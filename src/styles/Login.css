@@ -1,0 +1,30 @@
+body {
+  background: #f8f9fa;
+}
+
+.card {
+  border-radius: 10px;
+}
+
+/* Estilos del botón con el color del Sidebar */
+.custom-btn {
+  background-color: #003366 !important; /* Azul del Sidebar */
+  border-color: #003366 !important;
+  color: white !important;
+  font-weight: bold;
+  padding: 12px;
+  font-size: 16px;
+  border-radius: 8px;
+  transition: background 0.3s ease, transform 0.2s;
+}
+
+.custom-btn:hover {
+  background-color: #002244 !important; /* Azul más oscuro al pasar el mouse */
+  border-color: #002244 !important;
+  transform: scale(1.05); /* Efecto de agrandar ligeramente */
+}
+
+.label-custom {
+  color: #002244; /* Reemplaza con el código de color exacto */
+  font-weight: bold;
+}

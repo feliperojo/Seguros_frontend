@@ -1,0 +1,30 @@
+/* src/styles/MainLayout.css */
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  background: #f8f9fc;
+}
+
+
+
+
+.main-content {
+  transition: margin-left 0.3s ease-in-out;
+  flex-grow: 1;
+  padding: 20px;
+}
+
+.main-content.expanded {
+  margin-left: 250px;
+}
+
+.main-content.collapsed {
+  margin-left: 80px;
+}
+
+/* Ajustes responsivos */
+@media screen and (max-width: 768px) {
+  .main-content.expanded {
+    margin-left: 80px;
+  }
+}

@@ -1,0 +1,29 @@
+/* src/styles/Header.css */
+.header {
+    background: white;
+    padding: 15px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    margin: 20px;
+  }
+  
+  .search-bar {
+    background: #f1f3f5;
+    padding: 10px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-grow: 1;
+    max-width: 400px;
+  }
+  
+  .profile-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    font-weight: bold;
+  }

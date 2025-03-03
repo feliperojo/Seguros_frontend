@@ -1,0 +1,22 @@
+/* Reducir tamaño de la letra en la tabla */
+.table-container {
+  font-size: 14px; /* Tamaño general de la tabla */
+}
+
+/* Cambiar color del encabezado */
+.table thead {
+  background-color: #00071f !important; /* Azul Bootstrap */
+  color: white !important; /* Texto blanco */
+}
+
+/* Ajustar tamaño de fuente en encabezados y celdas */
+.table th {
+  font-size: 14px;
+  text-align: center;
+  padding: 10px;
+}
+
+.table td {
+  font-size: 12px;
+  padding: 8px;
+}

@@ -1,0 +1,108 @@
+/* Estilos para el Sidebar */
+.sidebar {
+  height: 100vh;
+  background: white; /* Fondo blanco */
+  color: #003366; /* Azul oscuro */
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s ease-in-out;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 1000;
+}
+
+.sidebar.expanded {
+  width: 250px;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+  align-items: center;
+}
+
+/* Botón de toggle */
+.sidebar .toggle-btn {
+  background: none;
+  border: none;
+  color: #003366;
+  font-size: 24px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+/* Logo */
+.logo-container {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.logo-img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Bienvenida */
+.welcome-container {
+  text-align: center;
+  margin-bottom: 15px;
+}
+
+.welcome-container p {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.welcome-container span {
+  font-size: 18px;
+  font-weight: bold;
+  color: #ff9800; /* Naranja */
+}
+
+/* Enlaces del Sidebar */
+.sidebar .nav-link {
+  color: #003366; /* Azul oscuro */
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  font-size: 18px; /* Tamaño más grande */
+  font-weight: bold;
+  border-radius: 10px;
+  transition: background 0.3s, color 0.3s;
+}
+
+.sidebar .nav-link svg {
+  font-size: 22px; /* Iconos más grandes */
+  margin-right: 10px;
+}
+
+/* Efecto Hover */
+.sidebar .nav-link:hover {
+  background: #003366; /* Fondo azul */
+  color: white !important; /* Texto blanco */
+}
+
+/* Cerrar sesión */
+.logout-button {
+  margin-top: auto;
+  text-align: center;
+}
+
+.logout-icon {
+  font-size: 28px;
+  color: #003366;
+  transition: color 0.3s;
+}
+
+.logout-icon:hover {
+  color: red;
+}

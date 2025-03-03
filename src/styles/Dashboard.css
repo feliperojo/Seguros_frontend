@@ -1,0 +1,11 @@
+/* src/styles/Dashboard.css */
+.content {
+    font-size: 18px;
+    text-align: center;
+    padding: 20px;
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    flex-grow: 1;
+    height: 100%;
+  }

@@ -1,0 +1,39 @@
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import MainLayout from "./layout/MainLayout";
+import Dashboard from "./pages/Dashboard";
+import Cliente from "./pages/Clientes";
+import Grupofamiliar from "./pages/Grupofamiliar";
+import Informes from "./pages/Informes";
+import Login from "./pages/login";
+
+// Función para verificar si el usuario está autenticado
+const isAuthenticated = () => {
+  return localStorage.getItem("auth_token") !== null;
+};
+
+// Layout protegido que envuelve todas las páginas
+const ProtectedLayout = () => {
+  return isAuthenticated() ? <MainLayout><Outlet /></MainLayout> : <Navigate to="/login" />;
+};
+
+const App = () => {
+  return (
+    <Routes>
+      {/* Página de Login (pública) */}
+      <Route path="/login" element={<Login />} />
+
+      {/* Rutas protegidas dentro del MainLayout */}
+      <Route element={<ProtectedLayout />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/clientes" element={<Cliente />} />
+        <Route path="/grupofamiliar" element={<Grupofamiliar />} />
+        <Route path="/informes" element={<Informes />} />
+      </Route>
+
+      {/* Redirigir a login si la ruta no existe */}
+      <Route path="*" element={<Navigate to="/login" />} />
+    </Routes>
+  );
+};
+
+export default App;
