@@ -161,68 +161,219 @@ const Clientes = () => {
   };
 
   return (
-    <div className="container mt-4 label-custom">
-      <h2 className="text-center mb-4">Registro de Cliente</h2>
-      <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
+    <div className="container mt-4">
+    <h2 className="text-center mb-4">Formulario de Registro de Cliente</h2>
+    <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
+      
+      {/* Nombre Completo Bloqueado */}
+      <h4 className="mb-3">Datos Principales</h4>
+      <div className="row">
+        <div className="col-md-10">
+          <label>Nombre Completo</label>
+          <input
+            type="text"
+            name="nombre_completo"
+            className="form-control"
+            value={formData.nombre_completo}
+            readOnly // Bloqueado para edición manual
+          />
+        </div>
+      </div>
+
+      {/* Campos de Nombre */}
+      <div className="row mt-3">
+        <div className="col-md-4">
+          <label>Primer Nombre</label>
+          <input type="text" name="primer_nombre" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Segundo Nombre</label>
+          <input type="text" name="segundo_nombre" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Apellidos</label>
+          <input type="text" name="apellidos" className="form-control" onChange={handleChange} />
+        </div>
+      </div>
+
+      {/* Fecha de Nacimiento y Edad */}
+      <div className="row mt-3">
+        <div className="col-md-6">
+          <label>Fecha de Nacimiento</label>
+          <input type="date" name="fecha_nacimiento" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-2">
+          <label>Edad</label>
+          <input type="number" name="edad" className="form-control" onChange={handleChange} />
+        </div>
+      </div>
+
+      {/* Género */}
+      <div className="row mt-3">
+        <div className="col-md-4">
+          <label>Género</label>
+          <select name="genero" className="form-select" onChange={handleChange}>
+            <option value="">Seleccione</option>
+            <option value="Masculino">Masculino</option>
+            <option value="Femenino">Femenino</option>
+          </select>
+        </div>
+      </div>
+
+      <h4 className="mt-4">Datos de Contacto</h4>
+      <div className="row">
+          <div className="col-md-6">
+            <label>Teléfono</label>
+            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-6">
+            <label>Secundario</label>
+            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-6">
+            <label>Whatsapp</label>
+            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-6">
+            <label>Email</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
         
-        {/* Nombre Completo Bloqueado */}
-        <h4 className="mb-3">Datos Principales</h4>
-        <div className="row">
-          <div className="col-md-10">
-            <label>Nombre Completo</label>
-            <input
-              type="text"
-              name="nombre_completo"
-              className="form-control"
-              value={formData.nombre_completo}
-              readOnly 
-            />
-          </div>
+
+      </div>
+
+      <h4 className="mt-4">Servicios de Mensajería</h4>
+      <div className="form-group checkbox-group">
+        <div className="form-check">
+          <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
+          <label className="form-check-label">WhatsApp</label>
+        </div>
+        <div className="form-check">
+          <input className="form-check-input" type="checkbox" name="telegram" checked={formData.telegram} onChange={handleChange} />
+          <label className="form-check-label">Telegram</label>
+        </div>
+        <div className="form-check">
+          <input className="form-check-input" type="checkbox" name="texto_sms" checked={formData.texto_sms} onChange={handleChange} />
+          <label className="form-check-label">Texto SMS</label>
+        </div>
+      </div>
+
+      <h4 className="mt-4">Dirección</h4>
+      <div className="row">
+        <div className="col-md-10">
+          <label>Dirección de Residencia</label>
+          <input type="text" name="direccion" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Calle</label>
+          <input type="text" name="calle" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>APT</label>
+          <input type="text" name="apto" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Ciudad</label>
+          <input type="text" name="ciudad" className="form-control" onChange={handleChange} />
+        </div>
+      
+        <div className="col-md-4">
+          <label>Estado</label>
+          <input type="text" name="estado" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Código Postal</label>
+          <input type="text" name="codigo_postal" className="form-control" onChange={handleChange} />
+        </div>
+        <div className="col-md-4">
+          <label>Condado</label>
+          <input type="text" name="ciudad" className="form-control" onChange={handleChange} />
+        </div>
+      <div className="col-md-10">
+          <label>Direccion de Correspondencia</label>
+          <input type="text" name="dir_correspondencia" className="form-control" onChange={handleChange} />
         </div>
 
-        {/* Primer Nombre, Segundo Nombre, Apellidos */}
-        <div className="row mt-3">
+        <h4 className="mt-4">Datos de Empleo e Ingreso</h4>
+      <div className="row">
           <div className="col-md-4">
-            <label>Primer Nombre</label>
-            <input type="text" name="primer_nombre" className="form-control" onChange={handleChange} />
+            <label>Tipo de Ingreso</label>
+            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
           </div>
           <div className="col-md-4">
-            <label>Segundo Nombre</label>
-            <input type="text" name="segundo_nombre" className="form-control" onChange={handleChange} />
+            <label>Empleador o Actividad</label>
+            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
           </div>
           <div className="col-md-4">
-            <label>Apellidos</label>
-            <input type="text" name="apellidos" className="form-control" onChange={handleChange} />
+            <label>Tel Empleador</label>
+            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
           </div>
-        </div>
+          <div className="col-md-3">
+            <label>Periodo de Ingreso</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Vr. del Ingreso por Periodo</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Vr. Ingreso Anual</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Prueba para MS</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-4">
+            <label>Periodo de Ingreso</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-4">
+            <label>Vr. del Ingreso por Periodo</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-4">
+            <label>Vr. Ingreso Anual</label>
+            <input type="email" name="email" className="form-control" onChange={handleChange} />
+          </div>
 
-        {/* Género */}
-        <div className="row mt-3">
-          <div className="col-md-4">
-            <label>Género</label>
-            <select name="genero" className="form-select" onChange={handleChange}>
-              <option value="">Seleccione</option>
-              <option value="Masculino">Masculino</option>
-              <option value="Femenino">Femenino</option>
-            </select>
+          <h4 className="mt-4">Ingreso por Horas Irregulares</h4>
+     
+          <div className="col-md-3">
+            <label>Periodo de Ingreso</label>
+            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
           </div>
-        </div>
-
-        {/* Mensaje de error */}
-        {error && (
-          <div className="alert alert-danger text-center py-2">
-            {error}
+          <div className="col-md-3">
+            <label>Cantidad de Horas</label>
+            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
           </div>
-        )}
+          <div className="col-md-3">
+            <label>Valor Por Horas</label>
+            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Ingreso Anual</label>
+            <input type="text" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Ingreso Total</label>
+            <input type="text" name="email" className="form-control" onChange={handleChange} />
+          </div>
+          <h4 className="mt-4">Detalles</h4>
+          <div className="col-md-12">
+            <label>Nota:</label>
+            <input type="text" name="email" className="form-control" onChange={handleChange} />
+          </div>
 
-        {/* Botón de Guardar */}
-        <div className="mt-4">
-          <button type="submit" className="btn btn-primary">Guardar Cliente</button>
-        </div>
-        
-      </form>
-    </div>
-  );
+      </div>
+      <div className="mt-4">
+        <button type="submit" className="btn btn-primary">Guardar Cliente</button>
+      </div>
+      </div>
+      
+    </form>
+  </div>
+);
 };
 
 export default Clientes;
