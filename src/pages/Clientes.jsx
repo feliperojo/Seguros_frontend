@@ -1,12 +1,11 @@
 import React, { useState } from "react";
-import "bootstrap/dist/css/bootstrap.min.css"; // Importar Bootstrap
-import "../styles/ClienteForm.css"; // Archivo CSS adicional si es necesario
-import { ToastContainer, toast } from "react-toastify"; // Importar Toastify
-import "react-toastify/dist/ReactToastify.css"; // Importar estilos de Toastify
-import apiRequest from "../services/api"; // Importa el servicio de API
+import "bootstrap/dist/css/bootstrap.min.css";
+import "../styles/ClienteForm.css";
+import apiRequest from "../services/api";
 
 const Clientes = () => {
-  const [formData, setFormData] = useState({
+  // Initial form state as a constant for easy resetting
+  const INITIAL_FORM_STATE = {
     nombre_completo: "",
     primer_nombre: "",
     segundo_nombre: "",
@@ -14,7 +13,7 @@ const Clientes = () => {
     fecha_nacimiento: "",
     edad: "",
     genero: "",
-    cobertura: "",
+    cobertura: true,
     social: "",
     status: "",
     auscis: "",
@@ -37,9 +36,10 @@ const Clientes = () => {
     whatsapp_num: "",
     direccion: "",
     dir_correspondencia: "",
-  });
+  };
 
-  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState(INITIAL_FORM_STATE);
+  const [alert, setAlert] = useState({ type: "", message: "", visible: false });
 
   const calcularEdad = (fechaNacimiento) => {
     const hoy = new Date();
@@ -47,126 +47,140 @@ const Clientes = () => {
     let edadCalculada = hoy.getFullYear() - nacimiento.getFullYear();
     const mes = hoy.getMonth() - nacimiento.getMonth();
     if (mes < 0 || (mes === 0 && hoy.getDate() < nacimiento.getDate())) {
-      edadCalculada--; 
+      edadCalculada--;
     }
     return edadCalculada;
   };
 
+  // 📌 Función para formatear números de teléfono como XXX-XXX-XXXX
+  const formatPhoneNumber = (value) => {
+    const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+
+    if (!match) return value; // Retorna el valor original si no hay coincidencias
+
+    return [match[1], match[2], match[3]].filter(Boolean).join("-");
+  };
+
+  // 📌 Función para formatear números de social como XXX-XX-XXXX
+  const formatsocial = (value) => {
+    const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
+    const match = cleaned.match(/^(\d{0,3})(\d{0,2})(\d{0,4})$/);
+
+    if (!match) return value; // Retorna el valor original si no hay coincidencias
+
+    return [match[1], match[2], match[3]].filter(Boolean).join("-");
+  };
+
+
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
-    const newFormData = { ...formData, [name]: type === "checkbox" ? checked : value };
-
-    if (name === "fecha_nacimiento") {
-      newFormData.edad = calcularEdad(value);
-    }
-
-    newFormData.nombre_completo = [
-      newFormData.primer_nombre,
-      newFormData.segundo_nombre,
-      newFormData.apellidos,
-    ].filter(Boolean).join(" ");
-
-    newFormData.direccion = [
-      newFormData.calle,
-      newFormData.apto,
-      newFormData.ciudad,
-      newFormData.estado,
-      newFormData.codigo_postal,
-    ].filter(Boolean).join(", ");
-
-    setFormData(newFormData);
+  
+    setFormData((prevData) => {
+      let updatedValue = type === "checkbox" ? checked : value;
+  
+      // Aplicar formato de teléfono solo a los campos requeridos
+      if (["telefono", "secundario", "whatsapp_num"].includes(name)) {
+        updatedValue = formatPhoneNumber(value);
+      }
+  
+      // Aplicar formato de social
+      if (["social"].includes(name)) {
+        updatedValue = formatsocial(value);
+      }
+  
+      const updatedData = { ...prevData, [name]: updatedValue };
+  
+      // Calcular edad si cambia la fecha de nacimiento
+      if (name === "fecha_nacimiento") {
+        updatedData.edad = calcularEdad(value);
+      }
+  
+      // Generar nombre completo dinámicamente
+      updatedData.nombre_completo = [
+        updatedData.primer_nombre,
+        updatedData.segundo_nombre,
+        updatedData.apellidos,
+      ]
+        .filter(Boolean)
+        .join(" ");
+  
+      // Construir dirección de residencia
+      updatedData.direccion = [
+        updatedData.calle,
+        updatedData.apto,
+        updatedData.ciudad,
+        updatedData.estado,
+        updatedData.codigo_postal,
+      ]
+        .filter(Boolean)
+        .join(" ");
+  
+      // Si el checkbox de "Copiar Dirección" se activa, copiar la dirección de residencia
+      if (name === "copi_dir" && checked) {
+        updatedData.dir_correspondencia = updatedData.direccion;
+      }
+  
+      return updatedData;
+    });
   };
+  
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
-
-    const formattedData = {
-      ...formData,
-      edad: Number(formData.edad),
-      cobertura: Boolean(formData.cobertura),
-      whatsapp: Boolean(formData.whatsapp),
-      telegram: Boolean(formData.telegram),
-      texto_sms: Boolean(formData.texto_sms),
-    };
-
-    console.log("📌 Datos a enviar:", formattedData);
-
-    const token = localStorage.getItem("auth_token"); // Obtener el token del localStorage
-
-    if (!token) {
-      setError("No tienes autorización. Inicia sesión nuevamente.");
-      return;
-    }
+    setAlert({ type: "", message: "", visible: false });
+    // 🔹 Crear una copia limpia del formData sin los guiones en los números de teléfono
+  const formattedData = {
+    ...formData,
+    telefono: formData.telefono.replace(/\D/g, ""),  // Eliminar guiones
+    secundario: formData.secundario.replace(/\D/g, ""),  // Eliminar guiones
+    whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),  // Eliminar guiones
+  };
 
     try {
-      const response = await apiRequest("cliente/create", "POST", formattedData, token);
+      const response = await apiRequest("cliente/create", "POST", formData);
 
-      if (response && response.success) {
-        toast.success("✅ Cliente registrado exitosamente", {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
+      if (response?.message && response.message.toLowerCase().includes("cliente creado exitosamente")) {
+        console.log("✅ Cliente fue creado con éxito:", response.message);
+
+        // Reset form to initial state
+        setFormData(INITIAL_FORM_STATE);
+
+        // Show success alert
+        setAlert({
+          type: "success", 
+          message: "Cliente creado exitosamente", 
+          visible: true
         });
 
-        setFormData({
-          nombre_completo: "",
-          primer_nombre: "",
-          segundo_nombre: "",
-          apellidos: "",
-          fecha_nacimiento: "",
-          edad: "",
-          genero: "",
-          cobertura: "",
-          social: "",
-          status: "",
-          auscis: "",
-          tarjeta_numero: "",
-          categoria: "",
-          fecha_emision: "",
-          fecha_expiracion: "",
-          telefono: "",
-          email: "",
-          whatsapp: false,
-          telegram: false,
-          texto_sms: false,
-          calle: "",
-          apto: "",
-          ciudad: "",
-          condado: "",
-          estado: "",
-          codigo_postal: "",
-          secundario: "",
-          whatsapp_num: "",
-          direccion: "",
-          dir_correspondencia: "",
-        });
+        // Hide alert after 3 seconds
+        setTimeout(() => {
+          setAlert({ type: "", message: "", visible: false });
+        }, 10000);
+
       } else {
-        throw new Error(response.message || "Error al registrar el cliente");
+        console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
       }
     } catch (err) {
-      console.error("❌ Error en la petición:", err.message);
-      toast.error(`❌ Error: ${err.message}`, {
-        position: "top-right",
-        autoClose: 5000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-      });
+      console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
     }
   };
 
+
+
+  
+  
   return (
-    <div className="container mt-4">
-    <h2 className="text-center mb-4">Formulario de Registro de Cliente</h2>
+    <div className="container mt-4 label-custom">
+
+    <h2 className="text-center mb-4">Registro de Cliente</h2>
+    
+
     <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
       
       {/* Nombre Completo Bloqueado */}
-      <h4 className="mb-3">Datos Principales</h4>
+      <h4 className="mb-3 ">Datos Principales</h4>
+      <hr />
       <div className="row">
         <div className="col-md-10">
           <label>Nombre Completo</label>
@@ -178,21 +192,22 @@ const Clientes = () => {
             readOnly // Bloqueado para edición manual
           />
         </div>
+        
       </div>
 
       {/* Campos de Nombre */}
       <div className="row mt-3">
         <div className="col-md-4">
           <label>Primer Nombre</label>
-          <input type="text" name="primer_nombre" className="form-control" onChange={handleChange} />
+          <input type="text" name="primer_nombre" className="form-control" value={formData.primer_nombre} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Segundo Nombre</label>
-          <input type="text" name="segundo_nombre" className="form-control" onChange={handleChange} />
+          <input type="text" name="segundo_nombre" className="form-control" value={formData.segundo_nombre} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Apellidos</label>
-          <input type="text" name="apellidos" className="form-control" onChange={handleChange} />
+          <input type="text" name="apellidos" className="form-control" value={formData.apellidos} onChange={handleChange} />
         </div>
       </div>
 
@@ -200,11 +215,15 @@ const Clientes = () => {
       <div className="row mt-3">
         <div className="col-md-6">
           <label>Fecha de Nacimiento</label>
-          <input type="date" name="fecha_nacimiento" className="form-control" onChange={handleChange} />
+          <input type="date" name="fecha_nacimiento" className="form-control" value={formData.fecha_nacimiento} onChange={handleChange} />
         </div>
         <div className="col-md-2">
           <label>Edad</label>
-          <input type="number" name="edad" className="form-control" onChange={handleChange} />
+          <input type="number" 
+          name="edad" 
+          className="form-control" 
+          value={formData.edad}
+          onChange={handleChange} />
         </div>
       </div>
 
@@ -212,7 +231,7 @@ const Clientes = () => {
       <div className="row mt-3">
         <div className="col-md-4">
           <label>Género</label>
-          <select name="genero" className="form-select" onChange={handleChange}>
+          <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
             <option value="">Seleccione</option>
             <option value="Masculino">Masculino</option>
             <option value="Femenino">Femenino</option>
@@ -220,29 +239,67 @@ const Clientes = () => {
         </div>
       </div>
 
-      <h4 className="mt-4">Datos de Contacto</h4>
-      <div className="row">
-          <div className="col-md-6">
-            <label>Teléfono</label>
-            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
+      <h4 className="mt-4">Datos sobre Status Migratorio</h4>
+      <hr />
+      <div className="row mt-3">
+          <div className="col-md-3">
+            <label>Social</label>
+            <input type="text" name="social" className="form-control" value={formData.social} onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Status</label>
+            <input type="text" name="status" className="form-control" value={formData.status} onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>A/USCIS</label>
+            <input type="text" name="auscis" className="form-control" value={formData.auscis} onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Tarjeta #</label>
+            <input type="text" name="tarjeta_numero" className="form-control" value={formData.tarjeta_numero} onChange={handleChange} />
           </div>
           <div className="col-md-6">
-            <label>Secundario</label>
-            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
+            <label>Categoria</label>
+            <input type="text" name="categoria" className="form-control" value={formData.categoria} onChange={handleChange} />
+          </div>
+          <div className="col-md-3">
+            <label>Fecha Emision</label>
+            <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}/>
+          </div>
+          <div className="col-md-3">
+            <label>Fecha Expedicion</label>
+            <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange} />
+          </div>
+
+        
+
+      </div>
+
+      <h4 className="mt-4">Datos de Contacto</h4>
+      <hr />
+      <div className="row mt-3">
+          <div className="col-md-6">
+            <label>Teléfono</label>
+            <input type="text" name="telefono" className="form-control" value={formData.telefono} onChange={handleChange} />
+          </div>
+          <div className="col-md-6">
+            <label>Tel. Secundario</label>
+            <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange} />
           </div>
           <div className="col-md-6">
             <label>Whatsapp</label>
-            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
+            <input type="text" name="whatsapp_num" className="form-control" value={formData.whatsapp_num} onChange={handleChange} />
           </div>
           <div className="col-md-6">
             <label>Email</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
+            <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
           </div>
         
 
       </div>
 
       <h4 className="mt-4">Servicios de Mensajería</h4>
+      <hr />
       <div className="form-group checkbox-group">
         <div className="form-check">
           <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
@@ -259,42 +316,59 @@ const Clientes = () => {
       </div>
 
       <h4 className="mt-4">Dirección</h4>
-      <div className="row">
+      <hr />
+      <div className="row mt-3">
         <div className="col-md-10">
           <label>Dirección de Residencia</label>
-          <input type="text" name="direccion" className="form-control" onChange={handleChange} />
+          <input type="text"
+           name="direccion" 
+           className="form-control"
+           value={formData.direccion}
+            readOnly // Bloqueado para edición manual
+            onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Calle</label>
-          <input type="text" name="calle" className="form-control" onChange={handleChange} />
+          <input type="text" name="calle" className="form-control" value={formData.calle} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>APT</label>
-          <input type="text" name="apto" className="form-control" onChange={handleChange} />
+          <input type="text" name="apto" className="form-control" value={formData.apto} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Ciudad</label>
-          <input type="text" name="ciudad" className="form-control" onChange={handleChange} />
+          <input type="text" name="ciudad" className="form-control" value={formData.ciudad} onChange={handleChange} />
         </div>
       
         <div className="col-md-4">
           <label>Estado</label>
-          <input type="text" name="estado" className="form-control" onChange={handleChange} />
+          <input type="text" name="estado" className="form-control" value={formData.estado} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Código Postal</label>
-          <input type="text" name="codigo_postal" className="form-control" onChange={handleChange} />
+          <input type="text" name="codigo_postal" className="form-control" value={formData.codigo_postal} onChange={handleChange} />
         </div>
         <div className="col-md-4">
           <label>Condado</label>
-          <input type="text" name="ciudad" className="form-control" onChange={handleChange} />
+          <input type="text" name="condado" className="form-control" value={formData.condado} onChange={handleChange} />
         </div>
-      <div className="col-md-10">
-          <label>Direccion de Correspondencia</label>
-          <input type="text" name="dir_correspondencia" className="form-control" onChange={handleChange} />
+        <div className="col-md-10">
+          <label>Dirección de Correspondencia</label>
+          <input type="text" name="dir_correspondencia" className="form-control" value={formData.dir_correspondencia} onChange={handleChange} />
+        </div>
+        <div className="form-check mt-3">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            name="copi_dir"
+            checked={formData.copi_dir}
+            onChange={handleChange}
+          />
+          <label className="form-check-label ms-2">Copiar Dirección</label>
         </div>
 
-        <h4 className="mt-4">Datos de Empleo e Ingreso</h4>
+        {/* <h4 className="mt-4">Datos de Empleo e Ingreso</h4>
+        <hr />
       <div className="row">
           <div className="col-md-4">
             <label>Tipo de Ingreso</label>
@@ -338,6 +412,7 @@ const Clientes = () => {
           </div>
 
           <h4 className="mt-4">Ingreso por Horas Irregulares</h4>
+          <hr />
      
           <div className="col-md-3">
             <label>Periodo de Ingreso</label>
@@ -364,14 +439,30 @@ const Clientes = () => {
             <label>Nota:</label>
             <input type="text" name="email" className="form-control" onChange={handleChange} />
           </div>
+          </div>*/}
+    {/* ✅ Agregar margen superior a la alerta para más espacio */}
+    {alert.visible && (
+          <div className="d-flex justify-content-center mt-4"> 
+            <div className={`alert alert-${alert.type} d-flex align-items-center w-75 shadow-sm`} 
+                 role="alert"
+                 style={{ borderRadius: "8px", fontSize: "16px", textAlign: "center" }}>
+              <span className="me-2">{alert.type === "success" ? "✅" : "⚠️"}</span>
+              <span>{alert.message}</span>
+            </div>
+          </div>
+        )}
 
-      </div>
+          
       <div className="mt-4">
         <button type="submit" className="btn btn-primary">Guardar Cliente</button>
       </div>
-      </div>
+      </div> 
       
     </form>
+    
+
+ 
+
   </div>
 );
 };
