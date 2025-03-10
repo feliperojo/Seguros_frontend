@@ -7,7 +7,7 @@ const Grupofamiliar = () => {
   // Initial form state for policy
   const INITIAL_POLICY_STATE = {
     compania: "",
-    plan_id: "",
+    plan: "",
     metal: "",
     precio: "",
     elegibilidad: "",
@@ -22,7 +22,9 @@ const Grupofamiliar = () => {
     fecha_cancelacion:"",
     compania_id:"",
     codigo_poliza:"",
-    referido:""
+    referido:"",
+    parentesco_id:"",
+    estado_cobertura:""
   };
 
   // State for policy details
@@ -36,6 +38,9 @@ const Grupofamiliar = () => {
   
   // State for available companies
   const [availableCompanies, setAvailableCompanies] = useState([]);
+
+  // State for available companies
+  const [availablePrentes, setAvailableParentes] = useState([]);
 
   // State for available companies
   const [availablePlan, setAvailablePlan] = useState([]);
@@ -96,6 +101,30 @@ const Grupofamiliar = () => {
 fetchDataplan();
 }, []);
   
+
+
+  // Fetch available parentesco
+  useEffect(() => {
+    const fetchDataparentesco = async () => {
+      try {
+
+   // Fetch plan
+   const parentecoResponse = await apiRequest("parentesco/", "GET");
+   console.log("Companies API Response:", parentecoResponse); // Debugging log
+
+   if (Array.isArray(parentecoResponse)) {
+     setAvailableParentes(parentecoResponse);
+   } else {
+     console.error("Unexpected companies API response format:", parentecoResponse);
+   }
+ } catch (error) {
+   console.error("Error fetching data:", error);
+ }
+};
+
+fetchDataparentesco();
+}, []);
+
 
   // Handle policy form changes
   const handlePolicyChange = (e) => {
@@ -191,53 +220,11 @@ fetchDataplan();
         
         {/* Policy Details Inputs */}
         <div className="row">
-          <div className="col-md-10 mb-3">
-            <label>Compañía</label>
-            <select 
-              name="compania" 
-              className="form-select" 
-              value={policyData.compania}
-              onChange={handlePolicyChange}
-            >
-              <option value="">Seleccione</option>
-              {availableCompanies.map(company => (
-                <option key={company.id} value={company.id}>
-                  {company.nombre}
-                </option>
-              ))}
-            </select>
-          </div> 
+           
           
 
         <div className="row">
-          <div className="col-md-6 mb-3">
-              <label>Plan</label>
-              <select 
-                name="plan_id" 
-                className="form-select" 
-                value={policyData.plan_id}
-                onChange={handlePolicyChange}
-              >
-                <option value="">Seleccione</option>
-              {availablePlan.map(plans => (
-                <option key={plans.id} value={plans.id}>
-                  {plans.nombre}
-                </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-md-3">
-            <label>Metal</label>
-            <input type="text" name="metal" className="form-control" value={policyData.metal} onChange={handlePolicyChange}/>
-          </div>  
-          <div className="col-md-3">
-            <label>Precio $</label>
-            <input type="text" name="precio" className="form-control" value={policyData.precio} onChange={handlePolicyChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Elegibilidad</label>
-            <input type="text" name="elegibilidad" className="form-control" value={policyData.elegibilidad} onChange={handlePolicyChange}/>
-          </div>
+          
         
           <div className="col-md-3">
             <label># Personas en Taxes</label>
@@ -308,15 +295,23 @@ fetchDataplan();
         </div>
                   
         {/* Family Members Table */}
+        <div className="table-responsive" style={{ overflowX: "auto", maxHeight: "400px" }}>
+
         <table className="table table-striped">
           <thead>
             <tr>
-              <th>ID Poliza</th>
-              <th>Nombre</th>
-              <th>Parentesco</th>
+              <th style={{ minWidth: "120px" }} >ID Poliza</th>
+              <th style={{ minWidth: "200px" }} >Nombre</th>
+              <th style={{ minWidth: "125px" }} >Parentesco</th>
               <th>Fecha Activación</th>
               <th>Fecha Cancelacion</th>
-              <th>Compañia</th>
+              <th style={{ minWidth: "150px" }} >Compañia</th>
+              <th style={{ minWidth: "150px" }} >Plan</th>
+              <th style={{ minWidth: "120px" }} >Metal</th>
+              <th style={{ minWidth: "120px" }} >Elegibilidad</th>
+              <th style={{ minWidth: "120px" }} >Cobertura</th>
+              <th>Pagador</th>
+              <th>Precio</th>
               <th>Acciones</th>
             </tr>
           </thead>
@@ -326,6 +321,7 @@ fetchDataplan();
                 <td><input 
                     type="text" 
                     className="form-control form-control-sm"
+                   
                     value={member.codigo_poliza}
                     onChange={(e) => updateFamilyMember(
                       member.id, 
@@ -336,17 +332,22 @@ fetchDataplan();
                   /></td>
                 <td>{member.nombre}</td>
                 <td>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    value={member.parentesco}
+                <select 
+                    className="form-select form-select-sm" 
+                    value={member.parentesco_id || ""}
                     onChange={(e) => updateFamilyMember(
                       member.id, 
-                      'parentesco', 
+                      'parentesco_id', 
                       e.target.value
                     )}
-                    placeholder="Ej. Esposo, Hijo"
-                  />
+                  >
+                    <option value="">Seleccione</option>
+                    {availablePrentes.map(parentescos => (
+                      <option key={parentescos.id} value={parentescos.id}>
+                        {parentescos.descripcion}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td>
                   <input 
@@ -390,6 +391,90 @@ fetchDataplan();
                     ))}
                   </select>
                 </td>
+
+                <td>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    value={member.plan}
+                    onChange={(e) => updateFamilyMember(
+                      member.id, 
+                      'plan', 
+                      e.target.value
+                    )}
+                    placeholder="Plan"
+                  />
+                </td>
+
+                <td>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    value={member.metal}
+                    onChange={(e) => updateFamilyMember(
+                      member.id, 
+                      'metal', 
+                      e.target.value
+                    )}
+                    placeholder="Metal"
+                  />
+                </td>
+
+                <td>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    value={member.elegibilidad}
+                    onChange={(e) => updateFamilyMember(
+                      member.id, 
+                      'elegibilidad', 
+                      e.target.value
+                    )}
+                    placeholder="Elegibilidad"
+                  />
+                </td>
+
+                <td>       
+                  <select name="genero" className="form-control form-control-sm" 
+                      value={member.estado_cobertura} 
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'estado_cobertura', 
+                        e.target.value
+                      )}>
+                    
+                    <option value="Con cobertura">Con cobertura</option>
+                    <option value="Sin cobertura">Sin cobertura</option>
+                </select>
+                </td>
+
+                <td>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    value={member.parentesco}
+                    onChange={(e) => updateFamilyMember(
+                      member.id, 
+                      'parentesco', 
+                      e.target.value
+                    )}
+                    placeholder="Ej. Esposo, Hijo"
+                  />
+                </td>
+                <td>
+                  <input 
+                    type="text" 
+                    className="form-control form-control-sm"
+                    value={member.parentesco}
+                    onChange={(e) => updateFamilyMember(
+                      member.id, 
+                      'parentesco', 
+                      e.target.value
+                    )}
+                    placeholder="Ej. Esposo, Hijo"
+                  />
+                </td>
+                
                 <td>
                   <button 
                     type="button" 
@@ -416,6 +501,8 @@ fetchDataplan();
           </div>
         )}
 
+        </div>
+
         <div className="mt-4">
           <button type="submit" className="btn btn-primary">
             Guardar Póliza de Grupo Familiar
@@ -423,6 +510,7 @@ fetchDataplan();
         </div>
       </form>
     </div>
+    
   );
 };
 

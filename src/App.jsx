@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Cliente from "./pages/Clientes";
 import Grupofamiliar from "./pages/Grupofamiliar";
 import Informes from "./pages/Informes";
+import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
 
 // Función para verificar si el usuario está autenticado
@@ -28,6 +29,7 @@ const App = () => {
         <Route path="/clientes" element={<Cliente />} />
         <Route path="/grupofamiliar" element={<Grupofamiliar />} />
         <Route path="/informes" element={<Informes />} />
+        <Route path="/Herramientas" element={<ImportarClientesPage />} />
       </Route>
 
       {/* Redirigir a login si la ruta no existe */}

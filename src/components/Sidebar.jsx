@@ -1,6 +1,6 @@
 import React from "react";
 import { Link } from "react-router-dom";
-import { FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft } from "react-icons/fa";
+import { FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaTools } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
 
@@ -34,6 +34,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <Link to="/Clientes" className="nav-link"><FaUsers /> {isOpen && "Cliente"}</Link>
         <Link to="/Grupofamiliar" className="nav-link"><FaProjectDiagram /> {isOpen && "Grupo Familiar"}</Link>
         <Link to="/Informes" className="nav-link"><FaFolder /> {isOpen && "Informes"}</Link>
+        <Link to="/Herramientas" className="nav-link"><FaTools /> {isOpen && "Importar Clientes"}</Link>
       </nav>
 
       {/* Cerrar sesión */}
