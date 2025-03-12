@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
+import { Modal, Button } from "react-bootstrap";
+import Clientes from "./Clientes";
 
 const Grupofamiliar = () => {
   // Initial form state for policy
@@ -27,104 +29,70 @@ const Grupofamiliar = () => {
     estado_cobertura:""
   };
 
+  const [showModal, setShowModal] = useState(false);
+
   // State for policy details
   const [policyData, setPolicyData] = useState(INITIAL_POLICY_STATE);
   
   // State for family members
   const [familyMembers, setFamilyMembers] = useState([]);
-  
-  // State for selecting existing clients
-  const [availableClients, setAvailableClients] = useState([]);
-  
+    
   // State for available companies
   const [availableCompanies, setAvailableCompanies] = useState([]);
 
   // State for available companies
   const [availablePrentes, setAvailableParentes] = useState([]);
-
-  // State for available companies
-  const [availablePlan, setAvailablePlan] = useState([]);
   
   // Alert state
   const [alert, setAlert] = useState({ type: "", message: "", visible: false });
 
   // Fetch available clients and companies when component mounts
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch clients
-        const clientsResponse = await apiRequest("cliente/", "GET");
-        console.log("Clients API Response:", clientsResponse); // Debugging log
-
-        if (Array.isArray(clientsResponse)) {
-          setAvailableClients(clientsResponse);
-        } else {
-          console.error("Unexpected clients API response format:", clientsResponse);
-        }
-
-        // Fetch companies
-        const companiesResponse = await apiRequest("compania/", "GET");
-        console.log("Companies API Response:", companiesResponse); // Debugging log
-
-        if (Array.isArray(companiesResponse)) {
-          setAvailableCompanies(companiesResponse);
-        } else {
-          console.error("Unexpected companies API response format:", companiesResponse);
-        }
-      } catch (error) {
-        console.error("Error fetching data:", error);
-      }
-    };
     
-    fetchData();
+    fetchCompanies();
   }, []);
 
-  // Fetch available clients and planes
-  useEffect(() => {
-    const fetchDataplan = async () => {
-      try {
-
-   // Fetch plan
-   const planResponse = await apiRequest("plan/", "GET");
-   console.log("Companies API Response:", planResponse); // Debugging log
-
-   if (Array.isArray(planResponse)) {
-     setAvailablePlan(planResponse);
-   } else {
-     console.error("Unexpected companies API response format:", planResponse);
-   }
- } catch (error) {
-   console.error("Error fetching data:", error);
- }
-};
-
-fetchDataplan();
-}, []);
+  // Function to fetch clients - separated for reuse
   
 
+  // Function to fetch companies - separated for clarity
+  const fetchCompanies = async () => {
+    try {
+      // Fetch companies
+      const companiesResponse = await apiRequest("compania/", "GET");
+      console.log("Companies API Response:", companiesResponse);
 
+      if (Array.isArray(companiesResponse)) {
+        setAvailableCompanies(companiesResponse);
+      } else {
+        console.error("Unexpected companies API response format:", companiesResponse);
+      }
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+    }
+  };
+
+  
   // Fetch available parentesco
   useEffect(() => {
     const fetchDataparentesco = async () => {
       try {
+        // Fetch parentesco
+        const parentecoResponse = await apiRequest("parentesco/", "GET");
+        console.log("Parentesco API Response:", parentecoResponse);
 
-   // Fetch plan
-   const parentecoResponse = await apiRequest("parentesco/", "GET");
-   console.log("Companies API Response:", parentecoResponse); // Debugging log
+        if (Array.isArray(parentecoResponse)) {
+          setAvailableParentes(parentecoResponse);
+        } else {
+          console.error("Unexpected parentesco API response format:", parentecoResponse);
+        }
+      } catch (error) {
+        console.error("Error fetching parentesco:", error);
+      }
+    };
 
-   if (Array.isArray(parentecoResponse)) {
-     setAvailableParentes(parentecoResponse);
-   } else {
-     console.error("Unexpected companies API response format:", parentecoResponse);
-   }
- } catch (error) {
-   console.error("Error fetching data:", error);
- }
-};
-
-fetchDataparentesco();
-}, []);
-
+    fetchDataparentesco();
+  }, []);
 
   // Handle policy form changes
   const handlePolicyChange = (e) => {
@@ -145,6 +113,22 @@ fetchDataparentesco();
         parentesco: "", // User can specify relationship
         fecha_activacion: new Date().toISOString().split('T')[0]
       }]);
+    }
+  };
+
+  // Handler for when a client is created successfully
+  const handleClienteCreated = async (newClient) => {
+    console.log("New client created:", newClient);
+    
+    // Close the modal
+    setShowModal(false);
+    
+    // Refresh the client list
+    await fetchClients();
+    
+    // Add the new client to family members
+    if (newClient && newClient.id) {
+      addFamilyMember(newClient);
     }
   };
 
@@ -175,8 +159,6 @@ fetchDataparentesco();
       ...policyData,
       familia: familyMembers
     };
-
-    
 
     try {
       const response = await apiRequest("grupo_familiar/create", "POST", submissionData);
@@ -220,219 +202,196 @@ fetchDataparentesco();
         
         {/* Policy Details Inputs */}
         <div className="row">
-           
-          
+          <div className="row">
+            <div className="col-md-3">
+              <label># Personas en Taxes</label>
+              <input type="text" name="personas_en_taxes" className="form-control" value={policyData.personas_en_taxes} onChange={handlePolicyChange}/>
+            </div>
 
-        <div className="row">
-          
-        
-          <div className="col-md-3">
-            <label># Personas en Taxes</label>
-            <input type="text" name="personas_en_taxes" className="form-control" value={policyData.personas_en_taxes} onChange={handlePolicyChange}/>
-          </div>
-
-          <div className="col-md-3">
-            <label># Personas en Cobertura</label>
-            <input type="text" name="personas_cobertura" className="form-control" value={policyData.personas_cobertura} onChange={handlePolicyChange}/>
-          </div>
+            <div className="col-md-3">
+              <label># Personas en Cobertura</label>
+              <input type="text" name="personas_cobertura" className="form-control" value={policyData.personas_cobertura} onChange={handlePolicyChange}/>
+            </div>
 
             <div className="col-md-3">
               <label>Ingreso Familiar Anual $</label>
               <input type="text" name="ingreso_familiar" className="form-control" value={policyData.ingreso_familiar} onChange={handlePolicyChange}/>
             </div>        
-      </div>
-
-    </div>
-
-    <h4 className="mt-4">Datos de Contacto</h4>
-    <hr />
-    <div className="row">
-        <div className="col-md-3">
-          <label>Persona de contacto en la poliza</label>
-          <input type="text" name="persona_contacto" className="form-control" value={policyData.persona_contacto} onChange={handlePolicyChange}/>
-        </div>
-        <div className="col-md-3">
-          <label>Medio de Contacto</label>
-          <input type="text" name="medio_contacto" className="form-control" value={policyData.medio_contacto} onChange={handlePolicyChange}/>
-        </div>
-        <div className="col-md-3">
-          <label>Telefono 1</label>
-          <input type="text" name="telefono1" className="form-control" value={policyData.telefono1} onChange={handlePolicyChange}/>
-        </div>
-        <div className="col-md-3">
-          <label>Telefono 2</label>
-          <input type="text" name="telefono2" className="form-control" value={policyData.telefono2} onChange={handlePolicyChange}/>
-        </div>
-        <div className="col-md-6">
-          <label>Nombre de Referencia</label>
-          <input type="text" name="referido" className="form-control" value={policyData.referido} onChange={handlePolicyChange}/>
+          </div>
         </div>
 
-    </div>
+        <h4 className="mt-4">Datos de Contacto</h4>
+        <hr />
+        <div className="row">
+          <div className="col-md-3">
+            <label>Persona de contacto en la poliza</label>
+            <input type="text" name="persona_contacto" className="form-control" value={policyData.persona_contacto} onChange={handlePolicyChange}/>
+          </div>
+          <div className="col-md-3">
+            <label>Medio de Contacto</label>
+            <input type="text" name="medio_contacto" className="form-control" value={policyData.medio_contacto} onChange={handlePolicyChange}/>
+          </div>
+          <div className="col-md-3">
+            <label>Telefono 1</label>
+            <input type="text" name="telefono1" className="form-control" value={policyData.telefono1} onChange={handlePolicyChange}/>
+          </div>
+          <div className="col-md-3">
+            <label>Telefono 2</label>
+            <input type="text" name="telefono2" className="form-control" value={policyData.telefono2} onChange={handlePolicyChange}/>
+          </div>
+          <div className="col-md-6">
+            <label>Nombre de Referencia</label>
+            <input type="text" name="referido" className="form-control" value={policyData.referido} onChange={handlePolicyChange}/>
+          </div>
+        </div>
+
         <h4 className="mt-4">Personas con Cobertura</h4>
         <hr />
      
-        {/* Client Selection Dropdown */}
-        <div className="mb-3 col-md-10">
-          <label>Agregar Miembro Familiar</label>
-          <select 
-            className="form-select" 
-            onChange={(e) => {
-              const selectedClient = availableClients.find(
-                client => client.id === parseInt(e.target.value) // Ensure the ID is treated as a number
-              );
-              if (selectedClient) addFamilyMember(selectedClient);
-            }}
-              >
-                  <option value="">Seleccionar Cliente</option>
-                  {availableClients.map(client => (
-                    <option key={client.id} value={client.id}>
-                      {client.nombre_completo}
-                    </option>
-                  ))}
-                </select>
+        {/* Button to add new client - replaced dropdown with just button */}
+        <div className="mb-3">
+          <Button variant="primary" onClick={() => setShowModal(true)}>
+            Agregar Miembro
+          </Button>
+        </div> 
 
-        </div>
-                  
         {/* Family Members Table */}
         <div className="table-responsive" style={{ overflowX: "auto", maxHeight: "400px" }}>
-
-        <table className="table table-striped">
-          <thead>
-            <tr>
-              <th style={{ minWidth: "120px" }} >ID Poliza</th>
-              <th style={{ minWidth: "200px" }} >Nombre</th>
-              <th style={{ minWidth: "125px" }} >Parentesco</th>
-              <th>Fecha Activación</th>
-              <th>Fecha Cancelacion</th>
-              <th style={{ minWidth: "150px" }} >Compañia</th>
-              <th style={{ minWidth: "150px" }} >Plan</th>
-              <th style={{ minWidth: "120px" }} >Metal</th>
-              <th style={{ minWidth: "120px" }} >Elegibilidad</th>
-              <th style={{ minWidth: "120px" }} >Cobertura</th>
-              <th>Pagador</th>
-              <th>Precio</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {familyMembers.map(member => (
-              <tr key={member.id}>
-                <td><input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                   
-                    value={member.codigo_poliza}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'codigo_poliza', 
-                      e.target.value
-                    )}
-                    placeholder="ID Poliza"
-                  /></td>
-                <td>{member.nombre}</td>
-                <td>
-                <select 
-                    className="form-select form-select-sm" 
-                    value={member.parentesco_id || ""}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'parentesco_id', 
-                      e.target.value
-                    )}
-                  >
-                    <option value="">Seleccione</option>
-                    {availablePrentes.map(parentescos => (
-                      <option key={parentescos.id} value={parentescos.id}>
-                        {parentescos.descripcion}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td>
-                  <input 
-                    type="date" 
-                    className="form-control form-control-sm"
-                    value={member.fecha_activacion}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'fecha_activacion', 
-                      e.target.value
-                    )}
-                  />
-                </td>
-                <td>
-                  <input 
-                    type="date" 
-                    className="form-control form-control-sm"
-                    value={member.fecha_cancelacion}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'fecha_cancelacion', 
-                      e.target.value
-                    )}
-                  />
-                </td>
-                <td>
+          <table className="table table-striped">
+            <thead>
+              <tr>
+                <th style={{ minWidth: "120px" }} >ID Poliza</th>
+                <th style={{ minWidth: "200px" }} >Nombre</th>
+                <th style={{ minWidth: "125px" }} >Parentesco</th>
+                <th>Fecha Activación</th>
+                <th>Fecha Cancelacion</th>
+                <th style={{ minWidth: "150px" }} >Compañia</th>
+                <th style={{ minWidth: "150px" }} >Plan</th>
+                <th style={{ minWidth: "120px" }} >Metal</th>
+                <th style={{ minWidth: "120px" }} >Elegibilidad</th>
+                <th style={{ minWidth: "120px" }} >Cobertura</th>
+                <th>Pagador</th>
+                <th>Precio</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {familyMembers.map(member => (
+                <tr key={member.id}>
+                  <td><input 
+                      type="text" 
+                      className="form-control form-control-sm"
+                      value={member.codigo_poliza || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'codigo_poliza', 
+                        e.target.value
+                      )}
+                      placeholder="ID Poliza"
+                    /></td>
+                  <td>{member.nombre}</td>
+                  <td>
                   <select 
-                    className="form-select form-select-sm" 
-                    value={member.compania_id || ""}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'compania_id', 
-                      e.target.value
-                    )}
-                  >
-                    <option value="">Seleccione</option>
-                    {availableCompanies.map(company => (
-                      <option key={company.id} value={company.id}>
-                        {company.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+                      className="form-select form-select-sm" 
+                      value={member.parentesco_id || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'parentesco_id', 
+                        e.target.value
+                      )}
+                    >
+                      <option value="">Seleccione</option>
+                      {availablePrentes.map(parentescos => (
+                        <option key={parentescos.id} value={parentescos.id}>
+                          {parentescos.descripcion}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-sm"
+                      value={member.fecha_activacion || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'fecha_activacion', 
+                        e.target.value
+                      )}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="date" 
+                      className="form-control form-control-sm"
+                      value={member.fecha_cancelacion || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'fecha_cancelacion', 
+                        e.target.value
+                      )}
+                    />
+                  </td>
+                  <td>
+                    <select 
+                      className="form-select form-select-sm" 
+                      value={member.compania_id || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'compania_id', 
+                        e.target.value
+                      )}
+                    >
+                      <option value="">Seleccione</option>
+                      {availableCompanies.map(company => (
+                        <option key={company.id} value={company.id}>
+                          {company.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
 
-                <td>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    value={member.plan}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'plan', 
-                      e.target.value
-                    )}
-                    placeholder="Plan"
-                  />
-                </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="form-control form-control-sm"
+                      value={member.plan || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'plan', 
+                        e.target.value
+                      )}
+                      placeholder="Plan"
+                    />
+                  </td>
 
-                <td>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    value={member.metal}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'metal', 
-                      e.target.value
-                    )}
-                    placeholder="Metal"
-                  />
-                </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="form-control form-control-sm"
+                      value={member.metal || ""}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'metal', 
+                        e.target.value
+                      )}
+                      placeholder="Metal"
+                    />
+                  </td>
 
-                <td>
-                  <input 
-                    type="text" 
-                    className="form-control form-control-sm"
-                    value={member.elegibilidad}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'elegibilidad', 
-                      e.target.value
-                    )}
-                    placeholder="Elegibilidad"
-                  />
-                </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="form-control form-control-sm"
+                      value={member.elegibilidad}
+                      onChange={(e) => updateFamilyMember(
+                        member.id, 
+                        'elegibilidad', 
+                        e.target.value
+                      )}
+                      placeholder="Elegibilidad"
+                    />
+                  </td>
 
                 <td>       
                   <select name="genero" className="form-control form-control-sm" 
@@ -509,6 +468,17 @@ fetchDataparentesco();
           </button>
         </div>
       </form>
+      <Modal show={showModal} 
+      onHide={() => setShowModal(false)}
+      size="xl"
+      >
+              <Modal.Header closeButton>
+                <Modal.Title>Agregar Miembro</Modal.Title>
+              </Modal.Header>
+              <Modal.Body>
+                <Clientes onClienteCreado={handleClienteCreated}/>
+              </Modal.Body>
+      </Modal>
     </div>
     
   );

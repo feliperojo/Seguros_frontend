@@ -1,11 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Papa from "papaparse";
 
 const ImportarClientes = () => {
   const [clientes, setClientes] = useState([]);
+  const [clientesExistentes, setClientesExistentes] = useState([]);
   const [errores, setErrores] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [procesando, setProcesando] = useState(false);
+  const [resumenImportacion, setResumenImportacion] = useState(null);
+
+  // 🔹 Obtener clientes existentes al cargar el componente
+  useEffect(() => {
+    obtenerClientesExistentes();
+  }, []);
+
+  // 🔹 Función para obtener los clientes existentes
+  const obtenerClientesExistentes = async () => {
+    try {
+      const token = "3yw3OnKzFKEcTrEu1JYPCrAqMLgxM9Hcqpx5l6aEd26d405f";
+      const response = await fetch("http://127.0.0.1:8000/api/cliente/", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error al obtener clientes: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log("✅ Clientes existentes obtenidos:", data);
+      
+      // Extraemos solo los códigos sociales para facilitar la búsqueda
+      const socialesExistentes = data.map(cliente => cliente.social).filter(social => social !== null);
+      setClientesExistentes(socialesExistentes);
+    } catch (error) {
+      console.error("❌ Error al obtener clientes existentes:", error);
+      setErrores(prev => [...prev, "Error al obtener clientes existentes. La validación de duplicados puede no ser precisa."]);
+    }
+  };
 
   // 🔹 Función para limpiar valores vacíos y asignar `null` si corresponde
   const limpiarValor = (valor, tipo, maxLength = null) => {
@@ -81,9 +114,7 @@ const ImportarClientes = () => {
     console.log("✅ Fecha formateada correctamente:", fechaFormateada);
 
     return fechaFormateada;
-};
-
-  
+  };
 
   // 🔹 Función para limpiar números de teléfono
   const formatearTelefono = (telefono) => {
@@ -99,6 +130,7 @@ const ImportarClientes = () => {
     setArchivo(file);
     setProcesando(true);
     setErrores([]);
+    setResumenImportacion(null);
 
     Papa.parse(file, {
       complete: (result) => {
@@ -164,15 +196,59 @@ const ImportarClientes = () => {
   // 🔹 Validación de datos antes de enviarlos a la API
   const validarDatos = (data) => {
     let erroresTemp = [];
+    let clientesNuevos = [];
+    let clientesDuplicados = [];
 
     data.forEach((cliente, index) => {
+      // Validar campos obligatorios
       if (!cliente.nombre_completo || cliente.nombre_completo.trim() === "") {
         erroresTemp.push(`Error en línea ${index + 1}: El nombre completo es obligatorio.`);
         console.warn(`⚠️ Registro inválido en línea ${index + 1}:`, cliente);
       }
+
+      // Validar duplicados por código social
+      if (cliente.social) {
+        if (clientesExistentes.includes(cliente.social)) {
+          clientesDuplicados.push({
+            index: index + 1,
+            nombre: cliente.nombre_completo,
+            social: cliente.social
+          });
+          console.warn(`⚠️ Cliente duplicado en línea ${index + 1}:`, cliente);
+        } else {
+          clientesNuevos.push({
+            index: index + 1,
+            nombre: cliente.nombre_completo,
+            social: cliente.social
+          });
+        }
+      } else {
+        // Cliente sin social no se puede validar como duplicado
+        clientesNuevos.push({
+          index: index + 1,
+          nombre: cliente.nombre_completo,
+          social: "No especificado"
+        });
+      }
+    });
+
+    // Generar resumen de importación
+    setResumenImportacion({
+      total: data.length,
+      nuevos: clientesNuevos.length,
+      duplicados: clientesDuplicados.length,
+      clientesNuevos,
+      clientesDuplicados
     });
 
     setErrores(erroresTemp);
+  };
+
+  // 🔹 Filtrar clientes duplicados antes de enviar
+  const filtrarClientesNuevos = () => {
+    return clientes.filter(cliente => 
+      !cliente.social || !clientesExistentes.includes(cliente.social)
+    );
   };
 
   // 🔹 Envío de datos a la API
@@ -187,10 +263,22 @@ const ImportarClientes = () => {
       return;
     }
 
+    // Filtrar solo los clientes que no existen en la base de datos
+    const clientesNuevos = filtrarClientesNuevos();
+    
+    if (clientesNuevos.length === 0) {
+      alert("Todos los clientes ya existen en la base de datos. No hay datos nuevos para enviar.");
+      return;
+    }
+
+    if (!window.confirm(`¿Estás seguro de crear ${clientesNuevos.length} nuevos clientes? Se omitirán ${clientes.length - clientesNuevos.length} clientes duplicados.`)) {
+      return;
+    }
+
     setProcesando(true);
     const token = "3yw3OnKzFKEcTrEu1JYPCrAqMLgxM9Hcqpx5l6aEd26d405f";
 
-    console.log("🚀 Enviando clientes a la API:", clientes);
+    console.log("🚀 Enviando clientes a la API:", clientesNuevos);
 
     try {
       const response = await fetch("http://127.0.0.1:8000/api/cliente/create", {
@@ -199,16 +287,20 @@ const ImportarClientes = () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ clientes }),
+        body: JSON.stringify({ clientes: clientesNuevos }),
       });
 
       const data = await response.json();
       console.log("✅ Respuesta de la API:", data);
-      alert(data.message || `Se importaron ${data.cantidad} clientes correctamente`);
+      alert(data.message || `Se importaron ${data.cantidad} clientes correctamente. Se omitieron ${clientes.length - clientesNuevos.length} clientes duplicados.`);
 
+      // Actualizar la lista de clientes existentes después de la importación
+      obtenerClientesExistentes();
+      
       setClientes([]);
       setArchivo(null);
       setErrores([]);
+      setResumenImportacion(null);
     } catch (error) {
       console.error("❌ Error al importar clientes:", error);
       alert("Error al importar los clientes: " + (error.message || "Error de conexión"));
@@ -220,8 +312,79 @@ const ImportarClientes = () => {
   return (
     <div className="container mt-4">
       <h2 className="text-center mb-4">Importar clientes</h2>
+      
+      <div className="card mb-4">
+        <div className="card-body">
+          <h5 className="card-title">Instrucciones</h5>
+          <p className="card-text">Sube un archivo CSV con los datos de los clientes. El sistema verificará si ya existen en la base de datos utilizando el campo <strong>social</strong> para evitar duplicados.</p>
+        </div>
+      </div>
+      
       <input type="file" accept=".csv" className="form-control" onChange={handleFileUpload} disabled={procesando} />
-      <button className="btn btn-success mt-3" onClick={enviarDatos} disabled={errores.length > 0 || clientes.length === 0 || procesando}>Crear Clientes</button>
+      
+      {/* Mostrar resumen de importación */}
+      {resumenImportacion && (
+        <div className="card mt-3">
+          <div className="card-header bg-info text-white">
+            Resumen de importación
+          </div>
+          <div className="card-body">
+            <h5 className="card-title">Total de registros: {resumenImportacion.total}</h5>
+            <div className="row">
+              <div className="col-md-6">
+                <div className="alert alert-success">
+                  <h6>Clientes nuevos: {resumenImportacion.nuevos}</h6>
+                  <p>Estos clientes serán importados a la base de datos.</p>
+                </div>
+              </div>
+              <div className="col-md-6">
+                <div className="alert alert-warning">
+                  <h6>Clientes duplicados: {resumenImportacion.duplicados}</h6>
+                  <p>Estos clientes ya existen en la base de datos y serán omitidos.</p>
+                </div>
+              </div>
+            </div>
+            
+            {resumenImportacion.duplicados > 0 && (
+              <div className="mt-3">
+                <h6>Detalle de clientes duplicados:</h6>
+                <ul className="list-group">
+                  {resumenImportacion.clientesDuplicados.slice(0, 30).map((cliente, idx) => (
+                    <li key={idx} className="list-group-item list-group-item-warning">
+                      Línea {cliente.index}: {cliente.nombre} (Social: {cliente.social})
+                    </li>
+                  ))}
+                  {resumenImportacion.clientesDuplicados.length > 30 && (
+                    <li className="list-group-item list-group-item-light">
+                      ... y {resumenImportacion.clientesDuplicados.length - 30} más
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Mostrar errores de validación */}
+      {errores.length > 0 && (
+        <div className="alert alert-danger mt-3">
+          <h6>Errores de validación:</h6>
+          <ul>
+            {errores.map((error, idx) => (
+              <li key={idx}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      
+      <button 
+        className="btn btn-success mt-3" 
+        onClick={enviarDatos} 
+        disabled={errores.length > 0 || clientes.length === 0 || procesando || (resumenImportacion && resumenImportacion.nuevos === 0)}
+      >
+        {procesando ? "Procesando..." : `Crear ${resumenImportacion ? resumenImportacion.nuevos : 0} Clientes`}
+      </button>
     </div>
   );
 };

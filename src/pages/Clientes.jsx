@@ -3,7 +3,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/ClienteForm.css";
 import apiRequest from "../services/api";
 
-const Clientes = () => {
+const Clientes = ({onClienteCreado}) => {
   // Initial form state as a constant for easy resetting
   const INITIAL_FORM_STATE = {
     nombre_completo: "",
@@ -137,12 +137,23 @@ const Clientes = () => {
     whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),  // Eliminar guiones
   };
 
-    try {
-      const response = await apiRequest("cliente/create", "POST", formData);
+  // Crear el JSON con la estructura deseada
+let jsonFinal = {
+  "clientes": [formData] // Insertar el JSON dentro de un array
+};
+console.log("formato antes de enviar ",jsonFinal)
 
-      if (response?.message && response.message.toLowerCase().includes("cliente creado exitosamente")) {
+    try {
+      const response = await apiRequest("cliente/create", "POST", jsonFinal);
+
+      if (response?.message && response.message.includes("cliente creado exitosamente")) {
         console.log("✅ Cliente fue creado con éxito:", response.message);
 
+       // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
+      if (onClienteCreado) {
+        console.log("entramos a onclientes",response.clientes[0].id)
+        onClienteCreado(response.clientes[0]);
+      }       
         // Reset form to initial state
         setFormData(INITIAL_FORM_STATE);
 
@@ -163,6 +174,11 @@ const Clientes = () => {
       }
     } catch (err) {
       console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
+      setAlert({
+        type: "danger", 
+        message: "❌ Error al crear cliente", 
+        visible: true
+      });
     }
   };
 
@@ -173,7 +189,7 @@ const Clientes = () => {
   return (
     <div className="container mt-4 label-custom">
 
-    <h2 className="text-center mb-4">Registro de Cliente</h2>
+    {/* <h2 className="text-center mb-4">Registro de Cliente</h2> */}
     
 
     <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
