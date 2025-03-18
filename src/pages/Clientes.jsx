@@ -1,9 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/ClienteForm.css";
 import apiRequest from "../services/api";
 
-const Clientes = ({onClienteCreado}) => {
+const Clientes = ({ onClienteCreado }) => {
   // Initial form state as a constant for easy resetting
   const INITIAL_FORM_STATE = {
     nombre_completo: "",
@@ -40,6 +40,29 @@ const Clientes = ({onClienteCreado}) => {
 
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [alert, setAlert] = useState({ type: "", message: "", visible: false });
+  const [showBankDetails, setShowBankDetails] = useState(false);
+  const [showCardDetails, setShowCardDetails] = useState(false);
+  
+  // Estado para controlar el paso actual del formulario
+  const [currentStep, setCurrentStep] = useState(1);
+  // Total de pasos en el formulario
+  const totalSteps = 5;
+
+  const pasos = [
+    { id: 1, titulo: "Datos Principales" },
+    { id: 2, titulo: "Datos sobre Status Migratorio" },
+    { id: 3, titulo: "Datos de Contacto" },
+    { id: 4, titulo: "Dirección" },
+    { id: 5, titulo: "Medios de Pago" }
+  ];
+
+  const handlePaymentToggle = (type) => {
+    if (type === "bank") {
+      setShowBankDetails(!showBankDetails);
+    } else if (type === "card") {
+      setShowCardDetails(!showCardDetails);
+    }
+  };
 
   const calcularEdad = (fechaNacimiento) => {
     const hoy = new Date();
@@ -52,7 +75,7 @@ const Clientes = ({onClienteCreado}) => {
     return edadCalculada;
   };
 
-  // 📌 Función para formatear números de teléfono como XXX-XXX-XXXX
+  // Función para formatear números de teléfono como XXX-XXX-XXXX
   const formatPhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
     const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
@@ -62,7 +85,7 @@ const Clientes = ({onClienteCreado}) => {
     return [match[1], match[2], match[3]].filter(Boolean).join("-");
   };
 
-  // 📌 Función para formatear números de social como XXX-XX-XXXX
+  // Función para formatear números de social como XXX-XX-XXXX
   const formatsocial = (value) => {
     const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
     const match = cleaned.match(/^(\d{0,3})(\d{0,2})(\d{0,4})$/);
@@ -71,7 +94,6 @@ const Clientes = ({onClienteCreado}) => {
 
     return [match[1], match[2], match[3]].filter(Boolean).join("-");
   };
-
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
@@ -125,23 +147,54 @@ const Clientes = ({onClienteCreado}) => {
     });
   };
   
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setAlert({ type: "", message: "", visible: false });
-    // 🔹 Crear una copia limpia del formData sin los guiones en los números de teléfono
-  const formattedData = {
-    ...formData,
-    telefono: formData.telefono.replace(/\D/g, ""),  // Eliminar guiones
-    secundario: formData.secundario.replace(/\D/g, ""),  // Eliminar guiones
-    whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),  // Eliminar guiones
+  // Función para avanzar al siguiente paso
+  const nextStep = () => {
+    if (currentStep < totalSteps) {
+      setCurrentStep(currentStep + 1);
+    }
   };
 
-  // Crear el JSON con la estructura deseada
-let jsonFinal = {
-  "clientes": [formData] // Insertar el JSON dentro de un array
-};
-console.log("formato antes de enviar ",jsonFinal)
+  // Función para retroceder al paso anterior
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  // Función para ir a un paso específico
+  const goToStep = (step) => {
+    if (step >= 1 && step <= totalSteps) {
+      setCurrentStep(step);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault(); // Prevenir el envío predeterminado del formulario
+    setAlert({ type: "", message: "", visible: false });
+  
+    if (currentStep !== 5) {
+      // Si no estamos en el último paso, no guardar y mostrar un mensaje
+      setAlert({
+        type: "danger", 
+        message: "Debes completar todos los pasos antes de guardar", 
+        visible: true
+      });
+      return; // Salir de la función
+    }
+    
+    // Crear una copia limpia del formData sin los guiones en los números de teléfono
+    const formattedData = {
+      ...formData,
+      telefono: formData.telefono.replace(/\D/g, ""),  // Eliminar guiones
+      secundario: formData.secundario.replace(/\D/g, ""),  // Eliminar guiones
+      whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),  // Eliminar guiones
+    };
+
+    // Crear el JSON con la estructura deseada
+    let jsonFinal = {
+      "clientes": [formData] // Insertar el JSON dentro de un array
+    };
+    console.log("formato antes de enviar ", jsonFinal);
 
     try {
       const response = await apiRequest("cliente/create", "POST", jsonFinal);
@@ -149,13 +202,15 @@ console.log("formato antes de enviar ",jsonFinal)
       if (response?.message && response.message.includes("cliente creado exitosamente")) {
         console.log("✅ Cliente fue creado con éxito:", response.message);
 
-       // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
-      if (onClienteCreado) {
-        console.log("entramos a onclientes",response.clientes[0].id)
-        onClienteCreado(response.clientes[0]);
-      }       
+        // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
+        if (onClienteCreado) {
+          console.log("entramos a onclientes", response.clientes[0].id);
+          onClienteCreado(response.clientes[0]);
+        }       
+        
         // Reset form to initial state
         setFormData(INITIAL_FORM_STATE);
+        setCurrentStep(1); // Reiniciar el paso a 1 después de guardar
 
         // Show success alert
         setAlert({
@@ -182,305 +237,454 @@ console.log("formato antes de enviar ",jsonFinal)
     }
   };
 
-
-
-  
-  
-  return (
-    <div className="container mt-4 label-custom">
-
-    {/* <h2 className="text-center mb-4">Registro de Cliente</h2> */}
-    
-
-    <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
-      
-      {/* Nombre Completo Bloqueado */}
-      <h4 className="mb-3 ">Datos Principales</h4>
-      <hr />
-      <div className="row">
-        <div className="col-md-10">
-          <label>Nombre Completo</label>
-          <input
-            type="text"
-            name="nombre_completo"
-            className="form-control"
-            value={formData.nombre_completo}
-            readOnly // Bloqueado para edición manual
-          />
+  // Componente para barra de progreso
+  const ProgressBar = () => {
+    return (
+      <div className="wizard-progress mb-4">
+        <div className="progress">
+          <div
+            className="progress-bar"
+            role="progressbar"
+            style={{ width: `${(currentStep / totalSteps) * 100}%` }}
+            aria-valuenow={(currentStep / totalSteps) * 100}
+            aria-valuemin="0"
+            aria-valuemax="100"
+          >
+            Paso {currentStep} de {totalSteps}
+          </div>
         </div>
-        
-      </div>
-
-      {/* Campos de Nombre */}
-      <div className="row mt-3">
-        <div className="col-md-4">
-          <label>Primer Nombre</label>
-          <input type="text" name="primer_nombre" className="form-control" value={formData.primer_nombre} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Segundo Nombre</label>
-          <input type="text" name="segundo_nombre" className="form-control" value={formData.segundo_nombre} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Apellidos</label>
-          <input type="text" name="apellidos" className="form-control" value={formData.apellidos} onChange={handleChange} />
-        </div>
-      </div>
-
-      {/* Fecha de Nacimiento y Edad */}
-      <div className="row mt-3">
-        <div className="col-md-6">
-          <label>Fecha de Nacimiento</label>
-          <input type="date" name="fecha_nacimiento" className="form-control" value={formData.fecha_nacimiento} onChange={handleChange} />
-        </div>
-        <div className="col-md-2">
-          <label>Edad</label>
-          <input type="number" 
-          name="edad" 
-          className="form-control" 
-          value={formData.edad}
-          onChange={handleChange} />
-        </div>
-      </div>
-
-      {/* Género */}
-      <div className="row mt-3">
-        <div className="col-md-4">
-          <label>Género</label>
-          <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
-            <option value="">Seleccione</option>
-            <option value="Masculino">Masculino</option>
-            <option value="Femenino">Femenino</option>
-          </select>
-        </div>
-      </div>
-
-      <h4 className="mt-4">Datos sobre Status Migratorio</h4>
-      <hr />
-      <div className="row mt-3">
-          <div className="col-md-3">
-            <label>Social</label>
-            <input type="text" name="social" className="form-control" value={formData.social} onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Status</label>
-            <input type="text" name="status" className="form-control" value={formData.status} onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>A/USCIS</label>
-            <input type="text" name="auscis" className="form-control" value={formData.auscis} onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Tarjeta #</label>
-            <input type="text" name="tarjeta_numero" className="form-control" value={formData.tarjeta_numero} onChange={handleChange} />
-          </div>
-          <div className="col-md-6">
-            <label>Categoria</label>
-            <input type="text" name="categoria" className="form-control" value={formData.categoria} onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Fecha Emision</label>
-            <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}/>
-          </div>
-          <div className="col-md-3">
-            <label>Fecha Expedicion</label>
-            <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange} />
-          </div>
-
-        
-
-      </div>
-
-      <h4 className="mt-4">Datos de Contacto</h4>
-      <hr />
-      <div className="row mt-3">
-          <div className="col-md-6">
-            <label>Teléfono</label>
-            <input type="text" name="telefono" className="form-control" value={formData.telefono} onChange={handleChange} />
-          </div>
-          <div className="col-md-6">
-            <label>Tel. Secundario</label>
-            <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange} />
-          </div>
-          <div className="col-md-6">
-            <label>Whatsapp</label>
-            <input type="text" name="whatsapp_num" className="form-control" value={formData.whatsapp_num} onChange={handleChange} />
-          </div>
-          <div className="col-md-6">
-            <label>Email</label>
-            <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
-          </div>
-        
-
-      </div>
-
-      <h4 className="mt-4">Servicios de Mensajería</h4>
-      <hr />
-      <div className="form-group checkbox-group">
-        <div className="form-check">
-          <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
-          <label className="form-check-label">WhatsApp</label>
-        </div>
-        <div className="form-check">
-          <input className="form-check-input" type="checkbox" name="telegram" checked={formData.telegram} onChange={handleChange} />
-          <label className="form-check-label">Telegram</label>
-        </div>
-        <div className="form-check">
-          <input className="form-check-input" type="checkbox" name="texto_sms" checked={formData.texto_sms} onChange={handleChange} />
-          <label className="form-check-label">Texto SMS</label>
-        </div>
-      </div>
-
-      <h4 className="mt-4">Dirección</h4>
-      <hr />
-      <div className="row mt-3">
-        <div className="col-md-10">
-          <label>Dirección de Residencia</label>
-          <input type="text"
-           name="direccion" 
-           className="form-control"
-           value={formData.direccion}
-            readOnly // Bloqueado para edición manual
-            onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Calle</label>
-          <input type="text" name="calle" className="form-control" value={formData.calle} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>APT</label>
-          <input type="text" name="apto" className="form-control" value={formData.apto} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Ciudad</label>
-          <input type="text" name="ciudad" className="form-control" value={formData.ciudad} onChange={handleChange} />
-        </div>
-      
-        <div className="col-md-4">
-          <label>Estado</label>
-          <input type="text" name="estado" className="form-control" value={formData.estado} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Código Postal</label>
-          <input type="text" name="codigo_postal" className="form-control" value={formData.codigo_postal} onChange={handleChange} />
-        </div>
-        <div className="col-md-4">
-          <label>Condado</label>
-          <input type="text" name="condado" className="form-control" value={formData.condado} onChange={handleChange} />
-        </div>
-        <div className="col-md-10">
-          <label>Dirección de Correspondencia</label>
-          <input type="text" name="dir_correspondencia" className="form-control" value={formData.dir_correspondencia} onChange={handleChange} />
-        </div>
-        <div className="form-check mt-3">
-          <input
-            className="form-check-input"
-            type="checkbox"
-            name="copi_dir"
-            checked={formData.copi_dir}
-            onChange={handleChange}
-          />
-          <label className="form-check-label ms-2">Copiar Dirección</label>
-        </div>
-
-        {/* <h4 className="mt-4">Datos de Empleo e Ingreso</h4>
-        <hr />
-      <div className="row">
-          <div className="col-md-4">
-            <label>Tipo de Ingreso</label>
-            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-4">
-            <label>Empleador o Actividad</label>
-            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-4">
-            <label>Tel Empleador</label>
-            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Periodo de Ingreso</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Vr. del Ingreso por Periodo</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Vr. Ingreso Anual</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Prueba para MS</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-4">
-            <label>Periodo de Ingreso</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-4">
-            <label>Vr. del Ingreso por Periodo</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-4">
-            <label>Vr. Ingreso Anual</label>
-            <input type="email" name="email" className="form-control" onChange={handleChange} />
-          </div>
-
-          <h4 className="mt-4">Ingreso por Horas Irregulares</h4>
-          <hr />
-     
-          <div className="col-md-3">
-            <label>Periodo de Ingreso</label>
-            <input type="text" name="telefono" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Cantidad de Horas</label>
-            <input type="text" name="secundario" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Valor Por Horas</label>
-            <input type="text" name="whtasapp_num" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Ingreso Anual</label>
-            <input type="text" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <div className="col-md-3">
-            <label>Ingreso Total</label>
-            <input type="text" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          <h4 className="mt-4">Detalles</h4>
-          <div className="col-md-12">
-            <label>Nota:</label>
-            <input type="text" name="email" className="form-control" onChange={handleChange} />
-          </div>
-          </div>*/}
-    {/* ✅ Agregar margen superior a la alerta para más espacio */}
-    {alert.visible && (
-          <div className="d-flex justify-content-center mt-4"> 
-            <div className={`alert alert-${alert.type} d-flex align-items-center w-75 shadow-sm`} 
-                 role="alert"
-                 style={{ borderRadius: "8px", fontSize: "16px", textAlign: "center" }}>
-              <span className="me-2">{alert.type === "success" ? "✅" : "⚠️"}</span>
-              <span>{alert.message}</span>
+        <div className="d-flex justify-content-between mt-2">
+          {pasos.map((paso) => (
+            <div 
+              key={paso.id} 
+              className={`wizard-step ${currentStep === paso.id ? 'active' : ''} ${currentStep > paso.id ? 'completed' : ''}`}
+              onClick={() => goToStep(paso.id)}
+            >
+              <div className="step-number">{paso.id}</div>
+              <div className="step-title">{paso.titulo}</div>
             </div>
-          </div>
-        )}
-
-          
-      <div className="mt-4">
-        <button type="submit" className="btn btn-primary">Guardar Cliente</button>
+          ))}
+        </div>
       </div>
-      </div> 
+    );
+  };
+
+  // Renderizado condicional de los pasos del formulario
+  const renderStep = () => {
+    switch (currentStep) {
       
-    </form>
-    
+      case 1:
+        console.log("case 1",currentStep)
+        return (
+          <>
+            <h4 className="mb-3">Datos Principales</h4>
+            <hr />
+            {/* Campos de Nombre */}
+            <div className="row mt-3">
+              <div className="col-md-3">
+                <label>Primer Nombre</label>
+                <input type="text" name="primer_nombre" className="form-control" value={formData.primer_nombre} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Segundo Nombre</label>
+                <input type="text" name="segundo_nombre" className="form-control" value={formData.segundo_nombre} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Apellidos</label>
+                <input type="text" name="apellidos" className="form-control" value={formData.apellidos} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Nombre Completo</label>
+                <input
+                  type="text"
+                  name="nombre_completo"
+                  className="form-control"
+                  value={formData.nombre_completo}
+                  readOnly // Bloqueado para edición manual
+                />
+              </div>
+            </div>
 
- 
+            {/* Fecha de Nacimiento y Edad */}
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <label>Fecha de Nacimiento</label>
+                <input type="date" name="fecha_nacimiento" className="form-control" value={formData.fecha_nacimiento} onChange={handleChange} />
+              </div>
+              <div className="col-md-2">
+                <label>Edad</label>
+                <input type="number" 
+                  name="edad" 
+                  className="form-control" 
+                  value={formData.edad}
+                  onChange={handleChange} />
+              </div>
+              {/* Género */}
+              <div className="col-md-4">
+                <label>Género</label>
+                <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
+                  <option value="">Seleccione</option>
+                  <option value="Masculino">Masculino</option>
+                  <option value="Femenino">Femenino</option>
+                </select>
+              </div>
+            </div>
+          </>
+        );
+      case 2:
+        console.log("case 2",currentStep)
+        return (
+          <>
+            <h4 className="mb-3">Datos sobre Status Migratorio</h4>
+            <hr />
+            <div className="row mt-3">
+              <div className="col-md-3">
+                <label>Social</label>
+                <input type="text" name="social" className="form-control" value={formData.social} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Status</label>
+                <input type="text" name="status" className="form-control" value={formData.status} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>A/USCIS</label>
+                <input type="text" name="auscis" className="form-control" value={formData.auscis} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Tarjeta #</label>
+                <input type="text" name="tarjeta_numero" className="form-control" value={formData.tarjeta_numero} onChange={handleChange} />
+              </div>
+              <div className="col-md-6">
+                <label>Categoria</label>
+                <input type="text" name="categoria" className="form-control" value={formData.categoria} onChange={handleChange} />
+              </div>
+              <div className="col-md-3">
+                <label>Fecha Emision</label>
+                <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}/>
+              </div>
+              <div className="col-md-3">
+                <label>Fecha Expedicion</label>
+                <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange} />
+              </div>
+            </div>
+          </>
+        );
+      case 3:
+        console.log("case 3",currentStep)
+        return (
+          <>
+            <h4 className="mb-3">Datos de Contacto</h4>
+            <hr />
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <label>Teléfono</label>
+                <input type="text" name="telefono" className="form-control" value={formData.telefono} onChange={handleChange} />
+              </div>
+              <div className="col-md-6">
+                <label>Tel. Secundario</label>
+                <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange} />
+              </div>
+              <div className="col-md-6">
+                <label>Whatsapp</label>
+                <input type="text" name="whatsapp_num" className="form-control" value={formData.whatsapp_num} onChange={handleChange} />
+              </div>
+              <div className="col-md-6">
+                <label>Email</label>
+                <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
+              </div>
+            </div>
 
-  </div>
-);
+            <h5 className="mt-4">Servicios de Mensajería</h5>
+            <hr />
+            <div className="form-group checkbox-group">
+              <div className="form-check">
+                <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
+                <label className="form-check-label">WhatsApp</label>
+              </div>
+              <div className="form-check">
+                <input className="form-check-input" type="checkbox" name="telegram" checked={formData.telegram} onChange={handleChange} />
+                <label className="form-check-label">Telegram</label>
+              </div>
+              <div className="form-check">
+                <input className="form-check-input" type="checkbox" name="texto_sms" checked={formData.texto_sms} onChange={handleChange} />
+                <label className="form-check-label">Texto SMS</label>
+              </div>
+            </div>
+          </>
+        );
+      case 4:
+        console.log("case 4",currentStep)
+        return (
+          <>
+            <h4 className="mb-3">Dirección</h4>
+            <hr />
+            <div className="row mt-3">
+              <div className="col-md-10">
+                <label>Dirección de Residencia</label>
+                <input type="text"
+                  name="direccion" 
+                  className="form-control"
+                  value={formData.direccion}
+                  readOnly // Bloqueado para edición manual
+                  onChange={handleChange} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                      nextStep(); // Opcional: avanzar al siguiente paso
+                    }
+                  }}
+                  
+                  />
+              </div>
+              <div className="col-md-4">
+                <label>Calle</label>
+                <input type="text" name="calle" className="form-control" value={formData.calle} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label>APT</label>
+                <input type="text" name="apto" className="form-control" value={formData.apto} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label>Ciudad</label>
+                <input type="text" name="ciudad" className="form-control" value={formData.ciudad} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label>Estado</label>
+                <input type="text" name="estado" className="form-control" value={formData.estado} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label>Código Postal</label>
+                <input type="text" name="codigo_postal" className="form-control" value={formData.codigo_postal} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-4">
+                <label>Condado</label>
+                <input type="text" name="condado" className="form-control" value={formData.condado} onChange={handleChange}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="col-md-10">
+                <label>Dirección de Correspondencia</label>
+                <input type="text" name="dir_correspondencia" className="form-control" value={formData.dir_correspondencia} onChange={handleChange} 
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                    nextStep(); // Opcional: avanzar al siguiente paso
+                  }
+                }}
+                />
+              </div>
+              <div className="form-check mt-3">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  name="copi_dir"
+                  checked={formData.copi_dir}
+                  onChange={handleChange}
+                  
+                />
+                <label className="form-check-label ms-2">Copiar Dirección</label>
+              </div>
+            </div>
+          </>
+        );
+      case 5:
+        console.log("case 5",currentStep)
+        return (
+          <>
+            <h4 className="mb-3">Medios de Pago</h4>
+            <hr />
+            <div>
+              <button
+                type="button"
+                className="btn btn-link"
+                onClick={() => handlePaymentToggle("bank")}
+              >
+                Agregar Datos Bancarios
+              </button>
+              {showBankDetails && (
+                <div>
+                  <div className="row mt-3">
+                    <div className="col-md-6">
+                      <label>Banco</label>
+                      <input
+                        type="text"
+                        name="banco"
+                        className="form-control"
+                        value={formData.banco || ""}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label>Cuenta</label>
+                      <input
+                        type="text"
+                        name="cuenta"
+                        className="form-control"
+                        value={formData.cuenta || ""}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label>Tipo de Cuenta</label>
+                      <select
+                        name="tipo_cuenta"
+                        className="form-select"
+                        value={formData.tipo_cuenta || ""}
+                        onChange={handleChange}
+                      >
+                        <option value="">Seleccione</option>
+                        <option value="Ahorros">Ahorros</option>
+                        <option value="Corriente">Corriente</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="btn btn-link"
+                onClick={() => handlePaymentToggle("card")}
+              >
+                Agregar Datos de Tarjeta
+              </button>
+              {showCardDetails && (
+                <div>
+                  <div className="row mt-3">
+                    <div className="col-md-6">
+                      <label>Nombre en la Tarjeta</label>
+                      <input
+                        type="text"
+                        name="nombre_tarjeta"
+                        className="form-control"
+                        value={formData.nombre_tarjeta || ""}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label>Número de Tarjeta</label>
+                      <input
+                        type="text"
+                        name="numero_tarjeta"
+                        className="form-control"
+                        value={formData.numero_tarjeta || ""}
+                        onChange={handleChange}
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label>Fecha de Expiración</label>
+                      <input
+                        type="month"
+                        name="fecha_expiracion_tarjeta"
+                        className="form-control"
+                        value={formData.fecha_expiracion_tarjeta || ""}
+                        onChange={handleChange}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        );
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="content mt-4 label-custom">
+      {/* Barra de progreso */}
+      <ProgressBar />
+      
+      {/* Contenido del paso actual */}
+      <div className="wizard-content">
+        {renderStep()}
+      </div>
+  
+      {/* Alertas */}
+      {alert.visible && (
+        <div className="d-flex justify-content-center mt-4">
+          <div className={`alert alert-${alert.type} d-flex align-items-center w-75 shadow-sm`}
+               role="alert"
+               style={{ borderRadius: "8px", fontSize: "16px", textAlign: "center" }}>
+            <span className="me-2">{alert.type === "success" ? "✅" : "⚠️"}</span>
+            <span>{alert.message}</span>
+          </div>
+        </div>
+      )}
+  
+      {/* Controles de navegación */}
+      <div className="wizard-controls d-flex justify-content-between mt-4">
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={prevStep}
+          disabled={currentStep === 1}
+        >
+          Anterior
+        </button>
+        
+        {currentStep < totalSteps ? (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={nextStep}
+          >
+            Siguiente
+          </button>
+        ) : (
+          <button
+            type="button"  // Cambiar a type="button"
+            className="btn btn-success"
+            onClick={handleSubmit}  // Manejar el clic directamente
+          >
+            Guardar Cliente
+          </button>
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default Clientes;

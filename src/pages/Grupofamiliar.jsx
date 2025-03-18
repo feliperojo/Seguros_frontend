@@ -29,6 +29,10 @@ const Grupofamiliar = () => {
     estado_cobertura:""
   };
 
+
+  
+  const [coverageGroups, setCoverageGroups] = useState([]); // Grupos de cobertura
+
   const [showModal, setShowModal] = useState(false);
 
   // State for policy details
@@ -103,34 +107,51 @@ const Grupofamiliar = () => {
     }));
   };
 
-  // Add family member from existing clients
   const addFamilyMember = (client) => {
-    // Check if client is already in family members
-    if (!familyMembers.some(member => member.id === client.id)) {
-      setFamilyMembers(prev => [...prev, {
+    if (!client || !client.id) return;
+
+    setFamilyMembers((prev) => [...prev, {
         id: client.id,
         nombre: client.nombre_completo,
-        parentesco: "", // User can specify relationship
-        fecha_activacion: new Date().toISOString().split('T')[0]
-      }]);
-    }
-  };
+        fecha_activacion: new Date().toISOString().split("T")[0]
+    }]);
+
+    setCoverageGroups((prevGroups) => {
+        return prevGroups.map((group, index) => {
+            if (index === 0) { // Solo afecta la primera tabla
+                return { 
+                    ...group, 
+                    members: [...group.members, { 
+                        id: client.id, 
+                        nombre: client.nombre_completo, 
+                        parentesco: "", 
+                        fecha_activacion: new Date().toISOString().split("T")[0] 
+                    }] 
+                };
+            }
+            return group;
+        });
+    });
+};
 
   // Handler for when a client is created successfully
   const handleClienteCreated = async (newClient) => {
-    console.log("New client created:", newClient);
+    
     
     // Close the modal
     setShowModal(false);
     
-    // Refresh the client list
-    await fetchClients();
+  
     
     // Add the new client to family members
     if (newClient && newClient.id) {
       addFamilyMember(newClient);
     }
   };
+
+  
+
+  
 
   // Remove family member
   const removeFamilyMember = (clientId) => {
@@ -149,6 +170,65 @@ const Grupofamiliar = () => {
       )
     );
   };
+
+  const addCoverageGroup = () => {
+    let newMembers = [];
+  
+    if (coverageGroups.length > 0) {
+      // Solo copiamos el ID y el nombre, dejando los demás datos en blanco
+      newMembers = coverageGroups[0].members.map(member => ({
+        id: member.id,
+        nombre: member.nombre,
+        parentesco: "",
+        fecha_activacion: "",
+        fecha_cancelacion: "",
+        compania_id: "",
+        plan: "",
+        metal: "",
+        elegibilidad: "",
+        estado_cobertura: "",
+        codigo_poliza: "",
+        precio: ""
+      }));
+    }
+  
+    const newGroup = {
+      id: coverageGroups.length + 1,
+      policyData: { ...INITIAL_POLICY_STATE }, // Datos de póliza independientes
+      members: newMembers, // Se copian solo ID y nombre de los miembros
+    };
+  
+    setCoverageGroups([...coverageGroups, newGroup]);
+  };
+  
+  
+// Eliminar un miembro solo de la tabla en la que se encuentra
+const removeMemberFromGroup = (groupId, memberId) => {
+  setCoverageGroups((prevGroups) =>
+    prevGroups.map((group) =>
+      group.id === groupId
+        ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+        : group
+    )
+  );
+};
+
+
+const updateMemberData = (groupId, memberId, field, value) => {
+  setCoverageGroups((prevGroups) =>
+    prevGroups.map((group) =>
+      group.id === groupId
+        ? {
+            ...group,
+            members: group.members.map((member) =>
+              member.id === memberId ? { ...member, [field]: value } : member
+            ),
+          }
+        : group
+    )
+  );
+};
+  
 
   // Submit policy and family group
   const handleSubmit = async (e) => {
@@ -193,10 +273,10 @@ const Grupofamiliar = () => {
   };
 
   return (
-    <div className="container mt-4 label-custom">
-      <h2 className="text-center mb-4">Registro Grupo Familiar</h2>
+    <div className="content mt-4 label-custom">
+     
       
-      <form onSubmit={handleSubmit} className="p-4 shadow bg-white rounded">
+      <form onSubmit={handleSubmit} >
         <h4 className="mb-3">Datos de la Póliza</h4>
         <hr />
         
@@ -249,14 +329,16 @@ const Grupofamiliar = () => {
         <hr />
      
         {/* Button to add new client - replaced dropdown with just button */}
-        <div className="mb-3">
+              {coverageGroups.length > 0 && (
           <Button variant="primary" onClick={() => setShowModal(true)}>
             Agregar Miembro
           </Button>
-        </div> 
+        )}
 
         {/* Family Members Table */}
-        <div className="table-responsive" style={{ overflowX: "auto", maxHeight: "400px" }}>
+        {coverageGroups.map((group) => (
+        <div key={group.id} className="table-responsive" style={{ overflowX: "auto", maxHeight: "400px" }}>
+           <h5>Cobertura # {group.id}</h5>
           <table className="table table-striped">
             <thead>
               <tr>
@@ -265,28 +347,26 @@ const Grupofamiliar = () => {
                 <th style={{ minWidth: "125px" }} >Parentesco</th>
                 <th>Fecha Activación</th>
                 <th>Fecha Cancelacion</th>
+                <th>Año Cobertura</th>
                 <th style={{ minWidth: "150px" }} >Compañia</th>
                 <th style={{ minWidth: "150px" }} >Plan</th>
                 <th style={{ minWidth: "120px" }} >Metal</th>
                 <th style={{ minWidth: "120px" }} >Elegibilidad</th>
-                <th style={{ minWidth: "120px" }} >Cobertura</th>
+                <th style={{ minWidth: "125px" }} >Cobertura</th>
+                <th style={{ minWidth: "95px" }} >Red</th>
                 <th>Pagador</th>
                 <th>Precio</th>
                 <th>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {familyMembers.map(member => (
+              {group.members.map(member => (
                 <tr key={member.id}>
                   <td><input 
                       type="text" 
                       className="form-control form-control-sm"
                       value={member.codigo_poliza || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'codigo_poliza', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
                       placeholder="ID Poliza"
                     /></td>
                   <td>{member.nombre}</td>
@@ -294,11 +374,7 @@ const Grupofamiliar = () => {
                   <select 
                       className="form-select form-select-sm" 
                       value={member.parentesco_id || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'parentesco_id', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "parentesco_id", e.target.value)}
                     >
                       <option value="">Seleccione</option>
                       {availablePrentes.map(parentescos => (
@@ -313,11 +389,7 @@ const Grupofamiliar = () => {
                       type="date" 
                       className="form-control form-control-sm"
                       value={member.fecha_activacion || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'fecha_activacion', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
                     />
                   </td>
                   <td>
@@ -325,22 +397,24 @@ const Grupofamiliar = () => {
                       type="date" 
                       className="form-control form-control-sm"
                       value={member.fecha_cancelacion || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'fecha_cancelacion', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
                     />
                   </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="form-control form-control-sm"
+                      value={member.ano}
+                      onChange={(e) => updateMemberData(group.id, member.id, "ano", e.target.value)}
+                      placeholder="Año"
+                    />
+                  </td>
+
                   <td>
                     <select 
                       className="form-select form-select-sm" 
                       value={member.compania_id || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'compania_id', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "compania_id", e.target.value)}
                     >
                       <option value="">Seleccione</option>
                       {availableCompanies.map(company => (
@@ -356,27 +430,21 @@ const Grupofamiliar = () => {
                       type="text" 
                       className="form-control form-control-sm"
                       value={member.plan || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'plan', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "plan", e.target.value)}
                       placeholder="Plan"
                     />
                   </td>
 
                   <td>
-                    <input 
-                      type="text" 
-                      className="form-control form-control-sm"
-                      value={member.metal || ""}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'metal', 
-                        e.target.value
-                      )}
-                      placeholder="Metal"
-                    />
+                  <select name="metal" className="form-select form-select-sm"  
+                      value={member.metal} 
+                      onChange={(e) => updateMemberData(group.id, member.id, "metal", e.target.value)}>
+                    <option value="">Seleccione</option>
+                    <option value="BRONCE">BRONCE</option>
+                    <option value="GOLD">GOLD</option>
+                    <option value="SILVER ">SILVER </option>
+                    
+                </select>
                   </td>
 
                   <td>
@@ -384,26 +452,32 @@ const Grupofamiliar = () => {
                       type="text" 
                       className="form-control form-control-sm"
                       value={member.elegibilidad}
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'elegibilidad', 
-                        e.target.value
-                      )}
+                      onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
                       placeholder="Elegibilidad"
                     />
                   </td>
 
                 <td>       
-                  <select name="genero" className="form-control form-control-sm" 
+                  <select name="estado_cobertura" className="form-select form-select-sm"  
                       value={member.estado_cobertura} 
-                      onChange={(e) => updateFamilyMember(
-                        member.id, 
-                        'estado_cobertura', 
-                        e.target.value
-                      )}>
+                      onChange={(e) => updateMemberData(group.id, member.id, "estado_cobertura", e.target.value)}>
+                    <option value="">Seleccione</option>
+                    <option value="Si">Si</option>
+                    <option value="No">No</option>
+                    <option value="MEDICARE ">MEDICARE </option>
+                    <option value="MEDICAID ">MEDICAID </option>
+                </select>
+                </td>
+
+                <td>       
+                  <select name="Red" className="form-select form-select-sm"  
+                      value={member.estado_cobertura} 
+                      onChange={(e) => updateMemberData(group.id, member.id, "red", e.target.value)}>
+                    <option value="">Seleccione</option>
+                    <option value="HMO">HMO</option>
+                    <option value="EPO">EPO</option>
+                    <option value="PPO ">PPO </option>
                     
-                    <option value="Con cobertura">Con cobertura</option>
-                    <option value="Sin cobertura">Sin cobertura</option>
                 </select>
                 </td>
 
@@ -412,11 +486,7 @@ const Grupofamiliar = () => {
                     type="text" 
                     className="form-control form-control-sm"
                     value={member.parentesco}
-                    onChange={(e) => updateFamilyMember(
-                      member.id, 
-                      'parentesco', 
-                      e.target.value
-                    )}
+                    onChange={(e) => updateMemberData(group.id, member.id, "parentesco", e.target.value)}
                     placeholder="Ej. Esposo, Hijo"
                   />
                 </td>
@@ -433,12 +503,15 @@ const Grupofamiliar = () => {
                     placeholder="Ej. Esposo, Hijo"
                   />
                 </td>
+
+
+                
                 
                 <td>
                   <button 
                     type="button" 
                     className="btn btn-danger btn-sm"
-                    onClick={() => removeFamilyMember(member.id)}
+                    onClick={() => removeMemberFromGroup(group.id, member.id)}
                   >
                     Eliminar
                   </button>
@@ -447,6 +520,7 @@ const Grupofamiliar = () => {
             ))}
           </tbody>
         </table>
+            
 
         {/* Alerts */}
         {alert.visible && (
@@ -461,9 +535,19 @@ const Grupofamiliar = () => {
         )}
 
         </div>
+ ))}
+
+          {/* Add coverage button */}
+          <div className="mb-3">
+                    <Button variant="btn btn-light" onClick={addCoverageGroup}>
+                      + Agregar nueva cobertura
+                    </Button>
+                  </div> 
+
+        
 
         <div className="mt-4">
-          <button type="submit" className="btn btn-primary">
+          <button type="submit" className="btn btn-success">
             Guardar Póliza de Grupo Familiar
           </button>
         </div>
@@ -476,7 +560,7 @@ const Grupofamiliar = () => {
                 <Modal.Title>Agregar Miembro</Modal.Title>
               </Modal.Header>
               <Modal.Body>
-                <Clientes onClienteCreado={handleClienteCreated}/>
+                <Clientes onClienteCreado={handleClienteCreated} />
               </Modal.Body>
       </Modal>
     </div>
