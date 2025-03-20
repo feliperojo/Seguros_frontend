@@ -6,6 +6,7 @@ import Grupofamiliar from "./pages/Grupofamiliar";
 import Informes from "./pages/Informes";
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
+import MediosPago from "./components/MediosPago";
 
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
@@ -30,6 +31,7 @@ const App = () => {
         <Route path="/grupofamiliar" element={<Grupofamiliar />} />
         <Route path="/informes" element={<Informes />} />
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
+        <Route path="/Mediospago" element={<MediosPago />} />
       </Route>
 
       {/* Redirigir a login si la ruta no existe */}

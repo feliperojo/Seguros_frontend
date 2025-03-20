@@ -12,6 +12,7 @@ const AppRoutes = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/team" element={<Team />} />
           <Route path="/projects" element={<Projects />} />
+          
         </Routes>
       </MainLayout>
     </Router>

@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/ClienteForm.css";
 import apiRequest from "../services/api";
+import MediosPago from "../components/MediosPago";
 
-const Clientes = ({ onClienteCreado }) => {
+const Clientes = ({ onClienteCreado, isModal = false }) => {
   // Initial form state as a constant for easy resetting
   const INITIAL_FORM_STATE = {
     nombre_completo: "",
@@ -36,13 +37,16 @@ const Clientes = ({ onClienteCreado }) => {
     whatsapp_num: "",
     direccion: "",
     dir_correspondencia: "",
+    copi_dir: false, // Añadido para el checkbox "Copiar Dirección"
   };
 
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [alert, setAlert] = useState({ type: "", message: "", visible: false });
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [showCardDetails, setShowCardDetails] = useState(false);
-  
+  const [clienteId, setClienteId] = useState(null);
+  const [clienteCreado, setClienteCreado] = useState(false);
+
   // Estado para controlar el paso actual del formulario
   const [currentStep, setCurrentStep] = useState(1);
   // Total de pasos en el formulario
@@ -168,19 +172,9 @@ const Clientes = ({ onClienteCreado }) => {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault(); // Prevenir el envío predeterminado del formulario
+  // Función para guardar cliente (llamada en paso 4)
+  const guardarCliente = async () => {
     setAlert({ type: "", message: "", visible: false });
-  
-    if (currentStep !== 5) {
-      // Si no estamos en el último paso, no guardar y mostrar un mensaje
-      setAlert({
-        type: "danger", 
-        message: "Debes completar todos los pasos antes de guardar", 
-        visible: true
-      });
-      return; // Salir de la función
-    }
     
     // Crear una copia limpia del formData sin los guiones en los números de teléfono
     const formattedData = {
@@ -201,40 +195,61 @@ const Clientes = ({ onClienteCreado }) => {
 
       if (response?.message && response.message.includes("cliente creado exitosamente")) {
         console.log("✅ Cliente fue creado con éxito:", response.message);
-
-        // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
-        if (onClienteCreado) {
-          console.log("entramos a onclientes", response.clientes[0].id);
-          onClienteCreado(response.clientes[0]);
-        }       
         
-        // Reset form to initial state
-        setFormData(INITIAL_FORM_STATE);
-        setCurrentStep(1); // Reiniciar el paso a 1 después de guardar
+        // Guardamos el ID del cliente
+        if (response.clientes && response.clientes[0] && response.clientes[0].id) {
+          setClienteId(response.clientes[0].id);
+          setClienteCreado(true);
+          
+          // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
+          if (onClienteCreado) {
+            console.log("entramos a onclientes", response.clientes[0].id);
+            onClienteCreado(response.clientes[0]);
+            
+            // Si estamos en un modal, no avanzamos al paso 5 automáticamente
+            if (isModal) {
+              return; // Salimos de la función sin avanzar al paso 5
+            }
+          }
+        }
 
         // Show success alert
         setAlert({
           type: "success", 
-          message: "Cliente creado exitosamente", 
+          message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.", 
           visible: true
         });
 
-        // Hide alert after 3 seconds
-        setTimeout(() => {
-          setAlert({ type: "", message: "", visible: false });
-        }, 10000);
+        // Avanzar al paso 5 automáticamente solo si no estamos en un modal
+        if (!isModal) {
+          setCurrentStep(5);
+        }
 
       } else {
         console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
+        setAlert({
+          type: "danger", 
+          message: "Error al crear cliente: " + (response.message || "Error desconocido"), 
+          visible: true
+        });
       }
     } catch (err) {
       console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
       setAlert({
         type: "danger", 
-        message: "❌ Error al crear cliente", 
+        message: "❌ Error al crear cliente: " + err.message, 
         visible: true
       });
     }
+  };
+
+  // Función para reiniciar el formulario
+  const reiniciarFormulario = () => {
+    setFormData(INITIAL_FORM_STATE);
+    setClienteId(null);
+    setClienteCreado(false);
+    setCurrentStep(1);
+    setAlert({ type: "", message: "", visible: false });
   };
 
   // Componente para barra de progreso
@@ -274,7 +289,6 @@ const Clientes = ({ onClienteCreado }) => {
     switch (currentStep) {
       
       case 1:
-        console.log("case 1",currentStep)
         return (
           <>
             <h4 className="mb-3">Datos Principales</h4>
@@ -332,7 +346,6 @@ const Clientes = ({ onClienteCreado }) => {
           </>
         );
       case 2:
-        console.log("case 2",currentStep)
         return (
           <>
             <h4 className="mb-3">Datos sobre Status Migratorio</h4>
@@ -370,7 +383,6 @@ const Clientes = ({ onClienteCreado }) => {
           </>
         );
       case 3:
-        console.log("case 3",currentStep)
         return (
           <>
             <h4 className="mb-3">Datos de Contacto</h4>
@@ -413,7 +425,6 @@ const Clientes = ({ onClienteCreado }) => {
           </>
         );
       case 4:
-        console.log("case 4",currentStep)
         return (
           <>
             <h4 className="mb-3">Dirección</h4>
@@ -520,7 +531,6 @@ const Clientes = ({ onClienteCreado }) => {
                   name="copi_dir"
                   checked={formData.copi_dir}
                   onChange={handleChange}
-                  
                 />
                 <label className="form-check-label ms-2">Copiar Dirección</label>
               </div>
@@ -528,103 +538,38 @@ const Clientes = ({ onClienteCreado }) => {
           </>
         );
       case 5:
-        console.log("case 5",currentStep)
         return (
           <>
             <h4 className="mb-3">Medios de Pago</h4>
             <hr />
-            <div>
-              <button
-                type="button"
-                className="btn btn-link"
-                onClick={() => handlePaymentToggle("bank")}
-              >
-                Agregar Datos Bancarios
-              </button>
-              {showBankDetails && (
-                <div>
-                  <div className="row mt-3">
-                    <div className="col-md-6">
-                      <label>Banco</label>
-                      <input
-                        type="text"
-                        name="banco"
-                        className="form-control"
-                        value={formData.banco || ""}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label>Cuenta</label>
-                      <input
-                        type="text"
-                        name="cuenta"
-                        className="form-control"
-                        value={formData.cuenta || ""}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label>Tipo de Cuenta</label>
-                      <select
-                        name="tipo_cuenta"
-                        className="form-select"
-                        value={formData.tipo_cuenta || ""}
-                        onChange={handleChange}
-                      >
-                        <option value="">Seleccione</option>
-                        <option value="Ahorros">Ahorros</option>
-                        <option value="Corriente">Corriente</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <button
-                type="button"
-                className="btn btn-link"
-                onClick={() => handlePaymentToggle("card")}
-              >
-                Agregar Datos de Tarjeta
-              </button>
-              {showCardDetails && (
-                <div>
-                  <div className="row mt-3">
-                    <div className="col-md-6">
-                      <label>Nombre en la Tarjeta</label>
-                      <input
-                        type="text"
-                        name="nombre_tarjeta"
-                        className="form-control"
-                        value={formData.nombre_tarjeta || ""}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label>Número de Tarjeta</label>
-                      <input
-                        type="text"
-                        name="numero_tarjeta"
-                        className="form-control"
-                        value={formData.numero_tarjeta || ""}
-                        onChange={handleChange}
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label>Fecha de Expiración</label>
-                      <input
-                        type="month"
-                        name="fecha_expiracion_tarjeta"
-                        className="form-control"
-                        value={formData.fecha_expiracion_tarjeta || ""}
-                        onChange={handleChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {clienteCreado ? (
+              <MediosPago 
+                key={clienteId} // Esto forzará el re-render cuando `clienteId` cambie
+                clienteId={clienteId} 
+                grupoFamiliarId={null} 
+                onSave={() => {
+                  console.log("Medio de pago guardado");
+                  setAlert({
+                    type: "success", 
+                    message: "Medio de pago guardado exitosamente", 
+                    visible: true
+                  });
+                  setTimeout(() => {
+                    setAlert({ type: "", message: "", visible: false });
+                  }, 3000);
+                }} 
+              />
+            ) : (
+              <div className="text-center py-4">
+                <p>Antes de agregar medios de pago, debemos guardar los datos del cliente.</p>
+                <button 
+                  className="btn btn-primary" 
+                  onClick={guardarCliente}
+                >
+                  Guardar datos del cliente
+                </button>
+              </div>
+            )}
           </>
         );
       default:
@@ -665,7 +610,7 @@ const Clientes = ({ onClienteCreado }) => {
           Anterior
         </button>
         
-        {currentStep < totalSteps ? (
+        {currentStep < 4 ? (
           <button
             type="button"
             className="btn btn-primary"
@@ -673,13 +618,21 @@ const Clientes = ({ onClienteCreado }) => {
           >
             Siguiente
           </button>
+        ) : currentStep === 4 ? (
+          <button
+            type="button"
+            className="btn btn-success"
+            onClick={guardarCliente}
+          >
+            Guardar Cliente y Continuar
+          </button>
         ) : (
           <button
-            type="button"  // Cambiar a type="button"
+            type="button"
             className="btn btn-success"
-            onClick={handleSubmit}  // Manejar el clic directamente
+            onClick={reiniciarFormulario}
           >
-            Guardar Cliente
+            Finalizar y Crear Nuevo Cliente
           </button>
         )}
       </div>
