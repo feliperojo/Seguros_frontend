@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from "react";
+import { FaMapMarkerAlt } from "react-icons/fa";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/ClienteForm.css";
 import apiRequest from "../services/api";
 import MediosPago from "../components/MediosPago";
+import CountrySelectWithFlags from '../components/CountrySelect';
+import countryCodes from '../services/countryCodes'
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
   // Initial form state as a constant for easy resetting
@@ -46,7 +49,15 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [showCardDetails, setShowCardDetails] = useState(false);
   const [clienteId, setClienteId] = useState(null);
   const [clienteCreado, setClienteCreado] = useState(false);
+ 
+  const [selectedCode, setSelectedCode] = useState({
+    telefono: "us",
+    secundario: "us",
+    whatsapp_num: "us"
+  });
+  
 
+  
   // Estado para controlar el paso actual del formulario
   const [currentStep, setCurrentStep] = useState(1);
   // Total de pasos en el formulario
@@ -57,8 +68,13 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     { id: 2, titulo: "Datos sobre Status Migratorio" },
     { id: 3, titulo: "Datos de Contacto" },
     { id: 4, titulo: "Dirección" },
-    { id: 5, titulo: "Medios de Pago" }
+    { id: 5, titulo: "Medios de Pago" },
+    { id: 6, titulo: "Datos de Empleo e Ingreso" }
   ];
+
+  const openMap = () => {
+    window.open("https://www.unitedstateszipcodes.org/", "_blank");
+  }
 
   const handlePaymentToggle = (type) => {
     if (type === "bank") {
@@ -99,11 +115,31 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     return [match[1], match[2], match[3]].filter(Boolean).join("-");
   };
 
+  // Función para formatear uscis como XXX-XXX-XXX
+  const formatuscis = (value) => {
+    const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,3})$/);
+
+    if (!match) return value; // Retorna el valor original si no hay coincidencias
+
+    return [match[1], match[2], match[3]].filter(Boolean).join("-");
+  };
+
+  const handleCountryCodeChange = (name, isoCode) => {
+    setSelectedCode((prev) => ({
+      ...prev,
+      [name]: isoCode
+    }));
+  };
+  
+
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
-  
+  console.log("estoy en name",name)
     setFormData((prevData) => {
       let updatedValue = type === "checkbox" ? checked : value;
+
+      
   
       // Aplicar formato de teléfono solo a los campos requeridos
       if (["telefono", "secundario", "whatsapp_num"].includes(name)) {
@@ -113,6 +149,11 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
       // Aplicar formato de social
       if (["social"].includes(name)) {
         updatedValue = formatsocial(value);
+      }
+
+       // Aplicar formato de uscis
+       if (["auscis"].includes(name)) {
+        updatedValue = formatuscis(value);
       }
   
       const updatedData = { ...prevData, [name]: updatedValue };
@@ -175,18 +216,28 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   // Función para guardar cliente (llamada en paso 4)
   const guardarCliente = async () => {
     setAlert({ type: "", message: "", visible: false });
+
+
+    // Encuentra el código numérico del país según el ISO
+const getCountryCode = (iso) => {
+  const country = countryCodes.find((c) => c.iso === iso);
+  return country ? country.code : "";
+};
+
     
     // Crear una copia limpia del formData sin los guiones en los números de teléfono
     const formattedData = {
       ...formData,
-      telefono: formData.telefono.replace(/\D/g, ""),  // Eliminar guiones
-      secundario: formData.secundario.replace(/\D/g, ""),  // Eliminar guiones
-      whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),  // Eliminar guiones
+      telefono: `+${getCountryCode(selectedCode.telefono)}${formData.telefono.replace(/\D/g, "")}`,
+      secundario: `+${getCountryCode(selectedCode.secundario)}${formData.secundario.replace(/\D/g, "")}`,
+      whatsapp_num: `+${getCountryCode(selectedCode.whatsapp_num)}${formData.whatsapp_num.replace(/\D/g, "")}`,
     };
+    
+    
 
     // Crear el JSON con la estructura deseada
     let jsonFinal = {
-      "clientes": [formData] // Insertar el JSON dentro de un array
+      "clientes": [formattedData] // Insertar el JSON dentro de un array
     };
     console.log("formato antes de enviar ", jsonFinal);
 
@@ -338,8 +389,8 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
                 <label>Género</label>
                 <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
                   <option value="">Seleccione</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
+                  <option value="Masculine">Masculine</option>
+                  <option value="Female">Female</option>
                 </select>
               </div>
             </div>
@@ -353,15 +404,29 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
             <div className="row mt-3">
               <div className="col-md-3">
                 <label>Social</label>
-                <input type="text" name="social" className="form-control" value={formData.social} onChange={handleChange} />
+                <input type="text" name="social" className="form-control" value={formData.social} onChange={handleChange} maxLength={11}/>
               </div>
               <div className="col-md-3">
                 <label>Status</label>
-                <input type="text" name="status" className="form-control" value={formData.status} onChange={handleChange} />
+                <select name="status" className="form-select" value={formData.status} onChange={handleChange}>
+                  <option value="">Seleccione</option>
+                  <option value="P. TRABAJO">P. TRABAJO</option>
+                  <option value="RESIDENTE">RESIDENTE</option>
+                  <option value="CIUDADANO">CIUDADANO</option>
+                  <option value="I-862">I-862</option>
+                  <option value="I-797">I-797</option>
+                  <option value="I-589 ASILUM">I-589 ASILUM</option>
+                  <option value="ESTUDIANTE">ESTUDIANTE</option>
+                  <option value="VISA E2">VISA E2</option>
+                  <option value="VISA K1">VISA K1</option>
+                  <option value="VISA J">VISA J</option>
+                  <option value="I-94">I-94</option>
+                  <option value="TPS">TPS</option>
+                </select>
               </div>
               <div className="col-md-3">
                 <label>A/USCIS</label>
-                <input type="text" name="auscis" className="form-control" value={formData.auscis} onChange={handleChange} />
+                <input type="text" name="auscis" className="form-control" value={formData.auscis} onChange={handleChange} maxLength={11}/>
               </div>
               <div className="col-md-3">
                 <label>Tarjeta #</label>
@@ -388,40 +453,70 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
             <h4 className="mb-3">Datos de Contacto</h4>
             <hr />
             <div className="row mt-3">
-              <div className="col-md-6">
-                <label>Teléfono</label>
-                <input type="text" name="telefono" className="form-control" value={formData.telefono} onChange={handleChange} />
-              </div>
-              <div className="col-md-6">
+                <div className="col-md-4">
+                          <label>Teléfono</label>
+                          <div className="input-group">
+                            <span className="input-group-text p-0">
+                              <CountrySelectWithFlags name="telefono" selectedCode={selectedCode.telefono} onChange={handleCountryCodeChange} />
+                            </span>
+                            <input
+                              type="text"
+                              name="telefono"
+                              className="form-control"
+                              value={formData.telefono}
+                              onChange={handleChange}
+                              
+                            />
+                          </div>
+                        </div>
+                  
+             
+              
+              <div className="col-md-4">
                 <label>Tel. Secundario</label>
-                <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange} />
+                <div className="input-group">
+                            <span className="input-group-text p-0">
+                              <CountrySelectWithFlags name="secundario" selectedCode={selectedCode.secundario} onChange={handleCountryCodeChange} />
+                            </span>
+                <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange}  />
               </div>
-              <div className="col-md-6">
+          </div>
+              <div className="col-md-4">
                 <label>Whatsapp</label>
+                <div className="input-group">
+                            <span className="input-group-text p-0">
+                              <CountrySelectWithFlags name="whatsapp_num" selectedCode={selectedCode.whatsapp_num} onChange={handleCountryCodeChange} />
+                            </span>
                 <input type="text" name="whatsapp_num" className="form-control" value={formData.whatsapp_num} onChange={handleChange} />
               </div>
-              <div className="col-md-6">
-                <label>Email</label>
-                <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
               </div>
+              
             </div>
 
             <h5 className="mt-4">Servicios de Mensajería</h5>
             <hr />
-            <div className="form-group checkbox-group">
-              <div className="form-check">
-                <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
-                <label className="form-check-label">WhatsApp</label>
-              </div>
-              <div className="form-check">
-                <input className="form-check-input" type="checkbox" name="telegram" checked={formData.telegram} onChange={handleChange} />
-                <label className="form-check-label">Telegram</label>
-              </div>
-              <div className="form-check">
-                <input className="form-check-input" type="checkbox" name="texto_sms" checked={formData.texto_sms} onChange={handleChange} />
-                <label className="form-check-label">Texto SMS</label>
-              </div>
+            <div className="row mb-3">
+              <div className="col-6">
+                <div className="d-flex flex-row flex-wrap align-items-center gap-3">
+                  <div className="form-check">
+                    <input className="form-check-input" type="checkbox" name="whatsapp" checked={formData.whatsapp} onChange={handleChange} />
+                    <label className="form-check-label">WhatsApp</label>
+                  </div>
+                  <div className="form-check">
+                    <input className="form-check-input" type="checkbox" name="telegram" checked={formData.telegram} onChange={handleChange} />
+                    <label className="form-check-label">Telegram</label>
+                  </div>
+                  <div className="form-check">
+                    <input className="form-check-input" type="checkbox" name="texto_sms" checked={formData.texto_sms} onChange={handleChange} />
+                    <label className="form-check-label">Texto SMS</label>
+                  </div>
+                </div>
             </div>
+        </div>
+            <div className="col-md-6">
+                <label>Email</label>
+                <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
+              </div>
           </>
         );
       case 4:
@@ -430,23 +525,36 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
             <h4 className="mb-3">Dirección</h4>
             <hr />
             <div className="row mt-3">
-              <div className="col-md-10">
-                <label>Dirección de Residencia</label>
-                <input type="text"
-                  name="direccion" 
-                  className="form-control"
-                  value={formData.direccion}
-                  readOnly // Bloqueado para edición manual
-                  onChange={handleChange} 
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                      nextStep(); // Opcional: avanzar al siguiente paso
-                    }
-                  }}
-                  
-                  />
-              </div>
+      {/* Campo de Dirección con Ícono */}
+      <div className="col-md-10">
+        <label className="form-label">Dirección de Residencia</label>
+        <div className="input-group">
+          <input
+            type="text"
+            name="direccion"
+            className="form-control"
+            value={formData.direccion}
+            readOnly // Bloqueado para edición manual
+            onChange={handleChange}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault(); // Prevenir el envío cuando se presiona Enter
+                nextStep(); // Opcional: avanzar al siguiente paso
+              }
+            }}
+          />
+          <span className="input-group-text bg-white">
+            <FaMapMarkerAlt
+              className="text-primary fs-4 cursor-pointer"
+              style={{ cursor: "pointer" }}
+              onClick={openMap}
+            />
+          </span>
+        </div>
+      </div>
+   
+
+          <div className="row mt-3">         
               <div className="col-md-4">
                 <label>Calle</label>
                 <input type="text" name="calle" className="form-control" value={formData.calle} onChange={handleChange} 
@@ -480,6 +588,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
                 }}
                 />
               </div>
+          </div>
+
+          <div className="row mt-3"> 
               <div className="col-md-4">
                 <label>Estado</label>
                 <input type="text" name="estado" className="form-control" value={formData.estado} onChange={handleChange} 
@@ -513,6 +624,10 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
                 }}
                 />
               </div>
+          </div>  
+
+
+          <div className="row mt-3"> 
               <div className="col-md-10">
                 <label>Dirección de Correspondencia</label>
                 <input type="text" name="dir_correspondencia" className="form-control" value={formData.dir_correspondencia} onChange={handleChange} 
@@ -535,6 +650,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
                 <label className="form-check-label ms-2">Copiar Dirección</label>
               </div>
             </div>
+           </div>
           </>
         );
       case 5:

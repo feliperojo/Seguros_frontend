@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
-import { Modal, Button } from "react-bootstrap";
+import { Modal, Button, Card, Form, Row, Col, Table, Alert } from "react-bootstrap";
 import Clientes from "./Clientes";
 
 const Grupofamiliar = () => {
@@ -26,8 +26,21 @@ const Grupofamiliar = () => {
     codigo_poliza: "",
     referido: "",
     parentesco_id: "",
-    estado_cobertura: ""
+    estado_cobertura: "",
+    pertenece_grupo_familiar: false
   };
+
+  // Lista de tipos de productos disponibles
+  const TIPOS_PRODUCTOS = [
+    { id: "SEGURO MEDICO  OBAMA", nombre: "SEGURO MEDICO  OBAMA" },
+    { id: "SEGURO  MEDICO SHORT TERM", nombre: "SEGURO  MEDICO SHORT TERM" },
+    { id: "VISION", nombre: "VISION" },
+    { id: "DENTAL", nombre: "DENTAL" },
+    { id: "VISION/DENTAL", nombre: "VISION/DENTAL" },
+    { id: "SEGURO DE VIDA", nombre: "SEGURO DE VIDA" },
+    { id: "PLAN DE DESCUENTO", nombre: "PLAN DE DESCUENTO" },
+    { id: "otro", nombre: "Otro" }
+  ];
 
   // Step control
   const [currentStep, setCurrentStep] = useState(1);
@@ -40,12 +53,18 @@ const Grupofamiliar = () => {
   const [availableCompanies, setAvailableCompanies] = useState([]);
   const [availablePrentes, setAvailableParentes] = useState([]);
   const [alert, setAlert] = useState({ type: "", message: "", visible: false });
+  const [contactMethods, setContactMethods] = useState({
+    whatsapp: false,
+    telegram: false,
+    texto_sms: false
+  });
 
   // Initialize the first coverage group if none exists
   useEffect(() => {
     if (coverageGroups.length === 0) {
       setCoverageGroups([{
         id: 1,
+        tipoProducto: "SEGURO MEDICO  OBAMA", // Valor por defecto
         policyData: { ...INITIAL_POLICY_STATE },
         members: []
       }]);
@@ -55,14 +74,13 @@ const Grupofamiliar = () => {
   // Fetch available clients and companies when component mounts
   useEffect(() => {
     fetchCompanies();
+    fetchDataparentesco();
   }, []);
 
   // Function to fetch companies
   const fetchCompanies = async () => {
     try {
       const companiesResponse = await apiRequest("compania/", "GET");
-      console.log("Companies API Response:", companiesResponse);
-
       if (Array.isArray(companiesResponse)) {
         setAvailableCompanies(companiesResponse);
       } else {
@@ -70,28 +88,32 @@ const Grupofamiliar = () => {
       }
     } catch (error) {
       console.error("Error fetching companies:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al cargar las compañías",
+        visible: true
+      });
     }
   };
 
   // Fetch available parentesco
-  useEffect(() => {
-    const fetchDataparentesco = async () => {
-      try {
-        const parentecoResponse = await apiRequest("parentesco/", "GET");
-        console.log("Parentesco API Response:", parentecoResponse);
-
-        if (Array.isArray(parentecoResponse)) {
-          setAvailableParentes(parentecoResponse);
-        } else {
-          console.error("Unexpected parentesco API response format:", parentecoResponse);
-        }
-      } catch (error) {
-        console.error("Error fetching parentesco:", error);
+  const fetchDataparentesco = async () => {
+    try {
+      const parentecoResponse = await apiRequest("parentesco/", "GET");
+      if (Array.isArray(parentecoResponse)) {
+        setAvailableParentes(parentecoResponse);
+      } else {
+        console.error("Unexpected parentesco API response format:", parentecoResponse);
       }
-    };
-
-    fetchDataparentesco();
-  }, []);
+    } catch (error) {
+      console.error("Error fetching parentesco:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al cargar los tipos de parentesco",
+        visible: true
+      });
+    }
+  };
 
   // Handle policy form changes
   const handlePolicyChange = (e) => {
@@ -100,6 +122,26 @@ const Grupofamiliar = () => {
       ...prev,
       [name]: value
     }));
+  };
+
+  // Handle contact method changes
+  const handleContactMethodChange = (e) => {
+    const { name, checked } = e.target;
+    setContactMethods(prev => ({
+      ...prev,
+      [name]: checked
+    }));
+  };
+
+  // Manejar cambio en el tipo de producto de una cobertura
+  const handleProductTypeChange = (groupId, newProductType) => {
+    setCoverageGroups(prevGroups =>
+      prevGroups.map(group =>
+        group.id === groupId
+          ? { ...group, tipoProducto: newProductType }
+          : group
+      )
+    );
   };
 
   const addFamilyMember = (client) => {
@@ -133,12 +175,9 @@ const Grupofamiliar = () => {
     if (newClient && newClient.id) {
       addFamilyMember(newClient);
       console.log("Cliente agregado a la tabla en GrupoFamiliar.");
-      
-      // ❌ NO CERRAR EL MODAL AQUÍ (Eliminar setShowModal(false))
     }
   };
   
-
   // Remove family member
   const removeFamilyMember = (clientId) => {
     setFamilyMembers(prev =>
@@ -180,6 +219,7 @@ const Grupofamiliar = () => {
 
     const newGroup = {
       id: coverageGroups.length + 1,
+      tipoProducto: "SEGURO MEDICO  OBAMA", // Por defecto nueva cobertura es Seguro Médico
       policyData: { ...INITIAL_POLICY_STATE }, // Datos de póliza independientes
       members: newMembers, // Se copian solo ID y nombre de los miembros
     };
@@ -245,10 +285,16 @@ const Grupofamiliar = () => {
         setFamilyMembers([]);
         setCoverageGroups([{
           id: 1,
+          tipoProducto: "SEGURO MEDICO  OBAMA",
           policyData: { ...INITIAL_POLICY_STATE },
           members: []
         }]);
         setCurrentStep(1);
+        setContactMethods({
+          whatsapp: false,
+          telegram: false,
+          texto_sms: false
+        });
 
         // Show success alert
         setAlert({
@@ -277,18 +323,18 @@ const Grupofamiliar = () => {
   // Render step progress bar
   const renderStepProgressBar = () => (
     <div className="mb-4">
-      <div className="d-flex justify-content-between">
-        <div style={{ width: '100%', backgroundColor: '#e9ecef', height: '10px', borderRadius: '5px' }}>
-          <div
-            style={{
-              width: `${(currentStep / totalSteps) * 100}%`,
-              backgroundColor: '#0d6efd',
-              height: '10px',
-              borderRadius: '5px',
-              transition: 'width 0.3s ease-in-out'
-            }}
-          />
-        </div>
+      <div className="progress" style={{ height: '10px', borderRadius: '5px' }}>
+        <div
+          className="progress-bar bg-primary"
+          role="progressbar"
+          style={{
+            width: `${(currentStep / totalSteps) * 100}%`,
+            transition: 'width 0.3s ease-in-out'
+          }}
+          aria-valuenow={(currentStep / totalSteps) * 100}
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ></div>
       </div>
       <div className="d-flex justify-content-between mt-2">
         {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
@@ -315,86 +361,226 @@ const Grupofamiliar = () => {
     switch (currentStep) {
       case 1:
         return (
-          <>
-            <div className="content mt-4 label-custom">
-              <h4 className="mb-3">Datos de la Póliza</h4>
+          <Card className="shadow-sm border-0 mb-4">
+            <Card.Body>
+              <h4 className="mb-3 text-primary">Datos de la Póliza</h4>
               <hr />
               
-              {/* Policy Details Inputs */}
-              <div className="row">
-                <div className="row">
-                  <div className="col-md-4">
-                    <label># Personas en Taxes</label>
-                    <input type="text" name="personas_en_taxes" className="form-control" value={policyData.personas_en_taxes} onChange={handlePolicyChange}/>
-                  </div>
+              <Row className="mb-4">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Personas en Taxes</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="personas_en_taxes" 
+                      value={policyData.personas_en_taxes}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
 
-                  <div className="col-md-4">
-                    <label># Personas en Cobertura</label>
-                    <input type="text" name="personas_cobertura" className="form-control" value={policyData.personas_cobertura} onChange={handlePolicyChange}/>
-                  </div>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Personas en Cobertura</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="personas_cobertura" 
+                      value={policyData.personas_cobertura}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
 
-                  <div className="col-md-4">
-                    <label>Ingreso Familiar Anual $</label>
-                    <input type="text" name="ingreso_familiar" className="form-control" value={policyData.ingreso_familiar} onChange={handlePolicyChange}/>
-                  </div>        
-                </div>
-              </div>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Ingreso Familiar Anual ($)</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="ingreso_familiar"
+                      value={policyData.ingreso_familiar}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
 
-              <h4 className="mt-4">Datos de Contacto</h4>
+              <h4 className="mt-4 mb-3 text-primary">Datos de Contacto</h4>
               <hr />
-              <div className="row mb-3">
-                <div className="col-md-6">
-                  <label>Persona de contacto en la poliza</label>
-                  <input type="text" name="persona_contacto" className="form-control" value={policyData.persona_contacto} onChange={handlePolicyChange}/>
-                </div>
-                <div className="col-md-6">
-                  <label>Medio de Contacto</label>
-                  <input type="text" name="medio_contacto" className="form-control" value={policyData.medio_contacto} onChange={handlePolicyChange}/>
-                </div>
-              </div>
-              <div className="row mb-3">
-                <div className="col-md-3">
-                  <label>Telefono 1</label>
-                  <input type="text" name="telefono1" className="form-control" value={policyData.telefono1} onChange={handlePolicyChange}/>
-                </div>
-                <div className="col-md-3">
-                  <label>Telefono 2</label>
-                  <input type="text" name="telefono2" className="form-control" value={policyData.telefono2} onChange={handlePolicyChange}/>
-                </div>
-                <div className="col-md-6">
-                  <label>Nombre de Referencia</label>
-                  <input type="text" name="referido" className="form-control" value={policyData.referido} onChange={handlePolicyChange}/>
-                </div>
-              </div>
-            </div>
-          </>
+              
+              <Row className="mb-4">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Persona de contacto en la póliza</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="persona_contacto" 
+                      value={policyData.persona_contacto}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium d-block">¿Pertenece al grupo familiar?</Form.Label>
+                    <Button 
+                      variant={policyData.pertenece_grupo_familiar ? "primary" : "outline-primary"}
+                      onClick={() => {
+                        setPolicyData({
+                          ...policyData,
+                          pertenece_grupo_familiar: !policyData.pertenece_grupo_familiar
+                        });
+                      }}
+                      className="w-100"
+                    >
+                      {policyData.pertenece_grupo_familiar ? 'Sí' : 'No'}
+                    </Button>
+                  </Form.Group>
+                </Col>
+                
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Teléfono 1</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="telefono1" 
+                      value={policyData.telefono1}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Teléfono 2</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="telefono2" 
+                      value={policyData.telefono2}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col xs={12}>
+                  <Form.Label className="fw-medium mb-2">Medios de contacto preferidos</Form.Label>
+                  <div className="d-flex flex-row flex-wrap gap-4">
+                    <Form.Check 
+                      type="checkbox"
+                      id="whatsapp"
+                      name="whatsapp"
+                      label="WhatsApp"
+                      checked={contactMethods.whatsapp}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                    <Form.Check 
+                      type="checkbox"
+                      id="telegram"
+                      name="telegram"
+                      label="Telegram"
+                      checked={contactMethods.telegram}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                    <Form.Check 
+                      type="checkbox"
+                      id="texto_sms"
+                      name="texto_sms"
+                      label="Texto SMS"
+                      checked={contactMethods.texto_sms}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                  </div>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Selecciona el medio por el cual fue conocido el grupo familiar">
+                      Captado por
+                    </Form.Label>
+                    <Form.Select name="captado_por" onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="Referido">Referido</option>
+                      <option value="Google">Google</option>
+                      <option value="Redes sociales">Redes sociales</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Cuál</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="referido" 
+                      value={policyData.referido}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Nota</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="notas_contacto" 
+                      value={policyData.notas_contacto}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
         );
       case 2:
         return (
-          <>
-            <div className="content mt-4 label-custom">
-              <h4 className="mb-3">Personas con Cobertura</h4>
+          <Card className="shadow-sm border-0 mb-4">
+            <Card.Body>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h4 className="mb-0 text-primary">Personas con Cobertura</h4>
+                <Button variant="primary" onClick={() => setShowModal(true)}>
+                  <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
+                </Button>
+              </div>
               <hr />
-              {/* Button to add new client */}
-              <Button variant="primary" onClick={() => setShowModal(true)} className="mb-3">
-                Agregar Miembro
-              </Button>
 
-              {/* Family Members Table */}
               {coverageGroups.map((group) => (
                 <div key={group.id} className="mb-4">
-                  <h5>Cobertura # {group.id}</h5>
-                  <div className="table-responsive" style={{ overflowX: "auto", maxHeight: "400px" }}>
-                    <table className="table table-striped">
-                      <thead>
+                  <div className="d-flex align-items-center mb-3">
+                    <h5 className="me-3 mb-0">Cobertura {group.id}:</h5>
+                    <Form.Select 
+                      style={{ width: "auto", maxWidth: "300px" }}
+                      value={group.tipoProducto}
+                      onChange={(e) => handleProductTypeChange(group.id, e.target.value)}
+                      className="form-select-sm"
+                    >
+                      {TIPOS_PRODUCTOS.map(producto => (
+                        <option key={producto.id} value={producto.id}>
+                          {producto.nombre}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                  
+                  <div className="table-responsive border rounded">
+                    <Table striped hover className="mb-0" size="sm">
+                      <thead className="bg-light">
                         <tr>
-                          <th style={{ minWidth: "120px" }}>ID Poliza</th>
+                          <th style={{ minWidth: "120px" }}>ID Póliza</th>
                           <th style={{ minWidth: "200px" }}>Nombre</th>
                           <th style={{ minWidth: "125px" }}>Parentesco</th>
                           <th>Fecha Activación</th>
-                          <th>Fecha Cancelacion</th>
+                          <th>Fecha Cancelación</th>
                           <th>Año Cobertura</th>
-                          <th style={{ minWidth: "150px" }}>Compañia</th>
+                          <th style={{ minWidth: "150px" }}>Compañía</th>
                           <th style={{ minWidth: "150px" }}>Plan</th>
                           <th style={{ minWidth: "120px" }}>Metal</th>
                           <th style={{ minWidth: "120px" }}>Elegibilidad</th>
@@ -406,170 +592,176 @@ const Grupofamiliar = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {group.members.map(member => (
-                          <tr key={member.id}>
-                            <td><input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.codigo_poliza || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
-                                placeholder="ID Poliza"
-                              /></td>
-                            <td>{member.nombre}</td>
-                            <td>
-                              <select 
-                                className="form-select form-select-sm" 
-                                value={member.parentesco_id || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "parentesco_id", e.target.value)}
-                              >
-                                <option value="">Seleccione</option>
-                                {availablePrentes.map(parentescos => (
-                                  <option key={parentescos.id} value={parentescos.id}>
-                                    {parentescos.descripcion}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="date" 
-                                className="form-control form-control-sm"
-                                value={member.fecha_activacion || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="date" 
-                                className="form-control form-control-sm"
-                                value={member.fecha_cancelacion || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.ano || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "ano", e.target.value)}
-                                placeholder="Año"
-                              />
-                            </td>
-                            <td>
-                              <select 
-                                className="form-select form-select-sm" 
-                                value={member.compania_id || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "compania_id", e.target.value)}
-                              >
-                                <option value="">Seleccione</option>
-                                {availableCompanies.map(company => (
-                                  <option key={company.id} value={company.id}>
-                                    {company.nombre}
-                                  </option>
-                                ))}
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.plan || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "plan", e.target.value)}
-                                placeholder="Plan"
-                              />
-                            </td>
-                            <td>
-                              <select 
-                                name="metal" 
-                                className="form-select form-select-sm"  
-                                value={member.metal || ""} 
-                                onChange={(e) => updateMemberData(group.id, member.id, "metal", e.target.value)}
-                              >
-                                <option value="">Seleccione</option>
-                                <option value="BRONCE">BRONCE</option>
-                                <option value="GOLD">GOLD</option>
-                                <option value="SILVER">SILVER</option>
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.elegibilidad || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
-                                placeholder="Elegibilidad"
-                              />
-                            </td>
-                            <td>       
-                              <select 
-                                name="estado_cobertura" 
-                                className="form-select form-select-sm"  
-                                value={member.estado_cobertura || ""} 
-                                onChange={(e) => updateMemberData(group.id, member.id, "estado_cobertura", e.target.value)}
-                              >
-                                <option value="">Seleccione</option>
-                                <option value="Si">Si</option>
-                                <option value="No">No</option>
-                                <option value="MEDICARE">MEDICARE</option>
-                                <option value="MEDICAID">MEDICAID</option>
-                              </select>
-                            </td>
-                            <td>       
-                              <select 
-                                name="Red" 
-                                className="form-select form-select-sm"  
-                                value={member.red || ""} 
-                                onChange={(e) => updateMemberData(group.id, member.id, "red", e.target.value)}
-                              >
-                                <option value="">Seleccione</option>
-                                <option value="HMO">HMO</option>
-                                <option value="EPO">EPO</option>
-                                <option value="PPO">PPO</option>
-                              </select>
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.pagador || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "pagador", e.target.value)}
-                                placeholder="Pagador"
-                              />
-                            </td>
-                            <td>
-                              <input 
-                                type="text" 
-                                className="form-control form-control-sm"
-                                value={member.precio || ""}
-                                onChange={(e) => updateMemberData(group.id, member.id, "precio", e.target.value)}
-                                placeholder="Precio"
-                              />
-                            </td>
-                            <td>
-                              <button 
-                                type="button" 
-                                className="btn btn-danger btn-sm"
-                                onClick={() => removeMemberFromGroup(group.id, member.id)}
-                              >
-                                Eliminar
-                              </button>
+                        {group.members.length > 0 ? (
+                          group.members.map(member => (
+                            <tr key={member.id}>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.codigo_poliza || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
+                                  placeholder="ID Póliza"
+                                />
+                              </td>
+                              <td>{member.nombre}</td>
+                              <td>
+                                <Form.Select 
+                                  size="sm"
+                                  value={member.parentesco_id || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "parentesco_id", e.target.value)}
+                                >
+                                  <option value="">Seleccione</option>
+                                  {availablePrentes.map(parentesco => (
+                                    <option key={parentesco.id} value={parentesco.id}>
+                                      {parentesco.descripcion}
+                                    </option>
+                                  ))}
+                                </Form.Select>
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="date" 
+                                  value={member.fecha_activacion || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
+                                />
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="date" 
+                                  value={member.fecha_cancelacion || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
+                                />
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.ano || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "ano", e.target.value)}
+                                  placeholder="Año"
+                                />
+                              </td>
+                              <td>
+                                <Form.Select 
+                                  size="sm"
+                                  value={member.compania_id || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "compania_id", e.target.value)}
+                                >
+                                  <option value="">Seleccione</option>
+                                  {availableCompanies.map(company => (
+                                    <option key={company.id} value={company.id}>
+                                      {company.nombre}
+                                    </option>
+                                  ))}
+                                </Form.Select>
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.plan || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "plan", e.target.value)}
+                                  placeholder="Plan"
+                                />
+                              </td>
+                              <td>
+                                <Form.Select 
+                                  size="sm"
+                                  value={member.metal || ""} 
+                                  onChange={(e) => updateMemberData(group.id, member.id, "metal", e.target.value)}
+                                >
+                                  <option value="">Seleccione</option>
+                                  <option value="BRONCE">BRONCE</option>
+                                  <option value="GOLD">GOLD</option>
+                                  <option value="SILVER">SILVER</option>
+                                </Form.Select>
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.elegibilidad || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
+                                  placeholder="Elegibilidad"
+                                />
+                              </td>
+                              <td>       
+                                <Form.Select 
+                                  size="sm"
+                                  value={member.estado_cobertura || ""} 
+                                  onChange={(e) => updateMemberData(group.id, member.id, "estado_cobertura", e.target.value)}
+                                >
+                                  <option value="">Seleccione</option>
+                                  <option value="Si">Si</option>
+                                  <option value="No">No</option>
+                                  <option value="MEDICARE">MEDICARE</option>
+                                  <option value="MEDICAID">MEDICAID</option>
+                                </Form.Select>
+                              </td>
+                              <td>       
+                                <Form.Select 
+                                  size="sm"
+                                  value={member.red || ""} 
+                                  onChange={(e) => updateMemberData(group.id, member.id, "red", e.target.value)}
+                                >
+                                  <option value="">Seleccione</option>
+                                  <option value="HMO">HMO</option>
+                                  <option value="EPO">EPO</option>
+                                  <option value="PPO">PPO</option>
+                                </Form.Select>
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.pagador || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "pagador", e.target.value)}
+                                  placeholder="Pagador"
+                                />
+                              </td>
+                              <td>
+                                <Form.Control 
+                                  size="sm"
+                                  type="text" 
+                                  value={member.precio || ""}
+                                  onChange={(e) => updateMemberData(group.id, member.id, "precio", e.target.value)}
+                                  placeholder="Precio"
+                                />
+                              </td>
+                              <td>
+                                <Button 
+                                  variant="outline-danger" 
+                                  size="sm"
+                                  onClick={() => removeMemberFromGroup(group.id, member.id)}
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </Button>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan="15" className="text-center py-3">
+                              No hay miembros agregados. Haga clic en "Agregar Miembro" para comenzar.
                             </td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
-                    </table>
+                    </Table>
                   </div>
                 </div>
               ))}
 
-              {/* Add coverage button */}
-              <div className="mb-3">
-                <Button variant="btn btn-light" onClick={addCoverageGroup}>
-                  + Agregar nueva cobertura
+              <div className="mt-4">
+                <Button variant="outline-primary" onClick={addCoverageGroup} className="d-flex align-items-center">
+                  <i className="bi bi-plus-circle me-2"></i> Agregar nueva cobertura
                 </Button>
               </div>
-            </div>
-          </>
+            </Card.Body>
+          </Card>
         );
       default:
         return null;
@@ -583,35 +775,39 @@ const Grupofamiliar = () => {
       
       {/* Alert Messages */}
       {alert.visible && (
-        <div className="d-flex justify-content-center mt-2 mb-3"> 
-          <div className={`alert alert-${alert.type} d-flex align-items-center w-75 shadow-sm`} 
-              role="alert"
-              style={{ borderRadius: "8px", fontSize: "16px", textAlign: "center" }}>
-            <span className="me-2">{alert.type === "success" ? "✅" : "⚠️"}</span>
-            <span>{alert.message}</span>
-          </div>
-        </div>
+        <Alert 
+          variant={alert.type} 
+          className="d-flex align-items-center shadow-sm mb-4"
+          dismissible
+          onClose={() => setAlert({...alert, visible: false})}
+        >
+          <i className={`bi ${alert.type === "success" ? "bi-check-circle" : "bi-exclamation-triangle"} me-2`}></i>
+          {alert.message}
+        </Alert>
       )}
       
-      {/* Contenido del formulario (sin etiqueta form) */}
+      {/* Form Content */}
       {renderStepContent()}
 
       {/* Navigation Buttons */}
-      <div className="d-flex justify-content-between mt-4 mb-4">
+      <div className="d-flex justify-content-between mb-4">
         {currentStep > 1 && (
-          <button type="button" className="btn btn-secondary" onClick={prevStep}>
+          <Button variant="secondary" onClick={prevStep}>
+            <i className="bi bi-arrow-left me-2"></i>
             Anterior
-          </button>
+          </Button>
         )}
         
         {currentStep < totalSteps ? (
-          <button type="button" className="btn btn-primary ms-auto" onClick={nextStep}>
+          <Button variant="primary" className="ms-auto" onClick={nextStep}>
             Siguiente
-          </button>
+            <i className="bi bi-arrow-right ms-2"></i>
+          </Button>
         ) : (
-          <button type="button" className="btn btn-success ms-auto" onClick={handleSubmit}>
+          <Button variant="success" className="ms-auto" onClick={handleSubmit}>
+            <i className="bi bi-save me-2"></i>
             Guardar Póliza de Grupo Familiar
-          </button>
+          </Button>
         )}
       </div>
       
@@ -620,12 +816,16 @@ const Grupofamiliar = () => {
         show={showModal} 
         onHide={() => setShowModal(false)}
         size="xl"
+        centered
       >
-        <Modal.Header closeButton>
-          <Modal.Title>Agregar Miembro</Modal.Title>
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title>
+            <i className="bi bi-person-plus me-2"></i>
+            Agregar Miembro
+          </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Clientes onClienteCreado={handleClienteCreated} />
+                  <Clientes onClienteCreado={handleClienteCreated} />
         </Modal.Body>
       </Modal>
     </div>
