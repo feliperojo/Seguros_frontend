@@ -1,13 +1,18 @@
-// Dashboard.js con fondo blanco
+// Dashboard.js con integración de modal de edición
 import React, { useState, useEffect } from "react";
 import { Card, Row, Col, Button, Table, Badge, Alert } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import {
   FaUsers, FaProjectDiagram, FaCalendarAlt, FaExclamationTriangle,
-  FaPlus, FaList, FaChartLine, FaFileInvoiceDollar
+  FaPlus, FaList, FaChartLine, FaFileInvoiceDollar, FaEdit, FaEye
 } from "react-icons/fa";
 import "../styles/Dashboard.css";
 import apiRequest from "../services/api";
+import EditClienteModal from "../components/EditClienteModal"; // Importamos el modal de edición
+// Importar el componente modal de visualización
+import DetalleClienteModal from "../components/DetalleClienteModal";
+
+
 
 const Dashboard = () => {
   const [clientesRecientes, setClientesRecientes] = useState([]);
@@ -20,29 +25,67 @@ const Dashboard = () => {
   });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+  
+  // Estados para el modal de edición
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [clienteToEdit, setClienteToEdit] = useState(null);
+  const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
+  // Agregar estados para el modal de visualización
+const [showViewModal, setShowViewModal] = useState(false);
+const [clienteToView, setClienteToView] = useState(null);
 
   useEffect(() => {
-    const cargarDatos = async () => {
-      setCargando(true);
-      setError(null);
-      try {
-        const resClientes = await apiRequest("cliente/recientes", "GET");
-        setClientesRecientes(resClientes.slice(0, 5));
-
-        const resPolizas = await apiRequest("cobertura/proximas-vencer", "GET");
-        setPolizasProximasVencer(resPolizas.slice(0, 5));
-
-        const resEstadisticas = await apiRequest("cliente/general", "GET");
-        setEstadisticas(resEstadisticas);
-      } catch (err) {
-        console.error("Error al cargar datos del dashboard:", err);
-        setError("Hubo un problema al cargar los datos. Por favor, intente nuevamente.");
-      } finally {
-        setCargando(false);
-      }
-    };
     cargarDatos();
   }, []);
+  
+  const cargarDatos = async () => {
+    setCargando(true);
+    setError(null);
+    try {
+      const resClientes = await apiRequest("cliente/recientes", "GET");
+      setClientesRecientes(resClientes.slice(0, 5));
+
+      const resPolizas = await apiRequest("cobertura/proximas-vencer", "GET");
+      setPolizasProximasVencer(resPolizas.slice(0, 5));
+
+      const resEstadisticas = await apiRequest("cliente/general", "GET");
+      setEstadisticas(resEstadisticas);
+    } catch (err) {
+      console.error("Error al cargar datos del dashboard:", err);
+      setError("Hubo un problema al cargar los datos. Por favor, intente nuevamente.");
+    } finally {
+      setCargando(false);
+    }
+  };
+
+  // Función para abrir el modal de visualización
+const handleOpenViewModal = (cliente) => {
+  setClienteToView(cliente);
+  setShowViewModal(true);
+};
+  
+  // Función para abrir el modal de edición
+  const handleOpenEditModal = (cliente) => {
+    setClienteToEdit(cliente.id);
+    setClienteDataToEdit(cliente);
+    setShowEditModal(true);
+  };
+  
+  // Función para manejar la actualización del cliente
+  const handleClienteUpdated = (updatedCliente) => {
+    // Actualizar el cliente en la lista de clientes recientes
+    setClientesRecientes(prevClientes => 
+      prevClientes.map(cliente => 
+        cliente.id === updatedCliente.id ? updatedCliente : cliente
+      )
+    );
+    
+    // Opcional: Mostrar un mensaje de éxito (podría implementarse con un Toast)
+    console.log("Cliente actualizado con éxito:", updatedCliente);
+    
+    // Opcional: Recargar los datos completos del dashboard
+    // cargarDatos();
+  };
 
   // Función para renderizar el mensaje cuando no hay datos
   const renderEmptyMessage = (mensaje) => (
@@ -199,15 +242,29 @@ const Dashboard = () => {
                   ) : clientesRecientes.length > 0 ? (
                     clientesRecientes.map(cliente => (
                       <tr key={cliente.id}>
-                        <td className="fw-medium">{cliente.nombre_completo}</td>
-                        <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
-                        <td>{cliente.telefono || cliente.email}</td>
-                        <td className="text-end">
-                          <Link to={`/cliente/editar/${cliente.id}`} className="btn btn-sm btn-outline-primary">
-                            Editar
-                          </Link>
-                        </td>
-                      </tr>
+  <td className="fw-medium">{cliente.nombre_completo}</td>
+  <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
+  <td>{cliente.telefono || cliente.email}</td>
+  <td className="text-end">
+    <Button 
+      variant="outline-primary" 
+      size="sm"
+      className="me-1"
+      onClick={() => handleOpenViewModal(cliente)}
+      title="Ver detalles"
+    >
+      <FaEye />
+    </Button>
+    <Button 
+      variant="outline-success" 
+      size="sm"
+      onClick={() => handleOpenEditModal(cliente)}
+      title="Editar cliente"
+    >
+      <FaEdit />
+    </Button>
+  </td>
+</tr>
                     ))
                   ) : (
                     renderEmptyMessage("No hay clientes recientes")
@@ -269,6 +326,21 @@ const Dashboard = () => {
           </div>
         </Col>
       </Row>
+      
+      {/* Modal de Edición */}
+      <EditClienteModal
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        clienteId={clienteToEdit}
+        clienteData={clienteDataToEdit}
+        onClienteUpdated={handleClienteUpdated}
+      />
+            {/* Modal de Visualización */}
+      <DetalleClienteModal
+        show={showViewModal}
+        onHide={() => setShowViewModal(false)}
+        clienteData={clienteToView}
+      />
     </div>
   );
 };

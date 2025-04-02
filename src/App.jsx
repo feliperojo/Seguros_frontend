@@ -7,7 +7,7 @@ import Informes from "./pages/Informes";
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
-import EditarCliente from "./pages/EditarCliente";
+
 import ListaClientes from "./pages/ListaClientes";
 
 // Función para verificar si el usuario está autenticado
@@ -34,7 +34,7 @@ const App = () => {
         <Route path="/informes" element={<Informes />} />
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Mediospago" element={<MediosPago />} />
-        <Route path="/clientes/editar/:id" element={<EditarCliente />} /> {/* Nueva ruta */}
+        
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
       
       </Route>

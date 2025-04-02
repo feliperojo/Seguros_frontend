@@ -2,13 +2,17 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
-import { Modal, Button, Card, Form, Row, Col, Table, Alert, Dropdown, Accordion } from "react-bootstrap";
+import { Modal, Button, Card, Form, Row, Col, Table, Alert, Dropdown, Accordion, Nav } from "react-bootstrap";
 import Clientes from "./Clientes";
+import ClienteExistente from "../components/ClienteExistente"; // Importamos el nuevo componente
 import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes';
 
 const Grupofamiliar = () => {
-  // Initial form state for policy
+  // Estado para controlar la pestaña activa en el modal
+  const [activeTab, setActiveTab] = useState("nuevo");
+  
+  // Resto del código existente sin cambios
   const INITIAL_POLICY_STATE = {
     compania: "",
     plan: "",
@@ -32,7 +36,6 @@ const Grupofamiliar = () => {
     pertenece_grupo_familiar: false
   };
 
-  // Lista de tipos de productos disponibles
   const TIPOS_PRODUCTOS = [
     { id: "SEGURO MEDICO  OBAMA", nombre: "SEGURO MEDICO  OBAMA" },
     { id: "SEGURO  MEDICO SHORT TERM", nombre: "SEGURO  MEDICO SHORT TERM" },
@@ -44,7 +47,6 @@ const Grupofamiliar = () => {
     { id: "otro", nombre: "Otro" }
   ];
 
-  // Step control
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
 
@@ -93,13 +95,11 @@ const Grupofamiliar = () => {
     }));
   };
 
-  // Encuentra el código numérico del país según el ISO
   const getCountryCode = (iso) => {
     const country = countryCodes.find((c) => c.iso === iso);
     return country ? country.code : "";
   };
 
-  // Function to fetch companies
   const fetchCompanies = async () => {
     try {
       const companiesResponse = await apiRequest("compania/", "GET");
@@ -118,7 +118,6 @@ const Grupofamiliar = () => {
     }
   };
 
-  // Fetch available parentesco
   const fetchDataparentesco = async () => {
     try {
       const parentecoResponse = await apiRequest("parentesco/", "GET");
@@ -137,7 +136,6 @@ const Grupofamiliar = () => {
     }
   };
 
-  // Función para formatear números de teléfono como XXX-XXX-XXXX
   const formatPhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
     const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
@@ -146,14 +144,12 @@ const Grupofamiliar = () => {
     return [match[1], match[2], match[3]].filter(Boolean).join("-");
   };
 
-  // Función para formatear fechas en formato legible
   const formatDate = (dateString) => {
     if (!dateString) return "-";
     const date = new Date(dateString);
     return date.toLocaleDateString();
   };
 
-  // Modificar la función handlePolicyChange para aplicar el formato
   const handlePolicyChange = (e) => {
     const { name, value } = e.target;
     
@@ -169,7 +165,6 @@ const Grupofamiliar = () => {
     }));
   };
 
-  // Handle contact method changes
   const handleContactMethodChange = (e) => {
     const { name, checked } = e.target;
     setContactMethods(prev => ({
@@ -178,7 +173,6 @@ const Grupofamiliar = () => {
     }));
   };
 
-  // Manejar cambio en el tipo de producto de una cobertura
   const handleProductTypeChange = (groupId, newProductType) => {
     setCoverageGroups(prevGroups =>
       prevGroups.map(group =>
@@ -194,18 +188,20 @@ const Grupofamiliar = () => {
 
     setFamilyMembers((prev) => [...prev, {
       id: client.id,
-      nombre: client.nombre_completo,
+      nombre: client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`,
+      ingreso_anual: client.ingreso_anual || 0,
       fecha_activacion: new Date().toISOString().split("T")[0]
     }]);
 
     setCoverageGroups((prevGroups) => {
-      return prevGroups.map((group, index) => {
-        if (index === 0) { // Solo afecta la primera tabla
+      const updatedGroups = prevGroups.map((group, index) => {
+        if (index === 0) {
           return {
             ...group,
             members: [...group.members, {
               id: client.id,
-              nombre: client.nombre_completo,
+              nombre: client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`,
+              ingreso_anual: client.ingreso_anual || 0,
               parentesco_id: "",
               fecha_activacion: new Date().toISOString().split("T")[0]
             }]
@@ -213,8 +209,43 @@ const Grupofamiliar = () => {
         }
         return group;
       });
+
+      // Calculamos inmediatamente
+      recalculateTotalIncome(updatedGroups);
+      
+      // Cerrar el modal después de agregar un miembro
+      setShowModal(false);
+      
+      // Mostrar mensaje de éxito
+      setAlert({
+        type: "success",
+        message: `Cliente "${client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`}" agregado exitosamente`,
+        visible: true
+      });
+      
+      // Ocultar alerta después de 3 segundos
+      setTimeout(() => {
+        setAlert({ type: "", message: "", visible: false });
+      }, 3000);
+
+      return updatedGroups;
     });
   };
+
+  const recalculateTotalIncome = (groups) => {
+    const total = groups.reduce((sum, group) =>
+        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+    , 0);
+
+    setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
+  };
+  
+  useEffect(() => {
+    const total = coverageGroups.reduce((sum, group) =>
+        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+    , 0);
+    setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
+  }, [coverageGroups]);
 
   const handleClienteCreated = async (newClient) => {
     if (newClient && newClient.id) {
@@ -223,14 +254,18 @@ const Grupofamiliar = () => {
     }
   };
   
-  // Remove family member
+  // Nuevo manejador para cliente existente seleccionado
+  const handleClienteExistenteSeleccionado = (cliente) => {
+    addFamilyMember(cliente);
+    console.log("Cliente existente agregado a la tabla en GrupoFamiliar.");
+  };
+  
   const removeFamilyMember = (clientId) => {
     setFamilyMembers(prev =>
       prev.filter(member => member.id !== clientId)
     );
   };
 
-  // Update family member details
   const updateFamilyMember = (clientId, field, value) => {
     setFamilyMembers(prev =>
       prev.map(member =>
@@ -272,33 +307,41 @@ const Grupofamiliar = () => {
     setCoverageGroups([...coverageGroups, newGroup]);
   };
 
-  // Eliminar un miembro solo de la tabla en la que se encuentra
   const removeMemberFromGroup = (groupId, memberId) => {
-    setCoverageGroups((prevGroups) =>
-      prevGroups.map((group) =>
-        group.id === groupId
-          ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
-          : group
-      )
+    const updatedGroups = coverageGroups.map((group) =>
+      group.id === groupId
+        ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+        : group
     );
+
+    setCoverageGroups(updatedGroups);
+    recalculateTotalIncome(updatedGroups);
   };
 
   const updateMemberData = (groupId, memberId, field, value) => {
-    setCoverageGroups((prevGroups) =>
-      prevGroups.map((group) =>
+    setCoverageGroups((prevGroups) => {
+      const updatedGroups = prevGroups.map((group) =>
         group.id === groupId
           ? {
-            ...group,
-            members: group.members.map((member) =>
-              member.id === memberId ? { ...member, [field]: value } : member
-            ),
-          }
+              ...group,
+              members: group.members.map((member) =>
+                member.id === memberId ? { ...member, [field]: value } : member
+              ),
+            }
           : group
-      )
-    );
+      );
+  
+      // Después de actualizar recalculamos el ingreso familiar
+      const total = updatedGroups.reduce((sum, group) =>
+        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+      , 0);
+  
+      setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
+  
+      return updatedGroups;
+    });
   };
 
-  // Abrir modal de edición
   const openEditModal = (groupId, memberId) => {
     const group = coverageGroups.find(g => g.id === groupId);
     if (!group) return;
@@ -310,7 +353,6 @@ const Grupofamiliar = () => {
     setShowEditModal(true);
   };
   
-  // Guardar cambios del miembro en el modal
   const saveEditChanges = () => {
     if (!currentEditMember) return;
     
@@ -333,25 +375,21 @@ const Grupofamiliar = () => {
     setCurrentEditMember(null);
   };
 
-  // Function to get parentesco name from ID
   const getParentescoName = (parentescoId) => {
     if (!parentescoId) return "-";
     const parentesco = availablePrentes.find(p => p.id === parentescoId);
     return parentesco ? parentesco.descripcion : parentescoId;
   };
 
-  
- // Function to get company name from ID
-const getCompanyName = (companyId) => {
-  if (!companyId) return "Sin compañía";
-  
-  // Asegurar que estamos comparando el mismo tipo de datos
-  const company = availableCompanies.find(c => String(c.id) === String(companyId));
-  
-  return company ? company.nombre : "Compañía desconocida";
-};
+  const getCompanyName = (companyId) => {
+    if (!companyId) return "Sin compañía";
+    
+    // Asegurar que estamos comparando el mismo tipo de datos
+    const company = availableCompanies.find(c => String(c.id) === String(companyId));
+    
+    return company ? company.nombre : "Compañía desconocida";
+  };
 
-  // Navigation between steps
   const nextStep = () => {
     if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
@@ -364,7 +402,12 @@ const getCompanyName = (companyId) => {
     }
   };
 
-  
+  // Función para abrir el modal y resetear a la pestaña por defecto
+  const handleOpenModal = () => {
+    setActiveTab("nuevo"); // Reset a la pestaña por defecto
+    setShowModal(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setAlert({ type: "", message: "", visible: false });
@@ -517,7 +560,7 @@ const getCompanyName = (companyId) => {
       });
     }
   };
-  // Render step progress bar
+
   const renderStepProgressBar = () => (
     <div className="mb-4">
       <div className="progress" style={{ height: '10px', borderRadius: '5px' }}>
@@ -553,7 +596,6 @@ const getCompanyName = (companyId) => {
     </div>
   );
 
-  // Render form based on current step
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -765,7 +807,7 @@ const getCompanyName = (companyId) => {
             <Card.Body>
               <div className="d-flex justify-content-between align-items-center mb-3">
                 <h4 className="mb-0 text-primary">Personas con Cobertura</h4>
-                <Button variant="primary" onClick={() => setShowModal(true)}>
+                <Button variant="primary" onClick={handleOpenModal}>
                   <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
                 </Button>
               </div>
@@ -899,7 +941,7 @@ const getCompanyName = (companyId) => {
                           <Col xs={12}>
                             <div className="text-center py-5 border rounded bg-light">
                               <p className="mb-0 text-muted">No hay miembros agregados.</p>
-                              <Button variant="outline-primary" size="sm" className="mt-2" onClick={() => setShowModal(true)}>
+                              <Button variant="outline-primary" size="sm" className="mt-2" onClick={handleOpenModal}>
                                   <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
                                 </Button>
                               </div>
@@ -968,7 +1010,7 @@ const getCompanyName = (companyId) => {
         )}
       </div>
       
-      {/* Modal for adding new client */}
+      {/* Modal for adding client (nuevo o existente) */}
       <Modal 
         show={showModal} 
         onHide={() => setShowModal(false)}
@@ -982,7 +1024,34 @@ const getCompanyName = (companyId) => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Clientes onClienteCreado={handleClienteCreated} isModal={true} />
+          <Nav variant="tabs" className="mb-4">
+            <Nav.Item>
+              <Nav.Link 
+                active={activeTab === "nuevo"} 
+                onClick={() => setActiveTab("nuevo")}
+                className={activeTab === "nuevo" ? "fw-bold" : ""}
+              >
+                <i className="bi bi-person-plus-fill me-2"></i>
+                Nuevo Cliente
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link 
+                active={activeTab === "existente"} 
+                onClick={() => setActiveTab("existente")}
+                className={activeTab === "existente" ? "fw-bold" : ""}
+              >
+                <i className="bi bi-search me-2"></i>
+                Cliente Existente
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
+          
+          {activeTab === "nuevo" ? (
+            <Clientes onClienteCreado={handleClienteCreated} isModal={true} />
+          ) : (
+            <ClienteExistente onClienteSeleccionado={handleClienteExistenteSeleccionado} />
+          )}
         </Modal.Body>
       </Modal>
 
@@ -1154,14 +1223,23 @@ const getCompanyName = (companyId) => {
                   </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Pagador</Form.Label>
-                    <Form.Control 
-                      type="text" 
-                      value={currentEditMember.pagador || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, pagador: e.target.value})}
-                    />
-                  </Form.Group>
+                <Form.Group className="mb-3">
+    <Form.Label>Pagador</Form.Label>
+    <Form.Select
+        value={currentEditMember.pagador || ""}
+        onChange={(e) => setCurrentEditMember({...currentEditMember, pagador: e.target.value})}
+    >
+        <option value="">Seleccione un pagador</option>
+        {coverageGroups
+            .find(group => group.id === currentEditMember.groupId)
+            ?.members.map(member => (
+                <option key={member.id} value={member.id}>
+                    {member.nombre}
+                </option>
+        ))}
+    </Form.Select>
+</Form.Group>
+
                 </Col>
                 <Col md={4}>
                   <Form.Group className="mb-3">
