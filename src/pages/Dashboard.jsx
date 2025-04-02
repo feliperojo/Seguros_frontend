@@ -1,12 +1,274 @@
-import React from "react";
+// Dashboard.js con fondo blanco
+import React, { useState, useEffect } from "react";
+import { Card, Row, Col, Button, Table, Badge, Alert } from "react-bootstrap";
+import { Link } from "react-router-dom";
+import {
+  FaUsers, FaProjectDiagram, FaCalendarAlt, FaExclamationTriangle,
+  FaPlus, FaList, FaChartLine, FaFileInvoiceDollar
+} from "react-icons/fa";
 import "../styles/Dashboard.css";
-import TableComponent from "../components/TableComponent"; // Importar el nuevo componente de tabla
+import apiRequest from "../services/api";
 
 const Dashboard = () => {
+  const [clientesRecientes, setClientesRecientes] = useState([]);
+  const [polizasProximasVencer, setPolizasProximasVencer] = useState([]);
+  const [estadisticas, setEstadisticas] = useState({
+    totalClientes: 0,
+    totalGruposFamiliares: 0,
+    polizasActivas: 0,
+    polizasVencidas: 0
+  });
+  const [cargando, setCargando] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const cargarDatos = async () => {
+      setCargando(true);
+      setError(null);
+      try {
+        const resClientes = await apiRequest("cliente/recientes", "GET");
+        setClientesRecientes(resClientes.slice(0, 5));
+
+        const resPolizas = await apiRequest("cobertura/proximas-vencer", "GET");
+        setPolizasProximasVencer(resPolizas.slice(0, 5));
+
+        const resEstadisticas = await apiRequest("cliente/general", "GET");
+        setEstadisticas(resEstadisticas);
+      } catch (err) {
+        console.error("Error al cargar datos del dashboard:", err);
+        setError("Hubo un problema al cargar los datos. Por favor, intente nuevamente.");
+      } finally {
+        setCargando(false);
+      }
+    };
+    cargarDatos();
+  }, []);
+
+  // Función para renderizar el mensaje cuando no hay datos
+  const renderEmptyMessage = (mensaje) => (
+    <tr>
+      <td colSpan="4" className="text-center py-4">
+        <div className="empty-state">
+          <FaList className="empty-icon" />
+          <p>{mensaje}</p>
+        </div>
+      </td>
+    </tr>
+  );
+
+  // Función para renderizar el estado de carga
+  const renderLoading = () => (
+    <tr>
+      <td colSpan="4" className="text-center py-4">
+        <div className="loading-state">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+          <p className="mt-2">Cargando datos...</p>
+        </div>
+      </td>
+    </tr>
+  );
+
   return (
-    <div className="content">
-      
-      <TableComponent />
+    <div className="dashboard-wrapper">
+      <div className="dashboard-header">
+        <h1>Panel Principal</h1>
+        <p className="text-muted">Bienvenido al sistema de gestión de Tampa Seguros</p>
+      </div>
+
+      {error && (
+        <Row className="mb-4">
+          <Col>
+            <Alert variant="danger" className="d-flex align-items-center">
+              <FaExclamationTriangle className="me-2" />
+              <span>{error}</span>
+            </Alert>
+          </Col>
+        </Row>
+      )}
+
+      <div className="section-container">
+        <Row className="stats-cards g-3">
+          <Col xl={3} md={6}>
+            <Card className="dashboard-card h-100">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="stats-title">Total Clientes</h6>
+                    <h3 className="stats-value">{estadisticas.totalClientes}</h3>
+                  </div>
+                  <div className="stats-icon"><FaUsers /></div>
+                </div>
+                <Link to="/cliente/lista" className="stretched-link"></Link>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col xl={3} md={6}>
+            <Card className="dashboard-card h-100">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="stats-title">Grupos Familiares</h6>
+                    <h3 className="stats-value">{estadisticas.totalGruposFamiliares}</h3>
+                  </div>
+                  <div className="stats-icon"><FaProjectDiagram /></div>
+                </div>
+                <Link to="/grupofamiliar/lista" className="stretched-link"></Link>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col xl={3} md={6}>
+            <Card className="dashboard-card h-100">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="stats-title">Pólizas Activas</h6>
+                    <h3 className="stats-value">{estadisticas.polizasActivas}</h3>
+                  </div>
+                  <div className="stats-icon"><FaFileInvoiceDollar /></div>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col xl={3} md={6}>
+            <Card className="dashboard-card alert-card h-100">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="stats-title">Pólizas Canceladas</h6>
+                    <h3 className="stats-value">{estadisticas.polizasCanceladas}</h3>
+                  </div>
+                  <div className="stats-icon"><FaCalendarAlt /></div>
+                </div>
+                <Link to="/grupofamiliar/vencimientos" className="stretched-link"></Link>
+              </Card.Body>
+            </Card>
+          </Col>
+        </Row>
+      </div>
+
+      <div className="section-container">
+        <h5 className="section-title">Acciones Rápidas</h5>
+        <Row className="g-3">
+          <Col lg={3} md={6}>
+            <Button as={Link} to="/cliente/crear" variant="primary" className="quick-action-btn">
+              <FaPlus /> Nuevo Cliente
+            </Button>
+          </Col>
+          <Col lg={3} md={6}>
+            <Button as={Link} to="/grupofamiliar/crear" variant="primary" className="quick-action-btn">
+              <FaPlus /> Nuevo Grupo Familiar
+            </Button>
+          </Col>
+          <Col lg={3} md={6}>
+            <Button as={Link} to="/informes/clientes" variant="outline-primary" className="quick-action-btn">
+              <FaChartLine /> Ver Informes
+            </Button>
+          </Col>
+          <Col lg={3} md={6}>
+            <Button as={Link} to="/grupofamiliar/vencimientos" variant="outline-primary" className="quick-action-btn">
+              <FaCalendarAlt /> Ver Cancelaciones
+            </Button>
+          </Col>
+        </Row>
+      </div>
+
+      <Row className="mb-4 g-4">
+        <Col lg={6}>
+          <div className="section-container table-section">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="section-title mb-0">Clientes Recientes</h5>
+              <Link to="/cliente/lista" className="btn btn-sm btn-link text-decoration-none">
+                Ver todos <FaList className="ms-1" />
+              </Link>
+            </div>
+            <div className="table-responsive">
+              <Table hover className="mb-0 table-borderless">
+                <thead>
+                  <tr>
+                    <th>Nombre</th>
+                    <th>Fecha</th>
+                    <th>Contacto</th>
+                    <th className="text-end">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cargando ? (
+                    renderLoading()
+                  ) : clientesRecientes.length > 0 ? (
+                    clientesRecientes.map(cliente => (
+                      <tr key={cliente.id}>
+                        <td className="fw-medium">{cliente.nombre_completo}</td>
+                        <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
+                        <td>{cliente.telefono || cliente.email}</td>
+                        <td className="text-end">
+                          <Link to={`/cliente/editar/${cliente.id}`} className="btn btn-sm btn-outline-primary">
+                            Editar
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    renderEmptyMessage("No hay clientes recientes")
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        </Col>
+
+        <Col lg={6}>
+          <div className="section-container table-section">
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="section-title mb-0">Pólizas Canceladas</h5>
+              <Link to="/grupofamiliar/vencimientos" className="btn btn-sm btn-link text-decoration-none">
+                Ver todas <FaList className="ms-1" />
+              </Link>
+            </div>
+            <div className="table-responsive">
+              <Table hover className="mb-0 table-borderless">
+                <thead>
+                  <tr>
+                    <th>Grupo Familiar</th>
+                    <th>Tipo</th>
+                    <th>Vencimiento</th>
+                    <th className="text-end">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cargando ? (
+                    renderLoading()
+                  ) : polizasProximasVencer.length > 0 ? (
+                    polizasProximasVencer.map(poliza => {
+                      const hoy = new Date();
+                      const vencimiento = new Date(poliza.fecha_vencimiento);
+                      const diasRestantes = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
+                      let estado = "success";
+                      if (diasRestantes <= 0) estado = "danger";
+                      else if (diasRestantes <= 15) estado = "warning";
+                      return (
+                        <tr key={poliza.id}>
+                          <td className="fw-medium">{poliza.grupo_familiar_nombre}</td>
+                          <td>{poliza.tipo_cobertura}</td>
+                          <td>{new Date(poliza.fecha_vencimiento).toLocaleDateString()}</td>
+                          <td className="text-end">
+                            <Badge bg={estado} pill>
+                              {diasRestantes <= 0 ? "Vencida" : `${diasRestantes} días`}
+                            </Badge>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    renderEmptyMessage("No hay pólizas próximas a vencer")
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </div>
+        </Col>
+      </Row>
     </div>
   );
 };

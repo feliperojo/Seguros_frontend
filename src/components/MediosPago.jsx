@@ -20,6 +20,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     cuenta_numero: '',
     cliente_id: ''
   });
+  const [error, setError] = useState({ campo: '', mensaje: '' });
 
   // Cargar medios de pago cuando el componente se monta o cambia clienteId
   useEffect(() => {
@@ -66,6 +67,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       cuenta_numero: '',
       cliente_id: clienteId // Asegurar que cliente_id esté siempre establecido
     });
+    setError({ campo: '', mensaje: '' });
     setShowModal(true);
   };
 
@@ -73,22 +75,173 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   const handleEditClick = (index) => {
     setEditingIndex(index);
     setCurrentMedioPago({...mediosPago[index]});
+    setError({ campo: '', mensaje: '' });
     setShowModal(true);
+  };
+
+  // Formatear número de tarjeta según el tipo
+  const formatCardNumber = (value, cardType) => {
+    // Eliminar espacios y caracteres no numéricos
+    const numbers = value.replace(/\D/g, '');
+    
+    // Limitar a los dígitos máximos según el tipo de tarjeta
+    const maxLength = cardType === 'american_express' ? 15 : 16;
+    const limitedNumbers = numbers.slice(0, maxLength);
+    
+    // Formatear según el tipo de tarjeta
+    if (cardType === 'american_express') {
+      // Formato 4-6-5 para Amex
+      const parts = [
+        limitedNumbers.slice(0, 4),
+        limitedNumbers.slice(4, 10),
+        limitedNumbers.slice(10, 15)
+      ].filter(part => part.length > 0);
+      return parts.join(' ');
+    } else {
+      // Formato 4-4-4-4 para otras tarjetas
+      const parts = [];
+      for (let i = 0; i < limitedNumbers.length; i += 4) {
+        parts.push(limitedNumbers.slice(i, i + 4));
+      }
+      return parts.join(' ');
+    }
+  };
+
+  // Formatear fecha de expiración (MM/AAAA)
+  const formatExpirationDate = (value) => {
+    const numbers = value.replace(/\D/g, '');
+    
+    if (numbers.length <= 2) {
+      return numbers;
+    }
+    
+    const month = numbers.slice(0, 2);
+    const year = numbers.slice(2, 6);
+    
+    return `${month}/${year}`;
+  };
+
+  // Validar CVV
+  const validateCVV = (cvv, cardType) => {
+    const digits = cvv.replace(/\D/g, '');
+    const requiredLength = cardType === 'american_express' ? 4 : 3;
+    
+    return digits.length === requiredLength;
   };
 
   // Manejador para cambios en campos del formulario
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setCurrentMedioPago(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setError({ campo: '', mensaje: '' }); // Limpiar errores previos
+    
+    if (name === 'tipo_tarjeta') {
+      // Al cambiar el tipo de tarjeta, resetear el número y CVV
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: value,
+        numero_tarjeta: '',
+        cvv: ''
+      }));
+    } else if (name === 'numero_tarjeta') {
+      // Formatear número de tarjeta
+      const formattedValue = formatCardNumber(value, currentMedioPago.tipo_tarjeta);
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: formattedValue
+      }));
+    } else if (name === 'fecha_expiracion') {
+      // Formatear fecha de expiración
+      const formattedValue = formatExpirationDate(value);
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: formattedValue
+      }));
+    } else if (name === 'cvv') {
+      // Limitar CVV a solo números
+      const digitsOnly = value.replace(/\D/g, '');
+      const maxLength = currentMedioPago.tipo_tarjeta === 'american_express' ? 4 : 3;
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: digitsOnly.slice(0, maxLength)
+      }));
+    } else {
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+  };
+
+  // Validar formulario antes de guardar
+  const validateForm = () => {
+    // Validar según forma de pago
+    if (currentMedioPago.forma_pago === 'tarjeta') {
+      // Validar titular
+      if (!currentMedioPago.titular.trim()) {
+        setError({ campo: 'titular', mensaje: 'Debe ingresar el nombre del titular' });
+        return false;
+      }
+      
+      // Validar tipo de tarjeta
+      if (!currentMedioPago.tipo_tarjeta) {
+        setError({ campo: 'tipo_tarjeta', mensaje: 'Debe seleccionar un tipo de tarjeta' });
+        return false;
+      }
+      
+      // Validar número de tarjeta
+      const numeroLimpio = currentMedioPago.numero_tarjeta.replace(/\D/g, '');
+      const longitudRequerida = currentMedioPago.tipo_tarjeta === 'american_express' ? 15 : 16;
+      if (numeroLimpio.length !== longitudRequerida) {
+        setError({ campo: 'numero_tarjeta', mensaje: `El número debe tener ${longitudRequerida} dígitos` });
+        return false;
+      }
+      
+      // Validar fecha de expiración
+      const fechaPattern = /^(0[1-9]|1[0-2])\/20\d{2}$/;
+      if (!fechaPattern.test(currentMedioPago.fecha_expiracion)) {
+        setError({ campo: 'fecha_expiracion', mensaje: 'Formato inválido. Use MM/AAAA' });
+        return false;
+      }
+      
+      // Validar CVV
+      if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
+        const longitudCVV = currentMedioPago.tipo_tarjeta === 'american_express' ? 4 : 3;
+        setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
+        return false;
+      }
+    } else if (currentMedioPago.forma_pago === 'cuenta_bancaria') {
+      // Validar titular
+      if (!currentMedioPago.titular.trim()) {
+        setError({ campo: 'titular', mensaje: 'Debe ingresar el nombre del titular' });
+        return false;
+      }
+      
+      // Validar banco
+      if (!currentMedioPago.banco.trim()) {
+        setError({ campo: 'banco', mensaje: 'Debe ingresar el nombre del banco' });
+        return false;
+      }
+      
+      // Validar número de cuenta
+      if (!currentMedioPago.cuenta_numero.trim()) {
+        setError({ campo: 'cuenta_numero', mensaje: 'Debe ingresar el número de cuenta' });
+        return false;
+      }
+    }
+    
+    return true;
   };
 
   // Función para guardar medio de pago - ajustada a nuevas rutas
   const handleSave = async () => {
+    // Validar formulario
+    if (!validateForm()) {
+      return;
+    }
+    
     try {
       let response;
+      // Preparar datos, eliminando espacios del número de tarjeta para almacenamiento
       const payloadData = {
         ...currentMedioPago,
         cliente_id: clienteId
@@ -109,6 +262,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       if (onSave) onSave(response.data || response);
     } catch (error) {
       console.error('Error al guardar medio de pago:', error);
+      setError({ campo: 'general', mensaje: 'Error al guardar el medio de pago. Inténtelo de nuevo.' });
     }
   };
 
@@ -140,20 +294,23 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               <label htmlFor="titular">Titular de la Tarjeta</label>
               <input
                 type="text"
-                className="form-control"
+                className={`form-control ${error.campo === 'titular' ? 'is-invalid' : ''}`}
                 id="titular"
                 name="titular"
                 value={currentMedioPago.titular || ''}
                 onChange={handleChange}
                 required
               />
+              {error.campo === 'titular' && (
+                <div className="invalid-feedback">{error.mensaje}</div>
+              )}
             </div>
             
             <div className="form-row">
               <div className="form-group col-md-6 mb-3">
                 <label htmlFor="tipo_tarjeta">Tipo de Tarjeta</label>
                 <select
-                  className="form-control"
+                  className={`form-control ${error.campo === 'tipo_tarjeta' ? 'is-invalid' : ''}`}
                   id="tipo_tarjeta"
                   name="tipo_tarjeta"
                   value={currentMedioPago.tipo_tarjeta || ''}
@@ -164,51 +321,63 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   <option value="visa">Visa</option>
                   <option value="mastercard">MasterCard</option>
                   <option value="american_express">American Express</option>
-                  <option value="Discover">Discover</option>
+                  <option value="discover">Discover</option>
                   <option value="otro">Otro</option>
                 </select>
+                {error.campo === 'tipo_tarjeta' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
               </div>
               <div className="form-group col-md-6 mb-3">
                 <label htmlFor="numero_tarjeta">Número de Tarjeta</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className={`form-control ${error.campo === 'numero_tarjeta' ? 'is-invalid' : ''}`}
                   id="numero_tarjeta"
                   name="numero_tarjeta"
                   value={currentMedioPago.numero_tarjeta || ''}
                   onChange={handleChange}
+                  placeholder={currentMedioPago.tipo_tarjeta === 'american_express' ? 'XXXX XXXXXX XXXXX' : 'XXXX XXXX XXXX XXXX'}
                   required
                 />
+                {error.campo === 'numero_tarjeta' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
               </div>
             </div>
             <div className="form-row">
               <div className="form-group col-md-6 mb-3">
-                <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AA)</label>
+                <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AAAA)</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className={`form-control ${error.campo === 'fecha_expiracion' ? 'is-invalid' : ''}`}
                   id="fecha_expiracion"
                   name="fecha_expiracion"
-                  placeholder="MM/AA"
+                  placeholder="MM/AAAA"
                   value={currentMedioPago.fecha_expiracion || ''}
                   onChange={handleChange}
                   required
                 />
+                {error.campo === 'fecha_expiracion' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
               </div>
               <div className="form-group col-md-6 mb-3">
                 <label htmlFor="cvv">CVV</label>
                 <input
                   type="text"
-                  className="form-control"
+                  className={`form-control ${error.campo === 'cvv' ? 'is-invalid' : ''}`}
                   id="cvv"
                   name="cvv"
                   value={currentMedioPago.cvv || ''}
                   onChange={handleChange}
+                  placeholder={currentMedioPago.tipo_tarjeta === 'american_express' ? '4 dígitos' : '3 dígitos'}
                   required
                 />
+                {error.campo === 'cvv' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
               </div>
-              
-
             </div>
           </>
         );
@@ -219,13 +388,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               <label htmlFor="titular">Titular de la Cuenta</label>
               <input
                 type="text"
-                className="form-control"
+                className={`form-control ${error.campo === 'titular' ? 'is-invalid' : ''}`}
                 id="titular"
                 name="titular"
                 value={currentMedioPago.titular || ''}
                 onChange={handleChange}
                 required
               />
+              {error.campo === 'titular' && (
+                <div className="invalid-feedback">{error.mensaje}</div>
+              )}
             </div>
 
             <div className="form-group mb-3">
@@ -243,13 +415,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               <label htmlFor="banco">Banco</label>
               <input
                 type="text"
-                className="form-control"
+                className={`form-control ${error.campo === 'banco' ? 'is-invalid' : ''}`}
                 id="banco"
                 name="banco"
                 value={currentMedioPago.banco || ''}
                 onChange={handleChange}
                 required
               />
+              {error.campo === 'banco' && (
+                <div className="invalid-feedback">{error.mensaje}</div>
+              )}
             </div>
             <div className="form-group mb-3">
               <label htmlFor="ruta">Ruta/Código de Banco</label>
@@ -266,13 +441,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               <label htmlFor="cuenta_numero">Número de Cuenta</label>
               <input
                 type="text"
-                className="form-control"
+                className={`form-control ${error.campo === 'cuenta_numero' ? 'is-invalid' : ''}`}
                 id="cuenta_numero"
                 name="cuenta_numero"
                 value={currentMedioPago.cuenta_numero || ''}
                 onChange={handleChange}
                 required
               />
+              {error.campo === 'cuenta_numero' && (
+                <div className="invalid-feedback">{error.mensaje}</div>
+              )}
             </div>
           </>
         );
@@ -283,8 +461,6 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
 
   return (
     <div className="medios-pago-container">
-     
-
       {/* Lista de medios de pago */}
       <div className="medios-pago-list">
         {mediosPago.length === 0 ? (
@@ -307,7 +483,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   <td>
                     {medio.forma_pago === 'tarjeta' 
                       ? `${medio.tipo_tarjeta || ''} •••• ${medio.numero_tarjeta ? medio.numero_tarjeta.slice(-4) : ''}` 
-                      : `${medio.banco || ''} - ${medio.cuenta_numero || ''}`}
+                      : `${medio.banco || ''} - ${medio.cuenta_numero ? '••••' + medio.cuenta_numero.slice(-4) : ''}`}
                   </td>
                   <td>
                     <button 
@@ -355,6 +531,11 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                 ></button>
               </div>
               <div className="modal-body">
+                {error.campo === 'general' && (
+                  <div className="alert alert-danger" role="alert">
+                    {error.mensaje}
+                  </div>
+                )}
                 <form>
                   <div className="form-group mb-3">
                     <label htmlFor="forma_pago">Tipo de Medio de Pago</label>

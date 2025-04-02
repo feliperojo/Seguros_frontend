@@ -7,6 +7,8 @@ import Informes from "./pages/Informes";
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
+import EditarCliente from "./pages/EditarCliente";
+import ListaClientes from "./pages/ListaClientes";
 
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
@@ -27,11 +29,14 @@ const App = () => {
       {/* Rutas protegidas dentro del MainLayout */}
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/clientes" element={<Cliente />} />
-        <Route path="/grupofamiliar" element={<Grupofamiliar />} />
+        <Route path="/clientes/crear" element={<Cliente />} />
+        <Route path="/grupofamiliar/crear" element={<Grupofamiliar />} />
         <Route path="/informes" element={<Informes />} />
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Mediospago" element={<MediosPago />} />
+        <Route path="/clientes/editar/:id" element={<EditarCliente />} /> {/* Nueva ruta */}
+        <Route path="/clientes/lista" element={<ListaClientes/>}/>
+      
       </Route>
 
       {/* Redirigir a login si la ruta no existe */}

@@ -1,0 +1,77 @@
+/* ListaClientes.css */
+
+.lista-clientes-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  
+  .page-title {
+    color: #1a3964;
+    font-weight: 600;
+    font-size: 24px;
+    margin-bottom: 15px;
+  }
+  
+  .filter-container {
+    margin-bottom: 20px;
+  }
+  
+  .lista-clientes-table {
+    background-color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  .lista-clientes-table thead th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    padding: 12px 15px;
+    border-bottom: 1px solid #dee2e6;
+  }
+  
+  .lista-clientes-table tbody td {
+    padding: 12px 15px;
+    vertical-align: middle;
+    border-top: 1px solid #f2f2f2;
+  }
+  
+  .lista-clientes-table tbody tr:hover {
+    background-color: #f9fafc;
+  }
+  
+  .sortable-header {
+    cursor: pointer;
+    user-select: none;
+  }
+  
+  .sortable-header:hover {
+    background-color: #edf2f7;
+  }
+  
+  .cliente-nombre {
+    font-weight: 500;
+  }
+  
+  .texto-secundario {
+    color: #6c757d;
+    font-size: 0.85rem;
+  }
+  
+  .pagination-info {
+    color: #6c757d;
+    font-size: 0.9rem;
+  }
+  
+  /* Responsive adjustments */
+  @media (max-width: 768px) {
+    .lista-clientes-table thead th,
+    .lista-clientes-table tbody td {
+      padding: 10px;
+    }
+    
+    .page-title {
+      font-size: 22px;
+    }
+  }

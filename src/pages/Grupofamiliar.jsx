@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
-import { Modal, Button, Card, Form, Row, Col, Table, Alert } from "react-bootstrap";
+import { Modal, Button, Card, Form, Row, Col, Table, Alert, Dropdown, Accordion } from "react-bootstrap";
 import Clientes from "./Clientes";
+import CountrySelectWithFlags from '../components/CountrySelect';
+import countryCodes from '../services/countryCodes';
 
 const Grupofamiliar = () => {
   // Initial form state for policy
@@ -48,6 +50,8 @@ const Grupofamiliar = () => {
 
   const [coverageGroups, setCoverageGroups] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentEditMember, setCurrentEditMember] = useState(null);
   const [policyData, setPolicyData] = useState(INITIAL_POLICY_STATE);
   const [familyMembers, setFamilyMembers] = useState([]);
   const [availableCompanies, setAvailableCompanies] = useState([]);
@@ -57,6 +61,11 @@ const Grupofamiliar = () => {
     whatsapp: false,
     telegram: false,
     texto_sms: false
+  });
+
+  const [selectedCode, setSelectedCode] = useState({
+    telefono1: "us",
+    telefono2: "us"
   });
 
   // Initialize the first coverage group if none exists
@@ -76,6 +85,19 @@ const Grupofamiliar = () => {
     fetchCompanies();
     fetchDataparentesco();
   }, []);
+
+  const handleCountryCodeChange = (name, isoCode) => {
+    setSelectedCode((prev) => ({
+      ...prev,
+      [name]: isoCode
+    }));
+  };
+
+  // Encuentra el código numérico del país según el ISO
+  const getCountryCode = (iso) => {
+    const country = countryCodes.find((c) => c.iso === iso);
+    return country ? country.code : "";
+  };
 
   // Function to fetch companies
   const fetchCompanies = async () => {
@@ -115,12 +137,35 @@ const Grupofamiliar = () => {
     }
   };
 
-  // Handle policy form changes
+  // Función para formatear números de teléfono como XXX-XXX-XXXX
+  const formatPhoneNumber = (value) => {
+    const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+
+    if (!match) return value; // Retorna el valor original si no hay coincidencias
+    return [match[1], match[2], match[3]].filter(Boolean).join("-");
+  };
+
+  // Función para formatear fechas en formato legible
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
+  // Modificar la función handlePolicyChange para aplicar el formato
   const handlePolicyChange = (e) => {
     const { name, value } = e.target;
+    
+    // Aplicar formato de teléfono
+    let updatedValue = value;
+    if (["telefono1", "telefono2"].includes(name)) {
+      updatedValue = formatPhoneNumber(value);
+    }
+    
     setPolicyData(prev => ({
       ...prev,
-      [name]: value
+      [name]: updatedValue
     }));
   };
 
@@ -161,7 +206,7 @@ const Grupofamiliar = () => {
             members: [...group.members, {
               id: client.id,
               nombre: client.nombre_completo,
-              parentesco: "",
+              parentesco_id: "",
               fecha_activacion: new Date().toISOString().split("T")[0]
             }]
           };
@@ -204,7 +249,7 @@ const Grupofamiliar = () => {
       newMembers = coverageGroups[0].members.map(member => ({
         id: member.id,
         nombre: member.nombre,
-        parentesco: "",
+        parentesco_id: "",
         fecha_activacion: "",
         fecha_cancelacion: "",
         compania_id: "",
@@ -253,6 +298,59 @@ const Grupofamiliar = () => {
     );
   };
 
+  // Abrir modal de edición
+  const openEditModal = (groupId, memberId) => {
+    const group = coverageGroups.find(g => g.id === groupId);
+    if (!group) return;
+    
+    const member = group.members.find(m => m.id === memberId);
+    if (!member) return;
+    
+    setCurrentEditMember({ ...member, groupId });
+    setShowEditModal(true);
+  };
+  
+  // Guardar cambios del miembro en el modal
+  const saveEditChanges = () => {
+    if (!currentEditMember) return;
+    
+    setCoverageGroups(prevGroups => 
+      prevGroups.map(group => 
+        group.id === currentEditMember.groupId
+          ? {
+              ...group,
+              members: group.members.map(member => 
+                member.id === currentEditMember.id 
+                  ? { ...currentEditMember }
+                  : member
+              )
+            }
+          : group
+      )
+    );
+    
+    setShowEditModal(false);
+    setCurrentEditMember(null);
+  };
+
+  // Function to get parentesco name from ID
+  const getParentescoName = (parentescoId) => {
+    if (!parentescoId) return "-";
+    const parentesco = availablePrentes.find(p => p.id === parentescoId);
+    return parentesco ? parentesco.descripcion : parentescoId;
+  };
+
+  
+ // Function to get company name from ID
+const getCompanyName = (companyId) => {
+  if (!companyId) return "Sin compañía";
+  
+  // Asegurar que estamos comparando el mismo tipo de datos
+  const company = availableCompanies.find(c => String(c.id) === String(companyId));
+  
+  return company ? company.nombre : "Compañía desconocida";
+};
+
   // Navigation between steps
   const nextStep = () => {
     if (currentStep < totalSteps) {
@@ -266,60 +364,159 @@ const Grupofamiliar = () => {
     }
   };
 
-  // Submit policy and family group
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Prepare submission data
-    const submissionData = {
-      ...policyData,
-      familia: familyMembers
-    };
-
+    setAlert({ type: "", message: "", visible: false });
+  
     try {
-      const response = await apiRequest("grupo_familiar/create", "POST", submissionData);
-
-      if (response?.message && response.message.toLowerCase().includes("poliza creada exitosamente")) {
-        // Reset form
-        setPolicyData(INITIAL_POLICY_STATE);
-        setFamilyMembers([]);
-        setCoverageGroups([{
-          id: 1,
-          tipoProducto: "SEGURO MEDICO  OBAMA",
-          policyData: { ...INITIAL_POLICY_STATE },
-          members: []
-        }]);
-        setCurrentStep(1);
-        setContactMethods({
-          whatsapp: false,
-          telegram: false,
-          texto_sms: false
-        });
-
-        // Show success alert
-        setAlert({
-          type: "success",
-          message: "Póliza de Grupo Familiar creada exitosamente",
-          visible: true
-        });
-
-        // Hide alert after 5 seconds
-        setTimeout(() => {
-          setAlert({ type: "", message: "", visible: false });
-        }, 5000);
+      // 1. Preparar los datos del grupo familiar para la API
+      const grupoFamiliarData = {
+        personas_taxes: policyData.personas_en_taxes,
+        personas_cobertura: policyData.personas_cobertura,
+        ingreso_familiar_anual: policyData.ingreso_familiar,
+        persona_contacto: policyData.persona_contacto,
+        pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
+        telefono_1: policyData.telefono1 ? `+${getCountryCode(selectedCode.telefono1)}${policyData.telefono1.replace(/\D/g, "")}` : "",
+        telefono_2: policyData.telefono2 ? `+${getCountryCode(selectedCode.telefono2)}${policyData.telefono2.replace(/\D/g, "")}` : "",
+        nota: policyData.notas_telefonos,
+        whatsapp: contactMethods.whatsapp,
+        telegram: contactMethods.telegram,
+        mensaje_sms: contactMethods.texto_sms,
+        captado_por: policyData.captado_por || "",
+        cual: policyData.referido || ""
+      };
+  
+      console.log("Enviando datos de grupo familiar:", grupoFamiliarData);
+  
+      // 2. Guardar el grupo familiar primero
+      const grupoFamiliarResponse = await apiRequest("grupo_familiar/create", "POST", grupoFamiliarData);
+      console.log("Respuesta completa de grupo familiar:", grupoFamiliarResponse);
+  
+      // Verificar estructura de la respuesta y extraer el ID apropiadamente
+      let grupoFamiliarId;
+      
+      // Verificamos la estructura de la respuesta para extraer el ID correctamente
+      if (grupoFamiliarResponse && grupoFamiliarResponse.id) {
+        // Si la respuesta tiene un campo id directo
+        grupoFamiliarId = grupoFamiliarResponse.id;
+      } else if (grupoFamiliarResponse && grupoFamiliarResponse.grupo_familiar && grupoFamiliarResponse.grupo_familiar.id) {
+        // Si la respuesta tiene un objeto anidado grupo_familiar con id
+        grupoFamiliarId = grupoFamiliarResponse.grupo_familiar.id;
+      } else if (grupoFamiliarResponse && grupoFamiliarResponse.data && grupoFamiliarResponse.data.id) {
+        // Si la respuesta tiene un objeto data con id
+        grupoFamiliarId = grupoFamiliarResponse.data.id;
+      } else if (grupoFamiliarResponse && Array.isArray(grupoFamiliarResponse) && grupoFamiliarResponse[0] && grupoFamiliarResponse[0].id) {
+        // Si la respuesta es un array con objetos que tienen id
+        grupoFamiliarId = grupoFamiliarResponse[0].id;
       } else {
-        throw new Error(response?.message || "Error desconocido");
+        // Busca recursivamente un campo id en la respuesta
+        const findId = (obj) => {
+          if (!obj || typeof obj !== 'object') return null;
+          if (obj.id !== undefined) return obj.id;
+          
+          for (const key in obj) {
+            const result = findId(obj[key]);
+            if (result !== null) return result;
+          }
+          return null;
+        };
+        
+        grupoFamiliarId = findId(grupoFamiliarResponse);
       }
-    } catch (err) {
-      console.error("Error creating policy:", err);
+  
+      if (!grupoFamiliarId) {
+        console.error("No se pudo encontrar el ID en la respuesta:", grupoFamiliarResponse);
+        throw new Error("No se pudo obtener el ID del grupo familiar en la respuesta de la API");
+      }
+  
+      console.log("✅ Grupo familiar creado con ID:", grupoFamiliarId);
+  
+      // 3. Ahora guardamos cada cobertura con las personas asociadas
+      const coberturasPromises = coverageGroups.map(async (group) => {
+        // Por cada grupo de cobertura, guardamos las coberturas de cada miembro
+        const miembrosPromises = group.members.map(async (member) => {
+          // Solo procesamos miembros que tengan datos básicos
+          if (!member.id) return null;
+  
+          const coberturaData = {
+            codigo_poliza: member.codigo_poliza || "",
+            parentesco_id: member.parentesco_id || null,
+            fecha_activacion: member.fecha_activacion || null,
+            fecha_cancelacion: member.fecha_cancelacion || null,
+            ano: member.ano || new Date().getFullYear().toString(),
+            compania_id: member.compania_id || null,
+            plan: member.plan || "",
+            metal: member.metal || "",
+            elegibilidad: member.elegibilidad || "",
+            estado_cobertura: member.estado_cobertura || "",
+            red: member.red || "",
+            pagador: member.pagador || "",
+            precio: member.precio || 0,
+            cliente_id: member.id, // ID del cliente
+            grupo_familiar_id: grupoFamiliarId, // ID del grupo familiar creado
+            tipo_producto: group.tipoProducto // Tipo de producto de esta cobertura
+          };
+  
+          console.log(`Enviando cobertura para miembro ${member.nombre}:`, coberturaData);
+          
+          try {
+            const coberturaResponse = await apiRequest("cobertura/create", "POST", coberturaData);
+            console.log(`✅ Cobertura creada para miembro ${member.nombre}:`, coberturaResponse);
+            return coberturaResponse;
+          } catch (error) {
+            console.error(`❌ Error al crear cobertura para miembro ${member.nombre}:`, error);
+            throw error;
+          }
+        });
+  
+        // Esperar a que todas las coberturas de este grupo se guarden
+        return Promise.all(miembrosPromises.filter(Boolean));
+      });
+  
+      // Esperar a que todas las coberturas se guarden
+      await Promise.all(coberturasPromises);
+  
+      // 4. Éxito - Mostrar mensaje y resetear formulario
+      console.log("✅ Todas las coberturas han sido guardadas exitosamente");
+      
+      // Resetear formulario
+      setPolicyData(INITIAL_POLICY_STATE);
+      setFamilyMembers([]);
+      setCoverageGroups([{
+        id: 1,
+        tipoProducto: "SEGURO MEDICO  OBAMA",
+        policyData: { ...INITIAL_POLICY_STATE },
+        members: []
+      }]);
+      setCurrentStep(1);
+      setContactMethods({
+        whatsapp: false,
+        telegram: false,
+        texto_sms: false
+      });
+  
+      // Mostrar alerta de éxito
+      setAlert({
+        type: "success",
+        message: "Póliza de Grupo Familiar y coberturas creadas exitosamente",
+        visible: true
+      });
+  
+      // Ocultar alerta después de 5 segundos
+      setTimeout(() => {
+        setAlert({ type: "", message: "", visible: false });
+      }, 5000);
+  
+    } catch (error) {
+      console.error("❌ Error al procesar la solicitud:", error);
       setAlert({
         type: "danger",
-        message: "Error al crear la póliza: " + err.message,
+        message: `Error: ${error.message || "Ocurrió un error inesperado"}`,
         visible: true
       });
     }
   };
-
   // Render step progress bar
   const renderStepProgressBar = () => (
     <div className="mb-4">
@@ -441,23 +638,57 @@ const Grupofamiliar = () => {
                 <Col md={3}>
                   <Form.Group>
                     <Form.Label className="fw-medium">Teléfono 1</Form.Label>
-                    <Form.Control 
-                      type="text" 
-                      name="telefono1" 
-                      value={policyData.telefono1}
-                      onChange={handlePolicyChange}
-                    />
+                    <div className="input-group">
+                      <span className="input-group-text p-0">
+                        <CountrySelectWithFlags 
+                          name="telefono1" 
+                          selectedCode={selectedCode.telefono1} 
+                          onChange={handleCountryCodeChange} 
+                        />
+                      </span>
+                      <Form.Control 
+                        type="text" 
+                        name="telefono1" 
+                        value={policyData.telefono1}
+                        onChange={handlePolicyChange}
+                      />
+                    </div>
                   </Form.Group>
                 </Col>
-                
+
                 <Col md={3}>
                   <Form.Group>
                     <Form.Label className="fw-medium">Teléfono 2</Form.Label>
-                    <Form.Control 
-                      type="text" 
-                      name="telefono2" 
-                      value={policyData.telefono2}
+                    <div className="input-group">
+                      <span className="input-group-text p-0">
+                        <CountrySelectWithFlags 
+                          name="telefono2" 
+                          selectedCode={selectedCode.telefono2} 
+                          onChange={handleCountryCodeChange} 
+                        />
+                      </span>
+                      <Form.Control 
+                        type="text" 
+                        name="telefono2" 
+                        value={policyData.telefono2}
+                        onChange={handlePolicyChange}
+                      />
+                    </div>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-medium">Nota</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={3}
+                      name="notas_telefonos"
+                      value={policyData.notas_telefonos}
                       onChange={handlePolicyChange}
+                      placeholder="Ingrese sus notas aquí..."
                     />
                   </Form.Group>
                 </Col>
@@ -524,18 +755,6 @@ const Grupofamiliar = () => {
                     />
                   </Form.Group>
                 </Col>
-                
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label className="fw-medium">Nota</Form.Label>
-                    <Form.Control 
-                      type="text" 
-                      name="notas_contacto" 
-                      value={policyData.notas_contacto}
-                      onChange={handlePolicyChange}
-                    />
-                  </Form.Group>
-                </Col>
               </Row>
             </Card.Body>
           </Card>
@@ -553,206 +772,144 @@ const Grupofamiliar = () => {
               <hr />
 
               {coverageGroups.map((group) => (
-                <div key={group.id} className="mb-4">
-                  <div className="d-flex align-items-center mb-3">
-                    <h5 className="me-3 mb-0">Cobertura {group.id}:</h5>
-                    <Form.Select 
-                      style={{ width: "auto", maxWidth: "300px" }}
-                      value={group.tipoProducto}
-                      onChange={(e) => handleProductTypeChange(group.id, e.target.value)}
-                      className="form-select-sm"
-                    >
-                      {TIPOS_PRODUCTOS.map(producto => (
-                        <option key={producto.id} value={producto.id}>
-                          {producto.nombre}
-                        </option>
-                      ))}
-                    </Form.Select>
-                  </div>
-                  
-                  <div className="table-responsive border rounded">
-                    <Table striped hover className="mb-0" size="sm">
-                      <thead className="bg-light">
-                        <tr>
-                          <th style={{ minWidth: "120px" }}>ID Póliza</th>
-                          <th style={{ minWidth: "200px" }}>Nombre</th>
-                          <th style={{ minWidth: "125px" }}>Parentesco</th>
-                          <th>Fecha Activación</th>
-                          <th>Fecha Cancelación</th>
-                          <th>Año Cobertura</th>
-                          <th style={{ minWidth: "150px" }}>Compañía</th>
-                          <th style={{ minWidth: "150px" }}>Plan</th>
-                          <th style={{ minWidth: "120px" }}>Metal</th>
-                          <th style={{ minWidth: "120px" }}>Elegibilidad</th>
-                          <th style={{ minWidth: "125px" }}>Cobertura</th>
-                          <th style={{ minWidth: "95px" }}>Red</th>
-                          <th>Pagador</th>
-                          <th>Precio</th>
-                          <th>Acciones</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                <Accordion key={group.id} className="mb-4" defaultActiveKey="0">
+                  <Accordion.Item eventKey="0">
+                    <Accordion.Header>
+                      <div className="d-flex align-items-center">
+                        <span className="me-2">Cobertura {group.id}:</span>
+                        <Form.Select 
+                          style={{ width: "auto", maxWidth: "300px", marginRight: "10px" }}
+                          value={group.tipoProducto}
+                          onChange={(e) => handleProductTypeChange(group.id, e.target.value)}
+                          className="form-select-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {TIPOS_PRODUCTOS.map(producto => (
+                            <option key={producto.id} value={producto.id}>
+                              {producto.nombre}
+                            </option>
+                          ))}
+                        </Form.Select>
+                        <span className="ms-3 text-muted">
+                          {group.members.length} {group.members.length === 1 ? 'miembro' : 'miembros'}
+                        </span>
+                      </div>
+                    </Accordion.Header>
+                    <Accordion.Body>
+                      <Row>
                         {group.members.length > 0 ? (
                           group.members.map(member => (
-                            <tr key={member.id}>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.codigo_poliza || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
-                                  placeholder="ID Póliza"
-                                />
-                              </td>
-                              <td>{member.nombre}</td>
-                              <td>
-                                <Form.Select 
-                                  size="sm"
-                                  value={member.parentesco_id || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "parentesco_id", e.target.value)}
-                                >
-                                  <option value="">Seleccione</option>
-                                  {availablePrentes.map(parentesco => (
-                                    <option key={parentesco.id} value={parentesco.id}>
-                                      {parentesco.descripcion}
-                                    </option>
-                                  ))}
-                                </Form.Select>
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="date" 
-                                  value={member.fecha_activacion || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
-                                />
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="date" 
-                                  value={member.fecha_cancelacion || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
-                                />
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.ano || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "ano", e.target.value)}
-                                  placeholder="Año"
-                                />
-                              </td>
-                              <td>
-                                <Form.Select 
-                                  size="sm"
-                                  value={member.compania_id || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "compania_id", e.target.value)}
-                                >
-                                  <option value="">Seleccione</option>
-                                  {availableCompanies.map(company => (
-                                    <option key={company.id} value={company.id}>
-                                      {company.nombre}
-                                    </option>
-                                  ))}
-                                </Form.Select>
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.plan || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "plan", e.target.value)}
-                                  placeholder="Plan"
-                                />
-                              </td>
-                              <td>
-                                <Form.Select 
-                                  size="sm"
-                                  value={member.metal || ""} 
-                                  onChange={(e) => updateMemberData(group.id, member.id, "metal", e.target.value)}
-                                >
-                                  <option value="">Seleccione</option>
-                                  <option value="BRONCE">BRONCE</option>
-                                  <option value="GOLD">GOLD</option>
-                                  <option value="SILVER">SILVER</option>
-                                </Form.Select>
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.elegibilidad || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
-                                  placeholder="Elegibilidad"
-                                />
-                              </td>
-                              <td>       
-                                <Form.Select 
-                                  size="sm"
-                                  value={member.estado_cobertura || ""} 
-                                  onChange={(e) => updateMemberData(group.id, member.id, "estado_cobertura", e.target.value)}
-                                >
-                                  <option value="">Seleccione</option>
-                                  <option value="Si">Si</option>
-                                  <option value="No">No</option>
-                                  <option value="MEDICARE">MEDICARE</option>
-                                  <option value="MEDICAID">MEDICAID</option>
-                                </Form.Select>
-                              </td>
-                              <td>       
-                                <Form.Select 
-                                  size="sm"
-                                  value={member.red || ""} 
-                                  onChange={(e) => updateMemberData(group.id, member.id, "red", e.target.value)}
-                                >
-                                  <option value="">Seleccione</option>
-                                  <option value="HMO">HMO</option>
-                                  <option value="EPO">EPO</option>
-                                  <option value="PPO">PPO</option>
-                                </Form.Select>
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.pagador || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "pagador", e.target.value)}
-                                  placeholder="Pagador"
-                                />
-                              </td>
-                              <td>
-                                <Form.Control 
-                                  size="sm"
-                                  type="text" 
-                                  value={member.precio || ""}
-                                  onChange={(e) => updateMemberData(group.id, member.id, "precio", e.target.value)}
-                                  placeholder="Precio"
-                                />
-                              </td>
-                              <td>
-                                <Button 
-                                  variant="outline-danger" 
-                                  size="sm"
-                                  onClick={() => removeMemberFromGroup(group.id, member.id)}
-                                >
-                                  <i className="bi bi-trash"></i>
-                                </Button>
-                              </td>
-                            </tr>
+                            <Col key={member.id} lg={4} md={6} className="mb-3">
+                              <Card className="h-100 shadow-sm">
+                                <Card.Header className="d-flex justify-content-between align-items-center bg-light">
+                                  <h6 className="mb-0">{member.nombre}</h6>
+                                  <Dropdown>
+                                    <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
+                                      <i className="bi bi-three-dots-vertical"></i>
+                                    </Dropdown.Toggle>
+                                    <Dropdown.Menu align="end">
+                                      <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
+                                        <i className="bi bi-pencil me-2"></i> Editar
+                                      </Dropdown.Item>
+                                      <Dropdown.Divider />
+                                      <Dropdown.Item className="text-danger" onClick={() => removeMemberFromGroup(group.id, member.id)}>
+                                        <i className="bi bi-trash me-2"></i> Eliminar
+                                      </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                  </Dropdown>
+                                </Card.Header>
+                                <Card.Body>
+                                  <div className="mb-3">
+                                    <Form.Group className="mb-2">
+                                      <Form.Label className="small text-muted mb-1">ID Póliza</Form.Label>
+                                      <Form.Control 
+                                        size="sm"
+                                        type="text" 
+                                        value={member.codigo_poliza || ""}
+                                        onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
+                                        placeholder="ID Póliza"
+                                      />
+                                    </Form.Group>
+                                    
+                                    <Form.Group className="mb-2">
+                                      <Form.Label className="small text-muted mb-1">Parentesco</Form.Label>
+                                      <Form.Select 
+                                        size="sm"
+                                        value={member.parentesco_id || ""}
+                                        onChange={(e) => updateMemberData(group.id, member.id, "parentesco_id", e.target.value)}
+                                      >
+                                        <option value="">Seleccione</option>
+                                        {availablePrentes.map(parentesco => (
+                                          <option key={parentesco.id} value={parentesco.id}>
+                                            {parentesco.descripcion}
+                                          </option>
+                                        ))}
+                                      </Form.Select>
+                                    </Form.Group>
+                                    
+                                    <Row className="mb-2">
+                                      <Col xs={6}>
+                                        <Form.Group>
+                                          <Form.Label className="small text-muted mb-1">Activación</Form.Label>
+                                          <Form.Control 
+                                            size="sm"
+                                            type="date" 
+                                            value={member.fecha_activacion || ""}
+                                            onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
+                                          />
+                                        </Form.Group>
+                                      </Col>
+                                      <Col xs={6}>
+                                        <Form.Group>
+                                          <Form.Label className="small text-muted mb-1">Cancelación</Form.Label>
+                                          <Form.Control 
+                                            size="sm"
+                                            type="date" 
+                                            value={member.fecha_cancelacion || ""}
+                                            onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
+                                          />
+                                        </Form.Group>
+                                      </Col>
+                                    </Row>
+                                  </div>
+                                  
+                                  <Button 
+                                    variant="outline-primary" 
+                                    size="sm" 
+                                    className="w-100"
+                                    onClick={() => openEditModal(group.id, member.id)}
+                                  >
+                                    <i className="bi bi-pencil-square me-1"></i> Editar detalles completos
+                                  </Button>
+                                </Card.Body>
+                                <Card.Footer className="bg-white">
+                                    <div className="d-flex justify-content-between align-items-center">
+                                      <small className="text-muted">
+                                        {member.compania_id ? getCompanyName(member.compania_id) : "Sin compañía"}
+                                      </small>
+                                      <span className="badge bg-info rounded-pill">
+                                        {member.metal || "Sin metal"}
+                                      </span>
+                                    </div>
+                                  </Card.Footer>
+                              </Card>
+                            </Col>
                           ))
                         ) : (
-                          <tr>
-                            <td colSpan="15" className="text-center py-3">
-                              No hay miembros agregados. Haga clic en "Agregar Miembro" para comenzar.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </Table>
-                  </div>
-                </div>
+                          <Col xs={12}>
+                            <div className="text-center py-5 border rounded bg-light">
+                              <p className="mb-0 text-muted">No hay miembros agregados.</p>
+                              <Button variant="outline-primary" size="sm" className="mt-2" onClick={() => setShowModal(true)}>
+                                  <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
+                                </Button>
+                              </div>
+                            </Col>
+                          )
+                        }
+                      </Row>
+                    </Accordion.Body>
+                  </Accordion.Item>
+                </Accordion>
               ))}
 
               <div className="mt-4">
@@ -825,8 +982,209 @@ const Grupofamiliar = () => {
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
-                  <Clientes onClienteCreado={handleClienteCreated} />
+          <Clientes onClienteCreado={handleClienteCreated} isModal={true} />
         </Modal.Body>
+      </Modal>
+
+      {/* Modal for editing member details */}
+      <Modal 
+        show={showEditModal} 
+        onHide={() => { setShowEditModal(false); setCurrentEditMember(null); }}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title>
+            <i className="bi bi-pencil-square me-2"></i>
+            Editar Miembro
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {currentEditMember && (
+            <Form>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>ID Póliza</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.codigo_poliza || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, codigo_poliza: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Parentesco</Form.Label>
+                    <Form.Select 
+                      value={currentEditMember.parentesco_id || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, parentesco_id: e.target.value})}
+                    >
+                      <option value="">Seleccione</option>
+                      {availablePrentes.map(parentesco => (
+                        <option key={parentesco.id} value={parentesco.id}>
+                          {parentesco.descripcion}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Fecha Activación</Form.Label>
+                    <Form.Control 
+                      type="date" 
+                      value={currentEditMember.fecha_activacion || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_activacion: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Fecha Cancelación</Form.Label>
+                    <Form.Control 
+                      type="date" 
+                      value={currentEditMember.fecha_cancelacion || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_cancelacion: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Año Cobertura</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.ano || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, ano: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Compañía</Form.Label>
+                    <Form.Select 
+                      value={currentEditMember.compania_id || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, compania_id: e.target.value})}
+                    >
+                      <option value="">Seleccione</option>
+                      {availableCompanies.map(company => (
+                        <option key={company.id} value={company.id}>
+                          {company.nombre}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Plan</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.plan || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, plan: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Metal</Form.Label>
+                    <Form.Select 
+                      value={currentEditMember.metal || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, metal: e.target.value})}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="BRONCE">BRONCE</option>
+                      <option value="GOLD">GOLD</option>
+                      <option value="SILVER">SILVER</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Elegibilidad</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.elegibilidad || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, elegibilidad: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Cobertura</Form.Label>
+                    <Form.Select 
+                      value={currentEditMember.estado_cobertura || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, estado_cobertura: e.target.value})}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                      <option value="MEDICARE">MEDICARE</option>
+                      <option value="MEDICAID">MEDICAID</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Red</Form.Label>
+                    <Form.Select 
+                      value={currentEditMember.red || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, red: e.target.value})}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="HMO">HMO</option>
+                      <option value="EPO">EPO</option>
+                      <option value="PPO">PPO</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Pagador</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.pagador || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, pagador: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Precio</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      value={currentEditMember.precio || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, precio: e.target.value})}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => { setShowEditModal(false); setCurrentEditMember(null); }}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={saveEditChanges}>
+            Guardar Cambios
+          </Button>
+        </Modal.Footer>
       </Modal>
     </div>
   );

@@ -39,8 +39,19 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     secundario: "",
     whatsapp_num: "",
     direccion: "",
-    dir_correspondencia: "",
+    dir_correspondencia: "",    
     copi_dir: false, // Añadido para el checkbox "Copiar Dirección"
+    // Campos para Datos de Empleo e Ingreso (Paso 6)
+    tipo_ingreso_id: "",
+    actividad_economica: "",
+    empleador: "",
+    telefono_empleador: "",
+    periodo_ingreso: "", // Valor por defecto
+    ingreso_por_periodo: "",
+    ingreso_anual: "",
+    nota_ocasional:"",
+    periodo_ingreso_ocasional: "", // Valor por defecto
+    ingreso_por_periodo_ocasional: ""
   };
 
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -49,7 +60,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [showCardDetails, setShowCardDetails] = useState(false);
   const [clienteId, setClienteId] = useState(null);
   const [clienteCreado, setClienteCreado] = useState(false);
- 
+  const [tiposIngreso, setTiposIngreso] = useState([]);
   const [selectedCode, setSelectedCode] = useState({
     telefono: "us",
     secundario: "us",
@@ -61,15 +72,15 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   // Estado para controlar el paso actual del formulario
   const [currentStep, setCurrentStep] = useState(1);
   // Total de pasos en el formulario
-  const totalSteps = 5;
+  const totalSteps = 6;
 
   const pasos = [
     { id: 1, titulo: "Datos Principales" },
     { id: 2, titulo: "Datos sobre Status Migratorio" },
     { id: 3, titulo: "Datos de Contacto" },
     { id: 4, titulo: "Dirección" },
-    { id: 5, titulo: "Medios de Pago" },
-    { id: 6, titulo: "Datos de Empleo e Ingreso" }
+    { id: 5, titulo: "Datos de Empleo e Ingreso" },
+    { id: 6, titulo: "Medios de Pago" }
   ];
 
   const openMap = () => {
@@ -135,28 +146,25 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
-  console.log("estoy en name",name)
+  
     setFormData((prevData) => {
       let updatedValue = type === "checkbox" ? checked : value;
-
-      
+      const updatedData = { ...prevData, [name]: updatedValue };
   
       // Aplicar formato de teléfono solo a los campos requeridos
       if (["telefono", "secundario", "whatsapp_num"].includes(name)) {
-        updatedValue = formatPhoneNumber(value);
+        updatedData[name] = formatPhoneNumber(value);
       }
   
       // Aplicar formato de social
       if (["social"].includes(name)) {
-        updatedValue = formatsocial(value);
-      }
-
-       // Aplicar formato de uscis
-       if (["auscis"].includes(name)) {
-        updatedValue = formatuscis(value);
+        updatedData[name] = formatsocial(value);
       }
   
-      const updatedData = { ...prevData, [name]: updatedValue };
+      // Aplicar formato de uscis
+      if (["auscis"].includes(name)) {
+        updatedData[name] = formatuscis(value);
+      }
   
       // Calcular edad si cambia la fecha de nacimiento
       if (name === "fecha_nacimiento") {
@@ -188,9 +196,39 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
         updatedData.dir_correspondencia = updatedData.direccion;
       }
   
+      // Si cambia ingreso_por_periodo o periodo_ingreso, calcular ingreso anual
+      if (name === 'ingreso_por_periodo' || name === 'periodo_ingreso') {
+        const periodo = name === 'periodo_ingreso' ? value : updatedData.periodo_ingreso;
+        const monto = name === 'ingreso_por_periodo' ? value : updatedData.ingreso_por_periodo;
+        updatedData.ingreso_anual = calcularIngresoAnual(monto, periodo);
+      }
+  
       return updatedData;
     });
   };
+
+
+  // Función para calcular ingreso anual automáticamente - fuera del método guardarCliente
+const calcularIngresoAnual = (monto, periodo) => {
+  let montoNumerico = parseFloat(monto) || 0;
+  
+  switch (periodo) {
+    case 'HOUR':
+      return (montoNumerico * 40 * 52).toFixed(2); // Asumiendo 40 horas por semana
+    case 'WEEKLY P.TIME':
+      return (montoNumerico * 52 * 0.5).toFixed(2); // Asumiendo medio tiempo
+    case 'WEEKLY':
+      return (montoNumerico * 52).toFixed(2);
+    case 'BIWEEKLY':
+      return (montoNumerico * 26).toFixed(2);
+    case 'MONTHLY':
+      return (montoNumerico * 12).toFixed(2);
+    case 'ANNUAL':
+      return montoNumerico.toFixed(2);
+    default:
+      return "0.00";
+  }
+};
   
   // Función para avanzar al siguiente paso
   const nextStep = () => {
@@ -213,87 +251,76 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     }
   };
 
-  // Función para guardar cliente (llamada en paso 4)
-  const guardarCliente = async () => {
-    setAlert({ type: "", message: "", visible: false });
+ // Función para guardar cliente (ahora llamada en paso 5)
+const guardarCliente = async () => {
+  setAlert({ type: "", message: "", visible: false });
 
+  // Encuentra el código numérico del país según el ISO
+  const getCountryCode = (iso) => {
+    const country = countryCodes.find((c) => c.iso === iso);
+    return country ? country.code : "";
+  };
+  
+  // Crear una copia limpia del formData sin los guiones en los números de teléfono
+  const formattedData = {
+    ...formData,
+    telefono: `+${getCountryCode(selectedCode.telefono)}${formData.telefono.replace(/\D/g, "")}`,
+    secundario: `+${getCountryCode(selectedCode.secundario)}${formData.secundario.replace(/\D/g, "")}`,
+    whatsapp_num: `+${getCountryCode(selectedCode.whatsapp_num)}${formData.whatsapp_num.replace(/\D/g, "")}`,
+  };
+  
+  // Crear el JSON con la estructura deseada
+  let jsonFinal = {
+    "clientes": [formattedData] // Insertar el JSON dentro de un array
+  };
+  console.log("formato antes de enviar ", jsonFinal);
 
-    // Encuentra el código numérico del país según el ISO
-const getCountryCode = (iso) => {
-  const country = countryCodes.find((c) => c.iso === iso);
-  return country ? country.code : "";
-};
+  try {
+    const response = await apiRequest("cliente/create", "POST", jsonFinal);
 
-    
-    // Crear una copia limpia del formData sin los guiones en los números de teléfono
-    const formattedData = {
-      ...formData,
-      telefono: `+${getCountryCode(selectedCode.telefono)}${formData.telefono.replace(/\D/g, "")}`,
-      secundario: `+${getCountryCode(selectedCode.secundario)}${formData.secundario.replace(/\D/g, "")}`,
-      whatsapp_num: `+${getCountryCode(selectedCode.whatsapp_num)}${formData.whatsapp_num.replace(/\D/g, "")}`,
-    };
-    
-    
-
-    // Crear el JSON con la estructura deseada
-    let jsonFinal = {
-      "clientes": [formattedData] // Insertar el JSON dentro de un array
-    };
-    console.log("formato antes de enviar ", jsonFinal);
-
-    try {
-      const response = await apiRequest("cliente/create", "POST", jsonFinal);
-
-      if (response?.message && response.message.includes("cliente creado exitosamente")) {
-        console.log("✅ Cliente fue creado con éxito:", response.message);
+    if (response?.message && response.message.includes("cliente creado exitosamente")) {
+      console.log("✅ Cliente fue creado con éxito:", response.message);
+      
+      // Guardamos el ID del cliente
+      if (response.clientes && response.clientes[0] && response.clientes[0].id) {
+        setClienteId(response.clientes[0].id);
+        setClienteCreado(true);
         
-        // Guardamos el ID del cliente
-        if (response.clientes && response.clientes[0] && response.clientes[0].id) {
-          setClienteId(response.clientes[0].id);
-          setClienteCreado(true);
-          
-          // Notificamos a `Grupofamiliar.js` enviándole el nuevo cliente
-          if (onClienteCreado) {
-            console.log("entramos a onclientes", response.clientes[0].id);
-            onClienteCreado(response.clientes[0]);
-            
-            // Si estamos en un modal, no avanzamos al paso 5 automáticamente
-            if (isModal) {
-              return; // Salimos de la función sin avanzar al paso 5
-            }
-          }
+        if (onClienteCreado) {
+          console.log("Notificando a componente padre con el nuevo cliente:", response.clientes[0].id);
+          onClienteCreado(response.clientes[0]);
+          // IMPORTANTE: Ya no hacemos return aquí, continuamos con el resto del código
         }
-
-        // Show success alert
-        setAlert({
-          type: "success", 
-          message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.", 
-          visible: true
-        });
-
-        // Avanzar al paso 5 automáticamente solo si no estamos en un modal
-        if (!isModal) {
-          setCurrentStep(5);
-        }
-
-      } else {
-        console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
-        setAlert({
-          type: "danger", 
-          message: "Error al crear cliente: " + (response.message || "Error desconocido"), 
-          visible: true
-        });
       }
-    } catch (err) {
-      console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
+
+      // Show success alert
+      setAlert({
+        type: "success", 
+        message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.", 
+        visible: true
+      });
+
+      // Avanzar al paso 6 automáticamente solo si no estamos en un modal
+      setCurrentStep(6);
+      console.log("Avanzando al paso 6, isModal:", isModal);
+
+    } else {
+      console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
       setAlert({
         type: "danger", 
-        message: "❌ Error al crear cliente: " + err.message, 
+        message: "Error al crear cliente: " + (response.message || "Error desconocido"), 
         visible: true
       });
     }
-  };
-
+  } catch (err) {
+    console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
+    setAlert({
+      type: "danger", 
+      message: "❌ Error al crear cliente: " + err.message, 
+      visible: true
+    });
+  }
+};
   // Función para reiniciar el formulario
   const reiniciarFormulario = () => {
     setFormData(INITIAL_FORM_STATE);
@@ -389,7 +416,7 @@ const getCountryCode = (iso) => {
                 <label>Género</label>
                 <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
                   <option value="">Seleccione</option>
-                  <option value="Masculine">Masculine</option>
+                  <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
               </div>
@@ -493,6 +520,15 @@ const getCountryCode = (iso) => {
               
             </div>
 
+            <div className="row mb-3">
+            <div className="col-md-6">
+              <label>Nota</label>
+                <div class="form-group">    
+                <textarea class="form-control" id="exampleFormControlTextarea1" rows="3"></textarea>
+              </div>
+              </div>
+
+              </div>  
             <h5 className="mt-4">Servicios de Mensajería</h5>
             <hr />
             <div className="row mb-3">
@@ -653,7 +689,158 @@ const getCountryCode = (iso) => {
            </div>
           </>
         );
-      case 5:
+
+        case 5:
+  return (
+    <>
+      <h4 className="mb-3">Datos de Empleo e Ingreso</h4>
+      <hr />
+      
+      <div className="row mt-3">
+        <div className="col-md-4">
+          
+                <label>Tipo de Ingreso</label>
+                <select name="tipo_ingreso" className="form-select" value={formData.tipo_ingreso_id} onChange={handleChange}>
+                  <option value="">Seleccione</option>
+                  <option value="W2">W2</option>
+                  <option value="1099">1099</option>
+                  <option value="SOCIAL SECURITY">SOCIAL SECURITY</option>
+                  <option value="SUPPORT">SUPPORT</option>
+                  <option value="ALIMONY">ALIMONY</option>
+                </select>
+              </div>
+ 
+        
+        <div className="col-md-4">
+          <label>Actividad Económica</label>
+          <input
+            type="text"
+            name="actividad_economica"
+            className="form-control"
+            value={formData.actividad_economica}
+            onChange={handleChange}
+            placeholder="Ej: Comercio, Servicios, etc."
+          />
+        </div>
+        
+        <div className="col-md-4">
+          <label>Empleador</label>
+          <input
+            type="text"
+            name="empleador"
+            className="form-control"
+            value={formData.empleador}
+            onChange={handleChange}
+            placeholder="Nombre de la empresa"
+          />
+        </div>
+      </div>
+      
+      <div className="row mt-3">
+        <div className="col-md-4">
+          <label>Teléfono del Empleador</label>
+          <input
+            type="text"
+            name="telefono_empleador"
+            className="form-control"
+            value={formData.telefono_empleador}
+            onChange={handleChange}
+            placeholder="Teléfono"
+          />
+        </div>
+        
+        <div className="col-md-2">
+          <label>Período de Ingreso</label>
+          <select
+            name="periodo_ingreso"
+            className="form-select"
+            value={formData.periodo_ingreso}
+            onChange={handleChange}
+          >
+            <option value="HOUR">HOUR</option>
+            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+            <option value="WEEKLY">WEEKLY</option>
+            <option value="BIWEEKLY">BIWEEKLY</option>
+            <option value="MONTHLY">MONTHLY</option>
+            <option value="ANNUAL">ANNUAL</option>
+          </select>
+        </div>
+        
+        <div className="col-md-3">
+          <label>Ingreso por Período ($)</label>
+          <input
+            type="number"
+            name="ingreso_por_periodo"
+            className="form-control"
+            value={formData.ingreso_por_periodo}
+            onChange={handleChange}
+            placeholder="Monto"
+          />
+        </div>
+        
+        <div className="col-md-3">
+          <label>Ingreso Anual ($)</label>
+          <input
+            type="number"
+            name="ingreso_anual"
+            className="form-control bg-light"
+            value={formData.ingreso_anual}
+            readOnly
+          />
+        </div>
+
+        <div className="row mt-3">
+          <hr />
+          <h4 className="mb-3">Ingreso Ocasional</h4>
+          <div className="col-md-6">
+                  <label>Nota</label>
+                  <div className="form-group">
+                    <textarea
+                      className="form-control"
+                      id="exampleFormControlTextarea1"
+                      rows="3"
+                      name="nota_ingreso_ocasional"
+                      onChange={handleChange}
+                    ></textarea>
+                  </div>
+                </div>
+
+
+              <div className="col-md-3">
+          <label>Período de Ingreso Ocacional</label>
+          <select
+            name="periodo_ingreso_ocasional"
+            className="form-select"
+            value={formData.periodo_ingreso_ocasional}
+            onChange={handleChange}
+          >
+            <option value="HOUR">HOUR</option>
+            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+            <option value="WEEKLY">WEEKLY</option>
+            <option value="BIWEEKLY">BIWEEKLY</option>
+            <option value="MONTHLY">MONTHLY</option>
+            <option value="ANNUAL">ANNUAL</option>
+          </select>
+        </div>  
+
+
+        <div className="col-md-3">
+          <label>Ingreso por Período ocacional ($)</label>
+          <input
+            type="number"
+            name="ingreso_por_periodo_ocasional"
+            className="form-control"
+            value={formData.ingreso_por_periodo_ocasional}
+            onChange={handleChange}
+            placeholder="Monto Ocasional"
+          />
+        </div>
+
+        </div>
+      </div>
+    </>
+  );
+      case 6:
         return (
           <>
             <h4 className="mb-3">Medios de Pago</h4>
@@ -715,43 +902,43 @@ const getCountryCode = (iso) => {
         </div>
       )}
   
-      {/* Controles de navegación */}
-      <div className="wizard-controls d-flex justify-content-between mt-4">
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={prevStep}
-          disabled={currentStep === 1}
-        >
-          Anterior
-        </button>
-        
-        {currentStep < 4 ? (
+     {/* Controles de navegación */}
+        <div className="wizard-controls d-flex justify-content-between mt-4">
           <button
             type="button"
-            className="btn btn-primary"
-            onClick={nextStep}
+            className="btn btn-secondary"
+            onClick={prevStep}
+            disabled={currentStep === 1}
           >
-            Siguiente
+            Anterior
           </button>
-        ) : currentStep === 4 ? (
-          <button
-            type="button"
-            className="btn btn-success"
-            onClick={guardarCliente}
-          >
-            Guardar Cliente y Continuar
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="btn btn-success"
-            onClick={reiniciarFormulario}
-          >
-            Finalizar y Crear Nuevo Cliente
-          </button>
-        )}
-      </div>
+          
+          {currentStep < 5 ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={nextStep}
+            >
+              Siguiente
+            </button>
+          ) : currentStep === 5 ? (
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={guardarCliente}
+            >
+              Guardar Cliente y Continuar
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-success"
+              onClick={reiniciarFormulario}
+            >
+              Finalizar y Crear Nuevo Cliente
+            </button>
+          )}
+        </div>
     </div>
   );
 };
