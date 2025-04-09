@@ -7,6 +7,8 @@ import Informes from "./pages/Informes";
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
+import MediosPagoManager from './pages/MediosPagoManager';
+import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
 
 import ListaClientes from "./pages/ListaClientes";
 
@@ -34,7 +36,8 @@ const App = () => {
         <Route path="/informes" element={<Informes />} />
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Mediospago" element={<MediosPago />} />
-        
+        <Route path="clientes/mediopago/:clienteId" element={<MediosPagoManager />} />
+        <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado/>}/>
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
       
       </Route>

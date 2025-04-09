@@ -1,0 +1,79 @@
+/* GruposFamiliaresListado.css */
+
+/* Estilo para botones de acción en la tabla */
+.btn-icon-action {
+    background: transparent;
+    border: none;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    margin: 0 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  
+  .btn-icon-action:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .btn-icon-action:focus {
+    box-shadow: none;
+    outline: none;
+  }
+  
+  .btn-icon-action i {
+    font-size: 16px;
+  }
+  
+  /* Estilos para el círculo de personas en cobertura */
+  .badge.rounded-circle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 12px;
+  }
+  
+  /* Estilos para los estados */
+  .badge.rounded-pill {
+    font-weight: normal;
+    padding: 5px 8px;
+  }
+  
+  /* Ajuste del espaciado en la tabla */
+  .table th {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #495057;
+  }
+  
+  .table td {
+    vertical-align: middle;
+    padding: 0.75rem;
+  }
+  
+  /* Estilos específicos del dropdown */
+  .dropdown-menu {
+    font-size: 0.875rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+  }
+  
+  .dropdown-item {
+    padding: 0.5rem 1rem;
+  }
+  
+  .dropdown-item:active {
+    background-color: #f8f9fa;
+    color: inherit;
+  }
+  
+  .dropdown-item.text-danger:active {
+    background-color: #fee2e2;
+    color: #dc3545;
+  }

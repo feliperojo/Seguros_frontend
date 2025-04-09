@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, 
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, 
@@ -8,12 +8,29 @@ import {
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
 
+
+
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const users = localStorage.getItem("name");
   const location = useLocation();
   
   // Estado para controlar qué submenús están expandidos
   const [expandedMenu, setExpandedMenu] = useState(null);
+
+  const navigate = useNavigate();
+
+const handleLogout = () => {
+  localStorage.removeItem("auth_token");
+  localStorage.removeItem("name"); // Opcional
+  navigate("/login");
+};
+useEffect(() => {
+  const token = localStorage.getItem("auth_token");
+  if (!token) {
+    navigate("/login");
+  }
+}, []);
+
   
   // Expandir automáticamente el menú basado en la ruta actual
   useEffect(() => {
@@ -124,7 +141,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           {/* Submenú de Grupo Familiar */}
           {isOpen && expandedMenu === 'grupos' && (
             <div className="submenu">
-              <Link to="/Grupofamiliar" className={`submenu-link ${isActive('/Grupofamiliar') ? 'active' : ''}`}>
+              <Link to="/Grupofamiliar/lista" className={`submenu-link ${isActive('/Grupofamiliar/lista') ? 'active' : ''}`}>
                 <FaList /> Lista de Grupos
               </Link>
               <Link to="/Grupofamiliar/crear" className={`submenu-link ${isActive('/Grupofamiliar/crear') ? 'active' : ''}`}>
@@ -201,10 +218,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       </nav>
       
       {/* Cerrar sesión */}
-      <div className="logout-button">
-        <FaSignOutAlt className="logout-icon" />
-        {isOpen && <span className="logout-text">Cerrar sesión</span>}
-      </div>
+            <div className="logout-button" onClick={handleLogout} style={{ cursor: "pointer" }}>
+              <FaSignOutAlt className="logout-icon" />
+              {isOpen && <span className="logout-text">Cerrar sesión</span>}
+            </div>
+
     </div>
   );
 };

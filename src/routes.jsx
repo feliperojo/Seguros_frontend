@@ -1,3 +1,5 @@
+import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
+
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Dashboard />} />
@@ -11,6 +13,7 @@ const AppRoutes = () => (
     <Route path="/grupofamiliar" element={<Grupofamiliar />} />
     <Route path="/grupofamiliar/crear" element={<CrearGrupoFamiliar />} />
     <Route path="/grupofamiliar/vencimientos" element={<ProximosVencimientos />} />
+    <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado />} />
     
     {/* Otras rutas... */}
     <Route path="/informes" element={<Informes />} />

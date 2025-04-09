@@ -273,7 +273,7 @@ const guardarCliente = async () => {
   let jsonFinal = {
     "clientes": [formattedData] // Insertar el JSON dentro de un array
   };
-  console.log("formato antes de enviar ", jsonFinal);
+ 
 
   try {
     const response = await apiRequest("cliente/create", "POST", jsonFinal);

@@ -79,7 +79,85 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+
+  const [mediosPago, setMediosPago] = useState([]);
+const [loadingMediosPago, setLoadingMediosPago] = useState(false);
+const [errorMediosPago, setErrorMediosPago] = useState(null);
   
+
+
+// Añadir esta función para cargar los medios de pago
+const fetchMediosPago = async () => {
+  if (!clienteId) return;
+  
+  setLoadingMediosPago(true);
+  setErrorMediosPago(null);
+  
+  try {
+    // Llamada a la API
+    const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
+    
+    if (Array.isArray(response)) {
+      setMediosPago(response);
+    } else {
+      console.error("Respuesta inesperada:", response);
+      setMediosPago([]);
+    }
+  } catch (error) {
+    console.error("Error al cargar medios de pago:", error);
+    setErrorMediosPago("No se pudieron cargar los medios de pago.");
+  } finally {
+    setLoadingMediosPago(false);
+  }
+};
+
+// Función para eliminar un medio de pago
+const handleDeleteMedioPago = async (medioId) => {
+  if (!window.confirm("¿Está seguro que desea eliminar este medio de pago?")) return;
+  
+  try {
+    // Eliminar en API
+    await apiRequest(`mediopago/${medioId}`, "DELETE");
+    
+    // Actualizar lista local
+    setMediosPago(prev => prev.filter(medio => medio.id !== medioId));
+    
+    // Mostrar mensaje de éxito temporal
+    setSuccessMessage("Medio de pago eliminado correctamente");
+    setTimeout(() => setSuccessMessage(""), 3000);
+  } catch (error) {
+    console.error("Error al eliminar medio de pago:", error);
+    setError("No se pudo eliminar el medio de pago. " + (error.message || ""));
+    setTimeout(() => setError(null), 5000);
+  }
+};
+
+// Cargar los medios de pago cuando se abre la pestaña
+useEffect(() => {
+  if (show && activeTab === "mediosPago") {
+    fetchMediosPago();
+  }
+}, [show, activeTab, clienteId]);
+
+// Función auxiliar para obtener la etiqueta del tipo de medio de pago
+const getTipoMedioPagoLabel = (tipo) => {
+  switch (tipo) {
+    case 'tarjeta_credito': return 'Tarjeta de Crédito';
+    case 'tarjeta_debito': return 'Tarjeta de Débito';
+    case 'efectivo': return 'Efectivo';
+    case 'transferencia': return 'Transferencia';
+    case 'cheque': return 'Cheque';
+    default: return tipo;
+  }
+};
+
+// Función para formatear fechas
+const formatDate = (dateString) => {
+  if (!dateString) return "-";
+  const date = new Date(dateString);
+  return date.toLocaleDateString();
+};
+
   // Cargar datos del cliente al abrir el modal
   useEffect(() => {
     if (show && clienteData) {
@@ -801,28 +879,115 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
 
   // Renderizar sección de medios de pago como referencia
   const renderMediosPagoTab = () => (
-    <div className="p-3 text-center">
-      <h5 className="border-bottom pb-2 mb-4">Medios de Pago</h5>
+    <div className="p-3">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="border-bottom pb-2 mb-0">Medios de Pago</h5>
+        <Button 
+          variant="primary"
+          onClick={() => window.open(`/clientes/mediopago/${clienteId}`, '_blank')}
+        >
+          <i className="bi bi-credit-card me-2"></i>
+          Administrar Medios de Pago
+        </Button>
+      </div>
       
-      <p className="mb-4">
-        Los medios de pago se administran por separado después de guardar los datos del cliente.
-      </p>
+      {loadingMediosPago ? (
+        <div className="text-center py-4">
+          <Spinner animation="border" variant="primary" size="sm" />
+          <p className="mt-2 mb-0 text-muted">Cargando medios de pago...</p>
+        </div>
+      ) : errorMediosPago ? (
+        <Alert variant="danger" className="mt-3">
+          <i className="bi bi-exclamation-triangle me-2"></i>
+          {errorMediosPago}
+        </Alert>
+      ) : mediosPago.length === 0 ? (
+        <div className="text-center border rounded py-4 mt-3 bg-light">
+          <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
+          <h6 className="mb-3">No hay medios de pago registrados</h6>
+          <p className="text-muted mb-3">Utilice el administrador de medios de pago para añadir nuevos métodos de pago.</p>
+          <Button 
+            variant="outline-primary" 
+            size="sm"
+            onClick={() => window.open(`/clientes/medios-pago/${clienteId}?action=new`, '_blank')}
+          >
+            <i className="bi bi-plus-circle me-2"></i>
+            Ir a Agregar Medio de Pago
+          </Button>
+        </div>
+      ) : (
+        <>
+          <div className="table-responsive mt-3">
+            <table className="table table-hover">
+              <thead className="table-light">
+                <tr>
+                  <th>Tipo</th>
+                  <th>Número/Referencia</th>
+                  <th>Titular</th>
+                  <th>Banco</th>
+                  <th>Vencimiento</th>
+                  <th>Estado</th>
+                  <th className="text-end">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {mediosPago.map(medio => (
+                  <tr key={medio.id}>
+                    <td>
+                      <div className="d-flex align-items-center">
+                        {medio.tipo === 'tarjeta_credito' && <i className="bi bi-credit-card me-2 text-primary"></i>}
+                        {medio.tipo === 'tarjeta_debito' && <i className="bi bi-credit-card-2-front me-2 text-success"></i>}
+                        {medio.tipo === 'efectivo' && <i className="bi bi-cash me-2 text-warning"></i>}
+                        {medio.tipo === 'transferencia' && <i className="bi bi-bank me-2 text-info"></i>}
+                        {medio.tipo === 'cheque' && <i className="bi bi-file-earmark-text me-2 text-secondary"></i>}
+                        {getTipoMedioPagoLabel(medio.tipo)}
+                      </div>
+                    </td>
+                    <td>
+                      {medio.numero ? (
+                        <span>•••• {medio.numero.slice(-4)}</span>
+                      ) : medio.referencia || '-'}
+                    </td>
+                    <td>{medio.titular || '-'}</td>
+                    <td>{medio.banco || '-'}</td>
+                    <td>{medio.fecha_vencimiento ? formatDate(medio.fecha_vencimiento) : '-'}</td>
+                    <td>
+                      <Badge bg={medio.activo ? 'success' : 'danger'} className="rounded-pill">
+                        {medio.activo ? 'Activo' : 'Inactivo'}
+                      </Badge>
+                    </td>
+                    <td className="text-end">
+                      <Button 
+                        variant="outline-danger" 
+                        size="sm"
+                        onClick={() => handleDeleteMedioPago(medio.id)}
+                      >
+                        <i className="bi bi-trash"></i>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
       
-      <Button 
-        variant="outline-primary"
-        onClick={() => window.open(`/clientes/medios-pago/${clienteId}`, '_blank')}
-        className="mb-3"
-      >
-        <i className="bi bi-credit-card me-2"></i>
-        Administrar Medios de Pago
-      </Button>
-
-      <p className="mt-3 text-muted small">
-        Se abrirá en una nueva ventana para que puedas mantener los cambios actuales.
-      </p>
+      <div className="alert alert-info mt-4">
+        <div className="d-flex">
+          <i className="bi bi-info-circle me-2 fs-5"></i>
+          <div>
+            <h6 className="mb-1">Nota importante:</h6>
+            <p className="mb-0">
+              Para administrar completamente los medios de pago (añadir nuevos, editar existentes, 
+              etc.), utilice el botón "Administrar Medios de Pago" que abrirá 
+              la herramienta específica en una nueva ventana.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
-
   return (
     <Modal 
       show={show} 
