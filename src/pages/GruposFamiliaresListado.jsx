@@ -286,8 +286,16 @@ const getCompaniaNombre = (grupo) => {
                             <span className="text-muted">en cobertura</span>
                           </td>
                           <td>{grupo.personas_taxes || "-"}</td>
-                          
                           <td>{getCompaniaNombre(grupo)}</td>
+                          <td>
+                            <Badge 
+                              pill 
+                              bg="primary"
+                            >
+                              Sin responsable
+                            </Badge>
+                          </td>
+                         
                           <td>{grupo.persona_contacto || "-"}</td>
                           <td>
                             <Badge 
@@ -295,14 +303,6 @@ const getCompaniaNombre = (grupo) => {
                               bg="secondary"
                             >
                               Sin estado
-                            </Badge>
-                          </td>
-                          <td>
-                            <Badge 
-                              pill 
-                              bg="primary"
-                            >
-                              Sin responsable
                             </Badge>
                           </td>
                           <td>

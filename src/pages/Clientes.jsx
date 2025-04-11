@@ -6,6 +6,8 @@ import apiRequest from "../services/api";
 import MediosPago from "../components/MediosPago";
 import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes'
+import idiomas  from '../services/idiomas.js';
+
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
   // Initial form state as a constant for easy resetting
@@ -36,6 +38,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     condado: "",
     estado: "",
     codigo_postal: "",
+    idioma:"",
     secundario: "",
     whatsapp_num: "",
     direccion: "",
@@ -53,7 +56,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     periodo_ingreso_ocasional: "", // Valor por defecto
     ingreso_por_periodo_ocasional: ""
   };
-
+  const [idiomasList, setIdiomasList] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
   const [alert, setAlert] = useState({ type: "", message: "", visible: false });
   const [showBankDetails, setShowBankDetails] = useState(false);
@@ -67,11 +70,8 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     whatsapp_num: "us"
   });
   
-
-  
-  // Estado para controlar el paso actual del formulario
   const [currentStep, setCurrentStep] = useState(1);
-  // Total de pasos en el formulario
+ 
   const totalSteps = 6;
 
   const pasos = [
@@ -86,6 +86,12 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const openMap = () => {
     window.open("https://www.unitedstateszipcodes.org/", "_blank");
   }
+
+  useEffect(() => {
+    // Carga la lista de idiomas
+    setIdiomasList(idiomas);
+  }, []);
+
 
   const handlePaymentToggle = (type) => {
     if (type === "bank") {
@@ -399,7 +405,7 @@ const guardarCliente = async () => {
 
             {/* Fecha de Nacimiento y Edad */}
             <div className="row mt-3">
-              <div className="col-md-6">
+              <div className="col-md-4">
                 <label>Fecha de Nacimiento</label>
                 <input type="date" name="fecha_nacimiento" className="form-control" value={formData.fecha_nacimiento} onChange={handleChange} />
               </div>
@@ -411,8 +417,24 @@ const guardarCliente = async () => {
                   value={formData.edad}
                   onChange={handleChange} />
               </div>
+              <div className="col-md-3">
+                  <label>Idioma</label>
+                  <select 
+                    name="idioma"
+                    className="form-select"
+                    value={formData.idioma}
+                    onChange={handleChange}
+                  >
+                    <option value="">Seleccione</option>
+                    {idiomasList.map(idioma => (
+                      <option key={idioma.code} value={idioma.name}>
+                        {idioma.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               {/* Género */}
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <label>Género</label>
                 <select name="genero" className="form-select" value={formData.genero} onChange={handleChange}>
                   <option value="">Seleccione</option>
@@ -797,6 +819,7 @@ const guardarCliente = async () => {
                   <div className="form-group">
                     <textarea
                       className="form-control"
+                      value={formData.nota_ocasional}
                       id="exampleFormControlTextarea1"
                       rows="3"
                       name="nota_ingreso_ocasional"

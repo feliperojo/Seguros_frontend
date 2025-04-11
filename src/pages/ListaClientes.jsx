@@ -2,15 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Card, Table, Form, InputGroup, Button, Badge, 
-  Spinner, Pagination, Dropdown, Toast, ToastContainer
+  Spinner, Pagination, Dropdown, Toast, ToastContainer,
+  Overlay, Popover
 } from "react-bootstrap";
 import { 
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, 
-  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport, FaTimes
 } from "react-icons/fa";
 import "../styles/ListaClientes.css";
 import apiRequest from "../services/api";
-import EditClienteModal from "../components/EditClienteModal"; // Importamos el componente de modal
+import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
 
 const ListaClientes = () => {
@@ -27,6 +28,17 @@ const ListaClientes = () => {
   const [sortField, setSortField] = useState("nombre_completo");
   const [sortDirection, setSortDirection] = useState("asc");
   const [filterStatus, setFilterStatus] = useState("all");
+  
+  // Nuevo estado para filtros adicionales
+  const [activeFilters, setActiveFilters] = useState({
+    nuevos30Dias: false,
+    conPolizasActivas: false,
+    sinGrupoFamiliar: false
+  });
+
+  // Estados para controlar el popover de filtros
+  const [showFiltersPopover, setShowFiltersPopover] = useState(false);
+  const filterRef = React.useRef(null);
   
   // Estados para el modal de edición
   const [showEditModal, setShowEditModal] = useState(false);
@@ -51,10 +63,12 @@ const ListaClientes = () => {
     try {
       console.log("Iniciando petición a la API para obtener clientes...");
       
-      const data = await apiRequest("cliente");
-      console.log("Respuesta completa:", data);
+      // Usamos el endpoint que ya funciona
+      const response = await apiRequest("cliente/with-cobertura");
+      console.log("Respuesta completa:", response);
       
-      const clientesData = data?.data || data || [];
+      // Extraer los datos según la estructura de la respuesta
+      const clientesData = response?.data || response || [];
       
       console.log("Datos de clientes procesados:", clientesData);
       
@@ -76,11 +90,40 @@ const ListaClientes = () => {
     }
   };
 
-      // Función para abrir el modal de visualización
-    const handleOpenViewModal = (cliente) => {
-      setClienteToView(cliente);
-      setShowViewModal(true);
-    };
+  // Función para abrir el modal de visualización
+  const handleOpenViewModal = (cliente) => {
+    setClienteToView(cliente);
+    setShowViewModal(true);
+  };
+  
+  // Función para aplicar un filtro
+  const applyFilter = (filterName, value = true) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [filterName]: value
+    }));
+    setShowFiltersPopover(false); // Cerrar el popover después de aplicar un filtro
+  };
+  
+  // Función para eliminar un filtro
+  const removeFilter = (filterName) => {
+    setActiveFilters(prev => ({
+      ...prev,
+      [filterName]: false
+    }));
+  };
+  
+  // Función para limpiar todos los filtros
+  const clearAllFilters = () => {
+    setSearchTerm("");
+    setFilterStatus("all");
+    setActiveFilters({
+      nuevos30Dias: false,
+      conPolizasActivas: false,
+      sinGrupoFamiliar: false
+    });
+    setShowFiltersPopover(false); // Cerrar el popover después de limpiar todos los filtros
+  };
   
   // Filtrar y ordenar clientes cuando cambian los criterios
   useEffect(() => {
@@ -94,13 +137,39 @@ const ListaClientes = () => {
         (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (cliente.email && cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (cliente.telefono && cliente.telefono.toString().includes(searchTerm)) ||
-        (cliente.numero_documento && cliente.numero_documento.toString().includes(searchTerm))
+        (cliente.social && cliente.social.toString().includes(searchTerm))
       );
     }
     
     // Aplicar filtro de estado
     if (filterStatus !== "all") {
       result = result.filter(cliente => cliente.status === filterStatus);
+    }
+    
+    // Aplicar filtros adicionales
+    if (activeFilters.nuevos30Dias) {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      result = result.filter(cliente => {
+        if (!cliente.created_at) return false;
+        const createdDate = new Date(cliente.created_at);
+        return createdDate >= thirtyDaysAgo;
+      });
+    }
+    
+    if (activeFilters.conPolizasActivas) {
+      result = result.filter(cliente => 
+        cliente.cobertura === true || 
+        (cliente.coberturas && cliente.coberturas.length > 0)
+      );
+    }
+    
+    if (activeFilters.sinGrupoFamiliar) {
+      result = result.filter(cliente => 
+        !cliente.grupo_familiar_id && 
+        (!cliente.coberturas || cliente.coberturas.length === 0 || !cliente.coberturas[0].grupo_familiar_id)
+      );
     }
     
     // Aplicar ordenamiento
@@ -119,7 +188,7 @@ const ListaClientes = () => {
     
     setFilteredClientes(result);
     setCurrentPage(1); // Reset a la primera página cuando cambian los filtros
-  }, [searchTerm, filterStatus, sortField, sortDirection, clientes]);
+  }, [searchTerm, filterStatus, sortField, sortDirection, clientes, activeFilters]);
   
   // Calcular paginación
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -150,12 +219,9 @@ const ListaClientes = () => {
         
         const updatedClientes = clientes.filter(cliente => cliente.id !== id);
         setClientes(updatedClientes);
-       // Actualizar la lista filtrada también
-  setFilteredClientes(prevFiltered => 
-    prevFiltered.map(cliente => 
-      cliente.id === updatedCliente.id ? updatedCliente : cliente
-    )
-  );
+        setFilteredClientes(prevFiltered => 
+          prevFiltered.filter(cliente => cliente.id !== id)
+        );
         
         // Mostrar toast de éxito
         setToastMessage("Cliente eliminado con éxito");
@@ -170,31 +236,63 @@ const ListaClientes = () => {
     }
   };
   
- 
-  
-    // Función para abrir el modal de edición y pasar todos los datos del cliente
-    const handleOpenEditModal = (cliente) => {
-      setClienteToEdit(cliente.id);
-      setClienteDataToEdit(cliente);
-      setShowEditModal(true);
-    };
-
-
-    
+  // Función para abrir el modal de edición y pasar todos los datos del cliente
+  const handleOpenEditModal = (cliente) => {
+    setClienteToEdit(cliente.id);
+    setClienteDataToEdit(cliente);
+    setShowEditModal(true);
+  };
   
   // Función para manejar la actualización del cliente después de editar
-const handleClienteUpdated = (updatedCliente) => {
-  // Actualizar el cliente en la lista
-  setClientes(prevClientes => 
-    prevClientes.map(cliente => 
-      cliente.id === updatedCliente.id ? updatedCliente : cliente
-    )
-  );
+  const handleClienteUpdated = (updatedCliente) => {
+    // Actualizar el cliente en la lista
+    setClientes(prevClientes => 
+      prevClientes.map(cliente => 
+        cliente.id === updatedCliente.id ? updatedCliente : cliente
+      )
+    );
+    
+    // Actualizar la lista filtrada también
+    setFilteredClientes(prevFiltered => 
+      prevFiltered.map(cliente => 
+        cliente.id === updatedCliente.id ? updatedCliente : cliente
+      )
+    );
     
     // Mostrar toast de éxito
     setToastMessage("Cliente actualizado con éxito");
     setToastVariant("success");
     setShowToast(true);
+  };
+  
+  // Función para obtener el parentesco del cliente
+  const getParentesco = (cliente) => {
+    // Verificamos si hay un valor directo
+    if (cliente.parentesco) {
+      return cliente.parentesco;
+    }
+    
+    // Si no, verificamos en coberturas
+    if (cliente.coberturas && Array.isArray(cliente.coberturas) && cliente.coberturas.length > 0) {
+      return cliente.coberturas[0].parentesco || "Sin definir";
+    }
+    
+    return "Sin parentesco";
+  };
+  
+  // Función para obtener el ID del grupo familiar
+  const getGrupoFamiliarId = (cliente) => {
+    // Verificamos si hay un valor directo
+    if (cliente.grupo_familiar_id) {
+      return cliente.grupo_familiar_id;
+    }
+    
+    // Si no, verificamos en coberturas
+    if (cliente.coberturas && Array.isArray(cliente.coberturas) && cliente.coberturas.length > 0) {
+      return cliente.coberturas[0].grupo_familiar_id || "N/A";
+    }
+    
+    return "Sin grupo";
   };
   
   // Renderizar paginación
@@ -267,6 +365,72 @@ const handleClienteUpdated = (updatedCliente) => {
     return pages;
   };
   
+  // Función para formatear fecha
+  const formatDate = (dateString) => {
+    if (!dateString) return "No registrado";
+    
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString();
+    } catch (e) {
+      return dateString;
+    }
+  };
+  
+  // Renderizar los filtros activos como pills/badges
+  const renderActiveFiltersPills = () => {
+    // Si no hay filtros activos, no mostrar nada
+    if (!Object.values(activeFilters).some(value => value)) {
+      return null;
+    }
+    
+    return (
+      <div className="d-flex flex-wrap mt-2">
+        {activeFilters.nuevos30Dias && (
+          <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
+            Clientes nuevos (30 días)
+            <Button 
+              variant="link" 
+              className="p-0 ms-2 text-white" 
+              onClick={() => removeFilter('nuevos30Dias')}
+              style={{ fontSize: '10px', textDecoration: 'none' }}
+            >
+              <FaTimes />
+            </Button>
+          </Badge>
+        )}
+        
+        {activeFilters.conPolizasActivas && (
+          <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
+            Con pólizas activas
+            <Button 
+              variant="link" 
+              className="p-0 ms-2 text-white" 
+              onClick={() => removeFilter('conPolizasActivas')}
+              style={{ fontSize: '10px', textDecoration: 'none' }}
+            >
+              <FaTimes />
+            </Button>
+          </Badge>
+        )}
+        
+        {activeFilters.sinGrupoFamiliar && (
+          <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
+            Sin grupo familiar
+            <Button 
+              variant="link" 
+              className="p-0 ms-2 text-white" 
+              onClick={() => removeFilter('sinGrupoFamiliar')}
+              style={{ fontSize: '10px', textDecoration: 'none' }}
+            >
+              <FaTimes />
+            </Button>
+          </Badge>
+        )}
+      </div>
+    );
+  };
+  
   // Renderizar tabla de clientes
   const renderClientesTable = () => {
     if (loading) {
@@ -293,20 +457,10 @@ const handleClienteUpdated = (updatedCliente) => {
           <FaSearch size={40} className="text-muted mb-3" />
           <h4>No se encontraron clientes</h4>
           <p className="text-muted">
-            {searchTerm || filterStatus !== "all" 
+            {searchTerm || filterStatus !== "all" || Object.values(activeFilters).some(v => v)
               ? "Intenta con otros criterios de búsqueda"
               : "No hay clientes registrados en el sistema"}
           </p>
-          // En la sección donde se renderizan los botones de acciones por cliente
-          <Button 
-            variant="outline-success" 
-            size="sm"
-            onClick={() => handleOpenEditModal(cliente)}
-            title="Editar cliente"
-          >
-            <FaEdit />
-          </Button>
-
         </div>
       );
     }
@@ -327,28 +481,31 @@ const handleClienteUpdated = (updatedCliente) => {
             <thead>
               <tr>
                 <th onClick={() => handleSort("nombre_completo")} className="sortable-header">
-                  Nombre
+                  Nombre Completo
                   {sortField === "nombre_completo" && (
                     sortDirection === "asc" ? <FaSortAmountUp className="ms-2" /> : <FaSortAmountDown className="ms-2" />
                   )}
                 </th>
-                <th onClick={() => handleSort("telefono")} className="sortable-header">
-                  Contacto
-                  {sortField === "telefono" && (
+                <th onClick={() => handleSort("fecha_nacimiento")} className="sortable-header">
+                  F. Nacimiento
+                  {sortField === "fecha_nacimiento" && (
                     sortDirection === "asc" ? <FaSortAmountUp className="ms-2" /> : <FaSortAmountDown className="ms-2" />
                   )}
                 </th>
-                <th onClick={() => handleSort("status")} className="sortable-header">
-                  Estado
-                  {sortField === "status" && (
+                <th onClick={() => handleSort("codigo_postal")} className="sortable-header">
+                  Código Postal
+                  {sortField === "codigo_postal" && (
                     sortDirection === "asc" ? <FaSortAmountUp className="ms-2" /> : <FaSortAmountDown className="ms-2" />
                   )}
                 </th>
-                <th onClick={() => handleSort("created_at")} className="sortable-header">
-                  Registro
-                  {sortField === "created_at" && (
-                    sortDirection === "asc" ? <FaSortAmountUp className="ms-2" /> : <FaSortAmountDown className="ms-2" />
-                  )}
+                <th>
+                  Parentesco
+                </th>
+                <th>
+                  ID FG
+                </th>
+                <th>
+                  Teléfono
                 </th>
                 <th className="text-center">Acciones</th>
               </tr>
@@ -358,54 +515,34 @@ const handleClienteUpdated = (updatedCliente) => {
                 <tr key={cliente.id || Math.random().toString()}>
                   <td>
                     <div className="cliente-nombre">
-                      {cliente.nombre_completo}
-                      {cliente.categoria && (
-                        <Badge bg="info" pill className="ms-2">
-                          {cliente.categoria}
-                        </Badge>
-                      )}
+                      {cliente.nombre_completo || "Sin nombre"}
                     </div>
-                    <small className="texto-secundario">
-                      {cliente.tipo_documento && cliente.numero_documento 
-                        ? `${cliente.tipo_documento}: ${cliente.numero_documento}`
-                        : "Sin documento registrado"}
-                    </small>
                   </td>
                   <td>
-                    {cliente.telefono && (
-                      <div>
-                        <i className="bi bi-telephone me-1"></i>
-                        {cliente.telefono}
-                        {cliente.whatsapp && <i className="bi bi-whatsapp ms-1 text-success"></i>}
-                      </div>
-                    )}
-                    {cliente.email && (
-                      <small className="texto-secundario d-block">
-                        <i className="bi bi-envelope me-1"></i>
-                        {cliente.email}
-                      </small>
-                    )}
+                    {formatDate(cliente.fecha_nacimiento)}
                   </td>
                   <td>
-                    <Badge bg={getStatusBadgeColor(cliente.status)}>
-                      {cliente.status || "Sin estado"}
-                    </Badge>
+                    {cliente.codigo_postal || "No registrado"}
                   </td>
                   <td>
-                    {cliente.created_at 
-                      ? new Date(cliente.created_at).toLocaleDateString() 
-                      : "Fecha desconocida"}
+                    {getParentesco(cliente)}
+                  </td>
+                  <td>
+                    {getGrupoFamiliarId(cliente)}
+                  </td>
+                  <td>
+                    {cliente.telefono || "No registrado"}
                   </td>
                   <td>
                     <div className="d-flex justify-content-center gap-2">
-                       <Button 
-                          variant="outline-primary" 
-                          size="sm"
-                          onClick={() => handleOpenViewModal(cliente)}
-                          title="Ver detalles"
-                        >
-                          <FaEye />
-                        </Button>
+                      <Button 
+                        variant="outline-primary" 
+                        size="sm"
+                        onClick={() => handleOpenViewModal(cliente)}
+                        title="Ver detalles"
+                      >
+                        <FaEye />
+                      </Button>
                       <Button 
                         variant="outline-success" 
                         size="sm"
@@ -478,7 +615,7 @@ const handleClienteUpdated = (updatedCliente) => {
               <div className="col-md-6 mb-3 mb-md-0">
                 <InputGroup>
                   <Form.Control
-                    placeholder="Buscar por nombre, email, teléfono o documento..."
+                    placeholder="Buscar por nombre, email, teléfono o Social..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -501,43 +638,94 @@ const handleClienteUpdated = (updatedCliente) => {
               </div>
               
               <div className="col-md-3 d-flex gap-2">
-                <Dropdown className="flex-grow-1">
-                  <Dropdown.Toggle variant="outline-secondary" id="dropdown-filters" className="w-100">
+                <div className="position-relative flex-grow-1" ref={filterRef}>
+                  <Button 
+                    variant="outline-secondary" 
+                    className="w-100 d-flex align-items-center justify-content-center"
+                    onClick={() => setShowFiltersPopover(!showFiltersPopover)}
+                  >
                     <FaFilter className="me-2" />
                     Filtros
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu>
-                    <Dropdown.Item>Clientes nuevos (30 días)</Dropdown.Item>
-                    <Dropdown.Item>Con pólizas activas</Dropdown.Item>
-                    <Dropdown.Item>Sin grupo familiar</Dropdown.Item>
-                    <Dropdown.Divider />
-                    <Dropdown.Item onClick={() => {
-                      setSearchTerm("");
-                      setFilterStatus("all");
-                    }}>
-                      Limpiar filtros
-                    </Dropdown.Item>
-                  </Dropdown.Menu>
-                </Dropdown>
+                  </Button>
+                  
+                  <Overlay
+                    show={showFiltersPopover}
+                    target={filterRef.current}
+                    placement="bottom"
+                    container={filterRef.current}
+                    containerPadding={20}
+                  >
+                    <Popover id="filters-popover" style={{ minWidth: '200px' }}>
+                      <Popover.Header as="h3">Filtros adicionales</Popover.Header>
+                      <Popover.Body>
+                        <div className="d-grid gap-2">
+                          <Button 
+                            variant={activeFilters.nuevos30Dias ? "primary" : "outline-primary"}
+                            size="sm"
+                            onClick={() => applyFilter('nuevos30Dias', !activeFilters.nuevos30Dias)}
+                            className="text-start"
+                          >
+                            Clientes nuevos (30 días)
+                          </Button>
+                          <Button 
+                            variant={activeFilters.conPolizasActivas ? "primary" : "outline-primary"}
+                            size="sm"
+                            onClick={() => applyFilter('conPolizasActivas', !activeFilters.conPolizasActivas)}
+                            className="text-start"
+                          >
+                            Con pólizas activas
+                          </Button>
+                          <Button 
+                            variant={activeFilters.sinGrupoFamiliar ? "primary" : "outline-primary"}
+                            size="sm"
+                            onClick={() => applyFilter('sinGrupoFamiliar', !activeFilters.sinGrupoFamiliar)}
+                            className="text-start"
+                          >
+                            Sin grupo familiar
+                          </Button>
+                          <hr />
+                          <Button 
+                            variant="outline-secondary"
+                            size="sm"
+                            onClick={clearAllFilters}
+                          >
+                            Limpiar filtros
+                          </Button>
+                        </div>
+                      </Popover.Body>
+                    </Popover>
+                  </Overlay>
+                </div>
                 
                 <Button variant="outline-secondary">
                   <FaFileExport />
                 </Button>
               </div>
             </div>
+            
+            {/* Mostrar filtros activos como badges */}
+            {renderActiveFiltersPills()}
           </div>
         </Card.Body>
       </Card>
       
       {renderClientesTable()}
       
+      {/* Modal de Edición */}
       <EditClienteModal
-  show={showEditModal}
-  onHide={() => setShowEditModal(false)}
-  clienteId={clienteToEdit}
-  clienteData={clienteDataToEdit}
-  onClienteUpdated={handleClienteUpdated}
-/>
+        show={showEditModal}
+        onHide={() => setShowEditModal(false)}
+        clienteId={clienteToEdit}
+        clienteData={clienteDataToEdit}
+        onClienteUpdated={handleClienteUpdated}
+      />
+      
+      {/* Modal de Visualización */}
+      <DetalleClienteModal
+        show={showViewModal}
+        onHide={() => setShowViewModal(false)}
+        clienteData={clienteToView}
+      />
       
       {/* Toast de notificación */}
       <ToastContainer className="p-3" position="top-end">
@@ -558,26 +746,7 @@ const handleClienteUpdated = (updatedCliente) => {
           </Toast.Body>
         </Toast>
       </ToastContainer>
-      // Al final del componente, antes del cierre del return
-          {/* Modal de Edición Mejorado */}
-          <EditClienteModal
-            show={showEditModal}
-            onHide={() => setShowEditModal(false)}
-            clienteId={clienteToEdit}
-            clienteData={clienteDataToEdit}
-            onClienteUpdated={handleClienteUpdated}
-
-          />
-     
-            {/* Modal de Visualización */}
-            <DetalleClienteModal
-              show={showViewModal}
-              onHide={() => setShowViewModal(false)}
-              clienteData={clienteToView}
-            />
-
     </div>
-    
   );
 };
 

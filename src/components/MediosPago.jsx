@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import apiRequest from "../services/api"; // Usando el servicio API existente
 
 const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
+ 
   // Inicialización de estados
   const [mediosPago, setMediosPago] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -21,7 +22,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     cliente_id: ''
   });
   const [error, setError] = useState({ campo: '', mensaje: '' });
-
+  console.log("id_cliente", clienteId)
   // Cargar medios de pago cuando el componente se monta o cambia clienteId
   useEffect(() => {
     if (clienteId) {

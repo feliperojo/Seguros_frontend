@@ -146,7 +146,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
           <InputGroup>
             <Form.Control
               type="text"
-              placeholder="Nombre, email, teléfono o documento de identidad"
+              placeholder="Nombre, email, teléfono o Social"
               value={searchTerm}
               onChange={handleSearchChange}
             />
