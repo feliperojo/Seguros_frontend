@@ -509,7 +509,7 @@ const getCompaniaNombre = (grupo) => {
               )}
               
               <div className="d-flex justify-content-between mt-4">
-                <Button 
+                {/* <Button 
                   variant="outline-primary" 
                   onClick={() => {
                     setShowViewModal(false);
@@ -517,8 +517,8 @@ const getCompaniaNombre = (grupo) => {
                   }}
                 >
                   Ver Detalles Completos
-                </Button>
-                <Button 
+                </Button> */}
+                {/* <Button 
                   variant="outline-success" 
                   onClick={() => {
                     setShowViewModal(false);
@@ -527,7 +527,7 @@ const getCompaniaNombre = (grupo) => {
                 >
                   <FaEdit className="me-2" />
                   Editar Grupo Familiar
-                </Button>
+                </Button> */}
               </div>
             </div>
           )}

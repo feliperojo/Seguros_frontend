@@ -143,7 +143,7 @@ const handleOpenViewModal = (cliente) => {
                   </div>
                   <div className="stats-icon"><FaUsers /></div>
                 </div>
-                <Link to="/cliente/lista" className="stretched-link"></Link>
+                <Link to="/clientes/lista" className="stretched-link"></Link>
               </Card.Body>
             </Card>
           </Col>
@@ -157,7 +157,7 @@ const handleOpenViewModal = (cliente) => {
                   </div>
                   <div className="stats-icon"><FaProjectDiagram /></div>
                 </div>
-                <Link to="/grupofamiliar/lista" className="stretched-link"></Link>
+                <Link to="/Grupofamiliar/lista" className="stretched-link"></Link>
               </Card.Body>
             </Card>
           </Col>
@@ -184,7 +184,7 @@ const handleOpenViewModal = (cliente) => {
                   </div>
                   <div className="stats-icon"><FaCalendarAlt /></div>
                 </div>
-                <Link to="/grupofamiliar/vencimientos" className="stretched-link"></Link>
+                
               </Card.Body>
             </Card>
           </Col>
@@ -195,7 +195,7 @@ const handleOpenViewModal = (cliente) => {
         <h5 className="section-title">Acciones Rápidas</h5>
         <Row className="g-3">
           <Col lg={3} md={6}>
-            <Button as={Link} to="/cliente/crear" variant="primary" className="quick-action-btn">
+            <Button as={Link} to="/clientes/crear" variant="primary" className="quick-action-btn">
               <FaPlus /> Nuevo Cliente
             </Button>
           </Col>
@@ -205,12 +205,12 @@ const handleOpenViewModal = (cliente) => {
             </Button>
           </Col>
           <Col lg={3} md={6}>
-            <Button as={Link} to="/informes/clientes" variant="outline-primary" className="quick-action-btn">
+            <Button as={Link} to="/" variant="outline-primary" className="quick-action-btn">
               <FaChartLine /> Ver Informes
             </Button>
           </Col>
           <Col lg={3} md={6}>
-            <Button as={Link} to="/grupofamiliar/vencimientos" variant="outline-primary" className="quick-action-btn">
+            <Button as={Link} to="/Grupofamiliar/lista" variant="outline-primary" className="quick-action-btn">
               <FaCalendarAlt /> Ver Cancelaciones
             </Button>
           </Col>

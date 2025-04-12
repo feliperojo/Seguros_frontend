@@ -3,6 +3,7 @@ import {
   Modal, Button, Row, Col, Card, Badge, Table, 
   ListGroup
 } from "react-bootstrap";
+import apiRequest from "../services/api";
 import {
   FaUser, FaAddressCard, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, 
   FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
@@ -14,7 +15,51 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
   
   // Estado para controlar la pestaña activa
   const [activeTab, setActiveTab] = useState("general");
+  const [mediosPago, setMediosPago] = useState([]);
+  const [loadingMediosPago, setLoadingMediosPago] = useState(false);
 
+  const [grupofamilia, setGrupoFamilia] = useState([]);
+  const [loadingGrupoFamilia, setLoadingGrupoFamilia] = useState(false);
+
+
+  const fetchMediosPago = async (clienteId) => {
+    try {
+      setLoadingMediosPago(true);
+      const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
+     
+      setMediosPago(response);
+    } catch (error) {
+      console.error("Error obteniendo medios de pago", error);
+    } finally {
+      setLoadingMediosPago(false);
+    }
+  };
+
+  const fetchPolizas = async (grupoFamiliarId) => {
+    try {
+      setLoadingGrupoFamilia(true);
+      const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
+  
+      // Extraemos las personas
+      const personas = response.data?.coberturas?.map((item) => ({
+        ...item.cliente,
+        parentesco: item.parentesco, // para mostrar parentesco
+        tipo: item.parentesco === "TOMADOR" ? "TOMADOR" : "INTEGRANTE",
+        compania: item.compania?.nombre || "No registrado"
+      })) || [];
+  
+      setGrupoFamilia(personas);
+  
+    } catch (error) {
+      console.error("Error obteniendo grupo familiar", error);
+      setGrupoFamilia([]);
+    } finally {
+      setLoadingGrupoFamilia(false);
+    }
+  };
+  
+  
+  
   // Formatear fecha para mostrarla más legible
   const formatDate = (dateString) => {
     if (!dateString) return "No disponible";
@@ -24,6 +69,19 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
       return dateString;
     }
   };
+
+  useEffect(() => {
+    if (show && clienteData?.id) {
+      fetchMediosPago(clienteData.id);
+    }
+  }, [show, clienteData]);
+
+  useEffect(() => {
+    if (show && clienteData?.grupo_familiar_id) {
+      fetchPolizas(clienteData.grupo_familiar_id);
+    }
+  }, [show, clienteData]);
+  
 
   // Componente para mostrar información no disponible
   const NotAvailable = () => <span className="text-muted fst-italic">No disponible</span>;
@@ -89,6 +147,15 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
         Pólizas y Coberturas
       </button>
     </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "medios" ? "active" : ""}`}
+        onClick={() => setActiveTab("medios")}
+      >
+        Mdios de Pago
+      </button>
+    </li>
+
     <li className="nav-item">
       <button 
         className={`nav-link ${activeTab === "info" ? "active" : ""}`}
@@ -391,56 +458,91 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
         )}
         
         {/* Contenido de la pestaña Pólizas y Coberturas */}
-        {activeTab === "polizas" && (
+              {activeTab === "polizas" && (
           <>
-            {clienteData.coberturas && clienteData.coberturas.length > 0 ? (
-              <Table responsive hover className="border">
-                <thead className="bg-light">
-                  <tr>
-                    <th>Tipo</th>
-                    <th>Compañía</th>
-                    <th>Plan</th>
-                    <th>Código</th>
-                    <th>Activación</th>
-                    <th>Cancelación</th>
-                    <th>Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clienteData.coberturas.map((cobertura, index) => (
-                    <tr key={index}>
-                      <td>{cobertura.tipo_producto}</td>
-                      <td>{cobertura.compania}</td>
-                      <td>
-                        {cobertura.plan}
-                        {cobertura.metal && (
-                          <Badge bg="info" className="ms-2">{cobertura.metal}</Badge>
-                        )}
-                      </td>
-                      <td>{cobertura.codigo_poliza}</td>
-                      <td>{formatDate(cobertura.fecha_activacion)}</td>
-                      <td>{formatDate(cobertura.fecha_cancelacion)}</td>
-                      <td>
-                        <Badge 
-                          bg={cobertura.estado_cobertura === "Yes" ? "success" : 
-                              cobertura.estado_cobertura === "No" ? "danger" : "secondary"}
-                        >
-                          {cobertura.estado_cobertura}
-                        </Badge>
-                      </td>
+            <div className="mt-4">
+              <h5 className="border-bottom pb-2 mb-3 text-primary fw-bold">
+               Grupo Familiar 
+              </h5>
+
+              {loadingGrupoFamilia ? (
+                <div className="text-center py-4">
+                  <span className="spinner-border text-primary"></span>
+                </div>
+              ) : grupofamilia.length > 0 ? (
+                <Table responsive bordered hover>
+                  <thead className="bg-light">
+                    <tr>
+                      <th>#</th>
+                      <th>Nombre Completo</th>
+                      <th>Parentesco</th>
+                      <th>Compañia</th>
                     </tr>
-                  ))}
-                </tbody>
-              </Table>
-            ) : (
-              <div className="text-center py-5 bg-light rounded">
-                <FaCreditCard size={40} className="text-muted mb-3" />
-                <h5>No hay pólizas registradas</h5>
-                <p className="text-muted">Este cliente no tiene pólizas o coberturas asociadas.</p>
-              </div>
-            )}
+                  </thead>
+                  <tbody>
+                      {grupofamilia.map((integrante, index) => (
+                        <tr key={integrante.id || index}>
+                          <td>{index + 1}</td>
+                          <td className="d-flex align-items-center gap-2">
+                            {integrante.nombre_completo}
+                            {integrante.tipo === "TOMADOR" && (
+                              <Badge bg="primary" pill>TOMADOR</Badge>
+                            )}
+                          </td>
+                          <td>{integrante.parentesco || "No registrado"}</td>
+                          <td>{integrante.compania || "No registrado"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+
+                </Table>
+              ) : (
+                <div className="text-center py-5 bg-light rounded">
+                  <FaUser size={40} className="text-muted mb-3" />
+                  <h6 className="text-muted">No hay personas asociadas.</h6>
+                </div>
+              )}
+            </div>
           </>
         )}
+
+            {activeTab === "medios" && (
+              <>
+              {loadingMediosPago ? (
+                <div className="text-center py-4">
+                  <span className="spinner-border text-primary"></span>
+                </div>
+              ) : mediosPago.length > 0 ? (
+                <Table responsive bordered hover>
+                  <thead>
+                    <tr>
+                      <th>Tipo</th>
+                      <th>Titular</th>
+                      <th>N° Tarjeta</th>
+                      <th>Banco</th>
+                      <th>N° Cuenta</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mediosPago.map((medio, index) => (
+                      <tr key={index}>
+                        <td>{medio.forma_pago}</td>
+                        <td>{medio.titular}</td>
+                        <td>{medio.numero_tarjeta}</td>
+                        <td>{medio.banco}</td>
+                        <td>{medio.cuenta_numero}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              ) : (
+                <div className="text-center py-4">
+                  <h6>No hay medios de pago registrados</h6>
+                </div>
+              )}
+            </>
+                )}
+
         
         {/* Contenido de la pestaña Información Adicional */}
         {activeTab === "info" && (

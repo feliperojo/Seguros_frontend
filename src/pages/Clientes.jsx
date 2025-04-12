@@ -64,11 +64,13 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [clienteId, setClienteId] = useState(null);
   const [clienteCreado, setClienteCreado] = useState(false);
   const [tiposIngreso, setTiposIngreso] = useState([]);
-  const [selectedCode, setSelectedCode] = useState({
-    telefono: "us",
-    secundario: "us",
-    whatsapp_num: "us"
-  });
+  // En la inicialización de selectedCode en tu componente Clientes
+const [selectedCode, setSelectedCode] = useState({
+  telefono: "us",
+  secundario: "us",
+  whatsapp_num: "us",
+  telefono_empleador: "us"  // Añadir esta línea si no existe
+});
   
   const [currentStep, setCurrentStep] = useState(1);
  
@@ -92,6 +94,28 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     setIdiomasList(idiomas);
   }, []);
 
+
+  // Función para formatear valores monetarios con el formato de dólares
+const formatCurrency = (value) => {
+  if (!value) return '';
+  
+  // Convertir a número si es string
+  const numValue = typeof value === 'string' ? parseFloat(value) : value;
+  
+  // Formatear como moneda en USD
+  return numValue.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
+// Función para extraer el valor numérico de un string con formato de moneda
+const extractNumericValue = (formattedValue) => {
+  if (!formattedValue) return '';
+  return formattedValue.replace(/[^\d.-]/g, '');
+};
 
   const handlePaymentToggle = (type) => {
     if (type === "bank") {
@@ -158,7 +182,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
       const updatedData = { ...prevData, [name]: updatedValue };
   
       // Aplicar formato de teléfono solo a los campos requeridos
-      if (["telefono", "secundario", "whatsapp_num"].includes(name)) {
+      if (["telefono", "secundario", "whatsapp_num", "telefono_empleador"].includes(name)) {
         updatedData[name] = formatPhoneNumber(value);
       }
   
@@ -266,13 +290,15 @@ const guardarCliente = async () => {
     const country = countryCodes.find((c) => c.iso === iso);
     return country ? country.code : "";
   };
+
   
-  // Crear una copia limpia del formData sin los guiones en los números de teléfono
+  // Crear una copia limpia del formData sin los guiones en los números de teléfono telefono_empleador
   const formattedData = {
     ...formData,
     telefono: `+${getCountryCode(selectedCode.telefono)}${formData.telefono.replace(/\D/g, "")}`,
     secundario: `+${getCountryCode(selectedCode.secundario)}${formData.secundario.replace(/\D/g, "")}`,
     whatsapp_num: `+${getCountryCode(selectedCode.whatsapp_num)}${formData.whatsapp_num.replace(/\D/g, "")}`,
+    telefono_empleador: `+${getCountryCode(selectedCode.telefono_empleador)}${formData.telefono_empleador.replace(/\D/g, "")}`,
   };
   
   // Crear el JSON con la estructura deseada
@@ -727,6 +753,7 @@ const guardarCliente = async () => {
                   <option value="W2">W2</option>
                   <option value="1099">1099</option>
                   <option value="SOCIAL SECURITY">SOCIAL SECURITY</option>
+                  <option value="SELF EMPLOYMENT">SELF EMPLOYMENT</option>
                   <option value="SUPPORT">SUPPORT</option>
                   <option value="ALIMONY">ALIMONY</option>
                 </select>
@@ -757,20 +784,17 @@ const guardarCliente = async () => {
           />
         </div>
       </div>
-      
       <div className="row mt-3">
-        <div className="col-md-4">
-          <label>Teléfono del Empleador</label>
-          <input
-            type="text"
-            name="telefono_empleador"
-            className="form-control"
-            value={formData.telefono_empleador}
-            onChange={handleChange}
-            placeholder="Teléfono"
-          />
-        </div>
-        
+          <div className="col-md-4">
+                    <label>Teléfono del Empleador</label>
+                    <div className="input-group">
+                                <span className="input-group-text p-0">
+                                  <CountrySelectWithFlags name="telefono_empleador" selectedCode={selectedCode.telefono_empleador} onChange={handleCountryCodeChange} />
+                                </span>
+                    <input type="text" name="telefono_empleador" className="form-control" value={formData.telefono_empleador} onChange={handleChange}  />
+                  </div>
+              </div>
+
         <div className="col-md-2">
           <label>Período de Ingreso</label>
           <select
@@ -789,27 +813,46 @@ const guardarCliente = async () => {
         </div>
         
         <div className="col-md-3">
-          <label>Ingreso por Período ($)</label>
-          <input
-            type="number"
-            name="ingreso_por_periodo"
-            className="form-control"
-            value={formData.ingreso_por_periodo}
-            onChange={handleChange}
-            placeholder="Monto"
-          />
-        </div>
+  <label>Ingreso por Período ($)</label>
+  <div className="input-group">
+    <span className="input-group-text">$</span>
+    <input
+      type="text"
+      name="ingreso_por_periodo"
+      className="form-control"
+      value={formData.ingreso_por_periodo}
+      onChange={handleChange}
+      placeholder="0.00"
+      onBlur={(e) => {
+        // Al perder el foco, formatear el valor como moneda
+        const numericValue = extractNumericValue(e.target.value);
+        if (numericValue) {
+          e.target.value = parseFloat(numericValue).toFixed(2);
+          handleChange({
+            target: {
+              name: 'ingreso_por_periodo',
+              value: e.target.value
+            }
+          });
+        }
+      }}
+    />
+  </div>
+</div>
         
-        <div className="col-md-3">
-          <label>Ingreso Anual ($)</label>
-          <input
-            type="number"
-            name="ingreso_anual"
-            className="form-control bg-light"
-            value={formData.ingreso_anual}
-            readOnly
-          />
-        </div>
+<div className="col-md-3">
+  <label>Ingreso Anual ($)</label>
+  <div className="input-group">
+    <span className="input-group-text">$</span>
+    <input
+      type="text"
+      name="ingreso_anual"
+      className="form-control bg-light"
+      value={formData.ingreso_anual ? parseFloat(formData.ingreso_anual).toFixed(2) : "0.00"}
+      readOnly
+    />
+  </div>
+</div>
 
         <div className="row mt-3">
           <hr />
@@ -822,7 +865,7 @@ const guardarCliente = async () => {
                       value={formData.nota_ocasional}
                       id="exampleFormControlTextarea1"
                       rows="3"
-                      name="nota_ingreso_ocasional"
+                      name="nota_ocasional"
                       onChange={handleChange}
                     ></textarea>
                   </div>
@@ -848,16 +891,32 @@ const guardarCliente = async () => {
 
 
         <div className="col-md-3">
-          <label>Ingreso por Período ocacional ($)</label>
-          <input
-            type="number"
-            name="ingreso_por_periodo_ocasional"
-            className="form-control"
-            value={formData.ingreso_por_periodo_ocasional}
-            onChange={handleChange}
-            placeholder="Monto Ocasional"
-          />
-        </div>
+            <label>Ingreso por Período ocacional ($)</label>
+            <div className="input-group">
+              <span className="input-group-text">$</span>
+              <input
+                type="text"
+                name="ingreso_por_periodo_ocasional"
+                className="form-control"
+                value={formData.ingreso_por_periodo_ocasional}
+                onChange={handleChange}
+                placeholder="0.00"
+                onBlur={(e) => {
+                  // Al perder el foco, formatear el valor como moneda
+                  const numericValue = extractNumericValue(e.target.value);
+                  if (numericValue) {
+                    e.target.value = parseFloat(numericValue).toFixed(2);
+                    handleChange({
+                      target: {
+                        name: 'ingreso_por_periodo_ocasional',
+                        value: e.target.value
+                      }
+                    });
+                  }
+                }}
+              />
+            </div>
+          </div>
 
         </div>
       </div>
