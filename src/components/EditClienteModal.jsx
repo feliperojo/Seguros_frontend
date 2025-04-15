@@ -5,7 +5,7 @@ import {
 } from "react-bootstrap";
 import apiRequest from "../services/api";
 import CountrySelect from "../components/CountrySelect"; // Ajusta según tu estructura
-
+import FormDireccion from "../components/FormDireccion";
 
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
   // Estado para los datos del cliente organizados por secciones
@@ -43,16 +43,19 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       },
       email: ""
     },
+   
     // Sección 4: Dirección
     direccion: {
       calle: "",
-      numero: "",
+      apto: "",
       ciudad: "",
       estado: "",
       codigo_postal: "",
-      pais: "",
-      referencias: ""
+      condado: "",
+      dir_correspondencia: "",
+      copi_dir: false
     },
+    
     // Sección 5: Datos de Empleo e Ingreso
     datosEmpleo: {
       tipo_ingreso: "",
@@ -63,7 +66,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       ingreso_por_periodo: "",
       ingreso_anual: "",
       ingreso_ocasional: {
-        nota: "",
+        nota_ingreso_ocasional: "",
         periodo: "",
         monto: ""
       }
@@ -131,6 +134,8 @@ const handleDeleteMedioPago = async (medioId) => {
     setTimeout(() => setError(null), 5000);
   }
 };
+
+
 
 // Cargar los medios de pago cuando se abre la pestaña
 useEffect(() => {
@@ -208,12 +213,13 @@ const formatDate = (dateString) => {
       // Sección 4: Dirección
       direccion: {
         calle: data.direccion?.calle || data.calle || "",
-        numero: data.direccion?.numero || data.numero || "",
+        apto: data.direccion?.apto || data.apto || "",
         ciudad: data.direccion?.ciudad || data.ciudad || "",
         estado: data.direccion?.estado || data.estado || "",
         codigo_postal: data.direccion?.codigo_postal || data.codigo_postal || "",
-        pais: data.direccion?.pais || data.pais || "",
-        referencias: data.direccion?.referencias || data.referencias || ""
+        condado: data.direccion?.condado || data.condado || "",
+        direccion: data.direccion?.direccion || data.direccion || "",
+        dir_correspondencia: data.direccion?.dir_correspondencia || data.dir_correspondencia || ""
       },
       // Sección 5: Datos de Empleo e Ingreso
       datosEmpleo: {
@@ -225,7 +231,7 @@ const formatDate = (dateString) => {
         ingreso_por_periodo: data.ingreso_por_periodo || "",
         ingreso_anual: data.ingreso_anual || "",
         ingreso_ocasional: {
-          nota: data.ingreso_ocasional?.nota || "",
+          nota_ingreso_ocasional: data.ingreso_ocasional?.nota_ingreso_ocasional || "",
           periodo: data.ingreso_ocasional?.periodo || "",
           monto: data.ingreso_ocasional?.monto || ""
         }
@@ -292,27 +298,53 @@ const formatDate = (dateString) => {
   };
 
   // Preparar los datos para enviar
+  // Preparar los datos para enviar
   const prepareDataForSubmit = () => {
-    // Combinar todos los datos en un solo objeto
+    // Crear dirección concatenada como texto simple
+    const direccionConcatenada = [
+      formData.direccion.calle,
+      formData.direccion.apto, 
+      formData.direccion.ciudad,
+      formData.direccion.estado,
+      formData.direccion.codigo_postal
+    ].filter(Boolean).join(" ");
+  
     const flatData = {
       // Datos principales
       ...formData.datosPrincipales,
+      
       // Status migratorio
       ...formData.statusMigratorio,
+      
       // Datos de contacto
       ...formData.datosContacto,
       servicios_mensajeria: formData.datosContacto.servicios_mensajeria,
-      // Dirección
-      direccion: formData.direccion,
+      
+      // Incluir los campos individuales de dirección
+      calle: formData.direccion.calle,
+      apto: formData.direccion.apto,
+      ciudad: formData.direccion.ciudad,
+      estado: formData.direccion.estado,
+      codigo_postal: formData.direccion.codigo_postal,
+      condado: formData.direccion.condado,
+      
+      
+      // Guardar la dirección como texto concatenado (no como objeto)
+      direccion: direccionConcatenada,
+      
+      // Dirección de correspondencia
+      dir_correspondencia: formData.direccion.dir_correspondencia,
+      
       // Datos de empleo
       ...formData.datosEmpleo,
-      ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional
+      nota_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.nota_ingreso_ocasional,
+      periodo_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.periodo,
+      ingreso_por_periodo_ocasional: formData.datosEmpleo.ingreso_ocasional.monto,
+
     };
-
+  
     return flatData;
-  };
-
-  // Enviar los datos actualizados
+  };  // Enviar los datos actualizados
   const handleSubmit = async () => {
     setSaving(true);
     setError(null);
@@ -645,91 +677,39 @@ const formatDate = (dateString) => {
     </div>
   );
 
-  // Renderizar pestañas para dirección
-  const renderDireccionTab = () => (
-    <div className="p-3">
-      <h5 className="border-bottom pb-2 mb-3">Dirección</h5>
-      
-      <Row className="mb-3">
-        <Col md={8}>
-          <Form.Group>
-            <Form.Label>Calle</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.calle}
-              onChange={(e) => handleNestedInputChange("direccion", "calle", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Número</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.numero}
-              onChange={(e) => handleNestedInputChange("direccion", "numero", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-      </Row>
-      
-      <Row className="mb-3">
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Ciudad</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.ciudad}
-              onChange={(e) => handleNestedInputChange("direccion", "ciudad", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Estado</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.estado}
-              onChange={(e) => handleNestedInputChange("direccion", "estado", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Código Postal</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.codigo_postal}
-              onChange={(e) => handleNestedInputChange("direccion", "codigo_postal", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-      </Row>
-      
-      <Row className="mb-3">
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label>País</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.pais}
-              onChange={(e) => handleNestedInputChange("direccion", "pais", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-        <Col md={6}>
-          <Form.Group>
-            <Form.Label>Referencias</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.direccion.referencias}
-              onChange={(e) => handleNestedInputChange("direccion", "referencias", e.target.value)}
-            />
-          </Form.Group>
-        </Col>
-      </Row>
-    </div>
-  );
+ // En el archivo EditClienteModal.js
+const renderDireccionTab = () => (
+  <div className="p-3">
+    <h5 className="border-bottom pb-2 mb-3">Dirección</h5>
+    
+    <FormDireccion
+      formData={formData.direccion || {}}
+      onChange={(name, value, direccionCompleta) => {
+        setFormData(prevData => {
+          // Crear una copia actualizada de los datos de dirección
+          const updatedDireccion = {
+            ...prevData.direccion,
+            [name]: value,
+          };
+          
+          // Si se actualizó un campo que afecta la dirección completa y no es el campo
+          // de correspondencia o el checkbox, actualizar la visualización de dirección
+          if (direccionCompleta && name !== "dir_correspondencia" && name !== "copi_dir") {
+            updatedDireccion.direccion = direccionCompleta;
+          }
+          
+          return {
+            ...prevData,
+            direccion: updatedDireccion
+          };
+        });
+        
+        setHasChanges(true);
+      }}
+      editable={true}
+    />
+  </div>
+);
 
   // Renderizar pestañas para datos de empleo
   const renderDatosEmpleoTab = () => (
@@ -745,10 +725,12 @@ const formatDate = (dateString) => {
               onChange={(e) => handleInputChange("datosEmpleo", "tipo_ingreso", e.target.value)}
             >
               <option value="">Seleccione</option>
-              <option value="Empleado">Empleado</option>
-              <option value="Autónomo">Autónomo</option>
-              <option value="Mixto">Mixto</option>
-              <option value="Otro">Otro</option>
+                  <option value="W2">W2</option>
+                  <option value="1099">1099</option>
+                  <option value="SOCIAL SECURITY">SOCIAL SECURITY</option>
+                  <option value="SELF EMPLOYMENT">SELF EMPLOYMENT</option>
+                  <option value="SUPPORT">SUPPORT</option>
+                  <option value="ALIMONY">ALIMONY</option>
             </Form.Select>
           </Form.Group>
         </Col>
@@ -798,12 +780,12 @@ const formatDate = (dateString) => {
               onChange={(e) => handleInputChange("datosEmpleo", "periodo_ingreso", e.target.value)}
             >
               <option value="">Seleccione</option>
-              <option value="HOUR">Por Hora</option>
-              <option value="DAY">Diario</option>
-              <option value="WEEK">Semanal</option>
-              <option value="BIWEEK">Quincenal</option>
-              <option value="MONTH">Mensual</option>
-              <option value="YEAR">Anual</option>
+              <option value="HOUR">HOUR</option>
+            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+            <option value="WEEKLY">WEEKLY</option>
+            <option value="BIWEEKLY">BIWEEKLY</option>
+            <option value="MONTHLY">MONTHLY</option>
+            <option value="ANNUAL">ANNUAL</option>
             </Form.Select>
           </Form.Group>
         </Col>
@@ -838,8 +820,9 @@ const formatDate = (dateString) => {
             <Form.Control
               as="textarea"
               rows={2}
-              value={formData.datosEmpleo.ingreso_ocasional.nota}
-              onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "nota", e.target.value)}
+              value={formData.datosEmpleo.ingreso_ocasional.nota_ingreso_ocasional}
+              onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "nota_ingreso_ocasional", e.target.value)}
+              
             />
           </Form.Group>
         </Col>
@@ -854,12 +837,12 @@ const formatDate = (dateString) => {
               onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "periodo", e.target.value)}
             >
               <option value="">Seleccione</option>
-              <option value="HOUR">Por Hora</option>
-              <option value="DAY">Diario</option>
-              <option value="WEEK">Semanal</option>
-              <option value="BIWEEK">Quincenal</option>
-              <option value="MONTH">Mensual</option>
-              <option value="YEAR">Anual</option>
+              <option value="HOUR">HOUR</option>
+            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+            <option value="WEEKLY">WEEKLY</option>
+            <option value="BIWEEKLY">BIWEEKLY</option>
+            <option value="MONTHLY">MONTHLY</option>
+            <option value="ANNUAL">ANNUAL</option>
             </Form.Select>
           </Form.Group>
         </Col>

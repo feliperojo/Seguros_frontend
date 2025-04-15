@@ -7,6 +7,7 @@ import MediosPago from "../components/MediosPago";
 import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes'
 import idiomas  from '../services/idiomas.js';
+import FormDireccion from "../components/FormDireccion";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -603,140 +604,50 @@ const guardarCliente = async () => {
               </div>
           </>
         );
-      case 4:
-        return (
-          <>
-            <h4 className="mb-3">Dirección</h4>
-            <hr />
-            <div className="row mt-3">
-      {/* Campo de Dirección con Ícono */}
-      <div className="col-md-10">
-        <label className="form-label">Dirección de Residencia</label>
-        <div className="input-group">
-          <input
-            type="text"
-            name="direccion"
-            className="form-control"
-            value={formData.direccion}
-            readOnly // Bloqueado para edición manual
-            onChange={handleChange}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                nextStep(); // Opcional: avanzar al siguiente paso
-              }
-            }}
-          />
-          <span className="input-group-text bg-white">
-            <FaMapMarkerAlt
-              className="text-primary fs-4 cursor-pointer"
-              style={{ cursor: "pointer" }}
-              onClick={openMap}
-            />
-          </span>
-        </div>
-      </div>
-   
-
-          <div className="row mt-3">         
-              <div className="col-md-4">
-                <label>Calle</label>
-                <input type="text" name="calle" className="form-control" value={formData.calle} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
+        case 4:
+          return (
+            <>
+              <h4 className="mb-3">Dirección</h4>
+              <hr />
+              
+              <FormDireccion
+                formData={{
+                  calle: formData.calle,
+                  apto: formData.apto,
+                  ciudad: formData.ciudad,
+                  estado: formData.estado,
+                  codigo_postal: formData.codigo_postal,
+                  condado: formData.condado,
+                  dir_correspondencia: formData.dir_correspondencia,
+                  copi_dir: formData.copi_dir
+                }}
+                onChange={(name, value, direccionCompleta) => {
+                  // Crear un evento sintético para reutilizar handleChange
+                  const syntheticEvent = {
+                    target: {
+                      name: name,
+                      value: value,
+                      type: name === "copi_dir" ? "checkbox" : "text",
+                      checked: value
+                    }
+                  };
+                  
+                  // Usar la función handleChange existente
+                  handleChange(syntheticEvent);
+                  
+                  // Si hay dirección concatenada y no es para dir_correspondencia o copi_dir,
+                  // actualizar explícitamente el campo direccion
+                  if (direccionCompleta && name !== "dir_correspondencia" && name !== "copi_dir") {
+                    setFormData(prev => ({
+                      ...prev,
+                      direccion: direccionCompleta
+                    }));
                   }
                 }}
-                />
-              </div>
-              <div className="col-md-4">
-                <label>APT</label>
-                <input type="text" name="apto" className="form-control" value={formData.apto} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-              <div className="col-md-4">
-                <label>Ciudad</label>
-                <input type="text" name="ciudad" className="form-control" value={formData.ciudad} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-          </div>
-
-          <div className="row mt-3"> 
-              <div className="col-md-4">
-                <label>Estado</label>
-                <input type="text" name="estado" className="form-control" value={formData.estado} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-              <div className="col-md-4">
-                <label>Código Postal</label>
-                <input type="text" name="codigo_postal" className="form-control" value={formData.codigo_postal} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-              <div className="col-md-4">
-                <label>Condado</label>
-                <input type="text" name="condado" className="form-control" value={formData.condado} onChange={handleChange}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-          </div>  
-
-
-          <div className="row mt-3"> 
-              <div className="col-md-10">
-                <label>Dirección de Correspondencia</label>
-                <input type="text" name="dir_correspondencia" className="form-control" value={formData.dir_correspondencia} onChange={handleChange} 
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault(); // Prevenir el envío cuando se presiona Enter
-                    nextStep(); // Opcional: avanzar al siguiente paso
-                  }
-                }}
-                />
-              </div>
-              <div className="form-check mt-3">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  name="copi_dir"
-                  checked={formData.copi_dir}
-                  onChange={handleChange}
-                />
-                <label className="form-check-label ms-2">Copiar Dirección</label>
-              </div>
-            </div>
-           </div>
-          </>
-        );
+                editable={true}
+              />
+            </>
+          );
 
         case 5:
   return (

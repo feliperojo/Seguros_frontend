@@ -61,7 +61,38 @@ const GruposFamiliaresListado = () => {
       setLoading(false);
     }
   };
+
+
+// Añade esta función después de getCompaniaNombre o getTomadorNombre
+const getGrupoEstado = (grupo) => {
+  if (!grupo.coberturas || grupo.coberturas.length === 0) {
+    return { estado: "Sin póliza", variant: "secondary" };
+  }
   
+  // Buscar primero la cobertura del tomador
+  const tomadorCobertura = grupo.coberturas.find(
+    cobertura => cobertura.parentesco && 
+    cobertura.parentesco.toUpperCase() === "TOMADOR"
+  );
+  
+  // Si encontramos la cobertura del tomador, verificamos su estado
+  if (tomadorCobertura) {
+    if (tomadorCobertura.fecha_cancelacion) {
+      return { estado: "Cancelada", variant: "danger" };
+    } else {
+      return { estado: "Activa", variant: "success" };
+    }
+  }
+  
+  // Si no hay tomador, verificamos si todas las coberturas están canceladas
+  const todasCanceladas = grupo.coberturas.every(cobertura => cobertura.fecha_cancelacion);
+  if (todasCanceladas) {
+    return { estado: "Cancelada", variant: "danger" };
+  }
+  
+  // Si al menos una cobertura está activa
+  return { estado: "Activa", variant: "success" };
+};
   // Funciones para manejar acciones
   const handleOpenViewModal = (grupo) => {
     setCurrentGrupo(grupo);
@@ -204,7 +235,7 @@ const getCompaniaNombre = (grupo) => {
         </h4>
         <Button 
           variant="primary" 
-          onClick={() => navigate("/grupo-familiar/nuevo")}
+          onClick={() => navigate("/Grupofamiliar/crear")}
         >
           <FaUserPlus className="me-2" />
           Nuevo Grupo Familiar
@@ -300,9 +331,9 @@ const getCompaniaNombre = (grupo) => {
                           <td>
                             <Badge 
                               pill 
-                              bg="secondary"
+                              bg={getGrupoEstado(grupo).variant}
                             >
-                              Sin estado
+                              {getGrupoEstado(grupo).estado}
                             </Badge>
                           </td>
                           <td>

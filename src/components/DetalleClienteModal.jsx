@@ -12,7 +12,7 @@ import {
 const DetalleClienteModal = ({ show, onHide, clienteData }) => {
   // Si no hay datos de cliente, no mostrar nada
   if (!clienteData) return null;
-  
+  console.log("dataclient",clienteData)
   // Estado para controlar la pestaña activa
   const [activeTab, setActiveTab] = useState("general");
   const [mediosPago, setMediosPago] = useState([]);
@@ -39,7 +39,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
     try {
       setLoadingGrupoFamilia(true);
       const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
-  
+  console.log("grupo",response)
       // Extraemos las personas
       const personas = response.data?.coberturas?.map((item) => ({
         ...item.cliente,
