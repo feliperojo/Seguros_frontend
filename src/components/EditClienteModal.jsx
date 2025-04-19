@@ -24,7 +24,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     statusMigratorio: {
       social: "",
       status: "",
-      a_uscis: "",
+      auscis: "",
       tarjeta_numero: "",
       fecha_emision: "",
       fecha_expedicion: "",
@@ -163,84 +163,88 @@ const formatDate = (dateString) => {
   return date.toLocaleDateString();
 };
 
-  // Cargar datos del cliente al abrir el modal
-  useEffect(() => {
-    if (show && clienteData) {
-      mapClienteDataToForm(clienteData);
-      setError(null);
-      setSuccessMessage("");
-      setHasChanges(false);
-    }
-  }, [show, clienteData]);
-  
-  // Función para mapear los datos del cliente al formulario
-  const mapClienteDataToForm = (data) => {
-    // Crear un nuevo objeto para manejar todas las propiedades
-    const mappedData = {
-      // Sección 1: Datos Principales
-      datosPrincipales: {
-        primer_nombre: data.primer_nombre || "",
-        segundo_nombre: data.segundo_nombre || "",
-        apellidos: data.apellidos || "",
-        nombre_completo: data.nombre_completo || "",
-        fecha_nacimiento: data.fecha_nacimiento || "",
-        edad: data.edad || "",
-        genero: data.genero || ""
-      },
-      // Sección 2: Status Migratorio
-      statusMigratorio: {
-        social: data.social || "",
-        status: data.status || "",
-        a_uscis: data.a_uscis || "",
-        tarjeta_numero: data.tarjeta_numero || "",
-        fecha_emision: data.fecha_emision || "",
-        fecha_expedicion: data.fecha_expedicion || "",
-        categoria: data.categoria || ""
-      },
-      // Sección 3: Datos de Contacto
-      datosContacto: {
-        telefono: data.telefono || "",
-        tel_secundario: data.tel_secundario || "",
-        whatsapp: data.whatsapp || "",
-        nota_telefonos: data.nota_telefonos || "",
-        servicios_mensajeria: {
-          whatsapp: data.servicios_mensajeria?.whatsapp || false,
-          telegram: data.servicios_mensajeria?.telegram || false,
-          texto_sms: data.servicios_mensajeria?.texto_sms || false
-        },
-        email: data.email || ""
-      },
-      // Sección 4: Dirección
-      direccion: {
-        calle: data.direccion?.calle || data.calle || "",
-        apto: data.direccion?.apto || data.apto || "",
-        ciudad: data.direccion?.ciudad || data.ciudad || "",
-        estado: data.direccion?.estado || data.estado || "",
-        codigo_postal: data.direccion?.codigo_postal || data.codigo_postal || "",
-        condado: data.direccion?.condado || data.condado || "",
-        direccion: data.direccion?.direccion || data.direccion || "",
-        dir_correspondencia: data.direccion?.dir_correspondencia || data.dir_correspondencia || ""
-      },
-      // Sección 5: Datos de Empleo e Ingreso
-      datosEmpleo: {
-        tipo_ingreso: data.tipo_ingreso || "",
-        actividad_economica: data.actividad_economica || "",
-        empleador: data.empleador || "",
-        telefono_empleador: data.telefono_empleador || "",
-        periodo_ingreso: data.periodo_ingreso || "",
-        ingreso_por_periodo: data.ingreso_por_periodo || "",
-        ingreso_anual: data.ingreso_anual || "",
-        ingreso_ocasional: {
-          nota_ingreso_ocasional: data.ingreso_ocasional?.nota_ingreso_ocasional || "",
-          periodo: data.ingreso_ocasional?.periodo || "",
-          monto: data.ingreso_ocasional?.monto || ""
-        }
-      }
-    };
+useEffect(() => {
+  if (show && clienteData) {
+    console.log("DATA QUE LLEGA --->", clienteData);
+    mapClienteDataToForm(clienteData);
+    setError(null);
+    setSuccessMessage("");
+    setHasChanges(false);
+  }
+}, [show, clienteData]);
 
-    // Actualizar el estado
-    setFormData(mappedData);
+
+  
+const mapClienteDataToForm = (data) => {
+  const mappedData = {
+    // Sección 1: Datos Principales
+    datosPrincipales: {
+      primer_nombre: data.primer_nombre || "",
+      segundo_nombre: data.segundo_nombre || "",
+      apellidos: data.apellidos || "",
+      nombre_completo: data.nombre_completo || "",
+      fecha_nacimiento: data.fecha_nacimiento || "",
+      edad: data.edad || "",
+      genero: data.genero || ""
+    },
+
+    // ✅ Sección 2: Status Migratorio (corrigiendo claves directas del modelo)
+    statusMigratorio: {
+      social: data.social || "",
+      status: data.status || "",
+      auscis: data.auscis || "",
+      tarjeta_numero: data.tarjeta_numero || "",
+      fecha_emision: data.fecha_emision || "",
+      fecha_expedicion: data.fecha_expiracion || "",
+      categoria: data.categoria || ""
+    },
+
+    // Sección 3: Datos de Contacto
+    datosContacto: {
+      telefono: data.telefono || "",
+      tel_secundario: data.secundario || "",
+      whatsapp: data.whatsapp_num || "",
+      nota_telefonos: data.nota_telefonos || "",
+      servicios_mensajeria: {
+        whatsapp: data.whatsapp || false,
+        telegram: data.telegram || false,
+        texto_sms: data.texto_sms || false
+      },
+      email: data.email || ""
+    },
+
+    // Sección 4: Dirección
+    direccion: {
+      calle: data.calle || "",
+      apto: data.apto || "",
+      ciudad: data.ciudad || "",
+      estado: data.estado || "",
+      codigo_postal: data.codigo_postal || "",
+      condado: data.condado || "",
+      direccion: data.direccion || "",
+      dir_correspondencia: data.dir_correspondencia || ""
+    },
+
+    // Sección 5: Empleo e Ingreso
+    datosEmpleo: {
+      tipo_ingreso: data.tipo_ingreso || "",
+      actividad_economica: data.actividad_economica || "",
+      empleador: data.empleador || "",
+      telefono_empleador: data.telefono_empleador || "",
+      periodo_ingreso: data.periodo_ingreso || "",
+      ingreso_por_periodo: data.ingreso_por_periodo || "",
+      ingreso_anual: data.ingreso_anual || "",
+      ingreso_ocasional: {
+        nota_ingreso_ocasional: data.nota_ingreso_ocasional || "",
+        periodo: data.periodo_ingreso_ocasional || "",
+        monto: data.ingreso_por_periodo_ocasional || ""
+      }
+    }
   };
+
+  setFormData(mappedData);
+};
+
 
   const handleInputChange = (section, field, value) => {
     setFormData(prevData => {
@@ -493,13 +497,18 @@ const formatDate = (dateString) => {
               onChange={(e) => handleInputChange("statusMigratorio", "status", e.target.value)}
             >
               <option value="">Seleccione</option>
-              <option value="Ciudadano">Ciudadano</option>
-              <option value="Residente">Residente</option>
-              <option value="Asilo">Asilo</option>
-              <option value="DACA">DACA</option>
-              <option value="TPS">TPS</option>
-              <option value="Visa">Visa</option>
-              <option value="Otro">Otro</option>
+              <option value="P. TRABAJO">P. TRABAJO</option>
+                  <option value="RESIDENTE">RESIDENTE</option>
+                  <option value="CIUDADANO">CIUDADANO</option>
+                  <option value="I-862">I-862</option>
+                  <option value="I-797">I-797</option>
+                  <option value="I-589 ASILUM">I-589 ASILUM</option>
+                  <option value="ESTUDIANTE">ESTUDIANTE</option>
+                  <option value="VISA E2">VISA E2</option>
+                  <option value="VISA K1">VISA K1</option>
+                  <option value="VISA J">VISA J</option>
+                  <option value="I-94">I-94</option>
+                  <option value="TPS">TPS</option>
             </Form.Select>
           </Form.Group>
         </Col>
@@ -511,8 +520,8 @@ const formatDate = (dateString) => {
             <Form.Label>A/USCIS</Form.Label>
             <Form.Control
               type="text"
-              value={formData.statusMigratorio.a_uscis}
-              onChange={(e) => handleInputChange("statusMigratorio", "a_uscis", e.target.value)}
+              value={formData.statusMigratorio.auscis}
+              onChange={(e) => handleInputChange("statusMigratorio", "auscis", e.target.value)}
             />
           </Form.Group>
         </Col>

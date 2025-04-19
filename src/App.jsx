@@ -9,7 +9,7 @@ import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
 import MediosPagoManager from './pages/MediosPagoManager';
 import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
-
+import ReporteGrupoFamiliar from "../src/components/Reports/ReporteGrupoFamiliar";
 import ListaClientes from "./pages/ListaClientes";
 
 // Función para verificar si el usuario está autenticado
@@ -27,7 +27,7 @@ const App = () => {
     <Routes>
       {/* Página de Login (pública) */}
       <Route path="/login" element={<Login />} />
-
+      <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />
       {/* Rutas protegidas dentro del MainLayout */}
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Dashboard />} />
@@ -39,6 +39,7 @@ const App = () => {
         <Route path="clientes/mediopago/:clienteId" element={<MediosPagoManager />} />
         <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado/>}/>
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
+        
       
       </Route>
 

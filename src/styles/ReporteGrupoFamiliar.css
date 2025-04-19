@@ -1,0 +1,66 @@
+.reporte-container {
+    background-color: white;
+    font-family: Arial, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    padding: 40px;
+    color: #333;
+  }
+  
+  .reporte-header h4,
+  .reporte-header h5 {
+    margin: 0;
+  }
+  
+  .reporte-header p {
+    margin: 0;
+  }
+  
+  table th,
+  table td {
+    vertical-align: middle !important;
+    font-size: 0.9rem;
+  }
+  
+  @media print {
+    body {
+      margin: 0;
+      padding: 0;
+      background: none;
+      -webkit-print-color-adjust: exact;
+    }
+  
+    .reporte-container {
+      box-shadow: none;
+      padding: 0;
+      max-width: 100%;
+      margin: 0;
+    }
+  
+    header,
+    footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+    }
+  
+    header {
+      top: 0;
+    }
+  
+    footer {
+      bottom: 0;
+    }
+  
+    section {
+      page-break-inside: avoid;
+    }
+  }
+  .reporte-container .card {
+    transition: all 0.2s ease-in-out;
+  }
+  .reporte-container .card:hover {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.08);
+  }
+  

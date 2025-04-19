@@ -11,6 +11,10 @@ import "../styles/GruposFamiliaresListado.css"
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../services/api";
 
+
+
+
+
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
   
@@ -68,33 +72,21 @@ const getGrupoEstado = (grupo) => {
   if (!grupo.coberturas || grupo.coberturas.length === 0) {
     return { estado: "Sin póliza", variant: "secondary" };
   }
-  
-  // Buscar primero la cobertura del tomador
-  const tomadorCobertura = grupo.coberturas.find(
-    cobertura => cobertura.parentesco && 
-    cobertura.parentesco.toUpperCase() === "TOMADOR"
-  );
-  
-  // Si encontramos la cobertura del tomador, verificamos su estado
-  if (tomadorCobertura) {
-    if (tomadorCobertura.fecha_cancelacion) {
-      return { estado: "Cancelada", variant: "danger" };
-    } else {
-      return { estado: "Activa", variant: "success" };
-    }
-  }
-  
-  // Si no hay tomador, verificamos si todas las coberturas están canceladas
-  const todasCanceladas = grupo.coberturas.every(cobertura => cobertura.fecha_cancelacion);
+
+  // Verificar si todas las coberturas tienen fecha de cancelación
+  const todasCanceladas = grupo.coberturas.every(cobertura => !!cobertura.fecha_cancelacion);
+
   if (todasCanceladas) {
     return { estado: "Cancelada", variant: "danger" };
   }
-  
-  // Si al menos una cobertura está activa
+
+  // Si al menos una no está cancelada
   return { estado: "Activa", variant: "success" };
 };
+
   // Funciones para manejar acciones
   const handleOpenViewModal = (grupo) => {
+    
     setCurrentGrupo(grupo);
     setShowViewModal(true);
   };
@@ -428,6 +420,10 @@ const getCompaniaNombre = (grupo) => {
                     <h6><strong>{currentGrupo.persona_contacto || "Sin especificar"}</strong></h6>
                   </div>
                   <div className="col-md-4 mb-3">
+                    <p className="mb-1 text-muted">Nota:</p>
+                    <h6><strong>{currentGrupo.nota || "Sin especificar"}</strong></h6>
+                  </div>
+                  <div className="col-md-4 mb-3">
                     <p className="mb-1 text-muted">Personas en Cobertura:</p>
                     <h6>
                       <span className="badge bg-info text-white">
@@ -446,13 +442,17 @@ const getCompaniaNombre = (grupo) => {
                   <div className="col-md-4 mb-3">
                     <p className="mb-1 text-muted">Ingreso Familiar Anual:</p>
                     <h6>
-                      <strong>
-                        {currentGrupo.ingreso_familiar_anual 
-                          ? `$${parseFloat(currentGrupo.ingreso_familiar_anual).toLocaleString()}`
-                          : "No especificado"
-                        }
-                      </strong>
-                    </h6>
+                        <strong>
+                          {currentGrupo.ingreso_familiar_anual 
+                            ? parseFloat(currentGrupo.ingreso_familiar_anual).toLocaleString('en-US', {
+                                style: 'currency',
+                                currency: 'USD',
+                              })
+                            : "No especificado"
+                          }
+                        </strong>
+                      </h6>
+
                   </div>
                 </div>
               </div>
@@ -463,21 +463,40 @@ const getCompaniaNombre = (grupo) => {
                 <div className="row">
                   {currentGrupo.telefonos && (
                     <>
-                      <div className="col-md-4 mb-3">
+                      <div className="col-md-3 mb-3">
                         <p className="mb-1 text-muted">Teléfono 1:</p>
                         <h6><strong>{currentGrupo.telefonos.telefono_1 || "No especificado"}</strong></h6>
                       </div>
-                      <div className="col-md-4 mb-3">
+                      <div className="col-md-3 mb-3">
                         <p className="mb-1 text-muted">Teléfono 2:</p>
                         <h6><strong>{currentGrupo.telefonos.telefono_2 || "No especificado"}</strong></h6>
                       </div>
-                      <div className="col-md-4 mb-3">
+                      <div className="col-md-2 mb-3">
                         <p className="mb-1 text-muted">Whatsapp:</p>
                         <h6>
                           <Badge pill bg={currentGrupo.telefonos.whatsapp ? "success" : "secondary"}>
                             {currentGrupo.telefonos.whatsapp ? "Activo" : "Inactivo"}
                           </Badge>
                         </h6>
+                        
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <p className="mb-1 text-muted">Telegram:</p>
+                        <h6>
+                          <Badge pill bg={currentGrupo.telefonos.telegram ? "success" : "secondary"}>
+                            {currentGrupo.telefonos.telegram ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </h6>
+                        
+                      </div>
+                      <div className="col-md-2 mb-3">
+                        <p className="mb-1 text-muted">Mensaje sms:</p>
+                        <h6>
+                          <Badge pill bg={currentGrupo.telefonos.mensaje_sms ? "success" : "secondary"}>
+                            {currentGrupo.telefonos.mensaje_sms ? "Activo" : "Inactivo"}
+                          </Badge>
+                        </h6>
+                        
                       </div>
                     </>
                   )}
@@ -496,12 +515,15 @@ const getCompaniaNombre = (grupo) => {
                           <th>Cliente</th>
                           <th>Parentesco</th>
                           <th>Elegibilidad</th>
+                          <th>Compañia</th>
                           <th>Plan</th>
                           <th>Metal</th>
+                          <th>Red</th>
                           <th>Pagador</th>
                           <th>Año Cobertura</th>
                           <th>Precio $</th>
                           <th>Fecha Activación</th>
+                          <th>Fecha cancelación</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -520,14 +542,22 @@ const getCompaniaNombre = (grupo) => {
                             </td>
                             <td>{cobertura.parentesco || "-"}</td>
                             <td>{cobertura.elegibilidad || "-"}</td>
+                            <td>{cobertura.compania.nombre || "-"}</td>
                             <td>{cobertura.plan || "-"}</td>
                             <td>{cobertura.metal || "-"}</td>
-                            <td>{cobertura.pagador_id || "-"}</td>
+                            <td>{cobertura.red || "-"}</td>
+                            <td>{cobertura.nombre_pagador || "-"}</td>
                             <td>{cobertura.ano_cobertura || "-"}</td>
                             <td>{cobertura.precio || "-"}</td>
                             <td>
                               {cobertura.fecha_activacion 
                                 ? new Date(cobertura.fecha_activacion).toLocaleDateString() 
+                                : "-"
+                              }
+                            </td>
+                            <td>
+                              {cobertura.fecha_activacion 
+                                ? new Date(cobertura.fecha_cancelacion).toLocaleDateString() 
                                 : "-"
                               }
                             </td>
@@ -540,15 +570,18 @@ const getCompaniaNombre = (grupo) => {
               )}
               
               <div className="d-flex justify-content-between mt-4">
-                {/* <Button 
-                  variant="outline-primary" 
-                  onClick={() => {
-                    setShowViewModal(false);
-                    navigate(`/grupo-familiar/${currentGrupo.id}`);
-                  }}
-                >
-                  Ver Detalles Completos
-                </Button> */}
+              <Button 
+                      variant="outline-primary" 
+                      onClick={() => {
+                        setShowViewModal(false);
+                        window.open(`/grupo-familiar/${currentGrupo.id}/reporte`, '_blank');
+                      }}
+                    >
+                      <FaFileExport className="me-2" />
+                      Ver Detalles Completos
+                    </Button>
+
+
                 {/* <Button 
                   variant="outline-success" 
                   onClick={() => {

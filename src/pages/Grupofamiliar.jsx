@@ -35,6 +35,7 @@ const Grupofamiliar = () => {
     referido: "",
     parentesco: "",
     estado_cobertura: "",
+    cobertura_tipo:"SEGURO MEDICO  OBAMA",
     pertenece_grupo_familiar: false
   };
 
@@ -51,6 +52,13 @@ const Grupofamiliar = () => {
 
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
+
+  const [conteoMiembros, setConteoMiembros] = useState(0);
+const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
+
+const [totalMiembros, setTotalMiembros] = useState(0);
+const [totalYes, setTotalYes] = useState(0);
+
 
   const [coverageGroups, setCoverageGroups] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -72,6 +80,24 @@ const Grupofamiliar = () => {
     telefono2: "us"
   });
 
+  useEffect(() => {
+    const totalMiembros = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
+    const totalYes = coverageGroups.reduce((sum, group) => 
+      sum + group.members.filter(m => m.estado_cobertura === "Yes").length
+    , 0);
+  
+    setConteoMiembros(totalMiembros);
+    setConteoCoberturaYes(totalYes);
+  }, [coverageGroups]);
+  
+  useEffect(() => {
+    const miembros = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
+    const conYes = coverageGroups.reduce((sum, group) => sum + group.members.filter(m => m.estado_cobertura === "Yes").length, 0);
+  
+    setTotalMiembros(miembros);
+    setTotalYes(conYes);
+  }, [coverageGroups]);
+  
   // Initialize the first coverage group if none exists
   useEffect(() => {
     if (coverageGroups.length === 0) {
@@ -104,12 +130,13 @@ const Grupofamiliar = () => {
     const miembroDestino = grupo.members[indexDestino];
   
     const camposACopiar = [
-      'fecha_activacion',
-      'ano',
-      'compania_id',
+      'ano_cobertura',
       'plan',
+      'elegibilidad',
+      'red',
+      'compania_id',
       'metal',
-      'red'
+      'fecha_activacion'
     ];
     const updatedGroups = coverageGroups.map(group => {
       if(group.id !== groupId) return group;
@@ -231,106 +258,102 @@ const Grupofamiliar = () => {
     );
   };
 
-  const addFamilyMember = (client) => {
+  const addFamilyMember = async (client) => {
     if (!client || !client.id) return;
   
-    const totalPermitido = parseInt(policyData.personas_cobertura || "0", 10);
-    const totalActual = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
-
-    const yaExiste = coverageGroups.some(group =>
-      group.members.some(member => member.id === client.id)
-    );
+    try {
+      const clientData = await apiRequest(`cliente/${client.id}`, "GET");
   
-    if (yaExiste) {
-      setAlert({
-        type: "warning",
-        message: `El cliente "${client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`}" ya está agregado en la cobertura.`,
-        visible: true
+      const ingresoAnualCliente = parseFloat(clientData.ingreso_anual || 0);
+  
+      const totalPermitido = parseInt(policyData.personas_cobertura || "0", 10);
+      const totalActual = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
+  
+      const yaExiste = coverageGroups.some(group =>
+        group.members.some(member => member.id === client.id)
+      );
+  
+      if (yaExiste) {
+        setAlert({
+          type: "warning",
+          message: `El cliente "${clientData.nombre_completo}" ya está agregado.`,
+          visible: true
+        });
+        setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+        return;
+      }
+  
+          const totalEnTaxesPermitido = parseInt(policyData.personas_en_taxes || "0", 10);
+            const totalActualEnGrupo = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
+
+            if (totalActualEnGrupo >= totalEnTaxesPermitido) {
+              setAlert({
+                type: "warning",
+                message: `Ya agregaste el máximo permitido de personas en el grupo (${totalEnTaxesPermitido})`,
+                visible: true
+              });
+              setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+              return;
+            }
+
+      setCoverageGroups(prevGroups => {
+        const updatedGroups = prevGroups.map((group, index) => {
+          if (index === 0) {
+            return {
+              ...group,
+              members: [
+                ...group.members,
+                {
+                  id: client.id,
+                  nombre: clientData.nombre_completo,
+                  ingreso_anual: ingresoAnualCliente,
+                  parentesco: "",
+                  fecha_activacion: new Date().toISOString().split("T")[0]
+                }
+              ]
+            };
+          }
+          return group;
+        });
+
+
+     
+        
+  
+        recalculateTotalIncome(updatedGroups);
+        return updatedGroups;
       });
   
-      setTimeout(() => {
-        setAlert({ type: "", message: "", visible: false });
-      }, 5000);
-      return;
-    }
-  
-
-
-
-    if (totalActual >= totalPermitido) {
-      setAlert({
-        type: "warning",
-        message: `Ya has agregado el máximo permitido de ${totalPermitido} persona(s) en cobertura.`,
-        visible: true
-      });
-  
-      // Ocultar después de 10 segundos
-      setTimeout(() => {
-        setAlert({ type: "", message: "", visible: false });
-      }, 10000);
-      return;
-    }
-
-    setFamilyMembers((prev) => [...prev, {
-      id: client.id,
-      nombre: client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`,
-      ingreso_anual: client.ingreso_anual || 0,
-      fecha_activacion: new Date().toISOString().split("T")[0]
-    }]);
-
-    setCoverageGroups((prevGroups) => {
-      const updatedGroups = prevGroups.map((group, index) => {
-        if (index === 0) {
-          return {
-            ...group,
-            members: [...group.members, {
-              id: client.id,
-              nombre: client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`,
-              ingreso_anual: client.ingreso_anual || 0,
-              parentesco: "",
-              fecha_activacion: new Date().toISOString().split("T")[0]
-            }]
-          };
-        }
-        return group;
-      });
-
-      // Calculamos inmediatamente
-      recalculateTotalIncome(updatedGroups);
-    setShowModal(false);
-    setAlert({
-      type: "success",
-      message: `Cliente "${client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`}" agregado exitosamente`,
-      visible: true
-    });
-
-      
-      // Cerrar el modal después de agregar un miembro
       setShowModal(false);
-      
-      // Mostrar mensaje de éxito
       setAlert({
         type: "success",
-        message: `Cliente "${client.nombre_completo || `${client.nombre || ''} ${client.apellido || ''}`}" agregado exitosamente`,
+        message: `Cliente "${clientData.nombre_completo}" agregado correctamente`,
         visible: true
       });
-      
-      // Ocultar alerta después de 3 segundos
-      setTimeout(() => {
-        setAlert({ type: "", message: "", visible: false });
-      }, 3000);
   
-      return updatedGroups;
-    });
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+  
+    } catch (error) {
+      console.error("Error al agregar cliente:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al traer información del cliente.",
+        visible: true
+      });
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+    }
   };
+  
+
 
   const recalculateTotalIncome = (groups) => {
     const total = groups.reduce((sum, group) =>
         sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
     , 0);
-
+  
     setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
   };
+  
   
   useEffect(() => {
     const total = coverageGroups.reduce((sum, group) =>
@@ -346,11 +369,29 @@ const Grupofamiliar = () => {
     }
   };
   
-  // Nuevo manejador para cliente existente seleccionado
-  const handleClienteExistenteSeleccionado = (cliente) => {
-    addFamilyMember(cliente);
-    console.log("Cliente existente agregado a la tabla en GrupoFamiliar.");
+  const handleClienteExistenteSeleccionado = async (cliente) => {
+    try {
+      const clientData = await apiRequest(`cliente/show/${cliente.id}`, "GET");
+
+
+  
+      if (!clientData || !clientData.id) throw new Error("Cliente no encontrado");
+  
+      // Llama a la lógica de agregar al grupo, que ya valida duplicados
+      addFamilyMember(clientData);
+  
+      console.log("Cliente existente agregado a la tabla en GrupoFamiliar.");
+    } catch (error) {
+      console.error("Error al traer información del cliente:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al traer información del cliente.",
+        visible: true
+      });
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+    }
   };
+  
   
 
 
@@ -387,7 +428,7 @@ const Grupofamiliar = () => {
 
     const newGroup = {
       id: coverageGroups.length + 1,
-      tipoProducto: "SEGURO MEDICO  OBAMA", // Por defecto nueva cobertura es Seguro Médico
+      cobertura_tipo: "SEGURO MEDICO  OBAMA", // Por defecto nueva cobertura es Seguro Médico
       policyData: { ...INITIAL_POLICY_STATE }, // Datos de póliza independientes
       members: newMembers, // Se copian solo ID y nombre de los miembros
     };
@@ -440,29 +481,48 @@ const Grupofamiliar = () => {
     setCurrentEditMember({ ...member, groupId });
     setShowEditModal(true);
   };
-  
   const saveEditChanges = () => {
     if (!currentEditMember) return;
-    
-    setCoverageGroups(prevGroups => 
-      prevGroups.map(group => 
+  
+    // Verificar si el campo está vacío o inválido
+    const precioCrudo = currentEditMember.precio?.toString().replace(/[^0-9.]/g, '') || "0";
+    const parsedPrecio = parseFloat(precioCrudo);
+  
+    // Actualizar el grupo con el valor de precio corregido
+    setCoverageGroups(prevGroups =>
+      prevGroups.map(group =>
         group.id === currentEditMember.groupId
           ? {
               ...group,
-              members: group.members.map(member => 
-                member.id === currentEditMember.id 
-                  ? { ...currentEditMember }
+              members: group.members.map(member =>
+                member.id === currentEditMember.id
+                  ? {
+                      ...member,
+                      ...currentEditMember,
+                      precio: isNaN(parsedPrecio) ? 0 : parsedPrecio
+                    }
                   : member
               )
             }
           : group
       )
     );
-    
+  
     setShowEditModal(false);
     setCurrentEditMember(null);
   };
-
+  
+  
+  
+  useEffect(() => {
+    const conYes = coverageGroups.reduce(
+      (sum, group) => sum + group.members.filter(m => m.estado_cobertura === "Yes").length,
+      0
+    );
+    console.log("✔️ Total con cobertura 'Yes':", conYes);
+    setTotalYes(conYes);
+  }, [coverageGroups]);
+  
 
 
   const getCompanyName = (companyId) => {
@@ -590,18 +650,18 @@ const Grupofamiliar = () => {
             parentesco: member.parentesco || null,
             fecha_activacion: member.fecha_activacion || null,
             fecha_cancelacion: member.fecha_cancelacion || null,
-            ano: member.ano || new Date().getFullYear().toString(),
+            ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
             compania_id: member.compania_id || null,
             plan: member.plan || "",
             metal: member.metal || "",
             elegibilidad: member.elegibilidad || "",
             estado_cobertura: member.estado_cobertura || "",
             red: member.red || "",
-            pagador: member.pagador || "",
+            pagador_id: member.pagador_id || "",
             precio: member.precio || 0,
             cliente_id: member.id, // ID del cliente
             grupo_familiar_id: grupoFamiliarId, // ID del grupo familiar creado
-            tipo_producto: group.tipoProducto // Tipo de producto de esta cobertura
+            cobertura_tipo: group.cobertura_tipo // Tipo de producto de esta cobertura
           };
   
           console.log(`Enviando cobertura para miembro ${member.nombre}:`, coberturaData);
@@ -698,7 +758,26 @@ const Grupofamiliar = () => {
       </div>
     </div>
   );
+  const companyColorMap = {
+    "AMBETER": "#FF99FF",
+    "BCBS TEXAS": "#89CFF0",
+    "BRIGHT HEALTH": "#9EFF00",
+    "FLORIDA BLUE": "#6FCFFF"
+  
+  };
 
+  const metalColorMap = {
+  "BRONCE": "#CD7F32",   // Bronce
+  "SILVER": "#C0C0C0",   // Plata
+  "GOLD": "#FFD700"      // Oro
+};
+
+  
+  const getCompanyColor = (compania_id) => {
+    const name = getCompanyName(compania_id);
+    return companyColorMap[name] || "#d3d3d3"; // Gris claro por defecto
+  };
+  
   const renderStepContent = () => {
     switch (currentStep) {
       case 1:
@@ -737,10 +816,15 @@ const Grupofamiliar = () => {
                   <Form.Group>
                     <Form.Label className="fw-medium">Ingreso Familiar Anual ($)</Form.Label>
                     <Form.Control 
+                     
                       type="text" 
                       name="ingreso_familiar"
                       value={policyData.ingreso_familiar}
                       onChange={handlePolicyChange}
+                  
+                   
+                      readOnly
+                      className="bg-light"
                     />
                   </Form.Group>
                 </Col>
@@ -749,7 +833,18 @@ const Grupofamiliar = () => {
               <h4 className="mt-4 mb-3 text-primary">Datos de Contacto</h4>
               <hr />
               
-              <Row className="mb-4">                
+              <Row className="mb-4">   
+              <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Persona Contacto</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="persona_contacto" 
+                      value={policyData.persona_contacto}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>             
                 <Col md={2}>
                   <Form.Group>
                     <Form.Label className="fw-medium d-block">¿Pertenece al grupo familiar?</Form.Label>
@@ -897,23 +992,22 @@ const Grupofamiliar = () => {
           <Card className="shadow-sm border-0 mb-4">
             <Card.Body>
             <div className="mb-4">
-                    <Alert variant="info">
-                      <div><strong>Personas en Taxes:</strong> {policyData.personas_en_taxes || 0}</div>
-                      <div><strong>Personas en Cobertura:</strong> {policyData.personas_cobertura || 0}</div>
-                    </Alert>
+          
+
+
+
                   </div>
 
               <div className="d-flex justify-content-between align-items-center mb-3">
-                <h4 className="mb-0 text-primary">Personas con Cobertura</h4>
+                <h4 className="mb-0 text-primary">Personas del Grupo Familiar</h4>
                 <Button
                     variant="primary"
                     onClick={handleOpenModal}
-                    disabled={
-                      coverageGroups.reduce((sum, group) => sum + group.members.length, 0) >= parseInt(policyData.personas_cobertura || "0", 10)
-                    }
+                    disabled={totalMiembros >= parseInt(policyData.personas_en_taxes || "0", 10)}
                   >
                     <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
                   </Button>
+
 
               </div>
               <hr />
@@ -937,18 +1031,22 @@ const Grupofamiliar = () => {
                             </option>
                           ))}
                         </Form.Select>
-                            <span className={`ms-3 fw-bold ${group.members.length >= parseInt(policyData.personas_cobertura || "0", 10) ? 'text-danger' : 'text-muted'}`}>
-                                {group.members.length} / {policyData.personas_cobertura || 0} {group.members.length === 1 ? 'miembro agregado' : 'miembros agregados'}
-                              </span>
+                           
 
                       </div>
                     </Accordion.Header>
+
+                    
                     <Accordion.Body>
+
                       <Row>
                         {group.members.length > 0 ? (
                           group.members.map((member, index) => (
                             <Col key={member.id} lg={4} md={6} className="mb-3">
-                              <Card className="h-100 shadow-sm">
+                             <Card 
+                                  className={`h-100 shadow-sm ${member.estado_cobertura !== "Yes" ? 'border-danger bg-light-subtle' : ''}`}>
+
+
                                 <Card.Header className="d-flex justify-content-between align-items-center bg-light">
                                   <h6 className="mb-0">{member.nombre}</h6>
                                   <Dropdown>
@@ -959,6 +1057,31 @@ const Grupofamiliar = () => {
                                       <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
                                         <i className="bi bi-pencil me-2"></i> Editar
                                       </Dropdown.Item>
+                                      {index > 0 && (
+                                            <Dropdown.Item onClick={() => {
+                                              Swal.fire({
+                                                title: '¿Está seguro?',
+                                                text: '¿Desea copiar la información del primer miembro a este miembro?',
+                                                icon: 'question',
+                                                showCancelButton: true,
+                                                confirmButtonText: 'Sí, copiar',
+                                                cancelButtonText: 'Cancelar',
+                                                customClass: {
+                                                  confirmButton: 'btn btn-success me-2',
+                                                  cancelButton: 'btn btn-secondary',
+                                                  actions: 'd-flex justify-content-center gap-2'
+                                                },
+                                                buttonsStyling: false
+                                              }).then((result) => {
+                                                if (result.isConfirmed) {
+                                                  copiarDatosDelPrimero(group.id, index);
+                                                }
+                                              });
+                                            }}>
+                                              <i className="bi bi-copy me-2"></i> Copiar datos
+                                            </Dropdown.Item>
+                                          )}
+
                                       <Dropdown.Divider />
                                       <Dropdown.Item className="text-danger" onClick={() => removeMemberFromGroup(group.id, member.id)}>
                                         <i className="bi bi-trash me-2"></i> Eliminar
@@ -1010,11 +1133,13 @@ const Grupofamiliar = () => {
                                         <Form.Group>
                                           <Form.Label className="small text-muted mb-1">Activación</Form.Label>
                                           <Form.Control 
-                                            size="sm"
-                                            type="date" 
-                                            value={member.fecha_activacion || ""}
-                                            onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
-                                          />
+                                              size="sm"
+                                              type="date" 
+                                              value={member.fecha_activacion || ""}
+                                              onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
+                                              disabled={member.estado_cobertura === "No"}
+                                            />
+
                                         </Form.Group>
                                       </Col>
                                       <Col xs={6}>
@@ -1042,48 +1167,43 @@ const Grupofamiliar = () => {
                                 </Card.Body>
                                 <Card.Footer className="bg-white">
                                     <div className="d-flex justify-content-between align-items-center">
-                                      <small className="text-muted">
-                                        {member.compania_id ? getCompanyName(member.compania_id) : "Sin compañía"}
-                                      </small>
-                                      <span className="badge bg-info rounded-pill">
-                                        {member.metal || "Sin metal"}
+                                    <small className="text-muted d-flex align-items-center gap-2">
+                                                <span
+                                                  style={{
+                                                    width: "12px",
+                                                    height: "12px",
+                                                    borderRadius: "50%",
+                                                    backgroundColor: getCompanyColor(member.compania_id),
+                                                    display: "inline-block"
+                                                  }}
+                                                ></span>
+                                                {member.compania_id ? getCompanyName(member.compania_id) : "Sin compañía"}
+                                              </small>
+
+
+                                              <span className="badge rounded-pill"
+                                              style={{
+                                                backgroundColor: metalColorMap[member.metal] || '#d3d3d3',
+                                                color: 'black'
+                                              }}>
+                                              {member.metal || "Sin metal"}
+                                            </span>
+
+                                    </div>
+
+                                    {/* NUEVO BLOQUE: Cobertura y Precio */}
+                                    <div className="d-flex justify-content-between align-items-center mt-2 px-1">
+                                      <span className="text-muted small">
+                                        <strong>Cobertura:</strong> {member.estado_cobertura || "No definido"}
+                                      </span>
+                                      <span className="text-muted small">
+                                      <strong>Precio:</strong> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(member.precio || 0)}
                                       </span>
                                     </div>
-                                    {index > 0 && (
-                                            <Form.Check 
-                                              type="checkbox"
-                                              label="Copiar datos"
-                                              onChange={(e) => {
-                                                if(e.target.checked){
-                                                  Swal.fire({
-                                                    title: '¿Está seguro?',
-                                                    text: '¿Desea copiar la información del primer miembro a este miembro?',
-                                                    icon: 'warning',
-                                                    showCancelButton: true,
-                                                    confirmButtonText: 'Sí, copiar',
-                                                    cancelButtonText: 'Cancelar',
-                                                    customClass: {
-                                                      confirmButton: 'btn btn-success me-2',  // le da margen a la derecha
-                                                      cancelButton: 'btn btn-secondary',
-                                                      actions: 'd-flex justify-content-center gap-2'  // fuerza alineación bonita
-                                                    },
-                                                    buttonsStyling: false
-                                                  
-                                                  
-                                                  
-                                                  
-                                                  }).then((result) => {
-                                                    if (result.isConfirmed) {
-                                                      copiarDatosDelPrimero(group.id, index);
-                                                    }
-                                                  });
-                                                }
-                                              }}
-                                            />
-                                          )}
 
-
+                                    
                                   </Card.Footer>
+
                               </Card>
                             </Col>
                           ))
@@ -1091,9 +1211,8 @@ const Grupofamiliar = () => {
                           <Col xs={12}>
                             <div className="text-center py-5 border rounded bg-light">
                               <p className="mb-0 text-muted">No hay miembros agregados.</p>
-                              <Button variant="outline-primary" size="sm" className="mt-2" onClick={handleOpenModal}>
-                                  <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
-                                </Button>
+                              
+
                               </div>
                             </Col>
                           )
@@ -1103,7 +1222,18 @@ const Grupofamiliar = () => {
                   </Accordion.Item>
                 </Accordion>
               ))}
-
+                    <div className="rounded shadow-sm border border-info bg-light p-3 mb-4">
+                  <Row className="text-center fw-medium small">
+                    <Col md={6}>
+                      <div className="text-info mb-2">Personas en Taxes</div>
+                      <span>{totalMiembros} / {policyData.personas_en_taxes || 0}</span>
+                    </Col>
+                    <Col md={6}>
+                      <div className="text-info mb-2">Personas con Cobertura</div>
+                      <span>{totalYes} / {policyData.personas_cobertura || 0}</span>
+                    </Col>
+                  </Row>
+                </div>
               {/* <div className="mt-4">
                 <Button variant="outline-primary" onClick={addCoverageGroup} className="d-flex align-items-center">
                   <i className="bi bi-plus-circle me-2"></i> Agregar nueva cobertura
@@ -1116,7 +1246,16 @@ const Grupofamiliar = () => {
         return null;
     }
   };
-
+  const isPolicyValid = () => {
+    const enTaxes = parseInt(policyData.personas_en_taxes || "0", 10);
+    const conCobertura = parseInt(policyData.personas_cobertura || "0", 10);
+  
+    return (
+      enTaxes === totalMiembros &&
+      conCobertura === totalYes
+    );
+  };
+  
   return (
     <div className="container-fluid py-4">
       {/* Progress Bar */}
@@ -1134,6 +1273,8 @@ const Grupofamiliar = () => {
           {alert.message}
         </Alert>
       )}
+
+      
       
       {/* Form Content */}
       {renderStepContent()}
@@ -1153,10 +1294,17 @@ const Grupofamiliar = () => {
             <i className="bi bi-arrow-right ms-2"></i>
           </Button>
         ) : (
-          <Button variant="success" className="ms-auto" onClick={handleSubmit}>
-            <i className="bi bi-save me-2"></i>
-            Guardar Póliza de Grupo Familiar
-          </Button>
+          <Button 
+          variant="success" 
+          className="ms-auto" 
+          onClick={handleSubmit}
+          disabled={!isPolicyValid()} // 👈 Deshabilita si no cumple
+        >
+          <i className="bi bi-save me-2"></i>
+          Guardar Póliza de Grupo Familiar
+        </Button>
+        
+        
         )}
       </div>
       
@@ -1240,10 +1388,12 @@ const Grupofamiliar = () => {
                   <Form.Group className="mb-3">
                     <Form.Label>Fecha Activación</Form.Label>
                     <Form.Control 
-                      type="date" 
-                      value={currentEditMember.fecha_activacion || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_activacion: e.target.value})}
-                    />
+                        type="date" 
+                        value={currentEditMember.fecha_activacion || ""} 
+                        onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_activacion: e.target.value})}
+                        disabled={currentEditMember.estado_cobertura === "No"}
+                      />
+
                   </Form.Group>
                 </Col>
                 <Col md={6}>
@@ -1264,8 +1414,8 @@ const Grupofamiliar = () => {
                     <Form.Label>Año Cobertura</Form.Label>
                     <Form.Control 
                       type="text" 
-                      value={currentEditMember.ano || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, ano: e.target.value})}
+                      value={currentEditMember.ano_cobertura || ""} 
+                      onChange={(e) => setCurrentEditMember({...currentEditMember, ano_cobertura: e.target.value})}
                     />
                   </Form.Group>
                 </Col>
@@ -1299,18 +1449,22 @@ const Grupofamiliar = () => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Metal</Form.Label>
-                    <Form.Select 
-                      value={currentEditMember.metal || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, metal: e.target.value})}
-                    >
-                      <option value="">Seleccione</option>
-                      <option value="BRONCE">BRONCE</option>
-                      <option value="GOLD">GOLD</option>
-                      <option value="SILVER">SILVER</option>
-                    </Form.Select>
-                  </Form.Group>
+                <Form.Group className="mb-3">
+                        <Form.Label>Metal</Form.Label>
+                        <Form.Select
+                            value={currentEditMember.metal || ""}
+                            onChange={(e) =>
+                              setCurrentEditMember({ ...currentEditMember, metal: e.target.value })
+                            }
+                          >
+                            <option value="">Seleccione</option>
+                            <option value="BRONCE">BRONCE</option>
+                            <option value="SILVER">SILVER</option>
+                            <option value="GOLD">GOLD</option>
+                          </Form.Select>
+
+                      </Form.Group>
+
                 </Col>
               </Row>
 
@@ -1326,19 +1480,28 @@ const Grupofamiliar = () => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Cobertura</Form.Label>
-                    <Form.Select 
-                      value={currentEditMember.estado_cobertura || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, estado_cobertura: e.target.value})}
-                    >
-                      <option value="">Seleccione</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
-                      <option value="MEDICARE">MEDICARE</option>
-                      <option value="MEDICAID">MEDICAID</option>
-                    </Form.Select>
-                  </Form.Group>
+                <Form.Group className="mb-3">
+                        <Form.Label>Cobertura</Form.Label>
+                        <Form.Select
+                          value={currentEditMember.estado_cobertura || ""}
+                          onChange={(e) => {
+                            const valor = e.target.value;
+                            setCurrentEditMember(prev => ({
+                              ...prev,
+                              estado_cobertura: valor,
+                              fecha_activacion: valor === "Yes" ? prev.fecha_activacion : ""
+                            }));
+                          }}
+                        >
+                          <option value="">Seleccione</option>
+                          {(currentEditMember.estado_cobertura === "Yes" || totalYes < parseInt(policyData.personas_cobertura || "0", 10)) && (
+                            <option value="Yes">Yes</option>
+                          )}
+                          <option value="No">No</option>
+                          <option value="MEDICARE">MEDICARE</option>
+                          <option value="MEDICAID">MEDICAID</option>
+                        </Form.Select>
+                      </Form.Group>
                 </Col>
               </Row>
 
@@ -1361,8 +1524,8 @@ const Grupofamiliar = () => {
                 <Form.Group className="mb-3">
           <Form.Label>Pagador</Form.Label>
             <Form.Select
-                value={currentEditMember.pagador || ""}
-                onChange={(e) => setCurrentEditMember({...currentEditMember, pagador: e.target.value})}
+                value={currentEditMember.pagador_id || ""}
+                onChange={(e) => setCurrentEditMember({...currentEditMember, pagador_id: e.target.value})}
             >
                 <option value="">Seleccione un pagador</option>
                 {coverageGroups
@@ -1376,14 +1539,44 @@ const Grupofamiliar = () => {
             </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <Form.Group className="mb-3">
+                <Form.Group className="mb-3">
                     <Form.Label>Precio</Form.Label>
                     <Form.Control 
-                      type="text" 
-                      value={currentEditMember.precio || ""} 
-                      onChange={(e) => setCurrentEditMember({...currentEditMember, precio: e.target.value})}
+                      type="text"
+                      value={currentEditMember.precio}
+                      onChange={(e) => {
+                        // Solo permite números y punto decimal
+                        const raw = e.target.value.replace(/[^0-9.]/g, '');
+                        setCurrentEditMember({
+                          ...currentEditMember,
+                          precio: raw
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const number = parseFloat(currentEditMember.precio);
+                        if (!isNaN(number)) {
+                          const formatted = new Intl.NumberFormat('en-US', {
+                            style: 'currency',
+                            currency: 'USD',
+                          }).format(number);
+                          setCurrentEditMember({
+                            ...currentEditMember,
+                            precio: formatted
+                          });
+                        }
+                      }}
+                      onFocus={(e) => {
+                        // Quita el símbolo $ y comas para editar fácilmente
+                        const clean = currentEditMember.precio.replace(/[$,]/g, '');
+                        setCurrentEditMember({
+                          ...currentEditMember,
+                          precio: clean
+                        });
+                      }}
                     />
                   </Form.Group>
+
+
                 </Col>
               </Row>
             </Form>

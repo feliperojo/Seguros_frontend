@@ -1,4 +1,5 @@
 import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
+import ReporteGrupoFamiliar from "./components/Reports/ReporteGrupoFamiliar";
 
 const AppRoutes = () => (
   <Routes>
@@ -14,7 +15,10 @@ const AppRoutes = () => (
     <Route path="/grupofamiliar/crear" element={<CrearGrupoFamiliar />} />
     <Route path="/grupofamiliar/vencimientos" element={<ProximosVencimientos />} />
     <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado />} />
-    
+    <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />
+
+
+
     {/* Otras rutas... */}
     <Route path="/informes" element={<Informes />} />
     <Route path="/informes/clientes" element={<InformesClientes />} />
@@ -23,5 +27,7 @@ const AppRoutes = () => (
     <Route path="/exportar-datos" element={<ExportarDatos />} />
   </Routes>
 );
+
+
 
 export default AppRoutes;
