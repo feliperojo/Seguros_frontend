@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
@@ -8,13 +9,73 @@ import ClienteExistente from "../components/ClienteExistente"; // Importamos el 
 import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes';
 import Swal from 'sweetalert2';
+import GrupoFamiliarService from '../services/GrupoFamiliarService';
 
 
-const Grupofamiliar = () => {
+const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   // Estado para controlar la pestaña activa en el modal
   const [activeTab, setActiveTab] = useState("nuevo");
+
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (mode === "edit" && initialData) {
+      console.log("📥 Cargando initialData:", initialData);
+      console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
+
+      setPolicyData(prev => ({
+        ...prev,
+        personas_en_taxes: initialData.personas_taxes || "",
+        personas_cobertura: initialData.personas_cobertura || "",
+        ingreso_familiar: initialData.ingreso_familiar_anual || 0,
+        persona_contacto: initialData.persona_contacto || "",
+        telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
+        telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
+
+        notas_telefonos: initialData.nota || "",
+        pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
+        captado_por: initialData.captado_por || "",
+        referido: initialData.cual || "",
+        responsable: initialData.responsable || ""
+      }));
   
-  // Resto del código existente sin cambios
+      setContactMethods({
+        whatsapp: initialData.telefonos?.whatsapp || false,
+        telegram: initialData.telefonos?.telegram || false,
+        texto_sms: initialData.telefonos?.mensaje_sms || false
+      });
+  
+      // Detectar país por prefijo si quieres configurar selectedCode también
+      if (initialData.cod_tel_1) {
+        const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_1);
+        if (codeObj) {
+          setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
+        }
+      }
+      
+  
+      if (initialData.cod_tel_2) {
+        const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_2);
+        if (codeObj) {
+          setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
+        }
+      }
+      
+  
+      // Agrupar coberturas
+      if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
+        const agrupadas = agruparCoberturasPorTipo(initialData.coberturas);
+        console.log("🔄 Coberturas agrupadas:", agrupadas);
+        setCoverageGroups(agrupadas);
+      }
+    }
+  }, [mode, initialData]);
+  
+  
+  
+  
+  
+ 
   const INITIAL_POLICY_STATE = {
     compania: "",
     plan: "",
@@ -26,17 +87,20 @@ const Grupofamiliar = () => {
     ingreso_familiar: "",
     persona_contacto: "",
     medio_contacto: "",
-    telefono1: "",
-    telefono2: "",
+    telefono_1: "",
+    telefono_2: "",
     notas_telefonos: "",
     fecha_cancelacion: "",
     compania_id: "",
+    cliente_id:"",
     codigo_poliza: "",
     referido: "",
+    captado_por:"",
     parentesco: "",
     estado_cobertura: "",
     cobertura_tipo:"SEGURO MEDICO  OBAMA",
-    pertenece_grupo_familiar: false
+    pertenece_grupo_familiar: false,
+    responsable:""
   };
 
   const TIPOS_PRODUCTOS = [
@@ -76,8 +140,8 @@ const [totalYes, setTotalYes] = useState(0);
   });
 
   const [selectedCode, setSelectedCode] = useState({
-    telefono1: "us",
-    telefono2: "us"
+    telefono_1: "us",
+    telefono_2: "us"
   });
 
   useEffect(() => {
@@ -230,7 +294,7 @@ const [totalYes, setTotalYes] = useState(0);
     
     // Aplicar formato de teléfono
     let updatedValue = value;
-    if (["telefono1", "telefono2"].includes(name)) {
+    if (["telefono_1", "telefono_2"].includes(name)) {
       updatedValue = formatPhoneNumber(value);
     }
     
@@ -356,11 +420,20 @@ const [totalYes, setTotalYes] = useState(0);
   
   
   useEffect(() => {
-    const total = coverageGroups.reduce((sum, group) =>
+    if (currentStep === 2) {
+      const total = coverageGroups.reduce((sum, group) =>
         sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
-    , 0);
-    setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
-  }, [coverageGroups]);
+      , 0);
+      if (mode === "edit" && total === 0 && initialData) {
+        // No actualizar, mantener el valor original
+        console.log("Manteniendo ingreso familiar original:", initialData.ingreso_familiar_anual);
+      } else {
+        // Actualizar al nuevo valor calculado
+        setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
+        console.log("Actualizando ingreso familiar a:", total);
+      }
+    }
+  }, [coverageGroups, currentStep, mode, initialData]);
 
   const handleClienteCreated = async (newClient) => {
     if (newClient && newClient.id) {
@@ -407,12 +480,11 @@ const [totalYes, setTotalYes] = useState(0);
 
   const addCoverageGroup = () => {
     let newMembers = [];
-
+  
     if (coverageGroups.length > 0) {
-      // Solo copiamos el ID y el nombre, dejando los demás datos en blanco
-      newMembers = coverageGroups[0].members.map(member => ({
-        id: member.id,
-        nombre: member.nombre,
+      // Hacer copia profunda de los objetos de los miembros (evita referencias compartidas)
+      const newMembers = coverageGroups[0].members.map(member => ({
+        ...JSON.parse(JSON.stringify(member)), // copia profunda segura
         parentesco: "",
         fecha_activacion: "",
         fecha_cancelacion: "",
@@ -422,19 +494,24 @@ const [totalYes, setTotalYes] = useState(0);
         elegibilidad: "",
         estado_cobertura: "",
         codigo_poliza: "",
-        precio: ""
+        precio: "",
+        red: "",
+        ano_cobertura: "",
+        pagador_id: ""
       }));
+      
     }
-
+  
     const newGroup = {
       id: coverageGroups.length + 1,
-      cobertura_tipo: "SEGURO MEDICO  OBAMA", // Por defecto nueva cobertura es Seguro Médico
-      policyData: { ...INITIAL_POLICY_STATE }, // Datos de póliza independientes
-      members: newMembers, // Se copian solo ID y nombre de los miembros
+      cobertura_tipo: "SEGURO MEDICO  OBAMA",
+      policyData: { ...INITIAL_POLICY_STATE },
+      members: newMembers
     };
-
+  
     setCoverageGroups([...coverageGroups, newGroup]);
   };
+  
 
   const removeMemberFromGroup = (groupId, memberId) => {
     const updatedGroups = coverageGroups.map((group) =>
@@ -576,73 +653,93 @@ const [totalYes, setTotalYes] = useState(0);
     setAlert({ type: "", message: "", visible: false });
   
     try {
-      // 1. Preparar los datos del grupo familiar para la API
+      let ingresoFamiliarFinal = policyData.ingreso_familiar;
+    
+    if (mode === "edit" && currentStep === 2) {
+      // Recalcular el ingreso familiar explícitamente justo antes de enviar
+      const calculatedIncome = coverageGroups.reduce((sum, group) =>
+        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+      , 0);
+      
+      // Solo usar el recalculado si es diferente de cero
+      ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
+      console.log("Ingreso familiar calculado:", calculatedIncome);
+      console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
+      console.log("Ingreso familiar final a enviar:", ingresoFamiliarFinal);
+    }
+  
+      // Preparar los datos del grupo familiar para la API
       const grupoFamiliarData = {
         personas_taxes: policyData.personas_en_taxes,
         personas_cobertura: policyData.personas_cobertura,
         ingreso_familiar_anual: policyData.ingreso_familiar,
         persona_contacto: policyData.persona_contacto,
         pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
-        telefono_1: policyData.telefono1 ? `+${getCountryCode(selectedCode.telefono1)}${policyData.telefono1.replace(/\D/g, "")}` : "",
-        telefono_2: policyData.telefono2 ? `+${getCountryCode(selectedCode.telefono2)}${policyData.telefono2.replace(/\D/g, "")}` : "",
+        telefonos: {
+          telefono_1: policyData.telefono_1.replace(/\D/g, ""),
+          telefono_2: policyData.telefono_2.replace(/\D/g, ""),
+          whatsapp: contactMethods.whatsapp,
+          telegram: contactMethods.telegram,
+          mensaje_sms: contactMethods.texto_sms
+        },
+        cod_tel_1: getCountryCode(selectedCode.telefono_1),
+        cod_tel_2: getCountryCode(selectedCode.telefono_2),
+  
         nota: policyData.notas_telefonos,
-        whatsapp: contactMethods.whatsapp,
-        telegram: contactMethods.telegram,
-        mensaje_sms: contactMethods.texto_sms,
         captado_por: policyData.captado_por || "",
-        cual: policyData.referido || ""
+        cual: policyData.referido || "",
+        responsable: policyData.responsable || ""
       };
   
-      console.log("Enviando datos de grupo familiar:", grupoFamiliarData);
-  
-      // 2. Guardar el grupo familiar primero
-      const grupoFamiliarResponse = await apiRequest("grupo_familiar/create", "POST", grupoFamiliarData);
-      console.log("Respuesta completa de grupo familiar:", grupoFamiliarResponse);
-  
-      // Verificar estructura de la respuesta y extraer el ID apropiadamente
-      let grupoFamiliarId;
-      
-      // Verificamos la estructura de la respuesta para extraer el ID correctamente
-      if (grupoFamiliarResponse && grupoFamiliarResponse.id) {
-        // Si la respuesta tiene un campo id directo
-        grupoFamiliarId = grupoFamiliarResponse.id;
-      } else if (grupoFamiliarResponse && grupoFamiliarResponse.grupo_familiar && grupoFamiliarResponse.grupo_familiar.id) {
-        // Si la respuesta tiene un objeto anidado grupo_familiar con id
-        grupoFamiliarId = grupoFamiliarResponse.grupo_familiar.id;
-      } else if (grupoFamiliarResponse && grupoFamiliarResponse.data && grupoFamiliarResponse.data.id) {
-        // Si la respuesta tiene un objeto data con id
-        grupoFamiliarId = grupoFamiliarResponse.data.id;
-      } else if (grupoFamiliarResponse && Array.isArray(grupoFamiliarResponse) && grupoFamiliarResponse[0] && grupoFamiliarResponse[0].id) {
-        // Si la respuesta es un array con objetos que tienen id
-        grupoFamiliarId = grupoFamiliarResponse[0].id;
-      } else {
-        // Busca recursivamente un campo id en la respuesta
-        const findId = (obj) => {
-          if (!obj || typeof obj !== 'object') return null;
-          if (obj.id !== undefined) return obj.id;
-          
-          for (const key in obj) {
-            const result = findId(obj[key]);
-            if (result !== null) return result;
-          }
-          return null;
+      // Enviar la actualización del grupo familiar
+      let grupoFamiliarResponse;
+      if (mode === "edit") {
+        const payload = {
+          ...grupoFamiliarData,
+          coberturas: coverageGroups.flatMap(group =>
+            group.members.map(member => ({
+              id: member.cobertura_id || null,
+              codigo_poliza: member.codigo_poliza || "",
+              parentesco: member.parentesco || null,
+              fecha_activacion: member.fecha_activacion || null,
+              fecha_cancelacion: member.fecha_cancelacion || null,
+              fecha_retiro: member.fecha_retiro || null,
+              ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
+              compania_id: member.compania_id || null,
+              plan: member.plan || "",
+              metal: member.metal || "",
+              red: member.red || "",
+              elegibilidad: member.elegibilidad || "",
+              estado_cobertura: member.estado_cobertura || "",
+              precio: member.precio || 0,
+              pagador_id: member.pagador_id || null,
+              cliente_id: member.id,
+              cobertura_tipo: group.cobertura_tipo,
+              responsable: group.responsable
+            }))
+          )
         };
-        
-        grupoFamiliarId = findId(grupoFamiliarResponse);
+        console.log("Datos a enviar:", payload);
+        grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
+        console.log("✅ Grupo familiar actualizado con todas las coberturas:", grupoFamiliarResponse);
+      } else {
+        grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
+        console.log("✅ Grupo familiar creado:", grupoFamiliarResponse);
       }
+  
+      console.log("Respuesta completa de grupo familiar:", grupoFamiliarResponse);
+      
+      // Almacenamos el ID si la respuesta lo contiene
+      const grupoFamiliarId = grupoFamiliarResponse?.data?.id || grupoFamiliarResponse?.id;
   
       if (!grupoFamiliarId) {
         console.error("No se pudo encontrar el ID en la respuesta:", grupoFamiliarResponse);
         throw new Error("No se pudo obtener el ID del grupo familiar en la respuesta de la API");
       }
   
-      console.log("✅ Grupo familiar creado con ID:", grupoFamiliarId);
-  
-      // 3. Ahora guardamos cada cobertura con las personas asociadas
+      // Guardar cada cobertura del grupo
       const coberturasPromises = coverageGroups.map(async (group) => {
-        // Por cada grupo de cobertura, guardamos las coberturas de cada miembro
         const miembrosPromises = group.members.map(async (member) => {
-          // Solo procesamos miembros que tengan datos básicos
           if (!member.id) return null;
   
           const coberturaData = {
@@ -659,61 +756,63 @@ const [totalYes, setTotalYes] = useState(0);
             red: member.red || "",
             pagador_id: member.pagador_id || "",
             precio: member.precio || 0,
-            cliente_id: member.id, // ID del cliente
-            grupo_familiar_id: grupoFamiliarId, // ID del grupo familiar creado
-            cobertura_tipo: group.cobertura_tipo // Tipo de producto de esta cobertura
+            cliente_id: member.id,
+            grupo_familiar_id: grupoFamiliarId,
+            cobertura_tipo: group.cobertura_tipo
           };
   
-          console.log(`Enviando cobertura para miembro ${member.nombre}:`, coberturaData);
-          
           try {
-            const coberturaResponse = await apiRequest("cobertura/create", "POST", coberturaData);
-            console.log(`✅ Cobertura creada para miembro ${member.nombre}:`, coberturaResponse);
+            const endpoint = member.id && member.cobertura_id
+              ? `cobertura/${member.cobertura_id}`
+              : "cobertura/create";
+            
+            const method = member.id && member.cobertura_id ? "PUT" : "POST";
+            
+            const coberturaResponse = await apiRequest(endpoint, method, coberturaData);
             return coberturaResponse;
           } catch (error) {
-            console.error(`❌ Error al crear cobertura para miembro ${member.nombre}:`, error);
+            // Manejo de errores de validación
             throw error;
           }
         });
   
-        // Esperar a que todas las coberturas de este grupo se guarden
         return Promise.all(miembrosPromises.filter(Boolean));
       });
   
-      // Esperar a que todas las coberturas se guarden
       await Promise.all(coberturasPromises);
-  
-      // 4. Éxito - Mostrar mensaje y resetear formulario
       console.log("✅ Todas las coberturas han sido guardadas exitosamente");
-      
-      // Resetear formulario
+
+      Swal.fire({
+        title: '¡Actualizacion con Éxito!',
+        text: mode === "edit" 
+          ? "El grupo familiar ha sido actualizado correctamente." 
+          : "La póliza de grupo familiar ha sido creada exitosamente.",
+        icon: 'success',
+        confirmButtonText: 'Aceptar',
+        confirmButtonColor: '#3085d6',
+        timer: 5000 // Cerrará automáticamente después de 3 segundos
+      }).then(() => {
+        // Redirigir a la lista de grupos familiares después de cerrar el alert
+        navigate('/grupofamiliar/lista');
+      });
+  
+      // Reset o finalizar el proceso
       setPolicyData(INITIAL_POLICY_STATE);
-      setFamilyMembers([]);
       setCoverageGroups([{
         id: 1,
         tipoProducto: "SEGURO MEDICO  OBAMA",
         policyData: { ...INITIAL_POLICY_STATE },
         members: []
       }]);
-      setCurrentStep(1);
-      setContactMethods({
-        whatsapp: false,
-        telegram: false,
-        texto_sms: false
-      });
-  
-      // Mostrar alerta de éxito
       setAlert({
         type: "success",
-        message: "Póliza de Grupo Familiar y coberturas creadas exitosamente",
+        message: mode === "edit" ? "Grupo Familiar actualizado exitosamente" : "Póliza de Grupo Familiar y coberturas creadas exitosamente",
         visible: true
       });
   
-      // Ocultar alerta después de 5 segundos
       setTimeout(() => {
         setAlert({ type: "", message: "", visible: false });
       }, 5000);
-  
     } catch (error) {
       console.error("❌ Error al procesar la solicitud:", error);
       setAlert({
@@ -723,6 +822,8 @@ const [totalYes, setTotalYes] = useState(0);
       });
     }
   };
+  
+  
 
   const renderStepProgressBar = () => (
     <div className="mb-4">
@@ -869,15 +970,15 @@ const [totalYes, setTotalYes] = useState(0);
                     <div className="input-group">
                       <span className="input-group-text p-0">
                         <CountrySelectWithFlags 
-                          name="telefono1" 
-                          selectedCode={selectedCode.telefono1} 
+                          name="telefono_1" 
+                          selectedCode={selectedCode.telefono_1} 
                           onChange={handleCountryCodeChange} 
                         />
                       </span>
                       <Form.Control 
                         type="text" 
-                        name="telefono1" 
-                        value={policyData.telefono1}
+                        name="telefono_1" 
+                        value={policyData.telefono_1}
                         onChange={handlePolicyChange}
                       />
                     </div>
@@ -890,15 +991,15 @@ const [totalYes, setTotalYes] = useState(0);
                     <div className="input-group">
                       <span className="input-group-text p-0">
                         <CountrySelectWithFlags 
-                          name="telefono2" 
-                          selectedCode={selectedCode.telefono2} 
+                          name="telefono_2" 
+                          selectedCode={selectedCode.telefono_2} 
                           onChange={handleCountryCodeChange} 
                         />
                       </span>
                       <Form.Control 
                         type="text" 
-                        name="telefono2" 
-                        value={policyData.telefono2}
+                        name="telefono_2" 
+                        value={policyData.telefono_2}
                         onChange={handlePolicyChange}
                       />
                     </div>
@@ -963,7 +1064,7 @@ const [totalYes, setTotalYes] = useState(0);
                     <Form.Label className="fw-medium" title="Selecciona el medio por el cual fue conocido el grupo familiar">
                       Captado por
                     </Form.Label>
-                    <Form.Select name="captado_por" onChange={handlePolicyChange}>
+                    <Form.Select name="captado_por" value={policyData.captado_por} onChange={handlePolicyChange}>
                       <option value="">Seleccione</option>
                       <option value="Referido">Referido</option>
                       <option value="Google">Google</option>
@@ -979,6 +1080,17 @@ const [totalYes, setTotalYes] = useState(0);
                       type="text" 
                       name="referido" 
                       value={policyData.referido}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Asesor</Form.Label>
+                    <Form.Control 
+                      type="text" 
+                      name="referido" 
+                      value={policyData.responsable}
                       onChange={handlePolicyChange}
                     />
                   </Form.Group>
@@ -1193,9 +1305,22 @@ const [totalYes, setTotalYes] = useState(0);
 
                                     {/* NUEVO BLOQUE: Cobertura y Precio */}
                                     <div className="d-flex justify-content-between align-items-center mt-2 px-1">
-                                      <span className="text-muted small">
-                                        <strong>Cobertura:</strong> {member.estado_cobertura || "No definido"}
-                                      </span>
+                                    <span className="d-flex align-items-center gap-1">
+                                            <span className="text-muted small fw-medium">Cobertura:</span>
+                                            <span
+                                              className={`badge rounded-pill text-white ${
+                                                member.estado_cobertura === "Yes"
+                                                  ? "bg-success"
+                                                  : member.estado_cobertura === "No"
+                                                  ? "bg-secondary"
+                                                  : "bg-warning text-dark"
+                                              }`}
+                                            >
+                                              {member.estado_cobertura || "No definido"}
+                                            </span>
+                                          </span>
+
+
                                       <span className="text-muted small">
                                       <strong>Precio:</strong> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(member.precio || 0)}
                                       </span>
@@ -1298,11 +1423,12 @@ const [totalYes, setTotalYes] = useState(0);
           variant="success" 
           className="ms-auto" 
           onClick={handleSubmit}
-          disabled={!isPolicyValid()} // 👈 Deshabilita si no cumple
+          disabled={!isPolicyValid()}
         >
           <i className="bi bi-save me-2"></i>
-          Guardar Póliza de Grupo Familiar
+          {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
         </Button>
+        
         
         
         )}
@@ -1596,3 +1722,42 @@ const [totalYes, setTotalYes] = useState(0);
 };
 
 export default Grupofamiliar;
+
+const agruparCoberturasPorTipo = (coberturas) => {
+  const grupos = {};
+
+  coberturas.forEach(cob => {
+    const tipo = cob.cobertura_tipo || "DESCONOCIDA";
+    if (!grupos[tipo]) {
+      grupos[tipo] = {
+        id: Object.keys(grupos).length + 1,
+        cobertura_tipo: tipo,
+        policyData: {},
+        members: []
+      };
+    }
+
+    const member = {
+      ...cob,
+      cobertura_id: cob.id,
+      id: cob.cliente?.id || null, // <- Para que funcione con lógica actual
+      nombre: cob.cliente?.nombre_completo || "Sin nombre",
+      ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
+      compania_id: cob.compania?.id || null,
+      estado_cobertura: cob.estado_cobertura || "",
+    };
+
+    grupos[tipo].members.push(member);
+  });
+
+  return Object.values(grupos);
+};
+// Extrae el código de país de un número como "+57XXXXXXXXX"
+const getCountryCodeFromPhone = (phone) => {
+  if (!phone) return "";
+
+  const match = phone.match(/^\+(\d{1,4})/); // Extrae entre +1 a +9999
+  return match ? match[1] : "";
+};
+
+

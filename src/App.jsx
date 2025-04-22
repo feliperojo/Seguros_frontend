@@ -11,7 +11,8 @@ import MediosPagoManager from './pages/MediosPagoManager';
 import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
 import ReporteGrupoFamiliar from "../src/components/Reports/ReporteGrupoFamiliar";
 import ListaClientes from "./pages/ListaClientes";
-
+import GrupofamiliarCreate from "./components/GrupoFamiliar/GrupofamiliarCreate";
+import GrupofamiliarEdit from "./components/GrupoFamiliar/GrupofamiliarEdit";
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
   return localStorage.getItem("auth_token") !== null;
@@ -32,14 +33,15 @@ const App = () => {
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/clientes/crear" element={<Cliente />} />
-        <Route path="/grupofamiliar/crear" element={<Grupofamiliar />} />
+        
         <Route path="/informes" element={<Informes />} />
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Mediospago" element={<MediosPago />} />
         <Route path="clientes/mediopago/:clienteId" element={<MediosPagoManager />} />
         <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado/>}/>
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
-        
+        <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
+        <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />
       
       </Route>
 

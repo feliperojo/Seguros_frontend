@@ -34,14 +34,19 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     datosContacto: {
       telefono: "",
       tel_secundario: "",
-      whatsapp: "",
-      nota_telefonos: "",
+      whatsapp_num: "",
+      nota: "",
+      cod_tel_1: "",
+      cod_tel_2: "",
+      cod_tel_3: "",
+      activo: true,
       servicios_mensajeria: {
         whatsapp: false,
         telegram: false,
         texto_sms: false
       },
       email: ""
+     
     },
    
     // Sección 4: Dirección
@@ -185,7 +190,8 @@ const mapClienteDataToForm = (data) => {
       nombre_completo: data.nombre_completo || "",
       fecha_nacimiento: data.fecha_nacimiento || "",
       edad: data.edad || "",
-      genero: data.genero || ""
+      genero: data.genero || "",
+      cobertura: data.cobertura || false
     },
 
     // ✅ Sección 2: Status Migratorio (corrigiendo claves directas del modelo)
@@ -203,12 +209,17 @@ const mapClienteDataToForm = (data) => {
     datosContacto: {
       telefono: data.telefono || "",
       tel_secundario: data.secundario || "",
-      whatsapp: data.whatsapp_num || "",
-      nota_telefonos: data.nota_telefonos || "",
+      whatsapp_num: data.whatsapp_num || "",
+      nota: data.nota || "",
+      cod_tel_1: data.cod_tel_1 || "",
+      cod_tel_2: data.cod_tel_2 || "",
+      cod_tel_3: data.cod_tel_3 || "",
+      activo: data.nota || true,
       servicios_mensajeria: {
         whatsapp: data.whatsapp || false,
         telegram: data.telegram || false,
         texto_sms: data.texto_sms || false
+        
       },
       email: data.email || ""
     },
@@ -623,8 +634,8 @@ const mapClienteDataToForm = (data) => {
               />
               <Form.Control
                 type="text"
-                value={formData.datosContacto.whatsapp}
-                onChange={(e) => handleInputChange("datosContacto", "whatsapp", e.target.value)}
+                value={formData.datosContacto.whatsapp_num}
+                onChange={(e) => handleInputChange("datosContacto", "whatsapp_num", e.target.value)}
               />
             </InputGroup>
           </Form.Group>
@@ -638,8 +649,8 @@ const mapClienteDataToForm = (data) => {
             <Form.Control
               as="textarea"
               rows={3}
-              value={formData.datosContacto.nota_telefonos}
-              onChange={(e) => handleInputChange("datosContacto", "nota_telefonos", e.target.value)}
+              value={formData.datosContacto.nota}
+              onChange={(e) => handleInputChange("datosContacto", "nota", e.target.value)}
             />
           </Form.Group>
         </Col>
