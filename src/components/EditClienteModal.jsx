@@ -214,7 +214,6 @@ const mapClienteDataToForm = (data) => {
       cod_tel_1: data.cod_tel_1 || "",
       cod_tel_2: data.cod_tel_2 || "",
       cod_tel_3: data.cod_tel_3 || "",
-      activo: data.nota || true,
       servicios_mensajeria: {
         whatsapp: data.whatsapp || false,
         telegram: data.telegram || false,

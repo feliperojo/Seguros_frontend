@@ -315,7 +315,7 @@ const getCompaniaNombre = (grupo) => {
                               pill 
                               bg="primary"
                             >
-                              Sin responsable
+                                {grupo.responsable || "Sin responsable"}
                             </Badge>
                           </td>
                          

@@ -11,6 +11,7 @@ import FormDireccion from "../components/FormDireccion";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
+  
   // Initial form state as a constant for easy resetting
   const INITIAL_FORM_STATE = {
     nombre_completo: "",
@@ -54,6 +55,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     ingreso_por_periodo: "",
     ingreso_anual: "",
     nota_ocasional:"",
+    nota:"",
     periodo_ingreso_ocasional: "", // Valor por defecto
     ingreso_por_periodo_ocasional: ""
   };
@@ -65,6 +67,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [clienteId, setClienteId] = useState(null);
   const [clienteCreado, setClienteCreado] = useState(false);
   const [tiposIngreso, setTiposIngreso] = useState([]);
+  const [showModal, setShowModal] = useState(isModal); // Inicializar con isModal
+
+
   // En la inicialización de selectedCode en tu componente Clientes
 const [selectedCode, setSelectedCode] = useState({
   telefono: "us",
@@ -72,6 +77,9 @@ const [selectedCode, setSelectedCode] = useState({
   whatsapp_num: "us",
   telefono_empleador: "us"  // Añadir esta línea si no existe
 });
+const openModal = () => setShowModal(true);
+const closeModal = () => setShowModal(false);
+
   
   const [currentStep, setCurrentStep] = useState(1);
  
@@ -96,6 +104,7 @@ const [selectedCode, setSelectedCode] = useState({
   }, []);
 
 
+  
   // Función para formatear valores monetarios con el formato de dólares
 const formatCurrency = (value) => {
   if (!value) return '';
@@ -262,11 +271,21 @@ const calcularIngresoAnual = (monto, periodo) => {
 };
   
   // Función para avanzar al siguiente paso
+
+
   const nextStep = () => {
+    console.log("nextStep activado, currentStep:", currentStep);
     if (currentStep < totalSteps) {
+      setShowModal(true);  // Mantén el modal abierto
       setCurrentStep(currentStep + 1);
     }
   };
+  
+  useEffect(() => {
+    console.log('isModal es:', isModal, 'showModal es:', showModal); // Seguimiento de cambios en el estado del modal
+  }, [showModal, isModal]);
+  
+  
 
   // Función para retroceder al paso anterior
   const prevStep = () => {
@@ -331,11 +350,16 @@ const guardarCliente = async () => {
         type: "success", 
         message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.", 
         visible: true
+        
       });
-
-      // Avanzar al paso 6 automáticamente solo si no estamos en un modal
       setCurrentStep(6);
-      console.log("Avanzando al paso 6, isModal:", isModal);
+      // Avanzar al paso 6 automáticamente solo si no estamos en un modal
+      if (currentStep === 6 && showModal) {
+        setShowModal(true); // Asegúrate de que se mantenga abierto para el paso 6
+      }
+      
+      
+      
 
     } else {
       console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
@@ -571,10 +595,17 @@ const guardarCliente = async () => {
 
             <div className="row mb-3">
             <div className="col-md-6">
-              <label>Nota</label>
-                <div class="form-group">    
-                <textarea class="form-control" id="exampleFormControlTextarea1" rows="3"></textarea>
-              </div>
+            <label>Nota</label>
+                  <div className="form-group">
+                    <textarea
+                      className="form-control"
+                      value={formData.nota}
+                      id="exampleFormControlTextarea1"
+                      rows="3"
+                      name="nota"
+                      onChange={handleChange}
+                    ></textarea>
+                  </div>
               </div>
 
               </div>  
