@@ -23,7 +23,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       console.log("📥 Cargando initialData:", initialData);
       console.log("🛠️ Coberturas recibidas:", initialData.coberturas);
       console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
-
+  
       setPolicyData(prev => ({
         ...prev,
         personas_en_taxes: initialData.personas_taxes || "",
@@ -32,7 +32,6 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         persona_contacto: initialData.persona_contacto || "",
         telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
         telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
-
         notas_telefonos: initialData.nota || "",
         pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
         captado_por: initialData.captado_por || "",
@@ -46,28 +45,17 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         texto_sms: initialData.telefonos?.mensaje_sms || false
       });
   
-      // Detectar país por prefijo si quieres configurar selectedCode también
       if (initialData.cod_tel_1) {
         const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_1);
-        if (codeObj) {
-          setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
-        }
+        if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
       }
-      
-  
       if (initialData.cod_tel_2) {
         const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_2);
-        if (codeObj) {
-          setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
-        }
+        if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
       }
-      
   
-      // Agrupar coberturas
       if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
-        const agrupadas = agruparCoberturasPorTipo(initialData.coberturas);
-        console.log("🔄 Coberturas agrupadas:", agrupadas);
-        setCoverageGroups(agrupadas);
+        setCoverageGroups(transformarCoberturasAcoverageGroups(initialData.coberturas || []));
       }
     }
   }, [mode, initialData]);
@@ -257,6 +245,50 @@ const [totalYes, setTotalYes] = useState(0);
       });
     }
   };
+
+
+  const transformarCoberturasAcoverageGroups = (coberturas) => {
+  const grupos = {};
+
+  if (!Array.isArray(coberturas)) return [];
+
+  coberturas.forEach(cob => {
+    const tipo = cob.cobertura_tipo || "SEGURO MEDICO OBAMA";
+    if (!grupos[tipo]) {
+      grupos[tipo] = {
+        id: Object.keys(grupos).length + 1,
+        cobertura_tipo: tipo,
+        policyData: {},
+        members: []
+      };
+    }
+
+    const member = {
+      cobertura_id: cob.id || null,
+      id: cob.cliente?.id || `temp-${Math.random()}`, // si no viene id, ponemos temporal
+      nombre: cob.cliente?.nombre_completo || "Sin nombre",
+      ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
+      compania_id: cob.compania?.id || null,
+      estado_cobertura: cob.estado_cobertura || "No definido",
+      fecha_activacion: cob.fecha_activacion || "",
+      fecha_cancelacion: cob.fecha_cancelacion || "",
+      fecha_retiro: cob.fecha_retiro || "",
+      ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
+      plan: cob.plan || "",
+      metal: cob.metal || "",
+      elegibilidad: cob.elegibilidad || "",
+      red: cob.red || "",
+      precio: parseFloat(cob.precio) || 0,
+      pagador_id: cob.pagador_id || "",
+      codigo_poliza: cob.codigo_poliza || ""
+    };
+
+    grupos[tipo].members.push(member);
+  });
+
+  return Object.values(grupos);
+};
+
 
   const fetchDataparentesco = async () => {
     try {
@@ -1022,7 +1054,7 @@ const [totalYes, setTotalYes] = useState(0);
                     <Form.Label className="fw-medium">Asesor</Form.Label>
                     <Form.Control 
                       type="text" 
-                      name="referido" 
+                      name="responsable" 
                       value={policyData.responsable}
                       onChange={handlePolicyChange}
                     />
@@ -1656,53 +1688,5 @@ const [totalYes, setTotalYes] = useState(0);
 
 export default Grupofamiliar;
 
-const agruparCoberturasPorTipo = (coberturas) => {
-  const grupos = {};
-
-  coberturas.forEach(cob => {
-    const tipo = cob.cobertura_tipo || "DESCONOCIDA";
-    if (!grupos[tipo]) {
-      grupos[tipo] = {
-        id: Object.keys(grupos).length + 1,
-        cobertura_tipo: tipo,
-        policyData: {},
-        members: []
-      };
-    }
-
-    const member = {
-      cobertura_id: cob.id || null,
-      id: cob.cliente?.id || null,
-      nombre: cob.cliente?.nombre_completo || "Sin nombre",
-      ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
-      compania_id: cob.compania?.id || null,
-      estado_cobertura: cob.estado_cobertura || "",
-      fecha_activacion: cob.fecha_activacion || "",
-      fecha_cancelacion: cob.fecha_cancelacion || "",
-      fecha_retiro: cob.fecha_retiro || "",
-      ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
-      plan: cob.plan || "",
-      metal: cob.metal || "",
-      elegibilidad: cob.elegibilidad || "",
-      red: cob.red || "",
-      precio: parseFloat(cob.precio) || 0,
-      pagador_id: cob.pagador_id || "",
-      codigo_poliza: cob.codigo_poliza || ""
-    };
-
-    grupos[tipo].members.push(member);
-  });
-
-  return Object.values(grupos);
-};
-
-
-// Extrae el código de país de un número como "+57XXXXXXXXX"
-const getCountryCodeFromPhone = (phone) => {
-  if (!phone) return "";
-
-  const match = phone.match(/^\+(\d{1,4})/); // Extrae entre +1 a +9999
-  return match ? match[1] : "";
-};
 
 
