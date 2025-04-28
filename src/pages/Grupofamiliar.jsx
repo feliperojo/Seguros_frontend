@@ -655,18 +655,14 @@ const [totalYes, setTotalYes] = useState(0);
     try {
       let ingresoFamiliarFinal = policyData.ingreso_familiar;
     
-    if (mode === "edit" && currentStep === 2) {
-      // Recalcular el ingreso familiar explícitamente justo antes de enviar
-      const calculatedIncome = coverageGroups.reduce((sum, group) =>
-        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
-      , 0);
+      if (mode === "edit" && currentStep === 2) {
+        const calculatedIncome = coverageGroups.reduce((sum, group) =>
+          sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+        , 0);
       
-      // Solo usar el recalculado si es diferente de cero
-      ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
-      console.log("Ingreso familiar calculado:", calculatedIncome);
-      console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
-      console.log("Ingreso familiar final a enviar:", ingresoFamiliarFinal);
-    }
+        ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
+      }
+      
   
       // Preparar los datos del grupo familiar para la API
       const grupoFamiliarData = {
@@ -1738,13 +1734,23 @@ const agruparCoberturasPorTipo = (coberturas) => {
     }
 
     const member = {
-      ...cob,
-      cobertura_id: cob.id,
-      id: cob.cliente?.id || null, // <- Para que funcione con lógica actual
+      cobertura_id: cob.id || null,
+      id: cob.cliente?.id || null,
       nombre: cob.cliente?.nombre_completo || "Sin nombre",
       ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
       compania_id: cob.compania?.id || null,
       estado_cobertura: cob.estado_cobertura || "",
+      fecha_activacion: cob.fecha_activacion || "",
+      fecha_cancelacion: cob.fecha_cancelacion || "",
+      fecha_retiro: cob.fecha_retiro || "",
+      ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
+      plan: cob.plan || "",
+      metal: cob.metal || "",
+      elegibilidad: cob.elegibilidad || "",
+      red: cob.red || "",
+      precio: parseFloat(cob.precio) || 0,
+      pagador_id: cob.pagador_id || "",
+      codigo_poliza: cob.codigo_poliza || ""
     };
 
     grupos[tipo].members.push(member);
@@ -1752,6 +1758,8 @@ const agruparCoberturasPorTipo = (coberturas) => {
 
   return Object.values(grupos);
 };
+
+
 // Extrae el código de país de un número como "+57XXXXXXXXX"
 const getCountryCodeFromPhone = (phone) => {
   if (!phone) return "";
