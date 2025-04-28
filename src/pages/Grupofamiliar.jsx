@@ -654,21 +654,22 @@ const [totalYes, setTotalYes] = useState(0);
   
     try {
       let ingresoFamiliarFinal = policyData.ingreso_familiar;
-    
+  
+      // Modo edición: recalcular ingreso familiar si cambia
       if (mode === "edit" && currentStep === 2) {
         const calculatedIncome = coverageGroups.reduce((sum, group) =>
           sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
         , 0);
-      
+  
+        // Solo usar recalculado si hay cambios
         ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
       }
-      
   
-      // Preparar los datos del grupo familiar para la API
+      // Datos del grupo familiar
       const grupoFamiliarData = {
         personas_taxes: policyData.personas_en_taxes,
         personas_cobertura: policyData.personas_cobertura,
-        ingreso_familiar_anual: policyData.ingreso_familiar,
+        ingreso_familiar_anual: ingresoFamiliarFinal,
         persona_contacto: policyData.persona_contacto,
         pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
         telefonos: {
@@ -680,144 +681,79 @@ const [totalYes, setTotalYes] = useState(0);
         },
         cod_tel_1: getCountryCode(selectedCode.telefono_1),
         cod_tel_2: getCountryCode(selectedCode.telefono_2),
-  
         nota: policyData.notas_telefonos,
         captado_por: policyData.captado_por || "",
         cual: policyData.referido || "",
         responsable: policyData.responsable || ""
       };
   
-      // Enviar la actualización del grupo familiar
       let grupoFamiliarResponse;
       if (mode === "edit") {
+        // PREPARAR payload completo para UPDATE (grupo + coberturas)
         const payload = {
           ...grupoFamiliarData,
           coberturas: coverageGroups.flatMap(group =>
             group.members.map(member => ({
-              id: member.cobertura_id || null,
+              id: member.cobertura_id || null, // importante
               codigo_poliza: member.codigo_poliza || "",
-              parentesco: member.parentesco || null,
-              fecha_activacion: member.fecha_activacion || null,
-              fecha_cancelacion: member.fecha_cancelacion || null,
-              fecha_retiro: member.fecha_retiro || null,
+              parentesco: member.parentesco || "",
+              fecha_activacion: member.fecha_activacion || "",
+              fecha_cancelacion: member.fecha_cancelacion || "",
+              fecha_retiro: member.fecha_retiro || "",
               ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
               compania_id: member.compania_id || null,
               plan: member.plan || "",
               metal: member.metal || "",
               red: member.red || "",
+              precio: member.precio || 0,
               elegibilidad: member.elegibilidad || "",
               estado_cobertura: member.estado_cobertura || "",
-              precio: member.precio || 0,
-              pagador_id: member.pagador_id || null,
+              pagador_id: member.pagador_id || "",
               cliente_id: member.id,
-              cobertura_tipo: group.cobertura_tipo,
-              responsable: group.responsable
+              cobertura_tipo: group.cobertura_tipo
             }))
           )
         };
-        console.log("Datos a enviar:", payload);
+  
+        console.log("📤 Payload para actualización:", payload);
         grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
-        console.log("✅ Grupo familiar actualizado con todas las coberturas:", grupoFamiliarResponse);
       } else {
         grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
-        console.log("✅ Grupo familiar creado:", grupoFamiliarResponse);
       }
   
-      console.log("Respuesta completa de grupo familiar:", grupoFamiliarResponse);
-      
-      // Almacenamos el ID si la respuesta lo contiene
-      const grupoFamiliarId = grupoFamiliarResponse?.data?.id || grupoFamiliarResponse?.id;
+      console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
   
-      if (!grupoFamiliarId) {
-        console.error("No se pudo encontrar el ID en la respuesta:", grupoFamiliarResponse);
-        throw new Error("No se pudo obtener el ID del grupo familiar en la respuesta de la API");
-      }
-  
-      // Guardar cada cobertura del grupo
-      const coberturasPromises = coverageGroups.map(async (group) => {
-        const miembrosPromises = group.members.map(async (member) => {
-          if (!member.id) return null;
-  
-          const coberturaData = {
-            codigo_poliza: member.codigo_poliza || "",
-            parentesco: member.parentesco || null,
-            fecha_activacion: member.fecha_activacion || null,
-            fecha_cancelacion: member.fecha_cancelacion || null,
-            ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
-            compania_id: member.compania_id || null,
-            plan: member.plan || "",
-            metal: member.metal || "",
-            elegibilidad: member.elegibilidad || "",
-            estado_cobertura: member.estado_cobertura || "",
-            red: member.red || "",
-            pagador_id: member.pagador_id || "",
-            precio: member.precio || 0,
-            cliente_id: member.id,
-            grupo_familiar_id: grupoFamiliarId,
-            cobertura_tipo: group.cobertura_tipo
-          };
-  
-          try {
-            const endpoint = member.id && member.cobertura_id
-              ? `cobertura/${member.cobertura_id}`
-              : "cobertura/create";
-            
-            const method = member.id && member.cobertura_id ? "PUT" : "POST";
-            
-            const coberturaResponse = await apiRequest(endpoint, method, coberturaData);
-            return coberturaResponse;
-          } catch (error) {
-            // Manejo de errores de validación
-            throw error;
-          }
-        });
-  
-        return Promise.all(miembrosPromises.filter(Boolean));
-      });
-  
-      await Promise.all(coberturasPromises);
-      console.log("✅ Todas las coberturas han sido guardadas exitosamente");
-
       Swal.fire({
-        title: '¡Actualizacion con Éxito!',
-        text: mode === "edit" 
-          ? "El grupo familiar ha sido actualizado correctamente." 
-          : "La póliza de grupo familiar ha sido creada exitosamente.",
-        icon: 'success',
-        confirmButtonText: 'Aceptar',
-        confirmButtonColor: '#3085d6',
-        timer: 5000 // Cerrará automáticamente después de 3 segundos
+        title: mode === "edit" ? "¡Actualización Exitosa!" : "¡Registro Exitoso!",
+        text: mode === "edit" ? "El grupo familiar ha sido actualizado." : "La póliza de grupo familiar ha sido creada.",
+        icon: "success",
+        confirmButtonText: "Aceptar",
+        timer: 4000
       }).then(() => {
-        // Redirigir a la lista de grupos familiares después de cerrar el alert
         navigate('/grupofamiliar/lista');
       });
   
-      // Reset o finalizar el proceso
-      setPolicyData(INITIAL_POLICY_STATE);
-      setCoverageGroups([{
-        id: 1,
-        tipoProducto: "SEGURO MEDICO  OBAMA",
-        policyData: { ...INITIAL_POLICY_STATE },
-        members: []
-      }]);
-      setAlert({
-        type: "success",
-        message: mode === "edit" ? "Grupo Familiar actualizado exitosamente" : "Póliza de Grupo Familiar y coberturas creadas exitosamente",
-        visible: true
-      });
+      // Reset solo si es creación
+      if (mode !== "edit") {
+        setPolicyData(INITIAL_POLICY_STATE);
+        setCoverageGroups([{
+          id: 1,
+          tipoProducto: "SEGURO MEDICO  OBAMA",
+          policyData: { ...INITIAL_POLICY_STATE },
+          members: []
+        }]);
+      }
   
-      setTimeout(() => {
-        setAlert({ type: "", message: "", visible: false });
-      }, 5000);
     } catch (error) {
-      console.error("❌ Error al procesar la solicitud:", error);
+      console.error("❌ Error en handleSubmit:", error);
       setAlert({
         type: "danger",
-        message: `Error: ${error.message || "Ocurrió un error inesperado"}`,
+        message: `Error al guardar: ${error.message || "Ocurrió un error inesperado"}`,
         visible: true
       });
     }
   };
+  
   
   
 
