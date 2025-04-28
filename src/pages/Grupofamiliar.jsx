@@ -176,7 +176,66 @@ const [totalYes, setTotalYes] = useState(0);
     }));
   };
 
+  const initializeEditData = (initialData) => {
+    if (!initialData) return;
+  
+    // Inicializar los datos principales
+    setPolicyData(prev => ({
+      ...prev,
+      personas_en_taxes: initialData.personas_taxes || "",
+      personas_cobertura: initialData.personas_cobertura || "",
+      ingreso_familiar: initialData.ingreso_familiar_anual || 0,
+      persona_contacto: initialData.persona_contacto || "",
+      telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
+      telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
+      notas_telefonos: initialData.nota || "",
+      pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
+      captado_por: initialData.captado_por || "",
+      referido: initialData.cual || "",
+      responsable: initialData.responsable || ""
+    }));
+  
+    // Inicializar codigos de país
+    if (initialData.cod_tel_1) {
+      const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_1);
+      if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
+    }
+    if (initialData.cod_tel_2) {
+      const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_2);
+      if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
+    }
+  
+    // Inicializar medios de contacto
+    setContactMethods({
+      whatsapp: initialData.telefonos?.whatsapp || false,
+      telegram: initialData.telefonos?.telegram || false,
+      texto_sms: initialData.telefonos?.mensaje_sms || false
+    });
+  
+    // Inicializar coverageGroups
+    if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
+      const groups = transformarCoberturasAcoverageGroups(initialData.coberturas);
+      if (groups.length > 0) {
+        setCoverageGroups(groups);
+      } else {
+        // Si por alguna razón no hay coberturas, crear un grupo vacío
+        setCoverageGroups([{
+          id: 1,
+          tipoProducto: "SEGURO MEDICO OBAMA",
+          policyData: { ...INITIAL_POLICY_STATE },
+          members: []
+        }]);
+      }
+    }
+  };
 
+  useEffect(() => {
+    if (mode === "edit" && initialData) {
+      initializeEditData(initialData);
+    }
+  }, [mode, initialData]);
+  
+  
   const copiarDatosDelPrimero = (groupId, indexDestino) => {
     const grupo = coverageGroups.find(g => g.id === groupId);
     const miembroModelo = grupo.members[0]; // Siempre el primer miembro
@@ -248,48 +307,49 @@ const [totalYes, setTotalYes] = useState(0);
 
 
   const transformarCoberturasAcoverageGroups = (coberturas) => {
-  const grupos = {};
-
-  if (!Array.isArray(coberturas)) return [];
-
-  coberturas.forEach(cob => {
-    const tipo = cob.cobertura_tipo || "SEGURO MEDICO OBAMA";
-    if (!grupos[tipo]) {
-      grupos[tipo] = {
-        id: Object.keys(grupos).length + 1,
-        cobertura_tipo: tipo,
-        policyData: {},
-        members: []
+    if (!Array.isArray(coberturas)) return [];
+  
+    const grupos = {};
+  
+    coberturas.forEach(cob => {
+      if (!cob) return;
+  
+      const tipo = cob.cobertura_tipo || "SEGURO MEDICO OBAMA";
+      if (!grupos[tipo]) {
+        grupos[tipo] = {
+          id: Object.keys(grupos).length + 1,
+          cobertura_tipo: tipo,
+          policyData: { ...INITIAL_POLICY_STATE },
+          members: []
+        };
+      }
+  
+      const member = {
+        cobertura_id: cob.id || null,
+        id: cob.cliente?.id || `temp-${Math.random()}`,
+        nombre: cob.cliente?.nombre_completo || "Sin nombre",
+        ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
+        compania_id: cob.compania?.id || null,
+        estado_cobertura: cob.estado_cobertura || "No definido",
+        fecha_activacion: cob.fecha_activacion || "",
+        fecha_cancelacion: cob.fecha_cancelacion || "",
+        fecha_retiro: cob.fecha_retiro || "",
+        ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
+        plan: cob.plan || "",
+        metal: cob.metal || "",
+        elegibilidad: cob.elegibilidad || "",
+        red: cob.red || "",
+        precio: parseFloat(cob.precio) || 0,
+        pagador_id: cob.pagador_id || "",
+        codigo_poliza: cob.codigo_poliza || ""
       };
-    }
-
-    const member = {
-      cobertura_id: cob.id || null,
-      id: cob.cliente?.id || `temp-${Math.random()}`, // si no viene id, ponemos temporal
-      nombre: cob.cliente?.nombre_completo || "Sin nombre",
-      ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
-      compania_id: cob.compania?.id || null,
-      estado_cobertura: cob.estado_cobertura || "No definido",
-      fecha_activacion: cob.fecha_activacion || "",
-      fecha_cancelacion: cob.fecha_cancelacion || "",
-      fecha_retiro: cob.fecha_retiro || "",
-      ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
-      plan: cob.plan || "",
-      metal: cob.metal || "",
-      elegibilidad: cob.elegibilidad || "",
-      red: cob.red || "",
-      precio: parseFloat(cob.precio) || 0,
-      pagador_id: cob.pagador_id || "",
-      codigo_poliza: cob.codigo_poliza || ""
-    };
-
-    grupos[tipo].members.push(member);
-  });
-
-  return Object.values(grupos);
-};
-
-
+  
+      grupos[tipo].members.push(member);
+    });
+  
+    return Object.values(grupos);
+  };
+  
   const fetchDataparentesco = async () => {
     try {
       const parentecoResponse = await apiRequest("parentesco/", "GET");
