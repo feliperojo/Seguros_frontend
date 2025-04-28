@@ -21,6 +21,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   useEffect(() => {
     if (mode === "edit" && initialData) {
       console.log("📥 Cargando initialData:", initialData);
+      console.log("🛠️ Coberturas recibidas:", initialData.coberturas);
       console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
 
       setPolicyData(prev => ({
