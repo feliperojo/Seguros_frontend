@@ -763,8 +763,8 @@ const [totalYes, setTotalYes] = useState(0);
         persona_contacto: policyData.persona_contacto,
         pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
         telefonos: {
-          telefono_1: policyData.telefono_1.replace(/\D/g, ""),
-          telefono_2: policyData.telefono_2.replace(/\D/g, ""),
+          telefono_1: policyData.telefono_1 ? policyData.telefono_1.replace(/\D/g, "") : null,
+          telefono_2: policyData.telefono_2 ? policyData.telefono_2.replace(/\D/g, "") : null,
           whatsapp: contactMethods.whatsapp,
           telegram: contactMethods.telegram,
           mensaje_sms: contactMethods.texto_sms

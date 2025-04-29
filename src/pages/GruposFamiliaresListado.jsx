@@ -551,13 +551,13 @@ const getCompaniaNombre = (grupo) => {
                             <td>{cobertura.precio || "-"}</td>
                             <td>
                               {cobertura.fecha_activacion 
-                                ? new Date(cobertura.fecha_activacion).toLocaleDateString() 
+                                ? new Date(cobertura.fecha_activacion).toLocaleDateString('es-CO') 
                                 : "-"
                               }
                             </td>
                             <td>
-                              {cobertura.fecha_activacion 
-                                ? new Date(cobertura.fecha_cancelacion).toLocaleDateString() 
+                              {cobertura.fecha_cancelacion 
+                                ? new Date(cobertura.fecha_cancelacion).toLocaleDateString('es-CO') 
                                 : "-"
                               }
                             </td>

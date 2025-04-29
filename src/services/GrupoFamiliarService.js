@@ -4,6 +4,7 @@ import apiRequest from './api';
 const GrupoFamiliarService = {
 
   create: async (grupoFamiliarData) => {
+    console.log("antes de enviar a create",grupoFamiliarData)
     return await apiRequest("grupo_familiar/create", "POST", grupoFamiliarData);
   },
 
