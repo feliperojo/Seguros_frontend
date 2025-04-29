@@ -20,9 +20,6 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
   useEffect(() => {
     if (mode === "edit" && initialData) {
-      console.log("📥 Cargando initialData:", initialData);
-      console.log("🛠️ Coberturas recibidas:", initialData.coberturas);
-      console.log("Ingreso familiar original:", initialData.ingreso_familiar_anual);
   
       setPolicyData(prev => ({
         ...prev,
@@ -341,7 +338,8 @@ const [totalYes, setTotalYes] = useState(0);
         red: cob.red || "",
         precio: parseFloat(cob.precio) || 0,
         pagador_id: cob.pagador_id || "",
-        codigo_poliza: cob.codigo_poliza || ""
+        codigo_poliza: cob.codigo_poliza || "",
+        parentesco: cob.parentesco || ""
       };
   
       grupos[tipo].members.push(member);
@@ -754,7 +752,6 @@ const [totalYes, setTotalYes] = useState(0);
           sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
         , 0);
   
-        // Solo usar recalculado si hay cambios
         ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
       }
   
@@ -782,12 +779,11 @@ const [totalYes, setTotalYes] = useState(0);
   
       let grupoFamiliarResponse;
       if (mode === "edit") {
-        // PREPARAR payload completo para UPDATE (grupo + coberturas)
         const payload = {
           ...grupoFamiliarData,
           coberturas: coverageGroups.flatMap(group =>
             group.members.map(member => ({
-              id: member.cobertura_id || null, // importante
+              id: member.cobertura_id || null,
               codigo_poliza: member.codigo_poliza || "",
               parentesco: member.parentesco || "",
               fecha_activacion: member.fecha_activacion || "",
@@ -811,7 +807,15 @@ const [totalYes, setTotalYes] = useState(0);
         console.log("📤 Payload para actualización:", payload);
         grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
       } else {
+        // CREACIÓN DEL GRUPO
         grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
+          console.log("revisamos id",grupoFamiliarResponse.data?.id)
+        const grupoFamiliarId = grupoFamiliarResponse.data?.id;
+        if (grupoFamiliarId) {
+          // CREACIÓN DE COBERTURAS
+          
+          await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
+        }
       }
   
       console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
@@ -826,7 +830,6 @@ const [totalYes, setTotalYes] = useState(0);
         navigate('/grupofamiliar/lista');
       });
   
-      // Reset solo si es creación
       if (mode !== "edit") {
         setPolicyData(INITIAL_POLICY_STATE);
         setCoverageGroups([{
@@ -846,6 +849,7 @@ const [totalYes, setTotalYes] = useState(0);
       });
     }
   };
+  
   
   
   
@@ -1717,13 +1721,15 @@ const [totalYes, setTotalYes] = useState(0);
                         }
                       }}
                       onFocus={(e) => {
-                        // Quita el símbolo $ y comas para editar fácilmente
-                        const clean = currentEditMember.precio.replace(/[$,]/g, '');
-                        setCurrentEditMember({
-                          ...currentEditMember,
-                          precio: clean
-                        });
-                      }}
+                       
+                          if (!currentEditMember?.precio) return; // 👈 Protección
+                          const clean = currentEditMember.precio.replace(/[$,]/g, '');
+                          setCurrentEditMember({
+                            ...currentEditMember,
+                            precio: clean
+                          });
+                        }}
+                        
                     />
                   </Form.Group>
 
