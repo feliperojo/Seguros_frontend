@@ -6,6 +6,8 @@ import {
 import apiRequest from "../services/api";
 import CountrySelect from "../components/CountrySelect"; // Ajusta según tu estructura
 import FormDireccion from "../components/FormDireccion";
+import CountrySelectWithFlags from "../components/CountrySelect";
+
 
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
   // Estado para los datos del cliente organizados por secciones
@@ -33,7 +35,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     // Sección 3: Datos de Contacto
     datosContacto: {
       telefono: "",
-      tel_secundario: "",
+      secundario: "",
       whatsapp_num: "",
       nota: "",
       cod_tel_1: "",
@@ -208,7 +210,7 @@ const mapClienteDataToForm = (data) => {
     // Sección 3: Datos de Contacto
     datosContacto: {
       telefono: data.telefono || "",
-      tel_secundario: data.secundario || "",
+      secundario: data.secundario || "",
       whatsapp_num: data.whatsapp_num || "",
       nota: data.nota || "",
       cod_tel_1: data.cod_tel_1 || "",
@@ -595,10 +597,11 @@ const mapClienteDataToForm = (data) => {
           <Form.Group>
             <Form.Label>Teléfono</Form.Label>
             <InputGroup>
-              <CountrySelect 
-                selectedCode="us" 
-                onChange={() => {}} 
-              />
+            <CountrySelectWithFlags
+                    selectedCode={formData.datosContacto.cod_tel_1}
+                    name="cod_tel_1"
+                    onChange={(field, value) => handleInputChange("datosContacto", field, value)}
+                  />
               <Form.Control
                 type="text"
                 value={formData.datosContacto.telefono}
@@ -611,14 +614,15 @@ const mapClienteDataToForm = (data) => {
           <Form.Group>
             <Form.Label>Tel. Secundario</Form.Label>
             <InputGroup>
-              <CountrySelect 
-                selectedCode="us" 
-                onChange={() => {}} 
-              />
+            <CountrySelectWithFlags
+                        selectedCode={formData.datosContacto.cod_tel_2}
+                        name="cod_tel_2"
+                        onChange={(field, value) => handleInputChange("datosContacto", field, value)}
+                      />
               <Form.Control
                 type="text"
-                value={formData.datosContacto.tel_secundario}
-                onChange={(e) => handleInputChange("datosContacto", "tel_secundario", e.target.value)}
+                value={formData.datosContacto.secundario}
+                onChange={(e) => handleInputChange("datosContacto", "secundario", e.target.value)}
               />
             </InputGroup>
           </Form.Group>
@@ -627,10 +631,11 @@ const mapClienteDataToForm = (data) => {
           <Form.Group>
             <Form.Label>WhatsApp</Form.Label>
             <InputGroup>
-              <CountrySelect 
-                selectedCode="us" 
-                onChange={() => {}} 
-              />
+            <CountrySelectWithFlags
+                        selectedCode={formData.datosContacto.cod_tel_3}
+                        name="cod_tel_3"
+                        onChange={(field, value) => handleInputChange("datosContacto", field, value)}
+                      />
               <Form.Control
                 type="text"
                 value={formData.datosContacto.whatsapp_num}

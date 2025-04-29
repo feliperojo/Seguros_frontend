@@ -274,7 +274,7 @@ const calcularIngresoAnual = (monto, periodo) => {
 
 
   const nextStep = () => {
-    console.log("nextStep activado, currentStep:", currentStep);
+   
     if (currentStep < totalSteps) {
       setShowModal(true);  // Mantén el modal abierto
       setCurrentStep(currentStep + 1);
@@ -282,7 +282,6 @@ const calcularIngresoAnual = (monto, periodo) => {
   };
   
   useEffect(() => {
-    console.log('isModal es:', isModal, 'showModal es:', showModal); // Seguimiento de cambios en el estado del modal
   }, [showModal, isModal]);
   
   
@@ -315,10 +314,14 @@ const guardarCliente = async () => {
   // Crear una copia limpia del formData sin los guiones en los números de teléfono telefono_empleador
   const formattedData = {
     ...formData,
-    telefono: `+${getCountryCode(selectedCode.telefono)}${formData.telefono.replace(/\D/g, "")}`,
-    secundario: `+${getCountryCode(selectedCode.secundario)}${formData.secundario.replace(/\D/g, "")}`,
-    whatsapp_num: `+${getCountryCode(selectedCode.whatsapp_num)}${formData.whatsapp_num.replace(/\D/g, "")}`,
-    telefono_empleador: `+${getCountryCode(selectedCode.telefono_empleador)}${formData.telefono_empleador.replace(/\D/g, "")}`,
+    telefono: formData.telefono.replace(/\D/g, ""),
+    secundario: formData.secundario.replace(/\D/g, ""),
+    whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),
+    telefono_empleador: formData.telefono_empleador.replace(/\D/g, ""),
+    cod_tel_1: getCountryCode(selectedCode.telefono),
+    cod_tel_2: getCountryCode(selectedCode.secundario),
+    cod_tel_3: getCountryCode(selectedCode.whatsapp_num),
+    
   };
   
   // Crear el JSON con la estructura deseada
@@ -326,12 +329,13 @@ const guardarCliente = async () => {
     "clientes": [formattedData] // Insertar el JSON dentro de un array
   };
  
+  console.log("📦 Datos preparados para enviar:", formattedData);
 
   try {
     const response = await apiRequest("cliente/create", "POST", jsonFinal);
 
     if (response?.message && response.message.includes("cliente creado exitosamente")) {
-      console.log("✅ Cliente fue creado con éxito:", response.message);
+     
       
       // Guardamos el ID del cliente
       if (response.clientes && response.clientes[0] && response.clientes[0].id) {
@@ -339,7 +343,6 @@ const guardarCliente = async () => {
         setClienteCreado(true);
         
         if (onClienteCreado) {
-          console.log("Notificando a componente padre con el nuevo cliente:", response.clientes[0].id);
           onClienteCreado(response.clientes[0]);
           // IMPORTANTE: Ya no hacemos return aquí, continuamos con el resto del código
         }
@@ -362,7 +365,6 @@ const guardarCliente = async () => {
       
 
     } else {
-      console.error("❌ Error al crear cliente:", response.message || "Mensaje no disponible");
       setAlert({
         type: "danger", 
         message: "Error al crear cliente: " + (response.message || "Error desconocido"), 
@@ -370,7 +372,6 @@ const guardarCliente = async () => {
       });
     }
   } catch (err) {
-    console.error("⚠️ Error en la API al intentar crear el cliente:", err.message);
     setAlert({
       type: "danger", 
       message: "❌ Error al crear cliente: " + err.message, 
@@ -875,7 +876,6 @@ const guardarCliente = async () => {
                 clienteId={clienteId} 
                 grupoFamiliarId={null} 
                 onSave={() => {
-                  console.log("Medio de pago guardado");
                   setAlert({
                     type: "success", 
                     message: "Medio de pago guardado exitosamente", 

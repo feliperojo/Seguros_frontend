@@ -224,7 +224,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">Teléfono Secundario</small>
-                      <strong>{clienteData.tel_secundario || <NotAvailable />}</strong>
+                      <strong>{clienteData.secundario || <NotAvailable />}</strong>
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">Email</small>
@@ -258,7 +258,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">Notas</small>
-                      <p className="mb-0 small">{clienteData.nota_telefonos || <NotAvailable />}</p>
+                      <p className="mb-0 small">{clienteData.nota || <NotAvailable />}</p>
                     </ListGroup.Item>
                   </ListGroup>
                 </Card>
@@ -282,7 +282,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">A/USCIS</small>
-                      <strong>{clienteData.a_uscis || <NotAvailable />}</strong>
+                      <strong>{clienteData.auscis || <NotAvailable />}</strong>
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">Tarjeta #</small>
@@ -317,30 +317,30 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     <Row>
                       <Col md={6}>
                         <dl className="row mb-0">
-                          <dt className="col-sm-4 text-muted">Calle y Número</dt>
+                          <dt className="col-sm-4 text-muted">Direccion</dt>
                           <dd className="col-sm-8">
-                            {clienteData.direccion?.calle 
-                              ? `${clienteData.direccion.calle} ${clienteData.direccion.numero || ''}` 
+                            {clienteData.direccion 
+                              ? `${clienteData.direccion || ''}  ` 
                               : <NotAvailable />}
                           </dd>
                           
                           <dt className="col-sm-4 text-muted">Ciudad</dt>
-                          <dd className="col-sm-8">{clienteData.direccion?.ciudad || <NotAvailable />}</dd>
+                          <dd className="col-sm-8">{clienteData?.ciudad || <NotAvailable />}</dd>
                           
                           <dt className="col-sm-4 text-muted">Estado/Provincia</dt>
-                          <dd className="col-sm-8">{clienteData.direccion?.estado || <NotAvailable />}</dd>
+                          <dd className="col-sm-8">{clienteData?.estado || <NotAvailable />}</dd>
                         </dl>
                       </Col>
                       <Col md={6}>
                         <dl className="row mb-0">
                           <dt className="col-sm-4 text-muted">Código Postal</dt>
-                          <dd className="col-sm-8">{clienteData.direccion?.codigo_postal || <NotAvailable />}</dd>
+                          <dd className="col-sm-8">{clienteData?.codigo_postal || <NotAvailable />}</dd>
                           
-                          <dt className="col-sm-4 text-muted">País</dt>
-                          <dd className="col-sm-8">{clienteData.direccion?.pais || <NotAvailable />}</dd>
+                          <dt className="col-sm-4 text-muted">Condado</dt>
+                          <dd className="col-sm-8">{clienteData?.condado || <NotAvailable />}</dd>
                           
-                          <dt className="col-sm-4 text-muted">Referencias</dt>
-                          <dd className="col-sm-8">{clienteData.direccion?.referencias || <NotAvailable />}</dd>
+                          <dt className="col-sm-4 text-muted">Dir Correspondencia</dt>
+                          <dd className="col-sm-8">{clienteData?.dir_correspondencia || <NotAvailable />}</dd>
                         </dl>
                       </Col>
                     </Row>

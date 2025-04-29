@@ -39,9 +39,15 @@ const customStyles = {
     zIndex: 9999 // para evitar que quede detrás de modales u otros elementos
   })
 };
+const getIsoByCode = (code) => {
+  const found = countryCodes.find((c) => c.code === code);
+  return found ? found.iso : "us";
+};
+
 
 const CountrySelectWithFlags = ({ selectedCode, onChange, name }) => {
-  const selectedOption = countryCodes.find((c) => c.iso === selectedCode) || countryCodes[0];
+  const selectedOption = countryCodes.find((c) => c.code === selectedCode) || countryCodes[0];
+
 
   return (
     <Select
@@ -55,7 +61,8 @@ const CountrySelectWithFlags = ({ selectedCode, onChange, name }) => {
         </div>
       )}
       value={selectedOption}
-      onChange={(option) => onChange(name, option.iso)}
+      onChange={(option) => onChange(name, option.code)}
+
       styles={{
         control: (base) => ({
           ...base,

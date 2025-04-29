@@ -479,7 +479,7 @@ const [totalYes, setTotalYes] = useState(0);
         return updatedGroups;
       });
   
-      setShowModal(false);
+      setShowModal(true);
       setAlert({
         type: "success",
         message: `Cliente "${clientData.nombre_completo}" agregado correctamente`,
