@@ -306,9 +306,16 @@ const guardarCliente = async () => {
 
   // Encuentra el código numérico del país según el ISO
   const getCountryCode = (iso) => {
-    const country = countryCodes.find((c) => c.iso === iso);
-    return country ? country.code : "";
+    const country = countryCodes.find((c) => c.iso.toLowerCase() === iso.toLowerCase());
+    if (!country) {
+      console.warn(`❌ País no encontrado para iso: ${iso}`);
+    }
+    return country ? country.code.replace("+", "") : "";
   };
+  
+  
+  
+  
 
   
   // Crear una copia limpia del formData sin los guiones en los números de teléfono telefono_empleador
@@ -318,9 +325,10 @@ const guardarCliente = async () => {
     secundario: formData.secundario.replace(/\D/g, ""),
     whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),
     telefono_empleador: formData.telefono_empleador.replace(/\D/g, ""),
-    cod_tel_1: getCountryCode(selectedCode.telefono),
-    cod_tel_2: getCountryCode(selectedCode.secundario),
-    cod_tel_3: getCountryCode(selectedCode.whatsapp_num),
+    cod_tel_1: selectedCode.telefono,
+    cod_tel_2: selectedCode.secundario,
+    cod_tel_3: selectedCode.whatsapp_num,
+    
     
   };
   

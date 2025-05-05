@@ -106,7 +106,7 @@ const fetchMediosPago = async () => {
   try {
     // Llamada a la API
     const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
-    
+    console.log("medios",response)
     if (Array.isArray(response)) {
       setMediosPago(response);
     } else {
@@ -154,11 +154,8 @@ useEffect(() => {
 // Función auxiliar para obtener la etiqueta del tipo de medio de pago
 const getTipoMedioPagoLabel = (tipo) => {
   switch (tipo) {
-    case 'tarjeta_credito': return 'Tarjeta de Crédito';
-    case 'tarjeta_debito': return 'Tarjeta de Débito';
-    case 'efectivo': return 'Efectivo';
-    case 'transferencia': return 'Transferencia';
-    case 'cheque': return 'Cheque';
+    case 'tarjeta': return 'Tarjeta de Crédito/Débito';
+    case 'cuenta_bancaria': return 'Cuenta Bancaria';
     default: return tipo;
   }
 };
@@ -180,7 +177,17 @@ useEffect(() => {
   }
 }, [show, clienteData]);
 
+const formatuscis = (value) => {
+  const cleaned = value?.replace(/\D/g, ""); // elimina todo lo que no sea número
+  const match = cleaned?.match(/^(\d{0,3})(\d{0,3})(\d{0,3})$/);
+  return match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : value;
+};
 
+const formatsocial = (value) => {
+  const cleaned = value?.replace(/\D/g, ""); // elimina todo lo que no sea número
+  const match = cleaned?.match(/^(\d{0,3})(\d{0,2})(\d{0,4})$/);
+  return match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : value;
+};
   
 const mapClienteDataToForm = (data) => {
   const mappedData = {
@@ -492,21 +499,30 @@ const mapClienteDataToForm = (data) => {
       
       <Row className="mb-3">
         <Col md={6}>
-          <Form.Group>
-            <Form.Label>Social</Form.Label>
-            <Form.Control
-              type="text"
-              value={formData.statusMigratorio.social}
-              onChange={(e) => handleInputChange("statusMigratorio", "social", e.target.value)}
-            />
+        <Form.Group>
+  <Form.Label>Social</Form.Label>
+              <Form.Control
+                type="text"
+                value={formData.statusMigratorio.social}
+                onChange={(e) => {
+                  const formatted = formatsocial(e.target.value);
+                  handleInputChange("statusMigratorio", "social", formatted);
+                }}
+                maxLength={11}
+              />
+
           </Form.Group>
         </Col>
         <Col md={6}>
           <Form.Group>
             <Form.Label>Status</Form.Label>
             <Form.Select
+              type="text"
               value={formData.statusMigratorio.status}
-              onChange={(e) => handleInputChange("statusMigratorio", "status", e.target.value)}
+              onChange={(e) => {
+                const formatted = formatsocial(e.target.value);
+                handleInputChange("statusMigratorio", "status", formatted);}}
+                maxLength={11}
             >
               <option value="">Seleccione</option>
               <option value="P. TRABAJO">P. TRABAJO</option>
@@ -531,10 +547,15 @@ const mapClienteDataToForm = (data) => {
           <Form.Group>
             <Form.Label>A/USCIS</Form.Label>
             <Form.Control
-              type="text"
-              value={formData.statusMigratorio.auscis}
-              onChange={(e) => handleInputChange("statusMigratorio", "auscis", e.target.value)}
-            />
+                type="text"
+                value={formData.statusMigratorio.auscis}
+                onChange={(e) => {
+                  const formatted = formatuscis(e.target.value);
+                  handleInputChange("statusMigratorio", "auscis", formatted);
+                }}
+                maxLength={11}
+
+              />
           </Form.Group>
         </Col>
         <Col md={6}>
@@ -913,14 +934,7 @@ const renderDireccionTab = () => (
           <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
           <h6 className="mb-3">No hay medios de pago registrados</h6>
           <p className="text-muted mb-3">Utilice el administrador de medios de pago para añadir nuevos métodos de pago.</p>
-          <Button 
-            variant="outline-primary" 
-            size="sm"
-            onClick={() => window.open(`/clientes/medios-pago/${clienteId}?action=new`, '_blank')}
-          >
-            <i className="bi bi-plus-circle me-2"></i>
-            Ir a Agregar Medio de Pago
-          </Button>
+     
         </div>
       ) : (
         <>
@@ -929,7 +943,7 @@ const renderDireccionTab = () => (
               <thead className="table-light">
                 <tr>
                   <th>Tipo</th>
-                  <th>Número/Referencia</th>
+                  <th>Cuenta</th>
                   <th>Titular</th>
                   <th>Banco</th>
                   <th>Vencimiento</th>
@@ -940,21 +954,8 @@ const renderDireccionTab = () => (
               <tbody>
                 {mediosPago.map(medio => (
                   <tr key={medio.id}>
-                    <td>
-                      <div className="d-flex align-items-center">
-                        {medio.tipo === 'tarjeta_credito' && <i className="bi bi-credit-card me-2 text-primary"></i>}
-                        {medio.tipo === 'tarjeta_debito' && <i className="bi bi-credit-card-2-front me-2 text-success"></i>}
-                        {medio.tipo === 'efectivo' && <i className="bi bi-cash me-2 text-warning"></i>}
-                        {medio.tipo === 'transferencia' && <i className="bi bi-bank me-2 text-info"></i>}
-                        {medio.tipo === 'cheque' && <i className="bi bi-file-earmark-text me-2 text-secondary"></i>}
-                        {getTipoMedioPagoLabel(medio.tipo)}
-                      </div>
-                    </td>
-                    <td>
-                      {medio.numero ? (
-                        <span>•••• {medio.numero.slice(-4)}</span>
-                      ) : medio.referencia || '-'}
-                    </td>
+                    <td>{medio.forma_pago || '-'}</td>
+                    <td>{medio.cuenta_numero || '-'}</td>
                     <td>{medio.titular || '-'}</td>
                     <td>{medio.banco || '-'}</td>
                     <td>{medio.fecha_vencimiento ? formatDate(medio.fecha_vencimiento) : '-'}</td>
