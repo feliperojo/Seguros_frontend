@@ -1546,7 +1546,7 @@ const [totalYes, setTotalYes] = useState(0);
                         type="date" 
                         value={currentEditMember.fecha_activacion || ""} 
                         onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_activacion: e.target.value})}
-                        disabled={currentEditMember.estado_cobertura === "No"}
+                        disabled={currentEditMember.estado_cobertura !== "Yes"}
                       />
 
                   </Form.Group>
