@@ -7,6 +7,7 @@ import apiRequest from "../services/api";
 import CountrySelect from "../components/CountrySelect"; // Ajusta según tu estructura
 import FormDireccion from "../components/FormDireccion";
 import CountrySelectWithFlags from "../components/CountrySelect";
+import { NumericFormat } from 'react-number-format';
 
 
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
@@ -836,22 +837,42 @@ const renderDireccionTab = () => (
         </Col>
         <Col md={4}>
           <Form.Group>
-            <Form.Label>Ingreso por Período ($)</Form.Label>
-            <Form.Control
-              type="number"
-              value={formData.datosEmpleo.ingreso_por_periodo}
-              onChange={(e) => handleInputChange("datosEmpleo", "ingreso_por_periodo", e.target.value)}
-            />
+          <Form.Label>Ingreso por Período ($)</Form.Label>
+              <NumericFormat
+                value={formData.datosEmpleo.ingreso_por_periodo}
+                thousandSeparator=","
+                decimalSeparator="."
+                prefix="$"
+                decimalScale={2}
+                fixedDecimalScale
+                allowNegative={false}
+                className="form-control"
+                onValueChange={(values) => {
+                  const { value } = values;
+                  handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
+                }}
+              />
+
           </Form.Group>
         </Col>
         <Col md={4}>
           <Form.Group>
-            <Form.Label>Ingreso Anual ($)</Form.Label>
-            <Form.Control
-              type="number"
-              value={formData.datosEmpleo.ingreso_anual}
-              onChange={(e) => handleInputChange("datosEmpleo", "ingreso_anual", e.target.value)}
-            />
+          <Form.Label>Ingreso Anual ($)</Form.Label>
+              <NumericFormat
+                value={formData.datosEmpleo.ingreso_anual}
+                thousandSeparator=","
+                decimalSeparator="."
+                prefix="$"
+                decimalScale={2}
+                fixedDecimalScale
+                allowNegative={false}
+                className="form-control"
+                onValueChange={(values) => {
+                  const { value } = values;
+                  handleInputChange("datosEmpleo", "ingreso_anual", value);
+                }}
+              />
+
           </Form.Group>
         </Col>
       </Row>
@@ -893,12 +914,22 @@ const renderDireccionTab = () => (
         </Col>
         <Col md={6}>
           <Form.Group>
-            <Form.Label>Ingreso por Período ocasional ($)</Form.Label>
-            <Form.Control
-              type="number"
-              value={formData.datosEmpleo.ingreso_ocasional.monto}
-              onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "monto", e.target.value)}
-            />
+          <Form.Label>Ingreso por Período ocasional ($)</Form.Label>
+              <NumericFormat
+                value={formData.datosEmpleo.ingreso_ocasional.monto}
+                thousandSeparator=","
+                decimalSeparator="."
+                prefix="$"
+                decimalScale={2}
+                fixedDecimalScale
+                allowNegative={false}
+                className="form-control"
+                onValueChange={(values) => {
+                  const { value } = values;
+                  handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "monto", value);
+                }}
+              />
+
           </Form.Group>
         </Col>
       </Row>
