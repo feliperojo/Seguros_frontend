@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { NumericFormat } from 'react-number-format';
 import { FaMapMarkerAlt } from "react-icons/fa";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/ClienteForm.css";
@@ -70,6 +71,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [showModal, setShowModal] = useState(isModal); // Inicializar con isModal
 
 
+  
   // En la inicialización de selectedCode en tu componente Clientes
 const [selectedCode, setSelectedCode] = useState({
   telefono: "us",
@@ -103,37 +105,6 @@ const closeModal = () => setShowModal(false);
     setIdiomasList(idiomas);
   }, []);
 
-
-  
-  // Función para formatear valores monetarios con el formato de dólares
-const formatCurrency = (value) => {
-  if (!value) return '';
-  
-  // Convertir a número si es string
-  const numValue = typeof value === 'string' ? parseFloat(value) : value;
-  
-  // Formatear como moneda en USD
-  return numValue.toLocaleString('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-};
-
-// Función para extraer el valor numérico de un string con formato de moneda
-const extractNumericValue = (formattedValue) => {
-  if (!formattedValue) return '';
-  return formattedValue.replace(/[^\d.-]/g, '');
-};
-
-  const handlePaymentToggle = (type) => {
-    if (type === "bank") {
-      setShowBankDetails(!showBankDetails);
-    } else if (type === "card") {
-      setShowCardDetails(!showCardDetails);
-    }
-  };
 
   const calcularEdad = (fechaNacimiento) => {
     const hoy = new Date();
@@ -779,27 +750,29 @@ const guardarCliente = async () => {
   <label>Ingreso por Período ($)</label>
   <div className="input-group">
     <span className="input-group-text">$</span>
-    <input
-      type="text"
-      name="ingreso_por_periodo"
-      className="form-control"
-      value={formData.ingreso_por_periodo}
-      onChange={handleChange}
-      placeholder="0.00"
-      onBlur={(e) => {
-        // Al perder el foco, formatear el valor como moneda
-        const numericValue = extractNumericValue(e.target.value);
-        if (numericValue) {
-          e.target.value = parseFloat(numericValue).toFixed(2);
-          handleChange({
-            target: {
-              name: 'ingreso_por_periodo',
-              value: e.target.value
-            }
-          });
-        }
-      }}
-    />
+    <NumericFormat
+  name="ingreso_por_periodo"
+  className="form-control"
+  value={formData.ingreso_por_periodo}
+  thousandSeparator=","
+  decimalSeparator="."
+  prefix="$"
+  decimalScale={2}
+  fixedDecimalScale
+  allowNegative={false}
+  onValueChange={(values) => {
+    const { value } = values; // este es el valor sin formato ($, comas)
+    handleChange({
+      target: {
+        name: "ingreso_por_periodo",
+        value: value
+      }
+    });
+  }}
+/>
+
+
+
   </div>
 </div>
         
@@ -811,7 +784,13 @@ const guardarCliente = async () => {
       type="text"
       name="ingreso_anual"
       className="form-control bg-light"
-      value={formData.ingreso_anual ? parseFloat(formData.ingreso_anual).toFixed(2) : "0.00"}
+      value={formData.ingreso_anual
+        ? parseFloat(formData.ingreso_anual).toLocaleString('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 2
+          })
+        : "$0.00"}
       readOnly
     />
   </div>
@@ -857,27 +836,27 @@ const guardarCliente = async () => {
             <label>Ingreso por Período ocacional ($)</label>
             <div className="input-group">
               <span className="input-group-text">$</span>
-              <input
-                type="text"
-                name="ingreso_por_periodo_ocasional"
-                className="form-control"
-                value={formData.ingreso_por_periodo_ocasional}
-                onChange={handleChange}
-                placeholder="0.00"
-                onBlur={(e) => {
-                  // Al perder el foco, formatear el valor como moneda
-                  const numericValue = extractNumericValue(e.target.value);
-                  if (numericValue) {
-                    e.target.value = parseFloat(numericValue).toFixed(2);
-                    handleChange({
-                      target: {
-                        name: 'ingreso_por_periodo_ocasional',
-                        value: e.target.value
-                      }
-                    });
-                  }
-                }}
-              />
+              <NumericFormat
+                      name="ingreso_por_periodo_ocasional"
+                      className="form-control"
+                      value={formData.ingreso_por_periodo_ocasional}
+                      thousandSeparator=","
+                      decimalSeparator="."
+                      prefix="$"
+                      decimalScale={2}
+                      fixedDecimalScale
+                      allowNegative={false}
+                      onValueChange={(values) => {
+                        const { value } = values;
+                        handleChange({
+                          target: {
+                            name: "ingreso_por_periodo_ocasional",
+                            value: value
+                          }
+                        });
+                      }}
+                    />
+
             </div>
           </div>
 
