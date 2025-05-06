@@ -48,7 +48,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     dir_correspondencia: "",    
     copi_dir: false, // Añadido para el checkbox "Copiar Dirección"
     // Campos para Datos de Empleo e Ingreso (Paso 6)
-    tipo_ingreso_id: "",
+    tipo_ingreso: "",
     actividad_economica: "",
     empleador: "",
     telefono_empleador: "",
@@ -450,7 +450,13 @@ const guardarCliente = async () => {
             <div className="row mt-3">
               <div className="col-md-4">
                 <label>Fecha de Nacimiento</label>
-                <input type="date" name="fecha_nacimiento" className="form-control" value={formData.fecha_nacimiento} onChange={handleChange} />
+                <input type="date" 
+                name="fecha_nacimiento" 
+                className="form-control" 
+                value={formData.fecha_nacimiento} 
+                onChange={handleChange}
+                max="2099-12-31"
+                min="1900-01-01" />
               </div>
               <div className="col-md-2">
                 <label>Edad</label>
@@ -530,11 +536,15 @@ const guardarCliente = async () => {
               </div>
               <div className="col-md-3">
                 <label>Fecha Emision</label>
-                <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}/>
+                <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}
+                max="2099-12-31"
+                min="1900-01-01"/>
               </div>
               <div className="col-md-3">
                 <label>Fecha Expedicion</label>
-                <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange} />
+                <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange}
+                max="2099-12-31"
+                min="1900-01-01"/>
               </div>
             </div>
           </>
@@ -682,7 +692,7 @@ const guardarCliente = async () => {
         <div className="col-md-4">
           
                 <label>Tipo de Ingreso</label>
-                <select name="tipo_ingreso" className="form-select" value={formData.tipo_ingreso_id} onChange={handleChange}>
+                <select name="tipo_ingreso" className="form-select" value={formData.tipo_ingreso} onChange={handleChange}>
                   <option value="">Seleccione</option>
                   <option value="W2">W2</option>
                   <option value="1099">1099</option>
@@ -751,25 +761,25 @@ const guardarCliente = async () => {
   <div className="input-group">
     <span className="input-group-text">$</span>
     <NumericFormat
-  name="ingreso_por_periodo"
-  className="form-control"
-  value={formData.ingreso_por_periodo}
-  thousandSeparator=","
-  decimalSeparator="."
-  prefix="$"
-  decimalScale={2}
-  fixedDecimalScale
-  allowNegative={false}
-  onValueChange={(values) => {
-    const { value } = values; // este es el valor sin formato ($, comas)
-    handleChange({
-      target: {
-        name: "ingreso_por_periodo",
-        value: value
-      }
-    });
-  }}
-/>
+          name="ingreso_por_periodo"
+          className="form-control"
+          value={formData.ingreso_por_periodo}
+          thousandSeparator=","
+          decimalSeparator="."
+          prefix="$"
+          decimalScale={2}
+          fixedDecimalScale
+          allowNegative={false}
+          onValueChange={(values) => {
+                  const { value } = values; // este es el valor sin formato ($, comas)
+                  handleChange({
+                    target: {
+                      name: "ingreso_por_periodo",
+                      value: value
+                    }
+                  });
+                }}
+              />
 
 
 

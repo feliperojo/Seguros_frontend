@@ -8,6 +8,9 @@ import CountrySelect from "../components/CountrySelect"; // Ajusta según tu est
 import FormDireccion from "../components/FormDireccion";
 import CountrySelectWithFlags from "../components/CountrySelect";
 import { NumericFormat } from 'react-number-format';
+import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
+
+
 
 
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
@@ -83,18 +86,29 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   
   // Estado activo para las pestañas
   const [activeTab, setActiveTab] = useState("datosPrincipales");
-  
-  // Estados para controlar la interfaz
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
-
   const [mediosPago, setMediosPago] = useState([]);
-const [loadingMediosPago, setLoadingMediosPago] = useState(false);
-const [errorMediosPago, setErrorMediosPago] = useState(null);
+  const [loadingMediosPago, setLoadingMediosPago] = useState(false);
+  const [errorMediosPago, setErrorMediosPago] = useState(null);
   
+useEffect(() => {
+  const { ingreso_por_periodo, periodo_ingreso } = formData.datosEmpleo;
+
+  if (ingreso_por_periodo && periodo_ingreso) {
+    const nuevoIngreso = calcularIngresoAnual(ingreso_por_periodo, periodo_ingreso);
+    setFormData(prev => ({
+      ...prev,
+      datosEmpleo: {
+        ...prev.datosEmpleo,
+        ingreso_anual: nuevoIngreso
+      }
+    }));
+  }
+}, [formData.datosEmpleo.ingreso_por_periodo, formData.datosEmpleo.periodo_ingreso]);
 
 
 // Añadir esta función para cargar los medios de pago
@@ -462,6 +476,8 @@ const mapClienteDataToForm = (data) => {
               type="date"
               value={formData.datosPrincipales.fecha_nacimiento}
               onChange={(e) => handleInputChange("datosPrincipales", "fecha_nacimiento", e.target.value)}
+            max="2099-12-31"
+            min="1900-01-01"
             />
           </Form.Group>
         </Col>
@@ -579,7 +595,9 @@ const mapClienteDataToForm = (data) => {
               type="date"
               value={formData.statusMigratorio.fecha_emision}
               onChange={(e) => handleInputChange("statusMigratorio", "fecha_emision", e.target.value)}
-            />
+              max="2099-12-31"
+              min="1900-01-01" 
+              />
           </Form.Group>
         </Col>
         <Col md={6}>
@@ -589,6 +607,8 @@ const mapClienteDataToForm = (data) => {
               type="date"
               value={formData.statusMigratorio.fecha_expedicion}
               onChange={(e) => handleInputChange("statusMigratorio", "fecha_expedicion", e.target.value)}
+                max="2099-12-31"
+                min="1900-01-01"
             />
           </Form.Group>
         </Col>
