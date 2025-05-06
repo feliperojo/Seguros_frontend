@@ -182,14 +182,26 @@ const extractNumericValue = (formattedValue) => {
       [name]: isoCode
     }));
   };
-  
+  const capitalizeWords = (str) => {
+    return str
+      .toLowerCase()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
 
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
-  
+   
+
     setFormData((prevData) => {
       let updatedValue = type === "checkbox" ? checked : value;
-      const updatedData = { ...prevData, [name]: updatedValue };
+      const updatedData = { ...prevData };
+
+      // Capitalizar si el campo es uno de los nombres
+      if (["primer_nombre", "segundo_nombre", "apellidos"].includes(name)) {
+        updatedValue = capitalizeWords(value);
+      }
+  
+      updatedData[name] = updatedValue;
   
       // Aplicar formato de teléfono solo a los campos requeridos
       if (["telefono", "secundario", "whatsapp_num", "telefono_empleador"].includes(name)) {

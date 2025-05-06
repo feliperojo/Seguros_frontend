@@ -482,9 +482,9 @@ const mapClienteDataToForm = (data) => {
               onChange={(e) => handleInputChange("datosPrincipales", "genero", e.target.value)}
             >
               <option value="">Seleccione</option>
-              <option value="Masculino">Masculino</option>
-              <option value="Femenino">Femenino</option>
-              <option value="Otro">Otro</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              
             </Form.Select>
           </Form.Group>
         </Col>

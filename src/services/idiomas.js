@@ -1,4 +1,5 @@
 const languages = [
+    { code: "es", name: "Spanish" },
     { code: "af", name: "Afrikaans" },
     { code: "sq", name: "Albanian" },
     { code: "am", name: "Amharic" },
@@ -66,7 +67,6 @@ const languages = [
     { code: "si", name: "Sinhala" },
     { code: "sk", name: "Slovak" },
     { code: "sl", name: "Slovenian" },
-    { code: "es", name: "Spanish" },
     { code: "su", name: "Sundanese" },
     { code: "sw", name: "Swahili" },
     { code: "sv", name: "Swedish" },
