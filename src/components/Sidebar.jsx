@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, 
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, 
-  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport
+  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -211,6 +211,9 @@ useEffect(() => {
               </Link>
               <Link to="/Herramientas/exportar" className={`submenu-link ${isActive('/Herramientas/exportar') ? 'active' : ''}`}>
                 <FaFileExport /> Exportar Datos
+              </Link>
+              <Link to="/Herramientas/auditoria" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
+                <FaCogs /> Auditoria
               </Link>
             </div>
           )}
