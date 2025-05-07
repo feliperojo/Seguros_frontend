@@ -94,22 +94,35 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   const [mediosPago, setMediosPago] = useState([]);
   const [loadingMediosPago, setLoadingMediosPago] = useState(false);
   const [errorMediosPago, setErrorMediosPago] = useState(null);
+  const [isIngresoModificado, setIsIngresoModificado] = useState(false);
+
+  useEffect(() => {
+    if (!isIngresoModificado) return;
   
-useEffect(() => {
-  const { ingreso_por_periodo, periodo_ingreso } = formData.datosEmpleo;
-
-  if (ingreso_por_periodo && periodo_ingreso) {
-    const nuevoIngreso = calcularIngresoAnual(ingreso_por_periodo, periodo_ingreso);
-    setFormData(prev => ({
-      ...prev,
-      datosEmpleo: {
-        ...prev.datosEmpleo,
-        ingreso_anual: nuevoIngreso
-      }
-    }));
-  }
-}, [formData.datosEmpleo.ingreso_por_periodo, formData.datosEmpleo.periodo_ingreso]);
-
+    const { ingreso_por_periodo, periodo_ingreso } = formData.datosEmpleo;
+  
+    if (ingreso_por_periodo && periodo_ingreso) {
+      const nuevoIngreso = calcularIngresoAnual(ingreso_por_periodo, periodo_ingreso);
+  
+      setFormData(prev => {
+        const actual = parseFloat(prev.datosEmpleo.ingreso_anual || 0);
+        const nuevo = parseFloat(nuevoIngreso || 0);
+  
+        if (actual.toFixed(2) === nuevo.toFixed(2)) return prev;
+  
+        return {
+          ...prev,
+          datosEmpleo: {
+            ...prev.datosEmpleo,
+            ingreso_anual: nuevoIngreso
+          }
+        };
+      });
+  
+      setHasChanges(true);
+    }
+  }, [formData.datosEmpleo.ingreso_por_periodo, formData.datosEmpleo.periodo_ingreso, isIngresoModificado]);
+  
 
 // Añadir esta función para cargar los medios de pago
 const fetchMediosPago = async () => {
@@ -136,26 +149,7 @@ const fetchMediosPago = async () => {
   }
 };
 
-// Función para eliminar un medio de pago
-const handleDeleteMedioPago = async (medioId) => {
-  if (!window.confirm("¿Está seguro que desea eliminar este medio de pago?")) return;
-  
-  try {
-    // Eliminar en API
-    await apiRequest(`mediopago/${medioId}`, "DELETE");
-    
-    // Actualizar lista local
-    setMediosPago(prev => prev.filter(medio => medio.id !== medioId));
-    
-    // Mostrar mensaje de éxito temporal
-    setSuccessMessage("Medio de pago eliminado correctamente");
-    setTimeout(() => setSuccessMessage(""), 3000);
-  } catch (error) {
-    console.error("Error al eliminar medio de pago:", error);
-    setError("No se pudo eliminar el medio de pago. " + (error.message || ""));
-    setTimeout(() => setError(null), 5000);
-  }
-};
+
 
 
 
@@ -189,6 +183,8 @@ useEffect(() => {
     setError(null);
     setSuccessMessage("");
     setHasChanges(false);
+    setIsIngresoModificado(false);
+
   }
 }, [show, clienteData]);
 
@@ -842,36 +838,43 @@ const renderDireccionTab = () => (
           <Form.Group>
             <Form.Label>Período de Ingreso</Form.Label>
             <Form.Select
-              value={formData.datosEmpleo.periodo_ingreso}
-              onChange={(e) => handleInputChange("datosEmpleo", "periodo_ingreso", e.target.value)}
-            >
-              <option value="">Seleccione</option>
-              <option value="HOUR">HOUR</option>
-            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
-            <option value="WEEKLY">WEEKLY</option>
-            <option value="BIWEEKLY">BIWEEKLY</option>
-            <option value="MONTHLY">MONTHLY</option>
-            <option value="ANNUAL">ANNUAL</option>
-            </Form.Select>
+                    value={formData.datosEmpleo.periodo_ingreso}
+                    onChange={(e) => {
+                      setIsIngresoModificado(true);
+                      handleInputChange("datosEmpleo", "periodo_ingreso", e.target.value);
+                    }}
+                  >
+                    <option value="">Seleccione</option>
+                    <option value="HOUR">HOUR</option>
+                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+                    <option value="WEEKLY">WEEKLY</option>
+                    <option value="BIWEEKLY">BIWEEKLY</option>
+                    <option value="MONTHLY">MONTHLY</option>
+                    <option value="ANNUAL">ANNUAL</option>
+                  </Form.Select>
+
           </Form.Group>
         </Col>
         <Col md={4}>
           <Form.Group>
           <Form.Label>Ingreso por Período ($)</Form.Label>
-              <NumericFormat
-                value={formData.datosEmpleo.ingreso_por_periodo}
-                thousandSeparator=","
-                decimalSeparator="."
-                prefix="$"
-                decimalScale={2}
-                fixedDecimalScale
-                allowNegative={false}
-                className="form-control"
-                onValueChange={(values) => {
-                  const { value } = values;
-                  handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
-                }}
-              />
+          <NumericFormat
+                  value={formData.datosEmpleo.ingreso_por_periodo}
+                  thousandSeparator=","
+                  decimalSeparator="."
+                  prefix="$"
+                  decimalScale={2}
+                  fixedDecimalScale
+                  allowNegative={false}
+                  className="form-control"
+                  onValueChange={(values) => {
+                    const { value } = values;
+                    setIsIngresoModificado(true);
+                    handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
+                  }}
+                />
+
+
 
           </Form.Group>
         </Col>
@@ -999,7 +1002,6 @@ const renderDireccionTab = () => (
                   <th>Banco</th>
                   <th>Vencimiento</th>
                   <th>Estado</th>
-                  <th className="text-end">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -1014,15 +1016,6 @@ const renderDireccionTab = () => (
                       <Badge bg={medio.activo ? 'success' : 'danger'} className="rounded-pill">
                         {medio.activo ? 'Activo' : 'Inactivo'}
                       </Badge>
-                    </td>
-                    <td className="text-end">
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm"
-                        onClick={() => handleDeleteMedioPago(medio.id)}
-                      >
-                        <i className="bi bi-trash"></i>
-                      </Button>
                     </td>
                   </tr>
                 ))}

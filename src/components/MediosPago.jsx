@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import apiRequest from "../services/api"; // Usando el servicio API existente
-
+import { 
+  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, 
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport, FaTimes
+} from "react-icons/fa";
 const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
- 
+
   // Inicialización de estados
   const [mediosPago, setMediosPago] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -22,7 +25,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     cliente_id: ''
   });
   const [error, setError] = useState({ campo: '', mensaje: '' });
-  console.log("id_cliente", clienteId)
+  
   // Cargar medios de pago cuando el componente se monta o cambia clienteId
   useEffect(() => {
     if (clienteId) {
@@ -35,22 +38,23 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     }
   }, [clienteId]);
 
+  
+  
   // Función para obtener medios de pago - ajustada a la nueva ruta
   const fetchMediosPago = async () => {
     try {
-      // Usando la ruta definida en tu controlador
-      const response = await apiRequest(`mediopago/`, "GET");
-      // Filtrar solo los medios de pago del cliente actual si la API devuelve todos
-      const clienteMediosPago = Array.isArray(response) 
-        ? response.filter(medio => medio.cliente_id === clienteId)
-        : [];
-      setMediosPago(clienteMediosPago);
+      const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
+      setMediosPago(Array.isArray(response) ? response : []);
     } catch (error) {
       console.error('Error al cargar medios de pago:', error);
       setMediosPago([]);
     }
   };
-
+  
+  const handleViewClick = (index) => {
+    const medio = mediosPago[index];
+    alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`);
+  };
   // Manejador para abrir modal y agregar nuevo medio de pago
   const handleAddClick = () => {
     setEditingIndex(-1);
@@ -487,18 +491,32 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                       : `${medio.banco || ''} - ${medio.cuenta_numero ? '••••' + medio.cuenta_numero.slice(-4) : ''}`}
                   </td>
                   <td>
-                    <button 
-                      className="btn btn-sm btn-outline-primary me-2"
-                      onClick={() => handleEditClick(index)}
-                    >
-                      Editar
-                    </button>
-                    <button 
-                      className="btn btn-sm btn-outline-danger"
-                      onClick={() => handleDeleteClick(index)}
-                    >
-                      Eliminar
-                    </button>
+                  <td>
+                      <div className="d-flex justify-content-center gap-2">
+                        <button
+                          className="btn btn-sm btn-outline-primary"
+                          onClick={() => handleViewClick(index)}
+                          title="Ver detalles"
+                        >
+                          <FaEye />
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-success"
+                          onClick={() => handleEditClick(index)}
+                          title="Editar"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button
+                          className="btn btn-sm btn-outline-danger"
+                          onClick={() => handleDeleteClick(index)}
+                          title="Eliminar"
+                        >
+                          <FaTrashAlt />
+                        </button>
+                      </div>
+                    </td>
+
                   </td>
                 </tr>
               ))}

@@ -480,6 +480,12 @@ const ListaClientes = () => {
           <Table hover className="lista-clientes-table">
             <thead>
               <tr>
+              <th onClick={() => handleSort("id")} className="sortable-header">
+                 ID
+                  {sortField === "id" && (
+                    sortDirection === "asc" ? <FaSortAmountUp className="ms-2" /> : <FaSortAmountDown className="ms-2" />
+                  )}
+                </th>
                 <th onClick={() => handleSort("nombre_completo")} className="sortable-header">
                   Nombre Completo
                   {sortField === "nombre_completo" && (
@@ -514,6 +520,11 @@ const ListaClientes = () => {
               {currentItems.map(cliente => (
                 <tr key={cliente.id || Math.random().toString()}>
                   <td>
+                      <div className="ID">
+                      {cliente.id || "Sin ID"}
+                    </div>
+                  </td>
+                    <td>
                     <div className="cliente-nombre">
                       {cliente.nombre_completo || "Sin nombre"}
                     </div>
