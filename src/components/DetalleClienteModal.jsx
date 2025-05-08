@@ -384,12 +384,12 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                         <dd className="col-sm-8">
                           {clienteData.periodo_ingreso ? (
                             <Badge bg="secondary">
-                              {clienteData.periodo_ingreso === "HOUR" ? "Por Hora" :
-                               clienteData.periodo_ingreso === "DAY" ? "Diario" :
-                               clienteData.periodo_ingreso === "WEEK" ? "Semanal" :
-                               clienteData.periodo_ingreso === "BIWEEK" ? "Quincenal" :
-                               clienteData.periodo_ingreso === "MONTH" ? "Mensual" :
-                               clienteData.periodo_ingreso === "YEAR" ? "Anual" :
+                              {clienteData.periodo_ingreso === "HOUR" ? "HOUR" :
+                               clienteData.periodo_ingreso === "DAY" ? "DAY" :
+                               clienteData.periodo_ingreso === "WEEK" ? "WEEK" :
+                               clienteData.periodo_ingreso === "BIWEEK" ? "BIWEEK" :
+                               clienteData.periodo_ingreso === "MONTH" ? "MONTH" :
+                               clienteData.periodo_ingreso === "YEAR" ? "YEAR" :
                                clienteData.periodo_ingreso}
                             </Badge>
                           ) : <NotAvailable />}
@@ -410,9 +410,10 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                         </dd>
                       </dl>
                     </Col>
+                    
                   </Row>
                   
-                  {clienteData.ingreso_ocasional && (
+                  {(clienteData.periodo_ingreso_ocasional || clienteData.ingreso_por_periodo_ocasional || clienteData.nota_ingreso_ocasional) && (
                     <div className="mt-4">
                       <h6 className="border-bottom pb-2">Ingreso Ocasional</h6>
                       <Row>
@@ -420,37 +421,40 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                           <dl className="row mb-0">
                             <dt className="col-sm-2 text-muted">Período</dt>
                             <dd className="col-sm-4">
-                              {clienteData.ingreso_ocasional.periodo ? (
+                              {clienteData.periodo_ingreso_ocasional ? (
                                 <Badge bg="secondary">
-                                  {clienteData.ingreso_ocasional.periodo === "HOUR" ? "Por Hora" :
-                                   clienteData.ingreso_ocasional.periodo === "DAY" ? "Diario" :
-                                   clienteData.ingreso_ocasional.periodo === "WEEK" ? "Semanal" :
-                                   clienteData.ingreso_ocasional.periodo === "BIWEEK" ? "Quincenal" :
-                                   clienteData.ingreso_ocasional.periodo === "MONTH" ? "Mensual" :
-                                   clienteData.ingreso_ocasional.periodo === "YEAR" ? "Anual" :
-                                   clienteData.ingreso_ocasional.periodo}
+                                  {{
+                                    "HOUR": "HOUR",
+                                    "DAY": "DAY",
+                                    "WEEK": "WEEK",
+                                    "BIWEEK": "BIWEEK",
+                                    "MONTH": "MONTH",
+                                    "YEAR": "YEAR"
+                                   
+                                  }[clienteData.periodo_ingreso_ocasional] || clienteData.periodo_ingreso_ocasional}
                                 </Badge>
                               ) : <NotAvailable />}
                             </dd>
-                            
+
                             <dt className="col-sm-2 text-muted">Monto</dt>
                             <dd className="col-sm-4">
-                              {clienteData.ingreso_ocasional.monto 
-                                ? `$${Number(clienteData.ingreso_ocasional.monto).toLocaleString()}` 
+                              {clienteData.ingreso_por_periodo_ocasional 
+                                ? `$${Number(clienteData.ingreso_por_periodo_ocasional).toLocaleString()}` 
                                 : <NotAvailable />}
                             </dd>
                           </dl>
-                          
-                          {clienteData.ingreso_ocasional.nota && (
+
+                          {clienteData.nota_ingreso_ocasional && (
                             <div className="mt-3">
                               <small className="text-muted">Nota:</small>
-                              <p className="mb-0 small mt-1">{clienteData.ingreso_ocasional.nota}</p>
+                              <p className="mb-0 small mt-1">{clienteData.nota_ingreso_ocasional}</p>
                             </div>
                           )}
                         </Col>
                       </Row>
                     </div>
                   )}
+
                 </Card.Body>
               </Card>
             </Col>

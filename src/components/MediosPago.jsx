@@ -25,7 +25,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     cliente_id: ''
   });
   const [error, setError] = useState({ campo: '', mensaje: '' });
-  
+  const tarjetas = mediosPago.filter(m => m.forma_pago === 'tarjeta');
+  const cuentasBancarias = mediosPago.filter(m => m.forma_pago === 'cuenta_bancaria');
+
   // Cargar medios de pago cuando el componente se monta o cambia clienteId
   useEffect(() => {
     if (clienteId) {
@@ -288,6 +290,104 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       }
     }
   };
+
+  const renderTablaTarjetas = () => (
+    <>
+      <h5 className="mt-4 mb-2">Tarjetas de Crédito/Débito</h5>
+      {tarjetas.length === 0 ? (
+        <p>No hay tarjetas registradas.</p>
+      ) : (
+        <table className="table table-bordered">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Quien paga</th>
+              <th>Titular</th>
+              <th>Número</th>
+              <th>Vencimiento</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tarjetas.map((medio, index) => (
+              <tr key={medio.id}>
+                <td>{medio.tipo_tarjeta}</td>
+                <td>{medio.quien_paga}</td>
+                <td>{medio.titular}</td>
+                <td>{medio.numero_tarjeta}</td>
+                <td>{medio.fecha_expiracion}</td>
+                <td>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleViewClick(index)}>
+                      <FaEye />
+                    </button>
+                    <button className="btn btn-sm btn-outline-success" onClick={() => handleEditClick(index)}>
+                      <FaEdit />
+                    </button>
+                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteClick(index)}>
+                      <FaTrashAlt />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+  
+  const renderTablaCuentas = () => (
+    <>
+      <h5 className="mt-4 mb-2">Cuentas Bancarias</h5>
+      {cuentasBancarias.length === 0 ? (
+        <p>No hay cuentas bancarias registradas.</p>
+      ) : (
+        <table className="table table-bordered">
+          <thead>
+            <tr>
+              <th>Banco</th>
+              <th>Quien paga</th>
+              <th>Titular</th>
+              <th>Dirección</th>
+              <th>Ruta/Código de Banco</th>
+              <th>Número de Cuenta</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cuentasBancarias.map((medio, index) => (
+              <tr key={medio.id}>
+                <td>{medio.banco}</td>
+                <td>{medio.quien_paga}</td>
+                <td>{medio.titular}</td>
+                <td>{medio.direccion}</td>
+                <td>{medio.ruta}</td>
+                <td>{medio.cuenta_numero}</td>
+                {/* <td>•••• {medio.cuenta_numero?.slice(-4)}</td> */}
+                <td>
+                  <div className="d-flex gap-2">
+                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleViewClick(index)}>
+                      <FaEye />
+                    </button>
+                    <button className="btn btn-sm btn-outline-success" onClick={() => handleEditClick(index)}>
+                      <FaEdit />
+                    </button>
+                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteClick(index)}>
+                      <FaTrashAlt />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </>
+  );
+  
+
+
  
   // Renderizar campos del formulario según tipo de pago
   const renderFormFields = () => {
@@ -323,10 +423,10 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   required
                 >
                   <option value="">Seleccione...</option>
-                  <option value="visa">Visa</option>
-                  <option value="mastercard">MasterCard</option>
-                  <option value="american_express">American Express</option>
-                  <option value="discover">Discover</option>
+                  <option value="Visa">Visa</option>
+                  <option value="Mastercard">MasterCard</option>
+                  <option value="American Express">American Express</option>
+                  <option value="Discover">Discover</option>
                   <option value="otro">Otro</option>
                 </select>
                 {error.campo === 'tipo_tarjeta' && (
@@ -342,7 +442,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   name="numero_tarjeta"
                   value={currentMedioPago.numero_tarjeta || ''}
                   onChange={handleChange}
-                  placeholder={currentMedioPago.tipo_tarjeta === 'american_express' ? 'XXXX XXXXXX XXXXX' : 'XXXX XXXX XXXX XXXX'}
+                  placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? 'XXXX XXXXXX XXXXX' : 'XXXX XXXX XXXX XXXX'}
                   required
                 />
                 {error.campo === 'numero_tarjeta' && (
@@ -468,61 +568,15 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     <div className="medios-pago-container">
       {/* Lista de medios de pago */}
       <div className="medios-pago-list">
-        {mediosPago.length === 0 ? (
-          <p>No hay medios de pago registrados.</p>
-        ) : (
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Tipo</th>
-                <th>Titular</th>
-                <th>Detalles</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mediosPago.map((medio, index) => (
-                <tr key={index}>
-                  <td>{medio.forma_pago === 'tarjeta' ? 'Tarjeta' : 'Cuenta Bancaria'}</td>
-                  <td>{medio.titular}</td>
-                  <td>
-                    {medio.forma_pago === 'tarjeta' 
-                      ? `${medio.tipo_tarjeta || ''} •••• ${medio.numero_tarjeta ? medio.numero_tarjeta.slice(-4) : ''}` 
-                      : `${medio.banco || ''} - ${medio.cuenta_numero ? '••••' + medio.cuenta_numero.slice(-4) : ''}`}
-                  </td>
-                  <td>
-                  <td>
-                      <div className="d-flex justify-content-center gap-2">
-                        <button
-                          className="btn btn-sm btn-outline-primary"
-                          onClick={() => handleViewClick(index)}
-                          title="Ver detalles"
-                        >
-                          <FaEye />
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-success"
-                          onClick={() => handleEditClick(index)}
-                          title="Editar"
-                        >
-                          <FaEdit />
-                        </button>
-                        <button
-                          className="btn btn-sm btn-outline-danger"
-                          onClick={() => handleDeleteClick(index)}
-                          title="Eliminar"
-                        >
-                          <FaTrashAlt />
-                        </button>
-                      </div>
-                    </td>
+      {mediosPago.length === 0 ? (
+        <p>No hay medios de pago registrados.</p>
+          ) : (
+            <>
+              {renderTablaTarjetas()}
+              {renderTablaCuentas()}
+            </>
+          )}
 
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
       </div>
 
       {/* Botón para agregar nuevo medio de pago */}

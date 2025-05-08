@@ -96,32 +96,12 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   const [errorMediosPago, setErrorMediosPago] = useState(null);
   const [isIngresoModificado, setIsIngresoModificado] = useState(false);
 
-  useEffect(() => {
-    if (!isIngresoModificado) return;
-  
-    const { ingreso_por_periodo, periodo_ingreso } = formData.datosEmpleo;
-  
-    if (ingreso_por_periodo && periodo_ingreso) {
-      const nuevoIngreso = calcularIngresoAnual(ingreso_por_periodo, periodo_ingreso);
-  
-      setFormData(prev => {
-        const actual = parseFloat(prev.datosEmpleo.ingreso_anual || 0);
-        const nuevo = parseFloat(nuevoIngreso || 0);
-  
-        if (actual.toFixed(2) === nuevo.toFixed(2)) return prev;
-  
-        return {
-          ...prev,
-          datosEmpleo: {
-            ...prev.datosEmpleo,
-            ingreso_anual: nuevoIngreso
-          }
-        };
-      });
-  
-      setHasChanges(true);
-    }
-  }, [formData.datosEmpleo.ingreso_por_periodo, formData.datosEmpleo.periodo_ingreso, isIngresoModificado]);
+  const formatPhoneNumber = (value) => {
+    if (!value) return "";
+    const cleaned = value.replace(/\D/g, "");
+    const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : value;
+  };
   
 
 // Añadir esta función para cargar los medios de pago
@@ -201,8 +181,7 @@ const formatsocial = (value) => {
 };
   
 const mapClienteDataToForm = (data) => {
-  const mappedData = {
-    // Sección 1: Datos Principales
+  return {
     datosPrincipales: {
       primer_nombre: data.primer_nombre || "",
       segundo_nombre: data.segundo_nombre || "",
@@ -213,8 +192,6 @@ const mapClienteDataToForm = (data) => {
       genero: data.genero || "",
       cobertura: data.cobertura || false
     },
-
-    // ✅ Sección 2: Status Migratorio (corrigiendo claves directas del modelo)
     statusMigratorio: {
       social: data.social || "",
       status: data.status || "",
@@ -224,12 +201,10 @@ const mapClienteDataToForm = (data) => {
       fecha_expedicion: data.fecha_expiracion || "",
       categoria: data.categoria || ""
     },
-
-    // Sección 3: Datos de Contacto
     datosContacto: {
-      telefono: data.telefono || "",
-      secundario: data.secundario || "",
-      whatsapp_num: data.whatsapp_num || "",
+      telefono: formatPhoneNumber(data.telefono || ""),
+      secundario: formatPhoneNumber(data.secundario || ""),
+      whatsapp_num: formatPhoneNumber(data.whatsapp_num || ""),
       nota: data.nota || "",
       cod_tel_1: data.cod_tel_1 || "",
       cod_tel_2: data.cod_tel_2 || "",
@@ -238,12 +213,9 @@ const mapClienteDataToForm = (data) => {
         whatsapp: data.whatsapp || false,
         telegram: data.telegram || false,
         texto_sms: data.texto_sms || false
-        
       },
       email: data.email || ""
     },
-
-    // Sección 4: Dirección
     direccion: {
       calle: data.calle || "",
       apto: data.apto || "",
@@ -252,10 +224,9 @@ const mapClienteDataToForm = (data) => {
       codigo_postal: data.codigo_postal || "",
       condado: data.condado || "",
       direccion: data.direccion || "",
-      dir_correspondencia: data.dir_correspondencia || ""
+      dir_correspondencia: data.dir_correspondencia || "",
+      copi_dir: false
     },
-
-    // Sección 5: Empleo e Ingreso
     datosEmpleo: {
       tipo_ingreso: data.tipo_ingreso || "",
       actividad_economica: data.actividad_economica || "",
@@ -271,10 +242,44 @@ const mapClienteDataToForm = (data) => {
       }
     }
   };
-
-  setFormData(mappedData);
 };
 
+const [initialFormData, setInitialFormData] = useState(null);
+
+useEffect(() => {
+  if (show && clienteData) {
+    const mapped = mapClienteDataToForm(clienteData);
+    setFormData(mapped);
+    setInitialFormData(JSON.parse(JSON.stringify(mapped))); // misma estructura
+    setError(null);
+    setSuccessMessage("");
+    setHasChanges(false);
+    setIsIngresoModificado(false);
+  }
+}, [show, clienteData]);
+
+
+// Extrae esta función para reutilizarla
+const mapClienteData = (data) => {
+  return {
+    datosPrincipales: {
+      primer_nombre: data.primer_nombre || "",
+      segundo_nombre: data.segundo_nombre || "",
+      apellidos: data.apellidos || "",
+      nombre_completo: data.nombre_completo || "",
+      fecha_nacimiento: data.fecha_nacimiento || "",
+      edad: data.edad || "",
+      genero: data.genero || "",
+    },
+    // ... el resto igual que ya lo tienes ...
+  };
+};
+useEffect(() => {
+  if (!initialFormData) return;
+
+  const formChanged = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  setHasChanges(formChanged);
+}, [formData, initialFormData]);
 
   const handleInputChange = (section, field, value) => {
     setFormData(prevData => {
@@ -313,7 +318,7 @@ const mapClienteDataToForm = (data) => {
       };
     });
     
-    setHasChanges(true);
+    
   };
 
   // Manejar cambios en campos anidados (como servicios_mensajeria)
@@ -328,10 +333,10 @@ const mapClienteDataToForm = (data) => {
         }
       }
     }));
-    setHasChanges(true);
+   
   };
 
-  // Preparar los datos para enviar
+ 
   // Preparar los datos para enviar
   const prepareDataForSubmit = () => {
     // Crear dirección concatenada como texto simple
@@ -414,6 +419,14 @@ const mapClienteDataToForm = (data) => {
       setSaving(false);
     }
   };
+
+  const handlePhoneInput = (section, field) => (e) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+    handleInputChange(section, field, formatted);
+  };
+  
 
   // Renderizar pestañas para la sección de datos principales
   const renderDatosPrincipalesTab = () => (
@@ -640,11 +653,17 @@ const mapClienteDataToForm = (data) => {
                     name="cod_tel_1"
                     onChange={(field, value) => handleInputChange("datosContacto", field, value)}
                   />
-              <Form.Control
-                type="text"
-                value={formData.datosContacto.telefono}
-                onChange={(e) => handleInputChange("datosContacto", "telefono", e.target.value)}
-              />
+             <Form.Control
+                      type="text"
+                      value={formData.datosContacto.telefono}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+
+                        handleInputChange("datosContacto", "telefono", formatted);
+                      }}
+                    />
             </InputGroup>
           </Form.Group>
         </Col>
@@ -660,8 +679,14 @@ const mapClienteDataToForm = (data) => {
               <Form.Control
                 type="text"
                 value={formData.datosContacto.secundario}
-                onChange={(e) => handleInputChange("datosContacto", "secundario", e.target.value)}
-              />
+                onChange={(e) => {
+                  const raw = e.target.value.replace(/\D/g, "");
+                  const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+                  const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+
+                  handleInputChange("datosContacto", "secundario", formatted);
+                }}
+               />
             </InputGroup>
           </Form.Group>
         </Col>
@@ -674,11 +699,18 @@ const mapClienteDataToForm = (data) => {
                         name="cod_tel_3"
                         onChange={(field, value) => handleInputChange("datosContacto", field, value)}
                       />
-              <Form.Control
-                type="text"
-                value={formData.datosContacto.whatsapp_num}
-                onChange={(e) => handleInputChange("datosContacto", "whatsapp_num", e.target.value)}
-              />
+                 <Form.Control
+                      type="text"
+                      value={formData.datosContacto.whatsapp_num}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+
+                        handleInputChange("datosContacto", "whatsapp_num", formatted);
+                      }}
+                    />
+
             </InputGroup>
           </Form.Group>
         </Col>
@@ -825,10 +857,16 @@ const renderDireccionTab = () => (
           <Form.Group>
             <Form.Label>Teléfono del Empleador</Form.Label>
             <Form.Control
-              type="text"
-              value={formData.datosEmpleo.telefono_empleador}
-              onChange={(e) => handleInputChange("datosEmpleo", "telefono_empleador", e.target.value)}
-            />
+                      type="text"
+                      value={formData.datosContacto.telefono_empleador}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+
+                        handleInputChange("datosContacto", "telefono_empleador", formatted);
+                      }}
+                    />
           </Form.Group>
         </Col>
       </Row>
@@ -840,18 +878,28 @@ const renderDireccionTab = () => (
             <Form.Select
                     value={formData.datosEmpleo.periodo_ingreso}
                     onChange={(e) => {
-                      setIsIngresoModificado(true);
-                      handleInputChange("datosEmpleo", "periodo_ingreso", e.target.value);
+                      const nuevoPeriodo = e.target.value;
+                      const ingreso = formData.datosEmpleo.ingreso_por_periodo;
+
+                      handleInputChange("datosEmpleo", "periodo_ingreso", nuevoPeriodo);
+
+                      if (ingreso && nuevoPeriodo) {
+                        const nuevoIngreso = calcularIngresoAnual(ingreso, nuevoPeriodo);
+                        handleInputChange("datosEmpleo", "ingreso_anual", nuevoIngreso); // Este sí marca hasChanges
+                      }
                     }}
                   >
-                    <option value="">Seleccione</option>
-                    <option value="HOUR">HOUR</option>
-                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
-                    <option value="WEEKLY">WEEKLY</option>
-                    <option value="BIWEEKLY">BIWEEKLY</option>
-                    <option value="MONTHLY">MONTHLY</option>
-                    <option value="ANNUAL">ANNUAL</option>
-                  </Form.Select>
+
+
+  <option value="">Seleccione</option>
+  <option value="HOUR">HOUR</option>
+  <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+  <option value="WEEKLY">WEEKLY</option>
+  <option value="BIWEEKLY">BIWEEKLY</option>
+  <option value="MONTHLY">MONTHLY</option>
+  <option value="ANNUAL">ANNUAL</option>
+</Form.Select>
+
 
           </Form.Group>
         </Col>
