@@ -304,10 +304,10 @@ const guardarCliente = async () => {
   // Crear una copia limpia del formData sin los guiones en los números de teléfono telefono_empleador
   const formattedData = {
     ...formData,
-    telefono: formData.telefono.replace(/\D/g, ""),
-    secundario: formData.secundario.replace(/\D/g, ""),
-    whatsapp_num: formData.whatsapp_num.replace(/\D/g, ""),
-    telefono_empleador: formData.telefono_empleador.replace(/\D/g, ""),
+    telefono: formData.telefono,
+    secundario: formData.secundario,
+    whatsapp_num: formData.whatsapp_num,
+    telefono_empleador: formData.telefono_empleador,
     cod_tel_1: selectedCode.telefono,
     cod_tel_2: selectedCode.secundario,
     cod_tel_3: selectedCode.whatsapp_num,

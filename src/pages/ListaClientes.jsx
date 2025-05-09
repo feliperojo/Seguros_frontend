@@ -263,6 +263,7 @@ const ListaClientes = () => {
     setToastMessage("Cliente actualizado con éxito");
     setToastVariant("success");
     setShowToast(true);
+    setShowEditModal(false);
   };
   
   // Función para obtener el parentesco del cliente

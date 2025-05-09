@@ -215,6 +215,9 @@ useEffect(() => {
               <Link to="/Herramientas/auditoria" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
                 <FaCogs /> Auditoria
               </Link>
+              <Link to="/Herramientas/operaciones" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
+                <FaCogs /> Centro de Operaciones
+              </Link>
             </div>
           )}
         </div>

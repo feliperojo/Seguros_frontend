@@ -10,6 +10,7 @@ import CountrySelectWithFlags from "../components/CountrySelect";
 import { NumericFormat } from 'react-number-format';
 import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
 
+import BitacoraModal from "../components/Tareas/BitacoraModal";
 
 
 
@@ -95,7 +96,9 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   const [loadingMediosPago, setLoadingMediosPago] = useState(false);
   const [errorMediosPago, setErrorMediosPago] = useState(null);
   const [isIngresoModificado, setIsIngresoModificado] = useState(false);
-
+  const [showBitacoraModal, setShowBitacoraModal] = useState(false);
+  const [dataToLog, setDataToLog] = useState(null);
+  
   const formatPhoneNumber = (value) => {
     if (!value) return "";
     const cleaned = value.replace(/\D/g, "");
@@ -103,7 +106,11 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     return match ? `${match[1]}-${match[2]}-${match[3]}` : value;
   };
   
-
+  const handleBitacoraSuccess = () => {
+    setShowBitacoraModal(false);
+    onHide(); // <-- Cierra el modal principal
+  };
+  
 // Añadir esta función para cargar los medios de pago
 const fetchMediosPago = async () => {
   if (!clienteId) return;
@@ -384,41 +391,40 @@ useEffect(() => {
   
     return flatData;
   };  // Enviar los datos actualizados
-  const handleSubmit = async () => {
-    setSaving(true);
-    setError(null);
-    setSuccessMessage("");
-    
+  const handleSubmit = () => {
+    setDataToLog({
+      cliente_id: clienteId,
+      grupo_familiar_id: clienteData?.grupo_familiar_id || null,
+      accion: "update",
+      entidad: "cliente",
+      entity_type: "cliente"
+    });
+    setShowBitacoraModal(true);
+  };
+  
+  const actualizarCliente = async () => {
+    const dataToSubmit = prepareDataForSubmit();
     try {
-      const dataToSubmit = prepareDataForSubmit();
-      console.log("Datos a enviar:", dataToSubmit);
-      
-      // Usar el método PUT para actualizar el cliente
       const response = await apiRequest(`cliente/${clienteId}`, "PUT", dataToSubmit);
-      console.log("Respuesta de actualización:", response);
-      
-      setSuccessMessage("Cliente actualizado con éxito");
-      setHasChanges(false);
-      
-      // Notificar al componente padre sobre la actualización
+      console.log("✅ Cliente actualizado correctamente:", response);
+  
       if (onClienteUpdated) {
+        // ⬅️ Aquí debes pasar el cliente actualizado (usa el response.data)
         onClienteUpdated({
           id: clienteId,
-          ...dataToSubmit
+          ...dataToSubmit,
+          nombre_completo: formData.datosPrincipales.nombre_completo
         });
       }
-      
-      // Cerrar el modal después de un breve retraso
-      setTimeout(() => {
-        onHide();
-      }, 1500);
-    } catch (err) {
-      console.error("Error al actualizar cliente:", err);
-      setError("No se pudo actualizar el cliente. " + (err.message || ""));
-    } finally {
-      setSaving(false);
+  
+      onHide(); // <- cerrar modal
+    } catch (error) {
+      console.error("❌ Error al actualizar el cliente:", error);
+      setError("No se pudo actualizar el cliente.");
     }
   };
+  
+  
 
   const handlePhoneInput = (section, field) => (e) => {
     const raw = e.target.value.replace(/\D/g, "");
@@ -1278,6 +1284,17 @@ const renderDireccionTab = () => (
           </>
         )}
       </Modal.Body>
+      {showBitacoraModal && (
+        <BitacoraModal
+            show={showBitacoraModal}
+            onHide={() => setShowBitacoraModal(false)}
+            data={dataToLog}
+            onSuccess={actualizarCliente} // <-- solo actualiza si bitácora fue exitosa
+          />
+
+
+)}
+
     </Modal>
   );
 };
