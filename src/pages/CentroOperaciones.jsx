@@ -19,8 +19,17 @@ const CentroOperaciones = () => {
   const [selectedTarea, setSelectedTarea] = useState(null);
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [logSeleccionado, setLogSeleccionado] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); // Puedes ajustar este valor
+  const [currentPageTareas, setCurrentPageTareas] = useState(1);
+  const [itemsPerPageTareas] = useState(10);
 
-
+  
+  useEffect(() => {
+    if (key === "bitacora") setCurrentPage(1);
+    if (key === "tareas") setCurrentPageTareas(1);
+  }, [key]);
+  
   useEffect(() => {
     setLoading(true);
     Promise.all([
@@ -42,7 +51,31 @@ const CentroOperaciones = () => {
       default: return <Badge bg="secondary">{status}</Badge>;
     }
   };
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentLogs = logs.slice(indexOfFirstItem, indexOfLastItem);
+  
+  const totalPages = Math.ceil(logs.length / itemsPerPage);
+  
+  const handlePageChange = (pageNumber) => {
+    if (pageNumber >= 1 && pageNumber <= totalPages) {
+      setCurrentPage(pageNumber);
+    }
+  };
 
+  const indexOfLastTarea = currentPageTareas * itemsPerPageTareas;
+const indexOfFirstTarea = indexOfLastTarea - itemsPerPageTareas;
+const currentTareas = tareas.slice(indexOfFirstTarea, indexOfLastTarea);
+
+const totalPagesTareas = Math.ceil(tareas.length / itemsPerPageTareas);
+
+const handlePageChangeTareas = (pageNumber) => {
+  if (pageNumber >= 1 && pageNumber <= totalPagesTareas) {
+    setCurrentPageTareas(pageNumber);
+  }
+};
+
+  
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -70,8 +103,8 @@ const CentroOperaciones = () => {
                 </tr>
               </thead>
               <tbody>
-                {logs.map((log) => (
-                  <tr key={log.id}>
+              {currentLogs.map((log) => (
+               <tr key={log.id}>
                     <td>{new Date(log.created_at).toLocaleString()}</td>
                     <td>{log.user?.name}</td>
                     <td>
@@ -122,7 +155,7 @@ const CentroOperaciones = () => {
                 </tr>
               </thead>
               <tbody>
-                {tareas.map((t) => (
+              {currentTareas.map((t) => (
                   <tr key={t.id}>
                     <td>{new Date(t.created_at).toLocaleString()}</td>
                     <td>{t.log.entity_type} #{t.log.entity_id}</td>
@@ -151,6 +184,63 @@ const CentroOperaciones = () => {
           )}
         </Tab>
       </Tabs>
+      {key === "bitacora" && (
+  <div className="d-flex justify-content-center mt-3">
+    <nav>
+      <ul className="pagination">
+        <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+          <button className="page-link" onClick={() => handlePageChange(currentPage - 1)}>
+            «
+          </button>
+        </li>
+
+        {[...Array(totalPages)].map((_, i) => (
+          <li key={i + 1} className={`page-item ${currentPage === i + 1 ? "active" : ""}`}>
+            <button className="page-link" onClick={() => handlePageChange(i + 1)}>
+              {i + 1}
+            </button>
+          </li>
+        ))}
+
+        <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+          <button className="page-link" onClick={() => handlePageChange(currentPage + 1)}>
+            »
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+)}
+
+{key === "tareas" && (
+  <div className="d-flex justify-content-center mt-3">
+    <nav>
+      <ul className="pagination">
+        <li className={`page-item ${currentPageTareas === 1 ? "disabled" : ""}`}>
+          <button className="page-link" onClick={() => handlePageChangeTareas(currentPageTareas - 1)}>
+            «
+          </button>
+        </li>
+
+        {[...Array(totalPagesTareas)].map((_, i) => (
+          <li key={i + 1} className={`page-item ${currentPageTareas === i + 1 ? "active" : ""}`}>
+            <button className="page-link" onClick={() => handlePageChangeTareas(i + 1)}>
+              {i + 1}
+            </button>
+          </li>
+        ))}
+
+        <li className={`page-item ${currentPageTareas === totalPagesTareas ? "disabled" : ""}`}>
+          <button className="page-link" onClick={() => handlePageChangeTareas(currentPageTareas + 1)}>
+            »
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
+)}
+
+
 
       <NuevaTareaModal show={showModal} onHide={() => setShowModal(false)} categoria="tarea_manual" />
       {selectedTarea && (

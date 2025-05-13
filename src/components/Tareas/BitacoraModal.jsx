@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
-const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
+const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
 
   const [nota, setNota] = useState("");
   const [concepto, setConcepto] = useState("");
@@ -13,9 +13,8 @@ const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
   const [guardando, setGuardando] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const userIdFromSession = 1; // ⚠️ Ajusta este valor con la lógica de sesión real
+  const userIdFromSession = 1; // ⚠️ Reemplaza esto con ID real del usuario
 
-  // Cargar conceptos y usuarios al mostrar el modal
   useEffect(() => {
     if (show) {
       fetchConceptos();
@@ -45,7 +44,7 @@ const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
 
   const handleGuardar = async () => {
     if (!nota.trim() || !concepto.trim()) {
-      setError("Por favor completa todos los campos.");
+      setError("Por favor completa todos los campos obligatorios.");
       return;
     }
 
@@ -64,17 +63,14 @@ const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
       };
 
       await apiRequest("bitacora_operativa/create", "POST", payload);
-      setSuccess(true);
-      
-      setTimeout(() => {
-        setNota("");
-        setConcepto("");
-        setAsignadoA("");
-        setSuccess(false);
-        setGuardando(false);
-      
-        if (onSuccess) onSuccess(); // ⬅️ Aquí llamamos a actualizar el cliente
-      }, 1000);
+
+      if (typeof onSaved === "function") {
+        onSaved(); // usado en Grupofamiliar
+      } else if (typeof onSuccess === "function") {
+        onSuccess(); // usado en EditClienteModal
+      } else if (typeof onHide === "function") {
+        onHide(true); // fallback tradicional
+      }
       
     } catch (err) {
       console.error("Error al guardar en bitácora:", err);
@@ -85,14 +81,12 @@ const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
   };
 
   return (
-    <Modal show={show} onHide={onHide} centered backdrop="static">
+    <Modal show={show} onHide={() => onHide(false)} centered backdrop="static">
       <Modal.Header closeButton>
         <Modal.Title>Registro en Bitácora</Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {error && <Alert variant="danger">{error}</Alert>}
-        {success && <Alert variant="success">Registro exitoso</Alert>}
-
         <Form.Group className="mb-3">
           <Form.Label>Concepto</Form.Label>
           <Form.Select
@@ -136,7 +130,7 @@ const BitacoraModal = ({ show, onHide, data, onSuccess }) => {
       </Modal.Body>
 
       <Modal.Footer>
-        <Button variant="secondary" onClick={onHide} disabled={guardando}>
+        <Button variant="secondary" onClick={() => onHide(false)} disabled={guardando}>
           Cancelar
         </Button>
         <Button variant="primary" onClick={handleGuardar} disabled={guardando}>

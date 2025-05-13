@@ -532,7 +532,7 @@ useEffect(() => {
       <Row className="mb-3">
         <Col md={6}>
         <Form.Group>
-  <Form.Label>Social</Form.Label>
+              <Form.Label>Social</Form.Label>
               <Form.Control
                 type="text"
                 value={formData.statusMigratorio.social}
@@ -549,13 +549,11 @@ useEffect(() => {
           <Form.Group>
             <Form.Label>Status</Form.Label>
             <Form.Select
-              type="text"
-              value={formData.statusMigratorio.status}
-              onChange={(e) => {
-                const formatted = formatsocial(e.target.value);
-                handleInputChange("statusMigratorio", "status", formatted);}}
-                maxLength={11}
-            >
+                  value={formData.statusMigratorio.status}
+                  onChange={(e) => handleInputChange("statusMigratorio", "status", e.target.value)}
+                >
+
+
               <option value="">Seleccione</option>
               <option value="P. TRABAJO">P. TRABAJO</option>
                   <option value="RESIDENTE">RESIDENTE</option>

@@ -10,6 +10,7 @@ import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes';
 import Swal from 'sweetalert2';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
+import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta si es necesario
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
@@ -104,10 +105,14 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const totalSteps = 2;
 
   const [conteoMiembros, setConteoMiembros] = useState(0);
-const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
+  const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
 
-const [totalMiembros, setTotalMiembros] = useState(0);
-const [totalYes, setTotalYes] = useState(0);
+  const [totalMiembros, setTotalMiembros] = useState(0);
+  const [totalYes, setTotalYes] = useState(0);
+  const [showBitacoraModal, setShowBitacoraModal] = useState(false);
+  const [bitacoraData, setBitacoraData] = useState(null);
+  const [pendingSubmission, setPendingSubmission] = useState(false);
+  const [shouldNavigateAfterSubmit, setShouldNavigateAfterSubmit] = useState(false);
 
 
   const [coverageGroups, setCoverageGroups] = useState([]);
@@ -740,6 +745,8 @@ const [totalYes, setTotalYes] = useState(0);
   };
 
   const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+  
     e.preventDefault();
     setAlert({ type: "", message: "", visible: false });
   
@@ -820,15 +827,18 @@ const [totalYes, setTotalYes] = useState(0);
   
       console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
   
-      Swal.fire({
-        title: mode === "edit" ? "¡Actualización Exitosa!" : "¡Registro Exitoso!",
-        text: mode === "edit" ? "El grupo familiar ha sido actualizado." : "La póliza de grupo familiar ha sido creada.",
-        icon: "success",
-        confirmButtonText: "Aceptar",
-        timer: 4000
-      }).then(() => {
-        navigate('/grupofamiliar/lista');
-      });
+     
+      if (mode === "edit") {
+        setBitacoraData({
+          accion: "update",
+          entity_type: "grupo_familiar",
+          grupo_familiar_id: id,
+          cliente_id: null
+        });
+        setShowBitacoraModal(true);
+        return; // ⬅️ Evita la navegación automática
+      }
+      
   
       if (mode !== "edit") {
         setPolicyData(INITIAL_POLICY_STATE);
@@ -1449,18 +1459,45 @@ const [totalYes, setTotalYes] = useState(0);
           </Button>
         ) : (
           <Button 
-          variant="success" 
-          className="ms-auto" 
-          onClick={handleSubmit}
-          disabled={!isPolicyValid()}
-        >
-          <i className="bi bi-save me-2"></i>
-          {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
-        </Button>
+              variant="success" 
+              className="ms-auto" 
+              onClick={handleSubmit}
+
+              disabled={!isPolicyValid()}
+            >
+              <i className="bi bi-save me-2"></i>
+              {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
+            </Button>
+
         
         
         
         )}
+
+        
+              {showBitacoraModal && (
+                <BitacoraModal
+                  show={showBitacoraModal}
+                  onHide={() => setShowBitacoraModal(false)}
+                  data={bitacoraData}
+                  onSaved={() => {
+                    setShowBitacoraModal(false);
+
+                    Swal.fire({
+                      title: "¡Actualización Exitosa!",
+                      text: "El grupo familiar ha sido actualizado.",
+                      icon: "success",
+                      confirmButtonText: "Aceptar",
+                      timer: 4000
+                    }).then(() => {
+                      navigate('/grupofamiliar/lista');
+                    });
+                  }}
+                />
+              )}
+
+
+
       </div>
       
       {/* Modal for adding client (nuevo o existente) */}
