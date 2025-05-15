@@ -609,16 +609,62 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   };
   
 
-  const removeMemberFromGroup = (groupId, memberId) => {
-    const updatedGroups = coverageGroups.map((group) =>
-      group.id === groupId
-        ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
-        : group
-    );
-
-    setCoverageGroups(updatedGroups);
-    recalculateTotalIncome(updatedGroups);
+  const removeMemberFromGroup = async (groupId, memberId) => {
+    try {
+      const group = coverageGroups.find(g => g.id === groupId);
+      if (!group) throw new Error("Grupo no encontrado");
+  
+      const member = group.members.find(m => m.id === memberId);
+      if (!member) throw new Error("Miembro no encontrado");
+  
+      if (!member.cobertura_id) {
+        // Solo frontend
+        const updatedGroups = coverageGroups.map((group) =>
+          group.id === groupId
+            ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+            : group
+        );
+        setCoverageGroups(updatedGroups);
+        recalculateTotalIncome(updatedGroups);
+        return;
+      }
+  
+      const response = await GrupoFamiliarService.deleteCobertura(member.cobertura_id);
+      console.log("Respuesta backend deleteCobertura:", response);
+      
+      // Verificar si la respuesta tiene message
+      if (response && response.message) {
+        // Eliminación exitosa
+        const updatedGroups = coverageGroups.map((group) =>
+          group.id === groupId
+            ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+            : group
+        );
+        setCoverageGroups(updatedGroups);
+        recalculateTotalIncome(updatedGroups);
+      
+        setAlert({
+          type: "success",
+          message: "Cobertura eliminada correctamente.",
+          visible: true,
+        });
+        setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+      } else {
+        throw new Error("La eliminación no fue confirmada por el servidor.");
+      }
+      
+  
+    } catch (error) {
+      console.error("Error al eliminar cobertura:", error);
+      setAlert({
+        type: "danger",
+        message: `Error al eliminar cobertura: ${error.message}`,
+        visible: true,
+      });
+    }
   };
+  
+  
 
   const updateMemberData = (groupId, memberId, field, value) => {
     setCoverageGroups((prevGroups) => {

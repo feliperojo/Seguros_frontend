@@ -3,6 +3,12 @@ import apiRequest from './api';
 
 const GrupoFamiliarService = {
 
+  deleteCobertura: async (coberturaId) => {
+    console.log("entramos a liminar cobertura",coberturaId)
+    if (!coberturaId) throw new Error("Cobertura ID es requerido para eliminar.");
+    return await apiRequest(`cobertura/${coberturaId}`, "DELETE");
+  },
+
   create: async (grupoFamiliarData) => {
     console.log("antes de enviar a create",grupoFamiliarData)
     return await apiRequest("grupo_familiar/create", "POST", grupoFamiliarData);
@@ -47,7 +53,7 @@ const GrupoFamiliarService = {
             grupo_familiar_id: grupoFamiliarId,
             cobertura_tipo: group.tipoProducto || "SEGURO MEDICO OBAMA"
           };
-          console.log("antes de enviar", grupoFamiliarId);
+          
           allMemberPromises.push(apiRequest("cobertura/create", "POST", coberturaData));
         }
       });
