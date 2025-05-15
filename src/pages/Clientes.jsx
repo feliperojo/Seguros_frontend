@@ -9,6 +9,7 @@ import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes'
 import idiomas  from '../services/idiomas.js';
 import FormDireccion from "../components/FormDireccion";
+import BitacoraModal from "../components/Tareas/BitacoraModal";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -69,7 +70,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [clienteCreado, setClienteCreado] = useState(false);
   const [tiposIngreso, setTiposIngreso] = useState([]);
   const [showModal, setShowModal] = useState(isModal); // Inicializar con isModal
-
+  const [showBitacora, setShowBitacora] = useState(false);
+  const [bitacoraData, setBitacoraData] = useState(null);
+  const [logId, setLogId] = useState(null);
 
   
   // En la inicialización de selectedCode en tu componente Clientes
@@ -284,7 +287,7 @@ const calcularIngresoAnual = (monto, periodo) => {
   };
 
  // Función para guardar cliente (ahora llamada en paso 5)
-const guardarCliente = async () => {
+ const guardarCliente = async () => {
   setAlert({ type: "", message: "", visible: false });
 
   // Encuentra el código numérico del país según el ISO
@@ -295,13 +298,8 @@ const guardarCliente = async () => {
     }
     return country ? country.code.replace("+", "") : "";
   };
-  
-  
-  
-  
 
-  
-  // Crear una copia limpia del formData sin los guiones en los números de teléfono telefono_empleador
+  // Crear una copia limpia del formData
   const formattedData = {
     ...formData,
     telefono: formData.telefono,
@@ -311,65 +309,70 @@ const guardarCliente = async () => {
     cod_tel_1: selectedCode.telefono,
     cod_tel_2: selectedCode.secundario,
     cod_tel_3: selectedCode.whatsapp_num,
-    
-    
   };
-  
-  // Crear el JSON con la estructura deseada
+
   let jsonFinal = {
-    "clientes": [formattedData] // Insertar el JSON dentro de un array
+    clientes: [formattedData],
   };
- 
+
   console.log("📦 Datos preparados para enviar:", formattedData);
 
   try {
     const response = await apiRequest("cliente/create", "POST", jsonFinal);
 
     if (response?.message && response.message.includes("cliente creado exitosamente")) {
-     
-      
-      // Guardamos el ID del cliente
-      if (response.clientes && response.clientes[0] && response.clientes[0].id) {
-        setClienteId(response.clientes[0].id);
+      const newId = response.clientes?.[0]?.id;
+
+      if (newId) {
+        setClienteId(newId);
         setClienteCreado(true);
-        
+
+        // 👉 Actualiza el log temporal con el cliente_id si logId está definido
+        if (logId) {
+          try {
+            await apiRequest(`bitacora_operativa/${logId}/update`, "PUT", {
+              cliente_id: newId,
+            });
+            console.log(`✅ Bitácora actualizada con cliente_id: ${newId}`);
+          } catch (err) {
+            console.warn("⚠️ No se pudo actualizar la bitácora con el cliente_id", err);
+          }
+        }
+
         if (onClienteCreado) {
           onClienteCreado(response.clientes[0]);
-          // IMPORTANTE: Ya no hacemos return aquí, continuamos con el resto del código
         }
       }
 
-      // Show success alert
       setAlert({
-        type: "success", 
-        message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.", 
-        visible: true
-        
+        type: "success",
+        message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.",
+        visible: true,
       });
+
       setCurrentStep(6);
-      // Avanzar al paso 6 automáticamente solo si no estamos en un modal
+
       if (currentStep === 6 && showModal) {
-        setShowModal(true); // Asegúrate de que se mantenga abierto para el paso 6
+        setShowModal(true);
       }
-      
-      
-      
 
     } else {
       setAlert({
-        type: "danger", 
-        message: "Error al crear cliente: " + (response.message || "Error desconocido"), 
-        visible: true
+        type: "danger",
+        message: "Error al crear cliente: " + (response.message || "Error desconocido"),
+        visible: true,
       });
     }
+
   } catch (err) {
     setAlert({
-      type: "danger", 
-      message: "❌ Error al crear cliente: " + err.message, 
-      visible: true
+      type: "danger",
+      message: "❌ Error al crear cliente: " + err.message,
+      visible: true,
     });
   }
 };
+
   // Función para reiniciar el formulario
   const reiniciarFormulario = () => {
     setFormData(INITIAL_FORM_STATE);
@@ -947,31 +950,75 @@ const guardarCliente = async () => {
           </button>
           
           {currentStep < 5 ? (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={nextStep}
-            >
-              Siguiente
-            </button>
-          ) : currentStep === 5 ? (
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={guardarCliente}
-            >
-              Guardar Cliente y Continuar
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-success"
-              onClick={reiniciarFormulario}
-            >
-              Finalizar y Crear Nuevo Cliente
-            </button>
-          )}
+  <button
+    type="button"
+    className="btn btn-primary"
+    onClick={nextStep}
+  >
+    Siguiente
+  </button>
+) : currentStep === 5 ? (
+  <button
+    type="button"
+    className="btn btn-success"
+    onClick={async () => {
+      try {
+        const tempLog = await apiRequest("bitacora_operativa/log_temp", "POST", {
+          action_type: "create",
+          entity_type: "cliente",
+          note: "(registro temporal)", // ✅ evitar que note sea null
+          
+        });
+        setLogId(tempLog.id);
+
+        if (tempLog && tempLog.id) {
+          setLogId(tempLog.id);
+          setBitacoraData({
+            accion: "create",
+            note: "note",
+            entity_type: "cliente",
+            logId: tempLog.id,
+            cliente_id: clienteId
+          });
+          setShowBitacora(true);
+        } else {
+          setAlert({ type: "danger", message: "No se pudo iniciar bitácora.", visible: true });
+        }
+      } catch (err) {
+        console.error("Error iniciando bitácora temporal:", err);
+        setAlert({ type: "danger", message: "Error al preparar la bitácora.", visible: true });
+      }
+    }}
+  >
+    Guardar Cliente y Continuar
+  </button>
+) : (
+  <button
+    type="button"
+    className="btn btn-success"
+    onClick={reiniciarFormulario}
+  >
+    Finalizar y Crear Nuevo Cliente
+  </button>
+)}
+
         </div>
+        {showBitacora && logId && (
+  <BitacoraModal
+    show={showBitacora}
+    onHide={(wasSaved) => {
+      setShowBitacora(false);
+      if (wasSaved) {
+        guardarCliente();
+      } else {
+        apiRequest(`bitacora_operativa/delete-ultima`, "DELETE");
+      }
+    }}
+    data={bitacoraData}
+    logId={logId}
+  />
+)}
+
     </div>
   );
 };

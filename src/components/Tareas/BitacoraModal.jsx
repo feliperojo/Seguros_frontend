@@ -2,8 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
-const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
-
+const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [nota, setNota] = useState("");
   const [concepto, setConcepto] = useState("");
   const [asignadoA, setAsignadoA] = useState("");
@@ -11,7 +10,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [error, setError] = useState(null);
   const [guardando, setGuardando] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [bitacoraGuardada, setBitacoraGuardada] = useState(false);
 
   const userIdFromSession = 1; // ⚠️ Reemplaza esto con ID real del usuario
 
@@ -47,31 +46,29 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
       setError("Por favor completa todos los campos obligatorios.");
       return;
     }
-
+  
     setGuardando(true);
     setError(null);
-
+  
     try {
       const payload = {
-        ...data,
         note: nota,
         concept_id: concepto,
-        assign_to_user_id: asignadoA,
-        action_type: data?.accion || null,
-        entity_type: data?.entity_type || null,
-        creado_por: userIdFromSession,
+        assign_to_user_id: asignadoA || null,
+        action_type: data?.accion || "create",
+        entity_type: data?.entity_type || "cliente",
+        ...(data?.cliente_id ? { cliente_id: data.cliente_id } : {})  // solo si existe y no es null
       };
-
-      await apiRequest("bitacora_operativa/create", "POST", payload);
-
-      if (typeof onSaved === "function") {
-        onSaved(); // usado en Grupofamiliar
-      } else if (typeof onSuccess === "function") {
-        onSuccess(); // usado en EditClienteModal
-      } else if (typeof onHide === "function") {
-        onHide(true); // fallback tradicional
-      }
-      
+  
+      const method = logId ? "PUT" : "POST";
+      const endpoint = logId
+        ? `bitacora_operativa/${logId}/update`
+        : `bitacora_operativa/create`;
+  console.log("antes de pos y put ",payload)
+      await apiRequest(endpoint, method, payload);
+      setBitacoraGuardada(true);
+  
+      onHide(true);
     } catch (err) {
       console.error("Error al guardar en bitácora:", err);
       setError("Ocurrió un error al guardar en la bitácora.");
@@ -79,9 +76,25 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
       setGuardando(false);
     }
   };
+  
+
+  const handleClose = async () => {
+    if (!bitacoraGuardada && logId) {
+      try {
+        await apiRequest("bitacora_operativa/delete-ultima", "DELETE");
+
+        console.log("Bitácora eliminada correctamente al cancelar.");
+      } catch (err) {
+        console.warn("No se pudo eliminar la bitácora temporal:", err);
+      }
+    }
+    if (typeof onHide === "function") {
+      onHide(false);
+    }
+  };
 
   return (
-    <Modal show={show} onHide={() => onHide(false)} centered backdrop="static">
+    <Modal show={show} onHide={handleClose} centered backdrop="static">
       <Modal.Header closeButton>
         <Modal.Title>Registro en Bitácora</Modal.Title>
       </Modal.Header>
@@ -130,7 +143,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data }) => {
       </Modal.Body>
 
       <Modal.Footer>
-        <Button variant="secondary" onClick={() => onHide(false)} disabled={guardando}>
+        <Button variant="secondary" onClick={handleClose} disabled={guardando}>
           Cancelar
         </Button>
         <Button variant="primary" onClick={handleGuardar} disabled={guardando}>

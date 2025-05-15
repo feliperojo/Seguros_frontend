@@ -1283,12 +1283,19 @@ const renderDireccionTab = () => (
         )}
       </Modal.Body>
       {showBitacoraModal && (
-        <BitacoraModal
-            show={showBitacoraModal}
-            onHide={() => setShowBitacoraModal(false)}
-            data={dataToLog}
-            onSuccess={actualizarCliente} // <-- solo actualiza si bitácora fue exitosa
-          />
+      <BitacoraModal
+      show={showBitacoraModal}
+      data={dataToLog}
+      logId={dataToLog?.logId} // si lo usas
+      onHide={async (wasSaved) => {
+        setShowBitacoraModal(false);
+        if (wasSaved) {
+          await actualizarCliente(); // 🟢 actualizar cliente
+          onHide(); // 🟢 cerrar modal de edición
+        }
+      }}
+    />
+    
 
 
 )}
