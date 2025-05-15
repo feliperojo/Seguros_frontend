@@ -64,11 +64,19 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
       const endpoint = logId
         ? `bitacora_operativa/${logId}/update`
         : `bitacora_operativa/create`;
-  console.log("antes de pos y put ",payload)
+  
       await apiRequest(endpoint, method, payload);
       setBitacoraGuardada(true);
   
-      onHide(true);
+      // Llama a onSaved si está definido, para que el padre pueda reaccionar al guardado
+      if (typeof onSaved === "function") {
+        onSaved();
+      }
+  
+      // Luego cerrar el modal
+      if (typeof onHide === "function") {
+        onHide(true);
+      }
     } catch (err) {
       console.error("Error al guardar en bitácora:", err);
       setError("Ocurrió un error al guardar en la bitácora.");
@@ -76,6 +84,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
       setGuardando(false);
     }
   };
+  
   
 
   const handleClose = async () => {

@@ -33,14 +33,15 @@ const CentroOperaciones = () => {
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      apiRequest("bitacora_operativa", "GET"),      // Debes implementar este endpoint
+      apiRequest("bitacora_operativa", "GET"),
       apiRequest("tareas_operativas", "GET")
     ])
-      .then(([logsData, tareasData]) => {
-        setLogs(logsData);
-        setTareas(tareasData);
-      })
-      .finally(() => setLoading(false));
+    .then(([logsData, tareasData]) => {
+      setLogs(Array.isArray(logsData) ? logsData : (logsData.data || []));
+      setTareas(Array.isArray(tareasData) ? tareasData : (tareasData.data || []));
+    })
+    .finally(() => setLoading(false));
+    
   }, [showModal]); // Volver a cargar cuando se cierra modal
 
   const statusBadge = (status) => {
