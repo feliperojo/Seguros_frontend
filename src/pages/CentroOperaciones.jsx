@@ -230,11 +230,12 @@ const CentroOperaciones = () => {
             <Table striped bordered hover size="sm">
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Entidad</th>
+                  <th>Fecha Tarea</th>
+                  <th>Cliente</th>
                   <th>Concepto</th>
                   <th>Estado</th>
-                  <th>Nota</th>
+                  <th>Tarea</th>
+                  <th>Respuesta</th>
                   <th>Acción</th>
                 </tr>
               </thead>
@@ -242,9 +243,14 @@ const CentroOperaciones = () => {
                 {(tareasData.data || []).map((t) => (
                   <tr key={t.id}>
                     <td>{new Date(t.created_at).toLocaleString()}</td>
-                    <td>{t.log.entity_type}</td>
+                    <td>
+                        {t.log.cliente
+                          ? `${t.log.cliente.nombre_completo} (ID: ${t.log.cliente.id})`
+                          : `${t.log.entity_type} #${t.log.entity_id}`}
+                      </td>
                     <td>{t.log.concept?.name}</td>
                     <td>{statusBadge(t.status)}</td>
+                    <td>{t.log.note || "---"}</td>
                     <td>{t.response_note || "---"}</td>
                     <td>
                       {t.status !== "completed" && (
