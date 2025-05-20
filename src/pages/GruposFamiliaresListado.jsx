@@ -4,13 +4,14 @@ import {
     Form, InputGroup, Dropdown, Modal
 } from "react-bootstrap";
 import { 
-    FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, 
+    FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
     FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../services/api";
 
+import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 
 
 
@@ -23,7 +24,9 @@ const GruposFamiliaresListado = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
-  
+  const [showRetiroModal, setShowRetiroModal] = useState(false);
+const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
+
   // Estados para modales
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -31,7 +34,11 @@ const GruposFamiliaresListado = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
 
-
+  const handleOpenRetiroModal = (grupo) => {
+    setGrupoParaRetiro(grupo);
+    setShowRetiroModal(true);
+  };
+  
   // Cargar grupos al montar el componente o cuando cambia el estado seleccionado
   useEffect(() => {
     fetchGrupos();
@@ -356,6 +363,16 @@ const getCompaniaNombre = (grupo) => {
                               >
                                 <FaTrashAlt />
                               </Button>
+                              <Button 
+                                  variant="outline-secondary" 
+                                  size="sm"
+                                  onClick={() => handleOpenRetiroModal(grupo)}
+                                  title="Retiros y cancelación"
+                                >
+                                  <FaCog />
+                                </Button>
+
+
                             </div>
                           </td>
                         </tr>
@@ -602,6 +619,21 @@ const getCompaniaNombre = (grupo) => {
 
 
       </Modal>
+              <RetiroCancelacionModal 
+          show={showRetiroModal}
+          onHide={() => setShowRetiroModal(false)}
+          grupoFamiliar={grupoParaRetiro}
+          onSave={(updatedGrupo) => {
+            // Actualizar el grupo en la lista
+            setGrupos(prev =>
+              prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
+            );
+            setShowRetiroModal(false);
+          }}
+        />
+
+
+      
     </Container>
   );
 };

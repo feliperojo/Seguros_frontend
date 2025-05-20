@@ -344,7 +344,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         precio: parseFloat(cob.precio) || 0,
         pagador_id: cob.pagador_id || "",
         codigo_poliza: cob.codigo_poliza || "",
-        parentesco: cob.parentesco || ""
+        parentesco: cob.parentesco || "",
+        activo: cob.fecha_cancelacion ? false : true,
       };
   
       grupos[tipo].members.push(member);
@@ -630,7 +631,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       }
   
       const response = await GrupoFamiliarService.deleteCobertura(member.cobertura_id);
-      console.log("Respuesta backend deleteCobertura:", response);
+     
       
       // Verificar si la respuesta tiene message
       if (response && response.message) {
@@ -672,9 +673,19 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         group.id === groupId
           ? {
               ...group,
-              members: group.members.map((member) =>
-                member.id === memberId ? { ...member, [field]: value } : member
-              ),
+              members: group.members.map((member) => {
+                if (member.id === memberId) {
+                  const updatedMember = { ...member, [field]: value };
+  
+                  // Si se está actualizando fecha_cancelacion, actualizamos el campo "activo"
+                  if (field === "fecha_cancelacion") {
+                    updatedMember.activo = !value; // Si tiene fecha de cancelación, desactivamos
+                  }
+  
+                  return updatedMember;
+                }
+                return member;
+              }),
             }
           : group
       );
@@ -689,6 +700,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       return updatedGroups;
     });
   };
+  
+  
+  
 
   const openEditModal = (groupId, memberId) => {
     const group = coverageGroups.find(g => g.id === groupId);
@@ -852,7 +866,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               estado_cobertura: member.estado_cobertura || "",
               pagador_id: member.pagador_id || "",
               cliente_id: member.id,
-              cobertura_tipo: group.cobertura_tipo
+              cobertura_tipo: group.cobertura_tipo,
+              activo: member.activo
             }))
           )
         };
