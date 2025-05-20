@@ -9,12 +9,19 @@ const DetalleBitacoraModal = ({ show, onHide, log }) => {
   useEffect(() => {
     if (show && log?.task?.id) {
       setLoadingHistorial(true);
+      console.log("Cargando comentarios para tarea con ID:", log.task.id);
       apiRequest(`tareas_operativas/${log.task.id}/comentarios`, "GET")
-        .then((data) => setHistorial(data || []))
-        .catch(() => setHistorial([]))
+        .then((data) => {
+          console.log("Historial de comentarios cargado:", data); 
+          setHistorial(data || []);
+        })
+        .catch((err) => {
+          console.error("Error cargando comentarios:", err);
+          setHistorial([]);
+        })
         .finally(() => setLoadingHistorial(false));
     }
-  }, [show, log]);
+  }, [show, log?.task?.id]);
 
   if (!log) return null;
 

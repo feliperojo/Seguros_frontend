@@ -52,13 +52,16 @@ const ResponderTareaModal = ({ show, onHide, tarea }) => {
   const handleCompletar = async () => {
     setLoading(true);
     try {
-      // Guardar comentario si es diferente del último
-      if (comentarios.length === 0 || comentarios[comentarios.length - 1].comment !== responseNote) {
+      // Guardar comentario si es diferente del último y no está vacío
+      if (
+        responseNote.trim() !== "" &&
+        (comentarios.length === 0 || comentarios[comentarios.length - 1].comment !== responseNote)
+      ) {
         await apiRequest(`tareas_operativas/${tarea.id}/comentarios`, "POST", {
           comment: responseNote,
         });
       }
-      // Marcar como completada
+      // Marcar como completada SIN enviar body
       await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT");
       onHide(true);
     } catch {
@@ -67,6 +70,7 @@ const ResponderTareaModal = ({ show, onHide, tarea }) => {
       setLoading(false);
     }
   };
+  
 
   return (
     <Modal show={show} onHide={() => onHide(false)} size="lg" centered>
