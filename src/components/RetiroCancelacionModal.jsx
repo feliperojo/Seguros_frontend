@@ -11,50 +11,83 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
-      const coberturasIniciales = grupoFamiliar.coberturas.map(c => ({
+      // Filtrar solo coberturas activas
+      const coberturasActivas = grupoFamiliar.coberturas.filter(
+        c => c.estado_cobertura === "Activa" || c.activo === true
+      );
+  
+      const coberturasIniciales = coberturasActivas.map(c => ({
         ...c,
         fecha_cancelacion: c.fecha_cancelacion || "",
         fecha_retiro: c.fecha_retiro || "",
         nota_cancel: c.nota_cancel || "",
       }));
+  
       setCoberturas(coberturasIniciales);
       setPersonasTaxes(grupoFamiliar.personas_taxes || 0);
       setPersonasCobertura(grupoFamiliar.personas_cobertura || 0);
     }
   }, [grupoFamiliar]);
   
-
+  
   const handleChange = (index, field, value) => {
     const nuevasCoberturas = [...coberturas];
+  
     nuevasCoberturas[index][field] = value;
+  
+    if (field === "fecha_cancelacion") {
+      nuevasCoberturas[index]["vigente"] = value ? false : true;
+    }
+  
+    if (field === "activo" && value === true) {
+      nuevasCoberturas[index]["fecha_retiro"] = ""; // Resetear retiro si activa
+    }
+  
     setCoberturas(nuevasCoberturas);
   };
+  
+  
+  
+  
 
   const handleSave = async () => {
     setLoading(true);
     try {
-      // Actualizar coberturas
       for (const cobertura of coberturas) {
-        const response = await apiRequest(`cobertura/${cobertura.id}`, "PUT", {
-            fecha_cancelacion: cobertura.fecha_cancelacion || null,
-            fecha_retiro: cobertura.fecha_retiro || null,
-            nota_cancel: cobertura.nota_cancel || null, // usa el nombre correcto del campo aquí
-          });
+        const payload = {
+          fecha_cancelacion: cobertura.fecha_cancelacion || null,
+          fecha_retiro: cobertura.fecha_retiro || null,
+          nota_cancel: cobertura.nota_cancel?.trim() || null,
+          activo: cobertura.activo ?? false,
+          vigente: cobertura.vigente ?? true, // 👈 Asegúrate que se envíe
+        };
+        
+  
+        console.log(`📤 Enviando cobertura ID: ${cobertura.id}`);
+        console.table(payload);
+  
+        const response = await apiRequest(`cobertura/${cobertura.id}`, "PUT", payload);
         console.log(`✅ Cobertura actualizada (ID ${cobertura.id}):`, response);
       }
   
-      // Actualizar grupo (solo una vez)
-
-  
+      // 👉 Actualizar grupo familiar
+      const grupoPayload = {
+        personas_taxes: personasTaxes,
+        personas_cobertura: personasCobertura,
+      };
+      const grupoResponse = await apiRequest(`grupo_familiar/${grupoFamiliar.id}`, "PUT", grupoPayload);
       onSave(grupoFamiliar);
       setLoading(false);
       onHide();
     } catch (error) {
-      console.error("Error al guardar:", error);
+      console.error("❌ Error al guardar:", error);
       alert("Error al guardar los retiros");
       setLoading(false);
     }
   };
+  
+  
+  
   
 
   return (
@@ -124,16 +157,6 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
     </Row>
 
     <Row>
-      <Col md={6}>
-        <Form.Group>
-          <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
-          <Form.Control
-            type="date"
-            value={cobertura.fecha_retiro}
-            onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
-          />
-        </Form.Group>
-      </Col>
 
       <Col md={6}>
         <Form.Group>
@@ -145,22 +168,48 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
           />
         </Form.Group>
       </Col>
+      <Col md={6}>
+        <Form.Group>
+          <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+          <Form.Control
+                type="date"
+                value={cobertura.fecha_retiro}
+                disabled={cobertura.activo === true} // ← aquí se desactiva
+                onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
+              />
 
+
+
+        </Form.Group>
+      </Col>
       <Col md={12} className="mt-3">
         <Form.Group>
-          <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
-          <Form.Control
-            as="textarea"
-            rows={2}
-            value={cobertura.nota_cancel}
-            onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
-            placeholder="Motivo o contexto del retiro..."
+          <Form.Check
+            type="checkbox"
+            label="Póliza activa para Taxes"
+            checked={cobertura.activo || false}
+            onChange={(e) =>
+              handleChange(index, "activo", e.target.checked)
+            }
           />
         </Form.Group>
       </Col>
-    </Row>
-  </div>
-))}
+
+      <Col md={12} className="mt-3">
+          <Form.Group>
+            <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={2}
+              value={cobertura.nota_cancel}
+              onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
+              placeholder="Motivo o contexto del retiro..."
+            />
+              </Form.Group>
+            </Col>
+          </Row>
+        </div>
+      ))}
 
       </Modal.Body>
 

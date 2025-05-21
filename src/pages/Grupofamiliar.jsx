@@ -345,7 +345,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         pagador_id: cob.pagador_id || "",
         codigo_poliza: cob.codigo_poliza || "",
         parentesco: cob.parentesco || "",
-        activo: cob.fecha_cancelacion ? false : true,
+        vigencia: cob.fecha_cancelacion ? false : true,
       };
   
       grupos[tipo].members.push(member);
@@ -677,9 +677,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                 if (member.id === memberId) {
                   const updatedMember = { ...member, [field]: value };
   
-                  // Si se está actualizando fecha_cancelacion, actualizamos el campo "activo"
+                  // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigencia"
                   if (field === "fecha_cancelacion") {
-                    updatedMember.activo = !value; // Si tiene fecha de cancelación, desactivamos
+                    updatedMember.vigencia = !value; // Si tiene fecha de cancelación, desactivamos
                   }
   
                   return updatedMember;
@@ -867,7 +867,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               pagador_id: member.pagador_id || "",
               cliente_id: member.id,
               cobertura_tipo: group.cobertura_tipo,
-              activo: member.activo
+              vigencia: member.vigencia
             }))
           )
         };
