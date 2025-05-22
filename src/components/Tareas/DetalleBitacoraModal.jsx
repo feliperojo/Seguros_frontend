@@ -50,11 +50,36 @@ const DetalleBitacoraModal = ({ show, onHide, log }) => {
     </Row>
   );
 
+  const getCategoriaColor = (categoria) => {
+    switch (categoria?.toLowerCase()) {
+      case "alta":
+        return "danger";
+      case "media":
+        return "warning";
+      case "baja":
+        return "success";
+      default:
+        return "secondary";
+    }
+  };
+  
+
   return (
     <Modal show={show} onHide={onHide} centered size="lg" scrollable>
-      <Modal.Header closeButton className="bg-primary text-white">
-        <Modal.Title>📋 Detalles del Registro</Modal.Title>
-      </Modal.Header>
+     <Modal.Header closeButton>
+  <Modal.Title className="text-dark d-flex align-items-center gap-3">
+    📋 Detalles del Registro
+    {log?.concept?.category && (
+      <span
+        className={`badge bg-${getCategoriaColor(log.concept.category)}`}
+        style={{ fontSize: "0.85rem" }}
+      >
+        Prioridad: {log.concept.category}
+      </span>
+    )}
+  </Modal.Title>
+</Modal.Header>
+
 
       <Modal.Body>
         <Card className="mb-4 shadow-sm p-3" style={{ borderRadius: "10px" }}>

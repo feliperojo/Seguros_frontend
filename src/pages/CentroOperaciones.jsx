@@ -109,6 +109,20 @@ const CentroOperaciones = () => {
     }
   };
 
+
+  const categoriaBadge = (categoria) => {
+    switch ((categoria || "").toLowerCase()) {
+      case "alta":
+        return <Badge bg="danger">Alta</Badge>;
+      case "media":
+        return <Badge bg="warning">Media</Badge>;
+      case "baja":
+        return <Badge bg="success">Baja</Badge>;
+      default:
+        return null;
+    }
+  };
+  
   // Badge estado
   const statusBadge = (status) => {
     switch (status) {
@@ -261,7 +275,12 @@ const CentroOperaciones = () => {
                     <td>{log.concept?.name}</td>
                     <td>{log.note}</td>
                     <td>{log.task?.assigned_user?.name || "No asignado"}</td>
-                    <td>{log.task?.status ? statusBadge(log.task.status) : <Badge bg="secondary">Acciones</Badge>}</td>
+                    <td>
+                      <div className="d-flex flex-column gap-1">
+                        {log.task?.status ? statusBadge(log.task.status) : <Badge bg="secondary">Acciones</Badge>}
+                        {categoriaBadge(log.concept?.category)}
+                      </div>
+                    </td>
                     <td>{log.task?.response_note || "---"}</td>
                     <td>
                       <Button
@@ -307,7 +326,13 @@ const CentroOperaciones = () => {
                           : `${t.log.entity_type} #${t.log.entity_id}`}
                       </td>
                     <td>{t.log.concept?.name}</td>
-                    <td>{statusBadge(t.status)}</td>
+                    <td>
+                        <div className="d-flex flex-column gap-1">
+                          {statusBadge(t.status)}
+                          {categoriaBadge(t.log?.concept?.category)}
+                        </div>
+                      </td>
+
                     <td>{t.log.note || "---"}</td>
                     <td>{t.response_note || "---"}</td>
                     <td>

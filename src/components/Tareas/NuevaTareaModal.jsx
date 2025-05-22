@@ -17,6 +17,7 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
   const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState({});
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -40,8 +41,19 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-
+  const validarCampos = () => {
+    const nuevosErrores = {};
+    if (!formData.concept_id) nuevosErrores.concept_id = "El concepto es obligatorio";
+    if (!formData.note.trim()) nuevosErrores.note = "La nota es obligatoria";
+    if (!formData.cliente_id) nuevosErrores.cliente_id = "El cliente es obligatorio";
+    if (!formData.assign_to_user_id) nuevosErrores.assign_to_user_id = "Debes asignar la tarea a un usuario";
+    setErrors(nuevosErrores);
+    return Object.keys(nuevosErrores).length === 0;
+  };
+  
   const handleSubmit = async () => {
+    if (!validarCampos()) return;
+  
     setLoading(true);
     try {
       await apiRequest("bitacora_operativa/create", "POST", {
@@ -55,23 +67,60 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
       setLoading(false);
     }
   };
+  const getCategoriaSeleccionada = () => {
+    const concepto = conceptos.find(c => c.id === parseInt(formData.concept_id));
+    return concepto?.category || null;
+  };
+  
+  
+  const getCategoriaColor = (categoria) => {
+    switch (categoria?.toLowerCase()) {
+      case "alta":
+        return "danger";
+      case "media":
+        return "warning";
+      case "baja":
+        return "success";
+      default:
+        return "secondary";
+    }
+  };
+  
 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton>
-        <Modal.Title>📌 Nueva Tarea Operativa</Modal.Title>
+      <Modal.Title className="d-flex align-items-center gap-3">
+        📌 Nueva Tarea Operativa
+        {getCategoriaSeleccionada() && (
+          <span
+            className={`badge bg-${getCategoriaColor(getCategoriaSeleccionada())}`}
+            style={{ fontSize: "0.85rem" }}
+          >
+            Prioridad: {getCategoriaSeleccionada()}
+          </span>
+        )}
+      </Modal.Title>
+
       </Modal.Header>
       <Modal.Body>
         <Form>
-          <Form.Group>
+        <Form.Group>
             <Form.Label>Concepto</Form.Label>
-            <Form.Select name="concept_id" value={formData.concept_id} onChange={handleChange}>
-              <option value="">-- Seleccionar --</option>
+            <Form.Select
+              name="concept_id"
+              value={formData.concept_id}
+              onChange={handleChange}
+              isInvalid={!!errors.concept_id}
+            >
+              <option value="">Seleccionar</option>
               {conceptos.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </Form.Select>
+            <Form.Control.Feedback type="invalid">{errors.concept_id}</Form.Control.Feedback>
           </Form.Group>
+
 
           <Form.Group className="mt-3">
             <Form.Label>Nota</Form.Label>
@@ -82,37 +131,42 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
               value={formData.note}
               onChange={handleChange}
               placeholder="Escribe una justificación o detalle de la tarea..."
+              isInvalid={!!errors.note}
             />
+            <Form.Control.Feedback type="invalid">{errors.note}</Form.Control.Feedback>
           </Form.Group>
 
           <Form.Group className="mt-3">
-            <Form.Label>Cliente (opcional)</Form.Label>
-            <Form.Select name="cliente_id" value={formData.cliente_id} onChange={handleChange}>
-              <option value="">-- Seleccionar cliente --</option>
+            <Form.Label>Cliente</Form.Label>
+            <Form.Select 
+            name="cliente_id" 
+            value={formData.cliente_id} 
+            onChange={handleChange}
+            isInvalid={!!errors.cliente_id}
+            >
+              <option value="">Seleccionar cliente</option>
               {clientes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nombre_completo}</option>
               ))}
             </Form.Select>
-          </Form.Group>
-
-          <Form.Group className="mt-3">
-            <Form.Label>Grupo Familiar (opcional)</Form.Label>
-            <Form.Select name="grupo_familiar_id" value={formData.grupo_familiar_id} onChange={handleChange}>
-              <option value="">-- Seleccionar grupo --</option>
-              {grupos.map((g) => (
-                <option key={g.id} value={g.id}>Grupo #{g.id} - {g.descripcion || "Sin descripción"}</option>
-              ))}
-            </Form.Select>
+            <Form.Control.Feedback type="invalid">{errors.cliente_id}</Form.Control.Feedback>
           </Form.Group>
 
           <Form.Group className="mt-3">
             <Form.Label>Asignar a</Form.Label>
-            <Form.Select name="assign_to_user_id" value={formData.assign_to_user_id} onChange={handleChange}>
-              <option value="">-- Seleccionar usuario --</option>
+            <Form.Select 
+            name="assign_to_user_id" 
+            value={formData.assign_to_user_id} 
+            onChange={handleChange}
+            isInvalid={!!errors.assign_to_user_id}
+            >
+              <option value="">Seleccionar usuario</option>
               {usuarios.map((u) => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </Form.Select>
+            <Form.Control.Feedback type="invalid">{errors.assign_to_user_id}</Form.Control.Feedback>
+
           </Form.Group>
         </Form>
       </Modal.Body>
