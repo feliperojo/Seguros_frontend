@@ -1362,6 +1362,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                                             type="date" 
                                             value={member.fecha_cancelacion || ""}
                                             onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
+                                            disabled
                                           />
                                         </Form.Group>
                                       </Col>
@@ -1656,6 +1657,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                       type="date" 
                       value={currentEditMember.fecha_cancelacion || ""} 
                       onChange={(e) => setCurrentEditMember({...currentEditMember, fecha_cancelacion: e.target.value})}
+                      disabled
                     />
                   </Form.Group>
                 </Col>

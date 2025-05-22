@@ -20,6 +20,9 @@ const CentroOperaciones = () => {
   const [fechaFinBitacora, setFechaFinBitacora] = useState(() => new Date().toISOString().split("T")[0]);
   const [fechaInicioBitacoraFiltro, setFechaInicioBitacoraFiltro] = useState(fechaInicioBitacora);
   const [fechaFinBitacoraFiltro, setFechaFinBitacoraFiltro] = useState(fechaFinBitacora);
+  const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [usuarios, setUsuarios] = useState([]);
+
 
   // Tareas
   const [tareasData, setTareasData] = useState({ data: [], total: 0, current_page: 1, per_page: 10 });
@@ -32,6 +35,9 @@ const CentroOperaciones = () => {
   const [fechaFinTareas, setFechaFinTareas] = useState(() => new Date().toISOString().split("T")[0]);
   const [fechaInicioTareasFiltro, setFechaInicioTareasFiltro] = useState(fechaInicioTareas);
   const [fechaFinTareasFiltro, setFechaFinTareasFiltro] = useState(fechaFinTareas);
+  const [usuarioFiltro, setUsuarioFiltro] = useState("");
+  const [estadoTareasFiltro, setEstadoTareasFiltro] = useState("");
+
 
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -45,13 +51,16 @@ const CentroOperaciones = () => {
     setLoading(true);
     Promise.all([
       apiRequest(
-        `bitacora_operativa?per_page=${logsData.per_page}&page=${pageBitacora}&fecha_inicio=${fechaInicioBitacoraFiltro}&fecha_fin=${fechaFinBitacoraFiltro}`,
+        `bitacora_operativa?per_page=${logsData.per_page}&page=${pageBitacora}&fecha_inicio=${fechaInicioBitacoraFiltro}&fecha_fin=${fechaFinBitacoraFiltro}&estado=${estadoFiltro}&usuario=${usuarioFiltro}`,
         "GET"
       ),
+      
+      
       apiRequest(
-        `tareas_operativas?per_page=${tareasData.per_page}&page=${pageTareas}&fecha_inicio=${fechaInicioTareasFiltro}&fecha_fin=${fechaFinTareasFiltro}`,
+        `tareas_operativas?per_page=${tareasData.per_page}&page=${pageTareas}&fecha_inicio=${fechaInicioTareasFiltro}&fecha_fin=${fechaFinTareasFiltro}&estado=${estadoTareasFiltro}`,
         "GET"
       )
+      
     ])
       .then(([logs, tareas]) => {
         setLogsData(logs && logs.data ? logs : { data: [], total: 0, current_page: 1, per_page: 10 });
@@ -59,7 +68,12 @@ const CentroOperaciones = () => {
       })
       .finally(() => setLoading(false));
   };
-
+  useEffect(() => {
+    apiRequest("usuarios-operativos", "GET")
+      .then(setUsuarios)
+      .catch(() => setUsuarios([]));
+  }, []);
+  
   useEffect(() => {
     cargarDatos(1, 1);
   }, [showModal]);
@@ -120,35 +134,66 @@ const CentroOperaciones = () => {
 
       {/* Filtros fecha independientes */}
       {key === "bitacora" && (
-        <div className="d-flex align-items-center mb-3 gap-2" style={{ maxWidth: "500px" }}>
-          <label htmlFor="fechaInicioBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>
-            Fecha inicio:
-          </label>
-          <input
-            type="date"
-            id="fechaInicioBitacora"
-            value={fechaInicioBitacoraFiltro}
-            onChange={(e) => setFechaInicioBitacoraFiltro(e.target.value)}
-            style={{ width: "130px", height: "28px" }}
-          />
-          <label htmlFor="fechaFinBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>
-            Fecha fin:
-          </label>
-          <input
-            type="date"
-            id="fechaFinBitacora"
-            value={fechaFinBitacoraFiltro}
-            onChange={(e) => setFechaFinBitacoraFiltro(e.target.value)}
-            style={{ width: "130px", height: "28px" }}
-          />
-          <Button size="sm" onClick={() => cargarDatos(1, currentPageTareas)}>
-            Filtrar
-          </Button>
-        </div>
-      )}
+  <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
+    <label htmlFor="fechaInicioBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha inicio:</label>
+    <input
+      type="date"
+      id="fechaInicioBitacora"
+      value={fechaInicioBitacoraFiltro}
+      onChange={(e) => setFechaInicioBitacoraFiltro(e.target.value)}
+      style={{ width: "130px", height: "28px" }}
+    />
+
+    <label htmlFor="fechaFinBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha fin:</label>
+    <input
+      type="date"
+      id="fechaFinBitacora"
+      value={fechaFinBitacoraFiltro}
+      onChange={(e) => setFechaFinBitacoraFiltro(e.target.value)}
+      style={{ width: "130px", height: "28px" }}
+    />
+
+    <label htmlFor="estadoFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Estado:</label>
+    <select
+      id="estadoFiltro"
+      value={estadoFiltro}
+      onChange={(e) => setEstadoFiltro(e.target.value)}
+      style={{ height: "28px", minWidth: "150px" }}
+    >
+      <option value="">Todos</option>
+      <option value="pending">Pendiente</option>
+      <option value="in_progress">En progreso</option>
+      <option value="completed">Completada</option>
+    </select>
+
+    <label htmlFor="usuarioFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Asignado a:</label>
+    <select
+        id="usuarioFiltro"
+        value={usuarioFiltro}
+        onChange={(e) => setUsuarioFiltro(e.target.value)}
+        style={{ height: "28px", minWidth: "160px" }}
+      >
+        <option value="">Todos</option>
+        {usuarios.map((u) => (
+          <option key={u.id} value={u.name}>
+            {u.name}
+          </option>
+        ))}
+      </select>
+
+
+
+    <Button size="sm" onClick={() => cargarDatos(1, currentPageTareas)}>
+      Filtrar
+    </Button>
+  </div>
+)}
+
+
 
       {key === "tareas" && (
-        <div className="d-flex align-items-center mb-3 gap-2" style={{ maxWidth: "500px" }}>
+      <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
+
           <label htmlFor="fechaInicioTareas" className="mb-0" style={{ fontSize: "0.85rem" }}>
             Fecha inicio:
           </label>
@@ -169,6 +214,19 @@ const CentroOperaciones = () => {
             onChange={(e) => setFechaFinTareasFiltro(e.target.value)}
             style={{ width: "130px", height: "28px" }}
           />
+          <label htmlFor="estadoTareasFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Estado:</label>
+              <select
+                id="estadoTareasFiltro"
+                value={estadoTareasFiltro}
+                onChange={(e) => setEstadoTareasFiltro(e.target.value)}
+                style={{ height: "28px", minWidth: "150px" }}
+              >
+                <option value="">Todos</option>
+                <option value="pending">Pendiente</option>
+                <option value="in_progress">En progreso</option>
+                <option value="completed">Completada</option>
+              </select>
+
           <Button size="sm" onClick={() => cargarDatos(currentPage, 1)}>
             Filtrar
           </Button>
@@ -203,7 +261,7 @@ const CentroOperaciones = () => {
                     <td>{log.concept?.name}</td>
                     <td>{log.note}</td>
                     <td>{log.task?.assigned_user?.name || "No asignado"}</td>
-                    <td>{log.task?.status ? statusBadge(log.task.status) : <Badge bg="secondary">---</Badge>}</td>
+                    <td>{log.task?.status ? statusBadge(log.task.status) : <Badge bg="secondary">Acciones</Badge>}</td>
                     <td>{log.task?.response_note || "---"}</td>
                     <td>
                       <Button
