@@ -10,6 +10,7 @@ import {
 import "../styles/GruposFamiliaresListado.css"
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../services/api";
+import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 
@@ -407,230 +408,25 @@ const getCompaniaNombre = (grupo) => {
         </Modal.Footer>
       </Modal>
       
-      {/* Modal para Ver Detalles - Tamaño extra grande */}
-      <Modal 
-        show={showViewModal} 
-        onHide={() => setShowViewModal(false)} 
-        size="xl" 
-        centered
-        dialogClassName="modal-90w"
-      >
-        <Modal.Header closeButton className="bg-light">
-          <Modal.Title>
-            <strong>Detalles del Grupo Familiar</strong>
-          </Modal.Title>
-        </Modal.Header>
-     
-        <Modal.Body className="px-4 py-4">
-  {currentGrupo && (
-    <div>
-      <div className="mb-4">
-        <h5 className="border-bottom pb-2 text-primary">Información General</h5>
-        <div className="row">
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">ID del Grupo:</p>
-            <h6><strong>{currentGrupo.id}</strong></h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Tomador:</p>
-            <h6><strong>{getTomadorNombre(currentGrupo)}</strong></h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Persona de Contacto:</p>
-            <h6><strong>{currentGrupo.persona_contacto || "Sin especificar"}</strong></h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Nota:</p>
-            <h6><strong>{currentGrupo.nota || "Sin especificar"}</strong></h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Personas en Cobertura:</p>
-            <h6>
-              <span className="badge bg-info text-white">
-                {currentGrupo.personas_cobertura || currentGrupo.coberturas?.length || "0"}
-              </span>
-            </h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Personas en taxes:</p>
-            <h6>
-              <span className="badge bg-info text-white">
-                {currentGrupo.personas_taxes || "0"}
-              </span>
-            </h6>
-          </div>
-          <div className="col-md-4 mb-3">
-            <p className="mb-1 text-muted">Ingreso Familiar Anual:</p>
-            <h6>
-              <strong>
-                {currentGrupo.ingreso_familiar_anual
-                  ? parseFloat(currentGrupo.ingreso_familiar_anual).toLocaleString('en-US', {
-                      style: 'currency',
-                      currency: 'USD',
-                    })
-                  : "No especificado"}
-              </strong>
-            </h6>
-          </div>
-        </div>
-      </div>
+                  <GrupoFamiliarDetalleModal
+                      show={showViewModal}
+                      onHide={() => setShowViewModal(false)}
+                      grupo={currentGrupo}
+                      getTomadorNombre={getTomadorNombre}
+                    />
 
-      <div className="mb-4">
-        <h5 className="border-bottom pb-2 text-primary">Información de Contacto</h5>
-        <div className="row">
-          {currentGrupo.telefonos && (
-            <>
-              <div className="col-md-3 mb-3">
-                <p className="mb-1 text-muted">Teléfono 1:</p>
-                <h6><strong>{currentGrupo.telefonos.telefono_1 || "No especificado"}</strong></h6>
-              </div>
-              <div className="col-md-3 mb-3">
-                <p className="mb-1 text-muted">Teléfono 2:</p>
-                <h6><strong>{currentGrupo.telefonos.telefono_2 || "No especificado"}</strong></h6>
-              </div>
-              <div className="col-md-2 mb-3">
-                <p className="mb-1 text-muted">Whatsapp:</p>
-                <h6>
-                  <Badge pill bg={currentGrupo.telefonos.whatsapp ? "success" : "secondary"}>
-                    {currentGrupo.telefonos.whatsapp ? "Activo" : "Inactivo"}
-                  </Badge>
-                </h6>
-              </div>
-              <div className="col-md-2 mb-3">
-                <p className="mb-1 text-muted">Telegram:</p>
-                <h6>
-                  <Badge pill bg={currentGrupo.telefonos.telegram ? "success" : "secondary"}>
-                    {currentGrupo.telefonos.telegram ? "Activo" : "Inactivo"}
-                  </Badge>
-                </h6>
-              </div>
-              <div className="col-md-2 mb-3">
-                <p className="mb-1 text-muted">Mensaje sms:</p>
-                <h6>
-                  <Badge pill bg={currentGrupo.telefonos.mensaje_sms ? "success" : "secondary"}>
-                    {currentGrupo.telefonos.mensaje_sms ? "Activo" : "Inactivo"}
-                  </Badge>
-                </h6>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {currentGrupo.coberturas && currentGrupo.coberturas.length > 0 && (
-        <div className="mb-4">
-          <h5 className="border-bottom pb-2 text-primary">Coberturas</h5>
-
-          <Form.Check 
-            type="checkbox"
-            label="Mostrar coberturas inactivas"
-            checked={mostrarInactivas}
-            onChange={() => setMostrarInactivas(!mostrarInactivas)}
-            className="mb-3"
-          />
-
-          <div className="table-responsive">
-            {
-              (() => {
-                const coberturasFiltradas = currentGrupo.coberturas.filter(cobertura =>
-                  mostrarInactivas ? true : cobertura.activo === true || cobertura.activo === "true" || cobertura.activo === 1
-                );
-                
-
-                return (
-                  <Table bordered hover className="mt-3">
-                    <thead className="table-light">
-                      <tr>
-                        <th>Código Póliza</th>
-                        <th>Cliente</th>
-                        <th>Parentesco</th>
-                        <th>Elegibilidad</th>
-                        <th>Compañia</th>
-                        <th>Plan</th>
-                        <th>Metal</th>
-                        <th>Red</th>
-                        <th>Pagador</th>
-                        <th>Año Cobertura</th>
-                        <th>Precio $</th>
-                        <th>Fecha Activación</th>
-                        <th>Fecha cancelación</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {coberturasFiltradas.map((cobertura, index) => (
-                        <tr 
-                          key={cobertura.id || index}
-                          style={isTomador(cobertura.parentesco) ? { backgroundColor: '#fff3cd' } : {}}
-                        >
-                          <td>{cobertura.codigo_poliza || "-"}</td>
-                          <td>
-                            <strong>{cobertura.cliente?.nombre_completo || "-"}</strong>
-                            {isTomador(cobertura.parentesco) && (
-                              <Badge bg="warning" text="dark" className="ms-2">TOMADOR</Badge>
-                            )}
-                          </td>
-                          <td>{cobertura.parentesco || "-"}</td>
-                          <td>{cobertura.elegibilidad || "-"}</td>
-                          <td>{cobertura.compania?.nombre || "-"}</td>
-                          <td>{cobertura.plan || "-"}</td>
-                          <td>{cobertura.metal || "-"}</td>
-                          <td>{cobertura.red || "-"}</td>
-                          <td>{cobertura.nombre_pagador || "-"}</td>
-                          <td>{cobertura.ano_cobertura || "-"}</td>
-                          <td>{cobertura.precio || "-"}</td>
-                          <td>
-                            {cobertura.fecha_activacion 
-                              ? new Date(cobertura.fecha_activacion).toLocaleDateString('es-CO') 
-                              : "-"
-                            }
-                          </td>
-                          <td>
-                            {cobertura.fecha_cancelacion 
-                              ? new Date(cobertura.fecha_cancelacion).toLocaleDateString('es-CO') 
-                              : "-"
-                            }
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                );
-              })()
-            }
-          </div>
-        </div>
-      )}
-
-      <div className="d-flex justify-content-between mt-4">
-        <Button 
-          variant="outline-primary" 
-          onClick={() => {
-            setShowViewModal(false);
-            window.open(`/grupo-familiar/${currentGrupo.id}/reporte`, '_blank');
-          }}
-        >
-          <FaFileExport className="me-2" />
-          Ver Detalles Completos
-        </Button>
-      </div>
-    </div>
-  )}
-</Modal.Body>
-
-
-      </Modal>
               <RetiroCancelacionModal 
-          show={showRetiroModal}
-          onHide={() => setShowRetiroModal(false)}
-          grupoFamiliar={grupoParaRetiro}
-          onSave={(updatedGrupo) => {
-            // Actualizar el grupo en la lista
-            setGrupos(prev =>
-              prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
-            );
-            setShowRetiroModal(false);
-          }}
-        />
+                  show={showRetiroModal}
+                  onHide={() => setShowRetiroModal(false)}
+                  grupoFamiliar={grupoParaRetiro}
+                  onSave={(updatedGrupo) => {
+                    // Actualizar el grupo en la lista
+                    setGrupos(prev =>
+                      prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
+                    );
+                    setShowRetiroModal(false);
+                  }}
+                  />
 
 
       

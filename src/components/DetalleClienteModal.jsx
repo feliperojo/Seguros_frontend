@@ -571,14 +571,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     <small className="text-muted d-block">Categoría</small>
                     <strong>{clienteData.categoria || <NotAvailable />}</strong>
                   </ListGroup.Item>
-                  <ListGroup.Item>
-                    <small className="text-muted d-block">Tipo de Documento</small>
-                    <strong>{clienteData.tipo_documento || <NotAvailable />}</strong>
-                  </ListGroup.Item>
-                  <ListGroup.Item>
-                    <small className="text-muted d-block">Número de Documento</small>
-                    <strong>{clienteData.numero_documento || <NotAvailable />}</strong>
-                  </ListGroup.Item>
+              
                 </ListGroup>
               </Card>
             </Col>

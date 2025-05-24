@@ -317,9 +317,13 @@ const CentroOperaciones = () => {
                 </tr>
               </thead>
               <tbody>
-                {(tareasData.data || []).map((t) => (
-                  <tr key={t.id}>
-                    <td>{new Date(t.created_at).toLocaleString()}</td>
+             
+                {[...(tareasData.data || [])]
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // 🔽 orden descendente
+                  .map((t) => (
+                    <tr key={t.id}>
+                      <td>{new Date(t.created_at).toLocaleString()}</td>
+
                     <td>
                         {t.log.cliente
                           ? `${t.log.cliente.nombre_completo} (ID: ${t.log.cliente.id})`

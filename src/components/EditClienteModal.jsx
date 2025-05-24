@@ -4,13 +4,73 @@ import {
   Nav, Tab, InputGroup, Badge
 } from "react-bootstrap";
 import apiRequest from "../services/api";
-import CountrySelect from "../components/CountrySelect"; // Ajusta según tu estructura
 import FormDireccion from "../components/FormDireccion";
 import CountrySelectWithFlags from "../components/CountrySelect";
 import { NumericFormat } from 'react-number-format';
 import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
-
+import MediosPagoTablas from './MediosPagoTablas';
 import BitacoraModal from "../components/Tareas/BitacoraModal";
+
+
+
+// Dentro del render del tab de mediosPago en EditClienteModal.js
+const renderMediosPagoTab = () => (
+  <div className="p-3">
+    <div className="d-flex justify-content-between align-items-center mb-3">
+      <h5 className="border-bottom pb-2 mb-0">Medios de Pago...</h5>
+      <Button
+        variant="primary"
+        onClick={() => window.open(`/clientes/mediopago/${clienteId}`, '_blank')}
+      >
+        <i className="bi bi-credit-card me-2"></i>
+        Administrar Medios de Pago..
+      </Button>
+    </div>
+
+    {loadingMediosPago ? (
+      <div className="text-center py-4">
+        <Spinner animation="border" variant="primary" size="sm" />
+        <p className="mt-2 mb-0 text-muted">Cargando medios de pago...</p>
+      </div>
+    ) : errorMediosPago ? (
+      <Alert variant="danger" className="mt-3">
+        <i className="bi bi-exclamation-triangle me-2"></i>
+        {errorMediosPago}
+      </Alert>
+    ) : mediosPago.length === 0 ? (
+      <div className="text-center border rounded py-4 mt-3 bg-light">
+        <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
+        <h6 className="mb-3">No hay medios de pago registrados</h6>
+        <p className="text-muted mb-3">
+          Utilice el administrador de medios de pago para añadir nuevos métodos de pago.
+        </p>
+      </div>
+    ) : (
+      <MediosPagoTablas
+        mediosPago={mediosPago}
+        onView={(medio) => alert(`Ver medio de pago: ${medio.titular} (${medio.forma_pago})`)}
+        onEdit={() => alert('Para editar, use el administrador de medios de pago.')}
+        onDelete={() => alert('Para eliminar, use el administrador de medios de pago.')}
+      />
+    )}
+
+    <div className="alert alert-info mt-4">
+      <div className="d-flex">
+        <i className="bi bi-info-circle me-2 fs-5"></i>
+        <div>
+          <h6 className="mb-1">Nota importante:</h6>
+          <p className="mb-0">
+            Para administrar completamente los medios de pago (añadir nuevos, editar existentes,
+            etc.), utilice el botón "Administrar Medios de Pago" que abrirá
+            la herramienta específica en una nueva ventana.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+
 
 
 
@@ -137,9 +197,6 @@ const fetchMediosPago = async () => {
 };
 
 
-
-
-
 // Cargar los medios de pago cuando se abre la pestaña
 useEffect(() => {
   if (show && activeTab === "mediosPago") {
@@ -147,21 +204,6 @@ useEffect(() => {
   }
 }, [show, activeTab, clienteId]);
 
-// Función auxiliar para obtener la etiqueta del tipo de medio de pago
-const getTipoMedioPagoLabel = (tipo) => {
-  switch (tipo) {
-    case 'tarjeta': return 'Tarjeta de Crédito/Débito';
-    case 'cuenta_bancaria': return 'Cuenta Bancaria';
-    default: return tipo;
-  }
-};
-
-// Función para formatear fechas
-const formatDate = (dateString) => {
-  if (!dateString) return "-";
-  const date = new Date(dateString);
-  return date.toLocaleDateString();
-};
 
 useEffect(() => {
   if (show && clienteData) {
@@ -266,21 +308,6 @@ useEffect(() => {
 }, [show, clienteData]);
 
 
-// Extrae esta función para reutilizarla
-const mapClienteData = (data) => {
-  return {
-    datosPrincipales: {
-      primer_nombre: data.primer_nombre || "",
-      segundo_nombre: data.segundo_nombre || "",
-      apellidos: data.apellidos || "",
-      nombre_completo: data.nombre_completo || "",
-      fecha_nacimiento: data.fecha_nacimiento || "",
-      edad: data.edad || "",
-      genero: data.genero || "",
-    },
-    // ... el resto igual que ya lo tienes ...
-  };
-};
 useEffect(() => {
   if (!initialFormData) return;
 
@@ -1024,7 +1051,7 @@ const renderDireccionTab = () => (
           Administrar Medios de Pago
         </Button>
       </div>
-      
+  
       {loadingMediosPago ? (
         <div className="text-center py-4">
           <Spinner animation="border" variant="primary" size="sm" />
@@ -1039,44 +1066,24 @@ const renderDireccionTab = () => (
         <div className="text-center border rounded py-4 mt-3 bg-light">
           <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
           <h6 className="mb-3">No hay medios de pago registrados</h6>
-          <p className="text-muted mb-3">Utilice el administrador de medios de pago para añadir nuevos métodos de pago.</p>
-     
+          <p className="text-muted mb-3">
+            Utilice el administrador de medios de pago para añadir nuevos métodos de pago.
+          </p>
         </div>
       ) : (
-        <>
-          <div className="table-responsive mt-3">
-            <table className="table table-hover">
-              <thead className="table-light">
-                <tr>
-                  <th>Tipo</th>
-                  <th>Cuenta</th>
-                  <th>Titular</th>
-                  <th>Banco</th>
-                  <th>Vencimiento</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mediosPago.map(medio => (
-                  <tr key={medio.id}>
-                    <td>{medio.forma_pago || '-'}</td>
-                    <td>{medio.cuenta_numero || '-'}</td>
-                    <td>{medio.titular || '-'}</td>
-                    <td>{medio.banco || '-'}</td>
-                    <td>{medio.fecha_vencimiento ? formatDate(medio.fecha_vencimiento) : '-'}</td>
-                    <td>
-                      <Badge bg={medio.activo ? 'success' : 'danger'} className="rounded-pill">
-                        {medio.activo ? 'Activo' : 'Inactivo'}
-                      </Badge>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+        <MediosPagoTablas
+        mediosPago={mediosPago}
+        onView={(medio) =>
+          alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`)
+        }
+        onEdit={() => {}}
+        onDelete={() => {}}
+        showActions={false}
+      />
       
+      
+      )}
+  
       <div className="alert alert-info mt-4">
         <div className="d-flex">
           <i className="bi bi-info-circle me-2 fs-5"></i>
@@ -1092,6 +1099,7 @@ const renderDireccionTab = () => (
       </div>
     </div>
   );
+  
   return (
     <Modal 
       show={show} 

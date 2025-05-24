@@ -74,7 +74,7 @@ const DetalleBitacoraModal = ({ show, onHide, log }) => {
         className={`badge bg-${getCategoriaColor(log.concept.category)}`}
         style={{ fontSize: "0.85rem" }}
       >
-        Prioridad: {log.concept.category}
+        Complejidad: {log.concept.category}
       </span>
     )}
   </Modal.Title>

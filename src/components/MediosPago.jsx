@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import apiRequest from "../services/api"; // Usando el servicio API existente
-import { 
-  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, 
-  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport, FaTimes
-} from "react-icons/fa";
+import apiRequest from "../services/api";
+import MediosPagoTablas from "./MediosPagoTablas";
+
+
 const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
 
   // Inicialización de estados
@@ -291,100 +290,6 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     }
   };
 
-  const renderTablaTarjetas = () => (
-    <>
-      <h5 className="mt-4 mb-2">Tarjetas de Crédito/Débito</h5>
-      {tarjetas.length === 0 ? (
-        <p>No hay tarjetas registradas.</p>
-      ) : (
-        <table className="table table-bordered">
-          <thead>
-            <tr>
-              <th>Tipo</th>
-              <th>Quien paga</th>
-              <th>Titular</th>
-              <th>Número</th>
-              <th>Vencimiento</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tarjetas.map((medio, index) => (
-              <tr key={medio.id}>
-                <td>{medio.tipo_tarjeta}</td>
-                <td>{medio.quien_paga}</td>
-                <td>{medio.titular}</td>
-                <td>{medio.numero_tarjeta}</td>
-                <td>{medio.fecha_expiracion}</td>
-                <td>
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleViewClick(index)}>
-                      <FaEye />
-                    </button>
-                    <button className="btn btn-sm btn-outline-success" onClick={() => handleEditClick(index)}>
-                      <FaEdit />
-                    </button>
-                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteClick(index)}>
-                      <FaTrashAlt />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
-  );
-  
-  const renderTablaCuentas = () => (
-    <>
-      <h5 className="mt-4 mb-2">Cuentas Bancarias</h5>
-      {cuentasBancarias.length === 0 ? (
-        <p>No hay cuentas bancarias registradas.</p>
-      ) : (
-        <table className="table table-bordered">
-          <thead>
-            <tr>
-              <th>Banco</th>
-              <th>Quien paga</th>
-              <th>Titular</th>
-              <th>Dirección</th>
-              <th>Ruta/Código de Banco</th>
-              <th>Número de Cuenta</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cuentasBancarias.map((medio, index) => (
-              <tr key={medio.id}>
-                <td>{medio.banco}</td>
-                <td>{medio.quien_paga}</td>
-                <td>{medio.titular}</td>
-                <td>{medio.direccion}</td>
-                <td>{medio.ruta}</td>
-                <td>{medio.cuenta_numero}</td>
-                {/* <td>•••• {medio.cuenta_numero?.slice(-4)}</td> */}
-                <td>
-                  <div className="d-flex gap-2">
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => handleViewClick(index)}>
-                      <FaEye />
-                    </button>
-                    <button className="btn btn-sm btn-outline-success" onClick={() => handleEditClick(index)}>
-                      <FaEdit />
-                    </button>
-                    <button className="btn btn-sm btn-outline-danger" onClick={() => handleDeleteClick(index)}>
-                      <FaTrashAlt />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </>
-  );
   
 
 
@@ -483,6 +388,17 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   <div className="invalid-feedback">{error.mensaje}</div>
                 )}
               </div>
+              <div className="form-group mb-3">
+              <label htmlFor="direccion">Dirección</label>
+              <input
+                type="text"
+                className="form-control"
+                id="direccion"
+                name="direccion"
+                value={currentMedioPago.direccion || ''}
+                onChange={handleChange}
+              />
+            </div>
             </div>
           </>
         );
@@ -566,20 +482,24 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
 
   return (
     <div className="medios-pago-container">
-      {/* Lista de medios de pago */}
+     
       <div className="medios-pago-list">
-      {mediosPago.length === 0 ? (
-        <p>No hay medios de pago registrados.</p>
-          ) : (
-            <>
-              {renderTablaTarjetas()}
-              {renderTablaCuentas()}
-            </>
-          )}
+      <MediosPagoTablas
+            mediosPago={mediosPago}
+            onView={(medio) => alert(`Ver medio de pago: ${medio.titular} (${medio.forma_pago})`)}
+            onEdit={(medio) => {
+              const index = mediosPago.findIndex(m => m.id === medio.id);
+              if (index !== -1) handleEditClick(index);
+            }}
+            onDelete={(medio) => {
+              const index = mediosPago.findIndex(m => m.id === medio.id);
+              if (index !== -1) handleDeleteClick(index);
+            }}
+          />
+
 
       </div>
 
-      {/* Botón para agregar nuevo medio de pago */}
       <button 
         className="btn btn-primary mt-3"
         onClick={handleAddClick}
