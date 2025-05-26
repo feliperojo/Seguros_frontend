@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Row, Col, Badge } from "react-bootstrap";
 import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
+import BitacoraModal from "../components/Tareas/BitacoraModal";
+
 
 const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const [coberturas, setCoberturas] = useState([]);
@@ -10,6 +12,8 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
   const [fechasOriginales, setFechasOriginales] = useState([]);
   const [cambiosDetectados, setCambiosDetectados] = useState(false);
+  const [showBitacora, setShowBitacora] = useState(false);
+  const [bitacoraPayload, setBitacoraPayload] = useState(null);
 
 
   useEffect(() => {
@@ -57,7 +61,7 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
         if (nuevaCancelacion) cambiosEnCancelaciones++;
         if (nuevaRetiro) cambiosEnRetiros++;
 
-        // Detecta cambio en fechas o notas
+        
         if (
           original.fecha_cancelacion !== actual.fecha_cancelacion ||
           original.fecha_retiro !== actual.fecha_retiro ||
@@ -112,24 +116,32 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
           estado_cobertura: cobertura.estado_cobertura
         };
 
-
-
-        const response = await apiRequest(`cobertura/${cobertura.id}`, "PUT", payload);
-        console.log(`✅ Cobertura actualizada (ID ${cobertura.id}):`, response);
+        await apiRequest(`cobertura/${cobertura.id}`, "PUT", payload);
       }
 
-      // 👉 Actualizar grupo familiar
+      // Actualizar grupo familiar
       const grupoPayload = {
         personas_taxes: personasTaxes,
         personas_cobertura: personasCobertura,
       };
-      const grupoResponse = await apiRequest(`grupo_familiar/${grupoFamiliar.id}`, "PUT", grupoPayload);
-      onSave(grupoFamiliar);
-      setLoading(false);
-      onHide();
+      await apiRequest(`grupo_familiar/${grupoFamiliar.id}`, "PUT", grupoPayload);
+
+      const tomador = coberturas.find(c => c.parentesco === "TOMADOR");
+      const clienteIdTomador = tomador?.cliente?.id || null;
+      
+      setBitacoraPayload({
+        accion: "retiro_o_cancelacion",
+        entity_type: "grupo_familiar",
+        grupo_familiar_id: grupoFamiliar.id,
+        cliente_id: clienteIdTomador
+      });
+      
+
+      setShowBitacora(true); // 👈 Mostrar modal
     } catch (error) {
       console.error("❌ Error al guardar:", error);
       alert("Error al guardar los retiros");
+    } finally {
       setLoading(false);
     }
   };
@@ -139,138 +151,155 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
 
   return (
-    <Modal show={show} onHide={onHide} centered size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>
-          <FaCog className="me-2" />
-          Retiros y Cancelaciones de Coberturas
-        </Modal.Title>
-      </Modal.Header>
+    <>
+      <Modal show={show} onHide={onHide} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <FaCog className="me-2" />
+            Retiros y Cancelaciones de Coberturas
+          </Modal.Title>
+        </Modal.Header>
 
-      <Modal.Body>
-        <div className="mb-3">
-          <Row>
-            <Col md={4}><strong>ID Grupo Familiar:</strong> #{grupoFamiliar?.id}</Col>
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label className="fw-semibold">Personas en Taxes</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={personasTaxes}
-                  disabled
-                  readOnly
-                />
-              </Form.Group>
-            </Col>
-
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label className="fw-semibold">Personas en Cobertura</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={personasCobertura}
-                  disabled
-                  readOnly
-                />
-              </Form.Group>
-            </Col>
-
-
-          </Row>
-        </div>
-
-        <hr />
-
-        {coberturas.map((cobertura, index) => (
-          <div key={index} className="p-3 mb-4 border rounded bg-white shadow-sm">
-            <div className="d-flex justify-content-between align-items-center mb-2">
-              <h6 className="mb-0">
-                <Badge bg="primary" className="me-2">#{index + 1}</Badge>
-                {cobertura.cliente?.nombre_completo || "Cliente sin nombre"} <small className="text-muted">({cobertura.parentesco || "-"})</small>
-              </h6>
-            </div>
-
-            <Row className="mb-3">
-              <Col md={4}>
-                <div className="text-muted small">ID Póliza</div>
-                <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
-              </Col>
-              <Col md={4}>
-                <div className="text-muted small">Compañía</div>
-                <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
-              </Col>
-              <Col md={4}>
-                <div className="text-muted small">Año de Cobertura</div>
-                <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
-              </Col>
-            </Row>
-
+        <Modal.Body>
+          <div className="mb-3">
             <Row>
-
-              <Col md={6}>
+              <Col md={4}><strong>ID Grupo Familiar:</strong> #{grupoFamiliar?.id}</Col>
+              <Col md={4}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
+                  <Form.Label className="fw-semibold">Personas en Taxes</Form.Label>
                   <Form.Control
-                    type="date"
-                    value={cobertura.fecha_cancelacion}
-                    onChange={(e) => handleChange(index, "fecha_cancelacion", e.target.value)}
+                    type="number"
+                    value={personasTaxes}
+                    disabled
+                    readOnly
                   />
                 </Form.Group>
               </Col>
-              <Col md={6}>
+
+              <Col md={4}>
                 <Form.Group>
-                  <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                  <Form.Label className="fw-semibold">Personas en Cobertura</Form.Label>
                   <Form.Control
-                    type="date"
-                    value={cobertura.fecha_retiro}
-                    disabled={cobertura.activo === true} // ← aquí se desactiva
-                    onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
-                  />
-
-
-
-                </Form.Group>
-              </Col>
-              <Col md={12} className="mt-3">
-                <Form.Group>
-                  <Form.Check
-                    type="checkbox"
-                    label="Póliza activa para Taxes"
-                    checked={cobertura.activo || false}
-                    onChange={(e) =>
-                      handleChange(index, "activo", e.target.checked)
-                    }
+                    type="number"
+                    value={personasCobertura}
+                    disabled
+                    readOnly
                   />
                 </Form.Group>
               </Col>
 
-              <Col md={12} className="mt-3">
-                <Form.Group>
-                  <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    value={cobertura.nota_cancel}
-                    onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
-                    placeholder="Motivo o contexto del retiro..."
-                  />
-                </Form.Group>
-              </Col>
+
             </Row>
           </div>
-        ))}
 
-      </Modal.Body>
+          <hr />
 
-      <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>Cerrar</Button>
-        <Button variant="primary" onClick={handleSave} disabled={loading || !cambiosDetectados}>
-          {loading ? "Guardando..." : "Guardar Cambios"}
-        </Button>
+          {coberturas.map((cobertura, index) => (
+            <div key={index} className="p-3 mb-4 border rounded bg-white shadow-sm">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="mb-0">
+                  <Badge bg="primary" className="me-2">#{index + 1}</Badge>
+                  {cobertura.cliente?.nombre_completo || "Cliente sin nombre"} <small className="text-muted">({cobertura.parentesco || "-"})</small>
+                </h6>
+              </div>
 
-      </Modal.Footer>
-    </Modal>
+              <Row className="mb-3">
+                <Col md={4}>
+                  <div className="text-muted small">ID Póliza</div>
+                  <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
+                </Col>
+                <Col md={4}>
+                  <div className="text-muted small">Compañía</div>
+                  <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
+                </Col>
+                <Col md={4}>
+                  <div className="text-muted small">Año de Cobertura</div>
+                  <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
+                </Col>
+              </Row>
+
+              <Row>
+
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={cobertura.fecha_cancelacion}
+                      onChange={(e) => handleChange(index, "fecha_cancelacion", e.target.value)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                    <Form.Control
+                      type="date"
+                      value={cobertura.fecha_retiro}
+                      disabled={cobertura.activo === true} // ← aquí se desactiva
+                      onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
+                    />
+
+
+
+                  </Form.Group>
+                </Col>
+                <Col md={12} className="mt-3">
+                  <Form.Group>
+                    <Form.Check
+                      type="checkbox"
+                      label="Póliza activa para Taxes"
+                      checked={cobertura.activo || false}
+                      onChange={(e) =>
+                        handleChange(index, "activo", e.target.checked)
+                      }
+                    />
+                  </Form.Group>
+                </Col>
+
+                <Col md={12} className="mt-3">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      value={cobertura.nota_cancel}
+                      onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
+                      placeholder="Motivo o contexto del retiro..."
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
+          ))}
+
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>Cerrar</Button>
+          <Button variant="primary" onClick={handleSave} disabled={loading || !cambiosDetectados}>
+            {loading ? "Guardando..." : "Guardar Cambios"}
+          </Button>
+
+        </Modal.Footer>
+
+      </Modal>
+
+      {showBitacora && (
+        <BitacoraModal
+          show={showBitacora}
+          onHide={() => setShowBitacora(false)}
+          data={bitacoraPayload}
+          onSaved={() => {
+            setShowBitacora(false);
+            onSave(grupoFamiliar);
+            onHide();
+          }}
+        />
+      )}
+    </>
   );
+
 };
 
 export default RetiroCancelacionModal;

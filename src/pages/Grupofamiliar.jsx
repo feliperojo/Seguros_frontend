@@ -806,6 +806,15 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     setShowModal(true);
   };
 
+  const obtenerClienteTomador = () => {
+    for (const group of coverageGroups) {
+      const tomador = group.members.find(m => m.parentesco === "TOMADOR");
+      if (tomador) return tomador.id;
+    }
+    return null;
+  };
+  
+
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
 
@@ -870,7 +879,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               cliente_id: member.id,
               cobertura_tipo: group.cobertura_tipo,
               vigencia: member.vigencia,
-              activo: cob.activo ?? true
+              activo: member.activo ?? true
+
             }))
           )
         };
@@ -880,13 +890,25 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       } else {
         // CREACIÓN DEL GRUPO
         grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
-        console.log("revisamos id", grupoFamiliarResponse.data?.id)
+       
         const grupoFamiliarId = grupoFamiliarResponse.data?.id;
         if (grupoFamiliarId) {
-          // CREACIÓN DE COBERTURAS
-
           await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
+        
+          const clienteTomadorId = obtenerClienteTomador();
+        
+          setBitacoraData({
+            accion: "create",
+            entity_type: "grupo_familiar",
+            grupo_familiar_id: grupoFamiliarId,
+            cliente_id: clienteTomadorId || null
+            
+          });
+        
+          setShowBitacoraModal(true);
+          return; // Muy importante para evitar navegación automática
         }
+        
       }
 
       console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
@@ -897,7 +919,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
           accion: "update",
           entity_type: "grupo_familiar",
           grupo_familiar_id: id,
-          cliente_id: null
+          cliente_id: obtenerClienteTomador() || null
+
         });
         setShowBitacoraModal(true);
         return; // ⬅️ Evita la navegación automática

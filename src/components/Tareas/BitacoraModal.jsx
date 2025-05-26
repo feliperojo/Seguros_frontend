@@ -49,17 +49,21 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   
     setGuardando(true);
     setError(null);
-  
+    
+
     try {
       const payload = {
         note: nota,
         concept_id: concepto,
-        assign_to_user_id: asignadoA || null,
         action_type: data?.accion || "create",
         entity_type: data?.entity_type || "cliente",
-        ...(data?.cliente_id ? { cliente_id: data.cliente_id } : {})  // solo si existe y no es null
+        ...(data?.cliente_id ? { cliente_id: data.cliente_id } : {}),
+        ...(data?.grupo_familiar_id ? { grupo_familiar_id: data.grupo_familiar_id } : {}),
+        ...(asignadoA ? { assign_to_user_id: asignadoA } : {})
       };
-  
+      
+     
+
       const method = logId ? "PUT" : "POST";
       const endpoint = logId
         ? `bitacora_operativa/${logId}/update`
