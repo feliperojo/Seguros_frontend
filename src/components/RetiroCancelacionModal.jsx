@@ -8,47 +8,60 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [personasTaxes, setPersonasTaxes] = useState(grupoFamiliar?.personas_taxes || 0);
   const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
-  
+
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
       // Filtrar solo coberturas activas
       const coberturasActivas = grupoFamiliar.coberturas.filter(
         c => c.estado_cobertura === "Activa" || c.activo === true
       );
-  
+
       const coberturasIniciales = coberturasActivas.map(c => ({
         ...c,
         fecha_cancelacion: c.fecha_cancelacion || "",
         fecha_retiro: c.fecha_retiro || "",
         nota_cancel: c.nota_cancel || "",
       }));
-  
+
       setCoberturas(coberturasIniciales);
       setPersonasTaxes(grupoFamiliar.personas_taxes || 0);
       setPersonasCobertura(grupoFamiliar.personas_cobertura || 0);
     }
   }, [grupoFamiliar]);
+
+  useEffect(() => {
+    const cantidadCancelados = coberturas.filter(c => c.fecha_cancelacion).length;
+    const cantidadRetirados = coberturas.filter(c => c.fecha_retiro).length;
   
+    const totalOriginalTaxes = grupoFamiliar?.personas_taxes || 0;
+    const totalOriginalCobertura = grupoFamiliar?.personas_cobertura || 0;
   
+    setPersonasTaxes(totalOriginalTaxes - cantidadRetirados);
+    setPersonasCobertura(totalOriginalCobertura - cantidadCancelados);
+  }, [coberturas]);
+  
+
+
   const handleChange = (index, field, value) => {
     const nuevasCoberturas = [...coberturas];
-  
+
     nuevasCoberturas[index][field] = value;
-  
+
     if (field === "fecha_cancelacion") {
       nuevasCoberturas[index]["vigente"] = value ? false : true;
+      nuevasCoberturas[index]["estado_cobertura"] = value ? "No" : nuevasCoberturas[index]["estado_cobertura"];
     }
-  
+
     if (field === "activo" && value === true) {
-      nuevasCoberturas[index]["fecha_retiro"] = ""; // Resetear retiro si activa
+      nuevasCoberturas[index]["fecha_retiro"] = "";
     }
-  
+
     setCoberturas(nuevasCoberturas);
   };
-  
-  
-  
-  
+
+
+
+
 
   const handleSave = async () => {
     setLoading(true);
@@ -59,17 +72,16 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
           fecha_retiro: cobertura.fecha_retiro || null,
           nota_cancel: cobertura.nota_cancel?.trim() || null,
           activo: cobertura.activo ?? false,
-          vigente: cobertura.vigente ?? true, // 👈 Asegúrate que se envíe
+          vigente: cobertura.vigente ?? true,
+          estado_cobertura: cobertura.estado_cobertura || "Yes"
         };
-        
-  
-        console.log(`📤 Enviando cobertura ID: ${cobertura.id}`);
-        console.table(payload);
-  
+
+
+
         const response = await apiRequest(`cobertura/${cobertura.id}`, "PUT", payload);
         console.log(`✅ Cobertura actualizada (ID ${cobertura.id}):`, response);
       }
-  
+
       // 👉 Actualizar grupo familiar
       const grupoPayload = {
         personas_taxes: personasTaxes,
@@ -85,10 +97,10 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
       setLoading(false);
     }
   };
-  
-  
-  
-  
+
+
+
+
 
   return (
     <Modal show={show} onHide={onHide} centered size="lg">
@@ -104,27 +116,28 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
           <Row>
             <Col md={4}><strong>ID Grupo Familiar:</strong> #{grupoFamiliar?.id}</Col>
             <Col md={4}>
-                <Form.Group>
-                    <Form.Label className="fw-semibold">Personas en Taxes</Form.Label>
-                    <Form.Control
-                    type="number"
-                    min={0}
-                    value={personasTaxes}
-                    onChange={(e) => setPersonasTaxes(parseInt(e.target.value) || 0)}
-                    />
-                </Form.Group>
-                </Col>
-                <Col md={4}>
-                <Form.Group>
-                    <Form.Label className="fw-semibold">Personas en Cobertura</Form.Label>
-                    <Form.Control
-                    type="number"
-                    min={0}
-                    value={personasCobertura}
-                    onChange={(e) => setPersonasCobertura(parseInt(e.target.value) || 0)}
-                    />
-                </Form.Group>
-                </Col>
+              <Form.Group>
+                <Form.Label className="fw-semibold">Personas en Taxes</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={personasTaxes}
+                  disabled
+                  readOnly
+                />
+              </Form.Group>
+            </Col>
+
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label className="fw-semibold">Personas en Cobertura</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={personasCobertura}
+                  disabled
+                  readOnly
+                />
+              </Form.Group>
+            </Col>
 
 
           </Row>
@@ -133,83 +146,83 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
         <hr />
 
         {coberturas.map((cobertura, index) => (
-  <div key={index} className="p-3 mb-4 border rounded bg-white shadow-sm">
-    <div className="d-flex justify-content-between align-items-center mb-2">
-      <h6 className="mb-0">
-        <Badge bg="primary" className="me-2">#{index + 1}</Badge>
-        {cobertura.cliente?.nombre_completo || "Cliente sin nombre"} <small className="text-muted">({cobertura.parentesco || "-"})</small>
-      </h6>
-    </div>
+          <div key={index} className="p-3 mb-4 border rounded bg-white shadow-sm">
+            <div className="d-flex justify-content-between align-items-center mb-2">
+              <h6 className="mb-0">
+                <Badge bg="primary" className="me-2">#{index + 1}</Badge>
+                {cobertura.cliente?.nombre_completo || "Cliente sin nombre"} <small className="text-muted">({cobertura.parentesco || "-"})</small>
+              </h6>
+            </div>
 
-    <Row className="mb-3">
-      <Col md={4}>
-        <div className="text-muted small">ID Póliza</div>
-        <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
-      </Col>
-      <Col md={4}>
-        <div className="text-muted small">Compañía</div>
-        <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
-      </Col>
-      <Col md={4}>
-        <div className="text-muted small">Año de Cobertura</div>
-        <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
-      </Col>
-    </Row>
+            <Row className="mb-3">
+              <Col md={4}>
+                <div className="text-muted small">ID Póliza</div>
+                <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
+              </Col>
+              <Col md={4}>
+                <div className="text-muted small">Compañía</div>
+                <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
+              </Col>
+              <Col md={4}>
+                <div className="text-muted small">Año de Cobertura</div>
+                <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
+              </Col>
+            </Row>
 
-    <Row>
+            <Row>
 
-      <Col md={6}>
-        <Form.Group>
-          <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
-          <Form.Control
-            type="date"
-            value={cobertura.fecha_cancelacion}
-            onChange={(e) => handleChange(index, "fecha_cancelacion", e.target.value)}
-          />
-        </Form.Group>
-      </Col>
-      <Col md={6}>
-        <Form.Group>
-          <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
-          <Form.Control
-                type="date"
-                value={cobertura.fecha_retiro}
-                disabled={cobertura.activo === true} // ← aquí se desactiva
-                onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
-              />
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={cobertura.fecha_cancelacion}
+                    onChange={(e) => handleChange(index, "fecha_cancelacion", e.target.value)}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={cobertura.fecha_retiro}
+                    disabled={cobertura.activo === true} // ← aquí se desactiva
+                    onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
+                  />
 
 
 
-        </Form.Group>
-      </Col>
-      <Col md={12} className="mt-3">
-        <Form.Group>
-          <Form.Check
-            type="checkbox"
-            label="Póliza activa para Taxes"
-            checked={cobertura.activo || false}
-            onChange={(e) =>
-              handleChange(index, "activo", e.target.checked)
-            }
-          />
-        </Form.Group>
-      </Col>
+                </Form.Group>
+              </Col>
+              <Col md={12} className="mt-3">
+                <Form.Group>
+                  <Form.Check
+                    type="checkbox"
+                    label="Póliza activa para Taxes"
+                    checked={cobertura.activo || false}
+                    onChange={(e) =>
+                      handleChange(index, "activo", e.target.checked)
+                    }
+                  />
+                </Form.Group>
+              </Col>
 
-      <Col md={12} className="mt-3">
-          <Form.Group>
-            <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
-            <Form.Control
-              as="textarea"
-              rows={2}
-              value={cobertura.nota_cancel}
-              onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
-              placeholder="Motivo o contexto del retiro..."
-            />
-              </Form.Group>
-            </Col>
-          </Row>
-        </div>
-      ))}
+              <Col md={12} className="mt-3">
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    value={cobertura.nota_cancel}
+                    onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
+                    placeholder="Motivo o contexto del retiro..."
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          </div>
+        ))}
 
       </Modal.Body>
 
