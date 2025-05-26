@@ -85,7 +85,7 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
     if (field === "fecha_cancelacion") {
       nuevasCoberturas[index]["vigente"] = value ? false : true;
-      nuevasCoberturas[index]["estado_cobertura"] = value ? "No" : nuevasCoberturas[index]["estado_cobertura"];
+      nuevasCoberturas[index]["estado_cobertura"] = value ? "No" : "Yes";
     }
 
     if (field === "activo" && value === true) {
@@ -109,7 +109,7 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
           nota_cancel: cobertura.nota_cancel?.trim() || null,
           activo: cobertura.activo ?? false,
           vigente: cobertura.vigente ?? true,
-          estado_cobertura: cobertura.estado_cobertura || "Yes"
+          estado_cobertura: cobertura.estado_cobertura
         };
 
 
