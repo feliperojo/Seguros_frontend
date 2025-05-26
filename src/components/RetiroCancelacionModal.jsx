@@ -8,10 +8,12 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const [loading, setLoading] = useState(false);
   const [personasTaxes, setPersonasTaxes] = useState(grupoFamiliar?.personas_taxes || 0);
   const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
+  const [fechasOriginales, setFechasOriginales] = useState([]);
+  const [cambiosDetectados, setCambiosDetectados] = useState(false);
+
 
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
-      // Filtrar solo coberturas activas
       const coberturasActivas = grupoFamiliar.coberturas.filter(
         c => c.estado_cobertura === "Activa" || c.activo === true
       );
@@ -24,22 +26,56 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
       }));
 
       setCoberturas(coberturasIniciales);
+      setFechasOriginales(
+        coberturasIniciales.map(c => ({
+          id: c.id,
+          fecha_cancelacion: c.fecha_cancelacion,
+          fecha_retiro: c.fecha_retiro
+        }))
+      );
+
       setPersonasTaxes(grupoFamiliar.personas_taxes || 0);
       setPersonasCobertura(grupoFamiliar.personas_cobertura || 0);
     }
   }, [grupoFamiliar]);
 
+
   useEffect(() => {
-    const cantidadCancelados = coberturas.filter(c => c.fecha_cancelacion).length;
-    const cantidadRetirados = coberturas.filter(c => c.fecha_retiro).length;
-  
+    if (fechasOriginales.length === 0 || coberturas.length === 0) return;
+
+    let cambiosEnCancelaciones = 0;
+    let cambiosEnRetiros = 0;
+    let hayCambios = false;
+
+    coberturas.forEach((actual) => {
+      const original = fechasOriginales.find(f => f.id === actual.id);
+
+      if (original) {
+        const nuevaCancelacion = !original.fecha_cancelacion && actual.fecha_cancelacion;
+        const nuevaRetiro = !original.fecha_retiro && actual.fecha_retiro;
+
+        if (nuevaCancelacion) cambiosEnCancelaciones++;
+        if (nuevaRetiro) cambiosEnRetiros++;
+
+        // Detecta cambio en fechas o notas
+        if (
+          original.fecha_cancelacion !== actual.fecha_cancelacion ||
+          original.fecha_retiro !== actual.fecha_retiro ||
+          actual.nota_cancel?.trim()
+        ) {
+          hayCambios = true;
+        }
+      }
+    });
+
     const totalOriginalTaxes = grupoFamiliar?.personas_taxes || 0;
     const totalOriginalCobertura = grupoFamiliar?.personas_cobertura || 0;
-  
-    setPersonasTaxes(totalOriginalTaxes - cantidadRetirados);
-    setPersonasCobertura(totalOriginalCobertura - cantidadCancelados);
-  }, [coberturas]);
-  
+
+    setPersonasTaxes(totalOriginalTaxes - cambiosEnRetiros);
+    setPersonasCobertura(totalOriginalCobertura - cambiosEnCancelaciones);
+    setCambiosDetectados(hayCambios); // ← ACTUALIZA BOTÓN
+  }, [coberturas, fechasOriginales]);
+
 
 
   const handleChange = (index, field, value) => {
@@ -228,9 +264,10 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>Cerrar</Button>
-        <Button variant="primary" onClick={handleSave} disabled={loading}>
+        <Button variant="primary" onClick={handleSave} disabled={loading || !cambiosDetectados}>
           {loading ? "Guardando..." : "Guardar Cambios"}
         </Button>
+
       </Modal.Footer>
     </Modal>
   );
