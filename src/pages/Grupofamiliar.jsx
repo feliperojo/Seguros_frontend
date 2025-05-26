@@ -346,6 +346,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         codigo_poliza: cob.codigo_poliza || "",
         parentesco: cob.parentesco || "",
         vigencia: cob.fecha_cancelacion ? false : true,
+        activo: cob.activo ?? true,
       };
   
       grupos[tipo].members.push(member);
@@ -867,12 +868,13 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               pagador_id: member.pagador_id || "",
               cliente_id: member.id,
               cobertura_tipo: group.cobertura_tipo,
-              vigencia: member.vigencia
+              vigencia: member.vigencia,
+              activo: cob.activo ?? true
             }))
           )
         };
   
-        console.log("📤 Payload para actualización:", payload);
+        
         grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
       } else {
         // CREACIÓN DEL GRUPO
@@ -1252,9 +1254,11 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                     <Accordion.Body>
 
                       <Row>
-                        {group.members.length > 0 ? (
-                          group.members.map((member, index) => (
-                            <Col key={member.id} lg={4} md={6} className="mb-3">
+                      {group.members.filter(m => m.activo === true).length > 0 ? (
+                          group.members
+                            .filter(m => m.activo === true)
+                            .map((member, index) => (
+                              <Col key={member.id} lg={4} md={6} className="mb-3">
                              <Card 
                                   className={`h-100 shadow-sm ${member.estado_cobertura !== "Yes" ? 'border-danger bg-light-subtle' : ''}`}>
 

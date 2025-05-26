@@ -319,7 +319,7 @@ const CentroOperaciones = () => {
               <tbody>
              
                 {[...(tareasData.data || [])]
-                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at)) // 🔽 orden descendente
+                  .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                   .map((t) => (
                     <tr key={t.id}>
                       <td>{new Date(t.created_at).toLocaleString()}</td>
