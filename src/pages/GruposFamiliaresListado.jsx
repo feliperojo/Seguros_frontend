@@ -420,6 +420,7 @@ const getCompaniaNombre = (grupo) => {
                   onHide={() => setShowRetiroModal(false)}
                   grupoFamiliar={grupoParaRetiro}
                   onSave={(updatedGrupo) => {
+                    fetchGrupos();
                     // Actualizar el grupo en la lista
                     setGrupos(prev =>
                       prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)

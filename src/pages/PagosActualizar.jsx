@@ -8,9 +8,14 @@ import {
   Row,
   Col,
   Pagination,
-  Badge
+  Badge,
+  Button
 } from "react-bootstrap";
+import { FaEye } from "react-icons/fa";
+
 import apiRequest from "../services/api";
+import ModalMediosPago from "../components/ModalMediosPago"; // Ajusta la ruta según tu estructura
+
 
 const PagosActualizar = () => {
   const [loading, setLoading] = useState(false);
@@ -23,7 +28,14 @@ const PagosActualizar = () => {
   const [filtros, setFiltros] = useState({ cliente: "", compania: "", estado: "", dia_pago: "" });
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 10;
-
+  const [showMediosModal, setShowMediosModal] = useState(false);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  
+  const abrirModalMedios = (clienteId) => {
+    setClienteSeleccionado(clienteId);
+    setShowMediosModal(true);
+  };
+  
   const mostrarAlerta = (mensaje, tipo = "success", duracion = 5000) => {
     setAlerta({ show: true, variant: tipo, mensaje });
     setTimeout(() => setAlerta({ show: false, variant: "", mensaje: "" }), duracion);
@@ -165,6 +177,7 @@ const PagosActualizar = () => {
                 <th>Fecha de Pago</th>
                 <th>Compañía</th>
                 <th>Monto</th>
+                <th>Medios</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -178,6 +191,17 @@ const PagosActualizar = () => {
                   <td>{p.fecha_pago || "-"}</td>
                   <td>{p.cobertura?.compania?.nombre || "-"}</td>
                   <td>${Number(p.monto).toFixed(2)}</td>
+                  <td className="text-center">
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={() => abrirModalMedios(p.cliente?.id)}
+                          disabled={!p.cliente?.id}
+                        >
+                          <FaEye />
+                        </Button>
+                      </td>
+
                   <td>
                     <Form.Select
                       value={p.estado}
@@ -215,8 +239,15 @@ const PagosActualizar = () => {
           )}
         </div>
       )}
+  <ModalMediosPago
+  show={showMediosModal}
+  onHide={() => setShowMediosModal(false)}
+  clienteId={clienteSeleccionado}
+/>
     </Container>
+    
   );
+
 };
 
 export default PagosActualizar;
