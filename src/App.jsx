@@ -15,6 +15,12 @@ import GrupofamiliarCreate from "./components/GrupoFamiliar/GrupofamiliarCreate"
 import GrupofamiliarEdit from "./components/GrupoFamiliar/GrupofamiliarEdit";
 import Auditoria from "./components/Auditoria";
 import CentroOperaciones from "./pages/CentroOperaciones";
+import PagosGenerar from './pages/PagosGenerar';
+import PagosActualizar from './pages/PagosActualizar';
+import PagosInforme from './pages/PagosInforme';
+
+
+
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
   return localStorage.getItem("auth_token") !== null;
@@ -47,6 +53,13 @@ const App = () => {
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
         <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />
+
+
+        <Route path="/Pagos/Generarpagos" element={<PagosGenerar />} />
+        <Route path="/Pagos/pagos" element={<PagosActualizar />} />
+        <Route path="/Pagos/cartera" element={<PagosInforme />} />
+
+
       
       </Route>
 

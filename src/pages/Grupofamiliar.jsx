@@ -28,6 +28,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         personas_cobertura: initialData.personas_cobertura || "",
         ingreso_familiar: initialData.ingreso_familiar_anual || 0,
         persona_contacto: initialData.persona_contacto || "",
+        relacion: initialData.relacion || "",
         telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
         telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
         notas_telefonos: initialData.nota || "",
@@ -73,6 +74,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     personas_cobertura: "",
     ingreso_familiar: "",
     persona_contacto: "",
+    relacion: "",
     medio_contacto: "",
     telefono_1: "",
     telefono_2: "",
@@ -188,6 +190,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       personas_cobertura: initialData.personas_cobertura || "",
       ingreso_familiar: initialData.ingreso_familiar_anual || 0,
       persona_contacto: initialData.persona_contacto || "",
+      relacion: initialData.relacion || "",
       telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
       telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
       notas_telefonos: initialData.nota || "",
@@ -347,6 +350,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         parentesco: cob.parentesco || "",
         vigencia: cob.fecha_cancelacion ? false : true,
         activo: cob.activo ?? true,
+        dia_pago: cob.dia_pago || 1,
+        tipo_pago: cob.tipo_pago || "",
       };
 
       grupos[tipo].members.push(member);
@@ -813,7 +818,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     }
     return null;
   };
-  
+
 
   const handleSubmit = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -837,6 +842,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       const grupoFamiliarData = {
         personas_taxes: policyData.personas_en_taxes,
         personas_cobertura: policyData.personas_cobertura,
+        relacion: policyData.relacion,
         ingreso_familiar_anual: ingresoFamiliarFinal,
         persona_contacto: policyData.persona_contacto,
         pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
@@ -879,7 +885,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               cliente_id: member.id,
               cobertura_tipo: group.cobertura_tipo,
               vigencia: member.vigencia,
-              activo: member.activo ?? true
+              activo: member.activo ?? true,
+              dia_pago: member.dia_pago || 1,
+              tipo_pago: member.tipo_pago || ""
 
             }))
           )
@@ -890,25 +898,25 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       } else {
         // CREACIÓN DEL GRUPO
         grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
-       
+
         const grupoFamiliarId = grupoFamiliarResponse.data?.id;
         if (grupoFamiliarId) {
           await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
-        
+
           const clienteTomadorId = obtenerClienteTomador();
-        
+
           setBitacoraData({
             accion: "create",
             entity_type: "grupo_familiar",
             grupo_familiar_id: grupoFamiliarId,
             cliente_id: clienteTomadorId || null
-            
+
           });
-        
+
           setShowBitacoraModal(true);
           return; // Muy importante para evitar navegación automática
         }
-        
+
       }
 
       console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
@@ -1060,7 +1068,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               <hr />
 
               <Row className="mb-4">
-                <Col md={4}>
+                <Col md={2}>
                   <Form.Group>
                     <Form.Label className="fw-medium">Persona Contacto</Form.Label>
                     <Form.Control
@@ -1069,6 +1077,27 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                       value={policyData.persona_contacto}
                       onChange={handlePolicyChange}
                     />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Seleccione la relacion entre la persona de contacto y el grupo familiar">
+                     Relación
+                    </Form.Label>
+                    <Form.Select name="relacion" value={policyData.relacion} onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="CONYUGE">CONYUGE</option>
+                      <option value="HIJO">HIJO</option>
+                      <option value="HERMANO">HERMANO</option>
+                      <option value="PADRE">PADRE</option>
+                      <option value="MADRE">MADRE</option>
+                      <option value="NIETO/A">NIETO/A</option>
+                      <option value="ABUELO/A">ABUELO/A</option>
+                      <option value="SUEGRO/A">SUEGRO/A</option>
+                      <option value="TIO/A">TIO/A</option>
+                      <option value="SOBRINO/A">SOBRINO/A</option>
+                      <option value="AMIGO">AMIGO</option>
+                    </Form.Select>
                   </Form.Group>
                 </Col>
                 <Col md={2}>
@@ -1322,7 +1351,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                                         )}
 
                                         <Dropdown.Divider />
-                                     {/* <Dropdown.Divider />
+                                        {/* <Dropdown.Divider />
                                           <Dropdown.Item className="text-danger" onClick={() => removeMemberFromGroup(group.id, member.id)}>
                                             <i className="bi bi-trash me-2"></i> Eliminar
                                           </Dropdown.Item> */}
@@ -1438,10 +1467,10 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                                         <span className="text-muted small fw-medium">Cobertura:</span>
                                         <span
                                           className={`badge rounded-pill text-white ${member.estado_cobertura === "Yes"
-                                              ? "bg-success"
-                                              : member.estado_cobertura === "No"
-                                                ? "bg-secondary"
-                                                : "bg-warning text-dark"
+                                            ? "bg-success"
+                                            : member.estado_cobertura === "No"
+                                              ? "bg-secondary"
+                                              : "bg-warning text-dark"
                                             }`}
                                         >
                                           {member.estado_cobertura || "No definido"}
@@ -1862,6 +1891,33 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
 
                 </Col>
+              </Row>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Dia C/M</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={currentEditMember.dia_pago || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, dia_pago: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label>Tipo de pago</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.tipo_pago || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, tipo_pago: e.target.value })}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
+                      <option value="CTE PAGA">CTE PAGA</option>
+                      <option value="MES A MES">MES A MES</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+
               </Row>
             </Form>
           )}

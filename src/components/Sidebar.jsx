@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, 
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, 
-  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs
+  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -148,11 +148,47 @@ useEffect(() => {
                 <FaPlus /> Crear Grupo
               </Link>
               <Link to="/Grupofamiliar/proximos-vencimientos" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
-                <FaCalendarAlt /> Próximos Vencimientos
+                <FaCalendarAlt /> Polizas Vencidas
               </Link>
             </div>
           )}
         </div>
+    
+       {/* PAGOS */}
+       <div className="nav-item">
+          <div 
+            className={`nav-link ${location.pathname.includes('/Pagos') ? 'active' : ''}`}
+            onClick={(e) => isOpen && toggleSubmenu('pagos', e)}
+          >
+            <FaChartLine /> 
+            {isOpen && (
+              <>
+                <span>Pagos</span>
+                {expandedMenu === 'pagos' ? 
+                  <FaChevronDown className="submenu-icon" /> : 
+                  <FaChevronRight className="submenu-icon" />
+                }
+              </>
+            )}
+          </div>
+          
+          {/* Submenú de Pagos */}
+          {isOpen && expandedMenu === 'pagos' && (
+            <div className="submenu">
+              <Link to="/Pagos/Generarpagos" className={`submenu-link ${isActive('/Pagos/Generarpagos') ? 'active' : ''}`}>
+                <FaMoneyCheckAlt /> Generacion de Pagos
+              </Link>
+              <Link to="/Pagos/pagos" className={`submenu-link ${isActive('/Pagos/pagos') ? 'active' : ''}`}>
+                <FaSyncAlt /> Actualizacion de Pagos
+              </Link>
+              <Link to="/Pagos/cartera" className={`submenu-link ${isActive('/Pagos/cartera') ? 'active' : ''}`}>
+                <FaFileInvoiceDollar /> Informe de Pagos
+              </Link>
+            </div>
+          )}
+        </div>
+        
+
         
         {/* Informes - Con submenú */}
         <div className="nav-item">
@@ -184,6 +220,7 @@ useEffect(() => {
             </div>
           )}
         </div>
+
         
         {/* Herramientas - Con submenú */}
         <div className="nav-item">
