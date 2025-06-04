@@ -352,6 +352,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         activo: cob.activo ?? true,
         dia_pago: cob.dia_pago || 1,
         tipo_pago: cob.tipo_pago || "",
+        grupo: cob.grupo || "G1",
       };
 
       grupos[tipo].members.push(member);
@@ -378,6 +379,12 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     }
   };
 
+  const grupoColorMap = {
+    G1: "#0d6efd",   // Azul Bootstrap
+    G2: "#198754",   // Verde Bootstrap
+    G3: "#ffc107"    // Amarillo Bootstrap
+  };
+  
   const formatPhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
     const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
@@ -476,7 +483,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   ingreso_anual: ingresoAnualCliente,
                   parentesco: "",
                   fecha_activacion: new Date().toISOString().split("T")[0],
-                  activo: true
+                  activo: true,
+                  grupo: "G1"
                 }
               ]
             };
@@ -887,7 +895,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               vigencia: member.vigencia,
               activo: member.activo ?? true,
               dia_pago: member.dia_pago || 1,
-              tipo_pago: member.tipo_pago || ""
+              tipo_pago: member.tipo_pago || "",
+              grupo: member.grupo || "G1",
 
             }))
           )
@@ -1312,52 +1321,67 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                             .map((member, index) => (
                               <Col key={member.id} lg={4} md={6} className="mb-3">
                                 <Card
+                                
                                   className={`h-100 shadow-sm ${member.estado_cobertura !== "Yes" ? 'border-danger bg-light-subtle' : ''}`}>
 
 
-                                  <Card.Header className="d-flex justify-content-between align-items-center bg-light">
-                                    <h6 className="mb-0">{member.nombre}</h6>
-                                    <Dropdown>
-                                      <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
-                                        <i className="bi bi-three-dots-vertical"></i>
-                                      </Dropdown.Toggle>
-                                      <Dropdown.Menu align="end">
-                                        <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
-                                          <i className="bi bi-pencil me-2"></i> Editar
-                                        </Dropdown.Item>
-                                        {index > 0 && (
-                                          <Dropdown.Item onClick={() => {
-                                            Swal.fire({
-                                              title: '¿Está seguro?',
-                                              text: '¿Desea copiar la información del primer miembro a este miembro?',
-                                              icon: 'question',
-                                              showCancelButton: true,
-                                              confirmButtonText: 'Sí, copiar',
-                                              cancelButtonText: 'Cancelar',
-                                              customClass: {
-                                                confirmButton: 'btn btn-success me-2',
-                                                cancelButton: 'btn btn-secondary',
-                                                actions: 'd-flex justify-content-center gap-2'
-                                              },
-                                              buttonsStyling: false
-                                            }).then((result) => {
-                                              if (result.isConfirmed) {
-                                                copiarDatosDelPrimero(group.id, index);
-                                              }
-                                            });
-                                          }}>
-                                            <i className="bi bi-copy me-2"></i> Copiar datos
-                                          </Dropdown.Item>
-                                        )}
+                                      <Card.Header className="d-flex justify-content-between align-items-start bg-light flex-wrap">
+                                        <div className="d-flex align-items-center flex-wrap gap-2">
+                                          <Form.Select
+                                            size="sm"
+                                            value={member.grupo || "G1"}
+                                            style={{
+                                              backgroundColor: grupoColorMap[member.grupo || "G1"],
+                                              color: "#fff",
+                                              fontWeight: "bold",
+                                              width: "55px",
+                                              padding: "2px 8px"
+                                            }}
+                                            onChange={(e) => updateMemberData(group.id, member.id, "grupo", e.target.value)}
+                                          >
+                                            <option value="G1">G1</option>
+                                            <option value="G2">G2</option>
+                                            <option value="G3">G3</option>
+                                          </Form.Select>
+                                              <h6 className="mb-0 me-2">{member.nombre}</h6>
+                                        </div>
 
-                                        <Dropdown.Divider />
-                                        {/* <Dropdown.Divider />
-                                          <Dropdown.Item className="text-danger" onClick={() => removeMemberFromGroup(group.id, member.id)}>
-                                            <i className="bi bi-trash me-2"></i> Eliminar
-                                          </Dropdown.Item> */}
-                                      </Dropdown.Menu>
-                                    </Dropdown>
-                                  </Card.Header>
+                                        <Dropdown>
+                                          <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
+                                            <i className="bi bi-three-dots-vertical"></i>
+                                          </Dropdown.Toggle>
+                                          <Dropdown.Menu align="end">
+                                            <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
+                                              <i className="bi bi-pencil me-2"></i> Editar
+                                            </Dropdown.Item>
+                                            {index > 0 && (
+                                              <Dropdown.Item onClick={() => {
+                                                Swal.fire({
+                                                  title: '¿Está seguro?',
+                                                  text: '¿Desea copiar la información del primer miembro a este miembro?',
+                                                  icon: 'question',
+                                                  showCancelButton: true,
+                                                  confirmButtonText: 'Sí, copiar',
+                                                  cancelButtonText: 'Cancelar',
+                                                  customClass: {
+                                                    confirmButton: 'btn btn-success me-2',
+                                                    cancelButton: 'btn btn-secondary',
+                                                    actions: 'd-flex justify-content-center gap-2'
+                                                  },
+                                                  buttonsStyling: false
+                                                }).then((result) => {
+                                                  if (result.isConfirmed) {
+                                                    copiarDatosDelPrimero(group.id, index);
+                                                  }
+                                                });
+                                              }}>
+                                                <i className="bi bi-copy me-2"></i> Copiar datos
+                                              </Dropdown.Item>
+                                            )}
+                                          </Dropdown.Menu>
+                                        </Dropdown>
+                                      </Card.Header>
+
                                   <Card.Body>
                                     <div className="mb-3">
                                       <Form.Group className="mb-2">
@@ -1370,6 +1394,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                                           placeholder="ID Póliza"
                                         />
                                       </Form.Group>
+
                                       <Form.Group className="mb-2">
                                         <Form.Label className="small text-muted mb-1">Parentesco</Form.Label>
                                         <Form.Select

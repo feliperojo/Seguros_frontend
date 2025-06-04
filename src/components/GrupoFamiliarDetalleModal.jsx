@@ -2,6 +2,13 @@ import React, { useState } from "react";
 import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
 import { FaFileExport } from "react-icons/fa";
 
+const grupoColorMap = {
+  G1: "#0d6efd",   // Azul
+  G2: "#198754",   // Verde
+  G3: "#ffc107"    // Amarillo
+};
+
+
 const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) => {
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
 
@@ -215,7 +222,22 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                     .filter(c => mostrarInactivas || c.activo === true || c.activo === "true" || c.activo === 1)
                     .map((c, index) => (
                       <tr key={c.id || index} style={c.parentesco?.toUpperCase() === "TOMADOR" ? { backgroundColor: '#fff9db' } : {}}>
-                        <td>{c.codigo_poliza || "-"}</td>
+                       <td>
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              width: '10px',
+                              height: '10px',
+                              borderRadius: '50%',
+                              backgroundColor: grupoColorMap[c.grupo] || '#6c757d',
+                              marginRight: '6px',
+                              verticalAlign: 'middle'
+                            }}
+                            title={`Grupo ${c.grupo || 'N/A'}`}
+                          ></span>
+                          {c.codigo_poliza || "-"}
+                        </td>
+
                         <td>
                           <strong>{c.cliente?.nombre_completo || "-"}</strong>
                           {c.parentesco?.toUpperCase() === "TOMADOR" && (
