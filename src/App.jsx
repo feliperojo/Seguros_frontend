@@ -3,7 +3,7 @@ import MainLayout from "./layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Cliente from "./pages/Clientes";
 import Grupofamiliar from "./pages/Grupofamiliar";
-import Informes from "./pages/Informes";
+
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
@@ -18,7 +18,8 @@ import CentroOperaciones from "./pages/CentroOperaciones";
 import PagosGenerar from './pages/PagosGenerar';
 import PagosActualizar from './pages/PagosActualizar';
 import PagosInforme from './pages/PagosInforme';
-
+import InformeCliente from './pages/InformeCliente'
+import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
 
 
 // Función para verificar si el usuario está autenticado
@@ -37,12 +38,13 @@ const App = () => {
       {/* Página de Login (pública) */}
       <Route path="/login" element={<Login />} />
       <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />
+      <Route path="/grupo-familiar/:id/historial" element={<GrupoFamiliarHistorial />} />
       {/* Rutas protegidas dentro del MainLayout */}
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/clientes/crear" element={<Cliente />} />
         
-        <Route path="/informes" element={<Informes />} />
+     
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Herramientas/auditoria" element={<Auditoria />} />
         <Route path="/herramientas/operaciones" element={<CentroOperaciones />} />
@@ -59,6 +61,7 @@ const App = () => {
         <Route path="/Pagos/pagos" element={<PagosActualizar />} />
         <Route path="/Pagos/cartera" element={<PagosInforme />} />
 
+        <Route path="/informes/historialCliente" element={<InformeCliente />} />
 
       
       </Route>

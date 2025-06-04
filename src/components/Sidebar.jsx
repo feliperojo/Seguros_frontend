@@ -211,7 +211,7 @@ useEffect(() => {
           {/* Submenú de Informes */}
           {isOpen && expandedMenu === 'informes' && (
             <div className="submenu">
-              <Link to="/Informes/clientes" className={`submenu-link ${isActive('/Informes/clientes') ? 'active' : ''}`}>
+              <Link to="/Informes/historialCliente" className={`submenu-link ${isActive('/Informes/historialCliente') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Clientes
               </Link>
               <Link to="/Informes/polizas" className={`submenu-link ${isActive('/Informes/polizas') ? 'active' : ''}`}>

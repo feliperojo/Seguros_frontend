@@ -242,19 +242,32 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
         </div>
       )}
 
-      {/* Acción final */}
-      <div className="text-end">
-        <Button
-          variant="outline-primary"
-          onClick={() => {
-            onHide();
-            window.open(`/grupo-familiar/${grupo.id}/reporte`, '_blank');
-          }}
-        >
-          <FaFileExport className="me-2" />
-          Ver Detalles Completos
-        </Button>
-      </div>
+     {/* Acción final */}
+<div className="text-end">
+  <Button
+    variant="outline-primary"
+    className="me-2" // Margen derecho para separación
+    onClick={() => {
+      onHide();
+      window.open(`/grupo-familiar/${grupo.id}/reporte`, '_blank');
+    }}
+  >
+    <FaFileExport className="me-2" />
+    Ver Detalles Completos
+  </Button>
+
+  <Button
+    variant="outline-success" // Color diferente
+    onClick={() => {
+      onHide();
+      window.open(`/grupo-familiar/${grupo.id}/historial`, '_blank');
+    }}
+  >
+    <FaFileExport className="me-2" />
+    Ver Historial
+  </Button>
+</div>
+
     </div>
   )}
 </Modal.Body>
