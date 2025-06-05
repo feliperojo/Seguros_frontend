@@ -364,14 +364,7 @@ const GruposFamiliaresListado = () => {
                               >
                                 <FaTrashAlt />
                               </Button>
-                              <Button
-                                variant="outline-secondary"
-                                size="sm"
-                                onClick={() => handleOpenRetiroModal(grupo)}
-                                title="Retiros y cancelación"
-                              >
-                                <FaCog />
-                              </Button>
+                        
 
 
                             </div>
@@ -415,7 +408,19 @@ const GruposFamiliaresListado = () => {
         getTomadorNombre={getTomadorNombre}
       />
 
-
+      <RetiroCancelacionModal
+        show={showRetiroModal}
+        onHide={() => setShowRetiroModal(false)}
+        grupoFamiliar={grupoParaRetiro}
+        onSave={(updatedGrupo) => {
+          fetchGrupos();
+          // Actualizar el grupo en la lista
+          setGrupos(prev =>
+            prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
+          );
+          setShowRetiroModal(false);
+        }}
+      />
 
 
 
