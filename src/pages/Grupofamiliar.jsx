@@ -138,8 +138,11 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   });
 
   useEffect(() => {
-    const totalMiembros = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
-    const totalYes = coverageGroups.reduce((sum, group) =>
+    const totalMiembros = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length,
+      0
+    );
+        const totalYes = coverageGroups.reduce((sum, group) =>
       sum + group.members.filter(m => m.estado_cobertura === "Yes").length
       , 0);
 
@@ -148,13 +151,17 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   }, [coverageGroups]);
 
   useEffect(() => {
-    const miembros = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
-    const conYes = coverageGroups.reduce((sum, group) => sum + group.members.filter(m => m.estado_cobertura === "Yes").length, 0);
-
+    const miembros = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length, 0
+    );
+    const conYes = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.estado_cobertura === "Yes" && m.activo === true && !m.fecha_retiro).length, 0
+    );
+  
     setTotalMiembros(miembros);
     setTotalYes(conYes);
   }, [coverageGroups]);
-
+  
   // Initialize the first coverage group if none exists
   useEffect(() => {
     if (coverageGroups.length === 0) {
@@ -353,6 +360,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         dia_pago: cob.dia_pago || 1,
         tipo_pago: cob.tipo_pago || "",
         grupo: cob.grupo || "G1",
+        nota_cancel:cob.nota_cancel || "",
       };
 
       grupos[tipo].members.push(member);
@@ -384,7 +392,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     G2: "#198754",   // Verde Bootstrap
     G3: "#ffc107"    // Amarillo Bootstrap
   };
-  
+
   const formatPhoneNumber = (value) => {
     const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
     const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
@@ -741,20 +749,22 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       prevGroups.map(group =>
         group.id === currentEditMember.groupId
           ? {
-            ...group,
-            members: group.members.map(member =>
-              member.id === currentEditMember.id
-                ? {
-                  ...member,
-                  ...currentEditMember,
-                  precio: isNaN(parsedPrecio) ? 0 : parsedPrecio
-                }
-                : member
-            )
-          }
+              ...group,
+              members: group.members.map(member =>
+                member.id === currentEditMember.id
+                  ? {
+                      ...member,
+                      ...currentEditMember,
+                      precio: isNaN(parsedPrecio) ? 0 : parsedPrecio,
+                      activo: currentEditMember.activo || false
+                    }
+                  : member
+              )
+            }
           : group
       )
     );
+    
 
     setShowEditModal(false);
     setCurrentEditMember(null);
@@ -897,6 +907,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               dia_pago: member.dia_pago || 1,
               tipo_pago: member.tipo_pago || "",
               grupo: member.grupo || "G1",
+              nota_cancel: member.nota_cancel || "",
 
             }))
           )
@@ -1091,7 +1102,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                 <Col md={2}>
                   <Form.Group>
                     <Form.Label className="fw-medium" title="Seleccione la relacion entre la persona de contacto y el grupo familiar">
-                     Relación
+                      Relación
                     </Form.Label>
                     <Form.Select name="relacion" value={policyData.relacion} onChange={handlePolicyChange}>
                       <option value="">Seleccione</option>
@@ -1321,66 +1332,66 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                             .map((member, index) => (
                               <Col key={member.id} lg={4} md={6} className="mb-3">
                                 <Card
-                                
+
                                   className={`h-100 shadow-sm ${member.estado_cobertura !== "Yes" ? 'border-danger bg-light-subtle' : ''}`}>
 
 
-                                      <Card.Header className="d-flex justify-content-between align-items-start bg-light flex-wrap">
-                                        <div className="d-flex align-items-center flex-wrap gap-2">
-                                          <Form.Select
-                                            size="sm"
-                                            value={member.grupo || "G1"}
-                                            style={{
-                                              backgroundColor: grupoColorMap[member.grupo || "G1"],
-                                              color: "#fff",
-                                              fontWeight: "bold",
-                                              width: "55px",
-                                              padding: "2px 8px"
-                                            }}
-                                            onChange={(e) => updateMemberData(group.id, member.id, "grupo", e.target.value)}
-                                          >
-                                            <option value="G1">G1</option>
-                                            <option value="G2">G2</option>
-                                            <option value="G3">G3</option>
-                                          </Form.Select>
-                                              <h6 className="mb-0 me-2">{member.nombre}</h6>
-                                        </div>
+                                  <Card.Header className="d-flex justify-content-between align-items-start bg-light flex-wrap">
+                                    <div className="d-flex align-items-center flex-wrap gap-2">
+                                      <Form.Select
+                                        size="sm"
+                                        value={member.grupo || "G1"}
+                                        style={{
+                                          backgroundColor: grupoColorMap[member.grupo || "G1"],
+                                          color: "#fff",
+                                          fontWeight: "bold",
+                                          width: "55px",
+                                          padding: "2px 8px"
+                                        }}
+                                        onChange={(e) => updateMemberData(group.id, member.id, "grupo", e.target.value)}
+                                      >
+                                        <option value="G1">G1</option>
+                                        <option value="G2">G2</option>
+                                        <option value="G3">G3</option>
+                                      </Form.Select>
+                                      <h6 className="mb-0 me-2">{member.nombre}</h6>
+                                    </div>
 
-                                        <Dropdown>
-                                          <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
-                                            <i className="bi bi-three-dots-vertical"></i>
-                                          </Dropdown.Toggle>
-                                          <Dropdown.Menu align="end">
-                                            <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
-                                              <i className="bi bi-pencil me-2"></i> Editar
-                                            </Dropdown.Item>
-                                            {index > 0 && (
-                                              <Dropdown.Item onClick={() => {
-                                                Swal.fire({
-                                                  title: '¿Está seguro?',
-                                                  text: '¿Desea copiar la información del primer miembro a este miembro?',
-                                                  icon: 'question',
-                                                  showCancelButton: true,
-                                                  confirmButtonText: 'Sí, copiar',
-                                                  cancelButtonText: 'Cancelar',
-                                                  customClass: {
-                                                    confirmButton: 'btn btn-success me-2',
-                                                    cancelButton: 'btn btn-secondary',
-                                                    actions: 'd-flex justify-content-center gap-2'
-                                                  },
-                                                  buttonsStyling: false
-                                                }).then((result) => {
-                                                  if (result.isConfirmed) {
-                                                    copiarDatosDelPrimero(group.id, index);
-                                                  }
-                                                });
-                                              }}>
-                                                <i className="bi bi-copy me-2"></i> Copiar datos
-                                              </Dropdown.Item>
-                                            )}
-                                          </Dropdown.Menu>
-                                        </Dropdown>
-                                      </Card.Header>
+                                    <Dropdown>
+                                      <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
+                                        <i className="bi bi-three-dots-vertical"></i>
+                                      </Dropdown.Toggle>
+                                      <Dropdown.Menu align="end">
+                                        <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
+                                          <i className="bi bi-pencil me-2"></i> Editar
+                                        </Dropdown.Item>
+                                        {index > 0 && (
+                                          <Dropdown.Item onClick={() => {
+                                            Swal.fire({
+                                              title: '¿Está seguro?',
+                                              text: '¿Desea copiar la información del primer miembro a este miembro?',
+                                              icon: 'question',
+                                              showCancelButton: true,
+                                              confirmButtonText: 'Sí, copiar',
+                                              cancelButtonText: 'Cancelar',
+                                              customClass: {
+                                                confirmButton: 'btn btn-success me-2',
+                                                cancelButton: 'btn btn-secondary',
+                                                actions: 'd-flex justify-content-center gap-2'
+                                              },
+                                              buttonsStyling: false
+                                            }).then((result) => {
+                                              if (result.isConfirmed) {
+                                                copiarDatosDelPrimero(group.id, index);
+                                              }
+                                            });
+                                          }}>
+                                            <i className="bi bi-copy me-2"></i> Copiar datos
+                                          </Dropdown.Item>
+                                        )}
+                                      </Dropdown.Menu>
+                                    </Dropdown>
+                                  </Card.Header>
 
                                   <Card.Body>
                                     <div className="mb-3">
@@ -1704,23 +1715,20 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         <Modal.Body>
           {currentEditMember && (
             <Form>
-              <Row>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>ID Póliza</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={currentEditMember.codigo_poliza || ""}
-                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, codigo_poliza: e.target.value })}
-                    />
-                  </Form.Group>
-                </Col>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="fw-semibold">
+                  <Form.Label>ID Póliza</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={currentEditMember.codigo_poliza || ""}
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, codigo_poliza: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
 
-              </Row>
-
-              <Row>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Fecha Activación</Form.Label>
                     <Form.Control
                       type="date"
@@ -1731,22 +1739,10 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
                   </Form.Group>
                 </Col>
-                <Col md={6}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Fecha Cancelación</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={currentEditMember.fecha_cancelacion || ""}
-                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, fecha_cancelacion: e.target.value })}
-                      disabled
-                    />
-                  </Form.Group>
-                </Col>
-              </Row>
-
+            </Row>
               <Row>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Año Cobertura</Form.Label>
                     <Form.Control
                       type="text"
@@ -1756,7 +1752,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Compañía</Form.Label>
                     <Form.Select
                       value={currentEditMember.compania_id || ""}
@@ -1775,7 +1771,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
               <Row>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Plan</Form.Label>
                     <Form.Control
                       type="text"
@@ -1785,7 +1781,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Metal</Form.Label>
                     <Form.Select
                       value={currentEditMember.metal || ""}
@@ -1806,7 +1802,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
               <Row>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Elegibilidad</Form.Label>
                     <Form.Control
                       type="text"
@@ -1816,7 +1812,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Cobertura</Form.Label>
                     <Form.Select
                       value={currentEditMember.estado_cobertura || ""}
@@ -1824,8 +1820,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                         const valor = e.target.value;
                         setCurrentEditMember(prev => ({
                           ...prev,
-                          estado_cobertura: valor,
-                          fecha_activacion: valor === "Yes" ? prev.fecha_activacion : ""
+                          estado_cobertura: valor
                         }));
                       }}
                     >
@@ -1843,7 +1838,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
               <Row>
                 <Col md={4}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Red</Form.Label>
                     <Form.Select
                       value={currentEditMember.red || ""}
@@ -1857,7 +1852,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Pagador</Form.Label>
                     <Form.Select
                       value={currentEditMember.pagador_id || ""}
@@ -1875,7 +1870,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={4}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Precio</Form.Label>
                     <Form.Control
                       type="text"
@@ -1919,7 +1914,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               </Row>
               <Row>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Dia C/M</Form.Label>
                     <Form.Control
                       type="number"
@@ -1929,7 +1924,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   </Form.Group>
                 </Col>
                 <Col md={6}>
-                  <Form.Group className="mb-3">
+                  <Form.Group className="fw-semibold">
                     <Form.Label>Tipo de pago</Form.Label>
                     <Form.Select
                       value={currentEditMember.tipo_pago || ""}
@@ -1944,6 +1939,74 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                 </Col>
 
               </Row>
+              <Row>
+              <Col md={4}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Fecha Cancelación</Form.Label>
+                    <Form.Control
+                          type="date"
+                          value={currentEditMember.fecha_cancelacion || ""}
+                          onChange={(e) => {
+                            const cancelDate = e.target.value;
+                            setCurrentEditMember(prev => ({
+                              ...prev,
+                              fecha_cancelacion: cancelDate,
+                              vigencia: cancelDate ? false : true // Actualiza automáticamente vigencia
+                            }));
+                          }}
+                        />
+
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                    <Form.Control
+                        type="date"
+                        value={currentEditMember.fecha_retiro || ""}
+                        onChange={(e) => setCurrentEditMember({ ...currentEditMember, fecha_retiro: e.target.value })}
+                        disabled={currentEditMember.activo}
+                      />
+
+                  </Form.Group>
+                </Col>
+                <Col md={4} className="d-flex align-items-center">
+                <Form.Group className="mb-0">
+                <Form.Check
+                      type="checkbox"
+                      label="Póliza activa para Taxes"
+                      checked={currentEditMember.activo || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCurrentEditMember(prev => ({
+                          ...prev,
+                          activo: checked,
+                          fecha_retiro: checked ? "" : prev.fecha_retiro,
+                          nota_retiro: checked ? "" : prev.nota_retiro // Limpia si se activa
+                        }));
+                      }}
+                    />
+
+
+                </Form.Group>
+              </Col>
+              </Row>
+              <Row>
+              <Col md={12} className="mt-3">
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    value={currentEditMember.nota_cancel || ""}
+                    disabled={currentEditMember.activo} // ❌ Deshabilitado si está activo
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, nota_cancel: e.target.value })}
+                    placeholder="Ingrese una nota si se retira al cliente"
+                  />
+                </Form.Group>
+              </Col>
+
+                              </Row>
             </Form>
           )}
         </Modal.Body>

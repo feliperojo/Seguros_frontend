@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { 
-    Container, Card, Table, Badge, Button, 
-    Form, InputGroup, Dropdown, Modal
+import {
+  Container, Card, Table, Badge, Button,
+  Form, InputGroup, Dropdown, Modal
 } from "react-bootstrap";
-import { 
-    FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
-    FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport
+import {
+  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { useNavigate } from "react-router-dom";
@@ -19,14 +19,14 @@ import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
-  
+
   // Estados
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
   const [showRetiroModal, setShowRetiroModal] = useState(false);
-const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
+  const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
 
   // Estados para modales
   const [showViewModal, setShowViewModal] = useState(false);
@@ -39,28 +39,28 @@ const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
     setGrupoParaRetiro(grupo);
     setShowRetiroModal(true);
   };
-  
+
   // Cargar grupos al montar el componente o cuando cambia el estado seleccionado
   useEffect(() => {
     fetchGrupos();
   }, [selectedStatus]);
-  
+
   // Función para cargar grupos
   const fetchGrupos = async () => {
     setLoading(true);
     try {
       // Endpoint para grupos familiares con coberturas y clientes
       let endpoint = "grupo_familiar/grupos-familiares-full";
-      
+
       // Añadir parámetros de filtro por estado si es necesario
       if (selectedStatus !== "Todos los estados") {
         const estadoParam = selectedStatus.toLowerCase();
         endpoint += `?estado=${estadoParam}`;
       }
-      
+
       const response = await apiRequest(endpoint, "GET");
       console.log("Datos recibidos:", response);
-      
+
       if (response && response.status === "success" && Array.isArray(response.data)) {
         setGrupos(response.data);
       } else {
@@ -77,43 +77,43 @@ const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
   };
 
 
-// Añade esta función después de getCompaniaNombre o getTomadorNombre
-const getGrupoEstado = (grupo) => {
-  if (!grupo.coberturas || grupo.coberturas.length === 0) {
-    return { estado: "Sin póliza", variant: "secondary" };
-  }
+  // Añade esta función después de getCompaniaNombre o getTomadorNombre
+  const getGrupoEstado = (grupo) => {
+    if (!grupo.coberturas || grupo.coberturas.length === 0) {
+      return { estado: "Sin póliza", variant: "secondary" };
+    }
 
-  // Verificar si todas las coberturas tienen fecha de cancelación
-  const todasCanceladas = grupo.coberturas.every(cobertura => !!cobertura.fecha_cancelacion);
+    // Verificar si todas las coberturas tienen fecha de cancelación
+    const todasCanceladas = grupo.coberturas.every(cobertura => !!cobertura.fecha_cancelacion);
 
-  if (todasCanceladas) {
-    return { estado: "Cancelada", variant: "danger" };
-  }
+    if (todasCanceladas) {
+      return { estado: "Cancelada", variant: "danger" };
+    }
 
-  // Si al menos una no está cancelada
-  return { estado: "Activa", variant: "success" };
-};
+    // Si al menos una no está cancelada
+    return { estado: "Activa", variant: "success" };
+  };
 
   // Funciones para manejar acciones
   const handleOpenViewModal = (grupo) => {
-    
+
     setCurrentGrupo(grupo);
     setShowViewModal(true);
   };
-  
+
   const handleOpenEditModal = (grupo) => {
     const id = grupo.id;
     navigate(`/grupo-familiar/${id}/editar`);
   };
-  
+
   const handleDelete = (grupo) => {
     setCurrentGrupo(grupo);
     setShowDeleteModal(true);
   };
-  
+
   const confirmDelete = async () => {
     if (!currentGrupo) return;
-    
+
     setDeleteLoading(true);
     try {
       const id = currentGrupo.id;
@@ -131,88 +131,88 @@ const getGrupoEstado = (grupo) => {
       setDeleteLoading(false);
     }
   };
-  
+
 
   // Añade esta función para obtener el nombre de la compañía
-// Añade esta función para obtener el nombre de la compañía
-const getCompaniaNombre = (grupo) => {
-  if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
+  // Añade esta función para obtener el nombre de la compañía
+  const getCompaniaNombre = (grupo) => {
+    if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
+      return "-";
+    }
+
+    // Buscar la cobertura donde el parentesco sea "TOMADOR"
+    const tomadorCobertura = grupo.coberturas.find(
+      cobertura => cobertura.parentesco &&
+        cobertura.parentesco.toUpperCase() === "TOMADOR" &&
+        cobertura.compania
+    );
+
+    if (tomadorCobertura && tomadorCobertura.compania) {
+      return tomadorCobertura.compania.nombre || "-";
+    }
+
+    // Si no hay tomador, usar la primera cobertura que tenga compañía
+    const primeraCobertura = grupo.coberturas.find(
+      cobertura => cobertura.compania
+    );
+
+    if (primeraCobertura && primeraCobertura.compania) {
+      return primeraCobertura.compania.nombre || "-";
+    }
+
     return "-";
-  }
-  
-  // Buscar la cobertura donde el parentesco sea "TOMADOR"
-  const tomadorCobertura = grupo.coberturas.find(
-    cobertura => cobertura.parentesco && 
-    cobertura.parentesco.toUpperCase() === "TOMADOR" && 
-    cobertura.compania
-  );
-  
-  if (tomadorCobertura && tomadorCobertura.compania) {
-    return tomadorCobertura.compania.nombre || "-";
-  }
-  
-  // Si no hay tomador, usar la primera cobertura que tenga compañía
-  const primeraCobertura = grupo.coberturas.find(
-    cobertura => cobertura.compania
-  );
-  
-  if (primeraCobertura && primeraCobertura.compania) {
-    return primeraCobertura.compania.nombre || "-";
-  }
-  
-  return "-";
-};
+  };
 
   // Función para obtener el tomador (persona con parentesco TOMADOR)
   const getTomadorNombre = (grupo) => {
     if (!grupo.coberturas || grupo.coberturas.length === 0) {
       return "Sin asignar";
     }
-    
+
     // Buscar la cobertura donde el parentesco sea "TOMADOR"
     const tomadorCobertura = grupo.coberturas.find(
-      cobertura => cobertura.parentesco && 
-      cobertura.parentesco.toUpperCase() === "TOMADOR" && 
-      cobertura.cliente
+      cobertura => cobertura.parentesco &&
+        cobertura.parentesco.toUpperCase() === "TOMADOR" &&
+        cobertura.cliente
     );
-    
+
     if (tomadorCobertura && tomadorCobertura.cliente) {
-      return tomadorCobertura.cliente.nombre_completo || 
-             (tomadorCobertura.cliente.primer_nombre + " " + tomadorCobertura.cliente.apellidos) || 
-             "Sin asignar";
+      return tomadorCobertura.cliente.nombre_completo ||
+        (tomadorCobertura.cliente.primer_nombre + " " + tomadorCobertura.cliente.apellidos) ||
+        "Sin asignar";
     }
-    
+
     // Si no hay tomador específico, devolvemos sin asignar
     return "Sin asignar";
   };
-  
+
   // Filtrar grupos según la búsqueda
   const filteredGrupos = grupos.filter(grupo => {
     if (searchTerm === "") return true;
-    
+
     // Buscar en persona de contacto
     const contacto = grupo.persona_contacto || "";
     const id = grupo.id ? grupo.id.toString() : "";
     const tomador = getTomadorNombre(grupo);
-    
+
     // También buscar en los clientes de las coberturas
-    const clientesMatch = grupo.coberturas && grupo.coberturas.some(cobertura => 
-      cobertura.cliente && 
-      cobertura.cliente.nombre_completo && 
+    const clientesMatch = grupo.coberturas && grupo.coberturas.some(cobertura =>
+      cobertura.cliente &&
+      cobertura.cliente.nombre_completo &&
       cobertura.cliente.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    
-    return contacto.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           id.includes(searchTerm) ||
-           tomador.toLowerCase().includes(searchTerm.toLowerCase()) ||
-           clientesMatch;
+
+    return contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      id.includes(searchTerm) ||
+      tomador.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      clientesMatch;
   });
-  
+
   // Función para obtener el color de la insignia según el estado
   const getBadgeVariant = (estado) => {
     if (!estado) return "secondary";
-    
-    switch(estado.toLowerCase()) {
+
+    switch (estado.toLowerCase()) {
       case "activo":
         return "success";
       case "inactivo":
@@ -223,27 +223,27 @@ const getCompaniaNombre = (grupo) => {
         return "secondary";
     }
   };
-  
+
   // Función para verificar si una cobertura es de un tomador
   const isTomador = (parentesco) => {
     return parentesco && parentesco.toUpperCase() === "TOMADOR";
   };
-  
+
   return (
     <Container fluid className="py-4">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">
           Lista de Grupos Familiares
         </h4>
-        <Button 
-          variant="primary" 
+        <Button
+          variant="primary"
           onClick={() => navigate("/Grupofamiliar/crear")}
         >
           <FaUserPlus className="me-2" />
           Nuevo Grupo Familiar
         </Button>
       </div>
-      
+
       <Card className="shadow-sm mb-4">
         <Card.Body>
           <div className="d-flex flex-column flex-md-row gap-3 mb-4">
@@ -260,7 +260,7 @@ const getCompaniaNombre = (grupo) => {
               </InputGroup>
             </div>
             <div style={{ minWidth: "200px" }}>
-              <Form.Select 
+              <Form.Select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
               >
@@ -277,7 +277,7 @@ const getCompaniaNombre = (grupo) => {
               </Button>
             </div>
           </div>
-          
+
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border text-primary" role="status">
@@ -321,18 +321,18 @@ const getCompaniaNombre = (grupo) => {
                           <td>{grupo.personas_taxes || "-"}</td>
                           <td>{getCompaniaNombre(grupo)}</td>
                           <td>
-                            <Badge 
-                              pill 
+                            <Badge
+                              pill
                               bg="primary"
                             >
-                                {grupo.responsable || "Sin responsable"}
+                              {grupo.responsable || "Sin responsable"}
                             </Badge>
                           </td>
-                         
+
                           <td>{grupo.persona_contacto || "-"}</td>
                           <td>
-                            <Badge 
-                              pill 
+                            <Badge
+                              pill
                               bg={getGrupoEstado(grupo).variant}
                             >
                               {getGrupoEstado(grupo).estado}
@@ -340,38 +340,38 @@ const getCompaniaNombre = (grupo) => {
                           </td>
                           <td>
                             <div className="d-flex justify-content-center gap-2">
-                              <Button 
-                                variant="outline-primary" 
+                              <Button
+                                variant="outline-primary"
                                 size="sm"
                                 onClick={() => handleOpenViewModal(grupo)}
                                 title="Ver detalles"
                               >
                                 <FaEye />
                               </Button>
-                              <Button 
-                                variant="outline-success" 
+                              <Button
+                                variant="outline-success"
                                 size="sm"
                                 onClick={() => handleOpenEditModal(grupo)}
                                 title="Editar grupo familiar"
                               >
                                 <FaEdit />
                               </Button>
-                              <Button 
-                                variant="outline-danger" 
+                              <Button
+                                variant="outline-danger"
                                 size="sm"
                                 onClick={() => handleDelete(grupo)}
                                 title="Eliminar grupo familiar"
                               >
                                 <FaTrashAlt />
                               </Button>
-                              <Button 
-                                  variant="outline-secondary" 
-                                  size="sm"
-                                  onClick={() => handleOpenRetiroModal(grupo)}
-                                  title="Retiros y cancelación"
-                                >
-                                  <FaCog />
-                                </Button>
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => handleOpenRetiroModal(grupo)}
+                                title="Retiros y cancelación"
+                              >
+                                <FaCog />
+                              </Button>
 
 
                             </div>
@@ -386,7 +386,7 @@ const getCompaniaNombre = (grupo) => {
           )}
         </Card.Body>
       </Card>
-      
+
       {/* Modal de Confirmación para Eliminar */}
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} backdrop="static" centered>
         <Modal.Header closeButton>
@@ -407,30 +407,18 @@ const getCompaniaNombre = (grupo) => {
           </Button>
         </Modal.Footer>
       </Modal>
-      
-                  <GrupoFamiliarDetalleModal
-                      show={showViewModal}
-                      onHide={() => setShowViewModal(false)}
-                      grupo={currentGrupo}
-                      getTomadorNombre={getTomadorNombre}
-                    />
 
-              <RetiroCancelacionModal 
-                  show={showRetiroModal}
-                  onHide={() => setShowRetiroModal(false)}
-                  grupoFamiliar={grupoParaRetiro}
-                  onSave={(updatedGrupo) => {
-                    fetchGrupos();
-                    // Actualizar el grupo en la lista
-                    setGrupos(prev =>
-                      prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
-                    );
-                    setShowRetiroModal(false);
-                  }}
-                  />
+      <GrupoFamiliarDetalleModal
+        show={showViewModal}
+        onHide={() => setShowViewModal(false)}
+        grupo={currentGrupo}
+        getTomadorNombre={getTomadorNombre}
+      />
 
 
-      
+
+
+
     </Container>
   );
 };

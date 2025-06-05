@@ -15,7 +15,12 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
   const isTomador = (parentesco) => {
     return parentesco && parentesco.toUpperCase() === "TOMADOR";
   };
-
+  const parseDate = (isoString) => {
+    const date = new Date(isoString);
+    date.setMinutes(date.getMinutes() + date.getTimezoneOffset()); // Ajuste para evitar desfase
+    return date.toLocaleDateString('es-CO');
+  };
+  
   const renderCoberturas = () => {
     if (!grupo?.coberturas?.length) return null;
 
@@ -71,8 +76,10 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                   <td>{c.nombre_pagador || "-"}</td>
                   <td>{c.ano_cobertura || "-"}</td>
                   <td>{c.precio || "-"}</td>
-                  <td>{c.fecha_activacion ? new Date(c.fecha_activacion).toLocaleDateString('es-CO') : "-"}</td>
-                  <td>{c.fecha_cancelacion ? new Date(c.fecha_cancelacion).toLocaleDateString('es-CO') : "-"}</td>
+                  <td>{c.fecha_activacion ? parseDate(c.fecha_activacion) : "-"}</td>
+                  <td>{c.fecha_cancelacion ? parseDate(c.fecha_cancelacion) : "-"}</td>
+
+
                 </tr>
               ))}
             </tbody>
@@ -253,8 +260,9 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                         <td>{c.nombre_pagador || "-"}</td>
                         <td>{c.ano_cobertura || "-"}</td>
                         <td>{c.precio || "-"}</td>
-                        <td>{c.fecha_activacion ? new Date(c.fecha_activacion).toLocaleDateString('es-CO') : "-"}</td>
-                        <td>{c.fecha_cancelacion ? new Date(c.fecha_cancelacion).toLocaleDateString('es-CO') : "-"}</td>
+                        <td>{c.fecha_activacion ? parseDate(c.fecha_activacion) : "-"}</td>
+                        <td>{c.fecha_cancelacion ? parseDate(c.fecha_cancelacion) : "-"}</td>
+
                       </tr>
                     ))}
                 </tbody>

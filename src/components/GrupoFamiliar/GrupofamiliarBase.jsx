@@ -13,6 +13,7 @@ const GrupofamiliarBase = ({ mode, id }) => {
       if (mode === "edit" && id) {
         try {
           const response = await apiRequest(`grupo_familiar/show/${id}`, "GET");
+          
           setInitialData(response.data);
         } catch (err) {
           console.error("Error loading data:", err);
