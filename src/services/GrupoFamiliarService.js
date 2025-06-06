@@ -18,9 +18,22 @@ const GrupoFamiliarService = {
     return await apiRequest(`grupo_familiar/grupos-familiares-full-update/${id}`, "PUT", payload);
   },
 
-  getFullGrupoById: async (id) => {
-    return await apiRequest(`grupo_familiar/grupos-familiares-full/${id}`, "GET");
+  getFullGrupoById: async (id, onlyActive = false) => {
+    const url = onlyActive
+      ? `grupo_familiar/grupos-familiares-full/${id}?onlyActive=true`
+      : `grupo_familiar/grupos-familiares-full/${id}`;
+    const response = await apiRequest(url, "GET");
+    return response.data;
+  },  
+  
+  getBasicGrupoById: async (id) => {
+    return await apiRequest(`grupo_familiar/show/${id}`, "GET");
   },
+  
+  
+  
+  
+  
 
   getBasicGrupoById: async (id) => {
     return await apiRequest(`grupo_familiar/show/${id}`, "GET");

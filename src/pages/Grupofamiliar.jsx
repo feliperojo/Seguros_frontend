@@ -442,42 +442,42 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
   const addFamilyMember = async (client) => {
     if (!client || !client.id) return;
-
+  
     try {
       const clientData = await apiRequest(`cliente/${client.id}`, "GET");
-
       const ingresoAnualCliente = parseFloat(clientData.ingreso_anual || 0);
-
+  
       const totalPermitido = parseInt(policyData.personas_cobertura || "0", 10);
-      const totalActual = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
-
-      const yaExiste = coverageGroups.some(group =>
-        group.members.some(member => member.id === client.id)
+  
+      const totalActual = coverageGroups.reduce(
+        (sum, group) =>
+          sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length,
+        0
       );
-
-      if (yaExiste) {
+  
+      // ❌ Verificar si ya existe una cobertura activa para el mismo cliente
+      const yaExisteActivoSinRetiro = coverageGroups.some(group =>
+        group.members.some(member =>
+          (member.cliente_id === client.id || member.id === client.id) &&
+          member.activo === true &&
+          !member.fecha_retiro &&
+          !member.fecha_cancelacion
+        )
+      );
+  
+      if (yaExisteActivoSinRetiro) {
         setAlert({
           type: "warning",
-          message: `El cliente "${clientData.nombre_completo}" ya está agregado.`,
+          message: `El cliente "${clientData.nombre_completo}" ya está agregado con una cobertura activa.`,
           visible: true
         });
         setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
         return;
       }
-
-      const totalEnTaxesPermitido = parseInt(policyData.personas_en_taxes || "0", 10);
-      const totalActualEnGrupo = coverageGroups.reduce((sum, group) => sum + group.members.length, 0);
-
-      if (totalActualEnGrupo >= totalEnTaxesPermitido) {
-        setAlert({
-          type: "warning",
-          message: `Ya agregaste el máximo permitido de personas en el grupo (${totalEnTaxesPermitido})`,
-          visible: true
-        });
-        setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
-        return;
-      }
-
+  
+   
+  
+      // ✅ Agregar nuevo miembro al primer grupo
       setCoverageGroups(prevGroups => {
         const updatedGroups = prevGroups.map((group, index) => {
           if (index === 0) {
@@ -486,37 +486,49 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               members: [
                 ...group.members,
                 {
-                  id: client.id,
+                  cobertura_id: null,
+                  id: `${client.id}-nuevo-${Date.now()}`, // ID temporal único
+                  cliente_id: client.id,
                   nombre: clientData.nombre_completo,
                   ingreso_anual: ingresoAnualCliente,
                   parentesco: "",
                   fecha_activacion: new Date().toISOString().split("T")[0],
-                  activo: true,
-                  grupo: "G1"
+                  fecha_cancelacion: "",
+                  fecha_retiro: "", // ⚠️ Muy importante: nueva cobertura no retirada
+                  compania_id: "",
+                  codigo_poliza: "",
+                  plan: "",
+                  metal: "",
+                  red: "",
+                  precio: 0,
+                  estado_cobertura: "",
+                  elegibilidad: "",
+                  ano_cobertura: new Date().getFullYear().toString(),
+                  activo: true,      // ✅ Activo por defecto
+                  grupo: "G1",
+                  pagador_id: "",
+                  tipo_pago: "",
+                  dia_pago: 1,
+                  nota_cancel: ""
                 }
               ]
             };
           }
           return group;
         });
-
-
-
-
-
+  
         recalculateTotalIncome(updatedGroups);
         return updatedGroups;
       });
-
-      setShowModal(true);
+  
+      setShowModal(false);
       setAlert({
         type: "success",
-        message: `Cliente "${clientData.nombre_completo}" agregado correctamente`,
+        message: `Cliente "${clientData.nombre_completo}" agregado correctamente.`,
         visible: true
       });
-
+  
       setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
-
     } catch (error) {
       console.error("Error al agregar cliente:", error);
       setAlert({
@@ -527,7 +539,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
     }
   };
-
+  
 
 
   const recalculateTotalIncome = (groups) => {
@@ -900,7 +912,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
               elegibilidad: member.elegibilidad || "",
               estado_cobertura: member.estado_cobertura || "",
               pagador_id: member.pagador_id || "",
-              cliente_id: member.id,
+              cliente_id: member.cliente_id || member.id,
               cobertura_tipo: group.cobertura_tipo,
               vigencia: member.vigencia,
               activo: member.activo ?? true,
@@ -1855,18 +1867,23 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   <Form.Group className="fw-semibold">
                     <Form.Label>Pagador</Form.Label>
                     <Form.Select
-                      value={currentEditMember.pagador_id || ""}
-                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, pagador_id: e.target.value })}
-                    >
-                      <option value="">Seleccione un pagador</option>
-                      {coverageGroups
-                        .find(group => group.id === currentEditMember.groupId)
-                        ?.members.map(member => (
-                          <option key={member.id} value={member.id}>
-                            {member.nombre}
-                          </option>
-                        ))}
-                    </Form.Select>
+                          value={currentEditMember.pagador_id || ""}
+                          onChange={(e) => setCurrentEditMember({ ...currentEditMember, pagador_id: e.target.value })}
+                        >
+                          <option value="">Seleccione un pagador</option>
+                          {Array.from(
+                            new Map(
+                              coverageGroups
+                                .find(group => group.id === currentEditMember.groupId)
+                                ?.members.map(member => [member.id, member]) || []
+                            ).values()
+                          ).map(member => (
+                            <option key={member.id} value={member.id}>
+                              {member.nombre}
+                            </option>
+                          ))}
+                        </Form.Select>
+
                   </Form.Group>
                 </Col>
                 <Col md={4}>

@@ -12,17 +12,19 @@ const GrupofamiliarEdit = () => {
   useEffect(() => {
     const fetchGrupo = async () => {
       try {
-        const response = await GrupoFamiliarService.getFullGrupoById(id);
-        setInitialData(response.data); // No usamos `.data` porque el servicio ya lo entrega limpio
+        const response = await GrupoFamiliarService.getFullGrupoById(id, true); // ← solo activas
+        console.log("paso por el edit", response);
+        setInitialData(response);
       } catch (err) {
         console.error("❌ Error al cargar grupo familiar:", err);
       } finally {
         setLoading(false);
       }
     };
-
+  
     fetchGrupo();
   }, [id]);
+  
 
   if (loading) return <p>Cargando grupo familiar...</p>;
   if (!initialData) return <p>Error cargando los datos del grupo.</p>;

@@ -642,7 +642,7 @@ useEffect(() => {
         </Col>
         <Col md={6}>
           <Form.Group>
-            <Form.Label>Fecha Expedición</Form.Label>
+            <Form.Label>Fecha Expiración</Form.Label>
             <Form.Control
               type="date"
               value={formData.statusMigratorio.fecha_expedicion}
