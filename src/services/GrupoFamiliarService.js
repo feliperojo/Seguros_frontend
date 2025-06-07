@@ -61,8 +61,13 @@ const GrupoFamiliarService = {
             precio: parseFloat(member.precio) || 0,
             elegibilidad: member.elegibilidad || "",
             estado_cobertura: member.estado_cobertura || "",
-            pagador_id: member.pagador_id || "",
-            cliente_id: member.id,
+            cliente_id: typeof member.cliente_id === 'number'
+        ? member.cliente_id
+        : /^\d+$/.test(member.cliente_id) ? parseInt(member.cliente_id) : null,
+
+      pagador_id: typeof member.pagador_id === 'number'
+        ? member.pagador_id
+        : /^\d+$/.test(member.pagador_id) ? parseInt(member.pagador_id) : null,
             grupo_familiar_id: grupoFamiliarId,
             cobertura_tipo: group.tipoProducto || "SEGURO MEDICO OBAMA"
           };

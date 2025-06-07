@@ -844,10 +844,11 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const obtenerClienteTomador = () => {
     for (const group of coverageGroups) {
       const tomador = group.members.find(m => m.parentesco === "TOMADOR");
-      if (tomador) return tomador.id;
+      if (tomador) return tomador.cliente_id;
     }
     return null;
   };
+  
 
 
   const handleSubmit = async (e) => {
@@ -897,6 +898,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
           ...grupoFamiliarData,
           coberturas: coverageGroups.flatMap(group =>
             group.members.map(member => ({
+             
               id: member.cobertura_id || null,
               codigo_poliza: member.codigo_poliza || "",
               parentesco: member.parentesco || "",
@@ -946,7 +948,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
           });
 
           setShowBitacoraModal(true);
+         
           return; // Muy importante para evitar navegación automática
+          
         }
 
       }
@@ -1867,22 +1871,24 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   <Form.Group className="fw-semibold">
                     <Form.Label>Pagador</Form.Label>
                     <Form.Select
-                          value={currentEditMember.pagador_id || ""}
-                          onChange={(e) => setCurrentEditMember({ ...currentEditMember, pagador_id: e.target.value })}
-                        >
-                          <option value="">Seleccione un pagador</option>
-                          {Array.from(
-                            new Map(
-                              coverageGroups
-                                .find(group => group.id === currentEditMember.groupId)
-                                ?.members.map(member => [member.id, member]) || []
-                            ).values()
-                          ).map(member => (
-                            <option key={member.id} value={member.id}>
-                              {member.nombre}
-                            </option>
-                          ))}
-                        </Form.Select>
+                        value={currentEditMember.pagador_id || ""}
+                        onChange={(e) => setCurrentEditMember({ ...currentEditMember, pagador_id: e.target.value })}
+                      >
+                        <option value="">Seleccione un pagador</option>
+                        {Array.from(
+                          new Map(
+                            coverageGroups
+                              .flatMap(group => group.members)
+                              .filter(m => m.activo && m.cliente_id) // solo miembros activos con cliente
+                              .map(member => [member.cliente_id, member]) // agrupar por cliente_id
+                          ).values()
+                        ).map(member => (
+                          <option key={member.cliente_id} value={member.cliente_id}>
+                            {member.nombre}
+                          </option>
+                        ))}
+                      </Form.Select>
+
 
                   </Form.Group>
                 </Col>
