@@ -521,7 +521,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         return updatedGroups;
       });
   
-      setShowModal(false);
+      setShowModal(true);
       setAlert({
         type: "success",
         message: `Cliente "${clientData.nombre_completo}" agregado correctamente.`,
@@ -570,7 +570,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const handleClienteCreated = async (newClient) => {
     if (newClient && newClient.id) {
       addFamilyMember(newClient);
-      console.log("Cliente agregado a la tabla en GrupoFamiliar.");
+      
     }
   };
 
@@ -585,7 +585,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       // Llama a la lógica de agregar al grupo, que ya valida duplicados
       addFamilyMember(clientData);
 
-      console.log("Cliente existente agregado a la tabla en GrupoFamiliar.");
+      
     } catch (error) {
       console.error("Error al traer información del cliente:", error);
       setAlert({
