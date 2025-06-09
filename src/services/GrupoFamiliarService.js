@@ -1,10 +1,11 @@
 // services/GrupoFamiliarService.js
 import apiRequest from './api';
 
-const GrupoFamiliarService = {
+const 
+GrupoFamiliarService = {
 
   deleteCobertura: async (coberturaId) => {
-    console.log("entramos a liminar cobertura",coberturaId)
+    
     if (!coberturaId) throw new Error("Cobertura ID es requerido para eliminar.");
     return await apiRequest(`cobertura/${coberturaId}`, "DELETE");
   },
@@ -30,10 +31,7 @@ const GrupoFamiliarService = {
     return await apiRequest(`grupo_familiar/show/${id}`, "GET");
   },
   
-  
-  
-  
-  
+
 
   getBasicGrupoById: async (id) => {
     return await apiRequest(`grupo_familiar/show/${id}`, "GET");
@@ -69,7 +67,16 @@ const GrupoFamiliarService = {
         ? member.pagador_id
         : /^\d+$/.test(member.pagador_id) ? parseInt(member.pagador_id) : null,
             grupo_familiar_id: grupoFamiliarId,
-            cobertura_tipo: group.tipoProducto || "SEGURO MEDICO OBAMA"
+            cobertura_tipo: group.tipoProducto || "SEGURO MEDICO OBAMA",
+            vigencia: member.vigencia,
+            activo: member.activo ?? true,
+            dia_pago: member.dia_pago || 1,
+            tipo_pago: member.tipo_pago || "",
+            grupo: member.grupo || "G1", // 🔥 Asegúrate que este campo esté presente
+            nota_cancel: member.nota_cancel || ""
+
+
+
           };
           
           allMemberPromises.push(apiRequest("cobertura/create", "POST", coberturaData));
