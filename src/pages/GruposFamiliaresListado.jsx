@@ -312,11 +312,11 @@ const GruposFamiliaresListado = () => {
                           <td>{getTomadorNombre(grupo)}</td>
                           <td>
                             <span className="badge rounded-circle bg-info text-white me-1">
-                              {grupo.personas_cobertura || grupo.coberturas?.length || "0"}
+                              {grupo.personas_cobertura || "0"}
                             </span>
                             <span className="text-muted">en cobertura</span>
                           </td>
-                          <td>{grupo.personas_taxes || "-"}</td>
+                          <td>{grupo.personas_taxes || "0"}</td>
                           <td>{getCompaniaNombre(grupo)}</td>
                           <td>
                             <Badge
