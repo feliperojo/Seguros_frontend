@@ -855,8 +855,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
       // Datos del grupo familiar
       const grupoFamiliarData = {
-        personas_taxes: policyData.personas_en_taxes,
-        personas_cobertura: policyData.personas_cobertura,
+        personas_taxes: totalMiembros,
+        personas_cobertura: totalYes,
         relacion: policyData.relacion,
         ingreso_familiar_anual: ingresoFamiliarFinal,
         persona_contacto: policyData.persona_contacto,

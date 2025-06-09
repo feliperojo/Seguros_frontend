@@ -133,8 +133,6 @@ const GruposFamiliaresListado = () => {
   };
 
 
-  // Añade esta función para obtener el nombre de la compañía
-  // Añade esta función para obtener el nombre de la compañía
   const getCompaniaNombre = (grupo) => {
     if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
       return "-";
