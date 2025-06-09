@@ -922,14 +922,14 @@ const renderDireccionTab = () => (
                   >
 
 
-  <option value="">Seleccione</option>
-  <option value="HOUR">HOUR</option>
-  <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
-  <option value="WEEKLY">WEEKLY</option>
-  <option value="BIWEEKLY">BIWEEKLY</option>
-  <option value="MONTHLY">MONTHLY</option>
-  <option value="ANNUAL">ANNUAL</option>
-</Form.Select>
+                    <option value="">Seleccione</option>
+                    <option value="HOUR">HOUR</option>
+                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+                    <option value="WEEKLY">WEEKLY</option>
+                    <option value="BIWEEKLY">BIWEEKLY</option>
+                    <option value="MONTHLY">MONTHLY</option>
+                    <option value="ANNUAL">ANNUAL</option>
+                  </Form.Select>
 
 
           </Form.Group>
@@ -948,8 +948,12 @@ const renderDireccionTab = () => (
                   className="form-control"
                   onValueChange={(values) => {
                     const { value } = values;
+                    const periodo = formData.datosEmpleo.periodo_ingreso;
+                    const ingresoAnual = calcularIngresoAnual(value, periodo);
+                    
                     setIsIngresoModificado(true);
                     handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
+                    handleInputChange("datosEmpleo", "ingreso_anual", ingresoAnual);
                   }}
                 />
 
