@@ -544,7 +544,7 @@ const calcularIngresoAnual = (monto, periodo) => {
                 min="1900-01-01"/>
               </div>
               <div className="col-md-3">
-                <label>Fecha Expedicion</label>
+                <label>Fecha Expiración</label>
                 <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange}
                 max="2099-12-31"
                 min="1900-01-01"/>

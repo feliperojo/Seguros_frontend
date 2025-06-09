@@ -789,7 +789,6 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       (sum, group) => sum + group.members.filter(m => m.estado_cobertura === "Yes").length,
       0
     );
-    console.log("✔️ Total con cobertura 'Yes':", conYes);
     setTotalYes(conYes);
   }, [coverageGroups]);
 
@@ -804,29 +803,14 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     return company ? company.nombre : "Compañía desconocida";
   };
 
-  const nextStep = () => {
-    if (currentStep === 1) {
-      if (!policyData.personas_en_taxes || !policyData.personas_cobertura) {
-        setAlert({
-          type: "danger",
-          message: "Debe ingresar el número de Personas en Taxes y Personas en Cobertura.",
-          visible: true
-        });
 
-        // Ocultar automáticamente a los 10 segundos
-        setTimeout(() => {
-          setAlert({ type: "", message: "", visible: false });
-        }, 10000);
-
-        return;
+  
+    const nextStep = () => {
+      if (currentStep < totalSteps) {
+        setCurrentStep(currentStep + 1);
       }
-    }
-
-    if (currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
+    };
+    
 
 
   const prevStep = () => {
@@ -1062,11 +1046,12 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   <Form.Group>
                     <Form.Label className="fw-medium">Personas en Taxes</Form.Label>
                     <Form.Control
-                      type="text"
-                      name="personas_en_taxes"
-                      value={policyData.personas_en_taxes}
-                      onChange={handlePolicyChange}
-                    />
+                          type="text"
+                          value={totalMiembros}
+                          readOnly
+                          className="bg-light"
+                        />
+
                   </Form.Group>
                 </Col>
 
@@ -1074,11 +1059,12 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                   <Form.Group>
                     <Form.Label className="fw-medium">Personas en Cobertura</Form.Label>
                     <Form.Control
-                      type="text"
-                      name="personas_cobertura"
-                      value={policyData.personas_cobertura}
-                      onChange={handlePolicyChange}
-                    />
+                          type="text"
+                          value={totalYes}
+                          readOnly
+                          className="bg-light"
+                        />
+
                   </Form.Group>
                 </Col>
 
@@ -1305,7 +1291,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                 <Button
                   variant="primary"
                   onClick={handleOpenModal}
-                  disabled={totalMiembros >= parseInt(policyData.personas_en_taxes || "0", 10)}
+      
                 >
                   <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
                 </Button>
@@ -1560,11 +1546,11 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                 <Row className="text-center fw-medium small">
                   <Col md={6}>
                     <div className="text-info mb-2">Personas en Taxes</div>
-                    <span>{totalMiembros} / {policyData.personas_en_taxes || 0}</span>
+                    <span>{totalMiembros}</span>
                   </Col>
                   <Col md={6}>
                     <div className="text-info mb-2">Personas con Cobertura</div>
-                    <span>{totalYes} / {policyData.personas_cobertura || 0}</span>
+                    <span>{totalYes}</span>
                   </Col>
                 </Row>
               </div>
@@ -1633,7 +1619,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
             className="ms-auto"
             onClick={handleSubmit}
 
-            disabled={!isPolicyValid()}
+            disabled={false}
+
           >
             <i className="bi bi-save me-2"></i>
             {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
@@ -1841,9 +1828,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                       }}
                     >
                       <option value="">Seleccione</option>
-                      {(currentEditMember.estado_cobertura === "Yes" || totalYes < parseInt(policyData.personas_cobertura || "0", 10)) && (
-                        <option value="Yes">Yes</option>
-                      )}
+                      <option value="Yes">Yes</option>
                       <option value="No">No</option>
                       <option value="MEDICARE">MEDICARE</option>
                       <option value="MEDICAID">MEDICAID</option>
