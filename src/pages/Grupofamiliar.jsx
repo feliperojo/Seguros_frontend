@@ -11,7 +11,7 @@ import countryCodes from '../services/countryCodes';
 import Swal from 'sweetalert2';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta si es necesario
-
+import EditClienteModal from "../components/EditClienteModal";
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   // Estado para controlar la pestaña activa en el modal
@@ -106,6 +106,10 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 2;
 
+  const [showClienteEditModal, setShowClienteEditModal] = useState(false);
+  const [clienteIdToEdit, setClienteIdToEdit] = useState(null);
+  const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
+  
   const [conteoMiembros, setConteoMiembros] = useState(0);
   const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
 
@@ -186,6 +190,36 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       [name]: isoCode
     }));
   };
+
+  const handleNombreClick = async (rawClienteId) => {
+    if (!rawClienteId) {
+      console.warn("⚠️ clienteId es undefined o null");
+      Swal.fire("Advertencia", "Este cliente no tiene un ID válido para edición.", "warning");
+      return;
+    }
+  
+    // Si el ID contiene guiones, tomar solo la primera parte (cliente_id real)
+    const clienteId = typeof rawClienteId === 'string' && rawClienteId.includes('-')
+      ? rawClienteId.split('-')[0]
+      : rawClienteId;
+  
+   
+  
+    setClienteIdToEdit(clienteId);
+  
+    try {
+      const data = await apiRequest(`cliente/show/${clienteId}`, "GET");
+      setClienteDataToEdit(data);
+      setShowClienteEditModal(true);
+    } catch (error) {
+      console.error("❌ Error al cargar datos del cliente:", error);
+      Swal.fire("Error", "No se pudo cargar la información del cliente", "error");
+    }
+  };
+  
+  
+  
+  
 
   const initializeEditData = (initialData) => {
     if (!initialData) return;
@@ -520,7 +554,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         recalculateTotalIncome(updatedGroups);
         return updatedGroups;
       });
-  
+  ////mantiene el modal de cliente abierto para continuar al paso 6 ojo
       setShowModal(true);
       setAlert({
         type: "success",
@@ -1356,7 +1390,14 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
                                         <option value="G2">G2</option>
                                         <option value="G3">G3</option>
                                       </Form.Select>
-                                      <h6 className="mb-0 me-2">{member.nombre}</h6>
+                                      <Button
+                                            variant="link"
+                                            className="p-0 m-0 text-primary fw-semibold"
+                                            onClick={() => handleNombreClick(member.id)}
+                                          >
+                                            {member.nombre}
+                                          </Button>
+
                                     </div>
 
                                     <Dropdown>
@@ -2027,6 +2068,20 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <EditClienteModal
+            show={showClienteEditModal}
+            onHide={() => setShowClienteEditModal(false)}
+            clienteId={clienteIdToEdit}
+            clienteData={clienteDataToEdit}
+            onClienteUpdated={(updatedClient) => {
+              setShowClienteEditModal(false);
+              // Si necesitas actualizar la UI, puedes hacerlo aquí
+            }}
+/>
+
+
+
     </div>
   );
 };

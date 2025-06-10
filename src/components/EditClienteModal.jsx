@@ -76,6 +76,8 @@ const renderMediosPagoTab = () => (
 
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
   // Estado para los datos del cliente organizados por secciones
+
+  
   const [formData, setFormData] = useState({
     // Sección 1: Datos Principales
     datosPrincipales: {
