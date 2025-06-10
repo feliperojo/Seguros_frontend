@@ -862,7 +862,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const obtenerClienteTomador = () => {
     for (const group of coverageGroups) {
       const tomador = group.members.find(m => m.parentesco === "TOMADOR");
-      if (tomador) return tomador.cliente_id;
+      console.log("tomador",tomador)
+      if (tomador) return tomador.id;
     }
     return null;
   };
