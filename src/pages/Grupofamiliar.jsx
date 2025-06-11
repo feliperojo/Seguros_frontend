@@ -12,6 +12,8 @@ import Swal from 'sweetalert2';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta si es necesario
 import EditClienteModal from "../components/EditClienteModal";
+import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
+
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   // Estado para controlar la pestaña activa en el modal
@@ -109,7 +111,10 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [showClienteEditModal, setShowClienteEditModal] = useState(false);
   const [clienteIdToEdit, setClienteIdToEdit] = useState(null);
   const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
-  
+  const [mostrarRenovacion, setMostrarRenovacion] = useState(false);
+  const [mostrarModalRenovacion, setMostrarModalRenovacion] = useState(false);
+
+
   const [conteoMiembros, setConteoMiembros] = useState(0);
   const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
 
@@ -376,6 +381,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       const member = {
         cobertura_id: cob.id || null,
         id: cob.cliente?.id || `temp-${Math.random()}`,
+        cliente_id: cob.cliente?.id || null,
         nombre: cob.cliente?.nombre_completo || "Sin nombre",
         ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
         compania_id: cob.compania?.id || null,
@@ -398,6 +404,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         tipo_pago: cob.tipo_pago || "",
         grupo: cob.grupo || "G1",
         nota_cancel:cob.nota_cancel || "",
+
       };
 
       grupos[tipo].members.push(member);
@@ -524,7 +531,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 ...group.members,
                 {
                   cobertura_id: null,
-                  id: `${client.id}-nuevo-${Date.now()}`, // ID temporal único
+                  id: client.id,
                   cliente_id: client.id,
                   nombre: clientData.nombre_completo,
                   ingreso_anual: ingresoAnualCliente,
@@ -775,61 +782,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
   };
 
   const handleAplicarCancelacionGeneral = () => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      html: `
-        <p>Este proceso marcará <strong>todas las coberturas activas</strong> como canceladas.</p>
-        <p>Se usará la fecha <strong>${fechaCancelacionGeneral}</strong> como cancelación y retiro.</p>
-        <p class="text-danger fw-bold mt-3">Esta acción no se puede deshacer.</p>
-      `,
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonText: "Sí, cancelar todo",
-      cancelButtonText: "No, cancelar",
-      customClass: {
-        confirmButton: 'btn btn-danger me-2',
-        cancelButton: 'btn btn-secondary',
-        actions: 'd-flex justify-content-center gap-2'
-      },
-      buttonsStyling: false
-    }).then((result) => {
-      if (result.isConfirmed) {
-        const nuevaLista = coverageGroups.map(group => {
-          return {
-            ...group,
-            members: group.members.map(member => {
-              const debeCancelar =
-                member.activo &&
-                (member.estado_cobertura === "Yes" || (member.fecha_cancelacion && !member.fecha_retiro));
-  
-              if (!debeCancelar) return member;
-  
-              return {
-                ...member,
-                estado_cobertura: "No",
-                fecha_cancelacion: fechaCancelacionGeneral,
-                fecha_retiro: fechaCancelacionGeneral,
-                activo: false,
-                vigente: false,
-                nota_cancel: "Cancelación general aplicada"
-              };
-            })
-          };
-        });
-  
-        setCoverageGroups(nuevaLista);
-  
-        Swal.fire({
-          title: "Cancelación General Aplicada",
-          text: "Todas las coberturas activas fueron marcadas como canceladas.",
-          icon: "success",
-          timer: 3000,
-          showConfirmButton: false
-        });
-      }
-    });
+    setMostrarModalRenovacion(true);
   };
-  
+   
 
 
   const openEditModal = (groupId, memberId) => {
@@ -1001,36 +956,38 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         const payload = {
           ...grupoFamiliarData,
           coberturas: coverageGroups.flatMap(group =>
-            group.members.map(member => ({
-             
-              id: member.cobertura_id || null,
-              codigo_poliza: member.codigo_poliza || "",
-              parentesco: member.parentesco || "",
-              fecha_activacion: member.fecha_activacion || "",
-              fecha_cancelacion: member.fecha_cancelacion || "",
-              fecha_retiro: member.fecha_retiro || "",
-              ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
-              compania_id: member.compania_id || null,
-              plan: member.plan || "",
-              metal: member.metal || "",
-              red: member.red || "",
-              precio: member.precio || 0,
-              elegibilidad: member.elegibilidad || "",
-              estado_cobertura: member.estado_cobertura || "",
-              pagador_id: member.pagador_id || "",
-              cliente_id: member.cliente_id || member.id,
-              cobertura_tipo: group.cobertura_tipo,
-              vigente: member.vigente ?? (member.fecha_cancelacion ? false : true),
-              activo: member.activo ?? true,
-              dia_pago: member.dia_pago || 1,
-              tipo_pago: member.tipo_pago || "",
-              grupo: member.grupo || "G1",
-              nota_cancel: member.nota_cancel || "",
-
-            }))
+            group.members
+              .filter(member => !!member.cliente_id) // ❗️Evita miembros sin cliente_id
+              .map(member => ({
+                id: member.cobertura_id || null,
+                codigo_poliza: member.codigo_poliza || "",
+                parentesco: member.parentesco || "",
+                fecha_activacion: member.fecha_activacion || "",
+                fecha_cancelacion: member.fecha_cancelacion || "",
+                fecha_retiro: member.fecha_retiro || "",
+                ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
+                compania_id: member.compania_id || null,
+                plan: member.plan || "",
+                metal: member.metal || "",
+                red: member.red || "",
+                precio: member.precio || 0,
+                elegibilidad: member.elegibilidad || "",
+                estado_cobertura: member.estado_cobertura || "",
+                pagador_id: member.pagador_id || "",
+                cliente_id: member.cliente_id, // ⚠️ Aquí fallaba si era undefined
+                cobertura_tipo: group.cobertura_tipo,
+                vigente: member.vigente ?? (member.fecha_cancelacion ? false : true),
+                activo: member.activo ?? true,
+                dia_pago: member.dia_pago || 1,
+                tipo_pago: member.tipo_pago || "",
+                grupo: member.grupo || "G1",
+                nota_cancel: member.nota_cancel || "",
+              }))
           )
+          
         };
 
+        console.log("Payload coberturas:", payload.coberturas);
 
         grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
       } else {
@@ -2207,6 +2164,14 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
             }}
 />
 
+
+            <RenovacionCoberturas
+              trigger={mostrarModalRenovacion}
+              coverageGroups={coverageGroups}
+              setCoverageGroups={setCoverageGroups}
+              fechaCancelacion={fechaCancelacionGeneral}
+              onComplete={() => setMostrarModalRenovacion(false)}
+            />
 
 
     </div>
