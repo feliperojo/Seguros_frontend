@@ -392,7 +392,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         pagador_id: cob.pagador_id || "",
         codigo_poliza: cob.codigo_poliza || "",
         parentesco: cob.parentesco || "",
-        vigencia: cob.fecha_cancelacion ? false : true,
+        vigente: cob.fecha_cancelacion ? false : true,
         activo: cob.activo ?? true,
         dia_pago: cob.dia_pago || 1,
         tipo_pago: cob.tipo_pago || "",
@@ -749,9 +749,10 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               if (member.id === memberId) {
                 const updatedMember = { ...member, [field]: value };
 
-                // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigencia"
+                // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigente"
                 if (field === "fecha_cancelacion") {
-                  updatedMember.vigencia = !value; // Si tiene fecha de cancelación, desactivamos
+                  updatedMember.vigente = !value; // Si tiene fecha de cancelación, desactivamos
+
                 }
 
                 return updatedMember;
@@ -809,7 +810,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 fecha_cancelacion: fechaCancelacionGeneral,
                 fecha_retiro: fechaCancelacionGeneral,
                 activo: false,
-                vigencia: false,
+                vigente: false,
                 nota_cancel: "Cancelación general aplicada"
               };
             })
@@ -847,7 +848,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     // Verificar si el campo está vacío o inválido
     const precioCrudo = currentEditMember.precio?.toString().replace(/[^0-9.]/g, '') || "0";
     const parsedPrecio = parseFloat(precioCrudo);
-
+    const updatedvigente = currentEditMember.fecha_cancelacion ? false : true;
     // Actualizar el grupo con el valor de precio corregido
     setCoverageGroups(prevGroups =>
       prevGroups.map(group =>
@@ -860,7 +861,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                       ...member,
                       ...currentEditMember,
                       precio: isNaN(parsedPrecio) ? 0 : parsedPrecio,
-                      activo: currentEditMember.activo || false
+                      activo: currentEditMember.activo || false,
+                      vigente: updatedvigente
                     }
                   : member
               )
@@ -916,7 +918,26 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     setActiveTab("nuevo"); // Reset a la pestaña por defecto
     setShowModal(true);
   };
-
+  const existeTomadorValido = () => {
+    let hayCoberturasActivas = false;
+  
+    for (const group of coverageGroups) {
+      for (const member of group.members) {
+        if (member.activo && !member.fecha_retiro) {
+          hayCoberturasActivas = true;
+  
+          if (member.parentesco === "TOMADOR") {
+            return true; // Si hay un tomador activo, OK
+          }
+        }
+      }
+    }
+  
+    // Si hay coberturas activas pero ningún tomador
+    return !hayCoberturasActivas ? true : false;
+  };
+  
+  
   const obtenerClienteTomador = () => {
     for (const group of coverageGroups) {
       const tomador = group.members.find(m => m.parentesco === "TOMADOR");
@@ -999,7 +1020,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               pagador_id: member.pagador_id || "",
               cliente_id: member.cliente_id || member.id,
               cobertura_tipo: group.cobertura_tipo,
-              vigencia: member.vigencia,
+              vigente: member.vigente ?? (member.fecha_cancelacion ? false : true),
               activo: member.activo ?? true,
               dia_pago: member.dia_pago || 1,
               tipo_pago: member.tipo_pago || "",
@@ -1038,7 +1059,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
       }
 
-      console.log("✅ Grupo familiar procesado correctamente:", grupoFamiliarResponse);
+    
 
 
       if (mode === "edit") {
@@ -1753,22 +1774,27 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
             <i className="bi bi-arrow-right ms-2"></i>
           </Button>
         ) : (
+       
+        
+          
           <Button
             variant="success"
             className="ms-auto"
             onClick={handleSubmit}
-
-            disabled={false}
-
+            disabled={!existeTomadorValido()}
+            title={!existeTomadorValido() ? "Debe configurar un tomador activo en el grupo familiar" : ""}
           >
             <i className="bi bi-save me-2"></i>
             {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
           </Button>
+        
 
 
 
 
-        )}
+        )
+        
+        }
 
 
         {showBitacoraModal && (
@@ -2095,10 +2121,13 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                           value={currentEditMember.fecha_cancelacion || ""}
                           onChange={(e) => {
                             const cancelDate = e.target.value;
+
+                            console.log("🟡 Edit modal → fecha_cancelacion:", cancelDate, "→ vigente:", cancelDate ? false : true);
+
                             setCurrentEditMember(prev => ({
                               ...prev,
                               fecha_cancelacion: cancelDate,
-                              vigencia: cancelDate ? false : true // Actualiza automáticamente vigencia
+                              vigente: cancelDate ? false : true
                             }));
                           }}
                         />
