@@ -113,6 +113,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [conteoMiembros, setConteoMiembros] = useState(0);
   const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
 
+const [cancelacionGeneralActiva, setCancelacionGeneralActiva] = useState(false);
+const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
+
   const [totalMiembros, setTotalMiembros] = useState(0);
   const [totalYes, setTotalYes] = useState(0);
   const [showBitacoraModal, setShowBitacoraModal] = useState(false);
@@ -770,7 +773,62 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     });
   };
 
-
+  const handleAplicarCancelacionGeneral = () => {
+    Swal.fire({
+      title: "¿Estás seguro?",
+      html: `
+        <p>Este proceso marcará <strong>todas las coberturas activas</strong> como canceladas.</p>
+        <p>Se usará la fecha <strong>${fechaCancelacionGeneral}</strong> como cancelación y retiro.</p>
+        <p class="text-danger fw-bold mt-3">Esta acción no se puede deshacer.</p>
+      `,
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonText: "Sí, cancelar todo",
+      cancelButtonText: "No, cancelar",
+      customClass: {
+        confirmButton: 'btn btn-danger me-2',
+        cancelButton: 'btn btn-secondary',
+        actions: 'd-flex justify-content-center gap-2'
+      },
+      buttonsStyling: false
+    }).then((result) => {
+      if (result.isConfirmed) {
+        const nuevaLista = coverageGroups.map(group => {
+          return {
+            ...group,
+            members: group.members.map(member => {
+              const debeCancelar =
+                member.activo &&
+                (member.estado_cobertura === "Yes" || (member.fecha_cancelacion && !member.fecha_retiro));
+  
+              if (!debeCancelar) return member;
+  
+              return {
+                ...member,
+                estado_cobertura: "No",
+                fecha_cancelacion: fechaCancelacionGeneral,
+                fecha_retiro: fechaCancelacionGeneral,
+                activo: false,
+                vigencia: false,
+                nota_cancel: "Cancelación general aplicada"
+              };
+            })
+          };
+        });
+  
+        setCoverageGroups(nuevaLista);
+  
+        Swal.fire({
+          title: "Cancelación General Aplicada",
+          text: "Todas las coberturas activas fueron marcadas como canceladas.",
+          icon: "success",
+          timer: 3000,
+          showConfirmButton: false
+        });
+      }
+    });
+  };
+  
 
 
   const openEditModal = (groupId, memberId) => {
@@ -862,8 +920,14 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const obtenerClienteTomador = () => {
     for (const group of coverageGroups) {
       const tomador = group.members.find(m => m.parentesco === "TOMADOR");
-      console.log("tomador",tomador)
-      if (tomador) return tomador.id;
+      if (tomador) {
+        // Si el ID es tipo string y tiene guiones, tomamos la primera parte
+        if (typeof tomador.id === "string" && tomador.id.includes("-")) {
+          return tomador.id.split("-")[0]; // solo el ID real
+        }
+        console.log("id",tomador.id)
+        return tomador.id;
+      }
     }
     return null;
   };
@@ -1334,8 +1398,41 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
               </div>
               <hr />
+              <Form.Check
+  type="checkbox"
+  label="Aplicar Cancelación General a todas las coberturas activas"
+  checked={cancelacionGeneralActiva}
+  onChange={(e) => setCancelacionGeneralActiva(e.target.checked)}
+  className="mb-2 fw-semibold"
+/>
+
+{cancelacionGeneralActiva && (
+  <Row className="mb-3">
+    <Col md={4}>
+      <Form.Group>
+        <Form.Label className="fw-semibold">Fecha de Cancelación General</Form.Label>
+        <Form.Control
+          type="date"
+          value={fechaCancelacionGeneral}
+          onChange={(e) => setFechaCancelacionGeneral(e.target.value)}
+        />
+      </Form.Group>
+    </Col>
+    <Col md={4} className="d-flex align-items-end">
+      <Button
+        variant="danger"
+        onClick={handleAplicarCancelacionGeneral}
+        disabled={!fechaCancelacionGeneral}
+      >
+        Aplicar Cancelación a Todas las Coberturas Activas
+      </Button>
+    </Col>
+  </Row>
+)}
 
               {coverageGroups.map((group) => (
+                
+                
                 <Accordion key={group.id} className="mb-4" defaultActiveKey="0">
                   <Accordion.Item eventKey="0">
                     <Accordion.Header>
