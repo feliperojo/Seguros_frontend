@@ -172,6 +172,21 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     setShowBitacoraModal(false);
     onHide(); // <-- Cierra el modal principal
   };
+
+
+  const recalcularIngresoAnualTotal = (datosEmpleo) => {
+    const montoPrincipal = datosEmpleo.ingreso_por_periodo;
+    const periodoPrincipal = datosEmpleo.periodo_ingreso;
+  
+    const montoOcasional = datosEmpleo.ingreso_ocasional.monto;
+    const periodoOcasional = datosEmpleo.ingreso_ocasional.periodo;
+  
+    const ingresoPrincipal = parseFloat(calcularIngresoAnual(montoPrincipal, periodoPrincipal));
+    const ingresoOcasional = parseFloat(calcularIngresoAnual(montoOcasional, periodoOcasional));
+  
+    return (ingresoPrincipal + ingresoOcasional).toFixed(2);
+  };
+  
   
 // Añadir esta función para cargar los medios de pago
 const fetchMediosPago = async () => {
@@ -911,16 +926,16 @@ const renderDireccionTab = () => (
             <Form.Select
                     value={formData.datosEmpleo.periodo_ingreso}
                     onChange={(e) => {
-                      const nuevoPeriodo = e.target.value;
-                      const ingreso = formData.datosEmpleo.ingreso_por_periodo;
-
-                      handleInputChange("datosEmpleo", "periodo_ingreso", nuevoPeriodo);
-
-                      if (ingreso && nuevoPeriodo) {
-                        const nuevoIngreso = calcularIngresoAnual(ingreso, nuevoPeriodo);
-                        handleInputChange("datosEmpleo", "ingreso_anual", nuevoIngreso); // Este sí marca hasChanges
-                      }
+                      const value = e.target.value;
+                      const nuevosDatosEmpleo = {
+                        ...formData.datosEmpleo,
+                        periodo_ingreso: value
+                      };
+                      const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
+                      handleInputChange("datosEmpleo", "periodo_ingreso", value);
+                      handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
                     }}
+                    
                   >
 
 
@@ -940,24 +955,24 @@ const renderDireccionTab = () => (
           <Form.Group>
           <Form.Label>Ingreso por Período ($)</Form.Label>
           <NumericFormat
-                  value={formData.datosEmpleo.ingreso_por_periodo}
-                  thousandSeparator=","
-                  decimalSeparator="."
-                  prefix="$"
-                  decimalScale={2}
-                  fixedDecimalScale
-                  allowNegative={false}
-                  className="form-control"
-                  onValueChange={(values) => {
-                    const { value } = values;
-                    const periodo = formData.datosEmpleo.periodo_ingreso;
-                    const ingresoAnual = calcularIngresoAnual(value, periodo);
-                    
-                    setIsIngresoModificado(true);
-                    handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
-                    handleInputChange("datosEmpleo", "ingreso_anual", ingresoAnual);
-                  }}
-                />
+                    value={formData.datosEmpleo.ingreso_por_periodo}
+                    thousandSeparator=","
+                    decimalSeparator="."
+                    prefix="$"
+                    decimalScale={2}
+                    fixedDecimalScale
+                    allowNegative={false}
+                    className="form-control"
+                    onValueChange={({ value }) => {
+                      const nuevosDatosEmpleo = {
+                        ...formData.datosEmpleo,
+                        ingreso_por_periodo: value,
+                      };
+                      const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
+                      handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
+                      handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
+                    }}
+                  />
 
 
 
@@ -1034,8 +1049,18 @@ const renderDireccionTab = () => (
                 className="form-control"
                 onValueChange={(values) => {
                   const { value } = values;
+                  const nuevosDatosEmpleo = {
+                    ...formData.datosEmpleo,
+                    ingreso_ocasional: {
+                      ...formData.datosEmpleo.ingreso_ocasional,
+                      monto: value
+                    }
+                  };
+                  const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
                   handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "monto", value);
+                  handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
                 }}
+                
               />
 
           </Form.Group>

@@ -290,51 +290,75 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
   }, [mode, initialData]);
 
 
-  const copiarDatosDelPrimero = (groupId, indexDestino) => {
+  const copiarDatosDelPrimero = (groupId, memberIdDestino) => {
     const grupo = coverageGroups.find(g => g.id === groupId);
-    const miembroModelo = grupo.members[0]; // Siempre el primer miembro
-    const miembroDestino = grupo.members[indexDestino];
-
+    if (!grupo) return;
+  
+    const miembroModelo = grupo.members.find(m => m.parentesco === "TOMADOR" && m.activo && !m.fecha_retiro);
+    const miembroDestino = grupo.members.find(m => m.id === memberIdDestino);
+  
+    if (!miembroModelo) {
+      Swal.fire("Error", "No se encontró un TOMADOR activo para copiar.", "error");
+      return;
+    }
+  
+    if (!miembroDestino) {
+      Swal.fire("Error", "No se encontró el miembro de destino.", "error");
+      return;
+    }
+  
+    if (miembroModelo.id === miembroDestino.id) {
+      Swal.fire("Atención", "Este miembro ya es el TOMADOR.", "info");
+      return;
+    }
+  
     const camposACopiar = [
-      'ano_cobertura',
-      'plan',
-      'elegibilidad',
-      'red',
-      'compania_id',
-      'metal',
-      'fecha_activacion'
+      "ano_cobertura",
+      "plan",
+      "elegibilidad",
+      "red",
+      "compania_id",
+      "metal",
+      "fecha_activacion",
+      "precio",
+      "estado_cobertura",
+      "pagador_id",
+      "tipo_pago",
+      "dia_pago"
     ];
-    const updatedGroups = coverageGroups.map(group => {
+  
+    const miembroActualizado = {
+      ...miembroDestino
+    };
+  
+    camposACopiar.forEach((campo) => {
+      miembroActualizado[campo] = miembroModelo[campo] ?? "";
+    });
+  
+    const updatedGroups = coverageGroups.map((group) => {
       if (group.id !== groupId) return group;
-
       return {
         ...group,
-        members: group.members.map((member, idx) => {
-          if (idx !== indexDestino) return member;
-
-          let nuevosDatos = { ...member };
-          camposACopiar.forEach(campo => {
-            nuevosDatos[campo] = miembroModelo[campo];
-          });
-
-          return nuevosDatos;
-        })
+        members: group.members.map((m) =>
+          m.id === memberIdDestino ? miembroActualizado : m
+        ),
       };
     });
-
+  
     setCoverageGroups(updatedGroups);
-
+  
     setAlert({
       type: "success",
-      message: "Los datos del primer miembro fueron copiados exitosamente.",
-      visible: true
+      message: "Se copiaron los datos correctamente desde el TOMADOR.",
+      visible: true,
     });
-
+  
     setTimeout(() => {
       setAlert({ type: "", message: "", visible: false });
     }, 3000);
   };
-
+  
+  
 
   const getCountryCode = (iso) => {
     const country = countryCodes.find((c) => c.iso === iso);
@@ -588,28 +612,37 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
   const recalculateTotalIncome = (groups) => {
     const total = groups.reduce((sum, group) =>
-      sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
-      , 0);
-
+      sum + group.members.reduce((gSum, m) => {
+        const ingreso = parseFloat(m.ingreso_anual) || 0;
+        const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
+        return gSum + (esValido ? ingreso : 0);
+      }, 0)
+    , 0);
+  
     setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
   };
+  
 
 
   useEffect(() => {
     if (currentStep === 2) {
       const total = coverageGroups.reduce((sum, group) =>
-        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
-        , 0);
+        sum + group.members.reduce((gSum, m) => {
+          const ingreso = parseFloat(m.ingreso_anual) || 0;
+          const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
+          return gSum + (esValido ? ingreso : 0);
+        }, 0)
+      , 0);
+  
       if (mode === "edit" && total === 0 && initialData) {
-        // No actualizar, mantener el valor original
         console.log("Manteniendo ingreso familiar original:", initialData.ingreso_familiar_anual);
       } else {
-        // Actualizar al nuevo valor calculado
         setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
         console.log("Actualizando ingreso familiar a:", total);
       }
     }
   }, [coverageGroups, currentStep, mode, initialData]);
+  
 
   const handleClienteCreated = async (newClient) => {
     if (newClient && newClient.id) {
@@ -772,10 +805,15 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
       // Después de actualizar recalculamos el ingreso familiar
       const total = updatedGroups.reduce((sum, group) =>
-        sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
-        , 0);
-
+        sum + group.members.reduce((gSum, m) => {
+          const ingreso = parseFloat(m.ingreso_anual) || 0;
+          const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
+          return gSum + (esValido ? ingreso : 0);
+        }, 0)
+      , 0);
+      
       setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
+      
 
       return updatedGroups;
     });
@@ -829,6 +867,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
     setShowEditModal(false);
     setCurrentEditMember(null);
+    recalculateTotalIncome(updatedGroups);
+
   };
 
 
@@ -1501,7 +1541,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                               buttonsStyling: false
                                             }).then((result) => {
                                               if (result.isConfirmed) {
-                                                copiarDatosDelPrimero(group.id, index);
+                                                copiarDatosDelPrimero(group.id, member.id);
                                               }
                                             });
                                           }}>

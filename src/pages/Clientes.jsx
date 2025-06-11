@@ -223,11 +223,21 @@ const closeModal = () => setShowModal(false);
       }
   
       // Si cambia ingreso_por_periodo o periodo_ingreso, calcular ingreso anual
-      if (name === 'ingreso_por_periodo' || name === 'periodo_ingreso') {
-        const periodo = name === 'periodo_ingreso' ? value : updatedData.periodo_ingreso;
-        const monto = name === 'ingreso_por_periodo' ? value : updatedData.ingreso_por_periodo;
-        updatedData.ingreso_anual = calcularIngresoAnual(monto, periodo);
+      if (
+        ['ingreso_por_periodo', 'periodo_ingreso', 'ingreso_por_periodo_ocasional', 'periodo_ingreso_ocasional'].includes(name)
+      ) {
+        const newData = {
+          ...updatedData,
+          [name]: updatedValue
+        };
+      
+        const anualPrincipal = parseFloat(calcularIngresoAnual(newData.ingreso_por_periodo, newData.periodo_ingreso));
+        const anualOcasional = parseFloat(calcularIngresoAnual(newData.ingreso_por_periodo_ocasional, newData.periodo_ingreso_ocasional));
+      
+        updatedData.ingreso_anual = (anualPrincipal + anualOcasional).toFixed(2);
       }
+      
+      
   
       return updatedData;
     });
