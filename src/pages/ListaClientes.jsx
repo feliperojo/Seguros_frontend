@@ -107,9 +107,10 @@ const ListaClientes = () => {
   
 
   // Función para abrir el modal de visualización
-  const handleOpenViewModal = (cliente) => {
+  const handleOpenViewModal = (cliente, grupoId) => {
     setClienteToView(cliente);
     setShowViewModal(true);
+    setClienteToView({ ...cliente, grupoFamiliarId: grupoId }); // Asegúrate de pasar el grupoId aquí si lo necesitas
   };
   
   // Función para aplicar un filtro
@@ -506,7 +507,7 @@ const renderPaginationItems = () => {
           <Button 
             variant="outline-primary" 
             size="sm"
-            onClick={() => handleOpenViewModal(cliente)}
+            onClick={() => handleOpenViewModal(cliente, grupoId)}
           >
             <FaEye />
           </Button>
@@ -688,6 +689,7 @@ const renderPaginationItems = () => {
         show={showViewModal}
         onHide={() => setShowViewModal(false)}
         clienteData={clienteToView}
+        grupoFamiliarId={clienteToView?.grupoFamiliarId} 
       />
       
       {/* Toast de notificación */}

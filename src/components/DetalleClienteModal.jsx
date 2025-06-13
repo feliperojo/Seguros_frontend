@@ -9,7 +9,9 @@ import {
   FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
 } from "react-icons/fa";
 
-const DetalleClienteModal = ({ show, onHide, clienteData }) => {
+const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => {
+
+  console.log("grupoFamiliarId entra",grupoFamiliarId)
   // Si no hay datos de cliente, no mostrar nada
   if (!clienteData) return null;
   console.log("dataclient",clienteData)
@@ -23,6 +25,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
 
 
   const fetchMediosPago = async (clienteId) => {
+    console.log("fetchMediosPago entra")
     try {
       setLoadingMediosPago(true);
       const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
@@ -34,23 +37,23 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
       setLoadingMediosPago(false);
     }
   };
-
+  console.log("antes de fetch polizas",grupoFamiliarId)
   const fetchPolizas = async (grupoFamiliarId) => {
+    console.log("fetchPolizas entra",grupoFamiliarId)
     try {
       setLoadingGrupoFamilia(true);
+      console.log("try entra",grupoFamiliarId)
       const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
+      console.log("grupo familiar full", response);
       
-      // Extraemos las personas
       const personas = response.data?.coberturas?.map((item) => ({
         ...item.cliente,
-        parentesco: item.parentesco, // para mostrar parentesco
+        parentesco: item.parentesco,
         tipo: item.parentesco === "TOMADOR" ? "TOMADOR" : "INTEGRANTE",
         compania: item.compania?.nombre || "No registrado"
       })) || [];
-      console.log("personas",personas)
-  
+
       setGrupoFamilia(personas);
-  
     } catch (error) {
       console.error("Error obteniendo grupo familiar", error);
       setGrupoFamilia([]);
@@ -58,7 +61,6 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
       setLoadingGrupoFamilia(false);
     }
   };
-  
   
   
   // Formatear fecha para mostrarla más legible
@@ -71,17 +73,13 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
     }
   };
 
-  useEffect(() => {
-    if (show && clienteData?.id) {
-      fetchMediosPago(clienteData.id);
-    }
-  }, [show, clienteData]);
 
   useEffect(() => {
-    if (show && clienteData?.grupo_familiar_id) {
-      fetchPolizas(clienteData.grupo_familiar_id);
+    if (show && grupoFamiliarId) {
+      console.log("Antes de hacer la petición:", grupoFamiliarId); // Verifica el valor aquí
+      fetchPolizas(grupoFamiliarId);
     }
-  }, [show, clienteData]);
+  }, [show, grupoFamiliarId]);
   
 
   // Componente para mostrar información no disponible
@@ -489,7 +487,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                     
                       {grupofamilia.map((integrante, index) => (
                         
-                        <tr key={integrante.id || index}>
+                        <tr key={`${integrante.id}-${index}`}>
                           <td>{index + 1}</td>
                           <td className="d-flex align-items-center gap-2">
                             {integrante.nombre_completo}
