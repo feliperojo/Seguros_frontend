@@ -39,7 +39,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
     try {
       setLoadingGrupoFamilia(true);
       const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
-  console.log("grupo",response)
+      
       // Extraemos las personas
       const personas = response.data?.coberturas?.map((item) => ({
         ...item.cliente,
@@ -47,6 +47,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
         tipo: item.parentesco === "TOMADOR" ? "TOMADOR" : "INTEGRANTE",
         compania: item.compania?.nombre || "No registrado"
       })) || [];
+      console.log("personas",personas)
   
       setGrupoFamilia(personas);
   
@@ -466,7 +467,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
           <>
             <div className="mt-4">
               <h5 className="border-bottom pb-2 mb-3 text-primary fw-bold">
-               Grupo Familiar 
+               Historial Grupo Familiar 
               </h5>
 
               {loadingGrupoFamilia ? (
@@ -481,10 +482,13 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                       <th>Nombre Completo</th>
                       <th>Parentesco</th>
                       <th>Compañia</th>
+                   
                     </tr>
                   </thead>
                   <tbody>
+                    
                       {grupofamilia.map((integrante, index) => (
+                        
                         <tr key={integrante.id || index}>
                           <td>{index + 1}</td>
                           <td className="d-flex align-items-center gap-2">
@@ -493,8 +497,8 @@ const DetalleClienteModal = ({ show, onHide, clienteData }) => {
                               <Badge bg="primary" pill>TOMADOR</Badge>
                             )}
                           </td>
-                          <td>{integrante.parentesco || "No registrado"}</td>
-                          <td>{integrante.compania || "No registrado"}</td>
+                            <td>{integrante?.parentesco || "Sin parentesco"}</td>
+                          <td>{integrante?.compania || "Sin compañia"}</td>
                         </tr>
                       ))}
                     </tbody>
