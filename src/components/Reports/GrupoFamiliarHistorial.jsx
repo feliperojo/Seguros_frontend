@@ -156,10 +156,10 @@ const GrupoFamiliarHistorial = () => {
                             <td colSpan="10">
                               <Row>
                                 <Col md={6}>
-                                  <p><strong>Email:</strong> {cob.cliente?.email || '-'}</p>
                                   <p><strong>Status Migratorio:</strong> {cob.cliente?.status || '-'}</p>
-                                  <p><strong>Teléfono:</strong> {cob.cliente?.telefono || '-'}</p>
                                   <p><strong>Fecha Nacimiento:</strong> {cob.cliente?.fecha_nacimiento || '-'}</p>
+                                  <p><strong>Direccion:</strong> {cob.cliente?.direccion || '-'}</p>
+                                  <p><strong>Ingreso Anual:</strong> {cob.cliente?.ingreso_anual || '-'}</p>
                                 </Col>
                                 <Col md={6}>
                                   <p><strong>Código de Póliza:</strong> {cob.codigo_poliza || '-'}</p>
