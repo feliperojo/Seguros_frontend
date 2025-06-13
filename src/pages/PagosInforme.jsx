@@ -25,7 +25,7 @@ const PagosInforme = () => {
       setLoading(true);
       const response = await apiRequest("cobertura/pagos/listado", "GET");
       setPagos(response);
-      console.log(response)
+      
     } catch (err) {
       console.error("Error al cargar pagos:", err);
       mostrarAlerta("Error al cargar los pagos", "danger");

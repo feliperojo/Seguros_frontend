@@ -53,42 +53,54 @@ const ListaClientes = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [clienteToView, setClienteToView] = useState(null);
   
-  // Cargar datos
   useEffect(() => {
     fetchClientes();
   }, []);
   
-  const fetchClientes = async () => {
-    setLoading(true);
-    try {
-      console.log("Iniciando petición a la API para obtener clientes...");
-      
-      // Usamos el endpoint que ya funciona
-      const response = await apiRequest("cliente/with-cobertura");
-      console.log("Respuesta completa:", response);
-      
-      // Extraer los datos según la estructura de la respuesta
-      const clientesData = response?.data || response || [];
-      
-      console.log("Datos de clientes procesados:", clientesData);
-      
-      const clientesArray = Array.isArray(clientesData) 
-        ? clientesData 
-        : Object.values(clientesData);
-      
-      if (clientesArray.length === 0) {
-        console.log("No se encontraron clientes en la respuesta de la API");
+  // Modificación en la parte donde procesas los clientes
+
+const fetchClientes = async () => {
+  setLoading(true);
+  try {
+    console.log("Iniciando petición a la API para obtener clientes...");
+    
+    const response = await apiRequest("cliente/with-cobertura");
+    console.log("Respuesta completa:", response);
+    
+    const clientesData = response?.data || response || [];
+    
+    console.log("Datos de clientes procesados:", clientesData);
+    
+    const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
+
+    const clientesUnicos = [];
+    const grupoFamiliares = new Set();
+    
+    // Filtrar y agrupar por grupo_familiar_id (incluyendo los que no tienen grupo familiar)
+    clientesArray.forEach(cliente => {
+      // Si el cliente tiene grupo familiar o no lo tiene, lo incluimos
+      if (!grupoFamiliares.has(cliente.grupo_familiar_id)) {
+        // Si no tiene grupo familiar, asignamos "N/A" como grupo_familiar_id temporal
+        const clienteConGrupo = {
+          ...cliente,
+          grupo_familiar_id: cliente.grupo_familiar_id || "N/A"
+        };
+        
+        clientesUnicos.push(clienteConGrupo);
+        grupoFamiliares.add(cliente.grupo_familiar_id || "N/A");
       }
-      
-      setClientes(clientesArray);
-      setFilteredClientes(clientesArray);
-    } catch (err) {
-      console.error("Error al cargar clientes:", err);
-      setError("No se pudieron cargar los clientes. " + (err.message || "Por favor, intente nuevamente."));
-    } finally {
-      setLoading(false);
-    }
-  };
+    });
+    
+    setClientes(clientesUnicos);
+    setFilteredClientes(clientesUnicos);
+  } catch (err) {
+    console.error("Error al cargar clientes:", err);
+    setError("No se pudieron cargar los clientes. " + (err.message || "Por favor, intente nuevamente."));
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Función para abrir el modal de visualización
   const handleOpenViewModal = (cliente) => {
@@ -283,18 +295,14 @@ const ListaClientes = () => {
   
   // Función para obtener el ID del grupo familiar
   const getGrupoFamiliarId = (cliente) => {
-    // Verificamos si hay un valor directo
-    if (cliente.grupo_familiar_id) {
-      return cliente.grupo_familiar_id;
+    // Si el cliente no tiene grupo familiar, asignar "N/A"
+    if (!cliente.grupo_familiar_id) {
+      return "N/A";
     }
-    
-    // Si no, verificamos en coberturas
-    if (cliente.coberturas && Array.isArray(cliente.coberturas) && cliente.coberturas.length > 0) {
-      return cliente.coberturas[0].grupo_familiar_id || "N/A";
-    }
-    
-    return "Sin grupo";
+  
+    return cliente.grupo_familiar_id;
   };
+  
   
   // Renderizar paginación
   const renderPaginationItems = () => {
@@ -518,64 +526,65 @@ const ListaClientes = () => {
               </tr>
             </thead>
             <tbody>
-              {currentItems.map(cliente => (
-                <tr key={cliente.id || Math.random().toString()}>
-                  <td>
-                      <div className="ID">
-                      {cliente.id || "Sin ID"}
-                    </div>
-                  </td>
-                    <td>
-                    <div className="cliente-nombre">
-                      {cliente.nombre_completo || "Sin nombre"}
-                    </div>
-                  </td>
-                  <td>
-                    {formatDate(cliente.fecha_nacimiento)}
-                  </td>
-                  <td>
-                    {cliente.codigo_postal || "No registrado"}
-                  </td>
-                  <td>
-                    {getParentesco(cliente)}
-                  </td>
-                  <td>
-                    {getGrupoFamiliarId(cliente)}
-                  </td>
-                  <td>
-                    {cliente.telefono || "No registrado"}
-                  </td>
-                  <td>
-                    <div className="d-flex justify-content-center gap-2">
-                      <Button 
-                        variant="outline-primary" 
-                        size="sm"
-                        onClick={() => handleOpenViewModal(cliente)}
-                        title="Ver detalles"
-                      >
-                        <FaEye />
-                      </Button>
-                      <Button 
-                        variant="outline-success" 
-                        size="sm"
-                        onClick={() => handleOpenEditModal(cliente)}
-                        title="Editar cliente"
-                      >
-                        <FaEdit />
-                      </Button>
-                      <Button 
-                        variant="outline-danger" 
-                        size="sm"
-                        onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
-                        title="Eliminar cliente"
-                      >
-                        <FaTrashAlt />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+  {currentItems.map(cliente => (
+    <tr key={`${cliente.id}-${cliente.grupo_familiar_id}`}>
+      <td>
+        <div className="ID">
+          {cliente.id || "Sin ID"}
+        </div>
+      </td>
+      <td>
+        <div className="cliente-nombre">
+          {cliente.nombre_completo || "Sin nombre"}
+        </div>
+      </td>
+      <td>
+        {formatDate(cliente.fecha_nacimiento)}
+      </td>
+      <td>
+        {cliente.codigo_postal || "No registrado"}
+      </td>
+      <td>
+        {getParentesco(cliente)}
+      </td>
+      <td>
+        {getGrupoFamiliarId(cliente)}
+      </td>
+      <td>
+        {cliente.telefono || "No registrado"}
+      </td>
+      <td>
+        <div className="d-flex justify-content-center gap-2">
+          <Button 
+            variant="outline-primary" 
+            size="sm"
+            onClick={() => handleOpenViewModal(cliente)}
+            title="Ver detalles"
+          >
+            <FaEye />
+          </Button>
+          <Button 
+            variant="outline-success" 
+            size="sm"
+            onClick={() => handleOpenEditModal(cliente)}
+            title="Editar cliente"
+          >
+            <FaEdit />
+          </Button>
+          <Button 
+            variant="outline-danger" 
+            size="sm"
+            onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
+            title="Eliminar cliente"
+          >
+            <FaTrashAlt />
+          </Button>
+        </div>
+      </td>
+    </tr>
+  ))}
+</tbody>
+
           </Table>
         </div>
         
