@@ -5,13 +5,13 @@ import {
 } from "react-bootstrap";
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
-  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
-
+import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 
 
@@ -27,6 +27,11 @@ const GruposFamiliaresListado = () => {
   const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
+ const [showModal, setShowModal] = useState(false);
+ const [showDocumentosModal, setShowDocumentosModal] = useState(false);
+const [coberturaId, setCoberturaId] = useState(null);
+const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el estado
+
 
   // Estados para modales
   const [showViewModal, setShowViewModal] = useState(false);
@@ -362,6 +367,20 @@ const GruposFamiliaresListado = () => {
                               >
                                 <FaTrashAlt />
                               </Button>
+                              <Button
+                                    variant="outline-primary"
+                                    size="sm"
+                                    onClick={() => {
+                                      // Aquí pasamos solo el ID del grupo familiar
+                                      setGrupoFamiliarId(grupo.id); // Establecer el ID del grupo familiar
+                                      setShowDocumentosModal(true); // Mostrar el modal
+                                    }}
+                                  >
+                                    <FaFile />
+                                  </Button>
+
+
+
                         
 
 
@@ -418,6 +437,11 @@ const GruposFamiliaresListado = () => {
           );
           setShowRetiroModal(false);
         }}
+      />
+      <RequerimientosModal
+        show={showDocumentosModal}
+        onHide={() => setShowDocumentosModal(false)}
+        grupoFamiliarId={grupoFamiliarId} // Pasar el ID del grupo familiar
       />
 
 

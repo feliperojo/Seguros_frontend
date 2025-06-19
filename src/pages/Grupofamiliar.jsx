@@ -1513,6 +1513,17 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                           >
                                             {member.nombre}
                                           </Button>
+                                          {member.tipo_renovacion === "copiada" && (
+                                              <span className="badge bg-info text-white small ms-2">
+                                                <i className="bi bi-files me-1"></i>Copiada
+                                              </span>
+                                            )}
+
+                                            {member.tipo_renovacion === "vacia" && (
+                                              <span className="badge bg-secondary text-white small ms-2">
+                                                <i className="bi bi-file-earmark-plus me-1"></i>Vacía
+                                              </span>
+                                            )}
 
                                     </div>
 

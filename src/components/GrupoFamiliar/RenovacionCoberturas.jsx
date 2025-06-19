@@ -13,17 +13,25 @@ const RenovacionCoberturas = ({
 
     Swal.fire({
       title: "¿Estás seguro?",
-      html: `
-        <p>Este proceso marcará <strong>todas las coberturas activas</strong> como canceladas.</p>
-        <p>Se usará la fecha <strong>${fechaCancelacion}</strong> como cancelación y retiro.</p>
-        <div class="form-check mt-3 text-start">
-          <input class="form-check-input" type="checkbox" id="checkbox_renovar_polizas" />
-          <label class="form-check-label fw-semibold" for="checkbox_renovar_polizas">
-            Deseo renovar automáticamente las pólizas canceladas
-          </label>
-        </div>
-        <p class="text-danger fw-bold mt-3">Esta acción no se puede deshacer.</p>
-      `,
+      // Reemplaza la parte del HTML del modal con esto:
+html: `
+<p>Este proceso marcará <strong>todas las coberturas activas</strong> como canceladas.</p>
+<p>Se usará la fecha <strong>${fechaCancelacion}</strong> como cancelación y retiro.</p>
+<div class="form-check mt-3 text-start">
+  <input class="form-check-input" type="radio" name="tipo_renovacion" id="renovar_vacio" value="vacio" checked />
+  <label class="form-check-label fw-semibold" for="renovar_vacio">
+    Renovar con tarjetas vacías (sólo nombres)
+  </label>
+</div>
+<div class="form-check text-start">
+  <input class="form-check-input" type="radio" name="tipo_renovacion" id="renovar_copia" value="copia" />
+  <label class="form-check-label fw-semibold" for="renovar_copia">
+    Renovar copiando datos de pólizas canceladas
+  </label>
+</div>
+<p class="text-danger fw-bold mt-3">Esta acción no se puede deshacer.</p>
+`,
+
       icon: "warning",
       showCancelButton: true,
       confirmButtonText: "Sí, cancelar",
@@ -34,9 +42,14 @@ const RenovacionCoberturas = ({
         actions: 'd-flex justify-content-center gap-2'
       },
       preConfirm: () => {
-        const checkbox = document.getElementById("checkbox_renovar_polizas");
-        return { renovar: checkbox.checked };
+        const tipoSeleccionado = document.querySelector('input[name="tipo_renovacion"]:checked');
+        if (!tipoSeleccionado) {
+          Swal.showValidationMessage('Debes seleccionar un tipo de renovación');
+          return false;
+        }
+        return { tipo: tipoSeleccionado.value };
       },
+      
       buttonsStyling: false
     }).then((result) => {
       if (!result.isConfirmed) {
@@ -65,7 +78,8 @@ const RenovacionCoberturas = ({
         })
       }));
 
-      if (result.value.renovar) {
+      if (result.value.tipo === "copia") {
+        // Copiar datos
         const gruposRenovados = listaCancelada.map(group => {
           const nuevosMiembros = group.members
             .filter(member => !member.activo && member.fecha_cancelacion)
@@ -73,6 +87,43 @@ const RenovacionCoberturas = ({
               ...member,
               cobertura_id: null,
               cliente_id: member.cliente_id || member.id, 
+              codigo_poliza: member.codigo_poliza,
+              fecha_activacion: "", // vacía
+              fecha_cancelacion: "",
+              fecha_retiro: "",
+              activo: true,
+              vigente: true,
+              id: `${member.id}-renovado-${Date.now()}`,
+              nota_cancel: "",
+              tipo_renovacion: "copiada"
+              // deja otros campos como plan, metal, red, precio, etc.
+            }));
+      
+          return {
+            ...group,
+            members: [...group.members, ...nuevosMiembros]
+          };
+        });
+      
+        setCoverageGroups(gruposRenovados);
+      
+        Swal.fire({
+          icon: "success",
+          title: "Renovación completada con datos copiados",
+          text: "Se copiaron los datos anteriores para permitir edición rápida.",
+          timer: 4000,
+          showConfirmButton: false
+        });
+      }
+      else if (result.value.tipo === "vacio") {
+        // Lógica actual de renovación vacía
+        const gruposVacios = listaCancelada.map(group => {
+          const nuevosMiembros = group.members
+            .filter(member => !member.activo && member.fecha_cancelacion)
+            .map(member => ({
+              ...member,
+              cobertura_id: null,
+              cliente_id: member.cliente_id || member.id,
               codigo_poliza: "",
               fecha_activacion: "",
               fecha_cancelacion: "",
@@ -87,36 +138,28 @@ const RenovacionCoberturas = ({
               activo: true,
               vigente: true,
               nota_cancel: "",
-              id: `${member.id}-renovado-${Date.now()}`,
-              ano_cobertura: String((parseInt(member.ano_cobertura) || new Date().getFullYear()))
+              id: `${member.id}-vacio-${Date.now()}`,
+              ano_cobertura: String((parseInt(member.ano_cobertura) || new Date().getFullYear())),
+              tipo_renovacion: "vacia"
             }));
-
+      
           return {
             ...group,
             members: [...group.members, ...nuevosMiembros]
           };
         });
-
-        setCoverageGroups(gruposRenovados);
-
+      
+        setCoverageGroups(gruposVacios);
+      
         Swal.fire({
           icon: "success",
-          title: "Cancelación y renovación completadas",
-          text: "Las coberturas fueron canceladas y nuevas coberturas vacías han sido generadas.",
+          title: "Renovación con tarjetas vacías",
+          text: "Las coberturas fueron renovadas sin datos.",
           timer: 4000,
           showConfirmButton: false
         });
-      } else {
-        setCoverageGroups(listaCancelada);
-
-        Swal.fire({
-          icon: "success",
-          title: "Cancelación completada",
-          text: "Las coberturas activas fueron canceladas correctamente.",
-          timer: 3000,
-          showConfirmButton: false
-        });
       }
+      
 
       onComplete(); // Limpia el estado trigger
     });
