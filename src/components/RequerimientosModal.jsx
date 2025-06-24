@@ -7,7 +7,7 @@ const estados = {
   Enviado: "info",
   Aprobado: "success",
   Rechazado: "danger",
-  Insuficiente: "secondary",
+  Insuficiente: "danger",
   Procesando: "primary",
   Completado: "success",
 };
