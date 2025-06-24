@@ -37,7 +37,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     fecha_solicitud: "",
     observaciones: "",
     cobertura_id: [],  // Asegurarte de que siempre sea un arreglo
-    estado: "pendiente",
+    estado: "Pendiente",
   });
 
   const [loading, setLoading] = useState(false);
@@ -82,7 +82,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     setEditableRequerimiento({
       ...requerimiento,
       fecha_vencimiento: requerimiento.fecha_vencimiento || "",
-      estado: requerimiento.estado || "pendiente"
+      estado: requerimiento.estado || "Pendiente"
     });
   };
 
@@ -152,7 +152,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
         fecha_vencimiento: "",
         observaciones: "",
         cobertura_id: [],
-        estado: "pendiente",
+        estado: "Pendiente",
       });
       fetchCoberturas(grupoFamiliarId); // Refresh data after creating
     } catch (error) {
@@ -343,7 +343,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                           {editingId === r.id ? (
                             <Form.Control
                               as="select"
-                              value={editableRequerimiento?.estado || "pendiente"}
+                              value={editableRequerimiento?.estado || "Pendiente"}
                               onChange={(e) =>
                                 setEditableRequerimiento({
                                   ...editableRequerimiento,
