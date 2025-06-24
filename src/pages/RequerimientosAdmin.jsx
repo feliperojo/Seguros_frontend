@@ -8,7 +8,7 @@ const estados = {
   Rechazado: { label: 'Rechazado', color: 'badge bg-danger' },
   Procesando: { label: 'Procesando', color: 'badge bg-secondary' },
   Completado: { label: 'Completado', color: 'badge bg-success' },
-  Insuficiente: { label: 'Insuficiente', color: 'badge bg-secondary' },
+  Insuficiente: { label: 'Insuficiente', color: 'badge bg-danger' },
 };
 
 export default function RequerimientosAdmin() {
