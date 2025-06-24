@@ -25,7 +25,8 @@ const estadosOptions = [
 const documentosDisponibles = [
   "Status",
   "Ingresos",
-  "Status E Ingresos",
+  "Medicare",
+  "Medicaid",
   // Agrega otros documentos necesarios aquí
 ];
 
