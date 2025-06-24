@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { 
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, 
-  FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, 
+  FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
@@ -146,6 +146,9 @@ useEffect(() => {
               </Link>
               <Link to="/Grupofamiliar/crear" className={`submenu-link ${isActive('/Grupofamiliar/crear') ? 'active' : ''}`}>
                 <FaPlus /> Crear Grupo
+              </Link>
+              <Link to="/Grupofamiliar/RequerimientosAdmin" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
+                <FaFile /> Documentos Solicitados
               </Link>
               <Link to="/Grupofamiliar/proximos-vencimientos" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaCalendarAlt /> Polizas Vencidas

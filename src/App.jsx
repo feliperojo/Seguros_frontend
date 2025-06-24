@@ -20,7 +20,7 @@ import PagosActualizar from './pages/PagosActualizar';
 import PagosInforme from './pages/PagosInforme';
 import InformeCliente from './pages/InformeCliente'
 import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
-
+import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
@@ -48,6 +48,7 @@ const App = () => {
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Herramientas/auditoria" element={<Auditoria />} />
         <Route path="/herramientas/operaciones" element={<CentroOperaciones />} />
+        
 
         <Route path="/Mediospago" element={<MediosPago />} />
         <Route path="clientes/mediopago/:clienteId" element={<MediosPagoManager />} />
@@ -55,7 +56,7 @@ const App = () => {
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
         <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />
-
+        <Route path="/grupofamiliar/RequerimientosAdmin" element={<RequerimientosAdmin />} />
 
         <Route path="/Pagos/Generarpagos" element={<PagosGenerar />} />
         <Route path="/Pagos/pagos" element={<PagosActualizar />} />

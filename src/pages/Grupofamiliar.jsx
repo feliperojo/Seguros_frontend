@@ -1417,36 +1417,36 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               </div>
               <hr />
               <Form.Check
-  type="checkbox"
-  label="Aplicar Cancelación General a todas las coberturas activas"
-  checked={cancelacionGeneralActiva}
-  onChange={(e) => setCancelacionGeneralActiva(e.target.checked)}
-  className="mb-2 fw-semibold"
-/>
+                  type="checkbox"
+                  label="Aplicar Cancelación General a todas las coberturas activas"
+                  checked={cancelacionGeneralActiva}
+                  onChange={(e) => setCancelacionGeneralActiva(e.target.checked)}
+                  className="mb-2 fw-semibold"
+                />
 
-{cancelacionGeneralActiva && (
-  <Row className="mb-3">
-    <Col md={4}>
-      <Form.Group>
-        <Form.Label className="fw-semibold">Fecha de Cancelación General</Form.Label>
-        <Form.Control
-          type="date"
-          value={fechaCancelacionGeneral}
-          onChange={(e) => setFechaCancelacionGeneral(e.target.value)}
-        />
-      </Form.Group>
-    </Col>
-    <Col md={4} className="d-flex align-items-end">
-      <Button
-        variant="danger"
-        onClick={handleAplicarCancelacionGeneral}
-        disabled={!fechaCancelacionGeneral}
-      >
-        Aplicar Cancelación a Todas las Coberturas Activas
-      </Button>
-    </Col>
-  </Row>
-)}
+                  {cancelacionGeneralActiva && (
+                    <Row className="mb-3">
+                      <Col md={4}>
+                        <Form.Group>
+                          <Form.Label className="fw-semibold">Fecha de Cancelación General</Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={fechaCancelacionGeneral}
+                            onChange={(e) => setFechaCancelacionGeneral(e.target.value)}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={4} className="d-flex align-items-end">
+                        <Button
+                          variant="danger"
+                          onClick={handleAplicarCancelacionGeneral}
+                          disabled={!fechaCancelacionGeneral}
+                        >
+                          Aplicar Cancelación a Todas las Coberturas Activas
+                        </Button>
+                      </Col>
+                    </Row>
+                  )}
 
               {coverageGroups.map((group) => (
                 

@@ -3,23 +3,23 @@ import { Modal, Button, Form, Table, Badge, Alert } from "react-bootstrap";
 import apiRequest from "../services/api"; // Asumiendo que usas este servicio para tus requests
 
 const estados = {
-  pendiente: "warning",
-  enviado: "info",
-  aprobado: "success",
-  rechazado: "danger",
-  insuficiente: "secondary",
-  procesando: "primary",
-  completado: "success",
+  Pendiente: "warning",
+  Enviado: "info",
+  Aprobado: "success",
+  Rechazado: "danger",
+  Insuficiente: "secondary",
+  Procesando: "primary",
+  Completado: "success",
 };
 
 const estadosOptions = [
-  { value: "pendiente", label: "Pendiente" },
-  { value: "enviado", label: "Enviado" },
-  { value: "aprobado", label: "Aprobado" },
-  { value: "rechazado", label: "Rechazado" },
-  { value: "insuficiente", label: "Insuficiente" },
-  { value: "procesando", label: "Procesando" },
-  { value: "completado", label: "Completado" },
+  { value: "Pendiente", label: "Pendiente" },
+  { value: "Enviado", label: "Enviado" },
+  { value: "Aprobado", label: "Aprobado" },
+  { value: "Rechazado", label: "Rechazado" },
+  { value: "Insuficiente", label: "Insuficiente" },
+  { value: "Procesando", label: "Procesando" },
+  { value: "Completado", label: "Completado" },
 ];
 
 const documentosDisponibles = [
