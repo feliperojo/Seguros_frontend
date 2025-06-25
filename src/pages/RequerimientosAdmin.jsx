@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import apiRequest from '../services/api';
-
+import ObservacionesModal from '../components/ObservacionesModal';
+import {
+  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
+} from "react-icons/fa";
 const estados = {
   Pendiente: { label: 'Pendiente', color: 'badge bg-warning text-dark' },
   Enviado: { label: 'Enviado', color: 'badge bg-info text-dark' },
@@ -15,6 +19,8 @@ export default function RequerimientosAdmin() {
   const [requerimientos, setRequerimientos] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({});
+  const [showObservaciones, setShowObservaciones] = useState(false);
+  const [selectedDocumentoId, setSelectedDocumentoId] = useState(null);
 
   // Filtros
   const [estadoFiltro, setEstadoFiltro] = useState('');
@@ -28,7 +34,7 @@ export default function RequerimientosAdmin() {
 
   const fetchRequerimientos = async () => {
     try {
-      const data = await apiRequest(`documentos`);
+      const data = await apiRequest(`Requerimientos`);
       setRequerimientos(data);
     } catch (err) {
       console.error('Error al cargar requerimientos:', err.message);
@@ -70,6 +76,11 @@ export default function RequerimientosAdmin() {
     }
   };
 
+  const handleShowObservaciones = (documentoId) => {
+    setSelectedDocumentoId(documentoId);
+    setShowObservaciones(true);
+  };
+
   // 🔎 Aplicar Filtros
   const requerimientosFiltrados = requerimientos.filter((req) => {
     const clienteNombre = req.cobertura?.cliente?.nombre_completo?.toLowerCase() || '';
@@ -88,7 +99,7 @@ export default function RequerimientosAdmin() {
   const requerimientosPorCliente = requerimientosFiltrados.reduce((acc, req) => {
     const cliente = req.cobertura?.cliente?.nombre_completo || 'Cliente desconocido';
     const documento = req.cobertura?.codigo_poliza || 'N/D';
-    const key = `${cliente} - ${documento}`;
+    const key = `${cliente} - CP ${documento}`;
     if (!acc[key]) acc[key] = [];
     acc[key].push(req);
     return acc;
@@ -211,8 +222,9 @@ export default function RequerimientosAdmin() {
                         <button onClick={() => handleUpdate(req)} className="btn btn-success btn-sm">Guardar</button>
                       ) : (
                         <>
-                          <button onClick={() => handleEdit(req)} className="btn btn-primary btn-sm me-1">Modificar</button>
-                          <button onClick={() => handleDelete(req)} className="btn btn-danger btn-sm">Eliminar</button>
+                          <button onClick={() => handleEdit(req)} className="btn btn-primary btn-sm me-1"><FaEdit /></button>
+                          <button onClick={() => handleDelete(req)} className="btn btn-danger btn-sm me-1"><FaTrashAlt /></button>
+                          <button onClick={() => handleShowObservaciones(req.id)} className="btn btn-info btn-sm"> <FaEye /></button>
                         </>
                       )}
                     </td>
@@ -223,6 +235,13 @@ export default function RequerimientosAdmin() {
           </div>
         </div>
       ))}
+
+      {/* Modal de Observaciones */}
+      <ObservacionesModal
+        show={showObservaciones}
+        onHide={() => setShowObservaciones(false)}
+        documentoId={selectedDocumentoId}
+      />
     </div>
   );
 }
