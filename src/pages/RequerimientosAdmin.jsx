@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import apiRequest from '../services/api';
 import ObservacionesModal from '../components/ObservacionesModal';
+import ModalAdjuntos from '../components/ModalAdjuntos';
+
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
@@ -22,6 +24,10 @@ export default function RequerimientosAdmin() {
   const [showObservaciones, setShowObservaciones] = useState(false);
   const [selectedDocumentoId, setSelectedDocumentoId] = useState(null);
 
+  const [showModalAdjuntos, setShowModalAdjuntos] = useState(false);
+const [reqActivo, setReqActivo] = useState(null);
+
+
   // Filtros
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [clienteFiltro, setClienteFiltro] = useState('');
@@ -40,6 +46,12 @@ export default function RequerimientosAdmin() {
       console.error('Error al cargar requerimientos:', err.message);
     }
   };
+
+  const handleMostrarAdjuntos = (req) => {
+    setReqActivo(req);
+    setShowModalAdjuntos(true);
+  };
+  
 
   const handleEdit = (req) => {
     setEditingId(req.id);
@@ -224,7 +236,9 @@ export default function RequerimientosAdmin() {
                         <>
                           <button onClick={() => handleEdit(req)} className="btn btn-primary btn-sm me-1"><FaEdit /></button>
                           <button onClick={() => handleDelete(req)} className="btn btn-danger btn-sm me-1"><FaTrashAlt /></button>
-                          <button onClick={() => handleShowObservaciones(req.id)} className="btn btn-info btn-sm"> <FaEye /></button>
+                          <button onClick={() => handleShowObservaciones(req.id)} className="btn btn-info btn-sm me-1"> <FaEye /></button>
+                          <button onClick={() => handleMostrarAdjuntos(req)}  className="btn btn-secondary btn-sm "> <FaFile /></button>
+
                         </>
                       )}
                     </td>
@@ -242,6 +256,15 @@ export default function RequerimientosAdmin() {
         onHide={() => setShowObservaciones(false)}
         documentoId={selectedDocumentoId}
       />
+
+        {showModalAdjuntos && reqActivo && (
+          <ModalAdjuntos
+            show={showModalAdjuntos}
+            onHide={() => setShowModalAdjuntos(false)}
+            documentoId={reqActivo.id}
+          />
+        )}
+
     </div>
   );
 }
