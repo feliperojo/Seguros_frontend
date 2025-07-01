@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import apiRequest from '../services/api';
 import ObservacionesModal from '../components/ObservacionesModal';
 import ModalAdjuntos from '../components/ModalAdjuntos';
-
+import '../styles/RequerimientosAdmin.css';
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
@@ -165,20 +165,21 @@ const [reqActivo, setReqActivo] = useState(null);
 
       {/* Tabla agrupada */}
       {Object.entries(requerimientosPorCliente).map(([clienteKey, docs]) => (
-        <div key={clienteKey} className="mb-4">
-          <h6 className="fw-bold">{clienteKey}</h6>
-          <div className="table-responsive">
-            <table className="table table-bordered table-sm">
+        <div key={clienteKey} className="requerimientos-bloque">
+        <h6>{clienteKey}</h6>
+        <div className="table-responsive">
+          <table className="requerimientos-table">
               <thead>
                 <tr>
-                  <th>DOCUMENTO</th>
-                  <th>FECHA VENCIMIENTO</th>
-                  <th>FECHA SOLICITUD</th>
-                  <th>ESTADO</th>
-                  <th>OBSERVACIONES</th>
-                  <th>ACCIONES</th>
+                  <th className="col-doc">DOCUMENTO</th>
+                  <th className="col-fecha">FECHA VENCIMIENTO</th>
+                  <th className="col-fecha">FECHA SOLICITUD</th>
+                  <th className="col-estado">ESTADO</th>
+                  <th className="col-obs">OBSERVACIONES</th>
+                  <th className="col-acciones">ACCIONES</th>
                 </tr>
               </thead>
+
               <tbody>
                 {docs.map((req) => (
                   <tr key={req.id}>
@@ -216,32 +217,19 @@ const [reqActivo, setReqActivo] = useState(null);
                         </span>
                       )}
                     </td>
+                    <td>{req.observaciones || '-'}</td>
                     <td>
-                      {editingId === req.id ? (
-                        <input
-                          type="text"
-                          name="observaciones"
-                          value={formData.observaciones}
-                          onChange={handleChange}
-                          className="form-control"
-                        />
-                      ) : (
-                        req.observaciones || '-'
-                      )}
-                    </td>
-                    <td>
-                      {editingId === req.id ? (
-                        <button onClick={() => handleUpdate(req)} className="btn btn-success btn-sm">Guardar</button>
-                      ) : (
-                        <>
-                          <button onClick={() => handleEdit(req)} className="btn btn-primary btn-sm me-1"><FaEdit /></button>
-                          <button onClick={() => handleDelete(req)} className="btn btn-danger btn-sm me-1"><FaTrashAlt /></button>
-                          <button onClick={() => handleShowObservaciones(req.id)} className="btn btn-info btn-sm me-1"> <FaEye /></button>
-                          <button onClick={() => handleMostrarAdjuntos(req)}  className="btn btn-secondary btn-sm "> <FaFile /></button>
-
-                        </>
-                      )}
-                    </td>
+                        {editingId === req.id ? (
+                          <button onClick={() => handleUpdate(req)} className="btn btn-success btn-sm w-100">Guardar</button>
+                        ) : (
+                          <div className="requerimientos-acciones">
+                            <button onClick={() => handleEdit(req)} className="btn btn-primary btn-sm"><FaEdit /></button>
+                            <button onClick={() => handleDelete(req)} className="btn btn-danger btn-sm"><FaTrashAlt /></button>
+                            <button onClick={() => handleShowObservaciones(req.id)} className="btn btn-info btn-sm"><FaEye /></button>
+                            <button onClick={() => handleMostrarAdjuntos(req)} className="btn btn-secondary btn-sm"><FaFile /></button>
+                          </div>
+                        )}
+                      </td>
                   </tr>
                 ))}
               </tbody>
