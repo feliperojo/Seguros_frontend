@@ -10,99 +10,39 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [itemsPerPage] = useState(10);
+  const termino = searchTerm.trim().toLowerCase();
 
   // Función para buscar clientes
-  const buscarClientes = async (pagina = 1) => {
-    if (!searchTerm.trim() || searchTerm.trim().length < 3) {
-      setError("Por favor ingrese al menos 3 caracteres para buscar");
+  const buscarClientes = async () => {
+    const termino = searchTerm.trim();
+  
+    if (termino.length < 3) {
+      setError("Ingrese al menos 3 caracteres para buscar");
+      setSearchResults([]);
       return;
     }
-
-    setLoading(true);
-    setError(null);
-    console.log("Buscando clientes con término:", searchTerm);
-
+  
     try {
-      // Intentamos primero con la ruta cliente/search (si existe en tu API)
-      console.log(`Realizando búsqueda con: cliente/search?query=${encodeURIComponent(searchTerm)}`);
-      let response;
-      
-      try {
-        // Intenta primero con el endpoint específico de búsqueda
-        response = await apiRequest(`cliente/search?query=${encodeURIComponent(searchTerm)}`, "GET");
-        console.log("Respuesta de búsqueda:", response);
-      } catch (searchError) {
-        console.log("Error con endpoint search, intentando con endpoint alternativo:", searchError);
-        
-        // Si falla, intentamos con el endpoint general que lista todos los clientes
-        response = await apiRequest(`cliente/?query=${encodeURIComponent(searchTerm)}`, "GET");
-        console.log("Respuesta de endpoint alternativo:", response);
-      }
-
-      // Procesamiento de la respuesta según su estructura
-      if (response) {
-        let clientesEncontrados = [];
-        
-        // Intentar diferentes estructuras de respuesta posibles
-        if (Array.isArray(response)) {
-          // Si la respuesta es directamente un array de clientes
-          clientesEncontrados = response;
-        } else if (response.data && Array.isArray(response.data)) {
-          // Si la respuesta tiene un campo data que es un array
-          clientesEncontrados = response.data;
-        } else if (response.clientes && Array.isArray(response.clientes)) {
-          // Si la respuesta tiene un campo clientes que es un array
-          clientesEncontrados = response.clientes;
-        } else if (response.results && Array.isArray(response.results)) {
-          // Si la respuesta tiene un campo results que es un array
-          clientesEncontrados = response.results;
-        } else if (typeof response === 'object') {
-          // Si la respuesta es un objeto, convertimos sus valores a un array
-          clientesEncontrados = Object.values(response).filter(item => typeof item === 'object');
-        }
-        
-        // Filtramos los resultados manualmente si es necesario
-        if (clientesEncontrados.length > 0) {
-          // Filtrar los resultados por el término de búsqueda (en caso de que la API no lo haga)
-          clientesEncontrados = clientesEncontrados.filter(cliente => {
-            const nombreCompleto = (cliente.nombre_completo || 
-              `${cliente.nombre || ''} ${cliente.apellido || ''}`).toLowerCase();
-            const email = (cliente.email || '').toLowerCase();
-            const telefono = (cliente.telefono || '').toLowerCase();
-            const documento = (cliente.documento_identidad || '').toLowerCase();
-            
-            const termino = searchTerm.toLowerCase();
-            
-            return nombreCompleto.includes(termino) || 
-                   email.includes(termino) || 
-                   telefono.includes(termino) || 
-                   documento.includes(termino);
-          });
-        }
-        
-        console.log("Clientes encontrados después de procesar:", clientesEncontrados);
-        
-        if (clientesEncontrados.length > 0) {
-          setSearchResults(clientesEncontrados);
-          setTotalPages(Math.ceil(clientesEncontrados.length / itemsPerPage) || 1);
-          setPage(1);
-        } else {
-          setSearchResults([]);
-          setError(`No se encontraron resultados para "${searchTerm}"`);
-        }
+      const response = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(termino)}`, "GET");
+      const clientes = Array.isArray(response) ? response : [];
+  
+      if (clientes.length > 0) {
+        setSearchResults(clientes);
+        setTotalPages(Math.ceil(clientes.length / itemsPerPage));
+        setPage(1);
       } else {
         setSearchResults([]);
-        setError("La respuesta de la API no tiene el formato esperado");
+        setError(`No se encontraron resultados para "${termino}"`);
       }
-    } catch (error) {
-      console.error("Error al buscar clientes:", error);
-      setError(`Error al buscar clientes: ${error.message || "Error desconocido"}`);
+    } catch (err) {
+      console.error("Error:", err);
       setSearchResults([]);
+      setError("Error al buscar clientes.");
     } finally {
       setLoading(false);
     }
   };
-
+  
   // Manejador para el cambio en el input de búsqueda
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -110,15 +50,11 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
   };
 
   // Manejador para el formulario de búsqueda
-  const handleSearchSubmit = (e) => {
-    e.preventDefault();
-    setPage(1); // Resetear página a 1 en nueva búsqueda
-    buscarClientes(1);
-  };
+  
 
   // Manejador para seleccionar un cliente
   const handleSelectClient = (cliente) => {
-    console.log("Cliente seleccionado:", cliente);
+   
     onClienteSeleccionado(cliente);
   };
 
@@ -130,6 +66,18 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
       // para la paginación del lado del cliente
     }
   };
+  useEffect(() => {
+    const delayDebounce = setTimeout(() => {
+      if (searchTerm.trim().length >= 3) {
+        buscarClientes();
+      } else {
+        setSearchResults([]);
+      }
+    }, 400); // espera 400ms tras dejar de escribir
+  
+    return () => clearTimeout(delayDebounce);
+  }, [searchTerm]);
+  
 
   // Obtenemos los clientes para la página actual
   const getCurrentPageClients = () => {
@@ -140,35 +88,17 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
 
   return (
     <div>
-      <Form onSubmit={handleSearchSubmit}>
+      <Form>
         <Form.Group className="mb-3">
           <Form.Label>Buscar Cliente</Form.Label>
           <InputGroup>
             <Form.Control
               type="text"
-              placeholder="Nombre, email, teléfono o Social"
+              placeholder="Nombre"
               value={searchTerm}
               onChange={handleSearchChange}
             />
-            <Button variant="primary" type="submit" disabled={loading}>
-              {loading ? (
-                <>
-                  <Spinner
-                    as="span"
-                    animation="border"
-                    size="sm"
-                    role="status"
-                    aria-hidden="true"
-                  />
-                  <span className="ms-2">Buscando...</span>
-                </>
-              ) : (
-                <>
-                  <i className="bi bi-search me-2"></i>
-                  Buscar
-                </>
-              )}
-            </Button>
+           
           </InputGroup>
           <Form.Text className="text-muted">
             Ingrese al menos 3 caracteres para buscar
@@ -266,8 +196,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
         !error && (
           <div className="text-center my-4 py-4 border rounded bg-light">
             <i className="bi bi-search fs-1 text-muted"></i>
-            <p className="mt-2 text-muted">No se encontraron resultados para "{searchTerm}"</p>
-          </div>
+                      </div>
         )
       )}
     </div>
