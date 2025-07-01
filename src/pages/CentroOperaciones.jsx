@@ -22,7 +22,7 @@ const CentroOperaciones = () => {
   const [fechaFinBitacoraFiltro, setFechaFinBitacoraFiltro] = useState(fechaFinBitacora);
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [usuarios, setUsuarios] = useState([]);
-
+  const [clienteFiltro, setClienteFiltro] = useState("");
 
   // Tareas
   const [tareasData, setTareasData] = useState({ data: [], total: 0, current_page: 1, per_page: 10 });
@@ -37,7 +37,10 @@ const CentroOperaciones = () => {
   const [fechaFinTareasFiltro, setFechaFinTareasFiltro] = useState(fechaFinTareas);
   const [usuarioFiltro, setUsuarioFiltro] = useState("");
   const [estadoTareasFiltro, setEstadoTareasFiltro] = useState("");
+  const [clienteTareasFiltro, setClienteTareasFiltro] = useState("");
 
+  // Estados para lista de clientes
+  const [clientes, setClientes] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -51,13 +54,13 @@ const CentroOperaciones = () => {
     setLoading(true);
     Promise.all([
       apiRequest(
-        `bitacora_operativa?per_page=${logsData.per_page}&page=${pageBitacora}&fecha_inicio=${fechaInicioBitacoraFiltro}&fecha_fin=${fechaFinBitacoraFiltro}&estado=${estadoFiltro}&usuario=${usuarioFiltro}`,
+        `bitacora_operativa?per_page=${logsData.per_page}&page=${pageBitacora}&fecha_inicio=${fechaInicioBitacoraFiltro}&fecha_fin=${fechaFinBitacoraFiltro}&estado=${estadoFiltro}&usuario=${usuarioFiltro}&cliente=${clienteFiltro}`,
         "GET"
       ),
       
       
       apiRequest(
-        `tareas_operativas?per_page=${tareasData.per_page}&page=${pageTareas}&fecha_inicio=${fechaInicioTareasFiltro}&fecha_fin=${fechaFinTareasFiltro}&estado=${estadoTareasFiltro}`,
+        `tareas_operativas?per_page=${tareasData.per_page}&page=${pageTareas}&fecha_inicio=${fechaInicioTareasFiltro}&fecha_fin=${fechaFinTareasFiltro}&estado=${estadoTareasFiltro}&cliente=${clienteTareasFiltro}`,
         "GET"
       )
       
@@ -68,10 +71,17 @@ const CentroOperaciones = () => {
       })
       .finally(() => setLoading(false));
   };
+
   useEffect(() => {
+    // Cargar usuarios operativos
     apiRequest("usuarios-operativos", "GET")
       .then(setUsuarios)
       .catch(() => setUsuarios([]));
+
+    // Cargar lista de clientes
+    apiRequest("cliente", "GET")
+      .then(setClientes)
+      .catch(() => setClientes([]));
   }, []);
   
   useEffect(() => {
@@ -108,7 +118,6 @@ const CentroOperaciones = () => {
       cargarDatos(currentPage, pageNumber);
     }
   };
-
 
   const categoriaBadge = (categoria) => {
     switch ((categoria || "").toLowerCase()) {
@@ -148,66 +157,76 @@ const CentroOperaciones = () => {
 
       {/* Filtros fecha independientes */}
       {key === "bitacora" && (
-  <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
-    <label htmlFor="fechaInicioBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha inicio:</label>
-    <input
-      type="date"
-      id="fechaInicioBitacora"
-      value={fechaInicioBitacoraFiltro}
-      onChange={(e) => setFechaInicioBitacoraFiltro(e.target.value)}
-      style={{ width: "130px", height: "28px" }}
-    />
+        <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
+          <label htmlFor="fechaInicioBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha inicio:</label>
+          <input
+            type="date"
+            id="fechaInicioBitacora"
+            value={fechaInicioBitacoraFiltro}
+            onChange={(e) => setFechaInicioBitacoraFiltro(e.target.value)}
+            style={{ width: "130px", height: "28px" }}
+          />
 
-    <label htmlFor="fechaFinBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha fin:</label>
-    <input
-      type="date"
-      id="fechaFinBitacora"
-      value={fechaFinBitacoraFiltro}
-      onChange={(e) => setFechaFinBitacoraFiltro(e.target.value)}
-      style={{ width: "130px", height: "28px" }}
-    />
+          <label htmlFor="fechaFinBitacora" className="mb-0" style={{ fontSize: "0.85rem" }}>Fecha fin:</label>
+          <input
+            type="date"
+            id="fechaFinBitacora"
+            value={fechaFinBitacoraFiltro}
+            onChange={(e) => setFechaFinBitacoraFiltro(e.target.value)}
+            style={{ width: "130px", height: "28px" }}
+          />
 
-    <label htmlFor="estadoFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Estado:</label>
-    <select
-      id="estadoFiltro"
-      value={estadoFiltro}
-      onChange={(e) => setEstadoFiltro(e.target.value)}
-      style={{ height: "28px", minWidth: "150px" }}
-    >
-      <option value="">Todos</option>
-      <option value="pending">Pendiente</option>
-      <option value="in_progress">En progreso</option>
-      <option value="completed">Completada</option>
-    </select>
+          <label htmlFor="estadoFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Estado:</label>
+          <select
+            id="estadoFiltro"
+            value={estadoFiltro}
+            onChange={(e) => setEstadoFiltro(e.target.value)}
+            style={{ height: "28px", minWidth: "150px" }}
+          >
+            <option value="">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="in_progress">En progreso</option>
+            <option value="completed">Completada</option>
+          </select>
 
-    <label htmlFor="usuarioFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Asignado a:</label>
-    <select
-        id="usuarioFiltro"
-        value={usuarioFiltro}
-        onChange={(e) => setUsuarioFiltro(e.target.value)}
-        style={{ height: "28px", minWidth: "160px" }}
-      >
-        <option value="">Todos</option>
-        {usuarios.map((u) => (
-          <option key={u.id} value={u.name}>
-            {u.name}
-          </option>
-        ))}
-      </select>
+          <label htmlFor="usuarioFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Asignado a:</label>
+          <select
+            id="usuarioFiltro"
+            value={usuarioFiltro}
+            onChange={(e) => setUsuarioFiltro(e.target.value)}
+            style={{ height: "28px", minWidth: "160px" }}
+          >
+            <option value="">Todos</option>
+            {usuarios.map((u) => (
+              <option key={u.id} value={u.name}>
+                {u.name}
+              </option>
+            ))}
+          </select>
 
+          <label htmlFor="clienteFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Cliente:</label>
+          <select
+            id="clienteFiltro"
+            value={clienteFiltro}
+            onChange={(e) => setClienteFiltro(e.target.value)}
+            style={{ height: "28px", minWidth: "200px" }}
+          >
+            <option value="">Todos los clientes</option>
+            {clientes.map((cliente) => (
+              <option key={cliente.id} value={cliente.id}>
+                {cliente.nombre_completo || cliente.nombre} (ID: {cliente.id})
+              </option>
+            ))}
+          </select>
 
-
-    <Button size="sm" onClick={() => cargarDatos(1, currentPageTareas)}>
-      Filtrar
-    </Button>
-  </div>
-)}
-
-
+          <Button size="sm" onClick={() => cargarDatos(1, currentPageTareas)}>
+            Filtrar
+          </Button>
+        </div>
+      )}
 
       {key === "tareas" && (
-      <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
-
+        <div className="d-flex align-items-center mb-3 gap-2 flex-wrap" style={{ maxWidth: "100%" }}>
           <label htmlFor="fechaInicioTareas" className="mb-0" style={{ fontSize: "0.85rem" }}>
             Fecha inicio:
           </label>
@@ -229,17 +248,32 @@ const CentroOperaciones = () => {
             style={{ width: "130px", height: "28px" }}
           />
           <label htmlFor="estadoTareasFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Estado:</label>
-              <select
-                id="estadoTareasFiltro"
-                value={estadoTareasFiltro}
-                onChange={(e) => setEstadoTareasFiltro(e.target.value)}
-                style={{ height: "28px", minWidth: "150px" }}
-              >
-                <option value="">Todos</option>
-                <option value="pending">Pendiente</option>
-                <option value="in_progress">En progreso</option>
-                <option value="completed">Completada</option>
-              </select>
+          <select
+            id="estadoTareasFiltro"
+            value={estadoTareasFiltro}
+            onChange={(e) => setEstadoTareasFiltro(e.target.value)}
+            style={{ height: "28px", minWidth: "150px" }}
+          >
+            <option value="">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="in_progress">En progreso</option>
+            <option value="completed">Completada</option>
+          </select>
+
+          <label htmlFor="clienteTareasFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Cliente:</label>
+          <select
+            id="clienteTareasFiltro"
+            value={clienteTareasFiltro}
+            onChange={(e) => setClienteTareasFiltro(e.target.value)}
+            style={{ height: "28px", minWidth: "200px" }}
+          >
+            <option value="">Todos los clientes</option>
+            {clientes.map((cliente) => (
+              <option key={cliente.id} value={cliente.id}>
+                {cliente.nombre_completo || cliente.nombre} (ID: {cliente.id})
+              </option>
+            ))}
+          </select>
 
           <Button size="sm" onClick={() => cargarDatos(currentPage, 1)}>
             Filtrar
@@ -317,44 +351,43 @@ const CentroOperaciones = () => {
                 </tr>
               </thead>
               <tbody>
-             
                 {[...(tareasData.data || [])]
                   .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                   .map((t) => (
                     <tr key={t.id}>
                       <td>{new Date(t.created_at).toLocaleString()}</td>
 
-                    <td>
+                      <td>
                         {t.log.cliente
                           ? `${t.log.cliente.nombre_completo} (ID: ${t.log.cliente.id})`
                           : `${t.log.entity_type} #${t.log.entity_id}`}
                       </td>
-                    <td>{t.log.concept?.name}</td>
-                    <td>
+                      <td>{t.log.concept?.name}</td>
+                      <td>
                         <div className="d-flex flex-column gap-1">
                           {statusBadge(t.status)}
                           {categoriaBadge(t.log?.concept?.category)}
                         </div>
                       </td>
 
-                    <td>{t.log.note || "---"}</td>
-                    <td>{t.response_note || "---"}</td>
-                    <td>
-                      {t.status !== "completed" && (
-                        <Button
-                          size="sm"
-                          variant="primary"
-                          onClick={() => {
-                            setSelectedTarea(t);
-                            setShowResponderModal(true);
-                          }}
-                        >
-                          Responder
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                      <td>{t.log.note || "---"}</td>
+                      <td>{t.response_note || "---"}</td>
+                      <td>
+                        {t.status !== "completed" && (
+                          <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => {
+                              setSelectedTarea(t);
+                              setShowResponderModal(true);
+                            }}
+                          >
+                            Responder
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </Table>
           )}
