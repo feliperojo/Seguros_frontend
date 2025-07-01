@@ -150,9 +150,9 @@ useEffect(() => {
               <Link to="/Grupofamiliar/RequerimientosAdmin" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaFile /> Documentos Solicitados
               </Link>
-              <Link to="/Grupofamiliar/proximos-vencimientos" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
+              {/* <Link to="/Grupofamiliar/proximos-vencimientos" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaCalendarAlt /> Polizas Vencidas
-              </Link>
+              </Link> */}
             </div>
           )}
         </div>
@@ -217,9 +217,9 @@ useEffect(() => {
               <Link to="/Informes/historialCliente" className={`submenu-link ${isActive('/Informes/historialCliente') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Clientes
               </Link>
-              <Link to="/Informes/polizas" className={`submenu-link ${isActive('/Informes/polizas') ? 'active' : ''}`}>
+              {/* <Link to="/Informes/polizas" className={`submenu-link ${isActive('/Informes/polizas') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Pólizas
-              </Link>
+              </Link> */}
             </div>
           )}
         </div>

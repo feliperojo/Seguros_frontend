@@ -16,6 +16,8 @@ import DetalleClienteModal from "../components/DetalleClienteModal";
 
 const Dashboard = () => {
   const [clientesRecientes, setClientesRecientes] = useState([]);
+  const [polizasCanceladas, setPolizasCanceladas] = useState([]);
+
   const [polizasProximasVencer, setPolizasProximasVencer] = useState([]);
   const [estadisticas, setEstadisticas] = useState({
     totalClientes: 0,
@@ -43,7 +45,12 @@ const [clienteToView, setClienteToView] = useState(null);
     setError(null);
     try {
       const resClientes = await apiRequest("cliente/recientes", "GET");
-      setClientesRecientes(resClientes.slice(0, 5));
+      setClientesRecientes(resClientes.slice(0, 15));
+
+      const resCanceladas = await apiRequest("cobertura/canceladas", "GET");
+      console.log(resCanceladas);
+      setPolizasCanceladas(resCanceladas.slice(0, 15)); // Mostrar solo 15
+
 
       const resPolizas = await apiRequest("cobertura/proximas-vencer", "GET");
       setPolizasProximasVencer(resPolizas.slice(0, 5));
@@ -80,11 +87,6 @@ const handleOpenViewModal = (cliente) => {
       )
     );
     
-    // Opcional: Mostrar un mensaje de éxito (podría implementarse con un Toast)
-    console.log("Cliente actualizado con éxito:", updatedCliente);
-    
-    // Opcional: Recargar los datos completos del dashboard
-    // cargarDatos();
   };
 
   // Función para renderizar el mensaje cuando no hay datos
@@ -222,7 +224,8 @@ const handleOpenViewModal = (cliente) => {
           <div className="section-container table-section">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="section-title mb-0">Clientes Recientes</h5>
-              <Link to="/cliente/lista" className="btn btn-sm btn-link text-decoration-none">
+              <Link to="/clientes/lista" className="btn btn-sm btn-link text-decoration-none">
+              
                 Ver todos <FaList className="ms-1" />
               </Link>
             </div>
@@ -242,29 +245,29 @@ const handleOpenViewModal = (cliente) => {
                   ) : clientesRecientes.length > 0 ? (
                     clientesRecientes.map(cliente => (
                       <tr key={cliente.id}>
-  <td className="fw-medium">{cliente.nombre_completo}</td>
-  <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
-  <td>{cliente.telefono || cliente.email}</td>
-  <td className="text-end">
-    <Button 
-      variant="outline-primary" 
-      size="sm"
-      className="me-1"
-      onClick={() => handleOpenViewModal(cliente)}
-      title="Ver detalles"
-    >
-      <FaEye />
-    </Button>
-    <Button 
-      variant="outline-success" 
-      size="sm"
-      onClick={() => handleOpenEditModal(cliente)}
-      title="Editar cliente"
-    >
-      <FaEdit />
-    </Button>
-  </td>
-</tr>
+                            <td className="fw-medium">{cliente.nombre_completo}</td>
+                            <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
+                            <td>{cliente.telefono || cliente.email}</td>
+                            <td className="text-end">
+                              <Button 
+                                variant="outline-primary" 
+                                size="sm"
+                                className="me-1"
+                                onClick={() => handleOpenViewModal(cliente)}
+                                title="Ver detalles"
+                              >
+                                <FaEye />
+                              </Button>
+                              <Button 
+                                variant="outline-success" 
+                                size="sm"
+                                onClick={() => handleOpenEditModal(cliente)}
+                                title="Editar cliente"
+                              >
+                                <FaEdit />
+                              </Button>
+                            </td>
+                          </tr>
                     ))
                   ) : (
                     renderEmptyMessage("No hay clientes recientes")
@@ -287,40 +290,31 @@ const handleOpenViewModal = (cliente) => {
               <Table hover className="mb-0 table-borderless">
                 <thead>
                   <tr>
-                    <th>Grupo Familiar</th>
-                    <th>Tipo</th>
+                    <th>GF</th>
+                    <th>Cliente</th>
                     <th>Vencimiento</th>
                     <th className="text-end">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cargando ? (
-                    renderLoading()
-                  ) : polizasProximasVencer.length > 0 ? (
-                    polizasProximasVencer.map(poliza => {
-                      const hoy = new Date();
-                      const vencimiento = new Date(poliza.fecha_vencimiento);
-                      const diasRestantes = Math.ceil((vencimiento - hoy) / (1000 * 60 * 60 * 24));
-                      let estado = "success";
-                      if (diasRestantes <= 0) estado = "danger";
-                      else if (diasRestantes <= 15) estado = "warning";
-                      return (
-                        <tr key={poliza.id}>
-                          <td className="fw-medium">{poliza.grupo_familiar_nombre}</td>
-                          <td>{poliza.tipo_cobertura}</td>
-                          <td>{new Date(poliza.fecha_vencimiento).toLocaleDateString()}</td>
-                          <td className="text-end">
-                            <Badge bg={estado} pill>
-                              {diasRestantes <= 0 ? "Vencida" : `${diasRestantes} días`}
-                            </Badge>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    renderEmptyMessage("No hay pólizas próximas a vencer")
-                  )}
-                </tbody>
+                      {cargando ? (
+                        renderLoading()
+                      ) : polizasCanceladas.length > 0 ? (
+                        polizasCanceladas.map(poliza => (
+                          <tr key={poliza.id}>
+                            <td className="fw-medium">{poliza.grupo_familiar?.id || 'Sin grupo'}</td>
+                            <td>{poliza.cliente.nombre_completo || 'Sin tipo'}</td>
+                            <td>{poliza.fecha_cancelacion ? new Date(poliza.fecha_cancelacion).toLocaleDateString() : 'Sin fecha'}</td>
+                            <td className="text-end">
+                              <Badge bg="danger" pill>Cancelada</Badge>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        renderEmptyMessage("No hay pólizas canceladas")
+                      )}
+                    </tbody>
+
               </Table>
             </div>
           </div>
