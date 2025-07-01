@@ -41,6 +41,11 @@ const CentroOperaciones = () => {
 
   // Estados para lista de clientes
   const [clientes, setClientes] = useState([]);
+  const [clientesBusqueda, setClientesBusqueda] = useState([]);
+  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+  const [showClienteDropdownTareas, setShowClienteDropdownTareas] = useState(false);
+  const [clienteBusquedaText, setClienteBusquedaText] = useState("");
+  const [clienteTareasBusquedaText, setClienteTareasBusquedaText] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -78,11 +83,84 @@ const CentroOperaciones = () => {
       .then(setUsuarios)
       .catch(() => setUsuarios([]));
 
-    // Cargar lista de clientes
+    // Cargar lista inicial de clientes (limitada)
     apiRequest("cliente", "GET")
       .then(setClientes)
       .catch(() => setClientes([]));
   }, []);
+
+  // Función para buscar clientes
+  const buscarClientes = async (searchTerm) => {
+    if (searchTerm.length >= 2) {
+      try {
+        const result = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(searchTerm)}`, "GET");
+        setClientesBusqueda(result || []);
+      } catch (error) {
+        setClientesBusqueda([]);
+      }
+    } else {
+      setClientesBusqueda([]);
+    }
+  };
+
+  // Debounce para la búsqueda
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (clienteBusquedaText) {
+        buscarClientes(clienteBusquedaText);
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [clienteBusquedaText]);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (clienteTareasBusquedaText) {
+        buscarClientes(clienteTareasBusquedaText);
+      }
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [clienteTareasBusquedaText]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest(".cliente-autocomplete")) {
+        setShowClienteDropdown(false);
+        setShowClienteDropdownTareas(false);
+      }
+    };
+    document.addEventListener("click", handleClickOutside);
+    return () => {
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+  
+
+  // Manejar selección de cliente
+  const seleccionarCliente = (cliente, esTareas = false) => {
+    if (esTareas) {
+      setClienteTareasFiltro(cliente.id);
+      setClienteTareasBusquedaText(`${cliente.nombre_completo || cliente.nombre} (ID: ${cliente.id})`);
+      setShowClienteDropdownTareas(false);
+    } else {
+      setClienteFiltro(cliente.id);
+      setClienteBusquedaText(`${cliente.nombre_completo || cliente.nombre} (ID: ${cliente.id})`);
+      setShowClienteDropdown(false);
+    }
+  };
+
+  // Limpiar filtro de cliente
+  const limpiarClienteFiltro = (esTareas = false) => {
+    if (esTareas) {
+      setClienteTareasFiltro("");
+      setClienteTareasBusquedaText("");
+      setShowClienteDropdownTareas(false);
+    } else {
+      setClienteFiltro("");
+      setClienteBusquedaText("");
+      setShowClienteDropdown(false);
+    }
+  };
   
   useEffect(() => {
     cargarDatos(1, 1);
@@ -205,19 +283,82 @@ const CentroOperaciones = () => {
           </select>
 
           <label htmlFor="clienteFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Cliente:</label>
-          <select
-            id="clienteFiltro"
-            value={clienteFiltro}
-            onChange={(e) => setClienteFiltro(e.target.value)}
-            style={{ height: "28px", minWidth: "200px" }}
-          >
-            <option value="">Todos los clientes</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id} value={cliente.id}>
-                {cliente.nombre_completo || cliente.nombre} (ID: {cliente.id})
-              </option>
-            ))}
-          </select>
+          <div className="cliente-autocomplete" style={{ position: "relative", minWidth: "200px" }}>
+            <input
+              type="text"
+              placeholder="Buscar cliente..."
+              value={clienteBusquedaText}
+              onChange={(e) => {
+                setClienteBusquedaText(e.target.value);
+                setShowClienteDropdown(true);
+              }}
+              onFocus={() => setShowClienteDropdown(true)}
+              style={{ height: "28px", width: "100%", paddingRight: "60px" }}
+            />
+            {clienteBusquedaText && (
+              <button
+                type="button"
+                onClick={() => limpiarClienteFiltro(false)}
+                style={{
+                  position: "absolute",
+                  right: "5px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  color: "#666"
+                }}
+              >
+                ✕
+              </button>
+            )}
+            
+            {showClienteDropdown && (clientesBusqueda.length > 0 || clienteBusquedaText.length >= 2) && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                backgroundColor: "white",
+                border: "1px solid #ddd",
+                borderRadius: "4px",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 1000,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+              }}>
+                {clientesBusqueda.length > 0 ? (
+                  clientesBusqueda.map((cliente) => (
+                    <div
+                      key={cliente.id}
+                      onClick={() => seleccionarCliente(cliente, false)}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        borderBottom: "1px solid #eee",
+                        fontSize: "14px"
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = "#f5f5f5"}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = "white"}
+                    >
+                      <div style={{ fontWeight: "500" }}>
+                        {cliente.nombre_completo || cliente.nombre}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#666" }}>
+                        ID: {cliente.id} {cliente.email && `• ${cliente.email}`}
+                      </div>
+                    </div>
+                  ))
+                ) : clienteBusquedaText.length >= 2 ? (
+                  <div style={{ padding: "8px 12px", color: "#666", fontSize: "14px" }}>
+                    No se encontraron clientes
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           <Button size="sm" onClick={() => cargarDatos(1, currentPageTareas)}>
             Filtrar
@@ -261,19 +402,82 @@ const CentroOperaciones = () => {
           </select>
 
           <label htmlFor="clienteTareasFiltro" className="mb-0" style={{ fontSize: "0.85rem" }}>Cliente:</label>
-          <select
-            id="clienteTareasFiltro"
-            value={clienteTareasFiltro}
-            onChange={(e) => setClienteTareasFiltro(e.target.value)}
-            style={{ height: "28px", minWidth: "200px" }}
-          >
-            <option value="">Todos los clientes</option>
-            {clientes.map((cliente) => (
-              <option key={cliente.id} value={cliente.id}>
-                {cliente.nombre_completo || cliente.nombre} (ID: {cliente.id})
-              </option>
-            ))}
-          </select>
+          <div style={{ position: "relative", minWidth: "200px" }}>
+            <input
+              type="text"
+              placeholder="Buscar cliente..."
+              value={clienteTareasBusquedaText}
+              onChange={(e) => {
+                setClienteTareasBusquedaText(e.target.value);
+                setShowClienteDropdownTareas(true);
+              }}
+              onFocus={() => setShowClienteDropdownTareas(true)}
+              style={{ height: "28px", width: "100%", paddingRight: "60px" }}
+            />
+            {clienteTareasBusquedaText && (
+              <button
+                type="button"
+                onClick={() => limpiarClienteFiltro(true)}
+                style={{
+                  position: "absolute",
+                  right: "5px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  border: "none",
+                  background: "transparent",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  color: "#666"
+                }}
+              >
+                ✕
+              </button>
+            )}
+            
+            {showClienteDropdownTareas && (clientesBusqueda.length > 0 || clienteTareasBusquedaText.length >= 2) && (
+              <div style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                backgroundColor: "white",
+                border: "1px solid #ddd",
+                borderRadius: "4px",
+                maxHeight: "200px",
+                overflowY: "auto",
+                zIndex: 1000,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.1)"
+              }}>
+                {clientesBusqueda.length > 0 ? (
+                  clientesBusqueda.map((cliente) => (
+                    <div
+                      key={cliente.id}
+                      onClick={() => seleccionarCliente(cliente, true)}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        borderBottom: "1px solid #eee",
+                        fontSize: "14px"
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = "#f5f5f5"}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = "white"}
+                    >
+                      <div style={{ fontWeight: "500" }}>
+                        {cliente.nombre_completo || cliente.nombre}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#666" }}>
+                        ID: {cliente.id} {cliente.email && `• ${cliente.email}`}
+                      </div>
+                    </div>
+                  ))
+                ) : clienteTareasBusquedaText.length >= 2 ? (
+                  <div style={{ padding: "8px 12px", color: "#666", fontSize: "14px" }}>
+                    No se encontraron clientes
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
 
           <Button size="sm" onClick={() => cargarDatos(currentPage, 1)}>
             Filtrar
