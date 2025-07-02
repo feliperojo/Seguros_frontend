@@ -10,6 +10,7 @@ const estados = {
   Insuficiente: "danger",
   Procesando: "primary",
   Completado: "success",
+  Cancelado: "danger",
 };
 
 const estadosOptions = [
@@ -20,6 +21,7 @@ const estadosOptions = [
   { value: "Insuficiente", label: "Insuficiente" },
   { value: "Procesando", label: "Procesando" },
   { value: "Completado", label: "Completado" },
+  { value: "Cancelado", label: "Cancelado" },
 ];
 
 const documentosDisponibles = [

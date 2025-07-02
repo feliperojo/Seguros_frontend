@@ -17,6 +17,7 @@ import DetalleClienteModal from "../components/DetalleClienteModal";
 const Dashboard = () => {
   const [clientesRecientes, setClientesRecientes] = useState([]);
   const [polizasCanceladas, setPolizasCanceladas] = useState([]);
+  const [documentosProximosVencer, setDocumentosProximosVencer] = useState([]);
 
   const [polizasProximasVencer, setPolizasProximasVencer] = useState([]);
   const [estadisticas, setEstadisticas] = useState({
@@ -35,6 +36,7 @@ const Dashboard = () => {
   // Agregar estados para el modal de visualización
 const [showViewModal, setShowViewModal] = useState(false);
 const [clienteToView, setClienteToView] = useState(null);
+const [filtroDias, setFiltroDias] = useState(15);
 
   useEffect(() => {
     cargarDatos();
@@ -44,6 +46,11 @@ const [clienteToView, setClienteToView] = useState(null);
     setCargando(true);
     setError(null);
     try {
+
+      const resDocumentos = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
+console.log("documentos", resDocumentos);
+      setDocumentosProximosVencer(resDocumentos);
+
       const resClientes = await apiRequest("cliente/recientes", "GET");
       setClientesRecientes(resClientes.slice(0, 15));
 
@@ -64,6 +71,18 @@ const [clienteToView, setClienteToView] = useState(null);
       setCargando(false);
     }
   };
+
+  const handleChangeFiltroDias = async (e) => {
+    const dias = parseInt(e.target.value);
+    setFiltroDias(dias);
+    try {
+      const res = await apiRequest(`documentos/proximos-vencer?dias=${dias}`, "GET");
+      setDocumentosProximosVencer(res);
+    } catch (error) {
+      console.error("Error filtrando documentos:", error);
+    }
+  };
+  
 
   // Función para abrir el modal de visualización
 const handleOpenViewModal = (cliente) => {
@@ -117,11 +136,7 @@ const handleOpenViewModal = (cliente) => {
 
   return (
     <div className="dashboard-wrapper">
-      <div className="dashboard-header">
-        <h1>Panel Principal</h1>
-        <p className="text-muted">Bienvenido al sistema de gestión de Tampa Seguros</p>
-      </div>
-
+   
       {error && (
         <Row className="mb-4">
           <Col>
@@ -192,6 +207,71 @@ const handleOpenViewModal = (cliente) => {
           </Col>
         </Row>
       </div>
+      <div className="section-container table-section">
+  <div className="d-flex justify-content-between align-items-center mb-3">
+    <h5 className="section-title mb-0">Documentos solicitados</h5>
+    <div>
+      <label className="me-2">Filtrar por:</label>
+      <select className="form-select form-select-sm w-auto d-inline" value={filtroDias} onChange={handleChangeFiltroDias}>
+        <option value="15">15 días</option>
+        <option value="30">30 días</option>
+        <option value="60">60 días</option>
+        <option value="90">90 días</option>
+      </select>
+    </div>
+  </div>
+
+  <div className="table-responsive">
+    <Table hover className="mb-0 table-borderless">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Codigo poliza</th>
+          <th>Parentesco</th>
+          <th>Documento</th>
+          <th>Estado</th>
+          <th>Vence el</th>
+          <th>Días restantes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {cargando ? (
+          renderLoading()
+        ) : documentosProximosVencer.length > 0 ? (
+          documentosProximosVencer.map(doc => {
+            const fechaVenc = new Date(doc.fecha_vencimiento);
+            const hoy = new Date();
+            const diasRestantes = Math.ceil((fechaVenc - hoy) / (1000 * 60 * 60 * 24));
+            return (
+              <tr key={doc.id}>
+                <td className="fw-medium">{doc.cobertura?.cliente?.nombre_completo || 'Cliente desconocido'}</td>
+                <td>{doc.cobertura?.codigo_poliza || 'N/D'}</td>
+                <td>{doc.cobertura?.parentesco || 'N/D'}</td>
+                <td>{doc.documento_requerido}</td>
+                <td>
+                  <Badge bg="primary">{doc.estado}</Badge>
+                </td>
+                <td>{fechaVenc.toLocaleDateString()}</td>
+                <td>
+                  {diasRestantes <= 5 ? (
+                    <Badge bg="danger">{diasRestantes} día(s)</Badge>
+                  ) : diasRestantes <= 15 ? (
+                    <Badge bg="warning" text="dark">{diasRestantes} días</Badge>
+                  ) : (
+                    <Badge bg="success">{diasRestantes} días</Badge>
+                  )}
+                </td>
+              </tr>
+            );
+          })
+        ) : (
+          renderEmptyMessage("No hay documentos próximos a vencer.")
+        )}
+      </tbody>
+    </Table>
+  </div>
+</div>
+
 
       <div className="section-container">
         <h5 className="section-title">Acciones Rápidas</h5>

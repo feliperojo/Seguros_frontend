@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+
 import apiRequest from '../services/api';
 import ObservacionesModal from '../components/ObservacionesModal';
 import ModalAdjuntos from '../components/ModalAdjuntos';
@@ -15,6 +16,7 @@ const estados = {
   Procesando: { label: 'Procesando', color: 'badge bg-secondary' },
   Completado: { label: 'Completado', color: 'badge bg-success' },
   Insuficiente: { label: 'Insuficiente', color: 'badge bg-danger' },
+  Cancelado: { label: 'Cancelado', color: 'badge bg-danger' },
 };
 
 export default function RequerimientosAdmin() {
