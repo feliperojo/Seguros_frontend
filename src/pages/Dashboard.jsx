@@ -111,7 +111,7 @@ const handleOpenViewModal = (cliente) => {
   // Función para renderizar el mensaje cuando no hay datos
   const renderEmptyMessage = (mensaje) => (
     <tr>
-      <td colSpan="4" className="text-center py-4">
+      <td colSpan="12" className="text-center py-12">
         <div className="empty-state">
           <FaList className="empty-icon" />
           <p>{mensaje}</p>
@@ -299,9 +299,9 @@ const handleOpenViewModal = (cliente) => {
         </Row>
       </div>
 
-      <Row className="mb-4 g-4">
-        <Col lg={6}>
-          <div className="section-container table-section">
+      <Row className="mb-4 g-4 align-items-stretch">
+      <Col lg={6} className="h-100">
+      <div className="section-container table-section h-100">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="section-title mb-0">Clientes Recientes</h5>
               <Link to="/clientes/lista" className="btn btn-sm btn-link text-decoration-none">
@@ -358,8 +358,8 @@ const handleOpenViewModal = (cliente) => {
           </div>
         </Col>
 
-        <Col lg={6}>
-          <div className="section-container table-section">
+        <Col lg={6} className="h-100">
+        <div className="section-container table-section h-100">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <h5 className="section-title mb-0">Pólizas Canceladas</h5>
               <Link to="/grupofamiliar/vencimientos" className="btn btn-sm btn-link text-decoration-none">
