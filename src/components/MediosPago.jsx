@@ -91,11 +91,11 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     const numbers = value.replace(/\D/g, '');
     
     // Limitar a los dígitos máximos según el tipo de tarjeta
-    const maxLength = cardType === 'american_express' ? 15 : 16;
+    const maxLength = cardType === 'American Express' ? 15 : 16;
     const limitedNumbers = numbers.slice(0, maxLength);
     
     // Formatear según el tipo de tarjeta
-    if (cardType === 'american_express') {
+    if (cardType === 'American Express') {
       // Formato 4-6-5 para Amex
       const parts = [
         limitedNumbers.slice(0, 4),
@@ -130,7 +130,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   // Validar CVV
   const validateCVV = (cvv, cardType) => {
     const digits = cvv.replace(/\D/g, '');
-    const requiredLength = cardType === 'american_express' ? 4 : 3;
+    const requiredLength = cardType === 'American Express' ? 4 : 3;
     
     return digits.length === requiredLength;
   };
@@ -165,7 +165,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     } else if (name === 'cvv') {
       // Limitar CVV a solo números
       const digitsOnly = value.replace(/\D/g, '');
-      const maxLength = currentMedioPago.tipo_tarjeta === 'american_express' ? 4 : 3;
+      const maxLength = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
       setCurrentMedioPago(prev => ({
         ...prev,
         [name]: digitsOnly.slice(0, maxLength)
@@ -196,7 +196,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       
       // Validar número de tarjeta
       const numeroLimpio = currentMedioPago.numero_tarjeta.replace(/\D/g, '');
-      const longitudRequerida = currentMedioPago.tipo_tarjeta === 'american_express' ? 15 : 16;
+      const longitudRequerida = currentMedioPago.tipo_tarjeta === 'American Express' ? 15 : 16;
       if (numeroLimpio.length !== longitudRequerida) {
         setError({ campo: 'numero_tarjeta', mensaje: `El número debe tener ${longitudRequerida} dígitos` });
         return false;
@@ -211,7 +211,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       
       // Validar CVV
       if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
-        const longitudCVV = currentMedioPago.tipo_tarjeta === 'american_express' ? 4 : 3;
+        const longitudCVV = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
         setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
         return false;
       }
@@ -381,7 +381,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                   name="cvv"
                   value={currentMedioPago.cvv || ''}
                   onChange={handleChange}
-                  placeholder={currentMedioPago.tipo_tarjeta === 'american_express' ? '4 dígitos' : '3 dígitos'}
+                  placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? '4 dígitos' : '3 dígitos'}
                   required
                 />
                 {error.campo === 'cvv' && (

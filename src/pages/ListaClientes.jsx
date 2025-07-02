@@ -62,14 +62,14 @@ const ListaClientes = () => {
   const fetchClientes = async () => {
     setLoading(true);
     try {
-      console.log("Iniciando petición a la API para obtener clientes...");
+      
       
       const response = await apiRequest("cliente/with-cobertura");
-      console.log("Respuesta completa:", response);
+    
       
       const clientesData = response?.data || response || [];
       
-      console.log("Datos de clientes procesados:", clientesData);
+      
       
       const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
       

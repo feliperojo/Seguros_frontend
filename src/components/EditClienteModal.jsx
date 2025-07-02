@@ -198,7 +198,7 @@ const fetchMediosPago = async () => {
   try {
     // Llamada a la API
     const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
-    console.log("medios",response)
+   
     if (Array.isArray(response)) {
       setMediosPago(response);
     } else {
@@ -224,7 +224,7 @@ useEffect(() => {
 
 useEffect(() => {
   if (show && clienteData) {
-    console.log("DATA QUE LLEGA --->", clienteData);
+    
     mapClienteDataToForm(clienteData);
     setError(null);
     setSuccessMessage("");
@@ -450,14 +450,15 @@ useEffect(() => {
     const dataToSubmit = prepareDataForSubmit();
     try {
       const response = await apiRequest(`cliente/${clienteId}`, "PUT", dataToSubmit);
-      console.log("✅ Cliente actualizado correctamente:", response);
+     
   
       if (onClienteUpdated) {
         // ⬅️ Aquí debes pasar el cliente actualizado (usa el response.data)
         onClienteUpdated({
           id: clienteId,
           ...dataToSubmit,
-          nombre_completo: formData.datosPrincipales.nombre_completo
+          nombre_completo: formData.datosPrincipales.nombre_completo,
+          grupoFamiliarIds: clienteData?.grupoFamiliarIds || [], // ← mantenerlo
         });
       }
   
