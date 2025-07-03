@@ -64,7 +64,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
       }
 
       const response = await apiRequest(endpoint, "GET");
-      console.log("Datos recibidos:", response);
+     
 
       if (response && response.status === "success" && Array.isArray(response.data)) {
         setGrupos(response.data);

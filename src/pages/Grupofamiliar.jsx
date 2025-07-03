@@ -1030,6 +1030,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         console.log("Payload coberturas:", payload.coberturas);
 
         grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
+        
       } else {
         // CREACIÓN DEL GRUPO
         grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
@@ -1044,7 +1045,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
             accion: "create",
             entity_type: "grupo_familiar",
             grupo_familiar_id: grupoFamiliarId,
-            cliente_id: clienteTomadorId || null
+            cliente_id: clienteTomadorId || null,
+            historial_id: grupoFamiliarResponse.data?.historial_id || null
 
           });
 
@@ -1060,11 +1062,13 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
 
       if (mode === "edit") {
+        const historialId = grupoFamiliarResponse?.data?.historial_id || null;
         setBitacoraData({
           accion: "update",
           entity_type: "grupo_familiar",
           grupo_familiar_id: id,
-          cliente_id: obtenerClienteTomador() || null
+          cliente_id: obtenerClienteTomador() || null,
+          historial_id: historialId
 
         });
         setShowBitacoraModal(true);

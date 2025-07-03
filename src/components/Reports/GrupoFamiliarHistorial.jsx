@@ -69,6 +69,7 @@ const GrupoFamiliarHistorial = () => {
           const coberturas = (estado.coberturas || []).filter(c => c.activo);
 
           return (
+
             <Card className="mb-4 shadow-sm" key={entry.id}>
               <Card.Header className="bg-light d-flex justify-content-between">
                 <strong>{formatActionLabel(entry.accion)}</strong>
@@ -76,6 +77,21 @@ const GrupoFamiliarHistorial = () => {
                   {formatDate(entry.created_at)} | {entry.usuario}
                 </span>
               </Card.Header>
+              {entry.operational_logs[0]?.note && (
+                  <div className="alert alert-warning d-flex align-items-start gap-2 p-3 mb-3" role="alert">
+                    <span className="fs-5 me-2">📝</span>
+                    <div>
+                      <strong className="d-block mb-1">
+                        {entry.operational_logs[0]?.concept?.name || 'Concepto desconocido'} - Observación:
+                      </strong>
+                      <div style={{ whiteSpace: 'pre-line' }}>
+                        {entry.operational_logs[0].note}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+
 
               <Card.Body>
                 <h5 className="mb-3">Versión del Grupo Familiar</h5>

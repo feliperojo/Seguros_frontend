@@ -13,7 +13,7 @@ const GrupofamiliarEdit = () => {
     const fetchGrupo = async () => {
       try {
         const response = await GrupoFamiliarService.getFullGrupoById(id, true); // ← solo activas
-        console.log("paso por el edit", response);
+      
         setInitialData(response);
       } catch (err) {
         console.error("❌ Error al cargar grupo familiar:", err);

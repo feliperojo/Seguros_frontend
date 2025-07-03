@@ -13,7 +13,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [bitacoraGuardada, setBitacoraGuardada] = useState(false);
 
   const userIdFromSession = 1; // ⚠️ Reemplaza esto con ID real del usuario
-
+console.log("data",data);
   useEffect(() => {
     if (show) {
       fetchConceptos();
@@ -59,7 +59,10 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
         entity_type: data?.entity_type || "cliente",
         ...(data?.cliente_id ? { cliente_id: data.cliente_id } : {}),
         ...(data?.grupo_familiar_id ? { grupo_familiar_id: data.grupo_familiar_id } : {}),
-        ...(asignadoA ? { assign_to_user_id: asignadoA } : {})
+        ...(asignadoA ? { assign_to_user_id: asignadoA } : {}),
+        ...(data?.historial_id ? { historial_id: data.historial_id } : {})
+
+        
       };
       
      
@@ -68,7 +71,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
       const endpoint = logId
         ? `bitacora_operativa/${logId}/update`
         : `bitacora_operativa/create`;
-  
+      
       await apiRequest(endpoint, method, payload);
       setBitacoraGuardada(true);
   
