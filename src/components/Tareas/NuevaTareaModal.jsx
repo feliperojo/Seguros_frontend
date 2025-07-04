@@ -18,17 +18,22 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+  const [conceptosPadres, setConceptosPadres] = useState([]);
+  const [subconceptos, setSubconceptos] = useState([]);
+  const [conceptoPadreId, setConceptoPadreId] = useState("");
+
 
   // Cargar datos iniciales
   useEffect(() => {
     if (show) {
       Promise.all([
-        apiRequest(`operational_concepts`, "GET"),
+        apiRequest(`operational_concepts?only_parents=true`, "GET"),
         apiRequest("cliente", "GET"),
         apiRequest("grupo_familiar", "GET"),
         apiRequest("users", "GET"),
       ]).then(([conceptos, clientes, grupos, usuarios]) => {
-        setConceptos(conceptos);
+        setConceptosPadres(conceptos);
+        setConceptos([]); // aún no hay subconceptos hasta que se seleccione uno
         setClientes(clientes);
         setGrupos(grupos);
         setUsuarios(usuarios);
@@ -41,6 +46,20 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
+  const handlePadreChange = async (e) => {
+    const selectedId = e.target.value;
+    setConceptoPadreId(selectedId);
+    setFormData((prev) => ({ ...prev, concept_id: "" })); // limpiar subconcepto seleccionado
+  
+    if (selectedId) {
+      const hijos = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
+      setSubconceptos(hijos);
+      setConceptos(hijos);
+    } else {
+      setConceptos([]);
+    }
+  };
+  
   const validarCampos = () => {
     const nuevosErrores = {};
     if (!formData.concept_id) nuevosErrores.concept_id = "El concepto es obligatorio";
@@ -106,20 +125,36 @@ const NuevaTareaModal = ({ show, onHide, categoria = "tarea_manual" }) => {
       <Modal.Body>
         <Form>
         <Form.Group>
-            <Form.Label>Concepto</Form.Label>
-            <Form.Select
-              name="concept_id"
-              value={formData.concept_id}
-              onChange={handleChange}
-              isInvalid={!!errors.concept_id}
-            >
-              <option value="">Seleccionar</option>
-              {conceptos.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </Form.Select>
-            <Form.Control.Feedback type="invalid">{errors.concept_id}</Form.Control.Feedback>
-          </Form.Group>
+  <Form.Label>Concepto Principal</Form.Label>
+  <Form.Select
+    value={conceptoPadreId}
+    onChange={handlePadreChange}
+  >
+    <option value="">Seleccionar</option>
+    {conceptosPadres.map((c) => (
+      <option key={c.id} value={c.id}>{c.name}</option>
+    ))}
+  </Form.Select>
+</Form.Group>
+
+{conceptos.length > 0 && (
+  <Form.Group className="mt-3">
+    <Form.Label>Subconcepto</Form.Label>
+    <Form.Select
+      name="concept_id"
+      value={formData.concept_id}
+      onChange={handleChange}
+      isInvalid={!!errors.concept_id}
+    >
+      <option value="">Seleccionar</option>
+      {conceptos.map((c) => (
+        <option key={c.id} value={c.id}>{c.name}</option>
+      ))}
+    </Form.Select>
+    <Form.Control.Feedback type="invalid">{errors.concept_id}</Form.Control.Feedback>
+  </Form.Group>
+)}
+
 
 
           <Form.Group className="mt-3">

@@ -11,6 +11,10 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [error, setError] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [bitacoraGuardada, setBitacoraGuardada] = useState(false);
+  const [conceptosPadres, setConceptosPadres] = useState([]);
+const [subconceptos, setSubconceptos] = useState([]);
+const [conceptoPadreId, setConceptoPadreId] = useState("");
+
 
   const userIdFromSession = 1; // ⚠️ Reemplaza esto con ID real del usuario
 console.log("data",data);
@@ -23,13 +27,17 @@ console.log("data",data);
 
   const fetchConceptos = async () => {
     try {
-      const response = await apiRequest("operational_concepts", "GET");
-      setConceptos(response || []);
+      const response = await apiRequest("operational_concepts?only_parents=true", "GET");
+      setConceptosPadres(response || []);
+      setConceptos([]); // limpia subconceptos al abrir
+      setConcepto("");  // limpia concepto seleccionado
+      setConceptoPadreId(""); // limpia padre seleccionado
     } catch (err) {
       console.error("Error cargando conceptos:", err);
       setError("Error al cargar conceptos.");
     }
   };
+  
 
   const fetchUsuarios = async () => {
     try {
@@ -40,6 +48,22 @@ console.log("data",data);
       setError("Error al cargar usuarios.");
     }
   };
+
+  const handlePadreChange = async (e) => {
+    const selectedId = e.target.value;
+    setConceptoPadreId(selectedId);
+    setConcepto(""); // limpia subconcepto seleccionado
+  
+    if (selectedId) {
+      const hijos = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
+      setSubconceptos(hijos || []);
+      setConceptos(hijos || []);
+    } else {
+      setSubconceptos([]);
+      setConceptos([]);
+    }
+  };
+  
 
   const handleGuardar = async () => {
     if (!nota.trim() || !concepto.trim()) {
@@ -117,19 +141,30 @@ console.log("data",data);
       <Modal.Body>
         {error && <Alert variant="danger">{error}</Alert>}
         <Form.Group className="mb-3">
-          <Form.Label>Concepto</Form.Label>
-          <Form.Select
-            value={concepto}
-            onChange={(e) => setConcepto(e.target.value)}
-          >
-            <option value="">Seleccione un concepto</option>
-            {conceptos.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </Form.Select>
-        </Form.Group>
+  <Form.Label>Concepto Principal</Form.Label>
+  <Form.Select value={conceptoPadreId} onChange={handlePadreChange}>
+    <option value="">Seleccione un concepto principal</option>
+    {conceptosPadres.map((item) => (
+      <option key={item.id} value={item.id}>{item.name}</option>
+    ))}
+  </Form.Select>
+</Form.Group>
+
+{conceptos.length > 0 && (
+  <Form.Group className="mb-3">
+    <Form.Label>Subconcepto</Form.Label>
+    <Form.Select
+      value={concepto}
+      onChange={(e) => setConcepto(e.target.value)}
+    >
+      <option value="">Seleccione un subconcepto</option>
+      {conceptos.map((item) => (
+        <option key={item.id} value={item.id}>{item.name}</option>
+      ))}
+    </Form.Select>
+  </Form.Group>
+)}
+
 
         <Form.Group className="mb-3">
           <Form.Label>Nota</Form.Label>
