@@ -205,6 +205,7 @@ const handleOpenViewModal = (cliente) => {
               </Card.Body>
             </Card>
           </Col>
+          
         </Row>
       </div>
       <div className="section-container table-section">
