@@ -23,7 +23,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
     }
   
     try {
-      const response = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(termino)}`, "GET");
+      const response = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(termino)}&incluir_prospectos=false`, "GET");
       const clientes = Array.isArray(response) ? response : [];
   
       if (clientes.length > 0) {

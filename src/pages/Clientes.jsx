@@ -59,7 +59,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     nota_ocasional:"",
     nota:"",
     periodo_ingreso_ocasional: "", // Valor por defecto
-    ingreso_por_periodo_ocasional: ""
+    ingreso_por_periodo_ocasional: "",
+    es_prospecto:false,
+    estado_cliente: "cliente"
   };
   const [idiomasList, setIdiomasList] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -169,7 +171,10 @@ const closeModal = () => setShowModal(false);
     setFormData((prevData) => {
       let updatedValue = type === "checkbox" ? checked : value;
       const updatedData = { ...prevData };
-
+      if (name === "es_prospecto") {
+        updatedValue = value === "true";
+      }
+      
       // Capitalizar si el campo es uno de los nombres
       if (["primer_nombre", "segundo_nombre", "apellidos"].includes(name)) {
         updatedValue = capitalizeWords(value);
@@ -312,6 +317,8 @@ const calcularIngresoAnual = (monto, periodo) => {
   // Crear una copia limpia del formData
   const formattedData = {
     ...formData,
+    es_prospecto: !!formData.es_prospecto,
+    estado_cliente: formData.estado_cliente,
     telefono: formData.telefono,
     secundario: formData.secundario,
     whatsapp_num: formData.whatsapp_num,
@@ -431,6 +438,73 @@ const calcularIngresoAnual = (monto, periodo) => {
       case 1:
         return (
           <>
+              <div className="card p-3 mb-4 shadow-sm bg-light border-0">
+                <div className="d-flex justify-content-between align-items-center flex-wrap">
+                
+                  <div className="btn-group mt-2 mt-md-0" role="group" aria-label="Tipo de cliente">
+                  <input
+                        type="radio"
+                        className="btn-check"
+                        name="estado_cliente"
+                        id="btnCliente"
+                        autoComplete="off"
+                        checked={formData.estado_cliente === "cliente"}
+                        onChange={() =>
+                          setFormData(prev => ({
+                            ...prev,
+                            estado_cliente: "cliente",
+                            es_prospecto: false,
+                          }))
+                        }
+                      />
+                      <label className="btn btn-outline-primary fw-semibold" htmlFor="btnCliente">
+                        Cliente
+                      </label>
+
+                      <input
+                        type="radio"
+                        className="btn-check"
+                        name="estado_cliente"
+                        id="btnProspecto"
+                        autoComplete="off"
+                        checked={formData.estado_cliente === "prospecto"}
+                        onChange={() =>
+                          setFormData(prev => ({
+                            ...prev,
+                            estado_cliente: "prospecto",
+                            es_prospecto: true,
+                          }))
+                        }
+                      />
+                      <label className="btn btn-outline-warning fw-semibold" htmlFor="btnProspecto">
+                        Prospecto
+                      </label>
+
+                      <input
+                        type="radio"
+                        className="btn-check"
+                        name="estado_cliente"
+                        id="btnDescartado"
+                        autoComplete="off"
+                        checked={formData.estado_cliente === "descartado"}
+                        onChange={() =>
+                          setFormData(prev => ({
+                            ...prev,
+                            estado_cliente: "descartado",
+                            es_prospecto: true,
+                          }))
+                        }
+                      />
+                      <label className="btn btn-outline-danger fw-semibold" htmlFor="btnDescartado">
+                        Descartado
+                      </label>
+
+
+                  </div>
+                </div>
+              </div>
+
+
             <h4 className="mb-3">Datos Principales</h4>
             <hr />
             {/* Campos de Nombre */}

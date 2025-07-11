@@ -7,7 +7,7 @@ import {
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
-
+import  SincronizarContactos from "../components/SincronizarContactos";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -66,7 +66,7 @@ useEffect(() => {
       <button className="toggle-btn" onClick={toggleSidebar}>
         <FaChevronLeft />
       </button>
-      
+     
       {/* Logo */}
       {isOpen && (
         <div className="logo-container">

@@ -14,7 +14,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
   console.log("grupoFamiliarId entra",grupoFamiliarId)
   // Si no hay datos de cliente, no mostrar nada
   if (!clienteData) return null;
-  console.log("dataclient",clienteData)
+ 
   // Estado para controlar la pestaña activa
   const [activeTab, setActiveTab] = useState("general");
   const [mediosPago, setMediosPago] = useState([]);
@@ -37,14 +37,14 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
       setLoadingMediosPago(false);
     }
   };
-  console.log("antes de fetch polizas",grupoFamiliarId)
+
   const fetchPolizas = async (grupoFamiliarId) => {
-    console.log("fetchPolizas entra",grupoFamiliarId)
+
     try {
       setLoadingGrupoFamilia(true);
-      console.log("try entra",grupoFamiliarId)
+    
       const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
-      console.log("grupo familiar full", response);
+     
       
       const personas = response.data?.coberturas?.map((item) => ({
         ...item.cliente,
@@ -76,7 +76,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
 
   useEffect(() => {
     if (show && grupoFamiliarId) {
-      console.log("Antes de hacer la petición:", grupoFamiliarId); // Verifica el valor aquí
+  
       fetchPolizas(grupoFamiliarId);
     }
   }, [show, grupoFamiliarId]);
@@ -84,7 +84,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
 
   // Componente para mostrar información no disponible
   const NotAvailable = () => <span className="text-muted fst-italic">No disponible</span>;
-
+  console.log("Servicios de mensajería:", clienteData);
   return (
     <Modal 
       show={show} 
@@ -212,53 +212,91 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
                     </h6>
                   </Card.Header>
                   <ListGroup variant="flush">
-                    <ListGroup.Item>
-                      <small className="text-muted d-block">Teléfono Principal</small>
-                      <strong className="d-flex align-items-center">
-                        {clienteData.telefono || <NotAvailable />}
-                        {clienteData.whatsapp && 
-                          <Badge bg="success" pill className="ms-2">WhatsApp</Badge>
-                        }
-                      </strong>
-                    </ListGroup.Item>
-                    <ListGroup.Item>
-                      <small className="text-muted d-block">Teléfono Secundario</small>
-                      <strong>{clienteData.secundario || <NotAvailable />}</strong>
-                    </ListGroup.Item>
-                    <ListGroup.Item>
-                      <small className="text-muted d-block">Email</small>
-                      <strong>{clienteData.email ? (
-                        <a href={`mailto:${clienteData.email}`} className="text-decoration-none">
-                          <FaEnvelope className="me-1" size={14} />
-                          {clienteData.email}
-                        </a>
-                      ) : (
-                        <NotAvailable />
-                      )}</strong>
-                    </ListGroup.Item>
-                    <ListGroup.Item>
-                      <small className="text-muted d-block">Preferencias de Contacto</small>
-                      <div className="mt-1">
-                        {clienteData.servicios_mensajeria?.whatsapp && 
-                          <Badge bg="success" className="me-1">WhatsApp</Badge>
-                        }
-                        {clienteData.servicios_mensajeria?.telegram && 
-                          <Badge bg="info" className="me-1">Telegram</Badge>
-                        }
-                        {clienteData.servicios_mensajeria?.texto_sms && 
-                          <Badge bg="secondary" className="me-1">SMS</Badge>
-                        }
-                        {(!clienteData.servicios_mensajeria?.whatsapp && 
-                          !clienteData.servicios_mensajeria?.telegram && 
-                          !clienteData.servicios_mensajeria?.texto_sms) && 
-                          <NotAvailable />
-                        }
-                      </div>
-                    </ListGroup.Item>
-                    <ListGroup.Item>
-                      <small className="text-muted d-block">Notas</small>
-                      <p className="mb-0 small">{clienteData.nota || <NotAvailable />}</p>
-                    </ListGroup.Item>
+                
+
+
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Teléfono Principal</small>
+                              <strong className="d-flex align-items-center">
+                                {clienteData.telefono ? (
+                                  <>
+                                    <a
+                                      href={`tel:${clienteData.telefono}`}
+                                      title="Llamar"
+                                      style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
+                                    >
+                                      <FaPhoneAlt className="me-2" /> {clienteData.telefono}
+                                    </a>
+                                    
+                                  </>
+                                ) : (
+                                  <NotAvailable />
+                                )}
+                              </strong>
+                            </ListGroup.Item>
+
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Teléfono Secundario</small>
+                              <strong className="d-flex align-items-center">
+                                {clienteData.secundario ? (
+                                  <a
+                                    href={`tel:${clienteData.secundario}`}
+                                    title="Llamar"
+                                    style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
+                                  >
+                                    <FaPhoneAlt className="me-2" /> {clienteData.secundario}
+                                  </a>
+                                ) : (
+                                  <NotAvailable />
+                                )}
+                              </strong>
+                            </ListGroup.Item>
+
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Teléfono WhatsApp</small>
+                              <strong className="d-flex align-items-center">
+                                {clienteData.whatsapp_num ? (
+                                  <>
+                                  <a
+                                    href={`tel:${clienteData.whatsapp_num}`}
+                                    title="Llamar"
+                                    style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
+                                  >
+                                    <FaPhoneAlt className="me-2" /> {clienteData.whatsapp_num}
+                                  </a>
+                                  {clienteData.whatsapp && (
+                                    <Badge bg="success" pill className="ms-2">
+                                      WhatsApp
+                                    </Badge>
+                                  )}
+                                  </>
+                                ) : (
+                                  <NotAvailable />
+                                )}
+                              </strong>
+                            </ListGroup.Item>
+
+                            <ListGroup.Item>
+                                <small className="text-muted d-block">Preferencias de Contacto</small>
+                                <div className="mt-1">
+                                  {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
+                                    <Badge bg="success" className="me-1">WhatsApp</Badge>
+                                  )}
+                                  {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
+                                    <Badge bg="info" className="me-1">Telegram</Badge>
+                                  )}
+                                  {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
+                                    <Badge bg="secondary" className="me-1">SMS</Badge>
+                                  )}
+                                  {(
+                                    !clienteData?.whatsapp &&
+                                    !clienteData?.telegram &&
+                                    !clienteData?.texto_sms
+                                  ) && <NotAvailable />}
+                                </div>
+                              </ListGroup.Item>
+
+                   
                   </ListGroup>
                 </Card>
               </Col>
@@ -573,7 +611,10 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
                     <small className="text-muted d-block">Categoría</small>
                     <strong>{clienteData.categoria || <NotAvailable />}</strong>
                   </ListGroup.Item>
-              
+                  <ListGroup.Item>
+                      <small className="text-muted d-block">Notas</small>
+                      <p className="mb-0 small">{clienteData.nota || <NotAvailable />}</p>
+                    </ListGroup.Item>
                 </ListGroup>
               </Card>
             </Col>

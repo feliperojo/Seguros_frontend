@@ -65,12 +65,12 @@ const ListaClientes = () => {
       
       
       const response = await apiRequest("cliente/with-cobertura");
-    
+   console.log(response)
       
       const clientesData = response?.data || response || [];
       
       
-      
+      console.log(clientesData)
       const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
       
       // Usamos un Set para agrupar a los clientes por su ID, y almacenar los grupos familiares únicos
@@ -489,6 +489,7 @@ const renderPaginationItems = () => {
                 <th>Parentesco</th>
                 <th>Teléfono</th>
                 <th>ID GF</th>
+                <th>Prospecto</th>
                 <th className="text-center">Acciones</th>
               </tr>
             </thead>
@@ -503,6 +504,32 @@ const renderPaginationItems = () => {
         <td>{getParentesco(cliente)}</td>
         <td>{cliente.telefono || "No registrado"}</td>
         <td>{grupoId || "Sin grupo"}</td>
+        <td>
+              <Badge
+                pill
+                bg={
+                  cliente.estado_cliente === "cliente"
+                    ? "primary"
+                    : cliente.estado_cliente === "prospecto"
+                    ? "warning"
+                    : "danger" // para "descartado"
+                }
+                text={
+                  cliente.estado_cliente === "cliente"
+                    ? "light"
+                    : cliente.estado_cliente === "prospecto"
+                    ? "dark"
+                    : "light" // para "descartado"
+                }
+              >
+                {cliente.estado_cliente === "cliente"
+                  ? "Cliente"
+                  : cliente.estado_cliente === "prospecto"
+                  ? "Prospecto"
+                  : "Descartado"}
+              </Badge>
+            </td>
+
         <td className="text-center">
           <Button 
             variant="outline-primary" 
