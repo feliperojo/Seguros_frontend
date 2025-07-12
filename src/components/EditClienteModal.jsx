@@ -77,7 +77,7 @@ const renderMediosPagoTab = () => (
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
   // Estado para los datos del cliente organizados por secciones
 
- 
+
   const [formData, setFormData] = useState({
     // Sección 1: Datos Principales
     datosPrincipales: {
@@ -87,7 +87,9 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       nombre_completo: "",
       fecha_nacimiento: "",
       edad: "",
-      genero: ""
+      genero: "",
+      estado_cliente: "cliente", // o "prospecto" o "descartado"
+      es_prospecto: false
     },
     // Sección 2: Status Migratorio
     statusMigratorio: {
@@ -146,6 +148,8 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       }
     }
   });
+
+  
   
   // Estado activo para las pestañas
   const [activeTab, setActiveTab] = useState("datosPrincipales");
@@ -214,6 +218,7 @@ const fetchMediosPago = async () => {
 };
 
 
+
 // Cargar los medios de pago cuando se abre la pestaña
 useEffect(() => {
   if (show && activeTab === "mediosPago") {
@@ -256,7 +261,9 @@ const mapClienteDataToForm = (data) => {
       fecha_nacimiento: data.fecha_nacimiento || "",
       edad: data.edad || "",
       genero: data.genero || "",
-      cobertura: data.cobertura || false
+      cobertura: data.cobertura || false,
+      estado_cliente: data.estado_cliente || "cliente",
+      es_prospecto: data.es_prospecto || false
     },
     statusMigratorio: {
       social: data.social || "",
@@ -431,6 +438,7 @@ useEffect(() => {
       periodo_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.periodo,
       ingreso_por_periodo_ocasional: formData.datosEmpleo.ingreso_ocasional.monto,
 
+
     };
   
     return flatData;
@@ -478,11 +486,85 @@ useEffect(() => {
     handleInputChange(section, field, formatted);
   };
   
-
+  const estadoActual = formData.datosPrincipales.estado_cliente;
+  const estadoOriginal = clienteData?.estado_cliente; // este viene desde el backend
+  const esClienteFijo = estadoOriginal === "cliente";
+  
+  
   // Renderizar pestañas para la sección de datos principales
   const renderDatosPrincipalesTab = () => (
+    
     <div className="p-3">
-      <h5 className="border-bottom pb-2 mb-3">Datos Principales</h5>
+     <div className="btn-group mt-2 mt-md-0" role="group" aria-label="Tipo de cliente">
+     <input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnCliente"
+  autoComplete="off"
+  checked={estadoActual === "cliente"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "cliente",
+        es_prospecto: false,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-primary fw-semibold" htmlFor="btnCliente">
+  Cliente
+</label>
+
+<input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnProspecto"
+  autoComplete="off"
+  disabled={esClienteFijo} // ❌ si ya es cliente, no puede volver a prospecto
+  checked={estadoActual === "prospecto"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "prospecto",
+        es_prospecto: true,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-warning fw-semibold" htmlFor="btnProspecto">
+  Prospecto
+</label>
+
+<input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnDescartado"
+  autoComplete="off"
+  disabled={esClienteFijo} // ❌ si ya es cliente, no puede ser descartado
+  checked={estadoActual === "descartado"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "descartado",
+        es_prospecto: true,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-danger fw-semibold" htmlFor="btnDescartado">
+  Descartado
+</label>
+</div>
+
       
       <Row className="mb-3">
         <Col md={4}>

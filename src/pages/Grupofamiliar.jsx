@@ -31,8 +31,8 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         ingreso_familiar: initialData.ingreso_familiar_anual || 0,
         persona_contacto: initialData.persona_contacto || "",
         relacion: initialData.relacion || "",
-        telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
-        telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
+        telefono_1: initialData.telefonos?.telefono_1 || "",
+        telefono_2: initialData.telefonos?.telefono_2 || "",
         notas_telefonos: initialData.nota || "",
         pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
         captado_por: initialData.captado_por || "",
@@ -240,8 +240,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       ingreso_familiar: initialData.ingreso_familiar_anual || 0,
       persona_contacto: initialData.persona_contacto || "",
       relacion: initialData.relacion || "",
-      telefono_1: initialData.telefonos?.telefono_1?.replace(/^\+\d{1,4}/, "") || "",
-      telefono_2: initialData.telefonos?.telefono_2?.replace(/^\+\d{1,4}/, "") || "",
+      telefono_1: initialData.telefonos?.telefono_1 || "",
+      telefono_2: initialData.telefonos?.telefono_2 || "",
       notas_telefonos: initialData.nota || "",
       pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
       captado_por: initialData.captado_por || "",
@@ -867,7 +867,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
     setShowEditModal(false);
     setCurrentEditMember(null);
-    recalculateTotalIncome(updatedGroups);
+   
 
   };
 
@@ -977,8 +977,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         persona_contacto: policyData.persona_contacto,
         pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
         telefonos: {
-          telefono_1: policyData.telefono_1 ? policyData.telefono_1.replace(/\D/g, "") : null,
-          telefono_2: policyData.telefono_2 ? policyData.telefono_2.replace(/\D/g, "") : null,
+          telefono_1: policyData.telefono_1 ? policyData.telefono_1 : null,
+          telefono_2: policyData.telefono_2 ? policyData.telefono_2 : null,
           whatsapp: contactMethods.whatsapp,
           telegram: contactMethods.telegram,
           mensaje_sms: contactMethods.texto_sms
