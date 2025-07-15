@@ -14,9 +14,10 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [conceptosPadres, setConceptosPadres] = useState([]);
 const [subconceptos, setSubconceptos] = useState([]);
 const [conceptoPadreId, setConceptoPadreId] = useState("");
+const [defaultSet, setDefaultSet] = useState(false);
 
 
-  const userIdFromSession = 1; // ⚠️ Reemplaza esto con ID real del usuario
+  const userIdFromSession = 1; 
 console.log("data",data);
   useEffect(() => {
     if (show) {
@@ -25,18 +26,74 @@ console.log("data",data);
     }
   }, [show]);
 
+  useEffect(() => {
+    if (
+      show &&
+      data?.entity_type === "cliente" && 
+      data?.accion === "create" && 
+      conceptosPadres.length > 0 && 
+      !defaultSet
+    ) {
+      const conceptoPadre = conceptosPadres.find(item => item.name === "Clientes Nuevos");
+      
+      if (conceptoPadre) {
+        setConceptoPadreId(conceptoPadre.id);
+        
+        apiRequest(`operational_concepts/${conceptoPadre.id}/subconcepts`, "GET")
+          .then((hijos) => {
+            setSubconceptos(hijos || []);
+            setConceptos(hijos || []);
+            const subconcepto = hijos.find(item => item.name === "Creación Nuevo Cliente");
+            if (subconcepto) {
+              setConcepto(subconcepto.id);
+            }
+          });
+      }
+      
+      setNota("Nuevo cliente");
+      setDefaultSet(true); // Evita reejecución
+    }
+  }, [show, data, conceptosPadres, defaultSet]);
+  
   const fetchConceptos = async () => {
     try {
       const response = await apiRequest("operational_concepts?only_parents=true", "GET");
       setConceptosPadres(response || []);
-      setConceptos([]); // limpia subconceptos al abrir
-      setConcepto("");  // limpia concepto seleccionado
-      setConceptoPadreId(""); // limpia padre seleccionado
+  
+      // ✅ Si viene de Clientes y es create, asignamos valores por defecto
+      if (
+        data?.entity_type === "cliente" &&
+        data?.accion === "create" &&
+        response?.length > 0
+      ) {
+        const conceptoPadre = response.find(item => item.name === "Clientes Nuevos");
+        if (conceptoPadre) {
+          setConceptoPadreId(conceptoPadre.id);
+  
+          // Cargar subconceptos
+          const hijos = await apiRequest(`operational_concepts/${conceptoPadre.id}/subconcepts`, "GET");
+          setSubconceptos(hijos || []);
+          setConceptos(hijos || []);
+  
+          const subconcepto = hijos.find(item => item.name === "Creación Nuevo Cliente");
+          if (subconcepto) {
+            setConcepto(subconcepto.id);
+          }
+  
+          setNota("Nuevo cliente");
+        }
+      } else {
+        // ✅ Reset para otros flujos
+        setConceptos([]);
+        setConcepto("");
+        setConceptoPadreId("");
+      }
     } catch (err) {
       console.error("Error cargando conceptos:", err);
       setError("Error al cargar conceptos.");
     }
   };
+  
   
 
   const fetchUsuarios = async () => {
@@ -66,15 +123,14 @@ console.log("data",data);
   
 
   const handleGuardar = async () => {
-    if (!nota.trim() || !concepto.trim()) {
+    if (!nota.trim() || !String(concepto).trim()) {
       setError("Por favor completa todos los campos obligatorios.");
       return;
     }
   
     setGuardando(true);
     setError(null);
-    
-
+  
     try {
       const payload = {
         note: nota,
@@ -85,26 +141,20 @@ console.log("data",data);
         ...(data?.grupo_familiar_id ? { grupo_familiar_id: data.grupo_familiar_id } : {}),
         ...(asignadoA ? { assign_to_user_id: asignadoA } : {}),
         ...(data?.historial_id ? { historial_id: data.historial_id } : {})
-
-        
       };
-      
-     
-
+  
       const method = logId ? "PUT" : "POST";
       const endpoint = logId
         ? `bitacora_operativa/${logId}/update`
         : `bitacora_operativa/create`;
-      
+  
       await apiRequest(endpoint, method, payload);
       setBitacoraGuardada(true);
   
-      // Llama a onSaved si está definido, para que el padre pueda reaccionar al guardado
       if (typeof onSaved === "function") {
         onSaved();
       }
   
-      // Luego cerrar el modal
       if (typeof onHide === "function") {
         onHide(true);
       }
@@ -115,23 +165,28 @@ console.log("data",data);
       setGuardando(false);
     }
   };
-  
-  
 
   const handleClose = async () => {
     if (!bitacoraGuardada && logId) {
       try {
         await apiRequest("bitacora_operativa/delete-ultima", "DELETE");
-
         console.log("Bitácora eliminada correctamente al cancelar.");
       } catch (err) {
         console.warn("No se pudo eliminar la bitácora temporal:", err);
       }
     }
+  
+    // ✅ Reset interno primero
+    setDefaultSet(false);
+    setNota("");
+    setConcepto("");
+    setConceptoPadreId("");
+  
     if (typeof onHide === "function") {
       onHide(false);
     }
   };
+  
 
   return (
     <Modal show={show} onHide={handleClose} centered backdrop="static">

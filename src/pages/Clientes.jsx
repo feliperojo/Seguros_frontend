@@ -10,6 +10,7 @@ import countryCodes from '../services/countryCodes'
 import idiomas  from '../services/idiomas.js';
 import FormDireccion from "../components/FormDireccion";
 import BitacoraModal from "../components/Tareas/BitacoraModal";
+import PrimerContacto from "../components/PrimerContacto";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -317,6 +318,7 @@ const calcularIngresoAnual = (monto, periodo) => {
   // Crear una copia limpia del formData
   const formattedData = {
     ...formData,
+    primer_contacto_info: formData.primer_contacto_info || "",
     es_prospecto: !!formData.es_prospecto,
     estado_cliente: formData.estado_cliente,
     telefono: formData.telefono,
@@ -332,7 +334,7 @@ const calcularIngresoAnual = (monto, periodo) => {
     clientes: [formattedData],
   };
 
-  console.log("📦 Datos preparados para enviar:", formattedData);
+ 
 
   try {
     const response = await apiRequest("cliente/create", "POST", jsonFinal);
@@ -347,8 +349,10 @@ const calcularIngresoAnual = (monto, periodo) => {
         // 👉 Actualiza el log temporal con el cliente_id si logId está definido
         if (logId) {
           try {
+            console.log(`⏳ Actualizando la bitácora con el cliente_id: ${newId}`);
             await apiRequest(`bitacora_operativa/${logId}/update`, "PUT", {
               cliente_id: newId,
+              
             });
             console.log(`✅ Bitácora actualizada con cliente_id: ${newId}`);
           } catch (err) {
@@ -578,6 +582,12 @@ const calcularIngresoAnual = (monto, periodo) => {
                   <option value="Female">Female</option>
                 </select>
               </div>
+            </div>
+            <div className="row mt-3">
+            <PrimerContacto
+                onChange={(texto) => setFormData({ ...formData, primer_contacto_info: texto })}
+              />
+
             </div>
           </>
         );
