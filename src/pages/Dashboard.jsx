@@ -11,6 +11,7 @@ import apiRequest from "../services/api";
 import EditClienteModal from "../components/EditClienteModal"; // Importamos el modal de edición
 // Importar el componente modal de visualización
 import DetalleClienteModal from "../components/DetalleClienteModal";
+import CalendarioTareas from "../components/Tareas/CalendarioTareas";
 
 
 
@@ -18,7 +19,9 @@ const Dashboard = () => {
   const [clientesRecientes, setClientesRecientes] = useState([]);
   const [polizasCanceladas, setPolizasCanceladas] = useState([]);
   const [documentosProximosVencer, setDocumentosProximosVencer] = useState([]);
-
+  const [tareas, setTareas] = useState([]);
+  const [loadingTareas, setLoadingTareas] = useState(true);
+  
   const [polizasProximasVencer, setPolizasProximasVencer] = useState([]);
   const [estadisticas, setEstadisticas] = useState({
     totalClientes: 0,
@@ -43,12 +46,16 @@ const [filtroDias, setFiltroDias] = useState(15);
   }, []);
   
   const cargarDatos = async () => {
+    const resTareas = await apiRequest("tareas_operativas?per_page=100", "GET");
+    setTareas(resTareas.data || []);
+    setLoadingTareas(false);
+
     setCargando(true);
     setError(null);
     try {
 
       const resDocumentos = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
-console.log("documentos", resDocumentos);
+
       setDocumentosProximosVencer(resDocumentos);
 
       const resClientes = await apiRequest("cliente/recientes", "GET");
@@ -401,6 +408,25 @@ const handleOpenViewModal = (cliente) => {
           </div>
         </Col>
       </Row>
+      <div className="section-container mt-4">
+  <Card>
+    <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+      <span><FaCalendarAlt className="me-2" /> Calendario de Tareas</span>
+    </Card.Header>
+    <Card.Body>
+      {loadingTareas ? (
+        <div className="d-flex justify-content-center py-4">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+        </div>
+      ) : (
+        <CalendarioTareas tareas={tareas} />
+      )}
+    </Card.Body>
+  </Card>
+</div>
+
       
       {/* Modal de Edición */}
       <EditClienteModal

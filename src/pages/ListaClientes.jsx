@@ -65,7 +65,7 @@ const ListaClientes = () => {
       
       
       const response = await apiRequest("cliente/with-cobertura");
-   console.log(response)
+  
       
       const clientesData = response?.data || response || [];
       

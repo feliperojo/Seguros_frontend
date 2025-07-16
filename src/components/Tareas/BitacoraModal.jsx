@@ -15,6 +15,14 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
 const [subconceptos, setSubconceptos] = useState([]);
 const [conceptoPadreId, setConceptoPadreId] = useState("");
 const [defaultSet, setDefaultSet] = useState(false);
+const [fechaProgramacion, setFechaProgramacion] = useState(() => {
+  const hoy = new Date().toISOString().split("T")[0];
+  return hoy;
+});
+const [fechaVencimiento, setFechaVencimiento] = useState(() => {
+  const hoy = new Date().toISOString().split("T")[0];
+  return hoy;
+});
 
 
   const userIdFromSession = 1; 
@@ -139,8 +147,13 @@ console.log("data",data);
         entity_type: data?.entity_type || "cliente",
         ...(data?.cliente_id ? { cliente_id: data.cliente_id } : {}),
         ...(data?.grupo_familiar_id ? { grupo_familiar_id: data.grupo_familiar_id } : {}),
-        ...(asignadoA ? { assign_to_user_id: asignadoA } : {}),
+        ...(asignadoA ? {
+          assign_to_user_id: asignadoA,
+          scheduled_date: fechaProgramacion,
+          due_date: fechaVencimiento
+        } : {}),
         ...(data?.historial_id ? { historial_id: data.historial_id } : {})
+
       };
   
       const method = logId ? "PUT" : "POST";
@@ -175,7 +188,11 @@ console.log("data",data);
         console.warn("No se pudo eliminar la bitácora temporal:", err);
       }
     }
-  
+    setAsignadoA("");
+    const hoy = new Date().toISOString().split("T")[0];
+    setFechaProgramacion(hoy);
+    setFechaVencimiento(hoy);
+    
     // ✅ Reset interno primero
     setDefaultSet(false);
     setNota("");
@@ -246,6 +263,29 @@ console.log("data",data);
             ))}
           </Form.Select>
         </Form.Group>
+        {asignadoA && (
+  <>
+    <Form.Group className="mb-3">
+      <Form.Label>Fecha de Programación</Form.Label>
+      <Form.Control
+        type="date"
+        value={fechaProgramacion}
+        onChange={(e) => setFechaProgramacion(e.target.value)}
+      />
+    </Form.Group>
+
+    <Form.Group className="mb-3">
+      <Form.Label>Fecha de Vencimiento</Form.Label>
+      <Form.Control
+        type="date"
+        value={fechaVencimiento}
+        min={fechaProgramacion} // Evita que sea antes de la programación
+        onChange={(e) => setFechaVencimiento(e.target.value)}
+      />
+    </Form.Group>
+  </>
+)}
+
       </Modal.Body>
 
       <Modal.Footer>

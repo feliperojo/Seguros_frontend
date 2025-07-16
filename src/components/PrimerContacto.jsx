@@ -1,32 +1,86 @@
 import React, { useEffect, useState } from "react";
 import { Row, Col, Form } from "react-bootstrap";
 
-const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
-  const [fields, setFields] = useState({
-    referido: "",
-    cobertura_prospecto: "",
-    taxes: "",
-    zipcode: "",
-    edad: "",
-    ingresos: "",
-    telefono: ""
-  });
+const parsePrimerContactoInfo = (texto) => {
+  if (!texto) {
+    return {
+      referido: "",
+      cobertura_prospecto: "",
+      taxes: "",
+      zipcode: "",
+      edad: "",
+      ingresos: "",
+      telefono: ""
+    };
+  }
+
+  return {
+    referido: (texto.match(/REF\s*([^|]+)/i)?.[1] || "").trim(),
+    cobertura_prospecto: (texto.match(/COB\.?\s*([^|]+)/i)?.[1] || "").trim(),
+    taxes: (texto.match(/TAXES\s*([^|]+)/i)?.[1] || "").trim(),
+    zipcode: (texto.match(/ZIPCODE\s*([^|]+)/i)?.[1] || "").trim(),
+    edad: (texto.match(/EDAD\s*([^|]+)/i)?.[1] || "").replace("AÑOS", "").trim(),
+    ingresos: (texto.match(/INGRESOS\s*([^|]+)/i)?.[1] || "").trim(),
+    telefono: (texto.match(/TLF\s*([^|]+)/i)?.[1] || "").trim()
+  };
+};
+
+const buildPrimerContactoInfo = (fields) => {
+  return `REF ${fields.referido || ""} | COB. ${fields.cobertura_prospecto || ""} | TAXES ${
+    fields.taxes || ""
+  } | ZIPCODE ${fields.zipcode || ""} | EDAD ${fields.edad ? `${fields.edad} AÑOS` : ""} | INGRESOS ${
+    fields.ingresos || ""
+  } | TLF ${fields.telefono || ""}`;
+};
+
+const PrimerContacto = ({ value = "", onChange }) => {
+  const [fields, setFields] = useState(parsePrimerContactoInfo(value));
 
   useEffect(() => {
-    setFields(initialData);
-  }, [initialData]);
+    setFields(parsePrimerContactoInfo(value));
+  }, [value]);
 
-  const handleChange = (field, value) => {
-    const updated = { ...fields, [field]: value };
+  const handleChange = (field, newValue) => {
+    const updated = { ...fields, [field]: newValue };
     setFields(updated);
-    onChange(updated); // 🔥 enviamos el objeto al padre para reconstruir el texto
+    onChange(buildPrimerContactoInfo(updated));
+  };
+
+  // ✅ Permitir números y punto decimal en ingresos
+  const handleIngresosChange = (val) => {
+    const cleaned = val.replace(/[^0-9.]/g, ""); // Solo números y punto
+    // Evitar más de un punto decimal
+    const parts = cleaned.split(".");
+    const valid = parts.length > 2 ? parts[0] + "." + parts[1] : cleaned;
+    handleChange("ingresos", valid);
+  };
+
+  // ✅ Formatear ingresos al perder el foco
+  const handleIngresosBlur = () => {
+    const num = parseFloat(fields.ingresos);
+    const formatted = !isNaN(num)
+      ? new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: "USD",
+          minimumFractionDigits: 2
+        }).format(num)
+      : "";
+    handleChange("ingresos", formatted);
+  };
+
+  // ✅ Formatear teléfono
+  const formatTelefono = (val) => {
+    const digits = val.replace(/\D/g, "").slice(0, 10);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
   };
 
   return (
     <div className="p-3 bg-light rounded border">
       <h6 className="mb-3">Información del Prospecto</h6>
       <Row className="mb-2">
-        <Col md={6}>
+        <Col md={4}>
           <Form.Group>
             <Form.Label>Referido</Form.Label>
             <Form.Control
@@ -36,9 +90,9 @@ const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
             />
           </Form.Group>
         </Col>
-        <Col md={6}>
+        <Col md={2}>
           <Form.Group>
-            <Form.Label>cobertura</Form.Label>
+            <Form.Label>Cobertura</Form.Label>
             <Form.Control
               type="text"
               value={fields.cobertura_prospecto}
@@ -46,10 +100,7 @@ const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
             />
           </Form.Group>
         </Col>
-      </Row>
-
-      <Row className="mb-2">
-        <Col md={4}>
+        <Col md={2}>
           <Form.Group>
             <Form.Label>Taxes</Form.Label>
             <Form.Control
@@ -59,7 +110,7 @@ const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
             />
           </Form.Group>
         </Col>
-        <Col md={4}>
+        <Col md={2}>
           <Form.Group>
             <Form.Label>ZIP Code</Form.Label>
             <Form.Control
@@ -69,7 +120,7 @@ const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
             />
           </Form.Group>
         </Col>
-        <Col md={4}>
+        <Col md={2}>
           <Form.Group>
             <Form.Label>Edad</Form.Label>
             <Form.Control
@@ -82,23 +133,27 @@ const PrimerContacto = ({ initialValue, initialData = {}, onChange }) => {
       </Row>
 
       <Row>
-        <Col md={6}>
+        <Col md={3}>
           <Form.Group>
             <Form.Label>Ingresos</Form.Label>
             <Form.Control
               type="text"
               value={fields.ingresos}
-              onChange={(e) => handleChange("ingresos", e.target.value)}
+              onChange={(e) => handleIngresosChange(e.target.value)}
+              onBlur={handleIngresosBlur} // Formato final al salir
             />
           </Form.Group>
         </Col>
-        <Col md={6}>
+        <Col md={3}>
           <Form.Group>
             <Form.Label>Teléfono</Form.Label>
             <Form.Control
               type="text"
               value={fields.telefono}
-              onChange={(e) => handleChange("telefono", e.target.value)}
+              onChange={(e) => {
+                const formatted = formatTelefono(e.target.value);
+                handleChange("telefono", formatted);
+              }}
             />
           </Form.Group>
         </Col>

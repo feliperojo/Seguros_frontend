@@ -71,41 +71,6 @@ const renderMediosPagoTab = () => (
 );
 
 
-// Dentro de EditClienteModal.jsx (fuera del componente, al inicio del archivo)
-const parsePrimerContactoInfo = (texto) => {
-  if (!texto) return {
-    referido: "",
-    cobertura: "",
-    taxes: "",
-    zipcode: "",
-    edad: "",
-    ingresos: "",
-    telefono: ""
-  };
-
-  return {
-    referido: (texto.match(/REF\s+([^\n]+)/i)?.[1] || "").trim(),
-    cobertura: (texto.match(/COB\.\s*([^\n]+)/i)?.[1] || "").trim(),
-    taxes: (texto.match(/TAXES\s+([^\n]+)/i)?.[1] || "").trim(),
-    zipcode: (texto.match(/ZIPCODE\s+([^\n]+)/i)?.[1] || "").trim(),
-    edad: (texto.match(/EDAD\s+(\d+)/i)?.[1] || "").trim(),
-    ingresos: (texto.match(/INGRESOS\s+([^\n]+)/i)?.[1] || "").trim(),
-    telefono: (texto.match(/TLF\s+([^\n]+)/i)?.[1] || "").trim()
-  };
-};
-
-const buildPrimerContactoInfo = (fields) => {
-  return `REF ${fields.referido || ""}
-COB.${fields.cobertura || ""}
-TAXES ${fields.taxes || ""}
-ZIPCODE ${fields.zipcode || ""}
-EDAD ${fields.edad ? `${fields.edad} AÑOS` : ""}
-INGRESOS ${fields.ingresos || ""}
-TLF ${fields.telefono || ""}`.trim();
-};
-
-
-
 const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
   // Estado para los datos del cliente organizados por secciones
 
@@ -184,7 +149,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
 
   const buildPrimerContactoInfo = (data) => {
     return `REF ${data.referido || ""}
-  COB.${data.cobertura || ""}
+  COB.${data.cobertura_prospecto || ""}
   TAXES ${data.taxes || ""}
   ZIPCODE ${data.zipcode || ""}
   EDAD ${data.edad ? `${data.edad} AÑOS` : ""}
@@ -297,9 +262,6 @@ const formatsocial = (value) => {
 };
   
 const mapClienteDataToForm = (data) => {
-
-  const parsedProspecto = parsePrimerContactoInfo(data.primer_contacto_info);
-  
   return {
     datosPrincipales: {
       primer_nombre: data.primer_nombre || "",
@@ -312,13 +274,8 @@ const mapClienteDataToForm = (data) => {
       estado_cliente: data.estado_cliente || "cliente",
       es_prospecto: data.es_prospecto || false,
       primer_contacto_info: data.primer_contacto_info || "",
-      referido: parsedProspecto.referido || "",
-      cobertura_prospecto: parsedProspecto.cobertura || "", // 🔄 renombrado
-      taxes: parsedProspecto.taxes || "",
-      zipcode: parsedProspecto.zipcode || "",
-      edad_prospecto: parsedProspecto.edad || "",
-      ingresos: parsedProspecto.ingresos || "",
-      telefono_prospecto: parsedProspecto.telefono || ""
+     
+    
     },
     statusMigratorio: {
       social: data.social || "",
@@ -704,20 +661,21 @@ useEffect(() => {
         </Col>
       </Row>
       <Row className="mb-3">
-  <PrimerContacto
-    initialValue={formData.datosPrincipales.primer_contacto_info || ""}
-    initialData={parsePrimerContactoInfo(formData.datosPrincipales.primer_contacto_info)}
-    onChange={(fields) => {
-      const nuevoTexto = buildPrimerContactoInfo(fields);
-      setFormData((prev) => ({
-        ...prev,
-        datosPrincipales: {
-          ...prev.datosPrincipales,
-          primer_contacto_info: nuevoTexto
-        },
-      }));
-    }}
-  />
+      <PrimerContacto
+            value={formData.datosPrincipales.primer_contacto_info}
+            onChange={(newString) => {
+              setFormData(prev => ({
+                ...prev,
+                datosPrincipales: {
+                  ...prev.datosPrincipales,
+                  primer_contacto_info: newString
+                }
+              }));
+            }}
+          />
+
+
+
 </Row>
 
     </div>

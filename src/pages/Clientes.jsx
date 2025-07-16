@@ -62,7 +62,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     periodo_ingreso_ocasional: "", // Valor por defecto
     ingreso_por_periodo_ocasional: "",
     es_prospecto:false,
-    estado_cliente: "cliente"
+    estado_cliente: "cliente",
+    primer_contacto: {}, // para guardar el objeto
+    primer_contacto_info: ""
   };
   const [idiomasList, setIdiomasList] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -318,7 +320,7 @@ const calcularIngresoAnual = (monto, periodo) => {
   // Crear una copia limpia del formData
   const formattedData = {
     ...formData,
-    primer_contacto_info: formData.primer_contacto_info || "",
+    primer_contacto_info: String(formData.primer_contacto_info || ""),
     es_prospecto: !!formData.es_prospecto,
     estado_cliente: formData.estado_cliente,
     telefono: formData.telefono,
@@ -585,9 +587,11 @@ const calcularIngresoAnual = (monto, periodo) => {
             </div>
             <div className="row mt-3">
             <PrimerContacto
-                onChange={(texto) => setFormData({ ...formData, primer_contacto_info: texto })}
+                value={formData.primer_contacto_info}
+                onChange={(newString) =>
+                  setFormData(prev => ({ ...prev, primer_contacto_info: newString }))
+                }
               />
-
             </div>
           </>
         );
