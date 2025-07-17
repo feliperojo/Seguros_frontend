@@ -16,6 +16,9 @@ import CalendarioTareas from "../components/Tareas/CalendarioTareas";
 
 
 const Dashboard = () => {
+  const currentUser = JSON.parse(localStorage.getItem("user"));
+  
+
   const [clientesRecientes, setClientesRecientes] = useState([]);
   const [polizasCanceladas, setPolizasCanceladas] = useState([]);
   const [documentosProximosVencer, setDocumentosProximosVencer] = useState([]);
@@ -421,7 +424,8 @@ const handleOpenViewModal = (cliente) => {
           </div>
         </div>
       ) : (
-        <CalendarioTareas tareas={tareas} />
+        <CalendarioTareas tareas={tareas} currentUser={currentUser} />
+
       )}
     </Card.Body>
   </Card>

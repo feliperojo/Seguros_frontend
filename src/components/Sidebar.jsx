@@ -11,7 +11,8 @@ import  SincronizarContactos from "../components/SincronizarContactos";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
-  const users = localStorage.getItem("name");
+  const users = JSON.parse(localStorage.getItem("user"))?.name || "Usuario";
+
   const location = useLocation();
   
   // Estado para controlar qué submenús están expandidos

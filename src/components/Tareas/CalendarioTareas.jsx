@@ -4,7 +4,8 @@ import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
 
-const CalendarioTareas = ({ tareas: tareasIniciales }) => {
+const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
+
   const hoy = new Date();
   const [mesActual, setMesActual] = useState(hoy.getMonth());
   const [añoActual, setAñoActual] = useState(hoy.getFullYear());
@@ -23,6 +24,11 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
   const diasEnMes = new Date(añoActual, mesActual + 1, 0).getDate();
   const primerDiaSemana = new Date(añoActual, mesActual, 1).getDay();
   const offsetInicio = primerDiaSemana === 0 ? 6 : primerDiaSemana - 1;
+
+  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(currentUser?.id || null);
+
+const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
+
 
   const nombreMes = new Date(añoActual, mesActual).toLocaleString("es-ES", {
     month: "long",
@@ -57,11 +63,37 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
       return fecha.getDate() === dia && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual;
     });
   };
+
+  React.useEffect(() => {
+    const fetchUsuarios = async () => {
+      try {
+        const response = await apiRequest("users", "GET");
+        if (response && Array.isArray(response)) {
+          setUsuarios(response);
+  
+          // ✅ Si el usuario logueado está en la lista, selecciónalo por defecto
+          const usuarioDefault = response.find(u => u.id === currentUser.id);
+          setUsuarioSeleccionado(usuarioDefault ? usuarioDefault.id : response[0].id);
+        }
+      } catch (error) {
+        console.error("Error cargando usuarios:", error);
+      }
+    };
+  
+    fetchUsuarios();
+  }, [currentUser]);
+  
+  
+  
+  const tareasFiltradas = tareas.filter((t) => 
+    !usuarioSeleccionado || t.assigned_user_id === usuarioSeleccionado
+  );
+  
   
 
   // Agrupar tareas por día según scheduled_date
   const tareasPorDia = {};
-  tareas
+  tareasFiltradas
   .filter((t) => t.status !== "completed") // ✅ Filtramos tareas completadas
   .forEach((t) => {
     const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
@@ -152,18 +184,42 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
   return (
     <div>
       {/* Botón Nueva Tarea */}
-      <div className="d-flex justify-content-between align-items-end mb-3">
-        <Button variant="primary" onClick={() => setShowNuevaModal(true)}>
-          + Nueva Tarea
-        </Button>
-      </div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  {/* Botón Anterior */}
+  <Button variant="outline-primary" size="sm" onClick={() => cambiarMes(-1)}>
+    ◀ Anterior
+  </Button>
 
-      {/* Encabezado calendario */}
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <Button variant="outline-primary" size="sm" onClick={() => cambiarMes(-1)}>◀ Anterior</Button>
-        <h5 className="mb-0 text-capitalize">{nombreMes}</h5>
-        <Button variant="outline-primary" size="sm" onClick={() => cambiarMes(1)}>Siguiente ▶</Button>
-      </div>
+  {/* Mes y Selector de Usuario */}
+  <div className="d-flex flex-column align-items-center">
+    <h5 className="mb-2 text-capitalize fw-bold">{nombreMes}</h5>
+    <select
+  className="form-select form-select-sm"
+  style={{ width: "220px" }}
+  value={usuarioSeleccionado || ""}
+  onChange={(e) => setUsuarioSeleccionado(parseInt(e.target.value))}
+  disabled={currentUser.name !== "Admin" && "Auxiliar" && "Catalina" && "Henry"} // ✅ Solo admin puede cambiar
+>
+  {usuarios.length > 0 ? (
+    usuarios.map((u) => (
+      <option key={u.id} value={u.id}>
+        {u.name}
+      </option>
+    ))
+  ) : (
+    <option value="">Cargando usuarios...</option>
+  )}
+</select>
+
+  </div>
+
+  {/* Botón Siguiente */}
+  <Button variant="outline-primary" size="sm" onClick={() => cambiarMes(1)}>
+    Siguiente ▶
+  </Button>
+</div>
+
+      
 
       {/* Días de la semana */}
       <div className="d-grid mb-2 fw-bold text-center" style={{ gridTemplateColumns: "repeat(7, 1fr)", gap: "8px" }}>
@@ -176,6 +232,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
           if (dia === null) return <div key={index}></div>;
 
           const tareasDia = tareasPorDia[dia] || [];
+          console.log("tareasDia",tareasDia)
           const esHoy = dia === hoy.getDate() && mesActual === hoy.getMonth() && añoActual === hoy.getFullYear();
 
           return (
@@ -222,7 +279,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
                         
                         
                       >
-                        {t.log?.concept?.name || "Tarea"}
+                         {t.log.cliente?.nombre_completo || "Sin Cliente"}
                       </Badge>
                     ))}
                     {tareasDia.length > 5 && (

@@ -33,8 +33,9 @@ const Login = () => {
       const response = await apiRequest("login", "POST", formData);
 
       if (response.token) {
-        localStorage.setItem("auth_token", response.token); // Guardar token en localStorage
-        localStorage.setItem("name", response.user.name);
+        localStorage.setItem("auth_token", response.token);
+        localStorage.setItem("user", JSON.stringify(response.user));
+        
         navigate("/"); // Redirigir al Dashboard
       } else {
         throw new Error("Datos de usuario incorrectos");
