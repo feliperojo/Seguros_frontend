@@ -121,9 +121,9 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
               <thead className="bg-light">
                 <tr>
                   <th>Nombre</th>
-                  <th>Email</th>
+                  <th>Estado Cliente</th>
                   <th>Teléfono</th>
-                  <th>Social</th>
+                  <th>Fecha de Nacimiento</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
@@ -131,9 +131,11 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                 {getCurrentPageClients().map((cliente) => (
                   <tr key={cliente.id}>
                     <td>{cliente.nombre_completo || `${cliente.nombre || ''} ${cliente.apellido || ''}`}</td>
-                    <td>{cliente.email || "-"}</td>
+                    <td>{cliente.estado_cliente || "-"}</td>
                     <td>{cliente.telefono || "-"}</td>
-                    <td>{cliente.social || cliente.social || "-"}</td>
+                    <td>{cliente.fecha_nacimiento
+                    ? new Date(cliente.fecha_nacimiento).toLocaleDateString()
+                    : "-"}</td>
                     <td>
                       <Button
                         variant="success"
