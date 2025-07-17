@@ -361,20 +361,28 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
 
       {/* Modales */}
       {showResponderModal && tareaSeleccionada && (
-        <ResponderTareaModal
-          show={showResponderModal}
-          onHide={() => setShowResponderModal(false)}
-          tarea={tareaSeleccionada}
-          onUpdated={onUpdated}
-        />
-      )}
-      {showNuevaModal && (
-        <NuevaTareaModal
-          show={showNuevaModal}
-          onHide={() => setShowNuevaModal(false)}
-          onCreated={onCreated}
-        />
-      )}
+  <ResponderTareaModal
+    show={showResponderModal}
+    onHide={() => setShowResponderModal(false)}
+    tarea={tareaSeleccionada}
+    onUpdated={(tareaActualizada) => {
+      onUpdated(tareaActualizada); // ✅ Actualiza en el estado
+      setShowResponderModal(false); // ✅ Cierra modal después
+    }}
+  />
+)}
+
+{showNuevaModal && (
+  <NuevaTareaModal
+    show={showNuevaModal}
+    onHide={() => setShowNuevaModal(false)}
+    onCreated={(nuevaTarea) => {
+      onCreated(nuevaTarea); // ✅ Agrega la nueva tarea al estado
+      setShowNuevaModal(false); // ✅ Cierra modal después
+    }}
+  />
+)}
+
     </div>
   );
 };

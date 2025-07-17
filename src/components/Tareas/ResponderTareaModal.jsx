@@ -44,8 +44,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
   const handleAgregarComentario = async () => {
     if (!responseNote.trim()) {
-      alert("La respuesta no puede estar vacía.");
-      return;
+      return; // Evitamos alert, simplemente no hace nada
     }
     setLoading(true);
     try {
@@ -54,19 +53,32 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         "POST",
         { comment: responseNote }
       );
+  
+      // ✅ Actualizamos la tarea localmente a in_progress
+      const tareaActualizada = {
+        ...tarea,
+        response_note: responseNote,
+        status: tarea.status === "pending" ? "in_progress" : tarea.status,
+      };
+  
+      if (onUpdated) onUpdated(tareaActualizada);
+  
       setComentarios((prev) => [...prev, data.comment]);
       setResponseNote("");
+  
+      // ✅ Cerramos modal automáticamente
+      onHide(true);
     } catch {
-      alert("❌ Error al agregar el comentario");
+      console.error("❌ Error al agregar el comentario");
     } finally {
       setLoading(false);
     }
   };
-
+  
+  
   const handleCompletar = async () => {
     setLoading(true);
     try {
-      // Guardar comentario antes de completar
       if (
         responseNote.trim() !== "" &&
         (comentarios.length === 0 ||
@@ -78,7 +90,17 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           { comment: responseNote }
         );
       }
+  
       await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT");
+  
+      const tareaActualizada = {
+        ...tarea,
+        status: "completed", // ✅ Cambiamos estado local
+      };
+  
+      if (onUpdated) onUpdated(tareaActualizada); // ✅ Actualizamos en el calendario
+  
+      
       onHide(true);
     } catch {
       alert("❌ Error al completar la tarea");
@@ -86,6 +108,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       setLoading(false);
     }
   };
+  
 
   // ✅ Actualizar fechas desde el modal
   const handleActualizarFechas = async () => {
@@ -108,7 +131,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       };
   
       if (onUpdated) onUpdated(tareaActualizada);
-      alert("✅ Fechas actualizadas correctamente");
+     
     } catch (error) {
       console.error(error);
       alert("❌ Error al actualizar fechas");
@@ -165,7 +188,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
               </p>
               <p className="mb-2">
                 <strong>Quien asigno la tarea:</strong>{" "}
-                {tarea?.log?.user.name|| "N/A"}
+                {tarea?.log?.user.name || "N/A"}
               </p>
             </Col>
             <Col md={6}>
