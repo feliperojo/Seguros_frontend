@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Card, Badge, Button, Toast, ToastContainer } from "react-bootstrap";
+import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
@@ -13,6 +13,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
   const [showNuevaModal, setShowNuevaModal] = useState(false);
   const [showResponderModal, setShowResponderModal] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [tareasDetalle, setTareasDetalle] = useState([]);
 
   const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
 
@@ -31,6 +34,11 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
     setShowResponderModal(true);
   };
 
+  const abrirDetalleDia = (lista) => {
+    setTareasDetalle(lista);
+    setShowDetalleModal(true);
+  };
+
   const onCreated = (nuevaTarea) => {
     setTareas((prev) => [...prev, nuevaTarea]);
     setToast({ show: true, message: "✅ Nueva tarea agregada", variant: "success" });
@@ -43,9 +51,19 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
     setToast({ show: true, message: "✅ Tarea actualizada", variant: "info" });
   };
 
+  const obtenerTodasTareasDelDia = (dia) => {
+    return tareas.filter((t) => {
+      const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
+      return fecha.getDate() === dia && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual;
+    });
+  };
+  
+
   // Agrupar tareas por día según scheduled_date
   const tareasPorDia = {};
-  tareas.forEach((t) => {
+  tareas
+  .filter((t) => t.status !== "completed") // ✅ Filtramos tareas completadas
+  .forEach((t) => {
     const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
     if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
       const dia = fecha.getDate();
@@ -53,6 +71,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
       tareasPorDia[dia].push(t);
     }
   });
+
 
   const cambiarMes = (incremento) => {
     let nuevoMes = mesActual + incremento;
@@ -80,24 +99,23 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
     e.preventDefault();
     const tareaId = e.dataTransfer.getData("tareaId");
     if (!tareaId) return;
-  
+
     const nuevaFecha = new Date(añoActual, mesActual, dia).toISOString().split("T")[0];
-  
+
     const tarea = tareas.find((t) => t.id === parseInt(tareaId));
     if (!tarea) return;
-  
+
     let newDueDate = tarea.due_date;
     if (new Date(nuevaFecha) > new Date(tarea.due_date)) {
       newDueDate = nuevaFecha;
     }
-  
+
     try {
-      const response = await apiRequest(`tareas_operativas/${tareaId}/reprogramar`, "PUT", {
+      await apiRequest(`tareas_operativas/${tareaId}/reprogramar`, "PUT", {
         scheduled_date: nuevaFecha,
         due_date: newDueDate,
       });
-  
-      // ✅ Actualizamos estado local manualmente
+
       setTareas((prev) =>
         prev.map((t) =>
           t.id === tarea.id
@@ -105,7 +123,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
             : t
         )
       );
-  
+
       setToast({
         show: true,
         message: `✅ Tarea movida al ${nuevaFecha}`,
@@ -120,7 +138,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
       });
     }
   };
-  
+
   const onDragOver = (e) => e.preventDefault();
 
   const celdas = [];
@@ -162,33 +180,61 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
 
           return (
             <Card
-              key={dia}
-              onDrop={(e) => onDrop(e, dia)}
-              onDragOver={onDragOver}
-              className="p-2 text-center"
-              style={{
-                minHeight: "130px",
-                borderRadius: "8px",
-                border: esHoy ? "2px solid #28a745" : "1px solid #ddd",
-                backgroundColor: esHoy ? "#eafbea" : "#fff",
-              }}
+            key={dia}
+            onDrop={(e) => onDrop(e, dia)}
+            onDragOver={onDragOver}
+            onClick={(e) => {
+              // Si el click no viene de una Badge, abre el modal
+              if (e.target.tagName !== "SPAN") {
+                const todasLasTareas = obtenerTodasTareasDelDia(dia);
+                if (todasLasTareas.length > 0) {
+                  abrirDetalleDia(todasLasTareas);
+                }
+              }
+            }}
+             // ✅ Ahora abre modal siempre que haya tareas
+            className="p-2 text-center"
+            style={{
+              minHeight: "130px",
+              borderRadius: "8px",
+              border: esHoy ? "2px solid #28a745" : "1px solid #ddd",
+              backgroundColor: esHoy ? "#eafbea" : "#fff",
+              cursor: tareasDia.length > 0 ? "pointer" : "default", // Indicador visual
+            }}
+          
             >
               <strong>{dia}</strong>
               <div className="mt-2">
                 {tareasDia.length > 0 ? (
-                  tareasDia.slice(0, 5).map((t) => (
-                    <Badge
-                      key={t.id}
-                      bg={getBadgeColor(t.status)}
-                      className="d-block mb-1"
-                      style={{ fontSize: "0.75rem", cursor: "pointer" }}
-                      draggable={t.status !== "completed"}
-                      onDragStart={(e) => onDragStart(e, t)}
-                      onDoubleClick={() => abrirResponderTarea(t)}
-                    >
-                      {t.log?.concept?.name || "Tarea"}
-                    </Badge>
-                  ))
+                  <>
+                    {tareasDia.slice(0, 5).map((t) => (
+                      <Badge
+                        key={t.id}
+                        bg={getBadgeColor(t.status)}
+                        className="d-block mb-1"
+                        style={{ fontSize: "0.75rem", cursor: "pointer" }}
+                        draggable={t.status !== "completed"}
+                        onDragStart={(e) => onDragStart(e, t)}
+                        onClick={(e) => {
+                          e.stopPropagation(); // Evita abrir el modal de detalle
+                          abrirResponderTarea(t); // Abre modal de responder
+                        }}
+                        
+                        
+                      >
+                        {t.log?.concept?.name || "Tarea"}
+                      </Badge>
+                    ))}
+                    {tareasDia.length > 5 && (
+                      <small
+                        className="text-primary"
+                        style={{ cursor: "pointer", fontSize: "0.8rem" }}
+                        onClick={() => abrirDetalleDia(tareasDia)}
+                      >
+                        +{tareasDia.length - 5} más
+                      </small>
+                    )}
+                  </>
                 ) : (
                   <small className="text-muted">-</small>
                 )}
@@ -205,20 +251,46 @@ const CalendarioTareas = ({ tareas: tareasIniciales }) => {
         </Toast>
       </ToastContainer>
 
+      {/* Modal Detalle */}
+      <Modal show={showDetalleModal} onHide={() => setShowDetalleModal(false)} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Tareas del día</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <ListGroup>
+            {tareasDetalle.map((t) => (
+              <ListGroup.Item
+                key={t.id}
+                className="d-flex justify-content-between align-items-center"
+              >
+                <div>
+                <Badge bg={getBadgeColor(t.status)} className="me-2">{getStatusLabel(t.status)}</Badge>
+
+                  {t.log?.concept?.name || "Tarea"}
+                </div>
+                <Button size="sm" variant="outline-primary" onClick={() => abrirResponderTarea(t)}>
+                  Ver / Responder
+                </Button>
+              </ListGroup.Item>
+            ))}
+          </ListGroup>
+        </Modal.Body>
+      </Modal>
+
       {/* Modales */}
       {showResponderModal && tareaSeleccionada && (
         <ResponderTareaModal
           show={showResponderModal}
           onHide={() => setShowResponderModal(false)}
           tarea={tareaSeleccionada}
-          onUpdated={onUpdated} // ✅ Se pasa al modal
+          onUpdated={onUpdated}
         />
       )}
       {showNuevaModal && (
         <NuevaTareaModal
           show={showNuevaModal}
           onHide={() => setShowNuevaModal(false)}
-          onCreated={onCreated} // ✅ Se pasa al modal
+          onCreated={onCreated}
         />
       )}
     </div>
@@ -233,5 +305,14 @@ const getBadgeColor = (status) => {
     default: return "secondary";
   }
 };
+const getStatusLabel = (status) => {
+  switch (status) {
+    case "pending": return "Pendiente";
+    case "in_progress": return "En Progreso";
+    case "completed": return "Completada";
+    default: return "Desconocido";
+  }
+};
+
 
 export default CalendarioTareas;
