@@ -212,7 +212,8 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
       style={{ width: "220px" }}
       value={usuarioSeleccionado || ""}
       onChange={(e) => setUsuarioSeleccionado(parseInt(e.target.value))}
-      disabled={currentUser.name !== "Admin" && "Auxiliar"}
+      disabled={!(currentUser.name === "Admin" || currentUser.name === "Auxiliar" || currentUser.name === "Catalina")}
+
     >
       {usuarios.length > 0 ? (
         usuarios.map((u) => (
