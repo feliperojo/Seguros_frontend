@@ -183,34 +183,47 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
 
   return (
     <div>
-      {/* Botón Nueva Tarea */}
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
-  {/* Botón Anterior */}
-  <Button variant="outline-primary" size="sm" onClick={() => cambiarMes(-1)}>
-    ◀ Anterior
-  </Button>
+     <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <div className="d-flex gap-2">
+    {/* Botón Nueva Tarea */}
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() => setShowNuevaModal(true)}
+    >
+      ➕ Nueva Tarea
+    </Button>
+
+    {/* Botón Anterior */}
+    <Button
+      variant="outline-primary"
+      size="sm"
+      onClick={() => cambiarMes(-1)}
+    >
+      ◀ Anterior
+    </Button>
+  </div>
 
   {/* Mes y Selector de Usuario */}
   <div className="d-flex flex-column align-items-center">
     <h5 className="mb-2 text-capitalize fw-bold">{nombreMes}</h5>
     <select
-  className="form-select form-select-sm"
-  style={{ width: "220px" }}
-  value={usuarioSeleccionado || ""}
-  onChange={(e) => setUsuarioSeleccionado(parseInt(e.target.value))}
-  disabled={currentUser.name !== "Admin" && "Auxiliar" && "Catalina" && "Henry"} // ✅ Solo admin puede cambiar
->
-  {usuarios.length > 0 ? (
-    usuarios.map((u) => (
-      <option key={u.id} value={u.id}>
-        {u.name}
-      </option>
-    ))
-  ) : (
-    <option value="">Cargando usuarios...</option>
-  )}
-</select>
-
+      className="form-select form-select-sm"
+      style={{ width: "220px" }}
+      value={usuarioSeleccionado || ""}
+      onChange={(e) => setUsuarioSeleccionado(parseInt(e.target.value))}
+      disabled={currentUser.name !== "Admin" && "Auxiliar"}
+    >
+      {usuarios.length > 0 ? (
+        usuarios.map((u) => (
+          <option key={u.id} value={u.id}>
+            {u.name}
+          </option>
+        ))
+      ) : (
+        <option value="">Cargando usuarios...</option>
+      )}
+    </select>
   </div>
 
   {/* Botón Siguiente */}
@@ -218,6 +231,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
     Siguiente ▶
   </Button>
 </div>
+
 
       
 
@@ -310,29 +324,40 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
 
       {/* Modal Detalle */}
       <Modal show={showDetalleModal} onHide={() => setShowDetalleModal(false)} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Tareas del día</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <ListGroup>
-            {tareasDetalle.map((t) => (
-              <ListGroup.Item
-                key={t.id}
-                className="d-flex justify-content-between align-items-center"
-              >
-                <div>
-                <Badge bg={getBadgeColor(t.status)} className="me-2">{getStatusLabel(t.status)}</Badge>
+  <Modal.Header closeButton>
+    <Modal.Title>Tareas del día</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    <ListGroup>
+      {tareasDetalle.map((t) => (
+        <ListGroup.Item
+          key={t.id}
+          className="d-flex justify-content-between align-items-center"
+        >
+          <div>
+            <Badge bg={getBadgeColor(t.status)} className="me-2">
+              {getStatusLabel(t.status)}
+            </Badge>
+            <div className="fw-bold">
+              {t.log?.concept?.name || "Tarea"}
+            </div>
+            <div className="text-muted" style={{ fontSize: "0.85rem" }}>
+              {t.log?.cliente?.nombre_completo || "Sin Cliente"}
+            </div>
+          </div>
+          <Button
+            size="sm"
+            variant="outline-primary"
+            onClick={() => abrirResponderTarea(t)}
+          >
+            Ver / Responder
+          </Button>
+        </ListGroup.Item>
+      ))}
+    </ListGroup>
+  </Modal.Body>
+</Modal>
 
-                  {t.log?.concept?.name || "Tarea"}
-                </div>
-                <Button size="sm" variant="outline-primary" onClick={() => abrirResponderTarea(t)}>
-                  Ver / Responder
-                </Button>
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
-        </Modal.Body>
-      </Modal>
 
       {/* Modales */}
       {showResponderModal && tareaSeleccionada && (

@@ -163,6 +163,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                 <strong>Cliente:</strong>{" "}
                 {tarea?.log?.cliente?.nombre_completo || "N/A"}
               </p>
+              <p className="mb-2">
+                <strong>Quien asigno la tarea:</strong>{" "}
+                {tarea?.log?.user.name|| "N/A"}
+              </p>
             </Col>
             <Col md={6}>
               {/* ✅ Campos editables si la tarea no está completada */}
