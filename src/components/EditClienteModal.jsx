@@ -197,6 +197,24 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   
     return (ingresoPrincipal + ingresoOcasional).toFixed(2);
   };
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return "";
+    const hoy = new Date();
+    const fechaNac = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - fechaNac.getFullYear();
+    const mes = hoy.getMonth() - fechaNac.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNac.getDate())) {
+      edad--;
+    }
+    return edad >= 0 ? edad : "";
+  };
+
+  const capitalizarPalabras = (texto) => {
+    if (!texto) return "";
+    return texto
+      .toLowerCase()
+      .replace(/\b\w/g, (letra) => letra.toUpperCase());
+  };
   
   
 // Añadir esta función para cargar los medios de pago
@@ -352,44 +370,77 @@ useEffect(() => {
 }, [formData, initialFormData]);
 
   const handleInputChange = (section, field, value) => {
-    setFormData(prevData => {
-      // Si estamos modificando campos que afectan el nombre completo
-      if (section === "datosPrincipales" && 
-          (field === "primer_nombre" || field === "segundo_nombre" || field === "apellidos")) {
-        
-        // Obtener los valores actualizados
-        const primerNombre = field === "primer_nombre" ? value : prevData.datosPrincipales.primer_nombre || "";
-        const segundoNombre = field === "segundo_nombre" ? value : prevData.datosPrincipales.segundo_nombre || "";
-        const apellidos = field === "apellidos" ? value : prevData.datosPrincipales.apellidos || "";
-        
-        // Construir el nombre completo
-        const nombreCompleto = [primerNombre, segundoNombre, apellidos]
-          .filter(part => part && part.trim() !== "")
-          .join(" ");
-        
-        // Actualizar el estado con todos los cambios
-        return {
-          ...prevData,
-          [section]: {
-            ...prevData[section],
-            [field]: value,
-            nombre_completo: nombreCompleto
-          }
-        };
-      }
-      
-      // Para otros campos, actualizar normalmente
+  setFormData((prevData) => {
+    let newValue = value;
+
+    // Capitalizar para nombre y apellidos
+    if (
+      section === "datosPrincipales" &&
+      (field === "primer_nombre" ||
+        field === "segundo_nombre" ||
+        field === "apellidos")
+    ) {
+      newValue = capitalizarPalabras(value);
+    }
+
+    // Si se cambia la fecha de nacimiento, recalcular edad
+    if (section === "datosPrincipales" && field === "fecha_nacimiento") {
+      const edadCalculada = calcularEdad(value);
       return {
         ...prevData,
         [section]: {
           ...prevData[section],
-          [field]: value
-        }
+          [field]: value,
+          edad: edadCalculada,
+        },
       };
-    });
-    
-    
-  };
+    }
+
+    // Actualizar nombre completo si afecta nombres o apellidos
+    if (
+      section === "datosPrincipales" &&
+      (field === "primer_nombre" ||
+        field === "segundo_nombre" ||
+        field === "apellidos")
+    ) {
+      const primerNombre =
+        field === "primer_nombre"
+          ? newValue
+          : prevData.datosPrincipales.primer_nombre || "";
+      const segundoNombre =
+        field === "segundo_nombre"
+          ? newValue
+          : prevData.datosPrincipales.segundo_nombre || "";
+      const apellidos =
+        field === "apellidos"
+          ? newValue
+          : prevData.datosPrincipales.apellidos || "";
+
+      const nombreCompleto = [primerNombre, segundoNombre, apellidos]
+        .filter((part) => part && part.trim() !== "")
+        .join(" ");
+
+      return {
+        ...prevData,
+        [section]: {
+          ...prevData[section],
+          [field]: newValue,
+          nombre_completo: nombreCompleto,
+        },
+      };
+    }
+
+    // Para otros campos, actualizar normalmente
+    return {
+      ...prevData,
+      [section]: {
+        ...prevData[section],
+        [field]: newValue,
+      },
+    };
+  });
+};
+
 
   // Manejar cambios en campos anidados (como servicios_mensajeria)
   const handleNestedInputChange = (section, nestedField, field, value) => {
@@ -641,6 +692,8 @@ useEffect(() => {
             <Form.Control
               type="number"
               value={formData.datosPrincipales.edad}
+              readOnly
+              className="bg-light"
               onChange={(e) => handleInputChange("datosPrincipales", "edad", e.target.value)}
             />
           </Form.Group>
