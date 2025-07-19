@@ -5,6 +5,8 @@ import apiRequest from "../services/api";
 import NuevaTareaModal from "../components/Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import DetalleBitacoraModal from "../components/Tareas/DetalleBitacoraModal";
+import HistorialClienteModal from "../components/Tareas/HistorialClienteModal";
+
 
 const CentroOperaciones = () => {
   const [key, setKey] = useState("bitacora");
@@ -23,6 +25,10 @@ const CentroOperaciones = () => {
   const [estadoFiltro, setEstadoFiltro] = useState("");
   const [usuarios, setUsuarios] = useState([]);
   const [clienteFiltro, setClienteFiltro] = useState("");
+
+  const [showHistorialModal, setShowHistorialModal] = useState(false);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+
 
   // Tareas
   const [tareasData, setTareasData] = useState({ data: [], total: 0, current_page: 1, per_page: 10 });
@@ -509,7 +515,29 @@ const CentroOperaciones = () => {
                   <tr key={log.id}>
                     <td>{new Date(log.created_at).toLocaleString()}</td>
                     <td>{log.user?.name}</td>
-                    <td>{log.cliente ? `${log.cliente.nombre_completo} (ID: ${log.cliente.id})` : "---"}</td>
+                    <td>
+  {log.cliente ? (
+    <>
+      {log.cliente.nombre_completo} (ID: {log.cliente.id})
+      <Button
+        size="sm"
+        variant="outline-info"
+        className="ms-2"
+        onClick={() => {
+          setClienteSeleccionado({
+            id: log.cliente.id,
+            nombre: log.cliente.nombre_completo,
+          });
+          setShowHistorialModal(true);
+        }}
+      >
+        Historial
+      </Button>
+    </>
+  ) : (
+    "---"
+  )}
+</td>
                     <td>{log.concept?.name}</td>
                     <td>{log.note}</td>
                     <td>{log.task?.assigned_user?.name || "No asignado"}</td>
@@ -562,10 +590,29 @@ const CentroOperaciones = () => {
                       <td>{new Date(t.created_at).toLocaleString()}</td>
 
                       <td>
-                        {t.log.cliente
-                          ? `${t.log.cliente.nombre_completo} (ID: ${t.log.cliente.id})`
-                          : `${t.log.entity_type} #${t.log.entity_id}`}
-                      </td>
+  {t.log.cliente ? (
+    <>
+      {t.log.cliente.nombre_completo} (ID: {t.log.cliente.id})
+      <Button
+        size="sm"
+        variant="outline-info"
+        className="ms-2"
+        onClick={() => {
+          setClienteSeleccionado({
+            id: t.log.cliente.id,
+            nombre: t.log.cliente.nombre_completo,
+          });
+          setShowHistorialModal(true);
+        }}
+      >
+        Historial
+      </Button>
+    </>
+  ) : (
+    `${t.log.entity_type} #${t.log.entity_id}`
+  )}
+</td>
+
                       <td>{t.log.concept?.name}</td>
                       <td>
                         <div className="d-flex flex-column gap-1">
@@ -654,11 +701,18 @@ const CentroOperaciones = () => {
                 >
                   »
                 </button>
+                
               </li>
             </ul>
           </nav>
         </div>
       )}
+<HistorialClienteModal
+  show={showHistorialModal}
+  onHide={() => setShowHistorialModal(false)}
+  clienteId={clienteSeleccionado?.id}
+  clienteNombre={clienteSeleccionado?.nombre}
+/>
 
       <NuevaTareaModal show={showModal} onHide={() => setShowModal(false)} categoria="tarea_manual" />
       {selectedTarea && (

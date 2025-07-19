@@ -40,3 +40,18 @@
 .read-the-docs {
   color: #888;
 }
+.timeline {
+  border-left: 2px solid #dee2e6;
+  padding-left: 15px;
+  position: relative;
+}
+.timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -7px;
+  width: 12px;
+  height: 12px;
+  background-color: #0d6efd;
+  border-radius: 50%;
+  top: 8px;
+}

@@ -1569,6 +1569,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
                                   <Card.Body>
                                     <div className="mb-3">
+                                    <Row className="mb-2">
+                                    <Col md={6}>
                                       <Form.Group className="mb-2">
                                         <Form.Label className="small text-muted mb-1">ID Póliza</Form.Label>
                                         <Form.Control
@@ -1579,7 +1581,20 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                           placeholder="ID Póliza"
                                         />
                                       </Form.Group>
-
+                                      </Col>
+                                      <Col md={6}>
+                                      <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">Elegibilidad</Form.Label>
+                                        <Form.Control
+                                          size="sm"
+                                          type="text"
+                                          value={member.elegibilidad || ""}
+                                          onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
+                                          placeholder="Elegibilidad"
+                                        />
+                                      </Form.Group>
+                                      </Col>
+                                      </Row>
                                       <Form.Group className="mb-2">
                                         <Form.Label className="small text-muted mb-1">Parentesco</Form.Label>
                                         <Form.Select
@@ -1800,10 +1815,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
             {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
           </Button>
         
-
-
-
-
         )
         
         }

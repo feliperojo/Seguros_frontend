@@ -11,6 +11,7 @@ import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
 import MediosPagoTablas from './MediosPagoTablas';
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
+import CartaAutorizacion from "./Reports/CartaAutorizacion";
 
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
@@ -726,10 +727,7 @@ useEffect(() => {
               }));
             }}
           />
-
-
-
-</Row>
+      </Row>
 
     </div>
   );
@@ -1425,6 +1423,14 @@ const renderDireccionTab = () => (
                         </>
                       )}
                     </Button>
+                    <CartaAutorizacion
+                            cliente={{
+                              nombre_completo: formData.datosPrincipales.nombre_completo,
+                              email: formData.datosContacto.email,
+                              direccion: `${formData.direccion.calle} ${formData.direccion.apto} ${formData.direccion.ciudad} ${formData.direccion.estado}`
+                            }}
+                          />
+
                   </div>
                 </div>
                 
