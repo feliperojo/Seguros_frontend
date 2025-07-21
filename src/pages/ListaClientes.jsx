@@ -70,7 +70,8 @@ const ListaClientes = () => {
       const clientesData = response?.data || response || [];
       
       
-      console.log(clientesData)
+      console.log("clientes con cobertura", clientesData)
+      
       const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
       
       // Usamos un Set para agrupar a los clientes por su ID, y almacenar los grupos familiares únicos

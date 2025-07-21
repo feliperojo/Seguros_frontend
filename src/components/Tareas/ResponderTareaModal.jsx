@@ -12,6 +12,7 @@ import {
 import apiRequest from "../../services/api";
 
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
+  console.log("tarea", tarea);
   const [responseNote, setResponseNote] = useState(tarea?.response_note || "");
   const [loading, setLoading] = useState(false);
   const [comentarios, setComentarios] = useState([]);
@@ -169,33 +170,63 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       <Modal.Body>
         <Row>
           {/* ✅ Columna izquierda: Tarea */}
+          <h6 className="mb-3">Detalles de la Tarea</h6>
           <Col md={6} style={{ borderRight: "1px solid #e9ecef" }}>
             <div
               className="mb-3 p-3 rounded shadow-sm"
               style={{ background: "#fff", border: "1px solid #dee2e6" }}
             >
-              <h6 className="mb-3">Detalles de la Tarea</h6>
+               <p>
+                  <strong>Cliente:</strong>{" "}
+                  {tarea?.log?.cliente ? (
+                    <a
+                      href={`/clientes/${tarea.log.cliente.id}/detalle`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: "#0d6efd", textDecoration: "underline", cursor: "pointer" }}
+                      onClick={(e) => e.stopPropagation()} // ✅ Evita que cierre el modal
+                    >
+                      {tarea.log.cliente.nombre_completo}
+                    </a>
+                  ) : (
+                    "N/A"
+                  )}
+                </p>
+
+              <p><strong>Tel:</strong> {tarea?.log?.cliente?.telefono || "N/A"}</p>
+              </div>
+              <div
+              className="mb-3 p-3 rounded shadow-sm"
+              style={{ background: "#fff", border: "1px solid #dee2e6" }}
+            >
               <p><strong>Concepto:</strong> {tarea?.log?.concept?.name || "N/A"}</p>
-              <p><strong>Cliente:</strong> {tarea?.log?.cliente?.nombre_completo || "N/A"}</p>
-              <p><strong>Asignada por:</strong> {tarea?.log?.user?.name || "N/A"}</p>
               {tarea.status !== "completed" ? (
                 <>
-                  <Form.Group className="mb-2">
-                    <Form.Label>📅 Programada:</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={scheduledDate}
-                      onChange={(e) => setScheduledDate(e.target.value)}
-                    />
-                  </Form.Group>
-                  <Form.Group>
-                    <Form.Label>⏳ Vencimiento:</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={dueDate}
-                      onChange={(e) => setDueDate(e.target.value)}
-                    />
-                  </Form.Group>
+                  <Row className="mb-2">
+                        <Col>
+                          <Form.Group>
+                            <Form.Label>📅 Programada:</Form.Label>
+                            <Form.Control
+                              type="date"
+                              value={scheduledDate}
+                              onChange={(e) => setScheduledDate(e.target.value)}
+                            />
+                          </Form.Group>
+                        </Col>
+                        <Col>
+                          <Form.Group>
+                            <Form.Label>⏳ Vencimiento:</Form.Label>
+                            <Form.Control
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                            />
+                          </Form.Group>
+                        </Col>
+                      </Row>
+                      <p><strong>Asignada por:</strong> {tarea?.log?.user?.name || "N/A"}</p>
+                      <p className="mt-3"><strong>Nota:</strong> {tarea?.log?.note || "Sin nota"}</p>
+
                 </>
               ) : (
                 <>
@@ -205,7 +236,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                   </Badge>
                 </>
               )}
-              <p className="mt-3"><strong>Nota:</strong> {tarea?.log?.note || "Sin nota"}</p>
             </div>
 
             <hr />

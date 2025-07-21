@@ -9,7 +9,7 @@ import {
   FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
 } from "react-icons/fa";
 
-const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => {
+const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fullscreenMode = false }) => {
 
   console.log("grupoFamiliarId entra",grupoFamiliarId)
   // Si no hay datos de cliente, no mostrar nada
@@ -93,8 +93,8 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
       centered
       className="detalle-cliente-modal"
     >
-      <Modal.Header closeButton className="bg-light border-0">
-        <Modal.Title className="d-flex align-items-center">
+<Modal.Header closeButton={!fullscreenMode} className="bg-light border-0">
+<Modal.Title className="d-flex align-items-center">
           <FaUser className="me-2 text-primary" />
           <div>
             <h5 className="mb-0">{clienteData.nombre_completo}</h5>
@@ -620,45 +620,73 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId }) => 
             </Col>
             
             <Col md={6} className="mb-3">
-              <Card className="border-0 shadow-sm h-100">
-                <Card.Header className="bg-light">
-                  <h6 className="mb-0 d-flex align-items-center">
-                    <FaCalendarAlt className="me-2 text-primary" /> Historial y Eventos
-                  </h6>
-                </Card.Header>
-                <Card.Body>
-                  {clienteData.historial && clienteData.historial.length > 0 ? (
-                    <div className="timeline">
-                      {clienteData.historial.map((evento, index) => (
-                        <div key={index} className="timeline-item">
-                          <div className="timeline-badge bg-primary">
-                            <small>{formatDate(evento.fecha)}</small>
-                          </div>
-                          <div className="timeline-content">
-                            <h6>{evento.tipo}</h6>
-                            <p>{evento.descripcion}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <FaCalendarAlt size={30} className="text-muted mb-3" />
-                      <p className="mb-0">No hay eventos registrados para este cliente.</p>
-                    </div>
-                  )}
-                </Card.Body>
-              </Card>
+            <Card className="border-0 shadow-sm h-100">
+  <Card.Header className="bg-light">
+    <h6 className="mb-0 d-flex align-items-center">
+      <FaCalendarAlt className="me-2 text-primary" /> Historial y Eventos
+    </h6>
+  </Card.Header>
+  <Card.Body>
+    {Array.isArray(clienteData.historial) && clienteData.historial.length > 0 ? (
+      // ✅ Mostrar historial si existe
+      <div className="timeline">
+        {clienteData.historial.map((evento, index) => (
+          <div key={index} className="timeline-item mb-3">
+            <div className="timeline-badge bg-primary text-white px-2 py-1 rounded">
+              <small>{evento.fecha ? formatDate(evento.fecha) : "Sin fecha"}</small>
+            </div>
+            <div className="timeline-content mt-2">
+              <h6 className="mb-1">{evento.tipo || "Evento sin tipo"}</h6>
+              <p className="mb-0 text-muted">{evento.descripcion || "Sin descripción"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      // ✅ Si no hay historial, mostramos info del primer contacto
+      <div className="text-center py-4">
+        <FaCalendarAlt size={30} className="text-muted mb-3" />
+        <p className="mb-3">No hay eventos registrados para este cliente.</p>
+
+        {clienteData.primer_contacto_info && clienteData.primer_contacto_info.trim() !== "" ? (
+          <div
+            className="text-start mt-3 p-3 rounded"
+            style={{ background: "#f8f9fa", border: "1px solid #dee2e6" }}
+          >
+            <h6 className="text-primary mb-2">📌 Información de Primer Contacto</h6>
+            <ul style={{ paddingLeft: "20px", marginBottom: 0 }}>
+              {clienteData.primer_contacto_info
+                .split("\n")
+                .filter((linea) => linea.trim() !== "")
+                .map((linea, index) => (
+                  <li key={index} style={{ fontSize: "14px", color: "#555" }}>
+                    {linea.trim()}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-muted mt-3">Tampoco hay información de primer contacto.</p>
+        )}
+      </div>
+    )}
+  </Card.Body>
+</Card>
+
+
             </Col>
           </Row>
         )}
       </Modal.Body>
       
-      <Modal.Footer className="bg-light">
-        <Button variant="secondary" onClick={onHide}>
-          Cerrar
-        </Button>
-      </Modal.Footer>
+      {!fullscreenMode && (
+  <Modal.Footer className="bg-light">
+    <Button variant="secondary" onClick={onHide}>
+      Cerrar
+    </Button>
+  </Modal.Footer>
+)}
+
     </Modal>
   );
 };

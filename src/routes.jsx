@@ -1,6 +1,6 @@
 import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
 import ReporteGrupoFamiliar from "./components/Reports/ReporteGrupoFamiliar";
-
+//aqui no son las rutas
 const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Dashboard />} />
@@ -12,7 +12,7 @@ const AppRoutes = () => (
     
     {/* Rutas de Grupo Familiar */}
     <Route path="/grupofamiliar" element={<Grupofamiliar />} />
-    <Route path="/grupofamiliar/crear" element={<CrearGrupoFamiliar />} />
+    {/* <Route path="/grupofamiliar/crear" element={<CrearGrupoFamiliar />} /> */}
     <Route path="/grupofamiliar/vencimientos" element={<ProximosVencimientos />} />
     <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado />} />
     <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />

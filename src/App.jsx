@@ -1,4 +1,6 @@
+import React from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+
 import MainLayout from "./layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Cliente from "./pages/Clientes";
@@ -21,6 +23,8 @@ import PagosInforme from './pages/PagosInforme';
 import InformeCliente from './pages/InformeCliente'
 import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
 import RequerimientosAdmin from "./pages/RequerimientosAdmin";
+import DetalleClientePage from "./pages/DetalleClientePage";
+
 
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
@@ -29,8 +33,26 @@ const isAuthenticated = () => {
 
 // Layout protegido que envuelve todas las páginas
 const ProtectedLayout = () => {
-  return isAuthenticated() ? <MainLayout><Outlet /></MainLayout> : <Navigate to="/login" />;
+  const [checkingAuth, setCheckingAuth] = React.useState(true);
+  const [isAuth, setIsAuth] = React.useState(false);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem("auth_token");
+    setIsAuth(!!token); // true si existe token
+    setCheckingAuth(false);
+  }, []);
+
+  if (checkingAuth) {
+    return (
+      <div style={{ textAlign: "center", marginTop: "50px" }}>
+        <p>Verificando sesión...</p>
+      </div>
+    );
+  }
+
+  return isAuth ? <MainLayout><Outlet /></MainLayout> : <Navigate to="/login" />;
 };
+
 
 const App = () => {
   return (
@@ -63,6 +85,7 @@ const App = () => {
         <Route path="/Pagos/cartera" element={<PagosInforme />} />
 
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
+        <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
 
       
       </Route>
