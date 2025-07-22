@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
-import { FaFileExport } from "react-icons/fa";
+import { FaFileExport, FaFilePdf } from "react-icons/fa";
+import { generarPDFConfirmacion } from "../services/generarPDFConfirmacion";
+
 
 const grupoColorMap = {
   G1: "#0d6efd",   // Azul
@@ -273,30 +275,39 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
       )}
 
      {/* Acción final */}
-<div className="text-end">
-  <Button
-    variant="outline-primary"
-    className="me-2" // Margen derecho para separación
-    onClick={() => {
-      onHide();
-      window.open(`/grupo-familiar/${grupo.id}/reporte`, '_blank');
-    }}
-  >
-    <FaFileExport className="me-2" />
-    Ver Detalles Completos
-  </Button>
+          <div className="text-end">
+            <Button
+              variant="outline-primary"
+              className="me-2" // Margen derecho para separación
+              onClick={() => {
+                onHide();
+                window.open(`/grupo-familiar/${grupo.id}/reporte`, '_blank');
+              }}
+            >
+              <FaFileExport className="me-2" />
+              Ver Detalles Completos
+            </Button>
 
-  <Button
-    variant="outline-success" // Color diferente
-    onClick={() => {
-      onHide();
-      window.open(`/grupo-familiar/${grupo.id}/historial`, '_blank');
-    }}
-  >
-    <FaFileExport className="me-2" />
-    Ver Historial
-  </Button>
-</div>
+            <Button
+              variant="outline-success" // Color diferente
+              className="me-2" 
+              onClick={() => {
+                onHide();
+                window.open(`/grupo-familiar/${grupo.id}/historial`, '_blank');
+              }}
+            >
+              <FaFileExport className="me-2" />
+              Ver Historial
+            </Button>
+            <Button
+                variant="outline-danger"
+                className="me-2" 
+                onClick={() => generarPDFConfirmacion(grupo)}
+              >
+                <FaFilePdf className="me-2" />
+                Confirmación de Datos
+              </Button>
+          </div>
 
     </div>
   )}

@@ -13,6 +13,7 @@ import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta si es necesario
 import EditClienteModal from "../components/EditClienteModal";
 import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
+import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
@@ -1022,6 +1023,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 tipo_pago: member.tipo_pago || "",
                 grupo: member.grupo || "G1",
                 nota_cancel: member.nota_cancel || "",
+               
               }))
           )
           
@@ -1539,6 +1541,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
                                           <i className="bi bi-pencil me-2"></i> Editar
                                         </Dropdown.Item>
+
                                         {index > 0 && (
                                           <Dropdown.Item onClick={() => {
                                             Swal.fire({
@@ -1563,8 +1566,21 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                             <i className="bi bi-copy me-2"></i> Copiar datos
                                           </Dropdown.Item>
                                         )}
+
+                                        <Dropdown.Divider />
+
+                                        {member.parentesco === "TOMADOR" && (
+                                            <Dropdown.Item onClick={() => generarPDFAutorizacion(member.cliente_id)}>
+                                              <i className="bi bi-file-earmark-pdf me-2 text-danger"></i> Descargar Autorización
+                                            </Dropdown.Item>
+                                          )}
+
+
+
+
                                       </Dropdown.Menu>
                                     </Dropdown>
+
                                   </Card.Header>
 
                                   <Card.Body>
