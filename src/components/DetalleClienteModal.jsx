@@ -11,7 +11,7 @@ import {
 
 const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fullscreenMode = false }) => {
 
-  console.log("grupoFamiliarId entra",grupoFamiliarId)
+
   // Si no hay datos de cliente, no mostrar nada
   if (!clienteData) return null;
  
@@ -25,7 +25,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
 
 
   const fetchMediosPago = async (clienteId) => {
-    console.log("fetchMediosPago entra")
+   
     try {
       setLoadingMediosPago(true);
       const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
@@ -84,7 +84,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
 
   // Componente para mostrar información no disponible
   const NotAvailable = () => <span className="text-muted fst-italic">No disponible</span>;
-  console.log("Servicios de mensajería:", clienteData);
+  
   return (
     <Modal 
       show={show} 
@@ -197,8 +197,16 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
                       <strong>{formatDate(clienteData.fecha_nacimiento)}</strong>
                     </ListGroup.Item>
                     <ListGroup.Item>
+                    <div className="d-flex justify-content-between">
+                    <div>
                       <small className="text-muted d-block">Género</small>
                       <strong>{clienteData.genero || <NotAvailable />}</strong>
+                      </div>
+                      <div>
+                      <small className="text-muted d-block">Idioma</small>
+                      <strong>{clienteData.idioma || <NotAvailable />}</strong>
+                      </div>
+                    </div>
                     </ListGroup.Item>
                   </ListGroup>
                 </Card>

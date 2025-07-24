@@ -247,7 +247,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
           if (dia === null) return <div key={index}></div>;
 
           const tareasDia = tareasPorDia[dia] || [];
-          console.log("tareasDia",tareasDia)
+         
           const esHoy = dia === hoy.getDate() && mesActual === hoy.getMonth() && añoActual === hoy.getFullYear();
 
           return (

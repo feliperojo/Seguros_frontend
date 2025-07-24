@@ -38,7 +38,12 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
         pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
         captado_por: initialData.captado_por || "",
         referido: initialData.cual || "",
-        responsable: initialData.responsable || ""
+        responsable: initialData.responsable || "",
+        carta_autorizacion: initialData.carta_autorizacion || "",
+        llamada_cliente: initialData.llamada_cliente || "",
+        elegibilidad_carta: initialData.elegibilidad_carta || ""
+       
+
       }));
 
       setContactMethods({
@@ -92,7 +97,10 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     estado_cobertura: "",
     cobertura_tipo: "SEGURO MEDICO  OBAMA",
     pertenece_grupo_familiar: false,
-    responsable: ""
+    responsable: "",
+    carta_autorizacion: "",
+    llamada_cliente: "",
+    elegibilidad_carta: ""
   };
 
   const TIPOS_PRODUCTOS = [
@@ -247,7 +255,10 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
       captado_por: initialData.captado_por || "",
       referido: initialData.cual || "",
-      responsable: initialData.responsable || ""
+      responsable: initialData.responsable || "",
+      carta_autorizacion: initialData.carta_autorizacion || "",
+      llamada_cliente: initialData.llamada_cliente || "",
+      elegibilidad_carta: initialData.elegibilidad_carta || ""
     }));
 
     // Inicializar codigos de país
@@ -989,7 +1000,10 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         nota: policyData.notas_telefonos,
         captado_por: policyData.captado_por || "",
         cual: policyData.referido || "",
-        responsable: policyData.responsable || ""
+        responsable: policyData.responsable || "",
+        carta_autorizacion: policyData.carta_autorizacion || "",
+        llamada_cliente: policyData.llamada_cliente || "",        
+        elegibilidad_carta: policyData.elegibilidad_carta || ""
       };
 
       let grupoFamiliarResponse;
@@ -1317,6 +1331,43 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                       value={policyData.notas_telefonos}
                       onChange={handlePolicyChange}
                       placeholder="Ingrese sus notas aquí..."
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Carta Autorización">
+                    Carta Autorización
+                    </Form.Label>
+                    <Form.Select name="carta_autorizacion" value={policyData.carta_autorizacion} onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="Carta">Carta</option>
+                      <option value="Cargada">Cargada</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Llamada cliente</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="llamada_cliente"
+                      value={policyData.llamada_cliente}
+                      onChange={handlePolicyChange}
+                      
+                      />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Elegibilidad</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="elegibilidad_carta"
+                      value={policyData.elegibilidad_carta}
+                      onChange={handlePolicyChange}
+                    
                     />
                   </Form.Group>
                 </Col>

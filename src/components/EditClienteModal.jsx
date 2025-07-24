@@ -12,7 +12,7 @@ import MediosPagoTablas from './MediosPagoTablas';
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import CartaAutorizacion from "./Reports/CartaAutorizacion";
-
+import idiomas  from '../services/idiomas.js';    
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
 const renderMediosPagoTab = () => (
@@ -88,7 +88,8 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       genero: "",
       estado_cliente: "cliente", // o "prospecto" o "descartado"
       es_prospecto: false,
-      primer_contacto_info: ""
+      primer_contacto_info: "",
+      idioma: "",
     },
     // Sección 2: Status Migratorio
     statusMigratorio: {
@@ -293,6 +294,7 @@ const mapClienteDataToForm = (data) => {
       estado_cliente: data.estado_cliente || "cliente",
       es_prospecto: data.es_prospecto || false,
       primer_contacto_info: data.primer_contacto_info || "",
+      idioma: data.idioma || "",
      
     
     },
@@ -687,7 +689,7 @@ useEffect(() => {
             />
           </Form.Group>
         </Col>
-        <Col md={4}>
+        <Col md={2}>
           <Form.Group>
             <Form.Label>Edad</Form.Label>
             <Form.Control
@@ -699,7 +701,7 @@ useEffect(() => {
             />
           </Form.Group>
         </Col>
-        <Col md={4}>
+        <Col md={3}>
           <Form.Group>
             <Form.Label>Género</Form.Label>
             <Form.Select
@@ -713,6 +715,22 @@ useEffect(() => {
             </Form.Select>
           </Form.Group>
         </Col>
+        <Col md={3}>
+    <Form.Group>
+      <Form.Label>Idioma</Form.Label>
+      <Form.Select
+        value={formData.datosPrincipales.idioma}
+        onChange={(e) => handleInputChange("datosPrincipales", "idioma", e.target.value)}
+      >
+        <option value="">Seleccione</option>
+        {idiomas.map((idioma) => (
+          <option key={idioma.code} value={idioma.name}>
+            {idioma.name}
+          </option>
+        ))}
+      </Form.Select>
+    </Form.Group>
+  </Col>
       </Row>
       <Row className="mb-3">
       <PrimerContacto

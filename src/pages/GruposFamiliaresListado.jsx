@@ -100,11 +100,23 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   };
 
   // Funciones para manejar acciones
-  const handleOpenViewModal = (grupo) => {
-
-    setCurrentGrupo(grupo);
-    setShowViewModal(true);
+  const handleOpenViewModal = async (grupo) => {
+    try {
+      const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupo.id}`, "GET");
+      if (response && response.status === "success") {
+        setCurrentGrupo(response.data); // 🔹 Aquí llega el detalle completo
+        setShowViewModal(true);
+      } else {
+        console.error("Error al cargar detalle:", response);
+        alert("No se pudo cargar la información del grupo familiar.");
+      }
+    } catch (error) {
+      console.error("Error al obtener detalle:", error);
+      alert("Error al cargar detalle del grupo familiar.");
+    }
   };
+  
+  
 
   const handleOpenEditModal = (grupo) => {
     const id = grupo.id;

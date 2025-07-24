@@ -65,7 +65,7 @@ const [filtroDias, setFiltroDias] = useState(15);
       setClientesRecientes(resClientes.slice(0, 15));
 
       const resCanceladas = await apiRequest("cobertura/canceladas", "GET");
-      console.log(resCanceladas);
+    
       setPolizasCanceladas(resCanceladas.slice(0, 15)); // Mostrar solo 15
 
 

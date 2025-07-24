@@ -12,6 +12,7 @@ const grupoColorMap = {
 
 
 const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) => {
+  console.log("GrupoFamiliarDetalleModal", grupo);
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
 
   const isTomador = (parentesco) => {
@@ -110,10 +111,26 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
               <p className="text-muted mb-1">ID del Grupo</p>
               <h6 className="fw-semibold">{grupo.id}</h6>
             </div>
+          </div>
+            <div className="row">
             <div className="col-md-3">
               <p className="text-muted mb-1">Agente Responsable</p>
               <h6 className="fw-semibold">{grupo.responsable}</h6>
             </div>
+            <div className="col-md-3">
+              <p className="text-muted mb-1">Carta Autorización</p>
+              <h6 className="fw-semibold">{grupo.carta_autorizacion}</h6>
+            </div>
+            <div className="col-md-3">
+              <p className="text-muted mb-1">Llamada Cliente</p>
+              <h6 className="fw-semibold">{grupo.llamada_cliente}</h6>
+            </div>
+            <div className="col-md-3">
+              <p className="text-muted mb-1">Elegibilidad</p>
+              <h6 className="fw-semibold">{grupo.elegibilidad_carta}</h6>
+            </div>
+             
+           
         </div>
         <div className="row">
             <div className="col-md-3">
