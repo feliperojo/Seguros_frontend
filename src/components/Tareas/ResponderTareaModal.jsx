@@ -32,11 +32,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       apiRequest(`tareas_operativas/${tarea.id}/comentarios`, "GET")
         .then((data) => {
           setComentarios(data || []);
-          if (data && data.length > 0) {
-            setResponseNote(data[data.length - 1].comment);
-          } else {
+         
             setResponseNote("");
-          }
+          
         })
         .finally(() => setCargandoComentarios(false));
 
@@ -141,6 +139,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    if (!show || !tarea?.id) return;
+    // tu lógica aquí
+  }, [show, tarea?.id]);
+  
 
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
@@ -198,11 +201,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                     <i className="fa fa-phone me-1"></i>{tarea.log.cliente.telefono || "N/A"}
                   </small>
                 </div>
-                <div>
-                  <small className="text-muted">
-                    <i className="fa fa-phone me-1"></i>{tarea.log.cliente.telefono || "N/A"}
-                  </small>
-                </div>
               </div>
 
               {/* ✅ Botones de acción */}
@@ -214,8 +212,20 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                     window.open(`/clientes/${tarea.log.cliente.id}/detalle`, "_blank")
                   }
                 >
-                  Ver Detalles
+                  Ver Detalles del Cliente
                 </Button>
+
+                <Button
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() => {
+                        const nombreCliente = encodeURIComponent(tarea.log.cliente.nombre_completo);
+                        window.open(`/Grupofamiliar/lista?search=${nombreCliente}`, "_blank");
+                      }}
+                    >
+                      Ver Grupos Familiares
+                    </Button>
+
               </div>
 
               {/* ✅ Info Primer Contacto SOLO si es prospecto */}
@@ -320,22 +330,21 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
             <hr />
             <h6>Comentarios:</h6>
             {cargandoComentarios ? (
-              <Spinner animation="border" />
-            ) : comentarios.length === 0 ? (
-              <p>No hay comentarios previos.</p>
-            ) : (
-              <ListGroup style={{ maxHeight: "150px", overflowY: "auto" }}>
-                {comentarios.map((c) => (
+                <Spinner animation="border" />
+              ) : comentarios.length === 0 ? (
+                <p>No hay comentarios previos.</p>
+              ) : (
+                comentarios.map((c) => (
                   <ListGroup.Item key={c.id}>
-                    <strong>{c.user?.name || "Usuario"}:</strong> {c.comment}
-                    <br />
+                    <strong>{c.user?.name || "Usuario"}:</strong>
+                    <div style={{ whiteSpace: "pre-wrap" }}>{c.comment}</div>
                     <small className="text-muted">
                       {new Date(c.created_at).toLocaleString()}
                     </small>
                   </ListGroup.Item>
-                ))}
-              </ListGroup>
-            )}
+                ))
+              )}
+
             {tarea.status !== "completed" && (
               <Form.Group className="mt-3">
                 <Form.Label>Mi respuesta:</Form.Label>
@@ -395,7 +404,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                         </Badge>
                       )}
                     </div>
-                    <p className="mb-1">{h.nota || "Sin detalles"}</p>
+                    <p className="mb-1" style={{ whiteSpace: "pre-wrap" }}>
+                          {h.nota || "Sin detalles"}
+                        </p>
+
                     <small className="text-muted">
                       {new Date(h.fecha).toLocaleString()} | {h.usuario}
                       {h.asignado_a && ` | Asignado a: ${h.asignado_a}`}

@@ -8,7 +8,7 @@ import {
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
@@ -39,6 +39,16 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [currentGrupo, setCurrentGrupo] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
+  const location = useLocation();
+
+useEffect(() => {
+  const params = new URLSearchParams(location.search);
+  const searchParam = params.get("search");
+  if (searchParam) {
+    setSearchTerm(searchParam);
+  }
+}, [location.search]);
+
 
   const handleOpenRetiroModal = (grupo) => {
     setGrupoParaRetiro(grupo);
@@ -56,15 +66,15 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     try {
       // Endpoint para grupos familiares con coberturas y clientes
       let endpoint = "grupo_familiar/grupos-familiares-full";
-
       // Añadir parámetros de filtro por estado si es necesario
       if (selectedStatus !== "Todos los estados") {
         const estadoParam = selectedStatus.toLowerCase();
         endpoint += `?estado=${estadoParam}`;
       }
-
+      
       const response = await apiRequest(endpoint, "GET");
-     
+      
+
 
       if (response && response.status === "success" && Array.isArray(response.data)) {
         setGrupos(response.data);

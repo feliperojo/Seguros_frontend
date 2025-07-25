@@ -70,7 +70,7 @@ const ListaClientes = () => {
       const clientesData = response?.data || response || [];
       
       
-      console.log("clientes con cobertura", clientesData)
+   
       
       const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
       

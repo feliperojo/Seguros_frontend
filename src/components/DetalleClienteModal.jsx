@@ -8,6 +8,7 @@ import {
   FaUser, FaAddressCard, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, 
   FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
 } from "react-icons/fa";
+import MediosPagoTablas from "./MediosPagoTablas";
 
 const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fullscreenMode = false }) => {
 
@@ -38,13 +39,19 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
     }
   };
 
+  useEffect(() => {
+    if (activeTab === "medios" && clienteData?.id) {
+      fetchMediosPago(clienteData.id);
+    }
+  }, [activeTab, clienteData]);
+  
   const fetchPolizas = async (grupoFamiliarId) => {
 
     try {
       setLoadingGrupoFamilia(true);
     
       const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
-     
+     console.log("response", response);
       
       const personas = response.data?.coberturas?.map((item) => ({
         ...item.cliente,
@@ -558,42 +565,21 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
           </>
         )}
 
-            {activeTab === "medios" && (
-              <>
-              {loadingMediosPago ? (
-                <div className="text-center py-4">
-                  <span className="spinner-border text-primary"></span>
-                </div>
-              ) : mediosPago.length > 0 ? (
-                <Table responsive bordered hover>
-                  <thead>
-                    <tr>
-                      <th>Tipo</th>
-                      <th>Titular</th>
-                      <th>N° Tarjeta</th>
-                      <th>Banco</th>
-                      <th>N° Cuenta</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mediosPago.map((medio, index) => (
-                      <tr key={index}>
-                        <td>{medio.forma_pago}</td>
-                        <td>{medio.titular}</td>
-                        <td>{medio.numero_tarjeta}</td>
-                        <td>{medio.banco}</td>
-                        <td>{medio.cuenta_numero}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              ) : (
-                <div className="text-center py-4">
-                  <h6>No hay medios de pago registrados</h6>
-                </div>
-              )}
-            </>
-                )}
+    {activeTab === "medios" && (
+  <>
+    {loadingMediosPago ? (
+      <div className="text-center py-4">
+        <span className="spinner-border text-primary"></span>
+      </div>
+    ) : (
+      <MediosPagoTablas 
+        mediosPago={mediosPago}
+        showActions={false} // Si no quieres acciones en esta vista
+      />
+    )}
+  </>
+)}
+
 
         
         {/* Contenido de la pestaña Información Adicional */}

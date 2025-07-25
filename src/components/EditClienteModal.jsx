@@ -256,8 +256,6 @@ useEffect(() => {
 
 useEffect(() => {
   if (show && clienteData) {
-    console.log("📦 Cargando datos del cliente:", clienteData);
-
     const mapped = mapClienteDataToForm(clienteData);
     setFormData(mapped);
     setInitialFormData(JSON.parse(JSON.stringify(mapped))); // Copia profunda
