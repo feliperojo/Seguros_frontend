@@ -11,6 +11,7 @@ import idiomas  from '../services/idiomas.js';
 import FormDireccion from "../components/FormDireccion";
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
+import { Helmet } from "react-helmet-async";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -1016,6 +1017,10 @@ const calcularIngresoAnual = (monto, periodo) => {
 
   return (
     <div className="content mt-4 label-custom">
+
+    <Helmet>
+      <title>Vantun/Crear Cliente</title>
+    </Helmet>
       {/* Barra de progreso */}
       <ProgressBar />
       

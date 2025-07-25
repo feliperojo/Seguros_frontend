@@ -4,6 +4,8 @@ import apiRequest from '../services/api';
 import ObservacionesModal from '../components/ObservacionesModal';
 import ModalAdjuntos from '../components/ModalAdjuntos';
 import '../styles/RequerimientosAdmin.css';
+import { Helmet } from "react-helmet-async";
+
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
@@ -121,6 +123,9 @@ const [reqActivo, setReqActivo] = useState(null);
 
   return (
     <div>
+        <Helmet>
+      <title>Vantun/Requerimientos</title>
+    </Helmet>
       {/* 🔍 Filtros */}
       <div className="d-flex flex-wrap gap-3 mb-4">
         <div>

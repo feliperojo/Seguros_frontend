@@ -12,6 +12,7 @@ import EditClienteModal from "../components/EditClienteModal"; // Importamos el 
 // Importar el componente modal de visualización
 import DetalleClienteModal from "../components/DetalleClienteModal";
 import CalendarioTareas from "../components/Tareas/CalendarioTareas";
+import { Helmet } from "react-helmet-async";
 
 
 
@@ -146,7 +147,9 @@ const handleOpenViewModal = (cliente) => {
 
   return (
     <div className="dashboard-wrapper">
-   
+ <Helmet>
+      <title>Vantun/Panel Principal</title>
+    </Helmet>
       {error && (
         <Row className="mb-4">
           <Col>

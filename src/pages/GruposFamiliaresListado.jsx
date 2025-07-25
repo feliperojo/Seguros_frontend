@@ -13,6 +13,7 @@ import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
+import { Helmet } from "react-helmet-async";
 
 
 
@@ -255,7 +256,11 @@ useEffect(() => {
   };
 
   return (
+    
     <Container fluid className="py-4">
+       <Helmet>
+              <title>Vantun/List Grupo Familiar</title>
+            </Helmet>
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">
           Lista de Grupos Familiares
