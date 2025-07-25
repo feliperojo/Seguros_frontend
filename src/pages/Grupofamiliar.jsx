@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaFileExport } from "react-icons/fa";
+
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Grupofamiliar.css";
 import apiRequest from "../services/api";
@@ -14,11 +16,16 @@ import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta s
 import EditClienteModal from "../components/EditClienteModal";
 import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
 import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
+import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
+import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   // Estado para controlar la pestaña activa en el modal
   const [activeTab, setActiveTab] = useState("nuevo");
+  const [driveUrl, setDriveUrl] = useState(initialData?.drive_url || "");
+  const [showDriveModal, setShowDriveModal] = useState(false);
+
 
   const navigate = useNavigate();
 
@@ -152,11 +159,14 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     telegram: false,
     texto_sms: false
   });
+  const [showDocumentosModal, setShowDocumentosModal] = useState(false);
 
   const [selectedCode, setSelectedCode] = useState({
     telefono_1: "us",
     telefono_2: "us"
   });
+
+ 
 
   useEffect(() => {
     const totalMiembros = coverageGroups.reduce((sum, group) =>
@@ -1003,7 +1013,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         responsable: policyData.responsable || "",
         carta_autorizacion: policyData.carta_autorizacion || "",
         llamada_cliente: policyData.llamada_cliente || "",        
-        elegibilidad_carta: policyData.elegibilidad_carta || ""
+        elegibilidad_carta: policyData.elegibilidad_carta || "",
+         drive_url: driveUrl || ""
       };
 
       let grupoFamiliarResponse;
@@ -1372,8 +1383,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   </Form.Group>
                 </Col>
               </Row>
-
-              <Row className="mb-4">
+           <Row className="mb-4">
                 <Col xs={12}>
                   <Form.Label className="fw-medium mb-2">Medios de contacto preferidos</Form.Label>
                   <div className="d-flex flex-row flex-wrap gap-4">
@@ -1460,18 +1470,58 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
               </div>
 
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <h4 className="mb-0 text-primary">Personas del Grupo Familiar</h4>
-                <Button
-                  variant="primary"
-                  onClick={handleOpenModal}
-      
-                >
-                  <i className="bi bi-plus-circle me-2"></i>Agregar Miembro
-                </Button>
+              <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
+  {/* Título */}
+  <h4 className="mb-2 mb-md-0 text-primary">Personas del Grupo Familiar</h4>
+
+  {/* Botones alineados */}
+  <div className="d-flex flex-wrap gap-2">
+    {/* Agregar Miembro */}
+    <Button
+      variant="outline-primary"
+      className="d-flex align-items-center"
+      onClick={handleOpenModal}
+    >
+      <i className="bi bi-plus-circle me-2"></i> Agregar Miembro
+    </Button>
+
+    {/* Requerimientos */}
+    <Button
+      variant="outline-success"
+      className="d-flex align-items-center"
+      onClick={() => setShowDocumentosModal(true)}
+      disabled={!id} // ✅ Deshabilitar si no hay ID
+    >
+      <i className="bi bi-folder2-open me-2"></i> Requerimientos
+    </Button>
+
+    {/* Botones de Drive solo en modo edición */}
+    {mode === "edit" && (
+      <>
+        <Button
+          variant="outline-primary"
+          className="d-flex align-items-center"
+          onClick={() => setShowDriveModal(true)}
+        >
+          <i className="bi bi-pencil-square me-2"></i>
+          {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
+        </Button>
+
+        {driveUrl && (
+          <Button
+            variant="outline-success"
+            className="d-flex align-items-center"
+            onClick={() => window.open(driveUrl, "_blank")}
+          >
+            <i className="bi bi-folder2-open me-2"></i> Abrir Drive
+          </Button>
+        )}
+      </>
+    )}
+  </div>
+</div>
 
 
-              </div>
               <hr />
               <Form.Check
                   type="checkbox"
@@ -2305,6 +2355,20 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               fechaCancelacion={fechaCancelacionGeneral}
               onComplete={() => setMostrarModalRenovacion(false)}
             />
+
+              <RequerimientosModal
+                show={showDocumentosModal}
+                onHide={() => setShowDocumentosModal(false)}
+                grupoFamiliarId={id}
+              />
+
+              <DriveUrlModal
+                show={showDriveModal}
+                onHide={() => setShowDriveModal(false)}
+                grupoId={id}
+                initialUrl={driveUrl}
+                onSave={(newUrl) => setDriveUrl(newUrl)}
+              />
 
 
     </div>
