@@ -3,7 +3,8 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import Grupofamiliar from "../../pages/Grupofamiliar"; // Asegúrate que este es el componente base correcto
-import { Helmet } from "react-helmet";
+import { Helmet } from "react-helmet-async";
+
 
 const GrupofamiliarEdit = () => {
   const { id } = useParams();

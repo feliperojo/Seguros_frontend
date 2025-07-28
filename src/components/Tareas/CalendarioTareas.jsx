@@ -68,13 +68,16 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
     const fetchUsuarios = async () => {
       try {
         const response = await apiRequest("users", "GET");
+        
         if (response && Array.isArray(response)) {
           setUsuarios(response);
-  
-          // ✅ Si el usuario logueado está en la lista, selecciónalo por defecto
           const usuarioDefault = response.find(u => u.id === currentUser.id);
-          setUsuarioSeleccionado(usuarioDefault ? usuarioDefault.id : response[0].id);
+          if (!usuarioSeleccionado) {
+            setUsuarioSeleccionado(usuarioDefault ? usuarioDefault.id : response[0].id);
+          }
         }
+        
+        
       } catch (error) {
         console.error("Error cargando usuarios:", error);
       }
@@ -83,26 +86,45 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
     fetchUsuarios();
   }, [currentUser]);
   
+  React.useEffect(() => {
+    const fetchTareasPorUsuario = async () => {
+      try {
+        if (!usuarioSeleccionado) return;
   
+        const response = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
+        console.log("🔁 Respuesta tareas:", response); // <- Este
+        if (response && Array.isArray(response.data)) {
+          setTareas(response.data);
+        }
+        
+      } catch (error) {
+        console.error("Error al cargar tareas por usuario:", error);
+        setToast({
+          show: true,
+          message: "Error al cargar tareas del usuario",
+          variant: "danger",
+        });
+      }
+    };
   
-  const tareasFiltradas = tareas.filter((t) => 
-    !usuarioSeleccionado || t.assigned_user_id === usuarioSeleccionado
-  );
+    fetchTareasPorUsuario();
+  }, [usuarioSeleccionado]);
   
   
 
   // Agrupar tareas por día según scheduled_date
   const tareasPorDia = {};
-  tareasFiltradas
-  .filter((t) => t.status !== "completed") // ✅ Filtramos tareas completadas
-  .forEach((t) => {
-    const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
-    if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
-      const dia = fecha.getDate();
-      if (!tareasPorDia[dia]) tareasPorDia[dia] = [];
-      tareasPorDia[dia].push(t);
-    }
-  });
+  tareas
+    .filter((t) => t.status !== "completed")
+    .forEach((t) => {
+      const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
+      if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
+        const dia = fecha.getDate();
+        if (!tareasPorDia[dia]) tareasPorDia[dia] = [];
+        tareasPorDia[dia].push(t);
+      }
+    });
+  
 
 
   const cambiarMes = (incremento) => {
