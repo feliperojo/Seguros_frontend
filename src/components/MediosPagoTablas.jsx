@@ -17,6 +17,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                     <th>Tipo</th>
                     <th>Quien paga</th>
                     <th>Titular</th>
+                    <th>Direccion</th>
                     <th>Número</th>
                     <th>Vencimiento</th>
                     {showActions && <th>Acciones</th>}
@@ -29,6 +30,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         <td>{medio.tipo_tarjeta}</td>
                         <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
+                        <td>{medio.direccion}</td>
                         <td>{medio.numero_tarjeta}</td>
                         <td>{medio.fecha_expiracion}</td>
                         {showActions && (
