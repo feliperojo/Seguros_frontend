@@ -3,7 +3,7 @@ import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup } from "re
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
-
+import ResumenTareasModal from "../Tareas/ResumenTareasModal";
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   const hoy = new Date();
@@ -14,6 +14,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [showNuevaModal, setShowNuevaModal] = useState(false);
   const [showResponderModal, setShowResponderModal] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+  const [showResumen, setShowResumen] = useState(false);
+  const [fechaResumen, setFechaResumen] = useState(new Date());
 
   const [showDetalleModal, setShowDetalleModal] = useState(false);
   const [tareasDetalle, setTareasDetalle] = useState([]);
@@ -92,7 +94,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
         if (!usuarioSeleccionado) return;
   
         const response = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
-        console.log("🔁 Respuesta tareas:", response); // <- Este
+      
         if (response && Array.isArray(response.data)) {
           setTareas(response.data);
         }
@@ -215,6 +217,17 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
     >
       ➕ Nueva Tarea
     </Button>
+
+    {(currentUser.name === "Auxiliar" || currentUser.name === "Catalina") && (
+      <Button variant="outline-dark" size="sm" onClick={() => {
+  setFechaResumen(new Date());
+  setShowResumen(true);
+}}>
+  📊 Ver Resumen Diario
+</Button>
+
+)}
+
 
     {/* Botón Anterior */}
     <Button
@@ -405,6 +418,17 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
     }}
   />
 )}
+
+<ResumenTareasModal
+  show={showResumen}
+  onHide={() => setShowResumen(false)}
+  tareas={tareas}
+  usuarios={usuarios}
+  fecha={fechaResumen}
+  setFecha={setFechaResumen}
+/>
+
+
 
     </div>
   );

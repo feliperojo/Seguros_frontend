@@ -10,27 +10,31 @@ const parsePrimerContactoInfo = (texto) => {
       zipcode: "",
       edad: "",
       ingresos: "",
-      telefono: ""
+      telefono: "",
+      nota: ""
     };
   }
 
   return {
-    referido: (texto.match(/REF\s*([^|]+)/i)?.[1] || "").trim(),
-    cobertura_prospecto: (texto.match(/COB\.?\s*([^|]+)/i)?.[1] || "").trim(),
-    taxes: (texto.match(/TAXES\s*([^|]+)/i)?.[1] || "").trim(),
-    zipcode: (texto.match(/ZIPCODE\s*([^|]+)/i)?.[1] || "").trim(),
-    edad: (texto.match(/EDAD\s*([^|]+)/i)?.[1] || "").replace("AÑOS", "").trim(),
-    ingresos: (texto.match(/INGRESOS\s*([^|]+)/i)?.[1] || "").trim(),
-    telefono: (texto.match(/TLF\s*([^|]+)/i)?.[1] || "").trim()
+    referido: (texto.match(/REF\s+([^|]*)/i)?.[1] || "").trim(),
+    cobertura_prospecto: (texto.match(/COB\.?\s+([^|]*)/i)?.[1] || "").trim(),
+    taxes: (texto.match(/TAXES\s+([^|]*)/i)?.[1] || "").trim(),
+    zipcode: (texto.match(/ZIPCODE\s+([^|]*)/i)?.[1] || "").trim(),
+    edad: (texto.match(/EDAD\s+([^|]*)/i)?.[1] || "").replace("AÑOS", "").trim(),
+    ingresos: (texto.match(/INGRESOS\s+([^|]*)/i)?.[1] || "").trim(),
+    telefono: (texto.match(/TLF\s+([^|]*)/i)?.[1] || "").trim(),
+    nota: (texto.match(/NOTA\s+([^|]*)/i)?.[1] || "").trim(),
   };
 };
+
+
 
 const buildPrimerContactoInfo = (fields) => {
   return `REF ${fields.referido || ""} | COB. ${fields.cobertura_prospecto || ""} | TAXES ${
     fields.taxes || ""
   } | ZIPCODE ${fields.zipcode || ""} | EDAD ${fields.edad ? `${fields.edad} AÑOS` : ""} | INGRESOS ${
     fields.ingresos || ""
-  } | TLF ${fields.telefono || ""}`;
+  } | TLF ${fields.telefono || ""} | NOTA ${fields.nota || ""}`;
 };
 
 const PrimerContacto = ({ value = "", onChange }) => {
@@ -86,8 +90,10 @@ const PrimerContacto = ({ value = "", onChange }) => {
             <Form.Control
               type="text"
               value={fields.referido}
-              onChange={(e) => handleChange("referido", e.target.value)}
+              onChange={(e) => setFields({ ...fields, referido: e.target.value })}
+              onBlur={() => onChange(buildPrimerContactoInfo(fields))}
             />
+
           </Form.Group>
         </Col>
         <Col md={2}>
@@ -154,6 +160,17 @@ const PrimerContacto = ({ value = "", onChange }) => {
                 const formatted = formatTelefono(e.target.value);
                 handleChange("telefono", formatted);
               }}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>Nota</Form.Label>
+            <Form.Control
+              type="text"
+              value={fields.nota}
+              onChange={(e) => setFields({ ...fields, nota: e.target.value })}
+              onBlur={() => onChange(buildPrimerContactoInfo(fields))}
             />
           </Form.Group>
         </Col>
