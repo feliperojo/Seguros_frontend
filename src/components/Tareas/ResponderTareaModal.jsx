@@ -369,7 +369,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       <Modal.Body>
         <Row>
           {/* ✅ Columna izquierda: Tarea */}
-          <h6 className="mb-3">Detalles de la Tarea</h6>
+          <h6 className="mb-3">Detalles de la Tarea agosto</h6>
           <Col md={6} style={{ borderRight: "1px solid #e9ecef" }}>
             <div
               className="mb-3 p-3 rounded shadow-sm"
