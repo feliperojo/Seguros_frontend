@@ -27,6 +27,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
+  const comentariosDeEstaTarea = historial
+  .filter(h => h.tipo === 'tarea' && h.id === tarea.id)
+  .flatMap(h => h.comentarios || []);
+
+  
+  const comentariosTareaActual = historial
+  .filter(h => h.tipo === 'tarea' && h.concepto === tarea?.log?.concept?.name)
+  .flatMap(h => h.comentarios || []);
+
   const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const [scheduledDate, setScheduledDate] = useState(tarea?.scheduled_date || "");
@@ -35,45 +44,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   useEffect(() => {
     if (show && tarea?.id) {
       // ✅ Cargar comentarios
-      setCargandoComentarios(true);
-      apiRequest(`tareas_operativas/${tarea.id}/comentarios`, "GET")
-        .then((data) => {
-          // ✅ Validar y limpiar datos de comentarios
-          let comentariosValidos = [];
-          
-          if (Array.isArray(data)) {
-            comentariosValidos = data.filter((comentario) => {
-              // Validar que tenga ID y comment válidos
-              if (!comentario.id) {
-                console.warn("⚠️ Comentario sin ID encontrado:", comentario);
-                return false;
-              }
-              
-              if (!comentario.comment || typeof comentario.comment !== 'string') {
-                console.warn("⚠️ Comentario sin texto válido:", comentario);
-                return false;
-              }
-              
-              return true;
-            });
-            
-            // Deduplicar por ID
-            comentariosValidos = comentariosValidos.filter((comentario, index, arr) => 
-              arr.findIndex(c => c.id === comentario.id) === index
-            );
-          }
-          
-          console.log('📝 Comentarios originales:', data?.length || 0);
-          console.log('📝 Comentarios válidos:', comentariosValidos.length);
-          
-          setComentarios(comentariosValidos);
-          setResponseNote("");
-        })
-        .catch(error => {
-          console.error("❌ Error al cargar comentarios:", error);
-          setComentarios([]);
-        })
-        .finally(() => setCargandoComentarios(false));
+      
 
       // ✅ Cargar historial del cliente
       if (tarea.log?.cliente?.id) {
@@ -81,7 +52,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
           .then((data) => {
             const historialData = Array.isArray(data.data) ? data.data : [];
-            
+            console.log('📜 Historial original:', historialData);
             // ✅ Deduplicar historial y sus comentarios, asegurar IDs
             const historialUnico = historialData.map(h => {
               if (h.comentarios && h.comentarios.length > 0) {
@@ -139,7 +110,12 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
       if (onUpdated) onUpdated(tareaActualizada);
 
-      setComentarios((prev) => [...prev, data.comment]);
+      await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
+      .then((data) => {
+        const historialData = Array.isArray(data.data) ? data.data : [];
+        setHistorial(historialData);
+      });
+    
       setResponseNote("");
       onHide(true);
     } catch (error) {
@@ -524,274 +500,88 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
             <hr />
             <h6>Comentarios de esta tarea:</h6>
-            {cargandoComentarios ? (
-              <Spinner animation="border" />
-            ) : comentarios.length === 0 ? (
-              <p>No hay comentarios previos.</p>
-            ) : (
-              comentarios.map((c) => {
-                if (!c.id) {
-                  console.warn("⚠️ Comentario sin ID, saltando render:", c);
-                  return null;
-                }
+            {comentariosDeEstaTarea.length === 0 ? (
+  <p>No hay comentarios previos.</p>
+) : (
+  comentariosDeEstaTarea.map((c) => {
+    const estaEnEdicion = comentariosEnEdicion.hasOwnProperty(c.id);
+    const fueActualizado = comentariosActualizados[c.id];
 
-                const estaEnEdicion = comentariosEnEdicion.hasOwnProperty(c.id);
-                const fueActualizado = comentariosActualizados[c.id];
+    return (
+      <ListGroup.Item key={c.id} className={fueActualizado ? 'border-success' : ''}>
+        <strong>{c.user || "Usuario"}:</strong>
+        {fueActualizado && (
+          <Badge bg="success" className="ms-2">Actualizado ✓</Badge>
+        )}
 
-                console.log('🔍 Renderizando comentario tarea:', { 
-                  id: c.id, 
-                  comment: c.comment, 
-                  estaEnEdicion,
-                  fueActualizado
-                });
+        {estaEnEdicion ? (
+          <>
+            <Form.Control
+              as="textarea"
+              value={comentariosEnEdicion[c.id]}
+              onChange={(e) =>
+                setComentariosEnEdicion((prev) => ({
+                  ...prev,
+                  [c.id]: e.target.value,
+                }))
+              }
+              rows={2}
+              className="mb-2 mt-2"
+            />
+            <div className="d-flex gap-2">
+              <Button
+                size="sm"
+                variant="success"
+                onClick={() => handleGuardarComentarioTarea(c.id)}
+                disabled={!comentariosEnEdicion[c.id]?.trim()}
+              >
+                Guardar
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  setComentariosEnEdicion((prev) => {
+                    const nuevo = { ...prev };
+                    delete nuevo[c.id];
+                    return nuevo;
+                  });
+                }}
+              >
+                Cancelar
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.comment}</div>
+            <small className="text-muted">
+              {new Date(c.fecha).toLocaleString()}
+            </small>
+            <div className="mt-1">
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={() => {
+                  setComentariosEnEdicion((prev) => ({
+                    ...prev,
+                    [c.id]: c.comment,
+                  }));
+                }}
+              >
+                ✏️ Editar
+              </Button>
+            </div>
+          </>
+        )}
+      </ListGroup.Item>
+    );
+  })
+)}
 
-                return (
-                  <ListGroup.Item key={c.id} className={fueActualizado ? 'border-success' : ''}>
-                    <strong>{c.user?.name || "Usuario"}:</strong>
-                    {fueActualizado && (
-                      <Badge bg="success" className="ms-2">Actualizado ✓</Badge>
-                    )}
-
-                    {estaEnEdicion ? (
-                      <>
-                        <Form.Control
-                          as="textarea"
-                          value={comentariosEnEdicion[c.id]}
-                          onChange={(e) =>
-                            setComentariosEnEdicion((prev) => ({
-                              ...prev,
-                              [c.id]: e.target.value,
-                            }))
-                          }
-                          rows={2}
-                          className="mb-2 mt-2"
-                        />
-                        <div className="d-flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="success"
-                            onClick={() => handleGuardarComentarioTarea(c.id)}
-                            disabled={!comentariosEnEdicion[c.id]?.trim()}
-                          >
-                            Guardar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              setComentariosEnEdicion((prev) => {
-                                const nuevo = { ...prev };
-                                delete nuevo[c.id];
-                                return nuevo;
-                              });
-                            }}
-                          >
-                            Cancelar
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.comment}</div>
-                        <small className="text-muted">
-                          {new Date(c.created_at).toLocaleString()}
-                        </small>
-                        <div className="mt-1">
-                          <Button
-                            size="sm"
-                            variant="outline-secondary"
-                            onClick={() => {
-                              setComentariosEnEdicion((prev) => ({
-                                ...prev,
-                                [c.id]: c.comment,
-                              }));
-                            }}
-                          >
-                            ✏️ Editar
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </ListGroup.Item>
-                );
-              })
-            )}
-
-            {/* ✅ HISTORIAL COMPLETO DE COMENTARIOS DEL CLIENTE */}
+           
             <hr />
-            <h6 className="mb-3">📚 Historial Completo de Comentarios del Cliente</h6>
-            {loadingHistorial ? (
-              <Spinner animation="border" size="sm" />
-            ) : (
-              <div style={{ maxHeight: "300px", overflowY: "auto" }}>
-                {/* ✅ Recopilar TODOS los comentarios del historial */}
-                {(() => {
-                  const todosLosComentarios = [];
-                  
-                  // Agregar comentarios de la tarea actual
-                  comentarios.forEach(c => {
-                    if (c.id && c.comment && typeof c.comment === 'string') {
-                      todosLosComentarios.push({
-                        id: c.id,
-                        comment: String(c.comment),
-                        user: c.user?.name || c.user || "Usuario",
-                        created_at: c.created_at,
-                        origen: 'tarea_actual',
-                        tarea_concepto: tarea?.log?.concept?.name || 'N/A',
-                        fecha_comentario: c.created_at
-                      });
-                    }
-                  });
-                  
-                  // Agregar comentarios del historial
-                  historial.forEach(h => {
-                    if (h.comentarios && Array.isArray(h.comentarios) && h.comentarios.length > 0) {
-                      h.comentarios.forEach(c => {
-                        // ✅ Validar que el comentario tenga las propiedades necesarias
-                        if (c.id && c.comment && typeof c.comment === 'string') {
-                          todosLosComentarios.push({
-                            id: c.id,
-                            comment: String(c.comment),
-                            user: c.user || "Usuario",
-                            created_at: c.fecha || c.created_at,
-                            origen: 'historial',
-                            tarea_concepto: String(h.concepto || 'N/A'),
-                            fecha_comentario: c.fecha || c.created_at,
-                            tipo_entrada: String(h.tipo || '')
-                          });
-                        } else {
-                          console.warn('⚠️ Comentario de historial con datos inválidos:', c);
-                        }
-                      });
-                    }
-                  });
-                  
-                  // Deduplicar por ID y ordenar por fecha (más reciente primero)
-                  const comentariosUnicos = todosLosComentarios
-                    .filter((comentario, index, arr) => {
-                      // Validar que el comentario tenga ID válido
-                      if (!comentario.id) return false;
-                      // Deduplicar por ID
-                      return arr.findIndex(c => c.id === comentario.id) === index;
-                    })
-                    .sort((a, b) => {
-                      const fechaA = new Date(a.fecha_comentario);
-                      const fechaB = new Date(b.fecha_comentario);
-                      return fechaB - fechaA;
-                    });
-                  
-                  console.log('📚 Total comentarios históricos únicos:', comentariosUnicos.length);
-                  
-                  if (comentariosUnicos.length === 0) {
-                    return <p className="text-muted">No hay comentarios en el historial.</p>;
-                  }
-                  
-                  return (
-                    <ListGroup variant="flush">
-                      {comentariosUnicos.map((c) => {
-                        const estaEnEdicion = comentariosHistorialEnEdicion.hasOwnProperty(c.id);
-                        const fueActualizado = comentariosHistorialActualizados[c.id];
-                        
-                        return (
-                          <ListGroup.Item 
-                            key={`historial-${c.id}`}
-                            className={`${fueActualizado ? 'border-success bg-light' : ''} mb-2`}
-                            style={{ 
-                              borderLeft: c.origen === 'tarea_actual' ? '4px solid #0d6efd' : '4px solid #6c757d',
-                              fontSize: '0.9rem'
-                            }}
-                          >
-                            {/* Header del comentario */}
-                            <div className="d-flex justify-content-between align-items-start mb-1">
-                              <div>
-                                <strong>{String(c.user)}:</strong>
-                                <Badge 
-                                  bg={c.origen === 'tarea_actual' ? 'primary' : 'secondary'} 
-                                  className="ms-2"
-                                >
-                                  {c.origen === 'tarea_actual' ? 'Tarea Actual' : 'Historial'}
-                                </Badge>
-                                {fueActualizado && (
-                                  <Badge bg="success" className="ms-1">Actualizado ✓</Badge>
-                                )}
-                              </div>
-                              <small className="text-muted">
-                                {String(c.tarea_concepto)}
-                                {c.tipo_entrada && ` (${String(c.tipo_entrada)})`}
-                              </small>
-                            </div>
-
-                            {/* Contenido del comentario */}
-                            {estaEnEdicion ? (
-                              <>
-                                <Form.Control
-                                  as="textarea"
-                                  rows={2}
-                                  value={comentariosHistorialEnEdicion[c.id] || ''}
-                                  onChange={(e) =>
-                                    setComentariosHistorialEnEdicion((prev) => ({
-                                      ...prev,
-                                      [c.id]: e.target.value,
-                                    }))
-                                  }
-                                  className="mb-2"
-                                />
-                                <div className="d-flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    variant="success"
-                                    onClick={() => handleGuardarComentarioHistorial(c.id)}
-                                    disabled={!comentariosHistorialEnEdicion[c.id]?.trim()}
-                                  >
-                                    Guardar
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() =>
-                                      setComentariosHistorialEnEdicion((prev) => {
-                                        const nuevo = { ...prev };
-                                        delete nuevo[c.id];
-                                        return nuevo;
-                                      })
-                                    }
-                                  >
-                                    Cancelar
-                                  </Button>
-                                </div>
-                              </>
-                            ) : (
-                              <>
-                                <div style={{ whiteSpace: "pre-wrap", marginBottom: "8px" }}>
-                                  {String(c.comment)}
-                                </div>
-                                <div className="d-flex justify-content-between align-items-center">
-                                  <small className="text-muted">
-                                    {c.fecha_comentario ? new Date(c.fecha_comentario).toLocaleString() : "Fecha inválida"}
-                                  </small>
-                                  <Button
-                                    size="sm"
-                                    variant="outline-secondary"
-                                    onClick={() =>
-                                      setComentariosHistorialEnEdicion((prev) => ({
-                                        ...prev,
-                                        [c.id]: String(c.comment),
-                                      }))
-                                    }
-                                  >
-                                    ✏️ Editar
-                                  </Button>
-                                </div>
-                              </>
-                            )}
-                          </ListGroup.Item>
-                        );
-                      })}
-                    </ListGroup>
-                  );
-                })()}
-              </div>
-            )}
+            
 
             {tarea.status !== "completed" && (
               <Form.Group className="mt-3">
