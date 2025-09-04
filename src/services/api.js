@@ -1,45 +1,39 @@
+// services/api.js
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
+const getAuthToken = () => localStorage.getItem("auth_token");
 
-const getAuthToken = () => {
-    return localStorage.getItem("auth_token"); // Obtener el token almacenado
+// util opcional: genera un UUID sencillo para idempotencia
+const genUUID = () =>
+  ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
+
+/**
+ * apiRequest(endpoint, method, body, extraHeaders)
+ */
+const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = {}) => {
+  const token = getAuthToken();
+
+  const headers = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+    ...extraHeaders,
+  };
+
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const options = { method, headers };
+  if (body) options.body = JSON.stringify(body);
+
+  const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data?.message || "Error en la petición");
+  }
+  return data;
 };
 
-const apiRequest = async (endpoint, method = "GET", body = null) => {
-    const token = getAuthToken();
-    //const token = "1|3yw3OnKzFKEcTrEu1JYPCrAqMLgxM9Hcqpx5l6aEd26d405f"
-
-    const headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json",
-    };
-
-    if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const options = {
-        method,
-        headers,
-    };
-
-    if (body) {
-        options.body = JSON.stringify(body);
-    }
-
-    try {
-        const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.message || "Error en la petición");
-        }
-
-        return data;
-    } catch (error) {
-        console.error("API Error:", error.message);
-        throw error;
-    }
-};
-
+export { apiRequest, genUUID };
 export default apiRequest;

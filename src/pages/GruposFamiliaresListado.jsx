@@ -8,7 +8,7 @@ import {
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
-import { useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
@@ -20,6 +20,7 @@ import { Helmet } from "react-helmet-async";
 
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
+
 
   // Estados
   const [grupos, setGrupos] = useState([]);
@@ -340,7 +341,19 @@ useEffect(() => {
                     <tbody>
                       {filteredGrupos.map((grupo) => (
                         <tr key={grupo.id}>
-                          <td>{grupo.id || "Sin asignar"}</td>
+                  <td>
+                          {grupo.id ? (
+                            <Link
+                              to={`/grupo_familiar/${grupo.id}`}
+                              className="text-decoration-none"
+                              title="Ver detalle del grupo"
+                            >
+                              {grupo.id}
+                            </Link>
+                          ) : (
+                            "Sin asignar"
+                          )}
+                        </td>
                           <td>{getTomadorNombre(grupo)}</td>
                           <td>
                             <span className="badge rounded-circle bg-info text-white me-1">

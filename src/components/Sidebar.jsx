@@ -151,9 +151,9 @@ useEffect(() => {
               <Link to="/Grupofamiliar/RequerimientosAdmin" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaFile /> Documentos Solicitados
               </Link>
-              {/* <Link to="/Grupofamiliar/proximos-vencimientos" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
-                <FaCalendarAlt /> Polizas Vencidas
-              </Link> */}
+              <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
+                <FaCalendarAlt /> Prospecto
+              </Link> 
             </div>
           )}
         </div>

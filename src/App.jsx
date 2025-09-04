@@ -24,8 +24,8 @@ import InformeCliente from './pages/InformeCliente'
 import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
 import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 import DetalleClientePage from "./pages/DetalleClientePage";
-
-
+import Porspectopage from "./pages/Prospecto";
+import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
   return localStorage.getItem("auth_token") !== null;
@@ -79,6 +79,8 @@ const App = () => {
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
         <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />
         <Route path="/grupofamiliar/RequerimientosAdmin" element={<RequerimientosAdmin />} />
+        <Route path="/grupofamiliar/prospecto" element={<Porspectopage />} />
+        <Route path="/grupo_familiar/:id" element={<GrupoFamiliarDetail />} />
 
         <Route path="/Pagos/Generarpagos" element={<PagosGenerar />} />
         <Route path="/Pagos/pagos" element={<PagosActualizar />} />
@@ -86,6 +88,7 @@ const App = () => {
 
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
+        <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
 
       
       </Route>
