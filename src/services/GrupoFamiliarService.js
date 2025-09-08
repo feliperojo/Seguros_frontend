@@ -62,12 +62,14 @@ const GrupoFamiliarService = {
     cliente_id,
     estado_cobertura = "Si/No",
     parentesco = "Tomador",
+    cobertura_tipo,
   }, headers = {}) => {
     const payload = {
       grupo_familiar_id,
       cliente_id,
       estado_cobertura,
       parentesco,
+      cobertura_tipo,
       ano_cobertura: new Date().getFullYear().toString(),
       activo: true,
     };

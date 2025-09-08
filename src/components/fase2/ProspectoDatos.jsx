@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import UserCoverageIcon from "./UserCoverageIcon"; 
+
 
 const getTypeColor = (tipo) => {
   switch (tipo) {
@@ -253,12 +255,11 @@ const onMemberChange = (e) => {
                     {/* Contenido con 3 zonas: icono - nombre (centro) - detalles (derecha) */}
                     <div className="d-flex align-items-center">
                       {/* Icono */}
-                      <div
-                        className={`bg-${getTypeColor(member.tipo)} text-white rounded-circle d-flex align-items-center justify-content-center me-3`}
-                        style={{ width: 50, height: 50 }}
-                      >
-                        <i className={`fas ${getTypeIcon(member.tipo)}`}></i>
-                      </div>
+                   {/* Icono de estado de cobertura (verde/rojo/gris + check) */}
+                    <div className="me-3 d-flex align-items-center justify-content-center" style={{ width: 50 }}>
+                      <UserCoverageIcon status={member.estado_cobertura} size={50} />
+                    </div>
+
           
                       {/* Nombre al centro (flex-grow para ocupar espacio central) */}
                       <div className="flex-grow-1 text-center">

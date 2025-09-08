@@ -5,8 +5,10 @@ import Prospectogrupo from "../components/fase2/Prospectogrupo";
 import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
+
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+
 // ================== Helpers ==================
 
 
@@ -419,13 +421,23 @@ const GrupoFamiliarDetail = () => {
           onChange={handleInputChange}
           readOnly={readOnly}
         />
-
-        {/* Miembros (puedes alternar por estado si lo necesitas) */}
-        <ProspectoDatos
-          familyMembers={familyMembers}
-          setFamilyMembers={setFamilyMembers}
-          readOnly={readOnly}
-        />
+      {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
+  (estadoActual || "").toUpperCase()
+) ? (
+  <TomaDeDatos
+    familyMembers={familyMembers}
+    setFamilyMembers={setFamilyMembers}
+    readOnly={readOnly}
+    onSaveMember={(m) => console.log("Guardar cliente:", m)}
+    onSaveCobertura={(m) => console.log("Guardar cobertura:", m)}
+  />
+) : (
+  <ProspectoDatos
+    familyMembers={familyMembers}
+    setFamilyMembers={setFamilyMembers}
+    readOnly={readOnly}
+  />
+)}
       </div>
 
 

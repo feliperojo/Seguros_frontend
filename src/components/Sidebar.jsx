@@ -1,38 +1,38 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { 
-  FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, 
+import {
+  FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
-import  SincronizarContactos from "../components/SincronizarContactos";
+import SincronizarContactos from "../components/SincronizarContactos";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const users = JSON.parse(localStorage.getItem("user"))?.name || "Usuario";
 
   const location = useLocation();
-  
+
   // Estado para controlar qué submenús están expandidos
   const [expandedMenu, setExpandedMenu] = useState(null);
 
   const navigate = useNavigate();
 
-const handleLogout = () => {
-  localStorage.removeItem("auth_token");
-  localStorage.removeItem("name"); // Opcional
-  navigate("/login");
-};
-useEffect(() => {
-  const token = localStorage.getItem("auth_token");
-  if (!token) {
+  const handleLogout = () => {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("name"); // Opcional
     navigate("/login");
-  }
-}, []);
+  };
+  useEffect(() => {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
+      navigate("/login");
+    }
+  }, []);
 
-  
+
   // Expandir automáticamente el menú basado en la ruta actual
   useEffect(() => {
     if (location.pathname.includes('/Clientes')) {
@@ -45,7 +45,7 @@ useEffect(() => {
       setExpandedMenu('herramientas');
     }
   }, [location]);
-  
+
   // Función para manejar la expansión de submenús
   const toggleSubmenu = (menu, e) => {
     e.stopPropagation(); // Evita que el evento se propague
@@ -55,26 +55,26 @@ useEffect(() => {
       setExpandedMenu(menu);
     }
   };
-  
+
   // Verifica si un enlace está activo
   const isActive = (path) => {
     return location.pathname === path;
   };
-  
+
   return (
     <div className={`sidebar ${isOpen ? "expanded" : "collapsed"}`}>
       {/* Botón de toggle */}
       <button className="toggle-btn" onClick={toggleSidebar}>
         <FaChevronLeft />
       </button>
-     
+
       {/* Logo */}
       {isOpen && (
         <div className="logo-container">
           <img src={logo} alt="Tampa Seguros" className="logo-img" />
         </div>
       )}
-      
+
       {/* Bienvenida */}
       {isOpen && (
         <div className="welcome-container">
@@ -82,32 +82,32 @@ useEffect(() => {
           <span>{users}</span>
         </div>
       )}
-      
+
       {/* Navegación */}
       <nav>
         {/* Dashboard - Sin submenú */}
         <Link to="/" className={`nav-link ${isActive('/') ? 'active' : ''}`}>
           <FaHome /> {isOpen && "Panel principal"}
         </Link>
-        
+
         {/* Clientes - Con submenú */}
         <div className="nav-item">
-          <div 
+          <div
             className={`nav-link ${location.pathname.includes('/Clientes') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('clientes', e)}
           >
-            <FaUsers /> 
+            <FaUsers />
             {isOpen && (
               <>
                 <span>Clientes</span>
-                {expandedMenu === 'clientes' ? 
-                  <FaChevronDown className="submenu-icon" /> : 
+                {expandedMenu === 'clientes' ?
+                  <FaChevronDown className="submenu-icon" /> :
                   <FaChevronRight className="submenu-icon" />
                 }
               </>
             )}
           </div>
-          
+
           {/* Submenú de Clientes */}
           {isOpen && expandedMenu === 'clientes' && (
             <div className="submenu">
@@ -120,62 +120,62 @@ useEffect(() => {
             </div>
           )}
         </div>
-        
+
         {/* Grupo Familiar - Con submenú */}
         <div className="nav-item">
-          <div 
+          <div
             className={`nav-link ${location.pathname.includes('/Grupofamiliar') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('grupos', e)}
           >
-            <FaProjectDiagram /> 
+            <FaProjectDiagram />
             {isOpen && (
               <>
                 <span>Grupo Familiar</span>
-                {expandedMenu === 'grupos' ? 
-                  <FaChevronDown className="submenu-icon" /> : 
+                {expandedMenu === 'grupos' ?
+                  <FaChevronDown className="submenu-icon" /> :
                   <FaChevronRight className="submenu-icon" />
                 }
               </>
             )}
           </div>
-          
+
           {/* Submenú de Grupo Familiar */}
           {isOpen && expandedMenu === 'grupos' && (
             <div className="submenu">
               <Link to="/Grupofamiliar/lista" className={`submenu-link ${isActive('/Grupofamiliar/lista') ? 'active' : ''}`}>
                 <FaList /> Lista de Grupos
               </Link>
-              <Link to="/Grupofamiliar/crear" className={`submenu-link ${isActive('/Grupofamiliar/crear') ? 'active' : ''}`}>
-                <FaPlus /> Crear Grupo
+              <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
+                <FaUserFriends /> Cotizaciones
               </Link>
+              {/* <Link to="/Grupofamiliar/crear" className={`submenu-link ${isActive('/Grupofamiliar/crear') ? 'active' : ''}`}>
+                <FaPlus /> Crear Grupo
+              </Link> */}
               <Link to="/Grupofamiliar/RequerimientosAdmin" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaFile /> Documentos Solicitados
               </Link>
-              <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
-                <FaCalendarAlt /> Prospecto
-              </Link> 
             </div>
           )}
         </div>
-    
-       {/* PAGOS */}
-       <div className="nav-item">
-          <div 
+
+        {/* PAGOS */}
+        <div className="nav-item">
+          <div
             className={`nav-link ${location.pathname.includes('/Pagos') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('pagos', e)}
           >
-            <FaChartLine /> 
+            <FaChartLine />
             {isOpen && (
               <>
                 <span>Pagos</span>
-                {expandedMenu === 'pagos' ? 
-                  <FaChevronDown className="submenu-icon" /> : 
+                {expandedMenu === 'pagos' ?
+                  <FaChevronDown className="submenu-icon" /> :
                   <FaChevronRight className="submenu-icon" />
                 }
               </>
             )}
           </div>
-          
+
           {/* Submenú de Pagos */}
           {isOpen && expandedMenu === 'pagos' && (
             <div className="submenu">
@@ -191,27 +191,27 @@ useEffect(() => {
             </div>
           )}
         </div>
-        
 
-        
+
+
         {/* Informes - Con submenú */}
         <div className="nav-item">
-          <div 
+          <div
             className={`nav-link ${location.pathname.includes('/Informes') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('informes', e)}
           >
-            <FaFolder /> 
+            <FaFolder />
             {isOpen && (
               <>
                 <span>Informes</span>
-                {expandedMenu === 'informes' ? 
-                  <FaChevronDown className="submenu-icon" /> : 
+                {expandedMenu === 'informes' ?
+                  <FaChevronDown className="submenu-icon" /> :
                   <FaChevronRight className="submenu-icon" />
                 }
               </>
             )}
           </div>
-          
+
           {/* Submenú de Informes */}
           {isOpen && expandedMenu === 'informes' && (
             <div className="submenu">
@@ -225,25 +225,25 @@ useEffect(() => {
           )}
         </div>
 
-        
+
         {/* Herramientas - Con submenú */}
         <div className="nav-item">
-          <div 
+          <div
             className={`nav-link ${location.pathname.includes('/Herramientas') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('herramientas', e)}
           >
-            <FaTools /> 
+            <FaTools />
             {isOpen && (
               <>
                 <span>Herramientas</span>
-                {expandedMenu === 'herramientas' ? 
-                  <FaChevronDown className="submenu-icon" /> : 
+                {expandedMenu === 'herramientas' ?
+                  <FaChevronDown className="submenu-icon" /> :
                   <FaChevronRight className="submenu-icon" />
                 }
               </>
             )}
           </div>
-          
+
           {/* Submenú de Herramientas */}
           {isOpen && expandedMenu === 'herramientas' && (
             <div className="submenu">
@@ -263,12 +263,12 @@ useEffect(() => {
           )}
         </div>
       </nav>
-      
+
       {/* Cerrar sesión */}
-            <div className="logout-button" onClick={handleLogout} style={{ cursor: "pointer" }}>
-              <FaSignOutAlt className="logout-icon" />
-              {isOpen && <span className="logout-text">Cerrar sesión</span>}
-            </div>
+      <div className="logout-button" onClick={handleLogout} style={{ cursor: "pointer" }}>
+        <FaSignOutAlt className="logout-icon" />
+        {isOpen && <span className="logout-text">Cerrar sesión</span>}
+      </div>
 
     </div>
   );

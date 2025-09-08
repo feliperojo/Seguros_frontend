@@ -1,4 +1,8 @@
+
+
 import React from "react";
+import UserCoverageIcon from "../fase2/UserCoverageIcon"; 
+
 
 // util: nombre completo
 const fullName = (m) =>
@@ -6,26 +10,28 @@ const fullName = (m) =>
   m.nombreCompleto ||
   "Sin nombre";
 
-// util: tiny input helper
+// util: campo de formulario
 const Field = ({ label, children, className = "col-md-6" }) => (
   <div className={className}>
-    <label className="form-label">{label}</label>
+    <label className="form-label small fw-semibold text-muted">{label}</label>
     {children}
   </div>
 );
 
 /**
  * Props:
- *  - familyMembers: array (misma estructura que ya usas en ProspectoDatos)
- *  - setFamilyMembers: fn(prev=>next)  (o onChange(memberIndex, patch))
- *  - onSaveMember?: fn(member)         (opcional, por si quieres “guardar” cada miembro)
- *  - onSaveCobertura?: fn(member)      (opcional, para guardar cobertura de ese miembro)
+ *  - familyMembers: array
+ *  - setFamilyMembers: fn(prev=>next)
+ *  - onSaveMember?: fn(member)
+ *  - onSaveCobertura?: fn(member)
+ *  - onDeleteMember?: fn(memberIndex)
  */
 const TomaDeDatos = ({
   familyMembers,
   setFamilyMembers,
   onSaveMember,
   onSaveCobertura,
+  onDeleteMember,
 }) => {
   const updateMember = (idx, patch) => {
     setFamilyMembers((prev) =>
@@ -38,222 +44,293 @@ const TomaDeDatos = ({
     updateMember(idx, { [name]: value });
   };
 
+  // Datos de ejemplo para la demo
+  const sampleMembers = [
+    {
+      id: 1,
+      tipo: "Tomador",
+      nombre: "Jose David",
+      apellidos: "Castillo Ospina",
+      edad: 49,
+      genero: "Masculino",
+      fechaNacimiento: "1975-03-15",
+      idioma: "Español",
+      nota: "",
+      parentesco: "Tomador",
+      estado_cobertura: "Sí",
+      codigo_poliza: "POL-001234",
+      vigencia: "2025-01"
+    },
+    {
+      id: 2,
+      tipo: "Cónyuge",
+      nombre: "Maria Elena",
+      apellidos: "Rodriguez Lopez",
+      edad: 45,
+      genero: "Femenino",
+      fechaNacimiento: "1979-07-22",
+      idioma: "Español",
+      nota: "",
+      parentesco: "Cónyuge",
+      estado_cobertura: "No",
+      codigo_poliza: "",
+      vigencia: ""
+    }
+  ];
+
+  const members = familyMembers?.length > 0 ? familyMembers : sampleMembers;
+
   return (
-    <div className="accordion" id="tomaDeDatosAccordion">
-      {familyMembers.map((m, idx) => {
-        const itemId = `m-${m.id || idx}`;
+    <div className="container-fluid p-0">
+      {members.map((m, idx) => {
+     const itemId = `member-${m.id || idx}`;
+
+     const leftRightWidth = 180; // mismo ancho a izquierda y derecha para centrar TODO
+   
+        const badgeColor = m.tipo === "Tomador" ? "primary" : 
+                          m.tipo === "Cónyuge" ? "success" : "secondary";
+        
         return (
-          <div className="accordion-item mb-2" key={itemId}>
-            <h2 className="accordion-header" id={`${itemId}-header`}>
-              <button
-                className="accordion-button collapsed fw-semibold"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target={`#${itemId}-body`}
-                aria-expanded="false"
-                aria-controls={`${itemId}-body`}
-              >
-                <span className="me-2 badge bg-secondary">{m.tipo || "Miembro"}</span>
-                {fullName(m)}
-              </button>
-            </h2>
+          <div className="card shadow-sm mb-3" key={itemId}>
+            {/* Header de la card */}
+            <div className="card-header bg-white border-0 px-4 py-3">
+  <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
+    
+    {/* IZQUIERDA: rol + icono */}
+    <div
+      className="d-flex flex-column justify-content-center align-items-start me-3"
+      style={{ width: leftRightWidth }}
+    >
+      <span className="fw-semibold" style={{ color: '#0d6efd' }}>
+        {m.tipo || 'Miembro'}
+      </span>
 
-            <div
-              id={`${itemId}-body`}
-              className="accordion-collapse collapse"
-              aria-labelledby={`${itemId}-header`}
-              data-bs-parent="#tomaDeDatosAccordion"
-            >
-              <div className="accordion-body">
-                {/* Sub-acordeón interno con dos secciones */}
-                <div className="accordion" id={`${itemId}-inner`}>
-                  {/* 1) Datos del Cliente */}
-                  <div className="accordion-item mb-2">
-                    <h2 className="accordion-header" id={`${itemId}-cliente-h`}>
-                      <button
-                        className="accordion-button fw-semibold"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target={`#${itemId}-cliente`}
-                        aria-expanded="true"
-                        aria-controls={`${itemId}-cliente`}
-                      >
-                        Datos del Cliente
-                      </button>
-                    </h2>
-                    <div
-                      id={`${itemId}-cliente`}
-                      className="accordion-collapse collapse show"
-                      aria-labelledby={`${itemId}-cliente-h`}
-                      data-bs-parent={`#${itemId}-inner`}
+      <div className="mt-2">
+      <UserCoverageIcon status={m.estado_cobertura} size={50} />
+
+      </div>
+    </div>
+
+    {/* CENTRO: nombre siempre centrado */}
+    <div className="flex-grow-1 text-center">
+      <span className="fw-semibold text-dark">{fullName(m)}</span>
+    </div>
+
+    {/* DERECHA: edad / género / estado + caneca */}
+    <div
+      className="d-flex align-items-center justify-content-end ms-3"
+      style={{ width: leftRightWidth }}
+    >
+     <div className="text-start me-3">
+  <div className="small">
+    <span className="text-muted">Edad: </span>
+    <span className="fw-semibold text-muted">{m.edad || 'N/A'}</span>
+  </div>
+  <div className="small text-muted">Género: {m.genero || '—'}</div>
+</div>
+
+
+      
+    </div>
+  </div>
+</div>
+
+
+            {/* Acordeones internos */}
+            <div className="card-body p-0">
+              <div className="accordion accordion-flush" id={`accordion-${itemId}`}>
+                
+                {/* Datos Cliente */}
+                <div className="accordion-item">
+                  <h2 className="accordion-header" id={`cliente-${itemId}`}>
+                    <button
+                      className="accordion-button collapsed py-3 px-4"
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target={`#collapse-cliente-${itemId}`}
+                      aria-expanded="false"
+                      aria-controls={`collapse-cliente-${itemId}`}
                     >
-                      <div className="accordion-body">
-                        <div className="row g-3">
-                          <Field label="Nombre">
-                            <input
-                              className="form-control"
-                              name="nombre"
-                              value={m.nombre || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-                          <Field label="Apellidos">
-                            <input
-                              className="form-control"
-                              name="apellidos"
-                              value={m.apellidos || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-                          <Field label="Fecha de Nacimiento" className="col-md-4">
-                            <input
-                              type="date"
-                              className="form-control"
-                              name="fechaNacimiento"
-                              value={m.fechaNacimiento || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-                          <Field label="Edad" className="col-md-2">
-                            <input
-                              type="number"
-                              className="form-control"
-                              name="edad"
-                              value={m.edad || ""}
-                              readOnly
-                            />
-                          </Field>
-                          <Field label="Género" className="col-md-3">
-                            <select
-                              className="form-select"
-                              name="genero"
-                              value={m.genero || ""}
-                              onChange={onChange(idx)}
-                            >
-                              <option value="">Seleccione</option>
-                              <option value="Masculino">Masculino</option>
-                              <option value="Femenino">Femenino</option>
-                            </select>
-                          </Field>
-                          <Field label="Idioma" className="col-md-3">
-                            <select
-                              className="form-select"
-                              name="idioma"
-                              value={m.idioma || ""}
-                              onChange={onChange(idx)}
-                            >
-                              <option value="">Seleccione</option>
-                              <option value="Español">Español</option>
-                              <option value="Inglés">Inglés</option>
-                              <option value="Otro">Otro</option>
-                            </select>
-                          </Field>
-                          <Field label="Nota" className="col-12">
-                            <textarea
-                              rows={3}
-                              className="form-control"
-                              name="nota"
-                              value={m.nota || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-                        </div>
-
-                        <div className="text-end mt-3">
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => onSaveMember?.(familyMembers[idx])}
-                          >
-                            Guardar cliente
-                          </button>
-                        </div>
+                      <div className="d-flex align-items-center">
+                        <i className="fas fa-user me-2 text-muted"></i>
+                        <span className="fw-semibold">Datos Cliente</span>
                       </div>
-                    </div>
-                  </div>
-
-                  {/* 2) Datos de la Cobertura */}
-                  <div className="accordion-item">
-                    <h2 className="accordion-header" id={`${itemId}-cob-h`}>
-                      <button
-                        className="accordion-button collapsed fw-semibold"
-                        type="button"
-                        data-bs-toggle="collapse"
-                        data-bs-target={`#${itemId}-cob`}
-                        aria-expanded="false"
-                        aria-controls={`${itemId}-cob`}
-                      >
-                        Datos de la Cobertura
-                      </button>
-                    </h2>
-                    <div
-                      id={`${itemId}-cob`}
-                      className="accordion-collapse collapse"
-                      aria-labelledby={`${itemId}-cob-h`}
-                      data-bs-parent={`#${itemId}-inner`}
-                    >
-                      <div className="accordion-body">
-                        <div className="row g-3">
-                          {/* Parentesco: toma del tipo seleccionado */}
-                          <Field label="Parentesco" className="col-md-3">
-                            <input
-                              className="form-control"
-                              value={m.parentesco || m.tipo || ""}
-                              name="parentesco"
-                              onChange={onChange(idx)}
-                              placeholder="Tomador / Cónyuge / Hijo/a ..."
-                            />
-                          </Field>
-
-                          <Field label="Estado cobertura" className="col-md-3">
-                            <select
-                              className="form-select"
-                              name="estado_cobertura"
-                              value={m.estado_cobertura || ""}
-                              onChange={onChange(idx)}
-                            >
-                              <option value="">Seleccione</option>
-                              <option value="Sí">Sí</option>
-                              <option value="No">No</option>
-                              <option value="Medicare">Medicare</option>
-                              <option value="Medicaid">Medicaid</option>
-                            </select>
-                          </Field>
-
-                          <Field label="Código Póliza" className="col-md-3">
-                            <input
-                              className="form-control"
-                              name="codigo_poliza"
-                              value={m.codigo_poliza || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-
-                          <Field label="Vigencia (AAAA-MM)" className="col-md-3">
-                            <input
-                              className="form-control"
-                              name="vigencia"
-                              placeholder="2025-01"
-                              value={m.vigencia || ""}
-                              onChange={onChange(idx)}
-                            />
-                          </Field>
-
-                          {/* Agrega más campos si los usas: compania_id, plan, metal, red, precio, ... */}
-                        </div>
-
-                        <div className="text-end mt-3">
-                          <button
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => onSaveCobertura?.(familyMembers[idx])}
+                    </button>
+                  </h2>
+                  <div
+                    id={`collapse-cliente-${itemId}`}
+                    className="accordion-collapse collapse"
+                    aria-labelledby={`cliente-${itemId}`}
+                    data-bs-parent={`#accordion-${itemId}`}
+                  >
+                    <div className="accordion-body px-4 py-4">
+                      <div className="row g-3">
+                        <Field label="Nombre" className="col-md-6">
+                          <input
+                            className="form-control form-control-sm"
+                            name="nombre"
+                            value={m.nombre || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+                        <Field label="Apellidos" className="col-md-6">
+                          <input
+                            className="form-control form-control-sm"
+                            name="apellidos"
+                            value={m.apellidos || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+                        <Field label="Fecha de Nacimiento" className="col-md-4">
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            name="fechaNacimiento"
+                            value={m.fechaNacimiento || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+                        <Field label="Edad" className="col-md-2">
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            name="edad"
+                            value={m.edad || ""}
+                            readOnly
+                          />
+                        </Field>
+                        <Field label="Género" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="genero"
+                            value={m.genero || ""}
+                            onChange={onChange(idx)}
                           >
-                            Guardar cobertura
-                          </button>
-                        </div>
+                            <option value="">Seleccione</option>
+                            <option value="Masculino">Masculino</option>
+                            <option value="Femenino">Femenino</option>
+                          </select>
+                        </Field>
+                        <Field label="Idioma" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="idioma"
+                            value={m.idioma || ""}
+                            onChange={onChange(idx)}
+                          >
+                            <option value="">Seleccione</option>
+                            <option value="Español">Español</option>
+                            <option value="Inglés">Inglés</option>
+                            <option value="Otro">Otro</option>
+                          </select>
+                        </Field>
+                        <Field label="Nota" className="col-12">
+                          <textarea
+                            rows={3}
+                            className="form-control form-control-sm"
+                            name="nota"
+                            value={m.nota || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+                      </div>
+
+                      <div className="text-end mt-4">
+                        <button
+                          className="btn btn-primary btn-sm px-4"
+                          onClick={() => onSaveMember?.(members[idx])}
+                        >
+                          <i className="fas fa-save me-2"></i>
+                          Guardar Cliente
+                        </button>
                       </div>
                     </div>
                   </div>
                 </div>
-                {/* /sub acordeón */}
+
+                {/* Datos Cobertura */}
+                <div className="accordion-item">
+                  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
+                    <button
+                      className="accordion-button collapsed py-3 px-4"
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target={`#collapse-cobertura-${itemId}`}
+                      aria-expanded="false"
+                      aria-controls={`collapse-cobertura-${itemId}`}
+                    >
+                      <div className="d-flex align-items-center">
+                        <i className="fas fa-shield-alt me-2 text-muted"></i>
+                        <span className="fw-semibold">Datos Cobertura</span>
+                      </div>
+                    </button>
+                  </h2>
+                  <div
+                    id={`collapse-cobertura-${itemId}`}
+                    className="accordion-collapse collapse"
+                    aria-labelledby={`cobertura-${itemId}`}
+                    data-bs-parent={`#accordion-${itemId}`}
+                  >
+                    <div className="accordion-body px-4 py-4">
+                      <div className="row g-3">
+                        <Field label="Parentesco" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            value={m.parentesco || m.tipo || ""}
+                            name="parentesco"
+                            onChange={onChange(idx)}
+                            placeholder="Tomador / Cónyuge / Hijo/a..."
+                          />
+                        </Field>
+
+                        <Field label="Estado Cobertura" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="estado_cobertura"
+                            value={m.estado_cobertura || ""}
+                            onChange={onChange(idx)}
+                          >
+                            <option value="">Seleccione</option>
+                            <option value="Sí">Sí</option>
+                            <option value="No">No</option>
+                            <option value="Medicare">Medicare</option>
+                            <option value="Medicaid">Medicaid</option>
+                          </select>
+                        </Field>
+
+                        <Field label="Código Póliza" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            name="codigo_poliza"
+                            value={m.codigo_poliza || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+
+                        <Field label="Vigencia (AAAA-MM)" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            name="vigencia"
+                            placeholder="2025-01"
+                            value={m.vigencia || ""}
+                            onChange={onChange(idx)}
+                          />
+                        </Field>
+                      </div>
+
+                      <div className="text-end mt-4">
+                        <button
+                          className="btn btn-primary btn-sm px-4"
+                          onClick={() => onSaveCobertura?.(members[idx])}
+                        >
+                          <i className="fas fa-save me-2"></i>
+                          Guardar Cobertura
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>
