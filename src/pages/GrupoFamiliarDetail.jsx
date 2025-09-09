@@ -86,9 +86,7 @@ const mapFullToForm = (fullRaw) => {
   const g = unwrapFull(fullRaw);
 
   // persona_contacto llega como string "Nombre Apellidos"
-  const pc = (g.persona_contacto || "").trim();
-  const [nombre, ...rest] = pc.split(/\s+/);
-  const apellidos = rest.join(" ");
+
 
   const tels = g.telefonos || {};
 
@@ -99,8 +97,8 @@ const mapFullToForm = (fullRaw) => {
     asesor: g.responsable ?? "",
 
     // Persona de Contacto
-    nombre: nombre || "",
-    apellidos: apellidos || "",
+    nombre: (g.persona_contacto || "").trim(),
+    apellidos: (g.apellido_persona_contacto || "").trim(),
     perteneceFamilia: g.pertenece_grupo_familiar ? "Sí" : "No",
     telefono1: tels.telefono_1 ?? "",
     telefono2: tels.telefono_2 ?? "",

@@ -51,6 +51,7 @@ const mapGrupoApiToForm = (g) => ({
   cual: g?.cual || '',
   asesor: g?.responsable || '',
   persona_contacto: g.persona_contacto,
+  apellido_persona_contacto: g.apellido_persona_contacto,
   perteneceFamilia: g?.pertenece_grupo_familiar ? 'Sí' : 'No',
   telefono1: g?.telefono_1 || '',
   telefono2: g?.telefono_2 || '',

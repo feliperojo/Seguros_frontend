@@ -1,6 +1,7 @@
 import React from 'react';
 
 const Prospectogrupo = ({ formData, onChange, readOnly }) => {
+  console.log("formData", formData)
   return (
     <>
       {/* Información del Prospecto (captación) */}

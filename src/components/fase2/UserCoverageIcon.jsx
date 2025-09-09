@@ -60,24 +60,28 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
 
       {/* Check (si aplica) */}
       {showCheck && (
-        <svg
-          className="position-absolute"
-          width={size * 0.45}
-          height={size * 0.45}
-          viewBox="0 0 24 24"
-          style={{ left: size * 0.55, top: -2 }}
-          aria-hidden="true"
-        >
-          <path
-            d="M20 6L9 17l-5-5"
-            fill="none"
-            stroke={color}
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      )}
+  <svg
+    className="position-absolute"
+    width={size * 0.40}   // un poco más pequeño que antes
+    height={size * 0.40}
+    viewBox="0 0 24 24"
+    style={{
+      left: size * 0.65,  // lo mueve más a la derecha
+      top: size * -0.10,  // lo sube un poco más
+    }}
+    aria-hidden="true"
+  >
+    <path
+      d="M20 6L9 17l-5-5"
+      fill="none"
+      stroke={color}
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)}
+
     </div>
   );
 });

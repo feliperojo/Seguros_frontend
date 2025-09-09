@@ -6,7 +6,8 @@ import UserCoverageIcon from "../fase2/UserCoverageIcon";
 
 // util: nombre completo
 const fullName = (m) =>
-  [m.nombre?.trim(), m.apellidos?.trim()].filter(Boolean).join(" ") ||
+
+  [m.primer_nombre?.trim(), m.segundo_nombre?.trim(), m.apellidos?.trim()].filter(Boolean).join(" ") ||
   m.nombreCompleto ||
   "Sin nombre";
 
@@ -79,7 +80,7 @@ const TomaDeDatos = ({
   ];
 
   const members = familyMembers?.length > 0 ? familyMembers : sampleMembers;
-
+console.log("datos", familyMembers)
   return (
     <div className="container-fluid p-0">
       {members.map((m, idx) => {
