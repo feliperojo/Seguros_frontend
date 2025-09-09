@@ -1,22 +1,35 @@
-// services/api.js
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+// src/services/api.js
 
+// Lee la variable del entorno (.env.production o .env.development)
+const RAW = import.meta.env.VITE_API_BASE_URL || "";
+
+// Elimina cualquier barra final duplicada y usa "/api" como fallback
+const API_BASE_URL = RAW.replace(/\/+$/, "") || "/api";
+
+// Obtiene el token de autenticación del localStorage
 const getAuthToken = () => localStorage.getItem("auth_token");
 
-// util opcional: genera un UUID sencillo para idempotencia
+// Utilidad opcional: genera un UUID sencillo (para idempotencia)
 const genUUID = () =>
-  ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g,c=>
-    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+    (
+      c ^
+      (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))
+    ).toString(16)
   );
 
 /**
- * apiRequest(endpoint, method, body, extraHeaders)
+ * apiRequest
+ * @param {string} endpoint - Ruta del endpoint (ej: "login" o "/login")
+ * @param {string} method - Método HTTP (GET, POST, PUT, DELETE)
+ * @param {object|null} body - Datos a enviar en JSON
+ * @param {object} extraHeaders - Headers adicionales opcionales
  */
 const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = {}) => {
   const token = getAuthToken();
 
   const headers = {
-    "Accept": "application/json",
+    Accept: "application/json",
     "Content-Type": "application/json",
     ...extraHeaders,
   };
@@ -26,7 +39,10 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
   const options = { method, headers };
   if (body) options.body = JSON.stringify(body);
 
-  const response = await fetch(`${API_BASE_URL}/${endpoint}`, options);
+  // Construye la URL final garantizando una sola barra
+  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+  const response = await fetch(url, options);
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
