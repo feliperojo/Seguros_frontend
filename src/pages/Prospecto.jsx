@@ -245,22 +245,30 @@ const Prospecto = () => {
           onClose={handleCloseModal}
         />
 
-        {/* Mostrar producto seleccionado */}
-        {productoCotizacion && (
-          <div className="mb-3 d-flex align-items-center justify-content-between">
-            <span className={`badge bg-${productoCotizacion.color} fs-6`}>
-              Producto seleccionado: {productoCotizacion.label}
-            </span>
-            {/* Botón para cambiar producto */}
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-secondary"
-              onClick={() => setShowProductModal(true)}
-            >
-              Cambiar producto
-            </button>
-          </div>
-        )}
+  {/* Sección dedicada para el plan después de la barra de progreso */}
+{productoCotizacion && (
+  <div className="card mb-4 border-0 shadow-sm">
+    <div className="card-body py-3">
+      <div className="d-flex align-items-center justify-content-between">
+        <div className="d-flex align-items-center">
+          <i className="fas fa-shield-alt text-primary me-2"></i>
+          <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
+          <span className={`badge bg-${productoCotizacion.color} fs-6`}>
+            {productoCotizacion.label}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-primary"
+          onClick={() => setShowProductModal(true)}
+        >
+          <i className="fas fa-edit me-1"></i>
+          Cambiar plan
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
         {loading ? (
           <div className="text-center text-muted my-5">

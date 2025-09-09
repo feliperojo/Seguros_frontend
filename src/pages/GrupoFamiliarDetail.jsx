@@ -4,14 +4,13 @@ import ProspectoBarra from "../components/fase2/ProspectoBarra";
 import Prospectogrupo from "../components/fase2/Prospectogrupo";
 import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
+import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
 // ================== Helpers ==================
-
-
 
 // --- Helpers de etapas (ajusta si tu flujo no es lineal) ---
 const NEXT_OF = {
@@ -24,13 +23,9 @@ const NEXT_OF = {
 
 const nextOf = (code) => NEXT_OF[(code || "").toUpperCase()] || null;
 
-
 const canAdvance = (from, to, ctx = {}) => {
   if (!from || !to) return false;
   if (nextOf(from) !== to) return false;
-
-
-
   return true;
 };
 
@@ -42,7 +37,6 @@ const toEstadoCode = (raw) => {
     return (raw.codigo || raw.code || raw.cod || raw.nombre || "").toUpperCase();
   return null;
 };
-
 
 const calcAge = (dateStr) => {
   if (!dateStr) return "";
@@ -62,6 +56,29 @@ const capitalizeWords = (s = "") =>
 
 // Desempaqueta respuesta: acepta {status,data} o el objeto directo
 const unwrapFull = (res) => res?.data ?? res ?? {};
+
+// ================== Función para obtener el producto desde coberturas ==================
+const getProductoFromCoberturas = (coberturas = []) => {
+  // Buscar el primer cobertura_tipo no vacío
+  const coberturaTipo = coberturas.find(c => c?.cobertura_tipo)?.cobertura_tipo;
+  
+  if (!coberturaTipo) return null;
+  
+  // Mapear el cobertura_tipo a un objeto producto similar al modal
+  // Ajusta estos mapeos según tus productos reales
+  const productosMap = {
+    "Plan de salud": { label: "Plan de salud", color: "primary" },
+    "Seguro de vida": { label: "Seguro de vida", color: "success" },
+    "Seguro dental": { label: "Seguro dental", color: "info" },
+    "Seguro de accidentes": { label: "Seguro de accidentes", color: "warning" },
+    // Agrega más mapeos según tus productos
+  };
+  
+  return productosMap[coberturaTipo] || { 
+    label: coberturaTipo, 
+    color: "secondary" 
+  };
+};
 
 // ================== Mapeos ==================
 // API FULL -> formData para Prospectogrupo (según tu JSON de ejemplo)
@@ -161,6 +178,8 @@ const GrupoFamiliarDetail = () => {
   const [estadoActual, setEstadoActual] = useState("PROSPECTO");
   const [formData, setFormData] = useState(null);
   const [familyMembers, setFamilyMembers] = useState([]);
+  const [productoCotizacion, setProductoCotizacion] = useState(null); // 👈 Nuevo estado
+  const [showProductModal, setShowProductModal] = useState(false); // 👈 Nuevo estado
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -173,6 +192,7 @@ const GrupoFamiliarDetail = () => {
     // Autocierre en 3.5s
     setTimeout(() => setToast((t) => ({ ...t, show: false })), 3500);
   };
+
   // Handler de cambios (respeta capitalizaciones que pediste)
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -186,17 +206,32 @@ const GrupoFamiliarDetail = () => {
     });
   };
 
+  // 👈 Nuevo: Manejador para selección de producto
+  const handleProductSelect = (producto) => {
+    setProductoCotizacion(producto);
+    setShowProductModal(false);
+  };
+
+  // 👈 Nuevo: Manejador para cerrar modal
+  const handleCloseModal = () => {
+    setShowProductModal(false);
+  };
+
   const reload = async () => {
     setLoading(true);
     setLoadError("");
     try {
       const full = await GrupoFamiliarService.getFullById(id);
+      const fullData = unwrapFull(full);
   
       setFormData(mapFullToForm(full));
       setFamilyMembers(mapFullToMembers(full));
+
+      // 👈 Nuevo: Extraer producto de las coberturas
+      const producto = getProductoFromCoberturas(fullData.coberturas || []);
+      setProductoCotizacion(producto);
   
-      const g = full?.data ?? full ?? {};
-      const code = toEstadoCode(g?.estado_actual) || "PROSPECTO";
+      const code = toEstadoCode(fullData?.estado_actual) || "PROSPECTO";
       setEstadoActual(code);
     } catch (err) {
       console.error(err);
@@ -205,13 +240,11 @@ const GrupoFamiliarDetail = () => {
       setLoading(false);
     }
   };
-  
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
-
 
   const advanceState = async (targetCode) => {
     setAdvancing(true);
@@ -226,53 +259,58 @@ const GrupoFamiliarDetail = () => {
       setAdvancing(false);
     }
   };
-  
 
   const handleSave = async (alsoAdvance = false) => {
-  try {
-    setSaving(true);
+    try {
+      setSaving(true);
 
-    const grupoPayload = stripNulls(mapGrupoFromForm(formData));
-    const clientesPayload = (familyMembers || [])
-      .filter(m => m?.cliente_id)
-      .map(mapClienteFromMember)
-      .map(stripNulls);
-    const coberturasPayload = (familyMembers || [])
-      .filter(m => m?.cobertura_id)
-      .map(m => mapCoberturaFromMember(m, id))
-      .map(stripNulls);
+      const grupoPayload = stripNulls(mapGrupoFromForm(formData));
+      const clientesPayload = (familyMembers || [])
+        .filter(m => m?.cliente_id)
+        .map(mapClienteFromMember)
+        .map(stripNulls);
+      
+      // 👈 Actualizar cobertura_tipo si se cambió el producto
+      const coberturasPayload = (familyMembers || [])
+        .filter(m => m?.cobertura_id)
+        .map(m => {
+          const cobertura = mapCoberturaFromMember(m, id);
+          // Si hay un producto seleccionado, actualizar cobertura_tipo
+          if (productoCotizacion?.label) {
+            cobertura.cobertura_tipo = productoCotizacion.label;
+          }
+          return stripNulls(cobertura);
+        });
 
-    await GrupoFamiliarService.fullUpdate(id, {
-      ...grupoPayload,
-      clientes: clientesPayload,
-      coberturas: coberturasPayload,
-    });
+      await GrupoFamiliarService.fullUpdate(id, {
+        ...grupoPayload,
+        clientes: clientesPayload,
+        coberturas: coberturasPayload,
+      });
 
-    if (alsoAdvance) {
-      const from = (estadoActual || "").toUpperCase();
-      const to = nextOf(from);
-      if (!to) {
-        showToast("warning", "No hay siguiente etapa", "No existe transición disponible.");
-      } else if (!canAdvance(from, to, { formData, familyMembers })) {
-        showToast("warning", "Faltan datos", "Completa los requisitos antes de avanzar.");
-      } else {
-        const ok = window.confirm(`¿Guardar y pasar a ${to}?`);
-        if (ok) await advanceState(to);
+      if (alsoAdvance) {
+        const from = (estadoActual || "").toUpperCase();
+        const to = nextOf(from);
+        if (!to) {
+          showToast("warning", "No hay siguiente etapa", "No existe transición disponible.");
+        } else if (!canAdvance(from, to, { formData, familyMembers })) {
+          showToast("warning", "Faltan datos", "Completa los requisitos antes de avanzar.");
+        } else {
+          const ok = window.confirm(`¿Guardar y pasar a ${to}?`);
+          if (ok) await advanceState(to);
+        }
       }
+
+      setIsEditing(false);
+      await reload();
+      showToast("success", alsoAdvance ? "Guardado y etapa actualizada" : "Actualización exitosa", "");
+    } catch (e) {
+      showToast("danger", "Error al actualizar", e?.message || "No se pudo guardar los cambios.");
+    } finally {
+      setSaving(false);
     }
+  };
 
-    setIsEditing(false);
-    await reload();
-    showToast("success", alsoAdvance ? "Guardado y etapa actualizada" : "Actualización exitosa", "");
-  } catch (e) {
-    showToast("danger", "Error al actualizar", e?.message || "No se pudo guardar los cambios.");
-  } finally {
-    setSaving(false);
-  }
-};
-
-
-  
   if (loading) {
     return (
       <div className="container py-5 text-center text-muted">
@@ -299,120 +337,153 @@ const GrupoFamiliarDetail = () => {
   const readOnly = !isEditing;
 
   return (
-    
     <div className="container-fluid bg-light min-vh-100 py-4">
       <div className="container">
         {/* Toast flotante */}
-<div
-  className="toast-container position-fixed top-0 end-0 p-3"
-  style={{ zIndex: 1080 }}
->
-  <div
-    className={`toast show ${toast.show ? "opacity-100" : "opacity-0"}`}
-    role="alert"
-    aria-live="assertive"
-    aria-atomic="true"
-    style={{
-      transition: "opacity 200ms ease",
-      minWidth: 320,
-      pointerEvents: toast.show ? "auto" : "none"
-    }}
-  >
-    <div className={`toast-header bg-${toast.type} text-white`}>
-      <strong className="me-auto">{toast.title || "Notificación"}</strong>
-      <button
-        type="button"
-        className="btn-close btn-close-white ms-2 mb-1"
-        aria-label="Close"
-        onClick={() => setToast((t) => ({ ...t, show: false }))}
-      />
-    </div>
-    {toast.message && (
-      <div className="toast-body bg-white text-dark">
-        {toast.message}
-      </div>
-    )}
-  </div>
-</div>
+        <div
+          className="toast-container position-fixed top-0 end-0 p-3"
+          style={{ zIndex: 1080 }}
+        >
+          <div
+            className={`toast show ${toast.show ? "opacity-100" : "opacity-0"}`}
+            role="alert"
+            aria-live="assertive"
+            aria-atomic="true"
+            style={{
+              transition: "opacity 200ms ease",
+              minWidth: 320,
+              pointerEvents: toast.show ? "auto" : "none"
+            }}
+          >
+            <div className={`toast-header bg-${toast.type} text-white`}>
+              <strong className="me-auto">{toast.title || "Notificación"}</strong>
+              <button
+                type="button"
+                className="btn-close btn-close-white ms-2 mb-1"
+                aria-label="Close"
+                onClick={() => setToast((t) => ({ ...t, show: false }))}
+              />
+            </div>
+            {toast.message && (
+              <div className="toast-body bg-white text-dark">
+                {toast.message}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* 👈 Nuevo: Modal de selección de producto */}
+        <ProductoCotizacionModal
+          open={showProductModal}
+          onSelect={handleProductSelect}
+          onClose={handleCloseModal}
+        />
 
         <ProspectoBarra currentCode={estadoActual} />
 
+
+
+
+
         <div className="d-flex justify-content-end mb-3">
-        {readOnly ? (
-  <div className="btn-toolbar gap-2">
-    <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Editar</button>
+          {readOnly ? (
+            <div className="btn-toolbar gap-2">
+              <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Editar</button>
 
-    <div className="btn-group">
-      <button
-        type="button"
-        className="btn btn-outline-secondary dropdown-toggle"
-        data-bs-toggle="dropdown"
-        aria-expanded="false"
-        disabled={advancing}
-      >
-        Acciones
-      </button>
-      <ul className="dropdown-menu dropdown-menu-end">
-        {nextOf(estadoActual) && (
-          <li>
-            <button
-              className="dropdown-item"
-              disabled={advancing}
-              onClick={async () => {
-                const from = (estadoActual || "").toUpperCase();
-                const to = nextOf(from);
-                if (!canAdvance(from, to, { formData, familyMembers })) {
-                  showToast("warning", "No disponible", "No puedes avanzar todavía.");
-                  return;
-                }
-                const ok = window.confirm(`¿Pasar a ${to}?`);
-                if (!ok) return;
-                await advanceState(to);
-              }}
-            >
-              Pasar a {nextOf(estadoActual)} →
-            </button>
-          </li>
-        )}
-      </ul>
+              <div className="btn-group">
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary dropdown-toggle"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  disabled={advancing}
+                >
+                  Acciones
+                </button>
+                <ul className="dropdown-menu dropdown-menu-end">
+                  {nextOf(estadoActual) && (
+                    <li>
+                      <button
+                        className="dropdown-item"
+                        disabled={advancing}
+                        onClick={async () => {
+                          const from = (estadoActual || "").toUpperCase();
+                          const to = nextOf(from);
+                          if (!canAdvance(from, to, { formData, familyMembers })) {
+                            showToast("warning", "No disponible", "No puedes avanzar todavía.");
+                            return;
+                          }
+                          const ok = window.confirm(`¿Pasar a ${to}?`);
+                          if (!ok) return;
+                          await advanceState(to);
+                        }}
+                      >
+                        Pasar a {nextOf(estadoActual)} →
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          ) : (
+            <div className="btn-toolbar gap-2">
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setIsEditing(false); reload(); }}
+                disabled={saving || advancing}
+              >
+                Cancelar
+              </button>
+
+              <div className="btn-group">
+                <button className="btn btn-success" onClick={() => handleSave(false)} disabled={saving || advancing}>
+                  {saving ? (<><span className="spinner-border spinner-border-sm me-2" />Guardando…</>) : "Guardar"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-success dropdown-toggle dropdown-toggle-split"
+                  data-bs-toggle="dropdown"
+                  aria-expanded="false"
+                  disabled={saving || advancing || !nextOf(estadoActual)}
+                >
+                  <span className="visually-hidden">Toggle</span>
+                </button>
+                <ul className="dropdown-menu dropdown-menu-end">
+                  {nextOf(estadoActual) && (
+                    <li>
+                      <button className="dropdown-item" onClick={() => handleSave(true)} disabled={saving || advancing}>
+                        Guardar y pasar a {nextOf(estadoActual)} →
+                      </button>
+                    </li>
+                  )}
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+                {/* 👈 Nuevo: Mostrar producto seleccionado */}
+     <div className="card mb-4 border-0 shadow-sm">
+  <div className="card-body py-3">
+    <div className="d-flex align-items-center justify-content-between">
+      <div className="d-flex align-items-center">
+        <i className="fas fa-shield-alt text-primary me-2"></i>
+        <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
+        <span className={`badge bg-${productoCotizacion.color} fs-6`}>
+          {productoCotizacion.label}
+        </span>
+      </div>
+      {isEditing && (
+        <button
+          type="button"
+          className="btn btn-sm btn-outline-primary"
+          onClick={() => setShowProductModal(true)}
+        >
+          <i className="fas fa-edit me-1"></i>
+          Cambiar plan
+        </button>
+      )}
     </div>
   </div>
-) : (
-  <div className="btn-toolbar gap-2">
-    <button
-      className="btn btn-secondary"
-      onClick={() => { setIsEditing(false); reload(); }}
-      disabled={saving || advancing}
-    >
-      Cancelar
-    </button>
-
-    <div className="btn-group">
-      <button className="btn btn-success" onClick={() => handleSave(false)} disabled={saving || advancing}>
-        {saving ? (<><span className="spinner-border spinner-border-sm me-2" />Guardando…</>) : "Guardar"}
-      </button>
-      <button
-        type="button"
-        className="btn btn-success dropdown-toggle dropdown-toggle-split"
-        data-bs-toggle="dropdown"
-        aria-expanded="false"
-        disabled={saving || advancing || !nextOf(estadoActual)}
-      >
-        <span className="visually-hidden">Toggle</span>
-      </button>
-      <ul className="dropdown-menu dropdown-menu-end">
-        {nextOf(estadoActual) && (
-          <li>
-            <button className="dropdown-item" onClick={() => handleSave(true)} disabled={saving || advancing}>
-              Guardar y pasar a {nextOf(estadoActual)} →
-            </button>
-          </li>
-        )}
-      </ul>
-    </div>
-  </div>
-)}
-
 </div>
 
         {/* Captación + económicos */}
@@ -421,30 +492,27 @@ const GrupoFamiliarDetail = () => {
           onChange={handleInputChange}
           readOnly={readOnly}
         />
-      {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
-  (estadoActual || "").toUpperCase()
-) ? (
-  <TomaDeDatos
-    familyMembers={familyMembers}
-    setFamilyMembers={setFamilyMembers}
-    readOnly={readOnly}
-    onSaveMember={(m) => console.log("Guardar cliente:", m)}
-    onSaveCobertura={(m) => console.log("Guardar cobertura:", m)}
-  />
-) : (
-  <ProspectoDatos
-    familyMembers={familyMembers}
-    setFamilyMembers={setFamilyMembers}
-    readOnly={readOnly}
-  />
-)}
+        
+        {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
+          (estadoActual || "").toUpperCase()
+        ) ? (
+          <TomaDeDatos
+            familyMembers={familyMembers}
+            setFamilyMembers={setFamilyMembers}
+            readOnly={readOnly}
+            onSaveMember={(m) => console.log("Guardar cliente:", m)}
+            onSaveCobertura={(m) => console.log("Guardar cobertura:", m)}
+          />
+        ) : (
+          <ProspectoDatos
+            familyMembers={familyMembers}
+            setFamilyMembers={setFamilyMembers}
+            readOnly={readOnly}
+          />
+        )}
       </div>
-
-
     </div>
-    
   );
-  
 };
 
 export default GrupoFamiliarDetail;
