@@ -95,21 +95,33 @@ useEffect(() => {
 
 
   // Añade esta función después de getCompaniaNombre o getTomadorNombre
+  // const getGrupoEstado = (grupo) => {
+  //   if (!grupo.coberturas || grupo.coberturas.length === 0) {
+  //     return { estado: "Sin póliza", variant: "secondary" };
+  //   }
+
+  //   // Verificar si todas las coberturas tienen fecha de cancelación
+  //   const todasCanceladas = grupo.coberturas.every(cobertura => !!cobertura.fecha_cancelacion);
+
+  //   if (todasCanceladas) {
+  //     return { estado: "Cancelada", variant: "danger" };
+  //   }
+
+  //   // Si al menos una no está cancelada
+  //   return { estado: "Activa", variant: "success" };
+  // };
   const getGrupoEstado = (grupo) => {
-    if (!grupo.coberturas || grupo.coberturas.length === 0) {
-      return { estado: "Sin póliza", variant: "secondary" };
-    }
-
-    // Verificar si todas las coberturas tienen fecha de cancelación
-    const todasCanceladas = grupo.coberturas.every(cobertura => !!cobertura.fecha_cancelacion);
-
-    if (todasCanceladas) {
-      return { estado: "Cancelada", variant: "danger" };
-    }
-
-    // Si al menos una no está cancelada
-    return { estado: "Activa", variant: "success" };
+    // Extract the estado (state) and estado_codigo from the response
+    const estado = grupo.estado || "Sin estado";  // Default to "Sin estado" if no estado is found
+  
+    // Define the badge color based on the estado value
+    const variant = estado === "Cotización" ? "warning" :
+                    estado === "Activo" ? "success" :
+                    estado === "Inactivo" ? "danger" : "secondary";
+  
+    return { estado, variant };
   };
+  
 
   // Funciones para manejar acciones
   const handleOpenViewModal = async (grupo) => {
