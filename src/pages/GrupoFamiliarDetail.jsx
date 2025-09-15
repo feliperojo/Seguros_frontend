@@ -184,6 +184,8 @@ const GrupoFamiliarDetail = () => {
   const [loadError, setLoadError] = useState("");
   const [advancing, setAdvancing] = useState(false);
 
+const [grupoVersion, setGrupoVersion] = useState(null);
+
   const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
   const showToast = (type, title, message) => {
     setToast({ show: true, type, title, message });
@@ -223,6 +225,7 @@ const GrupoFamiliarDetail = () => {
       const fullData = unwrapFull(full);
   
       setFormData(mapFullToForm(full));
+      setGrupoVersion(fullData?.updated_at || fullData?.updatedAt || null);
       setFamilyMembers(mapFullToMembers(full));
 
       // 👈 Nuevo: Extraer producto de las coberturas
@@ -243,6 +246,79 @@ const GrupoFamiliarDetail = () => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+
+  // Utilidad: mapea la respuesta {cliente, cobertura} a tu shape de card
+const mapMemberFromAppendResponse = (res) => {
+  const cli = res?.cliente || {};
+  const cov = res?.cobertura || {};
+  const nombreCompleto = [cli.primer_nombre, cli.segundo_nombre, cli.apellidos]
+    .filter(Boolean).join(" ");
+
+  return {
+    id: cli.id,
+    cliente_id: cli.id,
+    cobertura_id: cov.id,
+    primer_nombre: cli.primer_nombre || "",
+    segundo_nombre: cli.segundo_nombre || "",
+    apellidos: cli.apellidos || "",
+    nombreCompleto,
+    fechaNacimiento: cli.fecha_nacimiento || "",
+    edad: calcAge(cli.fecha_nacimiento),
+    ingresoAnual: cli.ingreso_anual || "",
+    parentesco: cov.parentesco || "Tomador",
+    tipo: cov.parentesco || "Tomador",
+    estado_cobertura: cov.estado_cobertura || "Si/No",
+    plan: cov.plan || null,
+    metal: cov.metal || null,
+    red: cov.red || null,
+    ano_cobertura: cov.ano_cobertura || null,
+  };
+};
+
+// 👇 llamada real al backend para alta en edición
+const handleCreateMemberRemote = async (memberData) => {
+  // payload mínimo: cliente nuevo + cobertura
+  const payload = {
+    request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+    grupo_version: grupoVersion,               // control de concurrencia
+    cliente_nuevo: {
+      primer_nombre: memberData.primer_nombre || "",
+      segundo_nombre: memberData.segundo_nombre || "",
+      apellidos: memberData.apellidos || "",
+      fecha_nacimiento: memberData.fechaNacimiento || null,
+      genero: memberData.genero || null,
+      idioma: memberData.idioma || null,
+      ingreso_anual: memberData.ingresoAnual || 0,
+      nota: memberData.nota || null,
+    },
+    parentesco: memberData.parentesco || memberData.tipo || "Tomador",
+    cobertura: {
+      cobertura_tipo: productoCotizacion?.label || "Plan de salud", // o el default que uses
+      estado_cobertura: memberData.estado_cobertura || "Si/No",
+      ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
+      fecha_activacion: memberData.fechaNacimiento ? null : null, // ajusta si debes
+      pagador_id: null,
+      dia_pago: 1,
+      tipo_pago: null,
+      compania_id: null,
+      precio: 0,
+    },
+  };
+
+  const res = await GrupoFamiliarService.appendMiembro(id, payload);
+  const data = unwrapFull(res)?.data || unwrapFull(res);
+  const nuevo = mapMemberFromAppendResponse(data?.miembro || {});
+  // hidratar lista
+  setFamilyMembers((prev) => [...prev, nuevo]);
+
+  // actualiza versión si el backend te devuelve la nueva
+  if (data?.grupo_version) setGrupoVersion(data.grupo_version);
+  // también puedes refrescar contadores si llegan en data.resumen
+
+  showToast("success", "Miembro agregado", "Se creó el cliente y su cobertura.");
+};
+
 
   const advanceState = async (targetCode) => {
     setAdvancing(true);
@@ -331,7 +407,8 @@ const GrupoFamiliarDetail = () => {
       </div>
     );
   }
-
+  const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';
+  const canAddMember = isProspecto ? true : isEditing;   // 👈 así en creación siempre se puede
   const readOnly = !isEditing;
 
   return (
@@ -503,10 +580,24 @@ const GrupoFamiliarDetail = () => {
           />
         ) : (
           <ProspectoDatos
-            familyMembers={familyMembers}
-            setFamilyMembers={setFamilyMembers}
-            readOnly={readOnly}
-          />
+  familyMembers={familyMembers}
+  setFamilyMembers={setFamilyMembers}
+  readOnly={readOnly}
+  canAdd={canAddMember}
+  estadoActual={estadoActual}
+  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   // 👈 para tipo por defecto
+  isProspecto={isProspecto}                                            // 👈 para que el hijo sepa el modo
+  onCreateMemberRemote={handleCreateMemberRemote}                       // 👈 alta remota
+  onBlockedAddClick={() =>
+    showToast(
+      'info',
+      'Añadir no disponible',
+      'Activa “Editar” y asegúrate de que el estado no sea Prospecto.'
+    )
+  }
+/>
+
+
         )}
       </div>
     </div>

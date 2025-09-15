@@ -62,10 +62,21 @@ const buildFullName = (primer_nombre = "", segundo_nombre = "", apellidos = "") 
     .join(" ");
 
 
-const ProspectoDatos = ({ familyMembers, setFamilyMembers, readOnly }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [modalStep, setModalStep] = useState(1); // 1: selección tipo, 2: formulario datos
-  const [editingMember, setEditingMember] = useState(null);
+    const ProspectoDatos = ({
+      familyMembers,
+      setFamilyMembers,
+      readOnly,
+      canAdd = false,
+      estadoActual,
+      isProspecto = false,               // 👈 nuevo
+      defaultCoberturaTipo = "Plan de salud",
+      onCreateMemberRemote,              // 👈 nuevo
+      onBlockedAddClick
+    }) => {
+      const [showModal, setShowModal] = useState(false);
+      const [modalStep, setModalStep] = useState(1);
+      const [editingMember, setEditingMember] = useState(null);
+      const [savingModal, setSavingModal] = useState(false); 
   const [memberData, setMemberData] = useState({
     primer_nombre: '', segundo_nombre: '',  apellidos: '', nombreCompleto: '',
     idioma: '', fechaNacimiento: '', edad: '',
@@ -176,27 +187,55 @@ const onMemberChange = (e) => {
     setModalStep(2);
   };
   
- 
 
-  const handleSave = () => {
+  
+
+  const handleSave = async () => {
+    // defensa extra
+    if (!canAdd && !editingMember) {
+      onBlockedAddClick && onBlockedAddClick();
+      return;
+    }
+  
     const payload = {
       ...memberData,
       nombreCompleto: buildFullName(memberData.primer_nombre, memberData.segundo_nombre, memberData.apellidos),
-      // por si alguien manipuló tipo, garantizamos consistencia:
       parentesco: memberData.parentesco || memberData.tipo || 'Tomador',
       tipo: memberData.parentesco || memberData.tipo || 'Tomador',
+      // default del tipo de cobertura por si lo necesitas en UI
+      cobertura_tipo: defaultCoberturaTipo,
     };
   
-    if (editingMember) {
-      setFamilyMembers(prev =>
-        prev.map(m => (m.id === editingMember.id ? { ...payload, id: editingMember.id } : m))
-      );
-    } else {
-      const newId = familyMembers.length ? Math.max(...familyMembers.map(m => m.id)) + 1 : 1;
-      setFamilyMembers(prev => [...prev, { ...payload, id: newId }]);
+    try {
+      setSavingModal(true);
+  
+      if (editingMember) {
+        // edición local de la card (tu lógica actual)
+        setFamilyMembers(prev =>
+          prev.map(m => (m.id === editingMember.id ? { ...payload, id: editingMember.id } : m))
+        );
+      } else if (isProspecto) {
+        // ➜ creación local (staging) en PROSPECTO
+        const newId = familyMembers.length ? Math.max(...familyMembers.map(m => m.id)) + 1 : 1;
+        setFamilyMembers(prev => [...prev, { ...payload, id: newId }]);
+      } else {
+        // ➜ grupo existente: crea en backend (alta remota)
+        if (typeof onCreateMemberRemote === 'function') {
+          await onCreateMemberRemote(payload);
+        } else {
+          throw new Error("No hay handler remoto configurado.");
+        }
+      }
+  
+      setShowModal(false);
+      setModalStep(1);
+    } catch (err) {
+      console.error(err);
+      // podrías emitir un toast desde el padre; aquí deja un alert simple si quieres
+      // alert(err?.message || "No se pudo crear el miembro.");
+    } finally {
+      setSavingModal(false);
     }
-    setShowModal(false);
-    setModalStep(1);
   };
   
 
@@ -224,10 +263,43 @@ const onMemberChange = (e) => {
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
       
       <div className="card mb-4">
-        <div className="card-header d-flex justify-content-between align-items-center">
-          <h5 className="mb-0"><i className="fas fa-users me-2"></i>Añadir Miembros</h5>
-          <button type="button" className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
-        </div>
+      <div className="card-header d-flex justify-content-between align-items-center">
+  <h5 className="mb-0">
+    <i className="fas fa-users me-2"></i>
+    Añadir Miembros
+  </h5>
+
+  {/* Reglas de visibilidad: 
+      - Si no estás en edición, no muestres nada (UI limpia).
+      - Si estás en edición y canAdd = true → botón activo.
+      - Si estás en edición pero canAdd = false → botón deshabilitado con tooltip. */}
+  {!readOnly && (
+    canAdd ? (
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        onClick={handleAdd}
+      >
+        Añadir
+      </button>
+    ) : (
+      <button
+        type="button"
+        className="btn btn-primary btn-sm"
+        disabled
+        title={
+          (estadoActual || '').toUpperCase() === 'PROSPECTO'
+            ? 'Cambia el estado del grupo (distinto de Prospecto) para añadir miembros.'
+            : 'Activa el modo edición para añadir miembros.'
+        }
+        onClick={() => onBlockedAddClick && onBlockedAddClick()}
+      >
+        Añadir
+      </button>
+    )
+  )}
+</div>
+
         <div className="card-body">
           {familyMembers.length === 0 ? (
             <div className="text-center text-muted py-4">
@@ -467,19 +539,19 @@ const onMemberChange = (e) => {
                   </div>
                 </div>
               )}
-                {!readOnly && (
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={handleCloseModal}>
-                  Cancelar
-                </button>
-                {modalStep === 2 && (
-                  <button type="button" className="btn btn-primary" onClick={handleSave}>
-                    <i className="fas fa-save me-1"></i>
-                    {editingMember ? 'Actualizar' : 'Guardar'}
-                  </button>
-                )}
-              </div>
-               )}
+         {!readOnly && (
+                    <div className="modal-footer">
+                      <button type="button" className="btn btn-secondary" onClick={handleCloseModal} disabled={savingModal}>
+                        Cancelar
+                      </button>
+                      {modalStep === 2 && (
+                        <button type="button" className="btn btn-primary" onClick={handleSave} disabled={savingModal}>
+                          {savingModal ? (<><span className="spinner-border spinner-border-sm me-2" />Guardando…</>) : (<><i className="fas fa-save me-1"></i>{editingMember ? 'Actualizar' : 'Guardar'}</>)}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
             </div>
           </div>
         </div>

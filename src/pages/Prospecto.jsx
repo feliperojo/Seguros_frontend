@@ -289,9 +289,13 @@ const Prospecto = () => {
                   (estadoActual || "").toUpperCase()
                 ) ? (
                   <ProspectoDatos
-                    familyMembers={familyMembers}
-                    setFamilyMembers={setFamilyMembers}
-                  />
+                  familyMembers={familyMembers}
+                  setFamilyMembers={setFamilyMembers}
+                  canAdd={true}
+                  readOnly={false}
+                  isProspecto={true}   // 👈 clave para que guarde local
+                />
+                
                 ) : estadoActual?.toUpperCase() === "TOMA_DATOS" ? (
                   <TomaDeDatos
                     familyMembers={familyMembers}
@@ -301,9 +305,14 @@ const Prospecto = () => {
                   />
                 ) : (
                   <ProspectoDatos
-                    familyMembers={familyMembers}
-                    setFamilyMembers={setFamilyMembers}
-                  />
+                  familyMembers={familyMembers}
+                  setFamilyMembers={setFamilyMembers}
+                  canAdd={true}
+                  readOnly={false}
+                  isProspecto={true}   // 👈 clave para que guarde local
+                />
+                
+                
                 )}
 
                 {/* 3) Guardar/Actualizar */}

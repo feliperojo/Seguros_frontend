@@ -22,6 +22,14 @@ const GrupoFamiliarService = {
     );
   },
 
+// POST /grupos/{grupoId}/miembros
+appendMiembro: async (grupoId, payload, headers = {}) => {
+  // payload: { request_id, grupo_version, cliente_nuevo | cliente_id, parentesco, cobertura:{...} }
+  return await apiRequest(`${BASE_GR}/${grupoId}/miembros`, "POST", payload, headers);
+},
+
+
+
   // ✅ trae todo el grupo con sus componentes (miembros, coberturas, etc)
   getFullById: async (id) => {
     const res = await apiRequest(`${BASE_GF}/grupos-familiares-full/${id}`, "GET");
