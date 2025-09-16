@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
+import ClienteExistente from "../ClienteExistente"; // ⬅️ ajusta la ruta si es necesario
 
-// Paleta/iconos por tipo
+// Paleta/iconos por tipo (igual que antes)
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
   Dependiente: "secondary", Padre: "dark", Madre: "danger", Nieto: "warning",
@@ -45,9 +46,11 @@ const calcAge = (d) => {
  * - editingMember (obj | null)
  * - defaultCoberturaTipo (string)
  * - canAdd (bool), readOnly (bool), isProspecto (bool)
+ * - grupoFamiliarId (id del grupo)                             // ⬅️ nuevo (opcional)
  * - onCreateLocal(payload)     -> para staging/local (Prospecto)
  * - onUpdateLocal(id, payload) -> editar local
  * - onCreateRemote(payload)    -> para grupo existente (llama al backend)
+ * - onCreateCoberturaDeClienteExistente(payloadMinimo)         // ⬅️ nuevo (opcional)
  */
 export default function MemberModal({
   open,
@@ -60,9 +63,14 @@ export default function MemberModal({
   onCreateLocal,
   onUpdateLocal,
   onCreateRemote,
+  grupoFamiliarId, 
+  onCreateCoberturaDeClienteExistente,          
 }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState("nuevo");      // 'nuevo' | 'existente' ⬅️ nuevo
+  const [tipoExistente, setTipoExistente] = useState("Tomador"); // ⬅️ nuevo
+
   const [data, setData] = useState({
     primer_nombre: "", segundo_nombre: "", apellidos: "", nombreCompleto: "",
     idioma: "", fechaNacimiento: "", edad: "", genero: "Masculino",
@@ -72,6 +80,10 @@ export default function MemberModal({
   // hidratar al abrir
   useEffect(() => {
     if (!open) return;
+    // reset de modo/tipo existente
+    setMode("nuevo");
+    setTipoExistente("Tomador");
+
     if (editingMember) {
       setData({
         ...editingMember,
@@ -109,6 +121,7 @@ export default function MemberModal({
   const selectTipo = (tipo) => setData(prev => ({ ...prev, tipo, parentesco: tipo })) || setStep(2);
 
   const handleSave = async () => {
+
     const payload = {
       ...data,
       nombreCompleto: buildFullName(data.primer_nombre, data.segundo_nombre, data.apellidos),
@@ -132,6 +145,122 @@ export default function MemberModal({
     }
   };
 
+    // Agregar un cliente EXISTENTE → crea cobertura y cierra modal
+  const handleAddExisting = async (clienteSeleccionado) => {
+   if (!clienteSeleccionado?.id) return;
+    if (!grupoFamiliarId) {
+      console.error("Falta grupoFamiliarId");
+      return;
+    }
+    const payload = {
+      grupo_familiar_id: grupoFamiliarId,
+      cliente_id: clienteSeleccionado.id,
+      tipo: data.parentesco || data.tipo || "Tomador",
+      cobertura_tipo: defaultCoberturaTipo,
+      estado_cobertura: data.estado_cobertura || "Si/No",
+    };
+    try {
+      setSaving(true);
+      // este callback se encarga de hacer el POST y de hacer setFamilyMembers en el padre
+     await onCreateCoberturaDeClienteExistente?.(payload, clienteSeleccionado);
+      // cerrar modal y resetear wizard
+      setStep(1);
+      onClose?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
+  // mapear cliente API → shape de miembro para pintar local (si hiciera falta)
+// Reemplaza tu mapClienteToMember por este:
+const mapClienteToMember = (c, tipoSel) => {
+    const primer  = c.primer_nombre || c.nombre || "";
+    const segundo = c.segundo_nombre || "";
+    const apell   = c.apellidos || c.apellido || "";
+    const fecha   = c.fecha_nacimiento || c.fechaNacimiento || "";
+    const nombreCompleto = c.nombre_completo || buildFullName(primer, segundo, apell);
+    const edad = calcAge(fecha);
+    const genero = c.genero || "Masculino";
+  
+    return {
+      // ---- plano (fallback que tu card también entiende)
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombreCompleto,
+      genero,
+      edad,
+      fecha_nacimiento: fecha,           // 👈 snake case para tu card
+      // ---- metadatos de cobertura / UI
+      parentesco: tipoSel,
+      tipo: tipoSel,
+      estado_cobertura: "Sí",
+      cobertura_tipo: defaultCoberturaTipo,
+      cliente_id: c.id,
+      // ---- anidado como la card espera por defecto
+      cliente: {
+        id: c.id,
+        primer_nombre: primer,
+        segundo_nombre: segundo,
+        apellidos: apell,
+        nombre_completo: nombreCompleto, // 👈 usado por fullName
+        genero,
+        fecha_nacimiento: fecha,
+        edad,
+        telefono: c.telefono || "",
+        idioma: c.idioma || "",
+      },
+    };
+  };
+  
+
+  // elegir cliente existente → crear cobertura (remota) o card local
+  // dentro de MemberModal
+const handlePickExisting = async (cliente) => {
+    // Validaciones básicas
+    if (!grupoFamiliarId) {
+      console.error("Falta grupoFamiliarId");
+      return;
+    }
+    if (!cliente?.id) {
+      console.error("Cliente inválido");
+      return;
+    }
+  
+    // payload mínimo para INSERT de cobertura
+    const coberturaPayload = {
+      grupo_familiar_id: grupoFamiliarId,
+      cliente_id: cliente.id,
+      parentesco: tipoExistente,   // == tipo seleccionado (Tomador, Cónyuge, etc.)
+      tipo: tipoExistente,
+      cobertura_tipo: defaultCoberturaTipo,
+      estado_cobertura: "Sí",      // o "Si/No" si prefieres
+    };
+  
+    try {
+      setSaving(true);
+  
+      // ✅ SIEMPRE que sea "existente", usamos este callback
+      if (onCreateCoberturaDeClienteExistente) {
+        const created = await onCreateCoberturaDeClienteExistente(coberturaPayload, cliente);
+  
+        // Si tu backend NO devuelve el miembro listo para pintar,
+        // puedes hacer un fallback local aquí (opcional):
+        // if (!created?.miembro) await onCreateLocal?.(mapClienteToMember(cliente, tipoExistente));
+      } else {
+        // Si no nos pasaron el callback, al menos agregamos la card local (Prospecto)
+        await onCreateLocal?.(mapClienteToMember(cliente, tipoExistente));
+      }
+  
+      onClose?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+  
+  
+
   if (!open) return null;
 
   const color = TYPE_COLOR[data.tipo] || "secondary";
@@ -152,29 +281,76 @@ export default function MemberModal({
           {/* PASO 1 */}
           {step===1 && (
             <div className="modal-body">
-              <div className="row g-3">
-                {TIPOS.map(t => (
-                  <div key={t.tipo} className="col-md-4 col-sm-6">
-                    <div
-                      className={`card h-100 border-2 ${data.tipo===t.tipo?`border-${color} bg-light`:"border-light"}`}
-                      style={{cursor:"pointer"}}
-                      onClick={() => selectTipo(t.tipo)}
+
+              {/* Tabs: Nuevo / Existente */}
+              {!editingMember && (
+                <ul className="nav nav-tabs mb-3">
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${mode==='nuevo'?'active':''}`}
+                      onClick={()=>setMode('nuevo')}
                     >
-                      <div className="card-body text-center py-4">
-                        <div className={`bg-${TYPE_COLOR[t.tipo]||"secondary"} text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`}
-                             style={{width:60, height:60}}>
-                          <i className={`fas ${TYPE_ICON[t.tipo]||"fa-user"} fa-lg`} />
+                      Nuevo
+                    </button>
+                  </li>
+                  <li className="nav-item">
+                    <button
+                      className={`nav-link ${mode==='existente'?'active':''}`}
+                      onClick={()=>setMode('existente')}
+                    >
+                      Existente
+                    </button>
+                  </li>
+                </ul>
+              )}
+
+              {mode === 'nuevo' ? (
+                <div className="row g-3">
+                  {TIPOS.map(t => (
+                    <div key={t.tipo} className="col-md-4 col-sm-6">
+                      <div
+                        className={`card h-100 border-2 ${data.tipo===t.tipo?`border-${TYPE_COLOR[t.tipo]||"secondary"} bg-light`:"border-light"}`}
+                        style={{cursor:"pointer"}}
+                        onClick={() => selectTipo(t.tipo)}
+                      >
+                        <div className="card-body text-center py-4">
+                          <div className={`bg-${TYPE_COLOR[t.tipo]||"secondary"} text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`}
+                               style={{width:60, height:60}}>
+                            <i className={`fas ${TYPE_ICON[t.tipo]||"fa-user"} fa-lg`} />
+                          </div>
+                          <h6 className="mb-0">{t.label}</h6>
                         </div>
-                        <h6 className="mb-0">{t.label}</h6>
                       </div>
                     </div>
+                  ))}
+                </div>
+              ) : (
+                <>
+                  <div className="row g-2 align-items-center mb-3">
+                    <div className="col-auto">
+                      <label className="form-label mb-0">Tipo</label>
+                    </div>
+                    <div className="col-auto">
+                      <select
+                        className="form-select form-select-sm"
+                        value={tipoExistente}
+                        onChange={(e)=>setTipoExistente(e.target.value)}
+                      >
+                        {TIPOS.map(t => <option key={t.tipo} value={t.tipo}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-auto">
+                      <span className={`badge bg-${TYPE_COLOR[tipoExistente]||"secondary"}`}>{tipoExistente}</span>
+                    </div>
                   </div>
-                ))}
-              </div>
+
+                  <ClienteExistente onClienteSeleccionado={handlePickExisting} />
+                </>
+              )}
             </div>
           )}
 
-          {/* PASO 2 */}
+          {/* PASO 2 (formulario) */}
           {step===2 && (
             <div className="modal-body">
               {!editingMember && (
@@ -250,6 +426,8 @@ export default function MemberModal({
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
+
+            {/* Guardar solo aplica para paso 2 o cuando hay edición */}
             {step===2 && (
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <><span className="spinner-border spinner-border-sm me-2"/>Guardando…</> : <>Guardar</>}

@@ -572,6 +572,7 @@ const handleCreateMemberRemote = async (memberData) => {
           (estadoActual || "").toUpperCase()
         ) ? (
           <TomaDeDatos
+          grupoFamiliarId={id}  
           familyMembers={familyMembers}
           setFamilyMembers={setFamilyMembers}
           readOnly={readOnly}
@@ -585,6 +586,7 @@ const handleCreateMemberRemote = async (memberData) => {
         
         ) : (
           <ProspectoDatos
+    grupoFamiliarId={id}      
   familyMembers={familyMembers}
   setFamilyMembers={setFamilyMembers}
   readOnly={readOnly}

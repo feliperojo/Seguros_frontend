@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
-// Opcional: si aún quieres colores por tipo en la badge,
-// crea un util pequeño o importa uno común:
 const getTypeColor = (tipo) => {
   switch (tipo) {
     case 'Tomador': return 'primary';
@@ -25,6 +24,59 @@ const getTypeColor = (tipo) => {
 const buildFullName = (p="", s="", a="") =>
   [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
 
+/* ==== helpers para soporte de cliente EXISTENTE ==== */
+const calcAge = (iso) => {
+  if (!iso) return "";
+  const b = new Date(iso);
+  if (isNaN(b)) return "";
+  const t = new Date();
+  let a = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+  return a;
+};
+
+const yaEstaEnElGrupo = (clienteId, members=[]) =>
+  members.some(m => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
+
+const mapClienteToMember = (c, tipoSel, coberturaTipo="Plan de salud", estadoCobertura="Sí") => {
+  const primer  = c.primer_nombre || c.nombre || "";
+  const segundo = c.segundo_nombre || "";
+  const apell   = c.apellidos || c.apellido || "";
+  const fecha   = c.fecha_nacimiento || c.fechaNacimiento || "";
+  const nombreCompleto = c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
+  const edad = calcAge(fecha);
+  const genero = c.genero || "Masculino";
+
+  return {
+    primer_nombre: primer,
+    segundo_nombre: segundo,
+    apellidos: apell,
+    nombreCompleto,
+    genero,
+    edad,
+    fecha_nacimiento: fecha,
+    parentesco: tipoSel,
+    tipo: tipoSel,
+    estado_cobertura: estadoCobertura,
+    cobertura_tipo: coberturaTipo,
+    cliente_id: c.id,
+    cliente: {
+      id: c.id,
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombre_completo: nombreCompleto,
+      genero,
+      fecha_nacimiento: fecha,
+      edad,
+      telefono: c.telefono || "",
+      idioma: c.idioma || "",
+    },
+  };
+};
+/* =================================================== */
+
 const ProspectoDatos = ({
   familyMembers,
   setFamilyMembers,
@@ -33,8 +85,9 @@ const ProspectoDatos = ({
   estadoActual,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
-  onCreateMemberRemote,
+  onCreateMemberRemote,           // creación remota para "nuevo"
   onBlockedAddClick,
+  grupoFamiliarId,                // ← si viene, habilita “cliente existente”
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -53,7 +106,7 @@ const ProspectoDatos = ({
     setModalOpen(true);
   };
 
-  // Callbacks que consumirá MemberModal
+  // === Callbacks que consumirá MemberModal ===
   const createLocal = async (payload) => {
     const newId = familyMembers.length ? Math.max(...familyMembers.map(m => m.id || 0)) + 1 : 1;
     setFamilyMembers(prev => [...prev, { ...payload, id: newId }]);
@@ -64,7 +117,6 @@ const ProspectoDatos = ({
   };
 
   const createRemote = async (payload) => {
-    // delega al padre si tienes backend:
     if (typeof onCreateMemberRemote === 'function') {
       await onCreateMemberRemote(payload);
     } else {
@@ -72,9 +124,45 @@ const ProspectoDatos = ({
     }
   };
 
+  // Crear cobertura para CLIENTE EXISTENTE (cuando hay grupoFamiliarId)
+  const handleCreateCoberturaExistente = async (payload, clienteSeleccionado) => {
+    if (!grupoFamiliarId) return;                // en prospecto local no aplica
+    if (!payload?.cliente_id) return;
+    if (yaEstaEnElGrupo(payload.cliente_id, familyMembers)) return;
+
+    const res = await GrupoFamiliarService.createCoberturaSimple({
+      grupo_familiar_id: grupoFamiliarId,
+      cliente_id: payload.cliente_id,
+      parentesco: payload.tipo,                  // o payload.parentesco
+      cobertura_tipo: payload.cobertura_tipo,
+      estado_cobertura: payload.estado_cobertura,
+    });
+
+    if (res?.miembro?.cliente || res?.miembro) {
+      setFamilyMembers(prev => [
+        ...prev,
+        {
+          ...res.miembro,
+          tipo: res.miembro.tipo || payload.tipo,
+          parentesco: res.miembro.parentesco || payload.tipo,
+          estado_cobertura: res.miembro.estado_cobertura || payload.estado_cobertura,
+          cobertura_tipo: res.miembro.cobertura_tipo || payload.cobertura_tipo,
+        },
+      ]);
+    } else {
+      const mLocal = mapClienteToMember(
+        clienteSeleccionado,
+        payload.tipo,
+        payload.cobertura_tipo,
+        payload.estado_cobertura
+      );
+      setFamilyMembers(prev => [...prev, mLocal]);
+    }
+    return res;
+  };
+
   return (
     <>
-      {/* FontAwesome global si aún no lo tienes en index.html */}
       <link
         rel="stylesheet"
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
@@ -181,10 +269,13 @@ const ProspectoDatos = ({
         defaultCoberturaTipo={defaultCoberturaTipo}
         canAdd={canAdd}
         readOnly={readOnly}
-        isProspecto={isProspecto}
+        isProspecto={isProspecto}                
         onCreateLocal={createLocal}
         onUpdateLocal={updateLocal}
         onCreateRemote={createRemote}
+        /* si hay grupo, habilitamos “cliente existente” con POST de cobertura */
+        grupoFamiliarId={grupoFamiliarId}
+        onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
     </>
   );

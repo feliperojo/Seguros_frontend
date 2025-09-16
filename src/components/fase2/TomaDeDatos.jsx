@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useCallback } from "react";
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
+import apiRequest from "../../services/api"; 
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
 // --- util: nombre completo (cliente anidado o plano)
 const fullName = (m) => {
@@ -57,17 +59,64 @@ const calcAge = (iso) => {
   return a;
 };
 
+// mapea cliente API → card que tu UI entiende (plano + anidado)
+const mapClienteToMember = (c, tipoSel, coberturaTipo = "Plan de salud", estadoCobertura = "Sí") => {
+  const primer  = c.primer_nombre || c.nombre || "";
+  const segundo = c.segundo_nombre || "";
+  const apell   = c.apellidos || c.apellido || "";
+  const fecha   = c.fecha_nacimiento || c.fechaNacimiento || "";
+  const nombreCompleto = c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
+  const edad = calcAge(fecha);
+  const genero = c.genero || "Masculino";
+
+  return {
+    // plano (fallback)
+    primer_nombre: primer,
+    segundo_nombre: segundo,
+    apellidos: apell,
+    nombreCompleto,
+    genero,
+    edad,
+    fecha_nacimiento: fecha,
+    // cobertura/meta
+    parentesco: tipoSel,
+    tipo: tipoSel,
+    estado_cobertura: estadoCobertura,
+    cobertura_tipo: coberturaTipo,
+    cliente_id: c.id,
+    // anidado (lo que la card prefiere)
+    cliente: {
+      id: c.id,
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombre_completo: nombreCompleto,
+      genero,
+      fecha_nacimiento: fecha,
+      edad,
+      telefono: c.telefono || "",
+      idioma: c.idioma || "",
+    },
+  };
+};
+
+// evita duplicados en el grupo
+const yaEstaEnElGrupo = (clienteId, members) =>
+  members.some(m => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
+
 const TomaDeDatos = ({
   familyMembers,
   setFamilyMembers,
-  onSaveCobertura,            // (lo mantengo tal cual lo usas abajo)
+  onSaveCobertura,                  // lo mantengo tal cual lo usas abajo
   // props homogeneizados
   canAdd = false,
   readOnly = false,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
-  onCreateMemberRemote,       // alta remota en edición
+  onCreateMemberRemote,             // alta remota en edición (para NUEVO)
   onBlockedAddClick,
+  // ⬇️ NUEVO: pásame el id del grupo
+  grupoFamiliarId,
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -115,29 +164,77 @@ const TomaDeDatos = ({
     if (["checkbox"].includes(type)) {
       if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, { [name]: !!checked });
       if (ROOT_FIELDS.has(name))   return patchRoot(idx,     { [name]: !!checked });
-      // por defecto cliente
       return patchCliente(idx, { [name]: !!checked });
     }
 
     // valores normales
     if (CLIENTE_FIELDS.has(name)) {
       const patch = { [name]: value };
-      // edad derivada si cambia fecha_nacimiento
-      if (name === "fecha_nacimiento") {
-        patch.edad = calcAge(value);
-      }
+      if (name === "fecha_nacimiento") patch.edad = calcAge(value);
       return patchCliente(idx, patch);
     }
-    if (ROOT_FIELDS.has(name)) {
-      return patchRoot(idx, { [name]: value });
-    }
-    // por defecto, escríbelo en cliente
+    if (ROOT_FIELDS.has(name)) return patchRoot(idx, { [name]: value });
     return patchCliente(idx, { [name]: value });
   };
 
-  // --- toggles de mensajería (para no repetir “map” inline)
-  const toggleClienteBool = (idx, key) => (e) =>
-    patchCliente(idx, { [key]: !!e.target.checked });
+  // --- toggles de mensajería
+  const toggleClienteBool = (idx, key) => (e) => patchCliente(idx, { [key]: !!e.target.checked });
+
+  // =============== NUEVO: crear cobertura con cliente existente (BACKEND) ===============
+  const handleCreateCoberturaExistente = useCallback(
+     async (payload, clienteSeleccionado) => {
+    if (!grupoFamiliarId) {
+      console.error("Falta grupoFamiliarId");
+      return;
+    }
+    if (!payload?.cliente_id) {
+      console.error("cliente_id inválido");
+      return;
+    }
+    if (yaEstaEnElGrupo(payload.cliente_id, members)) {
+      // opcional: toast.warn("Ese cliente ya está en este grupo");
+      return;
+    }
+
+    // 1) Crea la cobertura en backend (usa el servicio centralizado)
+
+   const res = await GrupoFamiliarService.createCoberturaSimple({
+     grupo_familiar_id: grupoFamiliarId,
+     cliente_id: payload.cliente_id,
+     parentesco: payload.tipo,                     // o payload.parentesco
+     cobertura_tipo: payload.cobertura_tipo,       // respeta la convención del backend
+     estado_cobertura: payload.estado_cobertura,   // "Sí", "No", "Medicare", etc.
+   });
+
+    // 2) Normaliza la respuesta: si el backend devuelve el miembro listo → úsalo
+    if (res?.miembro?.cliente || res?.miembro) {
+      setFamilyMembers(prev => [
+        ...prev,
+        {
+          ...res.miembro,
+          tipo: res.miembro.tipo || payload.tipo,
+          parentesco: res.miembro.parentesco || payload.tipo,
+          estado_cobertura: res.miembro.estado_cobertura || payload.estado_cobertura,
+          cobertura_tipo: res.miembro.cobertura_tipo || payload.cobertura_tipo,
+        },
+      ]);
+    } else {
+      // 3) Fallback: compón la card con el cliente seleccionado
+      const miembroLocal = mapClienteToMember(
+        clienteSeleccionado,
+        payload.tipo,
+        payload.cobertura_tipo,
+        payload.estado_cobertura
+      );
+      setFamilyMembers(prev => [...prev, miembroLocal]);
+    }
+
+    return res;
+  },
+  [grupoFamiliarId, members, setFamilyMembers]
+);
+
+  // =======================================================================================
 
   return (
     <div className="container-fluid p-0">
@@ -964,6 +1061,9 @@ const TomaDeDatos = ({
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}
+        // ⬇️ pasa el id del grupo y el callback que crea cobertura para EXISTENTES
+        grupoFamiliarId={grupoFamiliarId}
+        onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
     </div>
   );
