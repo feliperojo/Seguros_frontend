@@ -572,12 +572,17 @@ const handleCreateMemberRemote = async (memberData) => {
           (estadoActual || "").toUpperCase()
         ) ? (
           <TomaDeDatos
-            familyMembers={familyMembers}
-            setFamilyMembers={setFamilyMembers}
-            readOnly={readOnly}
-            onSaveMember={(m) => console.log("Guardar cliente:", m)}
-            onSaveCobertura={(m) => console.log("Guardar cobertura:", m)}
-          />
+          familyMembers={familyMembers}
+          setFamilyMembers={setFamilyMembers}
+          readOnly={readOnly}
+          canAdd={canAddMember}
+          isProspecto={isProspecto}
+          defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
+          onCreateMemberRemote={handleCreateMemberRemote}
+          onSaveMember={(m)=>{/* opcional */}}
+          onSaveCobertura={(m)=>{/* opcional */}}
+        />
+        
         ) : (
           <ProspectoDatos
   familyMembers={familyMembers}
