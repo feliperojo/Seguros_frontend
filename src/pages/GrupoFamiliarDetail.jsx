@@ -118,6 +118,7 @@ const mapFullToForm = (fullRaw) => {
 };
 
 // API FULL -> members para ProspectoDatos/TomaDeDatos (normalizado con cliente anidado)
+// API FULL -> members para ProspectoDatos/TomaDeDatos (con campos raíz)
 const mapFullToMembers = (fullRaw) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
@@ -130,83 +131,91 @@ const mapFullToMembers = (fullRaw) => {
     const fecha   = cli.fecha_nacimiento || "";
     const edad    = calcAge(fecha);
     const nombreCompleto =
-      cli.nombre_completo ||
-      [primer, segundo, apell].filter(Boolean).join(" ");
+      cli.nombre_completo || [primer, segundo, apell].filter(Boolean).join(" ");
 
-    // ROOT (cobertura/meta)
-    const root = {
+    return {
+      // -------- raíz (lo que usa el acordeón) --------
       id: cli.id ?? idx + 1,
       cliente_id: cli.id ?? null,
       cobertura_id: cov.id ?? null,
+
+      // datos “cliente” copiados a raíz para edición inline
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombreCompleto,
+      genero: cli.genero || "",
+      fecha_nacimiento: fecha,
+      edad,
+      idioma: cli.idioma || "",
+      ingreso_anual: cli.ingreso_anual || "",
+      nota: cli.nota || "",
+
+      // metadatos de cobertura
       parentesco: cov.parentesco || "Tomador",
       tipo: cov.parentesco || "Tomador",
       estado_cobertura: cov.estado_cobertura || "Sí",
-      codigo_poliza: cov.codigo_poliza || "",
-      vigencia: cov.vigencia || "",
       cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
       ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
+
+      // -------- también mantenemos el objeto cliente completo --------
+      cliente: {
+        id: cli.id ?? null,
+        primer_nombre: primer,
+        segundo_nombre: segundo,
+        apellidos: apell,
+        nombre_completo: nombreCompleto,
+        genero: cli.genero || "",
+        fecha_nacimiento: fecha,
+        edad,
+        idioma: cli.idioma || "",
+
+        // contacto
+        telefono: cli.telefono || "",
+        secundario: cli.secundario || "",
+        whatsapp_num: cli.whatsapp_num || "",
+        email: cli.email || "",
+        nota: cli.nota || "",
+
+        // dirección
+        direccion: cli.direccion || "",
+        calle: cli.calle || "",
+        apto: cli.apto || "",
+        ciudad: cli.ciudad || "",
+        estado: cli.estado || "",
+        codigo_postal: cli.codigo_postal || "",
+        condado: cli.condado || "",
+        dir_correspondencia: cli.dir_correspondencia || "",
+
+        // migratorio
+        social: cli.social || "",
+        status: cli.status || "",
+        auscis: cli.auscis || "",
+        tarjeta_numero: cli.tarjeta_numero || "",
+        fecha_emision: cli.fecha_emision || "",
+        fecha_expiracion: cli.fecha_expiracion || "",
+        categoria: cli.categoria || "",
+
+        // empleo/ingreso
+        tipo_ingreso: cli.tipo_ingreso || "",
+        actividad_economica: cli.actividad_economica || "",
+        empleador: cli.empleador || "",
+        telefono_empleador: cli.telefono_empleador || "",
+        periodo_ingreso: cli.periodo_ingreso || "",
+        ingreso_por_periodo: cli.ingreso_por_periodo || "",
+        ingreso_anual: cli.ingreso_anual || "",
+        nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
+        periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
+        ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
+
+        whatsapp: !!cli.whatsapp,
+        telegram: !!cli.telegram,
+        texto_sms: !!cli.texto_sms,
+      },
     };
-
-    // CLIENTE (anidado)
-    const cliente = {
-      id: cli.id ?? null,
-      primer_nombre: primer,
-      segundo_nombre: segundo,
-      apellidos: apell,
-      nombre_completo: nombreCompleto,
-      genero: cli.genero || "",
-      fecha_nacimiento: fecha,
-      edad,
-      idioma: cli.idioma || "",
-
-      // contacto
-      telefono: cli.telefono || "",
-      secundario: cli.secundario || "",
-      whatsapp_num: cli.whatsapp_num || "",
-      email: cli.email || "",
-      nota: cli.nota || "",
-
-      // dirección
-      direccion: cli.direccion || "",
-      calle: cli.calle || "",
-      apto: cli.apto || "",
-      ciudad: cli.ciudad || "",
-      estado: cli.estado || "",
-      codigo_postal: cli.codigo_postal || "",
-      condado: cli.condado || "",
-      dir_correspondencia: cli.dir_correspondencia || "",
-
-      // migratorio
-      social: cli.social || "",
-      status: cli.status || "",
-      auscis: cli.auscis || "",
-      tarjeta_numero: cli.tarjeta_numero || "",
-      fecha_emision: cli.fecha_emision || "",
-      fecha_expiracion: cli.fecha_expiracion || "",
-      categoria: cli.categoria || "",
-
-      // empleo/ingreso
-      tipo_ingreso: cli.tipo_ingreso || "",
-      actividad_economica: cli.actividad_economica || "",
-      empleador: cli.empleador || "",
-      telefono_empleador: cli.telefono_empleador || "",
-      periodo_ingreso: cli.periodo_ingreso || "",
-      ingreso_por_periodo: cli.ingreso_por_periodo || "",
-      ingreso_anual: cli.ingreso_anual || "",
-      nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
-      periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
-      ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
-
-      // toggles
-      whatsapp: !!cli.whatsapp,
-      telegram: !!cli.telegram,
-      texto_sms: !!cli.texto_sms,
-    };
-
-    return { ...root, cliente };
   });
 };
 
@@ -622,8 +631,7 @@ const handleCreateMemberRemote = async (memberData) => {
           isProspecto={isProspecto}
           defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
           onCreateMemberRemote={handleCreateMemberRemote}
-          onSaveMember={(m)=>{/* opcional */}}
-          onSaveCobertura={(m)=>{/* opcional */}}
+          onSaveCobertura={() => {}}
         />
         
         ) : (
@@ -644,6 +652,7 @@ const handleCreateMemberRemote = async (memberData) => {
       'Activa “Editar” y asegúrate de que el estado no sea Prospecto.'
     )
   }
+  onSaveCobertura={() => {}}
 />
 
 

@@ -1,11 +1,9 @@
 import React, { useMemo, useState, useCallback } from "react";
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
-import apiRequest from "../../services/api"; 
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
-// --- util: nombre completo (cliente anidado o plano)
-console.log("primero 1")
+/* =================== Utils =================== */
 const fullName = (m) => {
   const c = m?.cliente ?? m ?? {};
   const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
@@ -14,7 +12,6 @@ const fullName = (m) => {
   return composed || c.nombre_completo || m?.nombreCompleto || "Sin nombre";
 };
 
-// --- util: campo + etiqueta
 const Field = ({ label, children, className = "col-md-6" }) => (
   <div className={className}>
     <label className="form-label small fw-semibold text-muted">{label}</label>
@@ -22,229 +19,279 @@ const Field = ({ label, children, className = "col-md-6" }) => (
   </div>
 );
 
-// --- mapeos: dónde se guardan los campos
 const CLIENTE_FIELDS = new Set([
-  // datos principales
-  "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma",
+  // principales
+  "primer_nombre","segundo_nombre","apellidos","fecha_nacimiento","edad","genero","idioma",
   // contacto
-  "telefono", "secundario", "whatsapp_num", "email", "nota",
-  "dir_correspondencia",
+  "telefono","secundario","whatsapp_num","email","nota",
   // dirección
-  "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado",
+  "direccion","calle","apto","ciudad","estado","codigo_postal","condado","dir_correspondencia",
   // migratorio
-  "social", "status", "auscis", "tarjeta_numero", "fecha_emision", "fecha_expiracion", "categoria",
+  "social","status","auscis","tarjeta_numero","fecha_emision","fecha_expiracion","categoria",
   // empleo/ingreso
-  "tipo_ingreso", "actividad_economica", "empleador", "telefono_empleador",
-  "periodo_ingreso", "ingreso_por_periodo", "ingreso_anual",
-  "nota_ingreso_ocasional", "periodo_ingreso_ocasional", "ingreso_por_periodo_ocasional",
-  // toggles de mensajería
-  "whatsapp", "telegram", "texto_sms",
+  "tipo_ingreso","actividad_economica","empleador","telefono_empleador","periodo_ingreso",
+  "ingreso_por_periodo","ingreso_anual","nota_ingreso_ocasional","periodo_ingreso_ocasional",
+  "ingreso_por_periodo_ocasional",
+  // toggles
+  "whatsapp","telegram","texto_sms",
 ]);
 
-const ROOT_FIELDS = new Set([
-  "parentesco", "estado_cobertura", "codigo_poliza", "vigencia", "tipo"
-]);
+const ROOT_FIELDS = new Set(["parentesco","estado_cobertura","codigo_poliza","vigencia","tipo"]);
 
-// --- helpers
-const getC = (m) => (m?.cliente ? m.cliente : m);
+// 👇 Campos de cliente que también queremos mantener duplicados en la RAÍZ
+const DUPLICATE_TO_ROOT = [
+  "primer_nombre","segundo_nombre","apellidos",
+  "genero","fecha_nacimiento","edad","idioma",
+  "ingreso_anual","nota",
+];
 
-// edad derivada
 const calcAge = (iso) => {
   if (!iso) return "";
-  const b = new Date(iso);
-  if (isNaN(b)) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
   const t = new Date();
-  let a = t.getFullYear() - b.getFullYear();
-  const m = t.getMonth() - b.getMonth();
-  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+  let a = t.getFullYear() - d.getFullYear();
+  const m = t.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) a--;
   return a;
 };
 
-// mapea cliente API → card que tu UI entiende (plano + anidado)
-const mapClienteToMember = (c, tipoSel, coberturaTipo = "Plan de salud", estadoCobertura = "Sí") => {
-  console.log("entra a mapcliente")
-  const primer  = c.primer_nombre || c.nombre || "";
-  const segundo = c.segundo_nombre || "";
-  const apell   = c.apellidos || c.apellido || "";
-  const fecha   = c.fecha_nacimiento || c.fecha_nacimiento || "";
-  const nombreCompleto = c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
-  const edad = calcAge(fecha);
-  const genero = c.genero || "Masculino";
+const getC = (m) => (m?.cliente ? m.cliente : m);
+
+/** Normaliza un miembro a la forma { root..., cliente:{...} } */
+const normalizeMember = (m, idx) => {
+  if (m?.cliente && typeof m.cliente === "object") return m;
+
+  const primer  = m.primer_nombre || "";
+  const segundo = m.segundo_nombre || "";
+  const apell   = m.apellidos || "";
+  const fecha   = m.fecha_nacimiento || "";
+  const edad    = calcAge(fecha);
+  const nombre  = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
 
   return {
-    // plano (fallback)
+    id: m.id ?? idx + 1,
+    cliente_id: m.cliente_id ?? m.id ?? null,
+    cobertura_id: m.cobertura_id ?? null,
+    parentesco: m.parentesco || m.tipo || "Tomador",
+    tipo: m.tipo || m.parentesco || "Tomador",
+    estado_cobertura: m.estado_cobertura || "Sí",
+    codigo_poliza: m.codigo_poliza || "",
+    vigencia: m.vigencia || "",
+    cobertura_tipo: m.cobertura_tipo || "Plan de salud",
+    ano_cobertura: m.ano_cobertura || new Date().getFullYear(),
+    plan: m.plan ?? null,
+    metal: m.metal ?? null,
+    red: m.red ?? null,
+    // duplicados en raíz necesarios para el guardado
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
-    nombreCompleto,
-    genero,
-    edad,
+    genero: m.genero || "",
     fecha_nacimiento: fecha,
-    // cobertura/meta
-    parentesco: tipoSel,
-    tipo: tipoSel,
-    estado_cobertura: estadoCobertura,
-    cobertura_tipo: coberturaTipo,
-    cliente_id: c.id,
-    // anidado (lo que la card prefiere)
+    edad,
+    idioma: m.idioma || "",
+    ingreso_anual: m.ingreso_anual || "",
+    nombreCompleto: nombre,
+    nota: m.nota || "",
     cliente: {
-      id: c.id,
+      id: m.cliente_id ?? m.id ?? null,
       primer_nombre: primer,
       segundo_nombre: segundo,
       apellidos: apell,
-      nombre_completo: nombreCompleto,
-      genero,
+      nombre_completo: nombre,
+      genero: m.genero || "",
       fecha_nacimiento: fecha,
       edad,
-      telefono: c.telefono || "",
-      idioma: c.idioma || "",
+      idioma: m.idioma || "",
+      telefono: m.telefono || "",
+      secundario: m.secundario || "",
+      whatsapp_num: m.whatsapp_num || "",
+      email: m.email || "",
+      nota: m.nota || "",
+      direccion: m.direccion || "",
+      calle: m.calle || "",
+      apto: m.apto || "",
+      ciudad: m.ciudad || "",
+      estado: m.estado || "",
+      codigo_postal: m.codigo_postal || "",
+      condado: m.condado || "",
+      dir_correspondencia: m.dir_correspondencia || "",
+      social: m.social || "",
+      status: m.status || "",
+      auscis: m.auscis || "",
+      tarjeta_numero: m.tarjeta_numero || "",
+      fecha_emision: m.fecha_emision || "",
+      fecha_expiracion: m.fecha_expiracion || "",
+      categoria: m.categoria || "",
+      tipo_ingreso: m.tipo_ingreso || "",
+      actividad_economica: m.actividad_economica || "",
+      empleador: m.empleador || "",
+      telefono_empleador: m.telefono_empleador || "",
+      periodo_ingreso: m.periodo_ingreso || "",
+      ingreso_por_periodo: m.ingreso_por_periodo || "",
+      ingreso_anual: m.ingreso_anual || "",
+      nota_ingreso_ocasional: m.nota_ingreso_ocasional || "",
+      periodo_ingreso_ocasional: m.periodo_ingreso_ocasional || "",
+      ingreso_por_periodo_ocasional: m.ingreso_por_periodo_ocasional || "",
+      whatsapp: !!m.whatsapp,
+      telegram: !!m.telegram,
+      texto_sms: !!m.texto_sms,
     },
   };
 };
 
-// evita duplicados en el grupo
+// para crear cobertura con cliente existente
 const yaEstaEnElGrupo = (clienteId, members) =>
-  members.some(m => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
+  members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
 
+/* ======================================================= */
 const TomaDeDatos = ({
   familyMembers,
   setFamilyMembers,
-  onSaveCobertura,                  // lo mantengo tal cual lo usas abajo
-  // props homogeneizados
   canAdd = false,
   readOnly = false,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
-  onCreateMemberRemote,             // alta remota en edición (para NUEVO)
+  onCreateMemberRemote,   // alta remota para NUEVO
   onBlockedAddClick,
-  // ⬇️ NUEVO: pásame el id del grupo
   grupoFamiliarId,
 }) => {
-  console.log("segundo dentro de la funcion 2",familyMembers,"esto que es setFamilyMembers",setFamilyMembers)
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  const members = useMemo(() => familyMembers ?? [], [familyMembers]);
+  // Usamos miembros normalizados para render/edición/guardado
+  const normalized = useMemo(
+    () => (familyMembers ?? []).map(normalizeMember),
+    [familyMembers]
+  );
 
-  // --- CRUD local que consume MemberModal
-  const onCreateLocal = useCallback((payload) => {
-    const newId = members.length ? Math.max(...members.map(m => m.id || 0)) + 1 : 1;
-    setFamilyMembers(prev => [...prev, { ...payload, id: newId }]);
-  }, [members, setFamilyMembers]);
+  /* ---------- CRUD local para el modal (solo AÑADIR) ---------- */
+  const onCreateLocal = useCallback(
+    (payload) => {
+      const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
+      setFamilyMembers((prev) => [...(prev ?? []), normalizeMember({ ...payload, id: newId }, newId - 1)]);
+    },
+    [familyMembers, setFamilyMembers]
+  );
 
-  const onUpdateLocal = useCallback((id, payload) => {
-    setFamilyMembers(prev => prev.map(m => (m.id === id ? { ...payload, id } : m)));
-  }, [setFamilyMembers]);
+  const onUpdateLocal = useCallback(
+    (id, payload) => {
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((m) => (m.id === id ? normalizeMember({ ...payload, id }, 0) : m))
+      );
+    },
+    [setFamilyMembers]
+  );
 
-  // --- UI acciones
+  /* ---------- UI ---------- */
   const handleAdd = () => {
-    if (!canAdd) { onBlockedAddClick?.(); return; }
+    if (!canAdd) return onBlockedAddClick?.();
     setEditingMember(null);
     setOpenModal(true);
   };
-  const handleEdit = (m) => { setEditingMember(m); setOpenModal(true); };
 
-  // --- patchers
+  /* ---------- Patchers (escritura en local para Guardar global) ---------- */
   const patchRoot = (idx, patch) => {
-    setFamilyMembers(prev => prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)));
+    setFamilyMembers((prev) =>
+      (prev ?? []).map((m, i) => (i === idx ? { ...m, ...patch } : m))
+    );
   };
 
+  // 👉 clave: además de actualizar en cliente, duplicamos a la raíz y recalculamos derivados
   const patchCliente = (idx, patch) => {
-    setFamilyMembers(prev =>
-      prev.map((m, i) => {
+    setFamilyMembers((prev) =>
+      (prev ?? []).map((m, i) => {
         if (i !== idx) return m;
+
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
-        return { ...m, cliente: { ...base, ...patch } };
+        const nextCliente = { ...base, ...patch };
+
+        // si cambia la fecha, recalculamos edad en cliente
+        if ("fecha_nacimiento" in patch) nextCliente.edad = calcAge(patch.fecha_nacimiento);
+
+        // duplicados hacia la raíz
+        const dupe = {};
+        DUPLICATE_TO_ROOT.forEach((k) => {
+          if (k in nextCliente) dupe[k] = nextCliente[k];
+        });
+
+        // nombreCompleto raíz derivado
+        const nombreCompleto =
+          nextCliente.nombre_completo ||
+          [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
+            .filter(Boolean)
+            .join(" ");
+        if (nombreCompleto) dupe.nombreCompleto = nombreCompleto;
+
+        return { ...m, ...dupe, cliente: nextCliente };
       })
     );
   };
 
-  // --- único onChange para inputs/selects
+  // onChange único por fila
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
-
-    // toggles (checkbox)
-    if (["checkbox"].includes(type)) {
-      if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, { [name]: !!checked });
-      if (ROOT_FIELDS.has(name))   return patchRoot(idx,     { [name]: !!checked });
-      return patchCliente(idx, { [name]: !!checked });
-    }
-
-    // valores normales
-    if (CLIENTE_FIELDS.has(name)) {
-      const patch = { [name]: value };
-      if (name === "fecha_nacimiento") patch.edad = calcAge(value);
-      return patchCliente(idx, patch);
-    }
-    if (ROOT_FIELDS.has(name)) return patchRoot(idx, { [name]: value });
-    return patchCliente(idx, { [name]: value });
+    const v = type === "checkbox" ? !!checked : value;
+    if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, { [name]: v });
+    if (ROOT_FIELDS.has(name)) return patchRoot(idx, { [name]: v });
+    return patchCliente(idx, { [name]: v }); // por defecto, tratamos como campo de cliente
   };
 
-  // --- toggles de mensajería
   const toggleClienteBool = (idx, key) => (e) => patchCliente(idx, { [key]: !!e.target.checked });
 
-  // =============== NUEVO: crear cobertura con cliente existente (BACKEND) ===============
+  /* ---------- Crear cobertura para CLIENTE EXISTENTE ---------- */
   const handleCreateCoberturaExistente = useCallback(
-     async (payload, clienteSeleccionado) => {
-    if (!grupoFamiliarId) {
-      console.error("Falta grupoFamiliarId");
-      return;
-    }
-    if (!payload?.cliente_id) {
-      console.error("cliente_id inválido");
-      return;
-    }
-    if (yaEstaEnElGrupo(payload.cliente_id, members)) {
-      // opcional: toast.warn("Ese cliente ya está en este grupo");
-      return;
-    }
+    async (payload, clienteSeleccionado) => {
+      if (!grupoFamiliarId || !payload?.cliente_id) return;
+      if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
 
-    // 1) Crea la cobertura en backend (usa el servicio centralizado)
+      const res = await GrupoFamiliarService.createCoberturaSimple({
+        grupo_familiar_id: grupoFamiliarId,
+        cliente_id: payload.cliente_id,
+        parentesco: payload.tipo,
+        cobertura_tipo: payload.cobertura_tipo,
+        estado_cobertura: payload.estado_cobertura,
+      });
 
-   const res = await GrupoFamiliarService.createCoberturaSimple({
-     grupo_familiar_id: grupoFamiliarId,
-     cliente_id: payload.cliente_id,
-     parentesco: payload.tipo,                     // o payload.parentesco
-     cobertura_tipo: payload.cobertura_tipo,       // respeta la convención del backend
-     estado_cobertura: payload.estado_cobertura,   // "Sí", "No", "Medicare", etc.
-   });
+      if (res?.miembro?.cliente || res?.miembro) {
+        setFamilyMembers((prev) => [...(prev ?? []), normalizeMember(res.miembro, (prev?.length ?? 0))]);
+      } else {
+        const c = clienteSeleccionado || {};
+        const aggi = normalizeMember(
+          {
+            ...payload,
+            cliente: {
+              id: c.id,
+              primer_nombre: c.primer_nombre,
+              segundo_nombre: c.segundo_nombre,
+              apellidos: c.apellidos,
+              nombre_completo:
+                c.nombre_completo ||
+                [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" "),
+              genero: c.genero || "",
+              fecha_nacimiento: c.fecha_nacimiento || "",
+              idioma: c.idioma || "",
+            },
+            cliente_id: c.id,
+          },
+          (familyMembers?.length ?? 0)
+        );
+        setFamilyMembers((prev) => [...(prev ?? []), aggi]);
+      }
+      return res;
+    },
+    [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length]
+  );
 
-    // 2) Normaliza la respuesta: si el backend devuelve el miembro listo → úsalo
-    if (res?.miembro?.cliente || res?.miembro) {
-      setFamilyMembers(prev => [
-        ...prev,
-        {
-          ...res.miembro,
-          tipo: res.miembro.tipo || payload.tipo,
-          parentesco: res.miembro.parentesco || payload.tipo,
-          estado_cobertura: res.miembro.estado_cobertura || payload.estado_cobertura,
-          cobertura_tipo: res.miembro.cobertura_tipo || payload.cobertura_tipo,
-        },
-      ]);
-    } else {
-      // 3) Fallback: compón la card con el cliente seleccionado
-      const miembroLocal = mapClienteToMember(
-        clienteSeleccionado,
-        payload.tipo,
-        payload.cobertura_tipo,
-        payload.estado_cobertura
-      );
-      setFamilyMembers(prev => [...prev, miembroLocal]);
-    }
-
-    return res;
-  },
-  [grupoFamiliarId, members, setFamilyMembers]
-);
-
-
-
+  /* ============================ Render ============================ */
   return (
     <div className="container-fluid p-0">
-      {/* Header con botón Añadir */}
       {!readOnly && (
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
+          <h5 className="mb-0">
+            <i className="fas fa-users me-2" /> Miembros
+          </h5>
           {canAdd ? (
             <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
           ) : (
@@ -260,7 +307,7 @@ const TomaDeDatos = ({
         </div>
       )}
 
-      {members.map((m, idx) => {
+      {normalized.map((m, idx) => {
         const itemId = `member-${m.id ?? idx}`;
         const leftRightWidth = 180;
         const c = getC(m);
@@ -268,10 +315,9 @@ const TomaDeDatos = ({
 
         return (
           <div className="card shadow-sm mb-3" key={itemId}>
-            {/* Header de la card */}
+            {/* Header */}
             <div className="card-header bg-white border-0 px-4 py-3">
               <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
-                {/* IZQUIERDA: rol + icono */}
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
                   <span className="fw-semibold" style={{ color: "#0d6efd" }}>
                     {m.tipo || "Miembro"}
@@ -281,12 +327,10 @@ const TomaDeDatos = ({
                   </div>
                 </div>
 
-                {/* CENTRO: nombre */}
                 <div className="flex-grow-1 text-center">
                   <span className="fw-semibold text-dark">{fullName(m)}</span>
                 </div>
 
-                {/* DERECHA: edad / género + botón editar */}
                 <div className="d-flex align-items-center justify-content-end ms-3" style={{ width: leftRightWidth }}>
                   <div className="text-start me-3">
                     <div className="small">
@@ -295,11 +339,6 @@ const TomaDeDatos = ({
                     </div>
                     <div className="small text-muted">Género: {c.genero ?? m.genero ?? "—"}</div>
                   </div>
-                  {!readOnly && (
-                    <button className="btn btn-outline-secondary btn-sm" onClick={() => handleEdit(m)}>
-                      <i className="fas fa-edit" />
-                    </button>
-                  )}
                 </div>
               </div>
             </div>
@@ -318,10 +357,8 @@ const TomaDeDatos = ({
                       aria-expanded="false"
                       aria-controls={`collapse-cliente-${itemId}`}
                     >
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-user me-2 text-muted" />
-                        <span className="fw-semibold">Datos Cliente</span>
-                      </div>
+                      <i className="fas fa-user me-2 text-muted" />
+                      <span className="fw-semibold">Datos Cliente</span>
                     </button>
                   </h2>
 
@@ -387,7 +424,7 @@ const TomaDeDatos = ({
                                     type="date"
                                     className="form-control form-control-sm"
                                     name="fecha_nacimiento"
-                                    value={c.fecha_nacimiento ?? ""}
+                                    value={(c.fecha_nacimiento || "").slice(0,10)}
                                     onChange={onChange}
                                     disabled={readOnly}
                                   />
@@ -412,6 +449,7 @@ const TomaDeDatos = ({
                                     <option value="">Seleccione</option>
                                     <option value="Masculino">Masculino</option>
                                     <option value="Femenino">Femenino</option>
+                                    <option value="Otro">Otro</option>
                                   </select>
                                 </Field>
                                 <Field label="Idioma" className="col-md-3">
@@ -506,7 +544,7 @@ const TomaDeDatos = ({
                                     type="date"
                                     className="form-control form-control-sm"
                                     name="fecha_emision"
-                                    value={c.fecha_emision ?? ""}
+                                    value={(c.fecha_emision || "").slice(0,10)}
                                     onChange={onChange}
                                     disabled={readOnly}
                                   />
@@ -516,7 +554,7 @@ const TomaDeDatos = ({
                                     type="date"
                                     className="form-control form-control-sm"
                                     name="fecha_expiracion"
-                                    value={c.fecha_expiracion ?? ""}
+                                    value={(c.fecha_expiracion || "").slice(0,10)}
                                     onChange={onChange}
                                     disabled={readOnly}
                                   />
@@ -599,11 +637,8 @@ const TomaDeDatos = ({
                                   />
                                 </Field>
 
-                                {/* toggles */}
                                 <div className="col-12">
-                                  <div className="small fw-semibold text-muted mb-1">
-                                    Servicios de Mensajería
-                                  </div>
+                                  <div className="small fw-semibold text-muted mb-1">Servicios de Mensajería</div>
 
                                   <div className="form-check form-check-inline">
                                     <input
@@ -653,8 +688,6 @@ const TomaDeDatos = ({
                                     placeholder="correo@dominio.com"
                                   />
                                 </Field>
-
-                               
                               </div>
                             </div>
                           </div>
@@ -766,11 +799,7 @@ const TomaDeDatos = ({
                                       type="checkbox"
                                       id={`copy-dir-${itemId}`}
                                       onChange={(e) => {
-                                        if (e.target.checked) {
-                                          patchCliente(idx, {
-                                            dir_correspondencia: c.direccion ?? "",
-                                          });
-                                        }
+                                        if (e.target.checked) patchCliente(idx, { dir_correspondencia: c.direccion ?? "" });
                                       }}
                                       disabled={readOnly}
                                     />
@@ -949,7 +978,7 @@ const TomaDeDatos = ({
                   </div>
                 </div>
 
-                {/* Datos Cobertura (ROOT_FIELDS) */}
+                {/* Datos Cobertura */}
                 <div className="accordion-item">
                   <h2 className="accordion-header" id={`cobertura-${itemId}`}>
                     <button
@@ -960,10 +989,8 @@ const TomaDeDatos = ({
                       aria-expanded="false"
                       aria-controls={`collapse-cobertura-${itemId}`}
                     >
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-shield-alt me-2 text-muted" />
-                        <span className="fw-semibold">Datos Cobertura</span>
-                      </div>
+                      <i className="fas fa-shield-alt me-2 text-muted" />
+                      <span className="fw-semibold">Datos Cobertura</span>
                     </button>
                   </h2>
                   <div
@@ -977,8 +1004,8 @@ const TomaDeDatos = ({
                         <Field label="Parentesco" className="col-md-3">
                           <input
                             className="form-control form-control-sm"
-                            value={m.parentesco || m.tipo || ""}
                             name="parentesco"
+                            value={m.parentesco || m.tipo || ""}
                             onChange={onChange}
                             placeholder="Tomador / Cónyuge / Hijo/a..."
                             disabled={readOnly}
@@ -1022,18 +1049,6 @@ const TomaDeDatos = ({
                           />
                         </Field>
                       </div>
-
-                      {!readOnly && (
-                        <div className="text-end mt-4">
-                          <button
-                            className="btn btn-primary btn-sm px-4"
-                            onClick={() => onSaveCobertura?.(members[idx])}
-                          >
-                            <i className="fas fa-save me-2" />
-                            Guardar Cobertura
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -1044,7 +1059,7 @@ const TomaDeDatos = ({
         );
       })}
 
-      {/* Modal único */}
+      {/* Modal único: SOLO para añadir */}
       <MemberModal
         open={openModal}
         onClose={() => setOpenModal(false)}
@@ -1056,7 +1071,6 @@ const TomaDeDatos = ({
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}
-        // ⬇️ pasa el id del grupo y el callback que crea cobertura para EXISTENTES
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
