@@ -266,7 +266,7 @@ const handlePickExisting = async (cliente) => {
   const color = TYPE_COLOR[data.tipo] || "secondary";
   const icon  = TYPE_ICON[data.tipo]  || "fa-user-check";
   const title = step === 1
-    ? (editingMember ? "Cambiar Tipo de Miembro" : "Seleccionar Tipo de Miembro")
+    ? (editingMember ? "Cambiar Tipo de Miembro" : "Seleccionar Tipo de Miembro1")
     : (data.nombreCompleto?.trim() || `Datos del ${data.tipo}`);
 
   return (
