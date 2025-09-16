@@ -5,6 +5,7 @@ import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
 // --- util: nombre completo (cliente anidado o plano)
+console.log("primero 1")
 const fullName = (m) => {
   const c = m?.cliente ?? m ?? {};
   const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
@@ -61,10 +62,11 @@ const calcAge = (iso) => {
 
 // mapea cliente API → card que tu UI entiende (plano + anidado)
 const mapClienteToMember = (c, tipoSel, coberturaTipo = "Plan de salud", estadoCobertura = "Sí") => {
+  console.log("entra a mapcliente")
   const primer  = c.primer_nombre || c.nombre || "";
   const segundo = c.segundo_nombre || "";
   const apell   = c.apellidos || c.apellido || "";
-  const fecha   = c.fecha_nacimiento || c.fechaNacimiento || "";
+  const fecha   = c.fecha_nacimiento || c.fecha_nacimiento || "";
   const nombreCompleto = c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
   const edad = calcAge(fecha);
   const genero = c.genero || "Masculino";
@@ -118,6 +120,7 @@ const TomaDeDatos = ({
   // ⬇️ NUEVO: pásame el id del grupo
   grupoFamiliarId,
 }) => {
+  console.log("segundo dentro de la funcion 2",familyMembers,"esto que es setFamilyMembers",setFamilyMembers)
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
@@ -234,7 +237,7 @@ const TomaDeDatos = ({
   [grupoFamiliarId, members, setFamilyMembers]
 );
 
-  // =======================================================================================
+
 
   return (
     <div className="container-fluid p-0">
@@ -651,15 +654,7 @@ const TomaDeDatos = ({
                                   />
                                 </Field>
 
-                                <Field label="Dir. Correspondencia" className="col-md-6">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="dir_correspondencia"
-                                    value={c.dir_correspondencia ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
+                               
                               </div>
                             </div>
                           </div>

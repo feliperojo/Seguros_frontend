@@ -117,58 +117,99 @@ const mapFullToForm = (fullRaw) => {
   };
 };
 
-// API FULL -> members para ProspectoDatos
+// API FULL -> members para ProspectoDatos/TomaDeDatos (normalizado con cliente anidado)
 const mapFullToMembers = (fullRaw) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
 
   return coberturas.map((cov, idx) => {
     const cli = cov?.cliente || {};
+    const primer  = (cli.primer_nombre  || "").trim();
+    const segundo = (cli.segundo_nombre || "").trim();
+    const apell   = (cli.apellidos      || "").trim();
+    const fecha   = cli.fecha_nacimiento || "";
+    const edad    = calcAge(fecha);
+    const nombreCompleto =
+      cli.nombre_completo ||
+      [primer, segundo, apell].filter(Boolean).join(" ");
 
-    const first  = (cli.primer_nombre  || "").trim();
-    const middle = (cli.segundo_nombre || "").trim();
-    const last   = (cli.apellidos      || "").trim();
-
-    // si tu API no trae los atómicos, usa nombre_completo como fallback
-    let primer_nombre  = first;
-    let segundo_nombre = middle;
-    let apellidos      = last;
-
-    if (!primer_nombre && !apellidos && cli.nombre_completo) {
-      const partes = cli.nombre_completo.trim().split(/\s+/);
-      primer_nombre  = partes[0] || "";
-      apellidos      = partes.slice(1).join(" ");
-      // segundo_nombre lo dejamos vacío salvo que lo manejes diferente
-    }
-
-    const nombreCompleto = [primer_nombre, segundo_nombre, apellidos]
-      .filter(Boolean).join(" ");
-    return {
+    // ROOT (cobertura/meta)
+    const root = {
       id: cli.id ?? idx + 1,
       cliente_id: cli.id ?? null,
-      cobertura_id: cov.id ?? null,  
-
-      primer_nombre,
-      segundo_nombre,
-      apellidos,
-      nombreCompleto,
-
-      fechaNacimiento: cli.fecha_nacimiento ?? "",
-      edad: calcAge(cli.fecha_nacimiento),
-      ingresoAnual: cli.ingreso_anual ?? "",
-
-      parentesco: cov.parentesco ?? "Tomador",
-      tipo: cov.parentesco ?? "Tomador",
-      estado_cobertura: cov.estado_cobertura ?? "Si/No",
-
-      // (campos opcionales si luego los usas)
+      cobertura_id: cov.id ?? null,
+      parentesco: cov.parentesco || "Tomador",
+      tipo: cov.parentesco || "Tomador",
+      estado_cobertura: cov.estado_cobertura || "Sí",
+      codigo_poliza: cov.codigo_poliza || "",
+      vigencia: cov.vigencia || "",
+      cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
+      ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
-      ano_cobertura: cov.ano_cobertura ?? null,
     };
+
+    // CLIENTE (anidado)
+    const cliente = {
+      id: cli.id ?? null,
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombre_completo: nombreCompleto,
+      genero: cli.genero || "",
+      fecha_nacimiento: fecha,
+      edad,
+      idioma: cli.idioma || "",
+
+      // contacto
+      telefono: cli.telefono || "",
+      secundario: cli.secundario || "",
+      whatsapp_num: cli.whatsapp_num || "",
+      email: cli.email || "",
+      nota: cli.nota || "",
+
+      // dirección
+      direccion: cli.direccion || "",
+      calle: cli.calle || "",
+      apto: cli.apto || "",
+      ciudad: cli.ciudad || "",
+      estado: cli.estado || "",
+      codigo_postal: cli.codigo_postal || "",
+      condado: cli.condado || "",
+      dir_correspondencia: cli.dir_correspondencia || "",
+
+      // migratorio
+      social: cli.social || "",
+      status: cli.status || "",
+      auscis: cli.auscis || "",
+      tarjeta_numero: cli.tarjeta_numero || "",
+      fecha_emision: cli.fecha_emision || "",
+      fecha_expiracion: cli.fecha_expiracion || "",
+      categoria: cli.categoria || "",
+
+      // empleo/ingreso
+      tipo_ingreso: cli.tipo_ingreso || "",
+      actividad_economica: cli.actividad_economica || "",
+      empleador: cli.empleador || "",
+      telefono_empleador: cli.telefono_empleador || "",
+      periodo_ingreso: cli.periodo_ingreso || "",
+      ingreso_por_periodo: cli.ingreso_por_periodo || "",
+      ingreso_anual: cli.ingreso_anual || "",
+      nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
+      periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
+      ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
+
+      // toggles
+      whatsapp: !!cli.whatsapp,
+      telegram: !!cli.telegram,
+      texto_sms: !!cli.texto_sms,
+    };
+
+    return { ...root, cliente };
   });
 };
+
 
 // ================== Componente ==================
 const GrupoFamiliarDetail = () => {
@@ -262,8 +303,9 @@ const mapMemberFromAppendResponse = (res) => {
     primer_nombre: cli.primer_nombre || "",
     segundo_nombre: cli.segundo_nombre || "",
     apellidos: cli.apellidos || "",
+    genero: cli.genero || "",
     nombreCompleto,
-    fechaNacimiento: cli.fecha_nacimiento || "",
+    fecha_nacimiento: cli.fecha_nacimiento || "",
     edad: calcAge(cli.fecha_nacimiento),
     ingresoAnual: cli.ingreso_anual || "",
     parentesco: cov.parentesco || "Tomador",
@@ -286,7 +328,7 @@ const handleCreateMemberRemote = async (memberData) => {
       primer_nombre: memberData.primer_nombre || "",
       segundo_nombre: memberData.segundo_nombre || "",
       apellidos: memberData.apellidos || "",
-      fecha_nacimiento: memberData.fechaNacimiento || null,
+      fecha_nacimiento: memberData.fecha_nacimiento || null,
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,
       ingreso_anual: memberData.ingresoAnual || 0,
@@ -297,7 +339,7 @@ const handleCreateMemberRemote = async (memberData) => {
       cobertura_tipo: productoCotizacion?.label || "Plan de salud", // o el default que uses
       estado_cobertura: memberData.estado_cobertura || "Si/No",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
-      fecha_activacion: memberData.fechaNacimiento ? null : null, // ajusta si debes
+      fecha_activacion: memberData.fecha_nacimiento ? null : null, // ajusta si debes
       pagador_id: null,
       dia_pago: 1,
       tipo_pago: null,
