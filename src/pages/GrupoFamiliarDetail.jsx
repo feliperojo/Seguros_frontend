@@ -57,6 +57,69 @@ const capitalizeWords = (s = "") =>
 // Desempaqueta respuesta: acepta {status,data} o el objeto directo
 const unwrapFull = (res) => res?.data ?? res ?? {};
 
+// ===== Mapper local para GUARDAR todos los campos del cliente =====
+const mapClienteForSave = (m) => {
+  const c = m?.cliente || {};
+  const pick = (k) => (c[k] ?? m[k] ?? null);
+  const date10 = (v) => (v ? String(v).slice(0, 10) : null);
+
+  return {
+    id: m?.cliente_id ?? c?.id ?? null,
+
+    // Principales
+    primer_nombre: pick("primer_nombre"),
+    segundo_nombre: pick("segundo_nombre"),
+    apellidos: pick("apellidos"),
+    fecha_nacimiento: date10(pick("fecha_nacimiento")),
+    genero: pick("genero"),
+    idioma: pick("idioma"),
+
+    // Contacto
+    telefono: pick("telefono"),
+    secundario: pick("secundario"),
+    whatsapp_num: pick("whatsapp_num"),
+    email: pick("email"),
+    nota: pick("nota"),
+
+    // Dirección
+    direccion: pick("direccion"),
+    calle: pick("calle"),
+    apto: pick("apto"),
+    ciudad: pick("ciudad"),
+    estado: pick("estado"),
+    codigo_postal: pick("codigo_postal"),
+    condado: pick("condado"),
+    dir_correspondencia: pick("dir_correspondencia"),
+
+    // Migratorio
+    social: pick("social"),
+    status: pick("status"),                 // 👈 este era el que no estaba llegando
+    auscis: pick("auscis"),
+    tarjeta_numero: pick("tarjeta_numero"),
+    fecha_emision: date10(pick("fecha_emision")),
+    fecha_expiracion: date10(pick("fecha_expiracion")),
+    categoria: pick("categoria"),
+
+    // Empleo / Ingreso
+    tipo_ingreso: pick("tipo_ingreso"),
+    actividad_economica: pick("actividad_economica"),
+    empleador: pick("empleador"),
+    telefono_empleador: pick("telefono_empleador"),
+    periodo_ingreso: pick("periodo_ingreso"),
+    ingreso_por_periodo: pick("ingreso_por_periodo"),
+    ingreso_anual: pick("ingreso_anual"),
+    nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
+    periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
+    ingreso_por_periodo_ocasional: pick("ingreso_por_periodo_ocasional"),
+
+    // Toggles
+    whatsapp: pick("whatsapp") === true,
+    telegram: pick("telegram") === true,
+    texto_sms: pick("texto_sms") === true,
+  };
+};
+
+
 // ================== Función para obtener el producto desde coberturas ==================
 const getProductoFromCoberturas = (coberturas = []) => {
   // Buscar el primer cobertura_tipo no vacío
@@ -391,9 +454,10 @@ const handleCreateMemberRemote = async (memberData) => {
 
       const grupoPayload = stripNulls(mapGrupoFromForm(formData));
       const clientesPayload = (familyMembers || [])
-        .filter(m => m?.cliente_id)
-        .map(mapClienteFromMember)
-        .map(stripNulls);
+      .filter(m => m?.cliente_id)
+      .map(mapClienteForSave)   // 👈 nuestro mapper completo
+      .map(stripNulls);
+    
       
       // 👈 Actualizar cobertura_tipo si se cambió el producto
       const coberturasPayload = (familyMembers || [])

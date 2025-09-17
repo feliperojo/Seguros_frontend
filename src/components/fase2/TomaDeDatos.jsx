@@ -19,6 +19,7 @@ const Field = ({ label, children, className = "col-md-6" }) => (
   </div>
 );
 
+// Campos que pertenecen al objeto cliente (todas las secciones)
 const CLIENTE_FIELDS = new Set([
   // principales
   "primer_nombre","segundo_nombre","apellidos","fecha_nacimiento","edad","genero","idioma",
@@ -36,14 +37,11 @@ const CLIENTE_FIELDS = new Set([
   "whatsapp","telegram","texto_sms",
 ]);
 
+// Campos del nivel raíz (cobertura/meta)
 const ROOT_FIELDS = new Set(["parentesco","estado_cobertura","codigo_poliza","vigencia","tipo"]);
 
-// 👇 Campos de cliente que también queremos mantener duplicados en la RAÍZ
-const DUPLICATE_TO_ROOT = [
-  "primer_nombre","segundo_nombre","apellidos",
-  "genero","fecha_nacimiento","edad","idioma",
-  "ingreso_anual","nota",
-];
+// 👇 Duplicamos a la raíz TODOS los campos de cliente (así el mapper del padre siempre los ve)
+const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
 
 const calcAge = (iso) => {
   if (!iso) return "";
@@ -58,7 +56,7 @@ const calcAge = (iso) => {
 
 const getC = (m) => (m?.cliente ? m.cliente : m);
 
-/** Normaliza un miembro a la forma { root..., cliente:{...} } */
+/** Normaliza a { root..., cliente:{...} } */
 const normalizeMember = (m, idx) => {
   if (m?.cliente && typeof m.cliente === "object") return m;
 
@@ -83,7 +81,8 @@ const normalizeMember = (m, idx) => {
     plan: m.plan ?? null,
     metal: m.metal ?? null,
     red: m.red ?? null,
-    // duplicados en raíz necesarios para el guardado
+
+    // duplicados mínimos para cabecera
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
@@ -94,6 +93,8 @@ const normalizeMember = (m, idx) => {
     ingreso_anual: m.ingreso_anual || "",
     nombreCompleto: nombre,
     nota: m.nota || "",
+
+    // objeto cliente completo
     cliente: {
       id: m.cliente_id ?? m.id ?? null,
       primer_nombre: primer,
@@ -104,11 +105,13 @@ const normalizeMember = (m, idx) => {
       fecha_nacimiento: fecha,
       edad,
       idioma: m.idioma || "",
+
       telefono: m.telefono || "",
       secundario: m.secundario || "",
       whatsapp_num: m.whatsapp_num || "",
       email: m.email || "",
       nota: m.nota || "",
+
       direccion: m.direccion || "",
       calle: m.calle || "",
       apto: m.apto || "",
@@ -117,6 +120,7 @@ const normalizeMember = (m, idx) => {
       codigo_postal: m.codigo_postal || "",
       condado: m.condado || "",
       dir_correspondencia: m.dir_correspondencia || "",
+
       social: m.social || "",
       status: m.status || "",
       auscis: m.auscis || "",
@@ -124,6 +128,7 @@ const normalizeMember = (m, idx) => {
       fecha_emision: m.fecha_emision || "",
       fecha_expiracion: m.fecha_expiracion || "",
       categoria: m.categoria || "",
+
       tipo_ingreso: m.tipo_ingreso || "",
       actividad_economica: m.actividad_economica || "",
       empleador: m.empleador || "",
@@ -134,6 +139,7 @@ const normalizeMember = (m, idx) => {
       nota_ingreso_ocasional: m.nota_ingreso_ocasional || "",
       periodo_ingreso_ocasional: m.periodo_ingreso_ocasional || "",
       ingreso_por_periodo_ocasional: m.ingreso_por_periodo_ocasional || "",
+
       whatsapp: !!m.whatsapp,
       telegram: !!m.telegram,
       texto_sms: !!m.texto_sms,
@@ -160,13 +166,13 @@ const TomaDeDatos = ({
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  // Usamos miembros normalizados para render/edición/guardado
+  // Normalizados para render/edición/guardado
   const normalized = useMemo(
     () => (familyMembers ?? []).map(normalizeMember),
     [familyMembers]
   );
 
-  /* ---------- CRUD local para el modal (solo AÑADIR) ---------- */
+  /* ---------- CRUD local (modal: solo AÑADIR) ---------- */
   const onCreateLocal = useCallback(
     (payload) => {
       const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
@@ -191,14 +197,14 @@ const TomaDeDatos = ({
     setOpenModal(true);
   };
 
-  /* ---------- Patchers (escritura en local para Guardar global) ---------- */
+  /* ---------- Patchers (edición en local para “Guardar” global) ---------- */
   const patchRoot = (idx, patch) => {
     setFamilyMembers((prev) =>
       (prev ?? []).map((m, i) => (i === idx ? { ...m, ...patch } : m))
     );
   };
 
-  // 👉 clave: además de actualizar en cliente, duplicamos a la raíz y recalculamos derivados
+  // ❗Clave: además de actualizar cliente, duplicamos TODOS los campos a la raíz
   const patchCliente = (idx, patch) => {
     setFamilyMembers((prev) =>
       (prev ?? []).map((m, i) => {
@@ -207,10 +213,11 @@ const TomaDeDatos = ({
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
         const nextCliente = { ...base, ...patch };
 
-        // si cambia la fecha, recalculamos edad en cliente
-        if ("fecha_nacimiento" in patch) nextCliente.edad = calcAge(patch.fecha_nacimiento);
+        // Derivados
+        if ("fecha_nacimiento" in patch)
+          nextCliente.edad = calcAge(patch.fecha_nacimiento);
 
-        // duplicados hacia la raíz
+        // Duplicados hacia la raíz para que el mapper del padre los tome
         const dupe = {};
         DUPLICATE_TO_ROOT.forEach((k) => {
           if (k in nextCliente) dupe[k] = nextCliente[k];
@@ -234,8 +241,9 @@ const TomaDeDatos = ({
     const { name, value, type, checked } = e.target;
     const v = type === "checkbox" ? !!checked : value;
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, { [name]: v });
-    if (ROOT_FIELDS.has(name)) return patchRoot(idx, { [name]: v });
-    return patchCliente(idx, { [name]: v }); // por defecto, tratamos como campo de cliente
+    if (ROOT_FIELDS.has(name))   return patchRoot(idx, { [name]: v });
+    // default: trátalo como cliente
+    return patchCliente(idx, { [name]: v });
   };
 
   const toggleClienteBool = (idx, key) => (e) => patchCliente(idx, { [key]: !!e.target.checked });
@@ -289,9 +297,7 @@ const TomaDeDatos = ({
     <div className="container-fluid p-0">
       {!readOnly && (
         <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="mb-0">
-            <i className="fas fa-users me-2" /> Miembros
-          </h5>
+          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
           {canAdd ? (
             <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
           ) : (
@@ -511,12 +517,18 @@ const TomaDeDatos = ({
                                     disabled={readOnly}
                                   >
                                     <option value="">Seleccione</option>
-                                    <option value="Ciudadano">Ciudadano</option>
-                                    <option value="Residente">Residente</option>
-                                    <option value="Visa">Visa</option>
-                                    <option value="Permiso de Trabajo">Permiso de Trabajo</option>
-                                    <option value="Indocumentado">Indocumentado</option>
-                                    <option value="Otro">Otro</option>
+                                    <option value="P. TRABAJO">P. TRABAJO</option>
+                                    <option value="RESIDENTE">RESIDENTE</option>
+                                    <option value="CIUDADANO">CIUDADANO</option>
+                                    <option value="I-862">I-862</option>
+                                    <option value="I-797">I-797</option>
+                                    <option value="I-589 ASILUM">I-589 ASILUM</option>
+                                    <option value="ESTUDIANTE">ESTUDIANTE</option>
+                                    <option value="VISA E2">VISA E2</option>
+                                    <option value="VISA K1">VISA K1</option>
+                                    <option value="VISA J">VISA J</option>
+                                    <option value="I-94">I-94</option>
+                                    <option value="TPS">TPS</option>
                                   </select>
                                 </Field>
 
@@ -844,12 +856,12 @@ const TomaDeDatos = ({
                                     disabled={readOnly}
                                   >
                                     <option value="">Seleccione</option>
-                                    <option value="Empleado">Empleado</option>
-                                    <option value="Independiente">Independiente</option>
-                                    <option value="Contratista">Contratista</option>
-                                    <option value="Jubilado">Jubilado</option>
-                                    <option value="Desempleado">Desempleado</option>
-                                    <option value="Otro">Otro</option>
+                                    <option value="W2">W2</option>
+                                    <option value="1099">1099</option>
+                                    <option value="SOCIAL SECURITY">SOCIAL SECURITY</option>
+                                    <option value="SELF EMPLOYMENT">SELF EMPLOYMENT</option>
+                                    <option value="SUPPORT">SUPPORT</option>
+                                    <option value="ALIMONY">ALIMONY</option>
                                   </select>
                                 </Field>
 
@@ -894,13 +906,12 @@ const TomaDeDatos = ({
                                     disabled={readOnly}
                                   >
                                     <option value="">Seleccione</option>
-                                    <option value="Semanal">Semanal</option>
-                                    <option value="Quincenal">Quincenal</option>
-                                    <option value="Mensual">Mensual</option>
-                                    <option value="Bimestral">Bimestral</option>
-                                    <option value="Trimestral">Trimestral</option>
-                                    <option value="Semestral">Semestral</option>
-                                    <option value="Anual">Anual</option>
+                                    <option value="HOUR">HOUR</option>
+                                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+                                    <option value="WEEKLY">WEEKLY</option>
+                                    <option value="BIWEEKLY">BIWEEKLY</option>
+                                    <option value="MONTHLY">MONTHLY</option>
+                                    <option value="ANNUAL">ANNUAL</option>
                                   </select>
                                 </Field>
 
@@ -949,12 +960,12 @@ const TomaDeDatos = ({
                                     onChange={onChange}
                                     disabled={readOnly}
                                   >
-                                    <option value="">Seleccione</option>
-                                    <option value="Único">Único</option>
-                                    <option value="Mensual">Mensual</option>
-                                    <option value="Trimestral">Trimestral</option>
-                                    <option value="Semestral">Semestral</option>
-                                    <option value="Anual">Anual</option>
+                                    <option value="HOUR">HOUR</option>
+                                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+                                    <option value="WEEKLY">WEEKLY</option>
+                                    <option value="BIWEEKLY">BIWEEKLY</option>
+                                    <option value="MONTHLY">MONTHLY</option>
+                                    <option value="ANNUAL">ANNUAL</option>
                                   </select>
                                 </Field>
 
