@@ -41,8 +41,8 @@ const EMPTY_FORM = {
   // Económicos
   zipCode: '',
   ingresoFamiliar: '',
-  personasCobertura: '',
-  personasTaxes: ''
+ personasCobertura: 0,
+ personasTaxes: 0
 };
 
 // API -> UI para modo edición (ajusta si tu GET retorna otra forma)
@@ -50,8 +50,8 @@ const mapGrupoApiToForm = (g) => ({
   captadoPor: g?.captado_por || '',
   cual: g?.cual || '',
   asesor: g?.responsable || '',
-  persona_contacto: g.persona_contacto,
-  apellido_persona_contacto: g.apellido_persona_contacto,
+  nombre: g?.persona_contacto || '',
+  apellidos: g?.apellido_persona_contacto || '',
   perteneceFamilia: g?.pertenece_grupo_familiar ? 'Sí' : 'No',
   telefono1: g?.telefono_1 || '',
   telefono2: g?.telefono_2 || '',
@@ -83,7 +83,13 @@ const Prospecto = () => {
 
   // Cálculos derivados (después de las declaraciones)
   const isCotizacion = normalizeCode(estadoActual) === "COTIZACION";
-
+    const handleDerivedCounts = ({ taxes, cobertura }) => {
+        setFormData(prev => ({
+          ...prev,
+          personasTaxes: taxes,
+          personasCobertura: cobertura,
+        }));
+      };
   // ---------- Efecto para mostrar modal cuando es necesario ----------
   useEffect(() => {
     // Si no es edición (grupoId null) y no hay producto seleccionado, mostrar modal
@@ -211,7 +217,8 @@ const Prospecto = () => {
         await GrupoFamiliarService.createCoberturaSimple({
           grupo_familiar_id: newGrupoId,
           cliente_id: clienteId,
-          estado_cobertura: miembro.estado_cobertura || "Si/No",
+          estado_cobertura: miembro.estado_cobertura || "Sí",
+          fecha_retiro: null,
           parentesco: miembro.parentesco || miembro.tipo || "Tomador",
           cobertura_tipo: productoCotizacion?.label
         });
@@ -293,7 +300,8 @@ const Prospecto = () => {
                   setFamilyMembers={setFamilyMembers}
                   canAdd={true}
                   readOnly={false}
-                  isProspecto={true}   // 👈 clave para que guarde local
+                  isProspecto={true}
+                  onDerivedCounts={handleDerivedCounts}
                 />
                 
                 ) : estadoActual?.toUpperCase() === "TOMA_DATOS" ? (
@@ -309,7 +317,8 @@ const Prospecto = () => {
                   setFamilyMembers={setFamilyMembers}
                   canAdd={true}
                   readOnly={false}
-                  isProspecto={true}   // 👈 clave para que guarde local
+                  isProspecto={true}
+                  onDerivedCounts={handleDerivedCounts}
                 />
                 
                 

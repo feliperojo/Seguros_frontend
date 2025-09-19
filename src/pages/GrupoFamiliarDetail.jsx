@@ -223,6 +223,13 @@ const mapFullToMembers = (fullRaw) => {
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
+      codigo_poliza: cov.codigo_poliza ?? cov.id_poliza ?? "", 
+      elegibilidad: cov.elegibilidad ?? "",
+      precio: cov.precio ?? "",
+      tipo_pago: cov.tipo_pago ?? null,
+      dia_pago: cov.dia_pago ?? "",
+      nota_cancel: cov.nota_cancel ?? "",
+      grupo: cov.grupo ?? "",
 
       // -------- también mantenemos el objeto cliente completo --------
       cliente: {
@@ -387,6 +394,17 @@ const mapMemberFromAppendResponse = (res) => {
     metal: cov.metal || null,
     red: cov.red || null,
     ano_cobertura: cov.ano_cobertura || null,
+    fecha_activacion: cov.fecha_activacion || "",
+    elegibilidad: cov.elegibilidad || "",
+    compania_id: cov.compania_id || "",
+    pagador_id: cov.pagador_id || "",
+    tipo_pago: cov.tipo_pago || "",
+    dia_pago: cov.dia_pago || "",
+    precio: cov.precio ?? "",
+    fecha_cancelacion: cov.fecha_cancelacion || "",
+    fecha_retiro: cov.fecha_retiro || "",
+    nota_retiro: cov.nota_retiro || "",
+    codigo_poliza: cov.codigo_pliza || "",
   };
 };
 

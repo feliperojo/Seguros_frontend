@@ -38,7 +38,13 @@ const CLIENTE_FIELDS = new Set([
 ]);
 
 // Campos del nivel raíz (cobertura/meta)
-const ROOT_FIELDS = new Set(["parentesco","estado_cobertura","codigo_poliza","vigencia","tipo"]);
+const ROOT_FIELDS = new Set([
+  "parentesco", "estado_cobertura", "codigo_poliza", "vigencia", "tipo",
+  "fecha_activacion", "ano_cobertura", "elegibilidad",
+  "compania_id", "plan", "metal", "red",
+  "pagador_id", "tipo_pago", "dia_pago", "precio",
+  "fecha_cancelacion", "fecha_retiro", "nota_retiro", "grupo", "nota_cancel"
+]);
 
 // 👇 Duplicamos a la raíz TODOS los campos de cliente (así el mapper del padre siempre los ve)
 const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
@@ -81,6 +87,8 @@ const normalizeMember = (m, idx) => {
     plan: m.plan ?? null,
     metal: m.metal ?? null,
     red: m.red ?? null,
+    grupo: m.grupo || "", 
+    
 
     // duplicados mínimos para cabecera
     primer_nombre: primer,
@@ -318,7 +326,13 @@ const TomaDeDatos = ({
         const leftRightWidth = 180;
         const c = getC(m);
         const onChange = onChangeFactory(idx);
-
+        const grupoValor = (m.grupo ?? "").toUpperCase();
+        const badgeClass =
+          grupoValor === "G1" ? "bg-primary" :
+          grupoValor === "G2" ? "bg-success" :
+          grupoValor === "G3" ? "bg-warning text-dark" :
+          grupoValor === "G4" ? "bg-danger" :
+          "bg-secondary";
         return (
           <div className="card shadow-sm mb-3" key={itemId}>
             {/* Header */}
@@ -337,15 +351,29 @@ const TomaDeDatos = ({
                   <span className="fw-semibold text-dark">{fullName(m)}</span>
                 </div>
 
-                <div className="d-flex align-items-center justify-content-end ms-3" style={{ width: leftRightWidth }}>
-                  <div className="text-start me-3">
-                    <div className="small">
-                      <span className="text-muted">Edad: </span>
-                      <span className="fw-semibold text-muted">{c.edad ?? m.edad ?? "N/A"}</span>
-                    </div>
-                    <div className="small text-muted">Género: {c.genero ?? m.genero ?? "—"}</div>
+                <div
+                className="d-flex align-items-center justify-content-end ms-3"
+                style={{ width: leftRightWidth }}
+              >
+                <div className="text-start me-3">
+                  <div className="small">
+                    <span className="text-muted">Edad: </span>
+                    <span className="fw-semibold text-muted">
+                      {c.edad ?? m.edad ?? "N/A"}
+                    </span>
+                  </div>
+                  <div className="small text-muted">
+                    Género: {c.genero ?? m.genero ?? "—"}
+                  </div>
+                  <div className="small">
+                    Grupo:{" "}
+                    <span className={`badge ${badgeClass}`}>
+                      {grupoValor || "—"}
+                    </span>
                   </div>
                 </div>
+              </div>
+
               </div>
             </div>
 
@@ -990,79 +1018,267 @@ const TomaDeDatos = ({
                 </div>
 
                 {/* Datos Cobertura */}
-                <div className="accordion-item">
-                  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
-                    <button
-                      className="accordion-button collapsed py-3 px-4"
-                      type="button"
-                      data-bs-toggle="collapse"
-                      data-bs-target={`#collapse-cobertura-${itemId}`}
-                      aria-expanded="false"
-                      aria-controls={`collapse-cobertura-${itemId}`}
-                    >
-                      <i className="fas fa-shield-alt me-2 text-muted" />
-                      <span className="fw-semibold">Datos Cobertura</span>
-                    </button>
-                  </h2>
-                  <div
-                    id={`collapse-cobertura-${itemId}`}
-                    className="accordion-collapse collapse"
-                    aria-labelledby={`cobertura-${itemId}`}
-                    data-bs-parent={`#accordion-${itemId}`}
-                  >
-                    <div className="accordion-body px-4 py-4">
-                      <div className="row g-3">
-                        <Field label="Parentesco" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="parentesco"
-                            value={m.parentesco || m.tipo || ""}
-                            onChange={onChange}
-                            placeholder="Tomador / Cónyuge / Hijo/a..."
-                            disabled={readOnly}
-                          />
-                        </Field>
+                {/* Datos Cobertura */}
+<div className="accordion-item">
+  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
+    <button
+      className="accordion-button collapsed py-3 px-4"
+      type="button"
+      data-bs-toggle="collapse"
+      data-bs-target={`#collapse-cobertura-${itemId}`}
+      aria-expanded="false"
+      aria-controls={`collapse-cobertura-${itemId}`}
+    >
+      <i className="fas fa-shield-alt me-2 text-muted" />
+      <span className="fw-semibold">Datos Cobertura</span>
+    </button>
+  </h2>
 
-                        <Field label="Estado Cobertura" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm"
-                            name="estado_cobertura"
-                            value={m.estado_cobertura || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione</option>
-                            <option value="Sí">Sí</option>
-                            <option value="No">No</option>
-                            <option value="Medicare">Medicare</option>
-                            <option value="Medicaid">Medicaid</option>
-                          </select>
-                        </Field>
+  <div
+    id={`collapse-cobertura-${itemId}`}
+    className="accordion-collapse collapse"
+    aria-labelledby={`cobertura-${itemId}`}
+    data-bs-parent={`#accordion-${itemId}`}
+  >
+    <div className="accordion-body px-4 py-4">
 
-                        <Field label="Código Póliza" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="codigo_poliza"
-                            value={m.codigo_poliza || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          />
-                        </Field>
+      {/* Row 1 */}
+      <div className="row g-3">
+        <Field label="Código Póliza" className="col-md-3">
+          <input
+            className="form-control form-control-sm"
+            type="text"
+            name="codigo_poliza"
+            value={m.codigo_poliza || ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="ID Póliza"
+          />
+        </Field>
 
-                        <Field label="Vigencia (AAAA-MM)" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="vigencia"
-                            placeholder="2025-01"
-                            value={m.vigencia || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          />
-                        </Field>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+        <Field label="Fecha de Activación" className="col-md-3">
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            name="fecha_activacion"
+            value={(m.fecha_activacion || "").slice(0, 10)}
+            onChange={onChange}
+            disabled={readOnly}
+          />
+        </Field>
+
+        <Field label="Año de Cobertura" className="col-md-3">
+          <input
+            type="number"
+            min="2000"
+            max="2100"
+            className="form-control form-control-sm"
+            name="ano_cobertura"
+            value={m.ano_cobertura || ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="aaaa"
+          />
+        </Field>
+
+        <Field label="Elegibilidad" className="col-md-3">
+          <input
+            className="form-control form-control-sm"
+            name="elegibilidad"
+            value={m.elegibilidad || ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Elegibilidad"
+          />
+        </Field>
+      </div>
+
+      {/* Row 2 */}
+      <div className="row g-3">
+        <Field label="Compañía" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="compania_id"
+            value={m.compania_id ?? m.compania ?? ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="1">Compañía A</option>
+            <option value="2">Compañía B</option>
+          </select>
+        </Field>
+
+        <Field label="Plan" className="col-md-3">
+          <input
+            className="form-control form-control-sm"
+            name="plan"
+            value={m.plan || ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Nombre del plan"
+          />
+        </Field>
+
+        <Field label="Metal" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="metal"
+            value={m.metal || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="BRONCE">BRONCE</option>
+            <option value="SILVER">SILVER</option>
+            <option value="GOLD">GOLD</option>
+            <option value="PLATINUM">PLATINUM</option>
+          </select>
+        </Field>
+
+        <Field label="Red" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="red"
+            value={m.red || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="HMO">HMO</option>
+            <option value="EPO">EPO</option>
+            <option value="PPO">PPO</option>
+            <option value="POS">POS</option>
+          </select>
+        </Field>
+      </div>
+
+      {/* Row 3 */}
+      <div className="row g-3">
+        <Field label="Cobertura" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="estado_cobertura"
+            value={m.estado_cobertura || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="Sí">Sí</option>
+            <option value="No">No</option>
+            <option value="Medicare">Medicare</option>
+            <option value="Medicaid">Medicaid</option>
+          </select>
+        </Field>
+
+        <Field label="Pagador" className="col-md-3">
+          <input
+            className="form-control form-control-sm"
+            name="pagador_id"
+            value={m.pagador_id ?? m.pagador ?? ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Pagador"
+          />
+        </Field>
+
+        <Field label="Tipo de Pago" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="tipo_pago"
+            value={m.tipo_pago || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
+            <option value="CTE PAGA">CTE PAGA</option>
+            <option value="MES A MES">MES A MES</option>
+          </select>
+        </Field>
+
+        <Field label="Dia de Pago" className="col-md-3">
+          <input
+            type="number"
+            className="form-control form-control-sm"
+            name="dia_pago"
+            value={m.dia_pago || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          />
+        </Field>
+      </div>
+
+      {/* Row 4 */}
+      <div className="row g-3">
+
+        <Field label="Precio ($)" className="col-md-3">
+          <input
+            type="number"
+            step="0.01"
+            className="form-control form-control-sm"
+            name="precio"
+            value={m.precio ?? ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="0.00"
+          />
+        </Field>
+
+        <Field label="Fecha de Cancelación" className="col-md-3">
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            name="fecha_cancelacion"
+            value={(m.fecha_cancelacion || "").slice(0, 10)}
+            onChange={onChange}
+            disabled={readOnly}
+          />
+        </Field>
+
+        <Field label="Fecha de Retiro" className="col-md-3">
+          <input
+            type="date"
+            className="form-control form-control-sm"
+            name="fecha_retiro"
+            value={(m.fecha_retiro || "").slice(0, 10)}
+            onChange={onChange}
+            disabled={readOnly}
+          />
+        </Field>
+
+        <Field label="Nota de Retiro" className="col-md-3">
+          <input
+            className="form-control form-control-sm"
+            name="nota_retiro"
+            value={m.nota_retiro ?? m.nota_cancel ?? ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Notas…"
+          />
+        </Field>
+      </div>
+      <div className="row g-3">
+      <Field label="Grupo" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="grupo"
+            value={m.grupo || ""}
+            onChange={onChange}
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="G1">G1</option>
+            <option value="G2">G2</option>
+            <option value="G3">G3</option>
+            <option value="G4">G4</option>
+          </select>
+        </Field>
+      </div>
+
+    </div>
+  </div>
+</div>
 
               </div>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
@@ -83,6 +83,7 @@ const mapClienteToMember = (
     genero,
     edad,
     fecha_nacimiento: fecha,
+    fecha_retiro: null,
     parentesco: tipoSel,
     tipo: tipoSel,
     estado_cobertura: estadoCobertura,
@@ -264,6 +265,25 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   );
 };
 
+// === Helpers de cobertura / retiro ===
+const isActiveCoverage = (m = {}) => {
+    // Soporta ambas estructuras:
+    // 1) campo plano en el miembro
+    // 2) arreglo m.coberturas [{estado_cobertura, fecha_retiro}, ...]
+    const list = Array.isArray(m.coberturas)
+      ? m.coberturas
+      : [{ estado_cobertura: m.estado_cobertura, fecha_retiro: m.fecha_retiro }];
+    return list.some(
+     (c) =>
+        (c.estado_cobertura ?? m.estado_cobertura) === "Sí" &&
+        (c.fecha_retiro === null || c.fecha_retiro === undefined || c.fecha_retiro === "")
+    );
+  };
+  
+  const countTaxesMembers = (members = []) => members.length;
+  const countCoverageMembers = (members = []) =>
+  members.filter((m) => isActiveCoverage(m)).length;
+
 /* ======================= Componente principal ======================= */
 const ProspectoDatos = ({
   familyMembers,
@@ -273,9 +293,10 @@ const ProspectoDatos = ({
   estadoActual,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
-  onCreateMemberRemote, // creación remota para "nuevo"
+  onCreateMemberRemote, 
   onBlockedAddClick,
-  grupoFamiliarId, // si viene, habilita “cliente existente”
+  grupoFamiliarId,
+  onDerivedCounts,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
 
@@ -306,14 +327,26 @@ const ProspectoDatos = ({
     setModalOpen(true);
   };
 
-  /* ---- Callbacks del MemberModal ---- */
-  const createLocal = async (payload) => {
-    const newId = familyMembers.length
-      ? Math.max(...familyMembers.map((m) => m.id || 0)) + 1
-      : 1;
-    setFamilyMembers((prev) => [...prev, recomputeDerived({ ...payload, id: newId })]);
-  };
-
+    // Recalcular y notificar al padre los contadores derivados
+    useEffect(() => {
+      const taxes = countTaxesMembers(familyMembers);
+      const cobertura = countCoverageMembers(familyMembers);
+      onDerivedCounts && onDerivedCounts({ taxes, cobertura });
+   }, [familyMembers, onDerivedCounts]);
+  
+     // Crear local: garantizar fecha_retiro = null por defecto
+     const createLocal = async (payload) => {
+         const newId = familyMembers.length
+           ? Math.max(...familyMembers.map((m) => m.id || 0)) + 1
+           : 1;
+         const merged = recomputeDerived({
+           fecha_retiro: null, // default
+           ...payload,
+           id: newId,
+         });
+         setFamilyMembers((prev) => [...prev, merged]);
+         setModalOpen(false);
+       };
   const updateLocal = async (id, payload) => {
     setFamilyMembers((prev) =>
       prev.map((m) => (m.id === id ? recomputeDerived({ ...payload, id }) : m))

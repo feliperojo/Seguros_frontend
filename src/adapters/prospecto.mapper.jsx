@@ -76,12 +76,20 @@ export const mapClienteFromMember = (m = {}) => {
   };
 };
 export const mapCoberturaFromMember = (m = {}, grupoId) => ({
-  id: m.cobertura_id ?? null,                         // ← NECESARIO para UPDATE
+  id: m.cobertura_id ?? null,             
   grupo_familiar_id: Number(grupoId),
   cliente_id: m.cliente_id ?? null,
   parentesco: m.parentesco || m.tipo || "Tomador",
   estado_cobertura: m.estado_cobertura || "Si/No",
   ano_cobertura: m.ano_cobertura || new Date().getFullYear().toString(),
   activo: m.activo ?? true,
-  // agrega aquí plan/metal/red/dia_pago/tipo_pago si los editas en esta pantalla
+  grupo: m.grupo || null, 
+  plan: m.plan || "",
+  metal: m.metal || null,
+  red: m.red || null,
+  codigo_poliza: m.codigo_poliza || "",
+  elegibilidad: m.elegibilidad || "",
+  precio: m.precio || null,
+  tipo_pago: m.tipo_pago || null,
+  
 });
