@@ -9,7 +9,7 @@ import TomaDeDatos from '../components/fase2/TomaDeDatos';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import ClienteService from '../services/ClienteService';
 import { mapGrupoFromForm, mapClienteFromMember } from '../adapters/prospecto.mapper';
-
+import { calcIngresoFamiliar } from '../services/ingresos';
 import ProspectoService from "../services/ProspectoService";
 
 
@@ -98,6 +98,15 @@ const Prospecto = () => {
     }
   }, [grupoId, productoCotizacion]);
 
+
+  useEffect(() => {
+    const total = calcIngresoFamiliar(familyMembers);
+    setFormData((prev) =>
+      prev.ingresoFamiliar === total ? prev : { ...prev, ingresoFamiliar: total }
+    );
+  }, [familyMembers]);
+
+  
   // ---------- Cargar datos si es edición ----------
   useEffect(() => {
     const load = async () => {

@@ -6,7 +6,7 @@ import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
-
+import { calcIngresoFamiliar } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
@@ -60,7 +60,7 @@ const unwrapFull = (res) => res?.data ?? res ?? {};
 // ===== Mapper local para GUARDAR todos los campos del cliente =====
 const mapClienteForSave = (m) => {
   const c = m?.cliente || {};
-  const pick = (k) => (c[k] ?? m[k] ?? null);
+  const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
 
   return {
@@ -180,12 +180,13 @@ const mapFullToForm = (fullRaw) => {
   };
 };
 
-// API FULL -> members para ProspectoDatos/TomaDeDatos (normalizado con cliente anidado)
+
 // API FULL -> members para ProspectoDatos/TomaDeDatos (con campos raíz)
 const mapFullToMembers = (fullRaw) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
 
+  
   return coberturas.map((cov, idx) => {
     const cli = cov?.cliente || {};
     const primer  = (cli.primer_nombre  || "").trim();
@@ -326,6 +327,26 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     });
   };
 
+// Mantener ingresoFamiliar sincronizado con los miembros (detalle/edición)
+useEffect(() => {
+  if (!Array.isArray(familyMembers)) return;
+
+  const total = calcIngresoFamiliar(familyMembers);
+
+  setFormData(prev => {
+    const cur = prev || {}; // protege null
+    if (cur.ingresoFamiliar === total) return prev; // evita renders innecesarios
+    return { ...cur, ingresoFamiliar: total };
+  });
+}, [familyMembers]);
+
+
+// ✅ usar el estado real
+const total = calcIngresoFamiliar(Array.isArray(familyMembers) ? familyMembers : []);
+console.log("Ingreso Familiar:", total);
+
+
+
   // 👈 Nuevo: Manejador para selección de producto
   const handleProductSelect = (producto) => {
     setProductoCotizacion(producto);
@@ -366,6 +387,17 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+// Mantener ingresoFamiliar sincronizado con los miembros (detalle/edición)
+useEffect(() => {
+  if (!Array.isArray(familyMembers) || !formData) return;
+  const total = calcIngresoFamiliar(familyMembers);
+
+  setFormData(prev => {
+    if (!prev) return prev;
+    // evita renders innecesarios
+    return prev.ingresoFamiliar === total ? prev : { ...prev, ingresoFamiliar: total };
+  });
+}, [familyMembers, formData]);
 
 
   // Utilidad: mapea la respuesta {cliente, cobertura} a tu shape de card

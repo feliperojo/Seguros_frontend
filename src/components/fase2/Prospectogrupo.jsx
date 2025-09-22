@@ -264,8 +264,9 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
                 name="ingresoFamiliar"
                 value={formData.ingresoFamiliar}
                 onChange={onChange}
-                disabled={readOnly}
+                readOnly
               />
+              <div className="form-text">Sumatoria de los ingresos de cada miembro.</div>
             </div>
             <div className="col-md-3">
               <label className="form-label">Personas en Cobertura</label>

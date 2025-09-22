@@ -2,6 +2,8 @@ import React, { useMemo, useState, useCallback } from "react";
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import {  computeAnnual, sanitizeMoneyInput, formatMoney2} from "../../services/ingresos";
+
 
 /* =================== Utils =================== */
 const fullName = (m) => {
@@ -45,6 +47,14 @@ const ROOT_FIELDS = new Set([
   "pagador_id", "tipo_pago", "dia_pago", "precio",
   "fecha_cancelacion", "fecha_retiro", "nota_retiro", "grupo", "nota_cancel"
 ]);
+
+const MONEY_FIELDS = new Set([
+  "ingreso_por_periodo",
+  "ingreso_anual",
+  "ingreso_por_periodo_ocasional",
+  "precio", // si quieres que precio también se formatee
+]);
+
 
 // 👇 Duplicamos a la raíz TODOS los campos de cliente (así el mapper del padre siempre los ve)
 const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
@@ -244,15 +254,43 @@ const TomaDeDatos = ({
     );
   };
 
-  // onChange único por fila
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
-    const v = type === "checkbox" ? !!checked : value;
-    if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, { [name]: v });
-    if (ROOT_FIELDS.has(name))   return patchRoot(idx, { [name]: v });
-    // default: trátalo como cliente
-    return patchCliente(idx, { [name]: v });
+  
+    // 1) Sanitiza si es campo monetario
+    const vRaw = type === "checkbox" ? !!checked : value;
+    const v = MONEY_FIELDS.has(name) ? sanitizeMoneyInput(vRaw) : vRaw;
+  
+    const current = getC(normalized[idx] || {});
+    const patch = { [name]: v };
+  
+    // 2) Reglas de cálculo: anual = per * factor(periodo)
+    if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
+      const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
+      const per     = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
+      patch.ingreso_anual = formatMoney2(computeAnnual(periodo, per));
+    }
+  
+    if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
+    if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
+    return patchCliente(idx, patch);
   };
+  
+  const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
+    const cur = getC(normalized[idx] || {});
+    const val = cur?.[fieldName];
+    const formatted = formatMoney2(val);
+    const patch = { [fieldName]: formatted };
+  
+    // si salimos de ingreso_por_periodo, recalcula anual otra vez para “ajustar” los 2 decimales
+    if (fieldName === "ingreso_por_periodo") {
+      patch.ingreso_anual = formatMoney2(
+        computeAnnual(cur.periodo_ingreso ?? "", formatted)
+      );
+    }
+    return isCliente ? patchCliente(idx, patch) : patchRoot(idx, patch);
+  };
+  
 
   const toggleClienteBool = (idx, key) => (e) => patchCliente(idx, { [key]: !!e.target.checked });
 
@@ -944,26 +982,30 @@ const TomaDeDatos = ({
                                 </Field>
 
                                 <Field label="Ingreso por Período ($)" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="ingreso_por_periodo"
-                                    value={c.ingreso_por_periodo ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                    placeholder="0.00"
-                                  />
-                                </Field>
+                                      <input
+                                        className="form-control form-control-sm"
+                                        inputMode="decimal"           // teclado numérico en móvil
+                                        name="ingreso_por_periodo"
+                                        value={c.ingreso_por_periodo ?? ""}
+                                        onChange={onChange}
+                                        onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo")} // ← formatea 2 decimales
+                                        disabled={readOnly}
+                                        placeholder="0.00"
+                                      />
+                                    </Field>
 
-                                <Field label="Ingreso Anual ($)" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="ingreso_anual"
-                                    value={c.ingreso_anual ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                    placeholder="0.00"
-                                  />
-                                </Field>
+                                    <Field label="Ingreso Anual ($)" className="col-md-4">
+                                      <input
+                                        className="form-control form-control-sm"
+                                        inputMode="decimal"
+                                        name="ingreso_anual"
+                                        value={c.ingreso_anual ?? ""}
+                                        onChange={onChange}
+                                        onBlur={onBlurMoneyFactory(idx, "ingreso_anual")}
+                                        disabled={readOnly}      // o readOnly={!readOnly} si no quieres permitir edición manual
+                                        placeholder="0.00"
+                                      />
+                                    </Field>
 
                                 <div className="col-12">
                                   <div className="small fw-semibold text-muted mt-2">Ingreso Ocasional</div>
@@ -1000,9 +1042,11 @@ const TomaDeDatos = ({
                                 <Field label="Ingreso por Período ocasional ($)" className="col-md-6">
                                   <input
                                     className="form-control form-control-sm"
+                                    inputMode="decimal"
                                     name="ingreso_por_periodo_ocasional"
                                     value={c.ingreso_por_periodo_ocasional ?? ""}
                                     onChange={onChange}
+                                    onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo_ocasional")}
                                     disabled={readOnly}
                                     placeholder="0.00"
                                   />

@@ -39,19 +39,7 @@ const calcAge = (d) => {
   return a;
 };
 
-/**
- * MemberModal
- * props:
- * - open, onClose
- * - editingMember (obj | null)
- * - defaultCoberturaTipo (string)
- * - canAdd (bool), readOnly (bool), isProspecto (bool)
- * - grupoFamiliarId (id del grupo)                             // ⬅️ nuevo (opcional)
- * - onCreateLocal(payload)     -> para staging/local (Prospecto)
- * - onUpdateLocal(id, payload) -> editar local
- * - onCreateRemote(payload)    -> para grupo existente (llama al backend)
- * - onCreateCoberturaDeClienteExistente(payloadMinimo)         // ⬅️ nuevo (opcional)
- */
+
 export default function MemberModal({
   open,
   onClose,
@@ -128,6 +116,9 @@ export default function MemberModal({
       parentesco: data.parentesco || data.tipo || "Tomador",
       tipo: data.parentesco || data.tipo || "Tomador",
       cobertura_tipo: defaultCoberturaTipo,
+      fecha_nacimiento: data.fechaNacimiento ||  "",
+     ingreso_anual: data.ingresoAnual ?? "",
+     idioma:data.idioma || "",
     };
 
     try {
@@ -191,7 +182,8 @@ const mapClienteToMember = (c, tipoSel) => {
       nombreCompleto,
       genero,
       edad,
-      fecha_nacimiento: fecha,           // 👈 snake case para tu card
+      fecha_nacimiento: fecha,
+      idioma,           // 👈 snake case para tu card
       // ---- metadatos de cobertura / UI
       parentesco: tipoSel,
       tipo: tipoSel,
@@ -206,10 +198,11 @@ const mapClienteToMember = (c, tipoSel) => {
         apellidos: apell,
         nombre_completo: nombreCompleto, // 👈 usado por fullName
         genero,
+
         fecha_nacimiento: fecha,
         edad,
         telefono: c.telefono || "",
-        idioma: c.idioma || "",
+        idioma,
       },
     };
   };
