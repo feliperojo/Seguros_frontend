@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ClienteExistente from "../ClienteExistente"; // ⬅️ ajusta la ruta si es necesario
+import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 
 // Paleta/iconos por tipo (igual que antes)
 const TYPE_COLOR = {
@@ -75,29 +76,39 @@ export default function MemberModal({
     if (editingMember) {
       setData({
         ...editingMember,
-        nombreCompleto: editingMember.nombreCompleto ||
+        ingresoAnual: formatMoney2(editingMember.ingresoAnual ?? editingMember.ingreso_anual ?? ""),
+        nombreCompleto:
+          editingMember.nombreCompleto ||
           buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
       });
       setStep(2);
     } else {
       setData({
         primer_nombre:"", segundo_nombre:"", apellidos:"", nombreCompleto:"",
-        idioma:"", fechaNacimiento:"", edad:"", genero:"Masculino", ingresoAnual:"",
+        idioma:"", fechaNacimiento:"", edad:"", genero:"Masculino",
+        ingresoAnual:"",  // queda vacío
         nota:"", parentesco:"Tomador", estado_cobertura:"Si/No", tipo:"Tomador"
       });
       setStep(1);
     }
+    
   }, [open, editingMember]);
 
   const onChange = (e) => {
     const { name, value, type } = e.target;
+  
+    // si es dinero, sanitiza mientras escribe
+    const val =
+      name === "ingresoAnual" ? sanitizeMoneyInput(value) : value;
+  
     setData(prev => {
-      let v = value;
-      if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) v = capWords(value);
-      else if (["idioma","nota"].includes(name)) v = capFirst(value);
-      else if (!["number","date"].includes(type) && name !== "ingresoAnual") v = capFirst(value);
-
+      let v = val;
+      if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) v = capWords(val);
+      else if (["idioma","nota"].includes(name)) v = capFirst(val);
+      else if (!["number","date"].includes(type) && name !== "ingresoAnual") v = capFirst(val);
+  
       const next = { ...prev, [name]: v };
+  
       if (name === "fechaNacimiento") next.edad = calcAge(v);
       if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) {
         next.nombreCompleto = buildFullName(next.primer_nombre, next.segundo_nombre, next.apellidos);
@@ -105,6 +116,7 @@ export default function MemberModal({
       return next;
     });
   };
+  
 
   const selectTipo = (tipo) => setData(prev => ({ ...prev, tipo, parentesco: tipo })) || setStep(2);
 
@@ -173,6 +185,7 @@ const mapClienteToMember = (c, tipoSel) => {
     const nombreCompleto = c.nombre_completo || buildFullName(primer, segundo, apell);
     const edad = calcAge(fecha);
     const genero = c.genero || "Masculino";
+    const idioma  = c.idioma || ""; 
   
     return {
       // ---- plano (fallback que tu card también entiende)
@@ -183,7 +196,7 @@ const mapClienteToMember = (c, tipoSel) => {
       genero,
       edad,
       fecha_nacimiento: fecha,
-      idioma,           // 👈 snake case para tu card
+      idioma,           
       // ---- metadatos de cobertura / UI
       parentesco: tipoSel,
       tipo: tipoSel,
@@ -252,6 +265,9 @@ const handlePickExisting = async (cliente) => {
     }
   };
   
+  const onBlurMoney = (field) => () => {
+    setData(prev => ({ ...prev, [field]: formatMoney2(prev[field]) }));
+  };
   
 
   if (!open) return null;
@@ -398,9 +414,19 @@ const handlePickExisting = async (cliente) => {
                   <textarea className="form-control" rows="3" name="nota" value={data.nota} onChange={onChange} disabled={readOnly}/>
                 </div>
                 <div className="col-md-3">
-                  <label className="form-label">Ingreso Anual</label>
-                  <input className="form-control" name="ingresoAnual" value={data.ingresoAnual} onChange={onChange} disabled={readOnly}/>
-                </div>
+                      <label className="form-label">Ingreso Anual</label>
+                      <input
+                        className="form-control"
+                        inputMode="decimal"               
+                        name="ingresoAnual"
+                        value={data.ingresoAnual}
+                        onChange={onChange}
+                        onBlur={onBlurMoney("ingresoAnual")}
+                        disabled={readOnly}
+                        placeholder="0.00"
+                      />
+                    </div>
+
                 <div className="col-md-3">
                   <label className="form-label">¿Está en Cobertura?</label>
                   <select className="form-select" name="estado_cobertura" value={data.estado_cobertura} onChange={onChange} disabled={readOnly}>
