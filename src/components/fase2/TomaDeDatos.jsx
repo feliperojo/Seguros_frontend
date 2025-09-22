@@ -6,6 +6,16 @@ import {  computeAnnual, sanitizeMoneyInput, formatMoney2} from "../../services/
 
 
 /* =================== Utils =================== */
+
+// Capitaliza cada palabra (soporta acentos y guiones)
+const toTitle = (s = "") =>
+  s
+    .toLowerCase()
+    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+
+// Campos de nombre a capitalizar
+const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
+
 const fullName = (m) => {
   const c = m?.cliente ?? m ?? {};
   const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
@@ -76,13 +86,15 @@ const getC = (m) => (m?.cliente ? m.cliente : m);
 const normalizeMember = (m, idx) => {
   if (m?.cliente && typeof m.cliente === "object") return m;
 
-  const primer  = m.primer_nombre || "";
-  const segundo = m.segundo_nombre || "";
-  const apell   = m.apellidos || "";
+  const primerRaw  = m.primer_nombre || "";
+  const segundoRaw = m.segundo_nombre || "";
+  const apellRaw   = m.apellidos || "";
   const fecha   = m.fecha_nacimiento || "";
   const edad    = calcAge(fecha);
   const nombre  = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
-
+const primer  = toTitle(primerRaw);
+const segundo = toTitle(segundoRaw);
+const apell   = toTitle(apellRaw);
   return {
     id: m.id ?? idx + 1,
     cliente_id: m.cliente_id ?? m.id ?? null,
@@ -257,14 +269,19 @@ const TomaDeDatos = ({
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
   
-    // 1) Sanitiza si es campo monetario
-    const vRaw = type === "checkbox" ? !!checked : value;
-    const v = MONEY_FIELDS.has(name) ? sanitizeMoneyInput(vRaw) : vRaw;
+    // 1) Base
+    let v = type === "checkbox" ? !!checked : value;
+  
+    // 2) Formato dinero
+    if (MONEY_FIELDS.has(name)) v = sanitizeMoneyInput(v);
+  
+    // 3) Capitalización para nombres
+    if (NAME_FIELDS.has(name)) v = toTitle(v);
   
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
   
-    // 2) Reglas de cálculo: anual = per * factor(periodo)
+    // 4) Reglas de cálculo ingreso anual
     if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
       const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
       const per     = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
@@ -275,6 +292,7 @@ const TomaDeDatos = ({
     if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
     return patchCliente(idx, patch);
   };
+  
   
   const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
     const cur = getC(normalized[idx] || {});
@@ -464,33 +482,39 @@ const TomaDeDatos = ({
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                                <Field label="Primer Nombre" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="primer_nombre"
-                                    value={c.primer_nombre ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
-                                <Field label="Segundo Nombre" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="segundo_nombre"
-                                    value={c.segundo_nombre ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
-                                <Field label="Apellidos" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="apellidos"
-                                    value={c.apellidos ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
+                              <Field label="Primer Nombre" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="primer_nombre"
+                                      value={c.primer_nombre ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      style={{ textTransform: "capitalize" }}
+                                    />
+                                  </Field>
+
+                                  <Field label="Segundo Nombre" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="segundo_nombre"
+                                      value={c.segundo_nombre ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      style={{ textTransform: "capitalize" }}
+                                    />
+                                  </Field>
+
+                                  <Field label="Apellidos" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="apellidos"
+                                      value={c.apellidos ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      style={{ textTransform: "capitalize" }}
+                                    />
+                                  </Field>
+
                                 <Field label="Fecha de Nacimiento" className="col-md-4">
                                   <input
                                     type="date"
