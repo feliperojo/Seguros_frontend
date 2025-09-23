@@ -9,7 +9,7 @@ import TomaDeDatos from '../components/fase2/TomaDeDatos';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import ClienteService from '../services/ClienteService';
 import { mapGrupoFromForm, mapClienteFromMember } from '../adapters/prospecto.mapper';
-import { calcIngresoFamiliar } from '../services/ingresos';
+import { calcIngresoFamiliar, sanitizeMoneyInput } from '../services/ingresos';
 import ProspectoService from "../services/ProspectoService";
 
 
@@ -210,7 +210,24 @@ const Prospecto = () => {
       if (!newGrupoId) throw new Error("No se obtuvo id del grupo");
 
       // 2) Crear TODOS los clientes en una sola petición
-      const clientesPayload = familyMembers.map(mapClienteFromMember);
+      const clientesPayload = familyMembers.map((m) => {
+        const base = mapClienteFromMember(m);
+      
+        // Fuerza ingreso_anual numérico para el backend
+        const limpio = typeof m.ingreso_anual === "number"
+          ? m.ingreso_anual
+          : Number(sanitizeMoneyInput(String(m.ingreso_anual ?? "")));
+      
+        return {
+          ...base,
+          ingreso_anual: Number.isFinite(limpio) ? limpio : 0,
+        };
+      });
+      
+      // (opcional) debug antes del POST
+      console.log("clientesPayload", clientesPayload.map(c => ({
+        ingreso_anual: c.ingreso_anual, tipo: typeof c.ingreso_anual
+      })));
       let createdClients = [];
       if (clientesPayload.length) {
         const cliRes = await ClienteService.createMany(clientesPayload);

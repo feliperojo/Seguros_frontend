@@ -91,5 +91,7 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => ({
   elegibilidad: m.elegibilidad || "",
   precio: m.precio || null,
   tipo_pago: m.tipo_pago || null,
+  compania_id:m.compania_id || null,
+  pagador_id: m.pagador_id || null,
   
 });

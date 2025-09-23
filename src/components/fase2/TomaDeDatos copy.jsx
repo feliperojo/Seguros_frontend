@@ -3,14 +3,7 @@ import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import {  computeAnnual, sanitizeMoneyInput, formatMoney2} from "../../services/ingresos";
-import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
-import useCompanies from "../../hooks/useCompanies";
-import { buildPayerOptions } from "../../utils/payers";
-import CompanySelect from "../selects/CompanySelect";
-import PayerSelect from "../selects/PayerSelect";
-
-import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
-
+import CopiarDatosModal from "./CopiarDatosModal";
 
 /* =================== Utils =================== */
 
@@ -190,174 +183,6 @@ const apell   = toTitle(apellRaw);
 const yaEstaEnElGrupo = (clienteId, members) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
 
-
-
-// ===== Helpers Dirección =====
-const buildDireccion = (src) =>
-  [src.calle, src.apto, src.ciudad, src.estado, src.codigo_postal]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-/**
- * AddressSection
- * Props:
- *  - c: objeto cliente normalizado (getC(m))
- *  - onChange: handler del padre (onChangeFactory(idx))
- *  - readOnly: boolean
- */
-const AddressSection = ({ c, onChange, readOnly }) => {
-  const [copyDir, setCopyDir] = React.useState(false);
-
-  // Cuando cambie un campo de dirección:
-  const handleAddressChange = (e) => {
-    // 1) Propagar cambio del campo original
-    onChange(e);
-
-    // 2) Calcular 'direccion' con el valor nuevo
-    const { name, value } = e.target;
-    const next = {
-      ...c,
-      [name]: value,
-    };
-    const direccionConcatenada = buildDireccion(next);
-
-    // 3) Enviar un evento sintético para actualizar 'direccion'
-    onChange({
-      target: { name: "direccion", value: direccionConcatenada, type: "text" },
-    });
-
-    // 4) Si el toggle está activo, sincronizar dir_correspondencia también
-    if (copyDir) {
-      onChange({
-        target: {
-          name: "dir_correspondencia",
-          value: direccionConcatenada,
-          type: "text",
-        },
-      });
-    }
-  };
-
-  const handleCopyToggle = (e) => {
-    const checked = !!e.target.checked;
-    setCopyDir(checked);
-    if (checked) {
-      const direccionConcatenada = buildDireccion(c);
-      onChange({
-        target: {
-          name: "dir_correspondencia",
-          value: direccionConcatenada,
-          type: "text",
-        },
-      });
-    }
-  };
-
-  const direccionVisual = c.direccion || buildDireccion(c) || "";
-
-  return (
-    <>
-      <div className="row g-3">
-        <Field label="Dirección de Residencia" className="col-12">
-          <input
-            className="form-control form-control-sm"
-            name="direccion"
-            value={direccionVisual}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="Dirección completa (auto)"
-          />
-        </Field>
-
-        <Field label="Calle" className="col-md-4">
-          <input
-            className="form-control form-control-sm"
-            name="calle"
-            value={c.calle ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="APT" className="col-md-2">
-          <input
-            className="form-control form-control-sm"
-            name="apto"
-            value={c.apto ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Ciudad" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="ciudad"
-            value={c.ciudad ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Estado" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="estado"
-            value={c.estado ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Código Postal" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="codigo_postal"
-            value={c.codigo_postal ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Condado" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="condado"
-            value={c.condado ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Dirección de Correspondencia" className="col-md-9">
-          <input
-            className="form-control form-control-sm"
-            name="dir_correspondencia"
-            value={c.dir_correspondencia ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <div className="col-md-3 d-flex align-items-center">
-          <div className="form-check mt-3">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="copy-dir-toggle"
-              checked={copyDir}
-              onChange={handleCopyToggle}
-              disabled={readOnly}
-            />
-            <label className="form-check-label" htmlFor="copy-dir-toggle">
-              Copiar Dirección
-            </label>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
-
-
 /* ======================================================= */
 const TomaDeDatos = ({
   familyMembers,
@@ -373,22 +198,11 @@ const TomaDeDatos = ({
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  
-// 1) normalizados (primero)
-const normalized = useMemo(
-  () => (familyMembers ?? []).map(normalizeMember),
-  [familyMembers]
-);
-
-// 2) compañías (puede ir antes o después, no depende de normalized)
-const { companies, loading: companiesLoading } = useCompanies();
-
-// 3) opciones de pagadores (derivado de normalized)
-const payerOptions = useMemo(
-  () => buildPayerOptions(normalized),
-  [normalized]
-);
-
+  // Normalizados para render/edición/guardado
+  const normalized = useMemo(
+    () => (familyMembers ?? []).map(normalizeMember),
+    [familyMembers]
+  );
   const [openCopy, setOpenCopy] = useState(false);
 
 const duplicateToRootFromCliente = (m, cliente) => {
@@ -1063,13 +877,103 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                             aria-labelledby={`direccion-${itemId}`}
                             data-bs-parent={`#sub-accordion-${itemId}`}
                           >
-<div className="accordion-body">
-  <AddressSection c={c} onChange={onChange} readOnly={readOnly} idBase={itemId} />
-</div>
+                            <div className="accordion-body">
+                              <div className="row g-3">
+                                <Field label="Dirección de Residencia" className="col-12">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="direccion"
+                                    value={c.direccion ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    placeholder="Dirección completa"
+                                  />
+                                </Field>
 
+                                <Field label="Calle" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="calle"
+                                    value={c.calle ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
+                                <Field label="APT" className="col-md-2">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="apto"
+                                    value={c.apto ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
+                                <Field label="Ciudad" className="col-md-3">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="ciudad"
+                                    value={c.ciudad ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
 
+                                <Field label="Estado" className="col-md-3">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="estado"
+                                    value={c.estado ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
+                                <Field label="Código Postal" className="col-md-3">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="codigo_postal"
+                                    value={c.codigo_postal ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
+                                <Field label="Condado" className="col-md-3">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="condado"
+                                    value={c.condado ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
 
-                              
+                                <Field label="Dirección de Correspondencia" className="col-md-9">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="dir_correspondencia"
+                                    value={c.dir_correspondencia ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                  />
+                                </Field>
+
+                                <div className="col-md-3 d-flex align-items-center">
+                                  <div className="form-check mt-3">
+                                    <input
+                                      className="form-check-input"
+                                      type="checkbox"
+                                      id={`copy-dir-${itemId}`}
+                                      onChange={(e) => {
+                                        if (e.target.checked) patchCliente(idx, { dir_correspondencia: c.direccion ?? "" });
+                                      }}
+                                      disabled={readOnly}
+                                    />
+                                    <label className="form-check-label" htmlFor={`copy-dir-${itemId}`}>
+                                      Copiar Dirección
+                                    </label>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -1321,15 +1225,19 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
 
       {/* Row 2 */}
       <div className="row g-3">
-      <Field label="Compañía" className="col-md-3">
-          <CompanySelect
-            companies={companies}
-            value={m.compania_id ?? ""}
+        <Field label="Compañía" className="col-md-3">
+          <select
+            className="form-select form-select-sm"
+            name="compania_id"
+            value={m.compania_id ?? m.compania ?? ""}
             onChange={onChange}
-            disabled={readOnly || companiesLoading}
-          />
+            disabled={readOnly}
+          >
+            <option value="">Seleccione…</option>
+            <option value="1">Compañía A</option>
+            <option value="2">Compañía B</option>
+          </select>
         </Field>
-
 
         <Field label="Plan" className="col-md-3">
           <input
@@ -1394,14 +1302,15 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
         </Field>
 
         <Field label="Pagador" className="col-md-3">
-              <PayerSelect
-                options={payerOptions}
-                value={m.pagador_id ?? ""}
-                onChange={onChange}
-                disabled={readOnly}
-              />
-            </Field>
-
+          <input
+            className="form-control form-control-sm"
+            name="pagador_id"
+            value={m.pagador_id ?? m.pagador ?? ""}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Pagador"
+          />
+        </Field>
 
         <Field label="Tipo de Pago" className="col-md-3">
           <select

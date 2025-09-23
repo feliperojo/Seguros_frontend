@@ -233,6 +233,8 @@ const mapFullToMembers = (fullRaw) => {
       dia_pago: cov.dia_pago ?? "",
       nota_cancel: cov.nota_cancel ?? "",
       grupo: cov.grupo ?? "",
+      compania_id: cov.compania_id ?? null,
+      pagador_id:  cov.pagador_id  ?? null,
 
       // -------- también mantenemos el objeto cliente completo --------
       cliente: {

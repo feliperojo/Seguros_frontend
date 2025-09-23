@@ -117,15 +117,13 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   };
 
  // Handlers específicos para dinero
-  const handleMoneyChange = (field) => (e) => {
-    const val = sanitizeMoneyInput(e.target.value);
-    onChange({ [field]: val });
-  };
+ const handleMoneyChange = (field) => (e) => {
+  const raw = sanitizeMoneyInput(e.target.value); // debe devolver "250.00" para "250,00"
+  const num = raw === "" ? null : Number(raw);
+  onChange({ [field]: Number.isFinite(num) ? num : null });
+};
 
-  const handleMoneyBlur = (field) => (e) => {
-    const pretty = formatMoney2(e.target.value);
-    onChange({ [field]: pretty });
-  };
+
 
 
   const fechaBase = (member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || "")
@@ -234,21 +232,20 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               </div>
 
               <div className="col-md-4">
-   <label className="form-label">Ingreso Anual</label>
-   <input
-     className="form-control form-control-sm"
-     inputMode="decimal"
-    // En modo lectura siempre mostramos bonito; en edición dejamos el valor editable
-     value={
-       readOnly
-         ? formatMoneyDisplay(member.ingreso_anual ?? 0)
-         : (member.ingreso_anual ?? "")
-    }     disabled={readOnly}
-     onChange={handleMoneyChange("ingreso_anual")}
-     onBlur={handleMoneyBlur("ingreso_anual")}
-     placeholder="0,00"
-   />
- </div>
+                  <label className="form-label">Ingreso Anual</label>
+                  <input
+  className="form-control form-control-sm"
+  inputMode="decimal"
+  value={
+    readOnly
+      ? formatMoneyDisplay(member.ingreso_anual ?? 0) // bonito solo en lectura
+      : (member.ingreso_anual ?? "")                  // edición cruda (número o "")
+  }
+  disabled={readOnly}
+  onChange={handleMoneyChange("ingreso_anual")}
+  placeholder="0,00"
+/>
+                </div>
 
               <div className="col-md-4">
                 <label className="form-label">¿Está en Cobertura?</label>
@@ -352,7 +349,7 @@ const ProspectoDatos = ({
       const taxes = countTaxesMembers(familyMembers);
       const cobertura = countCoverageMembers(familyMembers);
       onDerivedCounts && onDerivedCounts({ taxes, cobertura });
-   }, [familyMembers, onDerivedCounts]);
+   }, [familyMembers]);
   
      // Crear local: garantizar fecha_retiro = null por defecto
      const createLocal = async (payload) => {
