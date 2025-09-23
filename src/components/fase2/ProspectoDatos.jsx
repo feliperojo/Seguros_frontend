@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay } from "../../services/ingresos";
 
 /* ---------- Helpers de UI ---------- */
 const getTypeColor = (tipo) => {
@@ -115,6 +116,18 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     onChange({ [field]: value });
   };
 
+ // Handlers específicos para dinero
+  const handleMoneyChange = (field) => (e) => {
+    const val = sanitizeMoneyInput(e.target.value);
+    onChange({ [field]: val });
+  };
+
+  const handleMoneyBlur = (field) => (e) => {
+    const pretty = formatMoney2(e.target.value);
+    onChange({ [field]: pretty });
+  };
+
+
   const fechaBase = (member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || "")
     .toString()
     .slice(0, 10);
@@ -221,14 +234,21 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               </div>
 
               <div className="col-md-4">
-                <label className="form-label">Ingreso Anual</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={member.ingreso_anual || ""}
-                  disabled={readOnly}
-                  onChange={handle("ingreso_anual")}
-                />
-              </div>
+   <label className="form-label">Ingreso Anual</label>
+   <input
+     className="form-control form-control-sm"
+     inputMode="decimal"
+    // En modo lectura siempre mostramos bonito; en edición dejamos el valor editable
+     value={
+       readOnly
+         ? formatMoneyDisplay(member.ingreso_anual ?? 0)
+         : (member.ingreso_anual ?? "")
+    }     disabled={readOnly}
+     onChange={handleMoneyChange("ingreso_anual")}
+     onBlur={handleMoneyBlur("ingreso_anual")}
+     placeholder="0,00"
+   />
+ </div>
 
               <div className="col-md-4">
                 <label className="form-label">¿Está en Cobertura?</label>
