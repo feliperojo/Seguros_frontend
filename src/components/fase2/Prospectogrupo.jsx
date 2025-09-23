@@ -1,5 +1,5 @@
 import React from 'react';
-
+import { formatMoneyDisplay } from "../../services/ingresos";
 const Prospectogrupo = ({ formData, onChange, readOnly }) => {
   // Mostrar datos de contacto solo si NO pertenece al grupo
   const showContacto = (formData?.perteneceFamilia || 'No') === 'No';
@@ -257,15 +257,15 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
               />
             </div>
             <div className="col-md-3">
-              <label className="form-label">Ingreso Familiar</label>
-              <input
-                type="text"
-                className="form-control"
-                name="ingresoFamiliar"
-                value={formData.ingresoFamiliar}
-                onChange={onChange}
-                readOnly
-              />
+                <label className="form-label">Ingreso Familiar</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  name="ingresoFamiliar"
+                  value={formatMoneyDisplay(formData.ingresoFamiliar ?? 0)}
+                  onChange={onChange}
+                  readOnly
+                />
               <div className="form-text">Sumatoria de los ingresos de cada miembro.</div>
             </div>
             <div className="col-md-3">

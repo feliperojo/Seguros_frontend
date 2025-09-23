@@ -6,7 +6,7 @@ import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
-import { calcIngresoFamiliar } from '../services/ingresos';
+import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
@@ -105,12 +105,14 @@ const mapClienteForSave = (m) => {
     actividad_economica: pick("actividad_economica"),
     empleador: pick("empleador"),
     telefono_empleador: pick("telefono_empleador"),
-    periodo_ingreso: pick("periodo_ingreso"),
-    ingreso_por_periodo: pick("ingreso_por_periodo"),
-    ingreso_anual: pick("ingreso_anual"),
+    periodo_ingreso: pick("periodo_ingreso"),                                // texto
+    ingreso_por_periodo: parseMoney(pick("ingreso_por_periodo")),            // número
+    ingreso_anual: parseMoney(pick("ingreso_anual")),  
+
     nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
-    periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
-    ingreso_por_periodo_ocasional: pick("ingreso_por_periodo_ocasional"),
+    periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),            // texto
+   ingreso_por_periodo_ocasional: parseMoney(pick("ingreso_por_periodo_ocasional")),
+    
 
     // Toggles
     whatsapp: pick("whatsapp") === true,
