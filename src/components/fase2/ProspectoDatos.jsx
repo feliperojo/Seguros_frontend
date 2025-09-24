@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay } from "../../services/ingresos";
+import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from "../../services/ingresos";
 
 /* ---------- Helpers de UI ---------- */
 const getTypeColor = (tipo) => {
@@ -116,13 +116,23 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     onChange({ [field]: value });
   };
 
- // Handlers específicos para dinero
- const handleMoneyChange = (field) => (e) => {
-  const raw = sanitizeMoneyInput(e.target.value); // debe devolver "250.00" para "250,00"
-  const num = raw === "" ? null : Number(raw);
-  onChange({ [field]: Number.isFinite(num) ? num : null });
-};
+  const handleMoneyChange = (field) => (e) => {
+       const raw = sanitizeMoneyInput(e.target.value);     // deja solo dígitos + separadores
+       if (raw === "") {
+         onChange({ [field]: null });
+         return;
+       }
+      const num = parseMoney(raw);                        // ⇦ convierte “12.000,00” → 12000
+       onChange({ [field]: Number.isFinite(num) ? num : null });
+     };
 
+      const handleMoneyBlur = (field) => (e) => {
+         const pretty = formatMoney2(e.target.value);        // “12000” → “12.000,00”
+        // NO reasignes el value del input aquí (controlado por React),
+         // solo normaliza el estado si quieres:
+         const num = parseMoney(pretty);
+         onChange({ [field]: Number.isFinite(num) ? num : null });
+       };
 
 
 
@@ -240,11 +250,12 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     readOnly
       ? formatMoneyDisplay(member.ingreso_anual ?? 0) // bonito solo en lectura
       : (member.ingreso_anual ?? "")                  // edición cruda (número o "")
-  }
-  disabled={readOnly}
-  onChange={handleMoneyChange("ingreso_anual")}
-  placeholder="0,00"
-/>
+            }
+            disabled={readOnly}
+            onChange={handleMoneyChange("ingreso_anual")}
+            onBlur={handleMoneyBlur("ingreso_anual")}
+            placeholder="0,00"
+          />
                 </div>
 
               <div className="col-md-4">

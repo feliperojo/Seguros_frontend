@@ -1322,13 +1322,14 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
       {/* Row 2 */}
       <div className="row g-3">
       <Field label="Compañía" className="col-md-3">
-          <CompanySelect
-            companies={companies}
-            value={m.compania_id ?? ""}
-            onChange={onChange}
-            disabled={readOnly || companiesLoading}
-          />
-        </Field>
+        <CompanySelect
+          companies={companies}
+          value={m.compania_id ?? m.compania?.id ?? ""}
+          onChange={onChange}                    // <-- works with onChangeFactory(e)
+          disabled={readOnly || companiesLoading}
+        />
+      </Field>
+
 
 
         <Field label="Plan" className="col-md-3">

@@ -9,7 +9,7 @@ import TomaDeDatos from '../components/fase2/TomaDeDatos';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import ClienteService from '../services/ClienteService';
 import { mapGrupoFromForm, mapClienteFromMember } from '../adapters/prospecto.mapper';
-import { calcIngresoFamiliar, sanitizeMoneyInput } from '../services/ingresos';
+import { calcIngresoFamiliar, sanitizeMoneyInput, parseMoney } from '../services/ingresos';
 import ProspectoService from "../services/ProspectoService";
 
 
@@ -214,9 +214,9 @@ const Prospecto = () => {
         const base = mapClienteFromMember(m);
       
         // Fuerza ingreso_anual numérico para el backend
-        const limpio = typeof m.ingreso_anual === "number"
-          ? m.ingreso_anual
-          : Number(sanitizeMoneyInput(String(m.ingreso_anual ?? "")));
+         const limpio = typeof m.ingreso_anual === "number"
+           ? m.ingreso_anual
+           : parseMoney(String(m.ingreso_anual ?? ""));
       
         return {
           ...base,

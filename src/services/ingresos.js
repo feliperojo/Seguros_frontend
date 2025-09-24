@@ -1,40 +1,49 @@
 // services/ingresos.js
 
-// --- helpers numéricos ---
 export const parseMoney = (v) => {
-    if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-    if (v == null) return 0;
-  
-    let s = String(v).trim();
-    if (!s) return 0;
-  
-    // Quita símbolos y espacios, conserva solo dígitos, coma, punto y signo
-    s = s.replace(/[^\d.,-]/g, "");
-  
-    // Si hay coma y punto, el separador decimal es el ÚLTIMO que aparezca
-    const hasComma = s.includes(",");
-    const hasDot = s.includes(".");
-    if (hasComma && hasDot) {
-      const lastComma = s.lastIndexOf(",");
-      const lastDot = s.lastIndexOf(".");
-      const decSep = lastComma > lastDot ? "," : ".";
-      const thouSep = decSep === "," ? "." : ",";
-  
-      // quita miles y normaliza decimal a punto JS
-      s = s.replace(new RegExp("\\" + thouSep, "g"), "");
-      s = s.replace(decSep, ".");
-    } else if (hasComma) {
-      // solo comas => coma decimal (es-CO)
-      s = s.replace(/\./g, ""); // por si viniesen puntos "decorativos"
-      s = s.replace(",", ".");
-    } else {
-      // solo puntos => punto decimal (en-US)
-      s = s.replace(/,/g, "");
-    }
-  
-    const n = Number(s);
-    return Number.isFinite(n) ? n : 0;
-  };
+  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
+  if (v == null) return 0;
+
+  let s = String(v).trim();
+  if (!s) return 0;
+
+  s = s.replace(/[^\d.,-]/g, "");
+
+  const hasComma = s.includes(",");
+  const hasDot = s.includes(".");
+ const commaCount = (s.match(/,/g) || []).length;
+ const dotCount   = (s.match(/\./g) || []).length;
+
+  if (hasComma && hasDot) {
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    const decSep = lastComma > lastDot ? "," : ".";
+    const thouSep = decSep === "," ? "." : ",";
+    s = s.replace(new RegExp("\\" + thouSep, "g"), "");
+    s = s.replace(decSep, ".");
+
+ } else if (hasComma) {
+   if (commaCount > 1) {
+     // último como decimal, anteriores como miles
+     const last = s.lastIndexOf(",");
+     s = s.slice(0, last).replace(/,/g, "") + "." + s.slice(last + 1).replace(/,/g, "");
+   } else {
+     s = s.replace(/\./g, "").replace(",", ".");
+   }
+ } else if (hasDot) {
+   if (dotCount > 1) {
+     // último como decimal, anteriores como miles
+     const last = s.lastIndexOf(".");
+     s = s.slice(0, last).replace(/\./g, "") + "." + s.slice(last + 1).replace(/\./g, "");
+   } else {
+     s = s.replace(/,/g, "");
+   }
+  }
+
+  const n = Number(s);
+  return Number.isFinite(n) ? n : 0;
+};
+
   
   const nfES = new Intl.NumberFormat("es-CO", {
     minimumFractionDigits: 2,
@@ -52,23 +61,25 @@ export const parseMoney = (v) => {
     if (raw == null) return "";
     let s = String(raw).replace(/[^\d.,]/g, "");
   
-    // si hay más de un separador decimal, conserva solo el primero
-    const commaCount = (s.match(/,/g) || []).length;
-    const dotCount = (s.match(/\./g) || []).length;
-    if (commaCount + dotCount > 1) {
-      // prioriza el primer separador que aparezca
-      const i = Math.min(
-        ...[s.indexOf(","), s.indexOf(".")].filter((x) => x >= 0)
-      );
-      const head = s.slice(0, i + 1);
-      const tail = s.slice(i + 1).replace(/[.,]/g, "");
-      s = head + tail;
-    }
   
-    // evita ceros a la izquierda tipo "0003"
+   const commaCount = (s.match(/,/g) || []).length;
+   const dotCount   = (s.match(/\./g) || []).length;
+   // Si solo hay comas y son varias: deja la ÚLTIMA como decimal, borra las anteriores
+   if (commaCount > 1 && dotCount === 0) {
+     const last = s.lastIndexOf(",");
+     s = s.slice(0, last).replace(/,/g, "") + "," + s.slice(last + 1).replace(/,/g, "");
+   }
+   // Si solo hay puntos y son varios: deja el ÚLTIMO como decimal, borra los anteriores
+   if (dotCount > 1 && commaCount === 0) {
+     const last = s.lastIndexOf(".");
+     s = s.slice(0, last).replace(/\./g, "") + "." + s.slice(last + 1).replace(/\./g, "");
+   }
+   // Si hay de ambos tipos, no tocamos: lo resuelve parseMoney
+  
     s = s.replace(/^0+(?=\d)/, "0");
     return s;
   };
+  
   
 
   // 👉 NUEVO: factor anual según período
