@@ -8,6 +8,7 @@ import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
+import { formatSSN, formatUSCIS } from "../../utils/formatters";
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
 
@@ -512,20 +513,22 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
 
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
-  
-    // 1) Base
     let v = type === "checkbox" ? !!checked : value;
   
-    // 2) Formato dinero
+    // ⬇️ Apply masks
+    if (name === "social") v = formatSSN(v);      // 3-2-4
+    if (name === "auscis") v = formatUSCIS(v);    // A + 3-3-3
+  
+    // existing money formatting
     if (MONEY_FIELDS.has(name)) v = sanitizeMoneyInput(v);
   
-    // 3) Capitalización para nombres
+    // existing capitalization
     if (NAME_FIELDS.has(name)) v = toTitle(v);
   
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
   
-    // 4) Reglas de cálculo ingreso anual
+    // existing annual income logic (unchanged)
     if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
       const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
       const per     = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
@@ -536,6 +539,7 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
     return patchCliente(idx, patch);
   };
+  
   
   
   const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
@@ -837,15 +841,19 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                                <Field label="Social" className="col-md-6">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="social"
-                                    value={c.social ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
+                              <Field label="Social" className="col-md-6">
+                                <input
+                                  className="form-control form-control-sm"
+                                  name="social"
+                                  value={c.social ?? ""}
+                                  onChange={onChange}
+                                  disabled={readOnly}
+                                  inputMode="numeric"
+                                  maxLength={11}            // 123-45-6789
+                                  
+                                />
+                              </Field>
+
                                 <Field label="Status" className="col-md-6">
                                   <select
                                     className="form-select form-select-sm"
@@ -871,14 +879,19 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                                 </Field>
 
                                 <Field label="A/USCIS" className="col-md-6">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="auscis"
-                                    value={c.auscis ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                  />
-                                </Field>
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="auscis"
+                                      value={c.auscis ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      inputMode="numeric"
+                                      maxLength={12}            // A123-456-789  (use 13 if you show A-123-456-789)
+                                      
+                                    />
+                                  </Field>
+
+
                                 <Field label="Tarjeta #" className="col-md-6">
                                   <input
                                     className="form-control form-control-sm"
