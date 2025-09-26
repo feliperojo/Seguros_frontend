@@ -9,6 +9,7 @@ import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import { deriveCounts } from "../utils/groupCounters";
 
 // ================== Helpers ==================
 
@@ -318,6 +319,8 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     setTimeout(() => setToast((t) => ({ ...t, show: false })), 3500);
   };
 
+
+
   // Handler de cambios (respeta capitalizaciones que pediste)
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -502,6 +505,19 @@ const handleCreateMemberRemote = async (memberData) => {
     }
   };
 
+  const handleDerivedCounts = useCallback(({ taxes, cobertura }) => {
+    setFormData(prev => {
+      if (!prev) return prev;
+      if (prev.personasTaxes === taxes && prev.personasCobertura === cobertura) return prev;
+      return { ...prev, personasTaxes: taxes, personasCobertura: cobertura };
+    });
+  }, []);
+  useEffect(() => {
+    if (!Array.isArray(familyMembers)) return;
+    const { taxes, cobertura } = deriveCounts(familyMembers);
+    handleDerivedCounts({ taxes, cobertura });
+  }, [familyMembers, handleDerivedCounts]);
+
   const handleSave = async (alsoAdvance = false) => {
     try {
       setSaving(true);
@@ -579,6 +595,9 @@ const handleCreateMemberRemote = async (memberData) => {
   const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';
   const canAddMember = isProspecto ? true : isEditing;   // 👈 así en creación siempre se puede
   const readOnly = !isEditing;
+
+
+  
 
   return (
     <div className="container-fluid bg-light min-vh-100 py-4">
@@ -750,6 +769,7 @@ const handleCreateMemberRemote = async (memberData) => {
           defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
           onCreateMemberRemote={handleCreateMemberRemote}
           onSaveCobertura={() => {}}
+          onDerivedCounts={handleDerivedCounts}
         />
         
         ) : (
@@ -771,6 +791,7 @@ const handleCreateMemberRemote = async (memberData) => {
     )
   }
   onSaveCobertura={() => {}}
+  onDerivedCounts={handleDerivedCounts}
 />
 
 

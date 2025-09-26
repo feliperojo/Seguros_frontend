@@ -3,7 +3,7 @@ import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from "../../services/ingresos";
-
+import { deriveCounts } from "../../utils/groupCounters";
 /* ---------- Helpers de UI ---------- */
 const getTypeColor = (tipo) => {
   switch (tipo) {
@@ -266,7 +266,6 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                   disabled={readOnly}
                   onChange={handle("estado_cobertura")}
                 >
-                  <option value="">Si/No</option>
                   <option value="Sí">Sí</option>
                   <option value="No">No</option>
                 </select>
@@ -293,24 +292,9 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   );
 };
 
-// === Helpers de cobertura / retiro ===
-const isActiveCoverage = (m = {}) => {
-    // Soporta ambas estructuras:
-    // 1) campo plano en el miembro
-    // 2) arreglo m.coberturas [{estado_cobertura, fecha_retiro}, ...]
-    const list = Array.isArray(m.coberturas)
-      ? m.coberturas
-      : [{ estado_cobertura: m.estado_cobertura, fecha_retiro: m.fecha_retiro }];
-    return list.some(
-     (c) =>
-        (c.estado_cobertura ?? m.estado_cobertura) === "Sí" &&
-        (c.fecha_retiro === null || c.fecha_retiro === undefined || c.fecha_retiro === "")
-    );
-  };
+
   
-  const countTaxesMembers = (members = []) => members.length;
-  const countCoverageMembers = (members = []) =>
-  members.filter((m) => isActiveCoverage(m)).length;
+
 
 /* ======================= Componente principal ======================= */
 const ProspectoDatos = ({
@@ -357,9 +341,8 @@ const ProspectoDatos = ({
 
     // Recalcular y notificar al padre los contadores derivados
     useEffect(() => {
-      const taxes = countTaxesMembers(familyMembers);
-      const cobertura = countCoverageMembers(familyMembers);
-      onDerivedCounts && onDerivedCounts({ taxes, cobertura });
+        const { taxes, cobertura } = deriveCounts(familyMembers);
+       onDerivedCounts?.({ taxes, cobertura });
    }, [familyMembers]);
   
      // Crear local: garantizar fecha_retiro = null por defecto

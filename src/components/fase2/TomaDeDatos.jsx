@@ -8,7 +8,9 @@ import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
-import { formatSSN, formatUSCIS } from "../../utils/formatters";
+import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
+
+
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
 
@@ -75,6 +77,7 @@ const MONEY_FIELDS = new Set([
   "precio", // si quieres que precio también se formatee
 ]);
 
+const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
 // 👇 Duplicamos a la raíz TODOS los campos de cliente (así el mapper del padre siempre los ve)
 const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
@@ -201,13 +204,7 @@ const buildDireccion = (src) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/**
- * AddressSection
- * Props:
- *  - c: objeto cliente normalizado (getC(m))
- *  - onChange: handler del padre (onChangeFactory(idx))
- *  - readOnly: boolean
- */
+
 const AddressSection = ({ c, onChange, readOnly }) => {
   const [copyDir, setCopyDir] = React.useState(false);
 
@@ -515,20 +512,21 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     const { name, value, type, checked } = e.target;
     let v = type === "checkbox" ? !!checked : value;
   
-    // ⬇️ Apply masks
-    if (name === "social") v = formatSSN(v);      // 3-2-4
-    if (name === "auscis") v = formatUSCIS(v);    // A + 3-3-3
+    // ⬇️ Máscaras
+    if (name === "social") v = formatSSN(v);       // 3-2-4
+    if (name === "auscis") v = formatUSCIS(v);     // A + 3-3-3
+    if (PHONE_FIELDS.has(name)) v = formatPhone334(v); // Teléfono
   
-    // existing money formatting
+    // dinero
     if (MONEY_FIELDS.has(name)) v = sanitizeMoneyInput(v);
   
-    // existing capitalization
+    // capitalización de nombres
     if (NAME_FIELDS.has(name)) v = toTitle(v);
   
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
   
-    // existing annual income logic (unchanged)
+    // cálculo ingreso anual (igual que ya tenías)
     if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
       const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
       const per     = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
@@ -958,36 +956,59 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                                <Field label="Teléfono" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="telefono"
-                                    value={c.telefono ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                    placeholder="Número principal"
-                                  />
-                                </Field>
-                                <Field label="Tel. Secundario" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="secundario"
-                                    value={c.secundario ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                    placeholder="Número alterno"
-                                  />
-                                </Field>
-                                <Field label="WhatsApp" className="col-md-4">
-                                  <input
-                                    className="form-control form-control-sm"
-                                    name="whatsapp_num"
-                                    value={c.whatsapp_num ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
-                                    placeholder="Número de WhatsApp"
-                                  />
-                                </Field>
+                              <Field label="Teléfono" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="telefono"
+                                      value={c.telefono ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      inputMode="numeric"
+                                      maxLength={12}               
+                                    
+                                    />
+                                  </Field>
+
+                                  <Field label="Tel. Secundario" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="secundario"
+                                      value={c.secundario ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      inputMode="numeric"
+                                      maxLength={12}
+                                      
+                                    />
+                                  </Field>
+
+                                  <Field label="WhatsApp" className="col-md-4">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="whatsapp_num"
+                                      value={c.whatsapp_num ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      inputMode="numeric"
+                                      maxLength={12}
+                                      
+                                    />
+                                  </Field>
+
+                                  {/* Empleador */}
+                                  <Field label="Teléfono del Empleador" className="col-md-6">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      name="telefono_empleador"
+                                      value={c.telefono_empleador ?? ""}
+                                      onChange={onChange}
+                                      disabled={readOnly}
+                                      inputMode="numeric"
+                                      maxLength={12}
+                                      
+                                    />
+                                  </Field>
+
 
                                 <Field label="Nota" className="col-12">
                                   <textarea

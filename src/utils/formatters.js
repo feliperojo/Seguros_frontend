@@ -31,3 +31,24 @@ export const formatUSCIS = (val = "") => {
 // --- Optional “unformat” helpers for API mapping ---
 export const unformatSSN = (val = "") => onlyDigits(val).slice(0, 9);
 export const unformatUSCIS = (val = "") => onlyDigits(val).slice(0, 9);
+
+// ...lo que ya tienes arriba (onlyDigits, chunkJoin, formatSSN, formatUSCIS, etc.)
+
+/** Teléfono US 3-3-4: 123-456-7890  */
+export const formatPhone334 = (raw = "") => {
+  const d = onlyDigits(raw).slice(0, 10);       // hasta 10 dígitos
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0,3)}-${d.slice(3)}`;
+  return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6,10)}`;
+};
+
+/** Variante flexible 3-3-(ilimitado) (la que usabas en otro componente) */
+export const formatPhoneFlexible = (raw = "") => {
+  const d = onlyDigits(raw);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0,3)}-${d.slice(3)}`;
+  return `${d.slice(0,3)}-${d.slice(3,6)}-${d.slice(6)}`;
+};
+
+/** Quitar guiones para enviar al backend */
+export const unformatPhone = (raw = "") => onlyDigits(raw).slice(0, 15);

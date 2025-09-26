@@ -430,7 +430,6 @@ const handlePickExisting = async (cliente) => {
                 <div className="col-md-3">
                   <label className="form-label">¿Está en Cobertura?</label>
                   <select className="form-select" name="estado_cobertura" value={data.estado_cobertura} onChange={onChange} disabled={readOnly}>
-                    <option value="Si/No">Si/No</option>
                     <option value="Sí">Sí</option>
                     <option value="No">No</option>
                     <option value="Medicare">Medicare</option>
