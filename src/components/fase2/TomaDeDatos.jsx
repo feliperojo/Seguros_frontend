@@ -991,19 +991,7 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                                     />
                                   </Field>
 
-                                  {/* Empleador */}
-                                  <Field label="Teléfono del Empleador" className="col-md-6">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="telefono_empleador"
-                                      value={c.telefono_empleador ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      inputMode="numeric"
-                                      maxLength={12}
-                                      
-                                    />
-                                  </Field>
+                            
 
 
                                 <Field label="Nota" className="col-12">

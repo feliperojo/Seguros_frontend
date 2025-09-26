@@ -319,8 +319,8 @@ const ProspectoDatos = ({
 
   /* ---- Mutadores locales con recálculo de derivados ---- */
   const recomputeDerived = (m) => {
-    const fecha = m.fecha_nacimiento || m.cliente?.fecha_nacimiento;
-    const edad = m.edad ?? calcAge(fecha);
+    const fecha =  (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
+    const edad = calcAge(fecha);
     const nombre =
       m.nombreCompleto ||
       m.nombre_completo ||

@@ -780,9 +780,9 @@ const handleCreateMemberRemote = async (memberData) => {
   readOnly={readOnly}
   canAdd={canAddMember}
   estadoActual={estadoActual}
-  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   // 👈 para tipo por defecto
-  isProspecto={isProspecto}                                            // 👈 para que el hijo sepa el modo
-  onCreateMemberRemote={handleCreateMemberRemote}                       // 👈 alta remota
+  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
+  isProspecto={isProspecto}                                       
+  onCreateMemberRemote={handleCreateMemberRemote}                      
   onBlockedAddClick={() =>
     showToast(
       'info',

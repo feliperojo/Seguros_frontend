@@ -12,6 +12,7 @@ const FIELD_DEFS = [
   { key: "tipo_pago",         label: "Tipo de pago" },
   { key: "dia_pago",          label: "Día de pago" },
   { key: "estado_cobertura",  label: "Cobertura" },
+  { key: "fecha_activacion",  label: "fecha de activacion" },
 ];
 
 const ALL_KEYS = FIELD_DEFS.map(f => f.key);
