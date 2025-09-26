@@ -4,6 +4,7 @@ import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from "../../services/ingresos";
 import { deriveCounts } from "../../utils/groupCounters";
+import languages from "../../services/idiomas";
 /* ---------- Helpers de UI ---------- */
 const getTypeColor = (tipo) => {
   switch (tipo) {
@@ -193,17 +194,21 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               </div>
 
               <div className="col-md-4">
-                <label className="form-label">Idioma</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={member.idioma || member?.cliente?.idioma || ""}
-                  disabled={readOnly}
-                  onChange={handle("idioma")}
-                >
-                  <option value="">Seleccione</option>
-                  <option>Español</option>
-                  <option>Inglés</option>
-                </select>
+              <label className="form-label">Idioma</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={member.idioma || member?.cliente?.idioma || ""}
+                    disabled={readOnly}
+                    onChange={handle("idioma")}
+                  >
+                    <option value="">Seleccione</option>
+                    {languages.map((lang) => (
+                      <option key={lang.code} value={lang.name}>
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+
               </div>
 
               <div className="col-md-4">

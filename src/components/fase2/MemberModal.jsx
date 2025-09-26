@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ClienteExistente from "../ClienteExistente"; // ⬅️ ajusta la ruta si es necesario
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
-
+import LanguageSelect from "../selects/LanguageSelect";
 // Paleta/iconos por tipo (igual que antes)
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
@@ -386,12 +386,13 @@ const handlePickExisting = async (cliente) => {
 
                 <div className="col-md-3">
                   <label className="form-label">Idioma</label>
-                  <select className="form-select" name="idioma" value={data.idioma} onChange={onChange} disabled={readOnly}>
-                    <option value="">Seleccione</option>
-                    <option value="Español">Español</option>
-                    <option value="Inglés">Inglés</option>
-                    <option value="Otro">Otro</option>
-                  </select>
+                  <LanguageSelect
+                    name="idioma"
+                    value={data.idioma}
+                    onChange={onChange}
+                    disabled={readOnly}
+
+                  />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>

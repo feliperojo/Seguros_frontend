@@ -9,7 +9,7 @@ import { buildPayerOptions } from "../../utils/payers";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
 import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
-
+import LanguageSelect from "../selects/LanguageSelect";
 
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
@@ -799,18 +799,14 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                                   </select>
                                 </Field>
                                 <Field label="Idioma" className="col-md-3">
-                                  <select
-                                    className="form-select form-select-sm"
+                                <LanguageSelect
                                     name="idioma"
                                     value={c.idioma ?? ""}
                                     onChange={onChange}
                                     disabled={readOnly}
-                                  >
-                                    <option value="">Seleccione</option>
-                                    <option value="Español">Español</option>
-                                    <option value="Inglés">Inglés</option>
-                                    <option value="Otro">Otro</option>
-                                  </select>
+                                    // getValue={(l)=>l.code}   // opcional si prefieres guardar el code
+                                    className="form-select form-select-sm"
+                                  />
                                 </Field>
                               </div>
                             </div>
