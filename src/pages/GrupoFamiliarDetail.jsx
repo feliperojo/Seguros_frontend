@@ -60,19 +60,25 @@ const unwrapFull = (res) => res?.data ?? res ?? {};
 
 
 
+
  // ---- helper a nivel de módulo (visible para mapClienteForSave) ----
  const moneyToDecimal = (v) => {
-   const cents = parseMoney(String(v ?? ""));   // "12.345,67" -> 1234567 (centavos)
-   if (!Number.isFinite(cents)) return 0;
-   const dec = cents / 100;                     // 1234567 -> 12345.67
-   return Math.min(Number(dec.toFixed(2)), 99999999.99); // protege NUMERIC(10,2)
- };
+  const n = parseMoney(v ?? "");
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(Number(n.toFixed(2)), 99999999.99);
+};
+
 
 // ===== Mapper local para GUARDAR todos los campos del cliente =====
 const mapClienteForSave = (m) => {
   const c = m?.cliente || {};
   const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
+  const nombre_completo = c?.nombre_completo || buildNombreCompleto({
+       primer_nombre: pick("primer_nombre"),
+       segundo_nombre: pick("segundo_nombre"),
+       apellidos: pick("apellidos"),
+    });
 
   return {
     id: m?.cliente_id ?? c?.id ?? null,
@@ -81,6 +87,7 @@ const mapClienteForSave = (m) => {
     primer_nombre: pick("primer_nombre"),
     segundo_nombre: pick("segundo_nombre"),
     apellidos: pick("apellidos"),
+    nombre_completo, 
     fecha_nacimiento: date10(pick("fecha_nacimiento")),
     genero: pick("genero"),
     idioma: pick("idioma"),
@@ -305,7 +312,13 @@ const mapFullToMembers = (fullRaw) => {
   });
 };
 
-
+const buildNombreCompleto = (o = {}) =>
+  [o.primer_nombre, o.segundo_nombre, o.apellidos]
+    .map(v => (v || "").toString().trim())
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 // ================== Componente ==================
 const GrupoFamiliarDetail = () => {
   const { id } = useParams();
@@ -461,6 +474,12 @@ const mapMemberFromAppendResponse = (res) => {
 
 // 👇 llamada real al backend para alta en edición
 const handleCreateMemberRemote = async (memberData) => {
+
+  // tolera tanto nombre_completo como nombreCompleto; si no, lo arma
+  const nombreCompleto =
+    memberData?.nombre_completo ||
+    memberData?.nombreCompleto ||
+    buildNombreCompleto(memberData);
   // payload mínimo: cliente nuevo + cobertura
   const payload = {
     request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -469,6 +488,7 @@ const handleCreateMemberRemote = async (memberData) => {
       primer_nombre: memberData.primer_nombre || "",
       segundo_nombre: memberData.segundo_nombre || "",
       apellidos: memberData.apellidos || "",
+      nombre_completo: buildNombreCompleto(memberData),
       fecha_nacimiento: memberData.fecha_nacimiento || null,
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,

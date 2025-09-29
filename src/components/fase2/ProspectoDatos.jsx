@@ -120,43 +120,41 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
 
 
   const [moneyStr, setMoneyStr] = useState("");
-
+  const [isEditing, setIsEditing] = useState(false);
    // Hidrata la máscara cuando cambie el valor real del miembro
-   useEffect(() => {
-     const v = member?.ingreso_anual;
-     if (v === null || v === undefined || v === "") {
-       setMoneyStr("");
-     } else {
-       setMoneyStr(formatMoney2(v)); // “202588” → “202.588,00”
-     }
-   }, [member?.ingreso_anual]);
+ useEffect(() => {
+    if (isEditing) return;
+    const v = member?.ingreso_anual;
+    if (v === null || v === undefined || v === "") {
+      setMoneyStr("");
+    } else {
+      setMoneyStr(formatMoney2(v)); // ej: 202588 -> "202.588,00"
+    }
+  }, [member?.ingreso_anual, isEditing]);
 
   const handle = (field) => (e) => {
     const value = e?.target?.value ?? e;
     onChange({ [field]: value });
   };
 
-     // Cambios de texto (mantén máscara y actualiza número si es válido)
-     const handleMoneyChange = (field) => (e) => {
-       const raw = sanitizeMoneyInput(e.target.value); // deja solo dígitos y separadores
-       setMoneyStr(raw);
-       if (raw === "") {
-         onChange({ [field]: null });
-         return;
-       }
-       const num = parseMoney(raw); // “12.345,67” → 12345.67
-       if (Number.isFinite(num)) onChange({ [field]: num });
-     };
-  
-     // Al salir, formatea bonito
-     const handleMoneyBlur = () => {
-       setMoneyStr((s) => (s ? formatMoney2(s) : ""));
-     };
-  
-     // Al entrar, quita separadores para editar cómodo
-    const handleMoneyFocus = () => {
-       setMoneyStr((s) => sanitizeMoneyInput(s));
-     };
+  const handleMoneyChange = (e) => {
+    const raw = sanitizeMoneyInput(e.target.value);
+    setMoneyStr(raw);
+  };
+
+  // Al entrar: modo edición (sin miles, separador único)
+  const handleMoneyFocus = () => {
+    setIsEditing(true);
+    setMoneyStr((s) => sanitizeMoneyInput(s));
+  };
+
+  // Al salir: commit al padre + formateo bonito
+  const handleMoneyBlur = () => {
+    const num = parseMoney(moneyStr);
+    onChange({ ingreso_anual: Number.isFinite(num) ? num : 0 });
+    setMoneyStr((s) => (s ? formatMoney2(s) : ""));
+    setIsEditing(false);
+  };
 
 
 
@@ -293,15 +291,15 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
       <input
         className="form-control form-control-sm"
         inputMode="decimal"
-       value={
-         readOnly
-           ? formatMoneyDisplay(member.ingreso_anual ?? 0) // solo lectura
-           : moneyStr                                     // edición con máscara
-       }
+        value={
+          readOnly
+            ? formatMoneyDisplay(member.ingreso_anual ?? 0)
+            : moneyStr
+        }
         disabled={readOnly}
-       onChange={handleMoneyChange("ingreso_anual")}
-       onBlur={handleMoneyBlur}
-       onFocus={handleMoneyFocus}
+        onChange={handleMoneyChange}
+        onBlur={handleMoneyBlur}
+        onFocus={handleMoneyFocus}
         placeholder="0,00"
       />
     </div>
