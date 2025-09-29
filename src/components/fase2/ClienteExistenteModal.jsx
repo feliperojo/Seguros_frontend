@@ -1,0 +1,85 @@
+import React, { useState } from "react";
+import ClienteExistente from "../ClienteExistente";
+
+const TYPE_COLOR = {
+  Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
+  Dependiente: "secondary", Padre: "dark", Madre: "danger", Nieto: "warning",
+  "Abuelo/a": "warning", "Suegro/a": "warning", "Tio/a": "warning", "Sobrino/a": "warning",
+};
+const TIPOS = ["Tomador","Conyuge","Hijo/a","Hermano","Padre","Madre","Nieto","Abuelo/a","Suegro/a","Tio/a","Sobrino/a"];
+
+export default function ClienteExistenteModal({
+  open,
+  onClose,
+  grupoFamiliarId,
+  defaultCoberturaTipo = "Plan de salud",
+  onCreateCoberturaDeClienteExistente,   // (payload, cliente) => Promise
+}) {
+  const [saving, setSaving] = useState(false);
+  const [tipo, setTipo] = useState("Tomador");
+
+  if (!open) return null;
+
+  const handlePick = async (cliente) => {
+    if (!cliente?.id || !grupoFamiliarId) return;
+
+    const payload = {
+      grupo_familiar_id: grupoFamiliarId,
+      cliente_id: cliente.id,
+      parentesco: tipo,
+      tipo,
+      cobertura_tipo: defaultCoberturaTipo,
+      estado_cobertura: "Sí",
+    };
+
+    try {
+      setSaving(true);
+      await onCreateCoberturaDeClienteExistente?.(payload, cliente);
+      onClose?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
+      <div className="modal-dialog modal-lg">
+        <div className="modal-content">
+
+          <div className="modal-header">
+            <h5 className="modal-title">Agregar cliente existente</h5>
+            <button className="btn-close" onClick={onClose}/>
+          </div>
+
+          <div className="modal-body">
+            <div className="row g-2 align-items-center mb-3">
+              <div className="col-auto">
+                <label className="form-label mb-0">Tipo</label>
+              </div>
+              <div className="col-auto">
+                <select
+                  className="form-select form-select-sm"
+                  value={tipo}
+                  onChange={(e)=>setTipo(e.target.value)}
+                >
+                  {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="col-auto">
+                <span className={`badge bg-${TYPE_COLOR[tipo]||"secondary"}`}>{tipo}</span>
+              </div>
+            </div>
+
+            {/* Buscador/listado de clientes existentes */}
+            <ClienteExistente onClienteSeleccionado={handlePick} />
+          </div>
+
+          <div className="modal-footer">
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cerrar</button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  );
+}

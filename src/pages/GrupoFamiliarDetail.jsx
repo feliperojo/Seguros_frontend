@@ -58,6 +58,16 @@ const capitalizeWords = (s = "") =>
 // Desempaqueta respuesta: acepta {status,data} o el objeto directo
 const unwrapFull = (res) => res?.data ?? res ?? {};
 
+
+
+ // ---- helper a nivel de módulo (visible para mapClienteForSave) ----
+ const moneyToDecimal = (v) => {
+   const cents = parseMoney(String(v ?? ""));   // "12.345,67" -> 1234567 (centavos)
+   if (!Number.isFinite(cents)) return 0;
+   const dec = cents / 100;                     // 1234567 -> 12345.67
+   return Math.min(Number(dec.toFixed(2)), 99999999.99); // protege NUMERIC(10,2)
+ };
+
 // ===== Mapper local para GUARDAR todos los campos del cliente =====
 const mapClienteForSave = (m) => {
   const c = m?.cliente || {};
@@ -106,13 +116,13 @@ const mapClienteForSave = (m) => {
     actividad_economica: pick("actividad_economica"),
     empleador: pick("empleador"),
     telefono_empleador: pick("telefono_empleador"),
-    periodo_ingreso: pick("periodo_ingreso"),                                // texto
-    ingreso_por_periodo: parseMoney(pick("ingreso_por_periodo")),            // número
-    ingreso_anual: parseMoney(pick("ingreso_anual")),  
+    periodo_ingreso: pick("periodo_ingreso"),
+    ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")), // ← dólares
+    ingreso_anual:        moneyToDecimal(pick("ingreso_anual")),      // ← dólares
 
     nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
     periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),            // texto
-   ingreso_por_periodo_ocasional: parseMoney(pick("ingreso_por_periodo_ocasional")),
+    ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
     
 
     // Toggles
@@ -418,17 +428,18 @@ const mapMemberFromAppendResponse = (res) => {
     id: cli.id,
     cliente_id: cli.id,
     cobertura_id: cov.id,
+    cobertura_tipo: cov.cobertura_tipo || res?.cobertura_tipo || "Plan de salud",
     primer_nombre: cli.primer_nombre || "",
     segundo_nombre: cli.segundo_nombre || "",
     apellidos: cli.apellidos || "",
     genero: cli.genero || "",
+    idioma: cli.idioma || "",
     nombreCompleto,
     fecha_nacimiento: cli.fecha_nacimiento || "",
     edad: calcAge(cli.fecha_nacimiento),
-    ingresoAnual: cli.ingreso_anual || "",
+    ingreso_anual: cli.ingreso_anual || 0,
     parentesco: cov.parentesco || "Tomador",
     tipo: cov.parentesco || "Tomador",
-    estado_cobertura: cov.estado_cobertura || "Si/No",
     plan: cov.plan || null,
     metal: cov.metal || null,
     red: cov.red || null,
@@ -443,7 +454,8 @@ const mapMemberFromAppendResponse = (res) => {
     fecha_cancelacion: cov.fecha_cancelacion || "",
     fecha_retiro: cov.fecha_retiro || "",
     nota_retiro: cov.nota_retiro || "",
-    codigo_poliza: cov.codigo_pliza || "",
+    codigo_poliza: cov.codigo_poliza || "",
+    estado_cobertura: cov.estado_cobertura || "Sí",
   };
 };
 
@@ -460,13 +472,14 @@ const handleCreateMemberRemote = async (memberData) => {
       fecha_nacimiento: memberData.fecha_nacimiento || null,
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,
-      ingreso_anual: memberData.ingresoAnual || 0,
+      ingreso_anual: memberData.ingreso_anual || 0,
       nota: memberData.nota || null,
     },
     parentesco: memberData.parentesco || memberData.tipo || "Tomador",
     cobertura: {
       cobertura_tipo: productoCotizacion?.label || "Plan de salud", // o el default que uses
-      estado_cobertura: memberData.estado_cobertura || "Si/No",
+      
+      estado_cobertura: memberData.estado_cobertura || "Sí",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
       fecha_activacion: memberData.fecha_nacimiento ? null : null, // ajusta si debes
       pagador_id: null,
@@ -486,7 +499,7 @@ const handleCreateMemberRemote = async (memberData) => {
   // actualiza versión si el backend te devuelve la nueva
   if (data?.grupo_version) setGrupoVersion(data.grupo_version);
   // también puedes refrescar contadores si llegan en data.resumen
-
+  await reload(); // asegura que la siguiente “Actualizar” ya tiene IDs reales
   showToast("success", "Miembro agregado", "Se creó el cliente y su cobertura.");
 };
 
@@ -518,28 +531,64 @@ const handleCreateMemberRemote = async (memberData) => {
     handleDerivedCounts({ taxes, cobertura });
   }, [familyMembers, handleDerivedCounts]);
 
+
+
+
   const handleSave = async (alsoAdvance = false) => {
     try {
       setSaving(true);
 
       const grupoPayload = stripNulls(mapGrupoFromForm(formData));
-      const clientesPayload = (familyMembers || [])
-      .filter(m => m?.cliente_id)
-      .map(mapClienteForSave)   // 👈 nuestro mapper completo
-      .map(stripNulls);
-    
+
+
+           // 1) Crear primero los miembros NUEVOS (sin cliente_id)
+     const nuevos = (familyMembers || []).filter(m => !m?.cliente_id);
+     for (const m of nuevos) {
+       const cliNuevo = mapClienteForSave(m);
+       delete cliNuevo.id; // aseguramos “nuevo”
+
+       let cov = mapCoberturaFromMember(m, id);
+       if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion.label;
+
+       await GrupoFamiliarService.appendMiembro(id, {
+         request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+         grupo_version: grupoVersion,
+         cliente_nuevo: cliNuevo,
+         parentesco: m.parentesco || m.tipo || "Tomador",
+         cobertura: {
+           ...cov,
+           // el backend asigna ids; evitamos mandar ids locales
+           id: undefined,
+           cliente_id: undefined,
+         },
+       });
+     }
+
+     
+
+     // 2) Actualizar los EXISTENTES
+     const existentes = (familyMembers || []).filter(m => m?.cliente_id);
+     const clientesPayload = existentes.map(mapClienteForSave).map(stripNulls);
       
       // 👈 Actualizar cobertura_tipo si se cambió el producto
+           
       const coberturasPayload = (familyMembers || [])
-        .filter(m => m?.cobertura_id)
-        .map(m => {
-          const cobertura = mapCoberturaFromMember(m, id);
-          // Si hay un producto seleccionado, actualizar cobertura_tipo
-          if (productoCotizacion?.label) {
-            cobertura.cobertura_tipo = productoCotizacion.label;
-          }
-          return stripNulls(cobertura);
-        });
+               .filter(m => m?.cliente_id) // al menos debe existir cliente
+               .map(m => {
+                 const cobertura = mapCoberturaFromMember(m, id);
+                 // si no hay cobertura_id, forzamos alta (upsert)
+                 if (!m.cobertura_id) {
+                   cobertura.id = null;
+                   cobertura.cliente_id = m.cliente_id;
+                   cobertura.estado_cobertura = m.estado_cobertura ?? "Sí";
+                   cobertura.cobertura_tipo =
+                     productoCotizacion?.label || m.cobertura_tipo || "Plan de salud";
+                 }
+                 if (productoCotizacion?.label) {
+                   cobertura.cobertura_tipo = productoCotizacion.label;
+                 }
+                 return stripNulls(cobertura);
+               });
 
       await GrupoFamiliarService.fullUpdate(id, {
         ...grupoPayload,

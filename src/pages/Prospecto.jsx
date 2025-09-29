@@ -66,6 +66,14 @@ const mapGrupoApiToForm = (g) => ({
   personasTaxes: g?.personas_taxes ?? ''
 });
 
+ // helper local
+ const moneyToDecimal = (v) => {
+   const cents = parseMoney(String(v ?? ""));
+   if (!Number.isFinite(cents)) return 0;
+   const dec = cents / 100;
+   return Math.min(Number(dec.toFixed(2)), 99999999.99);
+ };
+
 const Prospecto = () => {
   const { grupoId: routeGrupoId } = useParams();
   const navigate = useNavigate();
@@ -220,7 +228,7 @@ const Prospecto = () => {
       
         return {
           ...base,
-          ingreso_anual: Number.isFinite(limpio) ? limpio : 0,
+          ingreso_anual: moneyToDecimal(m.ingreso_anual),
         };
       });
       

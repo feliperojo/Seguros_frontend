@@ -2,7 +2,7 @@ import React, { useMemo, useState, useCallback } from "react";
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import {  computeAnnual, sanitizeMoneyInput, formatMoney2} from "../../services/ingresos";
+import {  computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../../services/ingresos";
 import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
 import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
@@ -104,10 +104,10 @@ const normalizeMember = (m, idx) => {
   const apellRaw   = m.apellidos || "";
   const fecha   = m.fecha_nacimiento || "";
   const edad    = calcAge(fecha);
-  const nombre  = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
-const primer  = toTitle(primerRaw);
-const segundo = toTitle(segundoRaw);
-const apell   = toTitle(apellRaw);
+  const primer  = toTitle(primerRaw);
+   const segundo = toTitle(segundoRaw);
+   const apell   = toTitle(apellRaw);
+   const nombre  = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
   return {
     id: m.id ?? idx + 1,
     cliente_id: m.cliente_id ?? m.id ?? null,
@@ -449,6 +449,7 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     (payload) => {
       const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
       setFamilyMembers((prev) => [...(prev ?? []), normalizeMember({ ...payload, id: newId }, newId - 1)]);
+      setOpenModal(false); // 👈 cierra el modal al guardar
     },
     [familyMembers, setFamilyMembers]
   );
@@ -527,11 +528,13 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     const patch = { [name]: v };
   
     // cálculo ingreso anual (igual que ya tenías)
-    if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
-      const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
-      const per     = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
-      patch.ingreso_anual = formatMoney2(computeAnnual(periodo, per));
-    }
+      if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
+          const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
+          const perRaw  = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
+          // perRaw viene en “centavos”; pásalo a dólares para el cálculo:
+          const perDollars = (parseMoney(String(perRaw)) || 0) / 100;
+          patch.ingreso_anual = formatMoney2(computeAnnual(periodo, perDollars));
+        }
   
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
     if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
@@ -1534,7 +1537,7 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
         defaultCoberturaTipo={defaultCoberturaTipo}
         canAdd={canAdd}
         readOnly={readOnly}
-        isProspecto={isProspecto}
+        isProspecto={true}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}

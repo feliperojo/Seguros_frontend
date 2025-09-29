@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import ClienteExistente from "../ClienteExistente"; // ⬅️ ajusta la ruta si es necesario
+import React, { useEffect, useState } from "react";
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 import LanguageSelect from "../selects/LanguageSelect";
-// Paleta/iconos por tipo (igual que antes)
+
+/* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
   Dependiente: "secondary", Padre: "dark", Madre: "danger", Nieto: "warning",
@@ -28,50 +28,42 @@ const TIPOS = [
   { tipo: "Sobrino/a", label: "Sobrino/a" },
 ];
 
+/* ---------- Helpers ---------- */
 const buildFullName = (p="", s="", a="") => [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
-const capFirst = (t="") => t ? t.trimStart().replace(/^./, c=>c.toUpperCase()) : "";
+const capFirst = (t="") => (t ? t.trimStart().replace(/^./, c=>c.toUpperCase()) : "");
 const capWords = (t="") => t.toLowerCase().replace(/\b\w/g, c=>c.toUpperCase());
 const calcAge = (d) => {
   if (!d) return "";
-  const b=new Date(d), t=new Date();
-  let a=t.getFullYear()-b.getFullYear();
-  const m=t.getMonth()-b.getMonth();
-  if(m<0||(m===0 && t.getDate()<b.getDate())) a--;
+  const b = new Date(d), t = new Date();
+  let a = t.getFullYear() - b.getFullYear();
+  const m = t.getMonth() - b.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
   return a;
 };
 
-
-export default function MemberModal({
+export default function MemberModalCreate({
   open,
   onClose,
   editingMember = null,
   defaultCoberturaTipo = "Plan de salud",
-  canAdd = false,
   readOnly = false,
   isProspecto = false,
   onCreateLocal,
   onUpdateLocal,
   onCreateRemote,
-  grupoFamiliarId, 
-  onCreateCoberturaDeClienteExistente,          
 }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
-  const [mode, setMode] = useState("nuevo");      // 'nuevo' | 'existente' ⬅️ nuevo
-  const [tipoExistente, setTipoExistente] = useState("Tomador"); // ⬅️ nuevo
 
   const [data, setData] = useState({
     primer_nombre: "", segundo_nombre: "", apellidos: "", nombreCompleto: "",
     idioma: "", fechaNacimiento: "", edad: "", genero: "Masculino",
-    ingresoAnual: "", nota: "", parentesco: "Tomador", estado_cobertura: "Si/No", tipo: "Tomador",
+    ingresoAnual: "", nota: "", parentesco: "Tomador", estado_cobertura: "Sí", tipo: "Tomador",
   });
 
-  // hidratar al abrir
+  /* -------- Hidratar al abrir -------- */
   useEffect(() => {
     if (!open) return;
-    // reset de modo/tipo existente
-    setMode("nuevo");
-    setTipoExistente("Tomador");
 
     if (editingMember) {
       setData({
@@ -86,29 +78,24 @@ export default function MemberModal({
       setData({
         primer_nombre:"", segundo_nombre:"", apellidos:"", nombreCompleto:"",
         idioma:"", fechaNacimiento:"", edad:"", genero:"Masculino",
-        ingresoAnual:"",  // queda vacío
-        nota:"", parentesco:"Tomador", estado_cobertura:"Si/No", tipo:"Tomador"
+        ingresoAnual:"", nota:"", parentesco:"Tomador", estado_cobertura:"Sí", tipo:"Tomador"
       });
       setStep(1);
     }
-    
   }, [open, editingMember]);
 
+  /* -------- Handlers -------- */
   const onChange = (e) => {
     const { name, value, type } = e.target;
-  
-    // si es dinero, sanitiza mientras escribe
-    const val =
-      name === "ingresoAnual" ? sanitizeMoneyInput(value) : value;
-  
+    const sanitized = name === "ingresoAnual" ? sanitizeMoneyInput(value) : value;
+
     setData(prev => {
-      let v = val;
-      if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) v = capWords(val);
-      else if (["idioma","nota"].includes(name)) v = capFirst(val);
-      else if (!["number","date"].includes(type) && name !== "ingresoAnual") v = capFirst(val);
-  
+      let v = sanitized;
+      if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) v = capWords(sanitized);
+      else if (["nota"].includes(name)) v = capFirst(sanitized);
+      else if (!["number","date"].includes(type) && name !== "ingresoAnual") v = capFirst(sanitized);
+
       const next = { ...prev, [name]: v };
-  
       if (name === "fechaNacimiento") next.edad = calcAge(v);
       if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) {
         next.nombreCompleto = buildFullName(next.primer_nombre, next.segundo_nombre, next.apellidos);
@@ -116,157 +103,94 @@ export default function MemberModal({
       return next;
     });
   };
-  
 
-  const selectTipo = (tipo) => setData(prev => ({ ...prev, tipo, parentesco: tipo })) || setStep(2);
+
+   const selectTipo = (tipo) => {
+       setData(prev => ({ ...prev, tipo, parentesco: tipo }));
+       setStep(2);
+     };
+
+  const onBlurMoney = (field) => () =>
+    setData(prev => ({ ...prev, [field]: formatMoney2(prev[field]) }));
 
   const handleSave = async () => {
-
-    const payload = {
-      ...data,
+    // 1) Normaliza y arma el payload base
+    const toNumber = (s) => {
+      if (s === null || s === undefined || s === "") return null;
+      // "1.234,56" -> 1234.56
+      const n = String(s).replace(/\./g, "").replace(",", ".");
+      const num = Number(n);
+      return Number.isFinite(num) ? num : null;
+    };
+  
+    const base = {
+      // nombres
+      primer_nombre: (data.primer_nombre || "").trim(),
+      segundo_nombre: (data.segundo_nombre || "").trim(),
+      apellidos: (data.apellidos || "").trim(),
       nombreCompleto: buildFullName(data.primer_nombre, data.segundo_nombre, data.apellidos),
+  
+      // demográficos
+      idioma: data.idioma || "",
+      fecha_nacimiento: data.fechaNacimiento || "",
+      edad: data.edad || "",
+      genero: data.genero || "Masculino",
+  
+      // económicos / notas
+      ingreso_anual: data.ingresoAnual,          // string formateado aquí
+      nota: data.nota || "",
+  
+      // cobertura / tipo
       parentesco: data.parentesco || data.tipo || "Tomador",
       tipo: data.parentesco || data.tipo || "Tomador",
+      estado_cobertura: data.estado_cobertura || "Sí",
       cobertura_tipo: defaultCoberturaTipo,
-      fecha_nacimiento: data.fechaNacimiento ||  "",
-     ingreso_anual: data.ingresoAnual ?? "",
-     idioma:data.idioma || "",
     };
-
+  
     try {
       setSaving(true);
+  
+      // 2) Update local si está editando
       if (editingMember && onUpdateLocal) {
-        await onUpdateLocal(editingMember.id, payload);
-      } else if (isProspecto && onCreateLocal) {
-        await onCreateLocal(payload);
-      } else if (!isProspecto && onCreateRemote) {
-        await onCreateRemote(payload);
-      }
-      onClose?.();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-    // Agregar un cliente EXISTENTE → crea cobertura y cierra modal
-  const handleAddExisting = async (clienteSeleccionado) => {
-   if (!clienteSeleccionado?.id) return;
-    if (!grupoFamiliarId) {
-      console.error("Falta grupoFamiliarId");
-      return;
-    }
-    const payload = {
-      grupo_familiar_id: grupoFamiliarId,
-      cliente_id: clienteSeleccionado.id,
-      tipo: data.parentesco || data.tipo || "Tomador",
-      cobertura_tipo: defaultCoberturaTipo,
-      estado_cobertura: data.estado_cobertura || "Si/No",
-    };
-    try {
-      setSaving(true);
-      // este callback se encarga de hacer el POST y de hacer setFamilyMembers en el padre
-     await onCreateCoberturaDeClienteExistente?.(payload, clienteSeleccionado);
-      // cerrar modal y resetear wizard
-      setStep(1);
-      onClose?.();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-
-  // mapear cliente API → shape de miembro para pintar local (si hiciera falta)
-// Reemplaza tu mapClienteToMember por este:
-const mapClienteToMember = (c, tipoSel) => {
-    const primer  = c.primer_nombre || c.nombre || "";
-    const segundo = c.segundo_nombre || "";
-    const apell   = c.apellidos || c.apellido || "";
-    const fecha   = c.fecha_nacimiento || c.fechaNacimiento || "";
-    const nombreCompleto = c.nombre_completo || buildFullName(primer, segundo, apell);
-    const edad = calcAge(fecha);
-    const genero = c.genero || "Masculino";
-    const idioma  = c.idioma || ""; 
-  
-    return {
-      // ---- plano (fallback que tu card también entiende)
-      primer_nombre: primer,
-      segundo_nombre: segundo,
-      apellidos: apell,
-      nombreCompleto,
-      genero,
-      edad,
-      fecha_nacimiento: fecha,
-      idioma,           
-      // ---- metadatos de cobertura / UI
-      parentesco: tipoSel,
-      tipo: tipoSel,
-      estado_cobertura: "Sí",
-      cobertura_tipo: defaultCoberturaTipo,
-      cliente_id: c.id,
-      // ---- anidado como la card espera por defecto
-      cliente: {
-        id: c.id,
-        primer_nombre: primer,
-        segundo_nombre: segundo,
-        apellidos: apell,
-        nombre_completo: nombreCompleto, // 👈 usado por fullName
-        genero,
-
-        fecha_nacimiento: fecha,
-        edad,
-        telefono: c.telefono || "",
-        idioma,
-      },
-    };
-  };
-  
-
-  // elegir cliente existente → crear cobertura (remota) o card local
-  // dentro de MemberModal
-const handlePickExisting = async (cliente) => {
-    // Validaciones básicas
-    if (!grupoFamiliarId) {
-      console.error("Falta grupoFamiliarId");
-      return;
-    }
-    if (!cliente?.id) {
-      console.error("Cliente inválido");
-      return;
-    }
-  
-    // payload mínimo para INSERT de cobertura
-    const coberturaPayload = {
-      grupo_familiar_id: grupoFamiliarId,
-      cliente_id: cliente.id,
-      parentesco: tipoExistente,   // == tipo seleccionado (Tomador, Cónyuge, etc.)
-      tipo: tipoExistente,
-      cobertura_tipo: defaultCoberturaTipo,
-      estado_cobertura: "Sí",      // o "Si/No" si prefieres
-    };
-  
-    try {
-      setSaving(true);
-  
-      // ✅ SIEMPRE que sea "existente", usamos este callback
-      if (onCreateCoberturaDeClienteExistente) {
-        const created = await onCreateCoberturaDeClienteExistente(coberturaPayload, cliente);
-  
-        // Si tu backend NO devuelve el miembro listo para pintar,
-        // puedes hacer un fallback local aquí (opcional):
-        // if (!created?.miembro) await onCreateLocal?.(mapClienteToMember(cliente, tipoExistente));
-      } else {
-        // Si no nos pasaron el callback, al menos agregamos la card local (Prospecto)
-        await onCreateLocal?.(mapClienteToMember(cliente, tipoExistente));
+        // el padre decide cómo actualizar el miembro existente
+        await onUpdateLocal(editingMember.id, base);
+        onClose?.();
+        return;
       }
   
+      // 3) Crear local (modo prospecto, sin backend)
+      if (isProspecto && onCreateLocal) {
+        await onCreateLocal(base);
+        onClose?.();
+        return;
+      }
+  
+      // 4) Crear remoto (modo edición de grupo ya existente)
+      if (!isProspecto && onCreateRemote) {
+        const remotePayload = {
+          ...base,
+          // al backend SIEMPRE número
+          ingreso_anual: toNumber(base.ingreso_anual),
+        };
+        // >>> IMPORTANTE: onCreateRemote debe retornar el miembro creado
+        // (o al menos los datos necesarios para pintar la card).
+        const created = await onCreateRemote(remotePayload);
+  
+        // Si tu padre NO inserta en el estado dentro de onCreateRemote,
+        // habilita también onCreateLocal para insertar inmediatamente en UI.
+        if (onCreateLocal && created) {
+          await onCreateLocal(created); // respeta estado del padre
+        }
+  
+        onClose?.();
+        return;
+      }
+  
+      // 5) Fallback: si nada aplica, cierra igual para no bloquear UX
       onClose?.();
     } finally {
       setSaving(false);
     }
-  };
-  
-  const onBlurMoney = (field) => () => {
-    setData(prev => ({ ...prev, [field]: formatMoney2(prev[field]) }));
   };
   
 
@@ -275,101 +199,58 @@ const handlePickExisting = async (cliente) => {
   const color = TYPE_COLOR[data.tipo] || "secondary";
   const icon  = TYPE_ICON[data.tipo]  || "fa-user-check";
   const title = step === 1
-    ? (editingMember ? "Cambiar Tipo de Miembro" : "Seleccionar Tipo de Miembro1")
+    ? (editingMember ? "Cambiar Tipo de Miembro" : "Seleccionar Tipo de Miembro")
     : (data.nombreCompleto?.trim() || `Datos del ${data.tipo}`);
 
   return (
     <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
       <div className="modal-dialog modal-lg">
         <div className="modal-content">
+
           <div className="modal-header">
             <h5 className="modal-title">{title}</h5>
             <button className="btn-close" onClick={onClose} />
           </div>
 
-          {/* PASO 1 */}
-          {step===1 && (
+          {/* PASO 1: Elegir tipo */}
+          {step === 1 && (
             <div className="modal-body">
-
-              {/* Tabs: Nuevo / Existente */}
-              {!editingMember && (
-                <ul className="nav nav-tabs mb-3">
-                  <li className="nav-item">
-                    <button
-                      className={`nav-link ${mode==='nuevo'?'active':''}`}
-                      onClick={()=>setMode('nuevo')}
+              <div className="row g-3">
+                {TIPOS.map(t => (
+                  <div key={t.tipo} className="col-md-4 col-sm-6">
+                    <div
+                      className={`card h-100 border-2 ${data.tipo===t.tipo?`border-${TYPE_COLOR[t.tipo]||"secondary"} bg-light`:"border-light"}`}
+                      style={{cursor:"pointer"}}
+                      onClick={() => selectTipo(t.tipo)}
                     >
-                      Nuevo
-                    </button>
-                  </li>
-                  <li className="nav-item">
-                    <button
-                      className={`nav-link ${mode==='existente'?'active':''}`}
-                      onClick={()=>setMode('existente')}
-                    >
-                      Existente
-                    </button>
-                  </li>
-                </ul>
-              )}
-
-              {mode === 'nuevo' ? (
-                <div className="row g-3">
-                  {TIPOS.map(t => (
-                    <div key={t.tipo} className="col-md-4 col-sm-6">
-                      <div
-                        className={`card h-100 border-2 ${data.tipo===t.tipo?`border-${TYPE_COLOR[t.tipo]||"secondary"} bg-light`:"border-light"}`}
-                        style={{cursor:"pointer"}}
-                        onClick={() => selectTipo(t.tipo)}
-                      >
-                        <div className="card-body text-center py-4">
-                          <div className={`bg-${TYPE_COLOR[t.tipo]||"secondary"} text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`}
-                               style={{width:60, height:60}}>
-                            <i className={`fas ${TYPE_ICON[t.tipo]||"fa-user"} fa-lg`} />
-                          </div>
-                          <h6 className="mb-0">{t.label}</h6>
+                      <div className="card-body text-center py-4">
+                        <div
+                          className={`bg-${TYPE_COLOR[t.tipo]||"secondary"} text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3`}
+                          style={{width:60, height:60}}
+                        >
+                          <i className={`fas ${TYPE_ICON[t.tipo]||"fa-user"} fa-lg`} />
                         </div>
+                        <h6 className="mb-0">{t.label}</h6>
                       </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <>
-                  <div className="row g-2 align-items-center mb-3">
-                    <div className="col-auto">
-                      <label className="form-label mb-0">Tipo</label>
-                    </div>
-                    <div className="col-auto">
-                      <select
-                        className="form-select form-select-sm"
-                        value={tipoExistente}
-                        onChange={(e)=>setTipoExistente(e.target.value)}
-                      >
-                        {TIPOS.map(t => <option key={t.tipo} value={t.tipo}>{t.label}</option>)}
-                      </select>
-                    </div>
-                    <div className="col-auto">
-                      <span className={`badge bg-${TYPE_COLOR[tipoExistente]||"secondary"}`}>{tipoExistente}</span>
-                    </div>
                   </div>
-
-                  <ClienteExistente onClienteSeleccionado={handlePickExisting} />
-                </>
-              )}
+                ))}
+              </div>
             </div>
           )}
 
-          {/* PASO 2 (formulario) */}
-          {step===2 && (
+          {/* PASO 2: Formulario */}
+          {step === 2 && (
             <div className="modal-body">
               {!editingMember && (
                 <div className="d-flex align-items-center mb-3">
                   <button className="btn btn-outline-secondary btn-sm me-3" onClick={()=>setStep(1)}>
                     <i className="fas fa-arrow-left me-1" /> Cambiar Tipo
                   </button>
-                  <span className={`badge bg-${color}`}>{data.tipo}</span>
+                  <span className={`badge bg-${color}`}><i className={`fas ${icon} me-1`} />{data.tipo}</span>
                 </div>
               )}
+
               <div className="row g-3">
                 <div className="col-md-4">
                   <label className="form-label">Primer Nombre</label>
@@ -386,13 +267,7 @@ const handlePickExisting = async (cliente) => {
 
                 <div className="col-md-3">
                   <label className="form-label">Idioma</label>
-                  <LanguageSelect
-                    name="idioma"
-                    value={data.idioma}
-                    onChange={onChange}
-                    disabled={readOnly}
-
-                  />
+                  <LanguageSelect name="idioma" value={data.idioma} onChange={onChange} disabled={readOnly}/>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>
@@ -414,19 +289,20 @@ const handlePickExisting = async (cliente) => {
                   <label className="form-label">Nota</label>
                   <textarea className="form-control" rows="3" name="nota" value={data.nota} onChange={onChange} disabled={readOnly}/>
                 </div>
+
                 <div className="col-md-3">
-                      <label className="form-label">Ingreso Anual</label>
-                      <input
-                        className="form-control"
-                        inputMode="decimal"               
-                        name="ingresoAnual"
-                        value={data.ingresoAnual}
-                        onChange={onChange}
-                        onBlur={onBlurMoney("ingresoAnual")}
-                        disabled={readOnly}
-                        placeholder="0.00"
-                      />
-                    </div>
+                  <label className="form-label">Ingreso Anual</label>
+                  <input
+                    className="form-control"
+                    inputMode="decimal"
+                    name="ingresoAnual"
+                    value={data.ingresoAnual}
+                    onChange={onChange}
+                    onBlur={onBlurMoney("ingresoAnual")}
+                    disabled={readOnly}
+                    placeholder="0.00"
+                  />
+                </div>
 
                 <div className="col-md-3">
                   <label className="form-label">¿Está en Cobertura?</label>
@@ -445,14 +321,13 @@ const handlePickExisting = async (cliente) => {
 
           <div className="modal-footer">
             <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-
-            {/* Guardar solo aplica para paso 2 o cuando hay edición */}
-            {step===2 && (
+            {(step === 2) && (
               <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                 {saving ? <><span className="spinner-border spinner-border-sm me-2"/>Guardando…</> : <>Guardar</>}
               </button>
             )}
           </div>
+
         </div>
       </div>
     </div>

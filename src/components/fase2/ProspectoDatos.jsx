@@ -4,7 +4,8 @@ import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from "../../services/ingresos";
 import { deriveCounts } from "../../utils/groupCounters";
-import languages from "../../services/idiomas";
+import useLanguages from "../../hooks/useLanguages";
+import ClienteExistenteModal from "./ClienteExistenteModal";
 /* ---------- Helpers de UI ---------- */
 const getTypeColor = (tipo) => {
   switch (tipo) {
@@ -91,6 +92,8 @@ const mapClienteToMember = (
     estado_cobertura: estadoCobertura,
     cobertura_tipo: coberturaTipo,
     cliente_id: c.id,
+    idioma: c.idioma || "",
+    ingreso_anual: c.ingreso_anual || 0,
     cliente: {
       id: c.id,
       primer_nombre: primer,
@@ -102,9 +105,12 @@ const mapClienteToMember = (
       edad,
       telefono: c.telefono || "",
       idioma: c.idioma || "",
+      ingreso_anual: c.ingreso_anual || 0,
     },
   };
 };
+
+
 
 /* ---------- Subcomponente: Acordeón editable por miembro ---------- */
 const MemberAccordionForm = ({ member, readOnly, onChange }) => {
@@ -112,34 +118,62 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   const hdrId = `hdr-m-${member.id}`;
   const colId = `col-m-${member.id}`;
 
+
+  const [moneyStr, setMoneyStr] = useState("");
+
+   // Hidrata la máscara cuando cambie el valor real del miembro
+   useEffect(() => {
+     const v = member?.ingreso_anual;
+     if (v === null || v === undefined || v === "") {
+       setMoneyStr("");
+     } else {
+       setMoneyStr(formatMoney2(v)); // “202588” → “202.588,00”
+     }
+   }, [member?.ingreso_anual]);
+
   const handle = (field) => (e) => {
     const value = e?.target?.value ?? e;
     onChange({ [field]: value });
   };
 
-  const handleMoneyChange = (field) => (e) => {
-       const raw = sanitizeMoneyInput(e.target.value);     // deja solo dígitos + separadores
+     // Cambios de texto (mantén máscara y actualiza número si es válido)
+     const handleMoneyChange = (field) => (e) => {
+       const raw = sanitizeMoneyInput(e.target.value); // deja solo dígitos y separadores
+       setMoneyStr(raw);
        if (raw === "") {
          onChange({ [field]: null });
          return;
        }
-      const num = parseMoney(raw);                        // ⇦ convierte “12.000,00” → 12000
-       onChange({ [field]: Number.isFinite(num) ? num : null });
+       const num = parseMoney(raw); // “12.345,67” → 12345.67
+       if (Number.isFinite(num)) onChange({ [field]: num });
      };
-
-      const handleMoneyBlur = (field) => (e) => {
-         const pretty = formatMoney2(e.target.value);        // “12000” → “12.000,00”
-        // NO reasignes el value del input aquí (controlado por React),
-         // solo normaliza el estado si quieres:
-         const num = parseMoney(pretty);
-         onChange({ [field]: Number.isFinite(num) ? num : null });
-       };
+  
+     // Al salir, formatea bonito
+     const handleMoneyBlur = () => {
+       setMoneyStr((s) => (s ? formatMoney2(s) : ""));
+     };
+  
+     // Al entrar, quita separadores para editar cómodo
+    const handleMoneyFocus = () => {
+       setMoneyStr((s) => sanitizeMoneyInput(s));
+     };
 
 
 
   const fechaBase = (member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || "")
     .toString()
     .slice(0, 10);
+
+    const { languages = [] } = useLanguages();
+     const resolveIdiomaName = (v) => {
+       const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
+       const vv = normalize(v);
+       if (!vv) return "";
+       const found = languages.find(
+         (l) => normalize(l.code) === vv || normalize(l.name) === vv
+       );
+       return found?.name ?? v; // si no lo encuentra, muestra lo que venga
+     };
 
   return (
     <div className="accordion mt-3" id={accId}>
@@ -195,19 +229,27 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
 
               <div className="col-md-4">
               <label className="form-label">Idioma</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={member.idioma || member?.cliente?.idioma || ""}
-                    disabled={readOnly}
-                    onChange={handle("idioma")}
-                  >
-                    <option value="">Seleccione</option>
-                    {languages.map((lang) => (
-                      <option key={lang.code} value={lang.name}>
-                        {lang.name}
-                      </option>
-                    ))}
-                  </select>
+              <select
+                      className="form-select form-select-sm"
+                      value={resolveIdiomaName(member.idioma ?? member?.cliente?.idioma ?? "")}
+                      disabled={readOnly}
+                      onChange={(e) => {
+                        const selectedName = e.target.value;
+                        const lang = languages.find(l => l.name === selectedName);
+                        onChange({
+                          idioma: lang?.name ?? selectedName,
+                          cliente: {
+                            ...(member.cliente || {}),
+                            idioma: lang?.name ?? selectedName, // mantén ambos sincronizados
+                          },
+                        });
+                      }}
+                    >
+                      <option value="">Seleccione</option>
+                      {languages.map((lang) => (
+                        <option key={lang.code} value={lang.name}>{lang.name}</option>
+                      ))}
+                    </select>
 
               </div>
 
@@ -247,22 +289,22 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               </div>
 
               <div className="col-md-4">
-                  <label className="form-label">Ingreso Anual</label>
-                  <input
-  className="form-control form-control-sm"
-  inputMode="decimal"
-  value={
-    readOnly
-      ? formatMoneyDisplay(member.ingreso_anual ?? 0) // bonito solo en lectura
-      : (member.ingreso_anual ?? "")                  // edición cruda (número o "")
-            }
-            disabled={readOnly}
-            onChange={handleMoneyChange("ingreso_anual")}
-            onBlur={handleMoneyBlur("ingreso_anual")}
-            placeholder="0,00"
-          />
-                </div>
-
+      <label className="form-label">Ingreso Anual</label>
+      <input
+        className="form-control form-control-sm"
+        inputMode="decimal"
+       value={
+         readOnly
+           ? formatMoneyDisplay(member.ingreso_anual ?? 0) // solo lectura
+           : moneyStr                                     // edición con máscara
+       }
+        disabled={readOnly}
+       onChange={handleMoneyChange("ingreso_anual")}
+       onBlur={handleMoneyBlur}
+       onFocus={handleMoneyFocus}
+        placeholder="0,00"
+      />
+    </div>
               <div className="col-md-4">
                 <label className="form-label">¿Está en Cobertura?</label>
                 <select
@@ -273,6 +315,8 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                 >
                   <option value="Sí">Sí</option>
                   <option value="No">No</option>
+                   <option value="Medicare">Medicare</option>
+                   <option value="Medicaid">Medicaid</option>
                 </select>
               </div>
 
@@ -314,9 +358,10 @@ const ProspectoDatos = ({
   onBlockedAddClick,
   grupoFamiliarId,
   onDerivedCounts,
+  onCreateCoberturaDeClienteExistente,
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
-
+  const [openExistente, setOpenExistente] = useState(false);
   /* ---- Mutadores locales con recálculo de derivados ---- */
   const recomputeDerived = (m) => {
     const fecha =  (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
@@ -352,17 +397,37 @@ const ProspectoDatos = ({
   
      // Crear local: garantizar fecha_retiro = null por defecto
      const createLocal = async (payload) => {
-         const newId = familyMembers.length
-           ? Math.max(...familyMembers.map((m) => m.id || 0)) + 1
-           : 1;
-         const merged = recomputeDerived({
-           fecha_retiro: null, // default
-           ...payload,
-           id: newId,
-         });
-         setFamilyMembers((prev) => [...prev, merged]);
-         setModalOpen(false);
-       };
+      const newId = familyMembers.length
+        ? Math.max(...familyMembers.map((m) => m.id || 0)) + 1
+        : 1;
+    
+     // normaliza ingreso a número
+     const normalizedIngreso =
+       payload.ingreso_anual ??
+       payload.ingresoAnual ??
+       payload?.cliente?.ingreso_anual ??
+       0;
+    
+     // sincroniza idioma (raíz y cliente)
+     const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+    
+      const merged = recomputeDerived({
+        fecha_retiro: null,
+        ...payload,
+       ingreso_anual: normalizedIngreso,
+       idioma,
+       cliente: {
+         ...(payload.cliente || {}),
+         ingreso_anual: normalizedIngreso,
+         idioma,
+       },
+        id: newId,
+      });
+    
+      setFamilyMembers((prev) => [...prev, merged]);
+      setModalOpen(false);
+    };
+    
   const updateLocal = async (id, payload) => {
     setFamilyMembers((prev) =>
       prev.map((m) => (m.id === id ? recomputeDerived({ ...payload, id }) : m))
@@ -416,33 +481,71 @@ const ProspectoDatos = ({
   return (
     <>
       <div className="card mb-4">
-        <div className="card-header d-flex justify-content-between align-items-center">
-          <h5 className="mb-0">
-            <i className="fas fa-users me-2" />
-            Añadir Miembros
-          </h5>
+      <div className="card-header d-flex justify-content-between align-items-center">
+                  <h5 className="mb-0">
+                    <i className="fas fa-users me-2" />
+                    Añadir Miembros
+                  </h5>
 
-          {!readOnly &&
-            (canAdd ? (
-              <button type="button" className="btn btn-primary btn-sm" onClick={handleAdd}>
-                Añadir
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled
-                title={
-                  (estadoActual || "").toUpperCase() === "PROSPECTO"
-                    ? "Cambia el estado del grupo (distinto de Prospecto) para añadir miembros."
-                    : "Activa el modo edición para añadir miembros."
-                }
-                onClick={() => onBlockedAddClick && onBlockedAddClick()}
-              >
-                Añadir
-              </button>
-            ))}
-        </div>
+                  {!readOnly && (
+                    <div className="d-flex gap-2">
+                      {/* Botón “Añadir” (NUEVO cliente) */}
+                      {canAdd ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={handleAdd}
+                          title="Crear un nuevo cliente y agregarlo"
+                        >
+                          Nuevo Miembro
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          disabled
+                          title={
+                            (estadoActual || "").toUpperCase() === "PROSPECTO"
+                              ? "Cambia el estado del grupo (distinto de Prospecto) para añadir miembros."
+                              : "Activa el modo edición para añadir miembros."
+                          }
+                          onClick={() => onBlockedAddClick && onBlockedAddClick()}
+                        >
+                          Nuevo Miembro
+                        </button>
+                      )}
+
+                      {/* Botón “Clientes existentes” */}
+                      {canAdd ? (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm"
+                          onClick={() => setOpenExistente(true)}
+                          title="Buscar un cliente existente y agregarlo"
+                        >
+                          <i className="fas fa-users me-1" />
+                          Miembros existentes
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm"
+                          disabled
+                          title={
+                            (estadoActual || "").toUpperCase() === "PROSPECTO"
+                              ? "Cambia el estado del grupo (distinto de Prospecto) para añadir miembros."
+                              : "Activa el modo edición para añadir miembros."
+                          }
+                          onClick={() => onBlockedAddClick && onBlockedAddClick()}
+                        >
+                          <i className="fas fa-users me-1" />
+                          Clientes existentes
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
 
         <div className="card-body">
           {familyMembers.length === 0 ? (
@@ -517,6 +620,15 @@ const ProspectoDatos = ({
         onCreateRemote={createRemote}
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+      />
+
+       {/* Modal EXISTENTE */}
+       <ClienteExistenteModal
+        open={openExistente}
+        onClose={()=>setOpenExistente(false)}
+        grupoFamiliarId={grupoFamiliarId}
+        onCreateCoberturaDeClienteExistente={onCreateCoberturaDeClienteExistente}
+        defaultCoberturaTipo="Plan de salud"
       />
     </>
   );
