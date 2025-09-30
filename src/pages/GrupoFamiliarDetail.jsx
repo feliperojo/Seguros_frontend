@@ -19,7 +19,7 @@ const NEXT_OF = {
   COTIZACION: "SEGUIMIENTO",
   SEGUIMIENTO: "TOMA_DATOS",
   TOMA_DATOS: "INSCRIPCION_INI",
-  INSCRIPCION_INI: "GRUPO_FAMILIAR",
+  INSCRIPCION_INI: "TERMINADO",
 };
 
 const nextOf = (code) => NEXT_OF[(code || "").toUpperCase()] || null;
@@ -670,7 +670,10 @@ const handleCreateMemberRemote = async (memberData) => {
 
   return (
     <div className="container-fluid bg-light min-vh-100 py-4">
-      <div className="container">
+     <div className="container py-4">
+  <div className="card shadow-sm border-0 rounded-4 bg-white px-4 py-4">
+    {/* Aquí dentro va TODO el contenido actual */}
+
         {/* Toast flotante */}
         <div
           className="toast-container position-fixed top-0 end-0 p-3"
@@ -792,31 +795,31 @@ const handleCreateMemberRemote = async (memberData) => {
               </div>
             </div>
           )}
-        </div>
+             </div>
                 {/* 👈 Nuevo: Mostrar producto seleccionado */}
-     <div className="card mb-4 border-0 shadow-sm">
-  <div className="card-body py-3">
-    <div className="d-flex align-items-center justify-content-between">
-      <div className="d-flex align-items-center">
-        <i className="fas fa-shield-alt text-primary me-2"></i>
-        <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
-        <span className={`badge bg-${productoCotizacion.color} fs-6`}>
-          {productoCotizacion.label}
-        </span>
-      </div>
-      {isEditing && (
-        <button
-          type="button"
-          className="btn btn-sm btn-outline-primary"
-          onClick={() => setShowProductModal(true)}
-        >
-          <i className="fas fa-edit me-1"></i>
-          Cambiar plan
-        </button>
-      )}
-    </div>
-  </div>
-</div>
+             <div className="card mb-4 border-0 shadow-sm">
+                      <div className="card-body py-3">
+                        <div className="d-flex align-items-center justify-content-between">
+                          <div className="d-flex align-items-center">
+                            <i className="fas fa-shield-alt text-primary me-2"></i>
+                            <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
+                            <span className={`badge bg-${productoCotizacion.color} fs-6`}>
+                              {productoCotizacion.label}
+                      </span>
+                    </div>
+                    {isEditing && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-primary"
+                        onClick={() => setShowProductModal(true)}
+                      >
+                        <i className="fas fa-edit me-1"></i>
+                        Cambiar plan
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
 
         {/* Captación + económicos */}
         <Prospectogrupo
@@ -843,28 +846,29 @@ const handleCreateMemberRemote = async (memberData) => {
         
         ) : (
           <ProspectoDatos
-    grupoFamiliarId={id}      
-  familyMembers={familyMembers}
-  setFamilyMembers={setFamilyMembers}
-  readOnly={readOnly}
-  canAdd={canAddMember}
-  estadoActual={estadoActual}
-  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
-  isProspecto={isProspecto}                                       
-  onCreateMemberRemote={handleCreateMemberRemote}                      
-  onBlockedAddClick={() =>
-    showToast(
-      'info',
-      'Añadir no disponible',
-      'Activa “Editar” y asegúrate de que el estado no sea Prospecto.'
-    )
-  }
-  onSaveCobertura={() => {}}
-  onDerivedCounts={handleDerivedCounts}
-/>
+              grupoFamiliarId={id}      
+                familyMembers={familyMembers}
+                setFamilyMembers={setFamilyMembers}
+                readOnly={readOnly}
+                canAdd={canAddMember}
+                estadoActual={estadoActual}
+                defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
+                isProspecto={isProspecto}                                       
+                onCreateMemberRemote={handleCreateMemberRemote}                      
+                onBlockedAddClick={() =>
+                  showToast(
+                    'info',
+                    'Añadir no disponible',
+                    'Activa “Editar” y asegúrate de que el estado no sea Prospecto.'
+                  )
+                }
+                onSaveCobertura={() => {}}
+                onDerivedCounts={handleDerivedCounts}
+              />
 
 
         )}
+        </div>
       </div>
     </div>
   );

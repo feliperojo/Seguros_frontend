@@ -8,7 +8,7 @@ const STEPS = [
   { code: "SEGUIMIENTO",     label: "SEGUIMIENTO" },
   { code: "TOMA_DATOS",      label: "TOMA DE DATOS" },
   { code: "INSCRIPCION_INI", label: "INSCRIPCIÓN INICIAL" },
-  { code: "GRUPO_FAMILIAR",  label: "GRUPO FAMILIAR" },
+  { code: "TERMINADO",       label: "TERMINADO" },
   { code: "DESCARTADO",      label: "DESCARTADO" },
 ];
 

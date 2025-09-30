@@ -74,6 +74,20 @@ const mapGrupoApiToForm = (g) => ({
    return Math.min(Number(dec.toFixed(2)), 99999999.99);
  };
 
+ // --- arriba del componente, junto a otros helpers ---
+const getLoggedUserName = () => {
+  try {
+    const raw = localStorage.getItem("user");
+    if (!raw) return "";
+    const u = JSON.parse(raw);
+    // contempla distintas convenciones de nombre por si cambian
+    return u?.name || u?.nombre || u?.full_name || "";
+  } catch {
+    return "";
+  }
+};
+
+
 const Prospecto = () => {
   const { grupoId: routeGrupoId } = useParams();
   const navigate = useNavigate();
@@ -113,6 +127,16 @@ const Prospecto = () => {
       prev.ingresoFamiliar === total ? prev : { ...prev, ingresoFamiliar: total }
     );
   }, [familyMembers]);
+// --- dentro de Prospecto, junto a otros useEffect ---
+useEffect(() => {
+  // sólo autollenar en creación
+  if (grupoId) return;
+
+  const name = getLoggedUserName();
+  if (name) {
+    setFormData(prev => prev.asesor ? prev : { ...prev, asesor: name });
+  }
+}, [grupoId]);
 
   
   // ---------- Cargar datos si es edición ----------

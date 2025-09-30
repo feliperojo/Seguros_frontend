@@ -14,6 +14,21 @@ import apiRequest from "../services/api";
 import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
 
+
+const renderGrupoFamiliarLink = (grupoId) => {
+  if (!grupoId) return "Sin grupo";
+  return (
+    <Link
+      to={`/grupo_familiar/${grupoId}`}   // mismo path que usas en GruposFamiliaresListado
+      className="text-decoration-none"
+      title="Ver detalle del grupo"
+    >
+      {grupoId}
+    </Link>
+  );
+};
+
+
 const ListaClientes = () => {
   const navigate = useNavigate();
   
@@ -69,7 +84,7 @@ const ListaClientes = () => {
       
       const clientesData = response?.data || response || [];
       
-      
+      console.log(clientesData)
    
       
       const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
@@ -490,7 +505,7 @@ const renderPaginationItems = () => {
                 <th>Parentesco</th>
                 <th>Teléfono</th>
                 <th>ID GF</th>
-                <th>Prospecto</th>
+                <th>ESTADO GF</th>
                 <th className="text-center">Acciones</th>
               </tr>
             </thead>
@@ -504,32 +519,37 @@ const renderPaginationItems = () => {
         <td>{cliente.codigo_postal || "No registrado"}</td>
         <td>{getParentesco(cliente)}</td>
         <td>{cliente.telefono || "No registrado"}</td>
-        <td>{grupoId || "Sin grupo"}</td>
+        <td>{renderGrupoFamiliarLink(grupoId)}</td>
         <td>
-              <Badge
-                pill
-                bg={
-                  cliente.estado_cliente === "cliente"
-                    ? "primary"
-                    : cliente.estado_cliente === "prospecto"
-                    ? "warning"
-                    : "danger" // para "descartado"
-                }
-                text={
-                  cliente.estado_cliente === "cliente"
-                    ? "light"
-                    : cliente.estado_cliente === "prospecto"
-                    ? "dark"
-                    : "light" // para "descartado"
-                }
-              >
-                {cliente.estado_cliente === "cliente"
-                  ? "Cliente"
-                  : cliente.estado_cliente === "prospecto"
-                  ? "Prospecto"
-                  : "Descartado"}
-              </Badge>
-            </td>
+  {(() => {
+    // Busca el estado del grupo familiar actual (grupoId de la fila)
+    const estado = (cliente.grupo_estados || []).find(g => g.id === grupoId)?.estado || "Sin estado";
+
+    let variant = "secondary";
+    switch (estado.toLowerCase()) {
+      case "activo":
+        variant = "success";
+        break;
+      case "inactivo":
+        variant = "danger";
+        break;
+      case "cotización":
+        variant = "warning";
+        break;
+      case "pendiente":
+        variant = "info";
+        break;
+      default:
+        variant = "secondary";
+    }
+
+    return (
+      <Badge pill bg={variant}>
+        {estado}
+      </Badge>
+    );
+  })()}
+</td>
 
         <td className="text-center">
           <Button 
