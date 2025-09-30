@@ -74,7 +74,7 @@ const mapClienteForSave = (m) => {
   const c = m?.cliente || {};
   const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
-  const nombre_completo = c?.nombre_completo || buildNombreCompleto({
+  const nombre_completo = buildNombreCompleto({
        primer_nombre: pick("primer_nombre"),
        segundo_nombre: pick("segundo_nombre"),
        apellidos: pick("apellidos"),

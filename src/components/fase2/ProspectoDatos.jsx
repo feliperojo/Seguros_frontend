@@ -54,6 +54,12 @@ const getMemberDisplayName = (m = {}) => {
     "Sin nombre"
   );
 };
+const toTitle = (s = "") =>
+  s
+    .toLowerCase()
+    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+
+    
 
 const getMemberEdad = (m = {}) =>
   m.edad ?? calcAge(m.fecha_nacimiento || m.cliente?.fecha_nacimiento);
@@ -69,9 +75,10 @@ const mapClienteToMember = (
   coberturaTipo = "Plan de salud",
   estadoCobertura = "Sí"
 ) => {
-  const primer = c.primer_nombre || c.nombre || "";
-  const segundo = c.segundo_nombre || "";
-  const apell = c.apellidos || c.apellido || "";
+  const primer  = toTitle(c.primer_nombre || c.nombre || "");
+const segundo = toTitle(c.segundo_nombre || "");
+const apell   = toTitle(c.apellidos || c.apellido || "");
+
   const fecha = c.fecha_nacimiento || c.fechaNacimiento || "";
   const nombreCompleto =
     c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
@@ -200,11 +207,13 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               <div className="col-md-4">
                 <label className="form-label">Primer Nombre</label>
                 <input
-                  className="form-control form-control-sm"
-                  value={member.primer_nombre || ""}
-                  disabled={readOnly}
-                  onChange={handle("primer_nombre")}
-                />
+                    className="form-control form-control-sm"
+                    value={member.primer_nombre || ""}
+                    disabled={readOnly}
+                    onChange={handle("primer_nombre")}
+                    style={{ textTransform: "capitalize" }}   // 👈 añade esto
+                  />
+
               </div>
               <div className="col-md-4">
                 <label className="form-label">Segundo nombre</label>
@@ -213,6 +222,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                   value={member.segundo_nombre || ""}
                   disabled={readOnly}
                   onChange={handle("segundo_nombre")}
+                  style={{ textTransform: "capitalize" }}
                 />
               </div>
               <div className="col-md-4">
@@ -222,6 +232,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                   value={member.apellidos || ""}
                   disabled={readOnly}
                   onChange={handle("apellidos")}
+                  style={{ textTransform: "capitalize" }}
                 />
               </div>
 
@@ -364,11 +375,14 @@ const ProspectoDatos = ({
   const recomputeDerived = (m) => {
     const fecha =  (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
     const edad = calcAge(fecha);
-    const nombre =
-      m.nombreCompleto ||
-      m.nombre_completo ||
-      buildFullName(m.primer_nombre, m.segundo_nombre, m.apellidos) ||
-      m?.cliente?.nombre_completo;
+    const nombre = 
+    [toTitle(m.primer_nombre), toTitle(m.segundo_nombre), toTitle(m.apellidos)]
+      .filter(Boolean)
+      .join(" ") ||
+    m.nombre_completo ||
+    m?.cliente?.nombre_completo ||
+    "Sin nombre";
+  
     return { ...m, edad, nombreCompleto: nombre };
   };
 

@@ -10,7 +10,7 @@ import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
 import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
 import LanguageSelect from "../selects/LanguageSelect";
-
+import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
 
@@ -19,10 +19,12 @@ import { getCompanyNameById, getCompanyColor } from "../../services/companies"; 
 
 // Capitaliza cada palabra (soporta acentos y guiones)
 const toTitle = (s = "") =>
-  s
+  (s ?? "")
+    .toString()
     .toLowerCase()
     .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
 
+    
 // Campos de nombre a capitalizar
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
 
@@ -371,7 +373,7 @@ const TomaDeDatos = ({
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
 
-  
+
 // 1) normalizados (primero)
 const normalized = useMemo(
   () => (familyMembers ?? []).map(normalizeMember),
@@ -496,13 +498,17 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
           if (k in nextCliente) dupe[k] = nextCliente[k];
         });
 
-        // nombreCompleto raíz derivado
-        const nombreCompleto =
-          nextCliente.nombre_completo ||
-          [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
-            .filter(Boolean)
-            .join(" ");
-        if (nombreCompleto) dupe.nombreCompleto = nombreCompleto;
+   
+        // nombreCompleto raíz derivado SIEMPRE forzado con toTitle
+              const nombreCompleto = [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
+              .map(toTitle)
+              .filter(Boolean)
+              .join(" ");
+              if (nombreCompleto) {
+              dupe.nombreCompleto = nombreCompleto;
+              nextCliente.nombre_completo = nombreCompleto; // 👈 sincroniza también dentro de cliente
+              }
+
 
         return { ...m, ...dupe, cliente: nextCliente };
       })
@@ -1084,9 +1090,9 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                             aria-labelledby={`direccion-${itemId}`}
                             data-bs-parent={`#sub-accordion-${itemId}`}
                           >
-<div className="accordion-body">
-  <AddressSection c={c} onChange={onChange} readOnly={readOnly} idBase={itemId} />
-</div>
+                              <div className="accordion-body">
+                                <AddressSection c={c} onChange={onChange} readOnly={readOnly} idBase={itemId} />
+                              </div>
 
 
 
@@ -1258,6 +1264,20 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
                             </div>
                           </div>
                         </div>
+                        
+                         
+
+                              {/* MEDIOS DE PAGO */}
+
+                                   
+                                <MediosPagoAccordionItem
+                                itemId={itemId}
+                                clienteId={m.cliente_id || m?.cliente?.id || m.id}
+                                parentId={`sub-accordion-${itemId}`}
+                              />
+
+
+
                         {/* Fin sub-acordeones */}
                       </div>
                     </div>
