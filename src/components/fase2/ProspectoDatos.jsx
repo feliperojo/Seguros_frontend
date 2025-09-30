@@ -59,7 +59,28 @@ const toTitle = (s = "") =>
     .toLowerCase()
     .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
 
+    const handleName = (field, onChange) => (e) => {
+      const raw = e?.target?.value ?? "";
     
+      // Mientras el usuario está componiendo (ej. ´ + a -> á), no normalices
+      if (e?.nativeEvent?.isComposing) {
+        onChange({ [field]: raw });
+        return;
+      }
+    
+      // Cuando no hay composición, normalizamos: todo a minúscula + primera en mayúscula por palabra
+      const normalized = tidy(
+        (raw || "")
+          .toLowerCase()
+          .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase())
+      );
+    
+      onChange({ [field]: normalized });
+    };
+    
+
+    const tidy = (s = "") => s.replace(/\s+/g, " ").trim();
+
 
 const getMemberEdad = (m = {}) =>
   m.edad ?? calcAge(m.fecha_nacimiento || m.cliente?.fecha_nacimiento);
@@ -210,7 +231,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                     className="form-control form-control-sm"
                     value={member.primer_nombre || ""}
                     disabled={readOnly}
-                    onChange={handle("primer_nombre")}
+                    onChange={handleName("primer_nombre", onChange)}
                     style={{ textTransform: "capitalize" }}   // 👈 añade esto
                   />
 
@@ -221,7 +242,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                   className="form-control form-control-sm"
                   value={member.segundo_nombre || ""}
                   disabled={readOnly}
-                  onChange={handle("segundo_nombre")}
+                  onChange={handleName("segundo_nombre", onChange)}
                   style={{ textTransform: "capitalize" }}
                 />
               </div>
@@ -231,7 +252,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                   className="form-control form-control-sm"
                   value={member.apellidos || ""}
                   disabled={readOnly}
-                  onChange={handle("apellidos")}
+                  onChange={handleName("apellidos", onChange)}
                   style={{ textTransform: "capitalize" }}
                 />
               </div>
