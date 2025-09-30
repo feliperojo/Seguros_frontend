@@ -1,8 +1,7 @@
 import React from 'react';
 import { formatMoneyDisplay } from "../../services/ingresos";
 const Prospectogrupo = ({ formData, onChange, readOnly }) => {
-  // Mostrar datos de contacto solo si NO pertenece al grupo
-  const showContacto = (formData?.perteneceFamilia || 'No') === 'No';
+
 
   // Formato 3-3-sin límite: 123-456-xxxx...
   const formatPhone = (raw) => {
@@ -18,21 +17,8 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
     onChange({ target: { name, value: formatted, type: 'text' } });
   };
 
-  // Cambiar pertenece / limpiar contacto si marca "Sí"
-  const handlePerteneceChange = (e) => {
-    const value = e.target.value;
-    onChange(e); // actualiza perteneceFamilia
 
-    if (value === 'Sí') {
-      const textFields = ['nombre', 'apellidos', 'telefono1', 'telefono2', 'nota', 'relacion'];
-      textFields.forEach((f) =>
-        onChange({ target: { name: f, value: '', type: 'text' } })
-      );
-      ['whatsapp', 'telegram', 'sms'].forEach((f) =>
-        onChange({ target: { name: f, checked: false, type: 'checkbox' } })
-      );
-    }
-  };
+ 
 
   return (
     <>
@@ -98,7 +84,7 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
                 className="form-select"
                 name="perteneceFamilia"
                 value={formData.perteneceFamilia}
-                onChange={handlePerteneceChange}
+                onChange={onChange}
                 disabled={readOnly}
               >
                 <option value="No">No</option>
@@ -108,7 +94,7 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
           </div>
 
           {/* Solo mostramos los datos de contacto si NO pertenece */}
-          {showContacto && (
+        
             <>
               <div className="row g-3 mt-1">
                 <div className="col-md-3">
@@ -237,7 +223,7 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
                 </div>
               </div>
             </>
-          )}
+          
         </div>
       </div>
 
