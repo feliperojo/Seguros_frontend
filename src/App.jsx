@@ -26,6 +26,9 @@ import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
 import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
+
+import FichaClienteLayout from "./pages/FichaClienteLayout";
+import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
   return localStorage.getItem("auth_token") !== null;
@@ -90,9 +93,20 @@ const App = () => {
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
 
+
       
       </Route>
-
+      {/* 🔹 Ficha con tabs: layout + rutas hijas */}
+      <Route path="/clientes/:id/ficha" element={<FichaClienteLayout />}>
+          {/* index = pestaña "General" */}
+          <Route index element={<FichaClienteGeneral />} />
+          {/* cuando tengas más pestañas, las agregas aquí:
+              <Route path="historial" element={<FichaClienteHistorial />} />
+              <Route path="tareas" element={<FichaClienteTareas />} />
+              ...
+          */}
+        </Route>
+     
       {/* Redirigir a login si la ruta no existe */}
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>

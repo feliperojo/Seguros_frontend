@@ -15,18 +15,42 @@ import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
 
 
+// arriba del componente
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
+
+export const renderClienteLink = (clienteId, label = null) => {
+  if (!clienteId) return "—";
+  return (
+    <Link
+      to={CLIENTE_FICHA_PATH(clienteId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-decoration-none"
+      title="Abrir ficha del cliente en una nueva pestaña"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {label ?? clienteId}
+    </Link>
+  );
+};
+
+
 const renderGrupoFamiliarLink = (grupoId) => {
   if (!grupoId) return "Sin grupo";
   return (
     <Link
-      to={`/grupo_familiar/${grupoId}`}   // mismo path que usas en GruposFamiliaresListado
+      to={`/grupo_familiar/${grupoId}`}
+      target="_blank"
+      rel="noopener noreferrer"
       className="text-decoration-none"
       title="Ver detalle del grupo"
+      onClick={(e) => e.stopPropagation()}
     >
       {grupoId}
     </Link>
   );
 };
+
 
 
 const ListaClientes = () => {
@@ -514,7 +538,7 @@ const renderPaginationItems = () => {
     cliente.grupoFamiliarIds.map((grupoId, index) => (
       <tr key={`${cliente.id}-${grupoId}`}>
         <td>{cliente.id || "Sin ID"}</td>
-        <td>{cliente.nombre_completo || "Sin nombre"}</td>
+        <td>{renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}</td>
         <td>{formatDate(cliente.fecha_nacimiento)}</td>
         <td>{cliente.codigo_postal || "No registrado"}</td>
         <td>{getParentesco(cliente)}</td>
