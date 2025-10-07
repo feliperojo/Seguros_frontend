@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback } from "react";
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
+import { FaMapMarkerAlt } from "react-icons/fa";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import {  computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../../services/ingresos";
 import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
@@ -11,6 +12,8 @@ import PayerSelect from "../selects/PayerSelect";
 import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
 import LanguageSelect from "../selects/LanguageSelect";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
+import ClienteExistenteModal from "../fase2/ClienteExistenteModal"; // ajusta la ruta si difiere
+
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
 
@@ -257,20 +260,34 @@ const AddressSection = ({ c, onChange, readOnly }) => {
   };
 
   const direccionVisual = c.direccion || buildDireccion(c) || "";
-
+  const openMap = () => {
+    window.open("https://www.unitedstateszipcodes.org/", "_blank");
+  };
   return (
     <>
       <div className="row g-3">
-        <Field label="Dirección de Residencia" className="col-12">
-          <input
-            className="form-control form-control-sm"
-            name="direccion"
-            value={direccionVisual}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="Dirección completa (auto)"
-          />
-        </Field>
+      <Field label="Dirección de Residencia" className="col-10">
+  <div className="d-flex align-items-center position-relative">
+    <input
+      className="form-control form-control-sm pe-5" // deja espacio para el ícono
+      name="direccion"
+      value={direccionVisual}
+      onChange={onChange}
+      disabled={readOnly}
+      placeholder="Dirección completa (auto)"
+    />
+    <FaMapMarkerAlt
+      className="text-primary fs-5 position-absolute"
+      style={{
+        right: "10px",
+        cursor: readOnly ? "not-allowed" : "pointer",
+        opacity: readOnly ? 0.5 : 1,
+      }}
+      onClick={!readOnly ? openMap : undefined}
+      title="Abrir mapa / ZIP codes"
+    />
+  </div>
+</Field>
 
         <Field label="Calle" className="col-md-4">
           <input
@@ -358,6 +375,28 @@ const AddressSection = ({ c, onChange, readOnly }) => {
   );
 };
 
+// === Derivados coherentes con ProspectoDatos ===
+const recomputeDerived = (m) => {
+  const fecha =
+    (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
+  const edad = calcAge(fecha);
+
+  const nombre = fullName(m);
+
+  return {
+    ...m,
+    edad,
+    nombreCompleto: nombre,
+    nombre_completo: nombre,
+    cliente: {
+      ...(m.cliente || {}),
+      edad,
+      nombre_completo:
+        (m?.cliente?.nombre_completo && toTitle(m?.cliente?.nombre_completo)) ||
+        nombre,
+    },
+  };
+};
 
 /* ======================================================= */
 const TomaDeDatos = ({
@@ -373,13 +412,14 @@ const TomaDeDatos = ({
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
-
+  const [openExistente, setOpenExistente] = useState(false);
 
 // 1) normalizados (primero)
 const normalized = useMemo(
-  () => (familyMembers ?? []).map(normalizeMember),
+  () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
   [familyMembers]
 );
+
 
 // 2) compañías (puede ir antes o después, no depende de normalized)
 const { companies, loading: companiesLoading } = useCompanies();
@@ -447,24 +487,57 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
   );
 };
 
-  /* ---------- CRUD local (modal: solo AÑADIR) ---------- */
-  const onCreateLocal = useCallback(
-    (payload) => {
-      const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
-      setFamilyMembers((prev) => [...(prev ?? []), normalizeMember({ ...payload, id: newId }, newId - 1)]);
-      setOpenModal(false); // 👈 cierra el modal al guardar
-    },
-    [familyMembers, setFamilyMembers]
-  );
+const onCreateLocal = useCallback(
+  (payload) => {
+    const newId =
+      (familyMembers?.length
+        ? Math.max(...familyMembers.map((m) => m.id || 0))
+        : 0) + 1;
 
-  const onUpdateLocal = useCallback(
-    (id, payload) => {
-      setFamilyMembers((prev) =>
-        (prev ?? []).map((m) => (m.id === id ? normalizeMember({ ...payload, id }, 0) : m))
-      );
-    },
-    [setFamilyMembers]
-  );
+    // idioma e ingreso sincronizados raíz/cliente
+    const ingreso =
+      payload.ingreso_anual ??
+      payload.ingresoAnual ??
+      payload?.cliente?.ingreso_anual ??
+      0;
+
+    const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+
+    const base = {
+      fecha_retiro: null, // default coherente
+      ...payload,
+      id: newId,
+      ingreso_anual: ingreso,
+      idioma,
+      cliente: {
+        ...(payload.cliente || {}),
+        ingreso_anual: ingreso,
+        idioma,
+      },
+    };
+
+    const normalized = normalizeMember(base, newId - 1);
+    const withDerived = recomputeDerived(normalized);
+
+    setFamilyMembers((prev) => ([...(prev ?? []), withDerived]));
+    setOpenModal(false);
+  },
+  [familyMembers, setFamilyMembers]
+);
+
+const onUpdateLocal = useCallback(
+  (id, payload) => {
+    setFamilyMembers((prev) =>
+      (prev ?? []).map((m) => {
+        if ((m.id ?? null) !== id) return m;
+        const merged = { ...m, ...payload, id };
+        return recomputeDerived(merged);
+      })
+    );
+  },
+  [setFamilyMembers]
+);
+
 
   /* ---------- UI ---------- */
   const handleAdd = () => {
@@ -485,36 +558,43 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     setFamilyMembers((prev) =>
       (prev ?? []).map((m, i) => {
         if (i !== idx) return m;
-
+  
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
         const nextCliente = { ...base, ...patch };
-
+  
         // Derivados
         if ("fecha_nacimiento" in patch)
           nextCliente.edad = calcAge(patch.fecha_nacimiento);
-
-        // Duplicados hacia la raíz para que el mapper del padre los tome
+  
+        // Forzar nombre completo bonito (raíz + cliente)
+        const nombreCompleto = [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
+          .map(toTitle)
+          .filter(Boolean)
+          .join(" ");
+        if (nombreCompleto) {
+          nextCliente.nombre_completo = nombreCompleto;
+        }
+  
+        // Sincronía de idioma raíz/cliente
+        if ("idioma" in patch) {
+          nextCliente.idioma = patch.idioma ?? "";
+        }
+  
+        // Duplicados hacia la raíz
         const dupe = {};
         DUPLICATE_TO_ROOT.forEach((k) => {
           if (k in nextCliente) dupe[k] = nextCliente[k];
         });
-
-   
-        // nombreCompleto raíz derivado SIEMPRE forzado con toTitle
-              const nombreCompleto = [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
-              .map(toTitle)
-              .filter(Boolean)
-              .join(" ");
-              if (nombreCompleto) {
-              dupe.nombreCompleto = nombreCompleto;
-              nextCliente.nombre_completo = nombreCompleto; // 👈 sincroniza también dentro de cliente
-              }
-
-
-        return { ...m, ...dupe, cliente: nextCliente };
+        if (nombreCompleto) dupe.nombreCompleto = nombreCompleto;
+        dupe.nombre_completo = nombreCompleto;
+  
+        // Merge + derivados finales
+        const merged = { ...m, ...dupe, cliente: nextCliente };
+        return recomputeDerived(merged);
       })
     );
   };
+  
 
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
@@ -542,8 +622,9 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
           const perDollars = (parseMoney(String(perRaw)) || 0) / 100;
           patch.ingreso_anual = formatMoney2(computeAnnual(periodo, perDollars));
         }
-  
+       
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
+        
     if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
     return patchCliente(idx, patch);
   };
@@ -620,20 +701,18 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
   <div className="d-flex justify-content-between align-items-center mb-3">
     <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
     <div className="btn-group">
-      {canAdd ? (
-        <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
-      ) : (
-        <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
-      )}
-      <button
-        className="btn btn-outline-secondary btn-sm"
-        type="button"
-        onClick={() => setOpenCopy(true)}
-        title="Copiar datos entre miembros"
-      >
-        <i className="fas fa-copy me-1" /> Copiar
-      </button>
-    </div>
+  {canAdd ? (
+    <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
+  ) : (
+    <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
+  )}
+  <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
+    <i className="fas fa-users me-1" /> Miembros existentes
+  </button>
+  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
+    <i className="fas fa-copy me-1" /> Copiar
+  </button>
+</div>
   </div>
 )}
 
@@ -1562,7 +1641,13 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
         isProspecto={true}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
-        onCreateRemote={onCreateMemberRemote}
+        onCreateRemote={(raw) =>
+          onCreateMemberRemote?.(
+            recomputeDerived(
+              normalizeMember(raw, (familyMembers?.length ?? 0))
+            )
+          )
+        }
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
@@ -1571,6 +1656,13 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
   onClose={() => setOpenCopy(false)}
   members={normalized}          // usa los normalizados para tener root+cliente
   onApply={applyCopySelection}
+/>
+<ClienteExistenteModal
+  open={openExistente}
+  onClose={() => setOpenExistente(false)}
+  grupoFamiliarId={grupoFamiliarId}
+  onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+  defaultCoberturaTipo="Plan de salud"
 />
 
     </div>

@@ -101,25 +101,31 @@ export const mapClienteFromMember = (m = {}) => {
   const ingreso_num =
     typeof ingreso_raw === "number" ? ingreso_raw : parseMoney(String(ingreso_raw));
 
-  return stripNulls({
-    id: m.cliente_id ?? c.id ?? m.id ?? null, // necesario para update en edición
+    const clienteIdReal = m.cliente_id ?? c.id ?? null;
+    const esClienteReal = clienteIdReal && Number(clienteIdReal) > 50;
+
+const payload = {
     primer_nombre,
     segundo_nombre,
     apellidos,
     nombre_completo,
-
     genero: pick("genero"),
-    idioma: pick("idioma"),              // 👈 ahora viaja el idioma del acordeón
-    fecha_nacimiento,                    // 👈 YYYY-MM-DD (de esto se recalcula la edad)
-    ingreso_anual: Number.isFinite(ingreso_num) ? ingreso_num : 0, // 👈 número seguro
+    idioma: pick("idioma"),
+    fecha_nacimiento,
+    ingreso_anual: Number.isFinite(ingreso_num) ? ingreso_num : 0,
     nota: pick("nota"),
-
-    // si decides enviar también contacto cuando exista:
     telefono: pick("telefono"),
     secundario: pick("secundario"),
     whatsapp_num: pick("whatsapp_num"),
     email: pick("email"),
-  });
+  };
+
+  // 👇 SOLO agregar 'id' si es un cliente REAL de la BD
+  if (esClienteReal) {
+    payload.id = clienteIdReal;
+  }
+
+  return stripNulls(payload);
 };
 
 // (opcional) normaliza "Sí"/"Si"

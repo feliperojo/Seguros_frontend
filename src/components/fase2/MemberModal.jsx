@@ -55,8 +55,9 @@ export default function MemberModalCreate({
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
 
-  const [data, setData] = useState({
-    primer_nombre: "", segundo_nombre: "", apellidos: "", nombreCompleto: "",
+      const [data, setData] = useState({
+        primer_nombre: "", segundo_nombre: "", apellidos: "",
+        nombreCompleto: "", nombre_completo: "",
     idioma: "", fechaNacimiento: "", edad: "", genero: "Masculino",
     ingresoAnual: "", nota: "", parentesco: "Tomador", estado_cobertura: "Sí", tipo: "Tomador",
   });
@@ -70,13 +71,19 @@ export default function MemberModalCreate({
         ...editingMember,
         ingresoAnual: formatMoney2(editingMember.ingresoAnual ?? editingMember.ingreso_anual ?? ""),
         nombreCompleto:
-          editingMember.nombreCompleto ||
-          buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
+             editingMember.nombreCompleto ||
+             editingMember.nombre_completo ||
+             buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
+           nombre_completo:
+             editingMember.nombre_completo ||
+             editingMember.nombreCompleto ||
+             buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
       });
       setStep(2);
     } else {
       setData({
-        primer_nombre:"", segundo_nombre:"", apellidos:"", nombreCompleto:"",
+          primer_nombre:"", segundo_nombre:"", apellidos:"",
+          nombreCompleto:"", nombre_completo:"",
         idioma:"", fechaNacimiento:"", edad:"", genero:"Masculino",
         ingresoAnual:"", nota:"", parentesco:"Tomador", estado_cobertura:"Sí", tipo:"Tomador"
       });
@@ -98,7 +105,9 @@ export default function MemberModalCreate({
       const next = { ...prev, [name]: v };
       if (name === "fechaNacimiento") next.edad = calcAge(v);
       if (["primer_nombre","segundo_nombre","apellidos"].includes(name)) {
-        next.nombreCompleto = buildFullName(next.primer_nombre, next.segundo_nombre, next.apellidos);
+          const nc = buildFullName(next.primer_nombre, next.segundo_nombre, next.apellidos);
+  next.nombreCompleto = nc;
+  next.nombre_completo = nc;
       }
       return next;
     });
@@ -122,13 +131,21 @@ export default function MemberModalCreate({
       const num = Number(n);
       return Number.isFinite(num) ? num : null;
     };
+
+    const nombreCompletoFinal = buildFullName(
+      data.primer_nombre, 
+      data.segundo_nombre, 
+      data.apellidos
+    );
   
     const base = {
       // nombres
       primer_nombre: (data.primer_nombre || "").trim(),
       segundo_nombre: (data.segundo_nombre || "").trim(),
       apellidos: (data.apellidos || "").trim(),
-      nombreCompleto: buildFullName(data.primer_nombre, data.segundo_nombre, data.apellidos),
+      nombreCompleto: nombreCompletoFinal,
+      nombre_completo: nombreCompletoFinal,
+
   
       // demográficos
       idioma: data.idioma || "",
@@ -146,6 +163,8 @@ export default function MemberModalCreate({
       estado_cobertura: data.estado_cobertura || "Sí",
       cobertura_tipo: defaultCoberturaTipo,
     };
+
+    
   
     try {
       setSaving(true);
