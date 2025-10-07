@@ -118,6 +118,7 @@ const normalizeMember = (m, idx) => {
     tipo: m.tipo || m.parentesco || "Tomador",
     estado_cobertura: m.estado_cobertura || "Sí",
     codigo_poliza: m.codigo_poliza || "",
+    fecha_activacion: m.fecha_activacion || "",
     vigencia: m.vigencia || "",
     cobertura_tipo: m.cobertura_tipo || "Plan de salud",
     ano_cobertura: m.ano_cobertura || new Date().getFullYear(),
@@ -572,6 +573,7 @@ const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => 
     async (payload, clienteSeleccionado) => {
       if (!grupoFamiliarId || !payload?.cliente_id) return;
       if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
+      
 
       const res = await GrupoFamiliarService.createCoberturaSimple({
         grupo_familiar_id: grupoFamiliarId,

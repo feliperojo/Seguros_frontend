@@ -205,7 +205,7 @@ const mapFullToForm = (fullRaw) => {
 const mapFullToMembers = (fullRaw) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
-
+  const date10 = (v) => (v ? String(v).slice(0, 10) : "");
   
   return coberturas.map((cov, idx) => {
     const cli = cov?.cliente || {};
@@ -241,6 +241,7 @@ const mapFullToMembers = (fullRaw) => {
       estado_cobertura: cov.estado_cobertura || "Sí",
       cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
       ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),
+      fecha_activacion: date10(cov.fecha_activacion ?? cov.fechaActivacion ?? null),
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
@@ -399,6 +400,8 @@ console.log("Ingreso Familiar:", total);
       setGrupoVersion(fullData?.updated_at || fullData?.updatedAt || null);
       setFamilyMembers(mapFullToMembers(full));
 
+      
+
       // 👈 Nuevo: Extraer producto de las coberturas
       const producto = getProductoFromCoberturas(fullData.coberturas || []);
       setProductoCotizacion(producto);
@@ -501,7 +504,8 @@ const handleCreateMemberRemote = async (memberData) => {
       
       estado_cobertura: memberData.estado_cobertura || "Sí",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
-      fecha_activacion: memberData.fecha_nacimiento ? null : null, // ajusta si debes
+      fecha_activacion: memberData.fecha_activacion ? String(memberData.fecha_activacion).slice(0,10)
+   : null,
       pagador_id: null,
       dia_pago: 1,
       tipo_pago: null,
@@ -609,6 +613,18 @@ const handleCreateMemberRemote = async (memberData) => {
                  }
                  return stripNulls(cobertura);
                });
+                    // 🔎 DEBUG: verifica que cada cobertura lleve fecha_activacion
+     try {
+       console.table(
+         coberturasPayload.map(c => ({
+           id: c.id,
+           cliente_id: c.cliente_id,
+           fecha_activacion: c.fecha_activacion,
+           fecha_cancelacion: c.fecha_cancelacion,
+           fecha_retiro: c.fecha_retiro
+         }))
+       );
+     } catch (_) {}
 
       await GrupoFamiliarService.fullUpdate(id, {
         ...grupoPayload,

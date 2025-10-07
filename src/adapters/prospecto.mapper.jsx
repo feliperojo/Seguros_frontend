@@ -48,6 +48,33 @@ export const mapGrupoFromForm = (f = {}) => {
   };
 };
 
+// --- Fecha helpers ---
+// A ISO 'YYYY-MM-DD' desde string (ISO, Date, timestamp o 'MM/DD/YYYY')
+export const toISODate = (v) => {
+  if (!v) return null;
+  if (typeof v === 'string') {
+    // Acepta 'YYYY-MM-DD' (input type=date) ó 'MM/DD/YYYY'
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (m) {
+      const [, M, D, Y] = m;
+      const yyyy = (Y.length === 2 ? (Number(Y) + 2000) : Number(Y)).toString().padStart(4,'0');
+      return `${yyyy}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
+    }
+    const d = new Date(v);
+    return isNaN(d) ? null : d.toISOString().slice(0,10);
+  }
+  const d = new Date(v);
+  return isNaN(d) ? null : d.toISOString().slice(0,10);
+};
+
+// Convierte "" → null y normaliza a ISO
+export const cleanDate = (v) => {
+  if (v === "") return null;
+  return toISODate(v);
+};
+
+
 /* ======================= AJUSTE CLAVE =======================
  * Toma lo que viene del acordeón/Modal *y* del objeto m.cliente,
  * normaliza fecha a YYYY-MM-DD, ingreso a número y añade idioma.
@@ -65,7 +92,8 @@ export const mapClienteFromMember = (m = {}) => {
 
   // fecha: acepta snake_case o camelCase
   const fecha_nacimiento =
-    date10(pick("fecha_nacimiento")) || date10(m.fechaNacimiento);
+     cleanDate(pick("fecha_nacimiento")) || cleanDate(m.fechaNacimiento);
+
 
   // ingreso: acepta número o string formateado (“12.345,67”)
   const ingreso_raw =
@@ -112,7 +140,9 @@ export const mapCoberturaFromMember = (m = {}, grupoId) =>
     estado_cobertura: normSiNo(m.estado_cobertura || "Si/No"),
     ano_cobertura: (m.ano_cobertura || new Date().getFullYear()).toString(),
     cobertura_tipo: m.cobertura_tipo || null, // 👈 por si ya lo traes en el miembro
-
+    fecha_activacion: cleanDate(m.fecha_activacion ?? m?.cobertura?.fecha_activacion ?? null),
+    fecha_cancelacion: cleanDate(m.fecha_cancelacion),
+    fecha_retiro: cleanDate(m.fecha_retiro),
     activo: m.activo ?? true,
     grupo: m.grupo || null,
     plan: m.plan || "",
