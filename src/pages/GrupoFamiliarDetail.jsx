@@ -19,7 +19,7 @@ const NEXT_OF = {
   COTIZACION: "SEGUIMIENTO",
   SEGUIMIENTO: "TOMA_DATOS",
   TOMA_DATOS: "INSCRIPCION_INI",
-  INSCRIPCION_INI: "TERMINADO",
+  INSCRIPCION_INI: "GRUPO_FAMILIAR",
 };
 
 const nextOf = (code) => NEXT_OF[(code || "").toUpperCase()] || null;

@@ -1,35 +1,50 @@
 import React from "react";
-import { FaChevronDown } from "react-icons/fa";
 
-/**
- * ProductosButtons
- * - Renderiza los 3 botones de Productos.
- * - Puedes pasar callbacks para cada botón.
+/** ProductosButtons
+ *  Solo muestra coberturas con estado "Grupo Familiar"
  */
 export default function ProductosButtons({
   className = "",
-  onPolizaSalud = () => {},
-  onPolizaDental = () => {},
-  onPolizaVida = () => {},
+  coberturas = [],
+  onSelectCobertura = () => {},
 }) {
-  const Item = ({ label, onClick }) => (
+  const Btn = ({ left, right, onClick }) => (
     <button
       type="button"
-      className="btn btn-light border w-100 d-flex justify-content-between align-items-center btn-sm py-2 mb-2 rounded-1"
       onClick={onClick}
+      className="btn btn-light border w-100 text-dark py-2 rounded-1 shadow-sm d-flex align-items-center justify-content-between"
+      style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
     >
-      <span className="fw-semibold">{label}</span>
-      <FaChevronDown className="opacity-50" />
+      <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3">
+        {left}
+      </span>
+      <span className="badge bg-white border text-secondary rounded-pill">GF {right}</span>
     </button>
+  );
+
+  const filtradas = (coberturas || []).filter(
+    (c) => c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre === "Grupo Familiar"
   );
 
   return (
     <div className={`card ${className}`}>
       <div className="card-body">
         <h6 className="text-center fw-semibold mb-3">Productos</h6>
-        <Item label="Póliza Salud" onClick={onPolizaSalud} />
-        <Item label="Póliza Dental" onClick={onPolizaDental} />
-        <Item label="Póliza de Vida" onClick={onPolizaVida} />
+        {filtradas.length ? (
+          <div className="row g-2">
+            {filtradas.map((c) => (
+              <div className="col-md-12" key={c.id}>
+                <Btn
+                  left={c.cobertura_tipo || "Sin tipo"}
+                  right={c.grupo_familiar?.id ?? c.grupo_familiar_id ?? "-"}
+                  onClick={() => onSelectCobertura(c)}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-muted small">Sin productos (Grupo Familiar)</div>
+        )}
       </div>
     </div>
   );

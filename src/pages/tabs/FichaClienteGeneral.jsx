@@ -68,19 +68,18 @@ export default function FichaClienteGeneral() {
               idiomaOptions={["Spanish", "English"]}
               relacionOptions={["Cónyuge", "Hijo/a", "Padre/Madre", "Hermano/a", "Amigo/a", "Otro"]}
             />
+       
 
             <ProductosButtons
-              className="mb-3"
-              onPolizaSalud={() => console.log("Ir a Póliza Salud")}
-              onPolizaDental={() => console.log("Ir a Póliza Dental")}
-              onPolizaVida={() => console.log("Ir a Póliza de Vida")}
+            className="mb-3"
+              coberturas={cliente.coberturas}
+              onSelectCobertura={(c) => console.log("Producto (GF):", c)}
             />
 
             <CotizacionesButtons
-              onCotizacionDental={() => console.log("Cotización Dental")}
-              onTomaDatos={() => console.log("Toma de Datos")}
-              onCotizacionVida={() => console.log("Cotización Vida")}
-              onSeguimiento={() => console.log("Seguimiento")}
+            className="mb-3"
+              coberturas={cliente.coberturas}
+              onSelectCobertura={(c) => console.log("Cotización:", c)}
             />
           </div>
         </div>
