@@ -71,35 +71,39 @@ const unwrapFull = (res) => res?.data ?? res ?? {};
 
 // ===== Mapper local para GUARDAR todos los campos del cliente =====
 const mapClienteForSave = (m) => {
+  // Validación de entrada
+  if (!m) {
+    console.error("❌ mapClienteForSave: miembro es undefined o null");
+    return null;
+  }
+
   const c = m?.cliente || {};
   const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
+  
   const nombre_completo = buildNombreCompleto({
-       primer_nombre: pick("primer_nombre"),
-       segundo_nombre: pick("segundo_nombre"),
-       apellidos: pick("apellidos"),
-    });
-
-  return {
-    id: m?.cliente_id ?? c?.id ?? null,
-
-    // Principales
     primer_nombre: pick("primer_nombre"),
     segundo_nombre: pick("segundo_nombre"),
     apellidos: pick("apellidos"),
-    nombre_completo, 
+  });
+
+  const clienteIdReal = m.cliente_id ?? c.id ?? null;
+  const esClienteReal = clienteIdReal && Number(clienteIdReal) > 50;
+
+  const payload = {
+    primer_nombre: pick("primer_nombre"),
+    segundo_nombre: pick("segundo_nombre"),
+    apellidos: pick("apellidos"),
+    nombre_completo,
     fecha_nacimiento: date10(pick("fecha_nacimiento")),
     genero: pick("genero"),
     idioma: pick("idioma"),
-
-    // Contacto
+    ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
+    nota: pick("nota"),
     telefono: pick("telefono"),
     secundario: pick("secundario"),
     whatsapp_num: pick("whatsapp_num"),
     email: pick("email"),
-    nota: pick("nota"),
-
-    // Dirección
     direccion: pick("direccion"),
     calle: pick("calle"),
     apto: pick("apto"),
@@ -108,37 +112,34 @@ const mapClienteForSave = (m) => {
     codigo_postal: pick("codigo_postal"),
     condado: pick("condado"),
     dir_correspondencia: pick("dir_correspondencia"),
-
-    // Migratorio
     social: pick("social"),
-    status: pick("status"),                 // 👈 este era el que no estaba llegando
+    status: pick("status"),
     auscis: pick("auscis"),
     tarjeta_numero: pick("tarjeta_numero"),
     fecha_emision: date10(pick("fecha_emision")),
     fecha_expiracion: date10(pick("fecha_expiracion")),
     categoria: pick("categoria"),
-
-    // Empleo / Ingreso
     tipo_ingreso: pick("tipo_ingreso"),
     actividad_economica: pick("actividad_economica"),
     empleador: pick("empleador"),
     telefono_empleador: pick("telefono_empleador"),
     periodo_ingreso: pick("periodo_ingreso"),
-    ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")), // ← dólares
-    ingreso_anual:        moneyToDecimal(pick("ingreso_anual")),      // ← dólares
-
+    ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")),
     nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
-    periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),            // texto
+    periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
     ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
-    
-
-    // Toggles
     whatsapp: pick("whatsapp") === true,
     telegram: pick("telegram") === true,
     texto_sms: pick("texto_sms") === true,
   };
-};
 
+  // Solo agregar 'id' si es un cliente REAL de la BD
+  if (esClienteReal) {
+    payload.id = clienteIdReal;
+  }
+
+  return stripNulls(payload);
+};
 
 // ================== Función para obtener el producto desde coberturas ==================
 const getProductoFromCoberturas = (coberturas = []) => {
@@ -477,35 +478,68 @@ const mapMemberFromAppendResponse = (res) => {
 
 // 👇 llamada real al backend para alta en edición
 const handleCreateMemberRemote = async (memberData) => {
+  // Validación de seguridad
+  if (!memberData) {
+    console.error("❌ memberData es undefined");
+    showToast("danger", "Error", "No se recibieron datos del miembro");
+    return;
+  }
 
-  // tolera tanto nombre_completo como nombreCompleto; si no, lo arma
-  const nombreCompleto =
-    memberData?.nombre_completo ||
-    memberData?.nombreCompleto ||
-    buildNombreCompleto(memberData);
+  // 🔧 Construir nombre_completo de forma más robusta
+  const construirNombre = (data) => {
+    const primer = (data.primer_nombre || "").toString().trim();
+    const segundo = (data.segundo_nombre || "").toString().trim();
+    const apellidos = (data.apellidos || "").toString().trim();
+    
+    return [primer, segundo, apellidos]
+      .filter(Boolean)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  // Priorizar: nombre ya construido > construir desde campos
+  const nombreCompleto = 
+    memberData?.nombre_completo?.trim() ||
+    memberData?.nombreCompleto?.trim() ||
+    construirNombre(memberData);
+
+  console.log("📝 Creando miembro con nombre_completo:", nombreCompleto);
+  console.log("📋 Datos originales:", {
+    primer: memberData.primer_nombre,
+    segundo: memberData.segundo_nombre,
+    apellidos: memberData.apellidos,
+    nombre_ya_construido: memberData.nombre_completo || memberData.nombreCompleto
+  });
+
+  // Normalizar ingreso_anual a número
+  const ingresoAnual = typeof memberData.ingreso_anual === "number" 
+    ? memberData.ingreso_anual 
+    : (parseMoney(String(memberData.ingreso_anual || "")) || 0);
+
   // payload mínimo: cliente nuevo + cobertura
   const payload = {
     request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-    grupo_version: grupoVersion,               // control de concurrencia
+    grupo_version: grupoVersion,
     cliente_nuevo: {
-      primer_nombre: memberData.primer_nombre || "",
-      segundo_nombre: memberData.segundo_nombre || "",
-      apellidos: memberData.apellidos || "",
-      nombre_completo: buildNombreCompleto(memberData),
+      primer_nombre: (memberData.primer_nombre || "").toString().trim(),
+      segundo_nombre: (memberData.segundo_nombre || "").toString().trim(),
+      apellidos: (memberData.apellidos || "").toString().trim(),
+      nombre_completo: nombreCompleto,  // 🎯 Nombre completo garantizado
       fecha_nacimiento: memberData.fecha_nacimiento || null,
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,
-      ingreso_anual: memberData.ingreso_anual || 0,
+      ingreso_anual: ingresoAnual,
       nota: memberData.nota || null,
     },
     parentesco: memberData.parentesco || memberData.tipo || "Tomador",
     cobertura: {
-      cobertura_tipo: productoCotizacion?.label || "Plan de salud", // o el default que uses
-      
+      cobertura_tipo: productoCotizacion?.label || "Plan de salud",
       estado_cobertura: memberData.estado_cobertura || "Sí",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
-      fecha_activacion: memberData.fecha_activacion ? String(memberData.fecha_activacion).slice(0,10)
-   : null,
+      fecha_activacion: memberData.fecha_activacion 
+        ? String(memberData.fecha_activacion).slice(0,10)
+        : null,
       pagador_id: null,
       dia_pago: 1,
       tipo_pago: null,
@@ -514,17 +548,25 @@ const handleCreateMemberRemote = async (memberData) => {
     },
   };
 
-  const res = await GrupoFamiliarService.appendMiembro(id, payload);
-  const data = unwrapFull(res)?.data || unwrapFull(res);
-  const nuevo = mapMemberFromAppendResponse(data?.miembro || {});
-  // hidratar lista
-  setFamilyMembers((prev) => [...prev, nuevo]);
+  console.log("📤 Payload a enviar:", JSON.stringify(payload, null, 2));
 
-  // actualiza versión si el backend te devuelve la nueva
-  if (data?.grupo_version) setGrupoVersion(data.grupo_version);
-  // también puedes refrescar contadores si llegan en data.resumen
-  await reload(); // asegura que la siguiente “Actualizar” ya tiene IDs reales
-  showToast("success", "Miembro agregado", "Se creó el cliente y su cobertura.");
+  try {
+    const res = await GrupoFamiliarService.appendMiembro(id, payload);
+    const data = unwrapFull(res)?.data || unwrapFull(res);
+    const nuevo = mapMemberFromAppendResponse(data?.miembro || {});
+    
+    // Hidratar lista
+    setFamilyMembers((prev) => [...prev, nuevo]);
+
+    // Actualiza versión si el backend te devuelve la nueva
+    if (data?.grupo_version) setGrupoVersion(data.grupo_version);
+    
+    await reload(); // Asegura que la siguiente "Actualizar" ya tiene IDs reales
+    showToast("success", "Miembro agregado", `${nombreCompleto} fue creado exitosamente.`);
+  } catch (error) {
+    console.error("❌ Error al crear miembro:", error);
+    showToast("danger", "Error al crear miembro", error?.message || "No se pudo crear el miembro");
+  }
 };
 
 
@@ -566,10 +608,18 @@ const handleCreateMemberRemote = async (memberData) => {
 
 
            // 1) Crear primero los miembros NUEVOS (sin cliente_id)
-     const nuevos = (familyMembers || []).filter(m => !m?.cliente_id);
-     for (const m of nuevos) {
-       const cliNuevo = mapClienteForSave(m);
-       delete cliNuevo.id; // aseguramos “nuevo”
+    // 1) Crear primero los miembros NUEVOS (sin cliente_id)
+    const nuevos = (familyMembers || []).filter(m => !m?.cliente_id);
+    for (const m of nuevos) {
+      const cliNuevo = mapClienteForSave(m);
+      
+      // Validar que mapClienteForSave retornó un objeto válido
+      if (!cliNuevo) {
+        console.error("❌ No se pudo mapear el cliente:", m);
+        continue; // Saltar este miembro
+      }
+      
+      delete cliNuevo.id;
 
        let cov = mapCoberturaFromMember(m, id);
        if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion.label;
@@ -590,9 +640,13 @@ const handleCreateMemberRemote = async (memberData) => {
 
      
 
-     // 2) Actualizar los EXISTENTES
-     const existentes = (familyMembers || []).filter(m => m?.cliente_id);
-     const clientesPayload = existentes.map(mapClienteForSave).map(stripNulls);
+   
+// 2) Actualizar los EXISTENTES
+const existentes = (familyMembers || []).filter(m => m?.cliente_id);
+const clientesPayload = existentes
+  .map(mapClienteForSave)
+  .filter(Boolean) // Eliminar nulls/undefined
+  .map(stripNulls);
       
       // 👈 Actualizar cobertura_tipo si se cambió el producto
            

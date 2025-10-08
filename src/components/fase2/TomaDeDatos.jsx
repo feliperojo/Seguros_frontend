@@ -231,7 +231,7 @@ const AddressSection = ({ c, onChange, readOnly }) => {
     onChange({
       target: { name: "direccion", value: direccionConcatenada, type: "text" },
     });
-
+    const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';  // false en TOMA_DATOS
     // 4) Si el toggle está activo, sincronizar dir_correspondencia también
     if (copyDir) {
       onChange({
@@ -1638,16 +1638,10 @@ const onUpdateLocal = useCallback(
         defaultCoberturaTipo={defaultCoberturaTipo}
         canAdd={canAdd}
         readOnly={readOnly}
-        isProspecto={true}
+        isProspecto={isProspecto}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
-        onCreateRemote={(raw) =>
-          onCreateMemberRemote?.(
-            recomputeDerived(
-              normalizeMember(raw, (familyMembers?.length ?? 0))
-            )
-          )
-        }
+        onCreateRemote={onCreateMemberRemote}
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
