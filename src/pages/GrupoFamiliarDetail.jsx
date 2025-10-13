@@ -893,9 +893,11 @@ const clientesPayload = existentes
 
         {/* Captación + económicos */}
         <Prospectogrupo
+          
           formData={formData}
           onChange={handleInputChange}
           readOnly={readOnly}
+          grupoFamiliarId={id} 
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(

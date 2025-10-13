@@ -75,3 +75,17 @@
       font-size: 22px;
   }
 }
+
+
+.stacked-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+}
+.stacked-item { line-height: 1.1; }
+.stacked-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: .35rem .5rem;
+}

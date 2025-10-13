@@ -1,4 +1,4 @@
-// adapters/prospecto.mapper.js
+
 import { parseMoney } from "../services/ingresos"; // 👈 importa el normalizador
 
 export const buildPersonaContacto = (nombre = "", apellidos = "") =>
@@ -22,13 +22,14 @@ export const stripNulls = (obj = {}) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null && v !== undefined));
 
 export const mapGrupoFromForm = (f = {}) => {
+
   const persona_contacto = buildPersonaContacto(f.nombre, f.apellidos);
 
   return {
     personas_taxes: toNumberOrZero(f.personasTaxes),
     personas_cobertura: toNumberOrZero(f.personasCobertura),
     ingreso_familiar_anual: toNumberOrZero(f.ingresoFamiliar),
-
+    id: !!f.id,
     persona_contacto: toNullIfEmpty((f.nombre ?? "").trim()),
     apellido_persona_contacto: toNullIfEmpty((f.apellidos ?? "").trim()),
     captado_por: toNullIfEmpty(f.captadoPor),
@@ -42,6 +43,7 @@ export const mapGrupoFromForm = (f = {}) => {
     whatsapp: !!f.whatsapp,
     telegram: !!f.telegram,
     mensaje_sms: !!f.sms,
+
 
     telefono_1: toNullIfEmpty(f.telefono1),
     telefono_2: toNullIfEmpty(f.telefono2),

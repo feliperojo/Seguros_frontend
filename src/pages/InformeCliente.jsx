@@ -41,7 +41,7 @@ const InformeCliente = () => {
         `cliente/${cliente.id}/historial-polizas?incluir_grupo=${incluirGrupo}`,
         "GET"
       );
-console.log(res)
+console.log("lista clientes",res)
       const agrupado = {};
       for (const poliza of res || []) {
         const grupoId = poliza.grupo_familiar_id;

@@ -1,21 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { 
-  Card, Table, Form, InputGroup, Button, Badge, 
-  Spinner, Pagination, Dropdown, Toast, ToastContainer,
-  Overlay, Popover
+import { Link } from "react-router-dom";
+import {
+  Card, Table, Form, InputGroup, Button, Badge,
+  Spinner, Pagination, Toast, ToastContainer, Overlay, Popover
 } from "react-bootstrap";
-import { 
-  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, 
-  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFileExport, FaTimes
+import {
+  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus,
+  FaFilter, FaFileExport, FaTimes
 } from "react-icons/fa";
 import "../styles/ListaClientes.css";
 import apiRequest from "../services/api";
 import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
 
-
-// arriba del componente
+/* Helpers */
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 
 export const renderClienteLink = (clienteId, label = null) => {
@@ -33,109 +31,139 @@ export const renderClienteLink = (clienteId, label = null) => {
     </Link>
   );
 };
+// normaliza para comparar "Cotización" == "cotizacion" == "COTIZACION"
+// Reemplaza tu norm por este
+const norm = (s) =>
+  (s ?? "")
+    .toString()
+    .trim()                       // <- quita espacios al inicio/fin
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, ""); // quita acentos
 
+    const estadoToVariant = (estado) => {
+      switch (norm(estado)) {          // <- normalizado
+        case "toma de datos":      return "info";
+        case "cotizacion":         return "warning";
+        case "seguimiento":        return "success";
+        case "inscripcion inicial":return "primary";
+        case "descartado":         return "danger";
+        default:                   return "secondary";
+      }
+    };
+    
 
-const renderGrupoFamiliarLink = (grupoId) => {
-  if (!grupoId) return "Sin grupo";
+/* Columna “Proceso” solo con estados (cada badge abre el grupo) */
+const ProcesoCell = ({ grupos }) => {
+  if (!grupos?.length) return <>Sin proceso</>;
+  const ordered = [...grupos].sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  const MAX = 3;
+  const [expanded, setExpanded] = React.useState(false);
+  const list = expanded ? ordered : ordered.slice(0, MAX);
+
   return (
-    <Link
-      to={`/grupo_familiar/${grupoId}`}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="text-decoration-none"
-      title="Ver detalle del grupo"
-      onClick={(e) => e.stopPropagation()}
-    >
-      {grupoId}
-    </Link>
+    <div>
+      <div className="stacked-list">
+        {list.map(g => (
+          <div key={g.id} className="stacked-item">
+            <Link
+              to={`/grupo_familiar/${g.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="text-decoration-none"
+              title={`Abrir grupo #${g.id}`}
+            >
+              <Badge pill bg={estadoToVariant(g.estado)} className="stacked-badge">
+                {g.estado || "Sin estado"}
+              </Badge>
+            </Link>
+          </div>
+        ))}
+      </div>
+
+      {ordered.length > MAX && (
+        <Button
+          variant="link"
+          size="sm"
+          className="p-0 mt-1"
+          onClick={() => setExpanded(v => !v)}
+        >
+          {expanded ? "Ver menos" : `+${ordered.length - MAX} más`}
+        </Button>
+      )}
+    </div>
   );
 };
 
-
-
 const ListaClientes = () => {
-  const navigate = useNavigate();
-  
-  // Estados para manejar datos y filtros
+  // Datos y UI
   const [clientes, setClientes] = useState([]);
   const [filteredClientes, setFilteredClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Filtros/búsqueda
   const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState("nombre_completo");
-  const [sortDirection, setSortDirection] = useState("asc");
   const [filterStatus, setFilterStatus] = useState("all");
-  
-  // Nuevo estado para filtros adicionales
   const [activeFilters, setActiveFilters] = useState({
     nuevos30Dias: false,
     conPolizasActivas: false,
     sinGrupoFamiliar: false
   });
-
-  // Estados para controlar el popover de filtros
   const [showFiltersPopover, setShowFiltersPopover] = useState(false);
   const filterRef = React.useRef(null);
-  
-  // Estados para el modal de edición
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Modales / toasts
   const [showEditModal, setShowEditModal] = useState(false);
   const [clienteToEdit, setClienteToEdit] = useState(null);
-  
-  // Estado para la notificación toast
+  const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [clienteToView, setClienteToView] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastVariant, setToastVariant] = useState("success");
-  const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
 
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [clienteToView, setClienteToView] = useState(null);
-  
   useEffect(() => {
     fetchClientes();
   }, []);
-  
-  // Modificación en la parte donde procesas los clientes
 
   const fetchClientes = async () => {
     setLoading(true);
     try {
-      
-      
       const response = await apiRequest("cliente/with-cobertura");
-  
-      
-      const clientesData = response?.data || response || [];
-      
-      console.log(clientesData)
-   
-      
-      const clientesArray = Array.isArray(clientesData) ? clientesData : Object.values(clientesData);
-      
-      // Usamos un Set para agrupar a los clientes por su ID, y almacenar los grupos familiares únicos
-      const clientesUnicos = [];
-  
-      clientesArray.forEach(cliente => {
-        const existingClient = clientesUnicos.find(c => c.id === cliente.id);
-  
-        // Si el cliente ya está en el array, solo agregamos un nuevo grupo familiar
-        if (existingClient) {
-          // Evitamos duplicar el ID de grupo familiar
-          if (!existingClient.grupoFamiliarIds.includes(cliente.grupo_familiar_id)) {
-            existingClient.grupoFamiliarIds.push(cliente.grupo_familiar_id);
-          }
-        } else {
-          // Si el cliente no está, lo agregamos con su grupo familiar
-          clientesUnicos.push({
-            ...cliente,
-            grupoFamiliarIds: [cliente.grupo_familiar_id] // Guardamos los IDs de los grupos familiares a los que pertenece
-          });
-        }
+      const raw = Array.isArray(response?.data) ? response.data : (response || []);
+      const clientesArray = Array.isArray(raw) ? raw : Object.values(raw);
+
+      const normalizados = clientesArray.map((c) => {
+        const idsCob = (c.coberturas || []).map(co => co.grupo_familiar_id).filter(Boolean);
+        const baseId = c.grupo_familiar_id ? [c.grupo_familiar_id] : [];
+        const grupoFamiliarIds = Array.from(new Set([...baseId, ...idsCob]));
+
+        const estadosMap = new Map(); // id -> estado
+        (c.grupo_estados || []).forEach(g => {
+          if (g?.id) estadosMap.set(g.id, g.estado || "Sin estado");
+        });
+        (c.coberturas || []).forEach(co => {
+          const gid = co.grupo_familiar_id;
+          const est = co.grupo_familiar?.estado_actual_catalogo?.estado_nombre;
+          if (gid && est && !estadosMap.has(gid)) estadosMap.set(gid, est);
+        });
+
+        const grupos = grupoFamiliarIds.map(id => ({
+          id,
+          estado: estadosMap.get(id) || "Sin estado",
+        }));
+
+        return { ...c, grupos };
       });
-  
-      setClientes(clientesUnicos);
-      setFilteredClientes(clientesUnicos);
+
+      setClientes(normalizados);
+      setFilteredClientes(normalizados);
     } catch (err) {
       console.error("Error al cargar clientes:", err);
       setError("No se pudieron cargar los clientes. " + (err.message || "Por favor, intente nuevamente."));
@@ -143,339 +171,182 @@ const ListaClientes = () => {
       setLoading(false);
     }
   };
-  
-  
 
-  // Función para abrir el modal de visualización
+  // Acciones UI
   const handleOpenViewModal = (cliente, grupoId) => {
-    setClienteToView(cliente);
+    setClienteToView({ ...cliente, grupoFamiliarId: grupoId });
     setShowViewModal(true);
-    setClienteToView({ ...cliente, grupoFamiliarId: grupoId }); // Asegúrate de pasar el grupoId aquí si lo necesitas
   };
-  
-  // Función para aplicar un filtro
+
   const applyFilter = (filterName, value = true) => {
-    setActiveFilters(prev => ({
-      ...prev,
-      [filterName]: value
-    }));
-    setShowFiltersPopover(false); // Cerrar el popover después de aplicar un filtro
+    setActiveFilters(prev => ({ ...prev, [filterName]: value }));
+    setShowFiltersPopover(false);
   };
-  
-  // Función para eliminar un filtro
+
   const removeFilter = (filterName) => {
-    setActiveFilters(prev => ({
-      ...prev,
-      [filterName]: false
-    }));
+    setActiveFilters(prev => ({ ...prev, [filterName]: false }));
   };
-  
-  // Función para limpiar todos los filtros
+
   const clearAllFilters = () => {
     setSearchTerm("");
     setFilterStatus("all");
-    setActiveFilters({
-      nuevos30Dias: false,
-      conPolizasActivas: false,
-      sinGrupoFamiliar: false
-    });
-    setShowFiltersPopover(false); // Cerrar el popover después de limpiar todos los filtros
+    setActiveFilters({ nuevos30Dias: false, conPolizasActivas: false, sinGrupoFamiliar: false });
+    setShowFiltersPopover(false);
   };
-  
-  // Filtrar y ordenar clientes cuando cambian los criterios
+
+  // Búsqueda + filtros + orden por nombre
   useEffect(() => {
     if (!Array.isArray(clientes) || clientes.length === 0) return;
-  
+
     let result = [...clientes];
-  
-    // Aplicar filtro de búsqueda
+
     if (searchTerm) {
+      const q = searchTerm.toLowerCase();
       result = result.filter(cliente =>
-        (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (cliente.email && cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (cliente.telefono && cliente.telefono.toString().includes(searchTerm)) ||
-        (cliente.social && cliente.social.toString().includes(searchTerm))
+        (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(q)) ||
+        (cliente.email && cliente.email.toLowerCase().includes(q)) ||
+        (cliente.telefono && String(cliente.telefono).includes(searchTerm)) ||
+        (cliente.social && String(cliente.social).includes(searchTerm))
       );
     }
-  
-    // Aplicar filtro de estado
+
     if (filterStatus !== "all") {
-      result = result.filter(cliente => cliente.status === filterStatus);
-    }
-  
-    // Aplicar filtros adicionales
-    if (activeFilters.nuevos30Dias) {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  
-      result = result.filter(cliente => {
-        if (!cliente.created_at) return false;
-        const createdDate = new Date(cliente.created_at);
-        return createdDate >= thirtyDaysAgo;
+      result = result.filter((cliente) => {
+        const grupos = cliente.grupos || [];
+        if (filterStatus === "sin-proceso") {
+          return grupos.length === 0;
+        }
+        // hay al menos un grupo cuyo estado coincide
+        return grupos.some(g => norm(g.estado) === norm(filterStatus));
       });
     }
-  
+    
+
+    if (activeFilters.nuevos30Dias) {
+      const d = new Date(); d.setDate(d.getDate() - 30);
+      result = result.filter(c => c.created_at && new Date(c.created_at) >= d);
+    }
+
     if (activeFilters.conPolizasActivas) {
-      result = result.filter(cliente =>
-        cliente.cobertura === true ||
-        (cliente.coberturas && cliente.coberturas.length > 0)
-      );
+      result = result.filter(c => c.cobertura === true || (c.coberturas && c.coberturas.length > 0));
     }
-  
+
     if (activeFilters.sinGrupoFamiliar) {
-      result = result.filter(cliente =>
-        !cliente.grupo_familiar_id &&
-        (!cliente.coberturas || cliente.coberturas.length === 0 || !cliente.coberturas[0].grupo_familiar_id)
+      result = result.filter(c =>
+        !c.grupo_familiar_id &&
+        (!c.coberturas || c.coberturas.length === 0 || !c.coberturas[0].grupo_familiar_id)
       );
     }
-  
-    // Aplicar ordenamiento
-    result.sort((a, b) => {
-      let valueA = a[sortField] ?? "";
-      let valueB = b[sortField] ?? "";
-  
-      // Convertir a minúsculas si son strings
-      if (typeof valueA === 'string') valueA = valueA.toLowerCase();
-      if (typeof valueB === 'string') valueB = valueB.toLowerCase();
-  
-      if (valueA < valueB) return sortDirection === "asc" ? -1 : 1;
-      if (valueA > valueB) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-  
-    setFilteredClientes(result); // Actualiza el estado con los datos filtrados.
-    setCurrentPage(1); // Resetea a la primera página cuando cambian los filtros.
-  }, [searchTerm, filterStatus, sortField, sortDirection, clientes, activeFilters]);
-  
- // Calcular la paginación
-const indexOfLastItem = currentPage * itemsPerPage; // Índice del último ítem de la página
-const indexOfFirstItem = indexOfLastItem - itemsPerPage; // Índice del primer ítem de la página
-const currentItems = Array.isArray(filteredClientes) 
-  ? filteredClientes.slice(indexOfFirstItem, indexOfLastItem) // Cortamos los elementos para mostrar en la página actual
-  : [];
-const totalPages = Math.ceil((filteredClientes?.length || 0) / itemsPerPage); // Calculamos el total de páginas
 
+    // Orden simple por nombre
+    result.sort((a, b) => (a.nombre_completo || "").localeCompare(b.nombre_completo || "", undefined, { sensitivity: "base" }));
 
-// Cambiar de página
-const paginate = (pageNumber) => setCurrentPage(pageNumber); // Actualiza la página
-  
-  // Manejar ordenamiento
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
+    setFilteredClientes(result);
+    setCurrentPage(1);
+  }, [searchTerm, filterStatus, clientes, activeFilters]);
+
+  // Paginación
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = Array.isArray(filteredClientes)
+    ? filteredClientes.slice(indexOfFirstItem, indexOfLastItem)
+    : [];
+  const totalPages = Math.ceil((filteredClientes?.length || 0) / itemsPerPage);
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  const renderPaginationItems = () => {
+    const pages = [];
+    pages.push(<Pagination.First key="first" onClick={() => paginate(1)} disabled={currentPage === 1} />);
+    pages.push(<Pagination.Prev key="prev" onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} />);
+
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    if (startPage > 1) pages.push(<Pagination.Ellipsis key="ellipsis-start" disabled />);
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(<Pagination.Item key={i} active={i === currentPage} onClick={() => paginate(i)}>{i}</Pagination.Item>);
+    }
+
+    if (endPage < totalPages) pages.push(<Pagination.Ellipsis key="ellipsis-end" disabled />);
+    pages.push(<Pagination.Next key="next" onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0} />);
+    pages.push(<Pagination.Last key="last" onClick={() => paginate(totalPages)} disabled={currentPage === totalPages || totalPages === 0} />);
+    return pages;
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "No registrado";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString();
+    } catch {
+      return dateString;
     }
   };
-  
-  // Manejar eliminación
+
+  const getParentesco = (cliente) => {
+    if (cliente.parentesco) return cliente.parentesco;
+    if (cliente.coberturas?.length) return cliente.coberturas[0].parentesco || "Sin definir";
+    return "Sin parentesco";
+  };
+
   const handleDelete = async (id, nombre) => {
-    if (window.confirm(`¿Estás seguro de que deseas eliminar al cliente ${nombre}?`)) {
-      try {
-        await apiRequest(`cliente/${id}`, "DELETE");
-        
-        const updatedClientes = clientes.filter(cliente => cliente.id !== id);
-        setClientes(updatedClientes);
-        setFilteredClientes(prevFiltered => 
-          prevFiltered.filter(cliente => cliente.id !== id)
-        );
-        
-        // Mostrar toast de éxito
-        setToastMessage("Cliente eliminado con éxito");
-        setToastVariant("success");
-        setShowToast(true);
-      } catch (err) {
-        console.error("Error al eliminar cliente:", err);
-        setToastMessage("No se pudo eliminar el cliente. " + (err.message || "Podría estar asociado a otros registros."));
-        setToastVariant("danger");
-        setShowToast(true);
-      }
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar al cliente ${nombre}?`)) return;
+    try {
+      await apiRequest(`cliente/${id}`, "DELETE");
+      const updated = clientes.filter(c => c.id !== id);
+      setClientes(updated);
+      setFilteredClientes(prev => prev.filter(c => c.id !== id));
+      setToastMessage("Cliente eliminado con éxito");
+      setToastVariant("success");
+      setShowToast(true);
+    } catch (err) {
+      console.error("Error al eliminar cliente:", err);
+      setToastMessage("No se pudo eliminar el cliente. " + (err.message || "Podría estar asociado a otros registros."));
+      setToastVariant("danger");
+      setShowToast(true);
     }
   };
-  
-  // Función para abrir el modal de edición y pasar todos los datos del cliente
+
   const handleOpenEditModal = (cliente) => {
     setClienteToEdit(cliente.id);
     setClienteDataToEdit(cliente);
     setShowEditModal(true);
   };
-  
-  // Función para manejar la actualización del cliente después de editar
+
   const handleClienteUpdated = (updatedCliente) => {
-    // Actualizar el cliente en la lista
-    setClientes(prevClientes => 
-      prevClientes.map(cliente => 
-        cliente.id === updatedCliente.id ? updatedCliente : cliente
-      )
-    );
-    
-    // Actualizar la lista filtrada también
-    setFilteredClientes(prevFiltered => 
-      prevFiltered.map(cliente => 
-        cliente.id === updatedCliente.id ? updatedCliente : cliente
-      )
-    );
-    
-    // Mostrar toast de éxito
+    setClientes(prev => prev.map(c => (c.id === updatedCliente.id ? updatedCliente : c)));
+    setFilteredClientes(prev => prev.map(c => (c.id === updatedCliente.id ? updatedCliente : c)));
     setToastMessage("Cliente actualizado con éxito");
     setToastVariant("success");
     setShowToast(true);
     setShowEditModal(false);
   };
-  
-  // Función para obtener el parentesco del cliente
-  const getParentesco = (cliente) => {
-    // Verificamos si hay un valor directo
-    if (cliente.parentesco) {
-      return cliente.parentesco;
-    }
-    
-    // Si no, verificamos en coberturas
-    if (cliente.coberturas && Array.isArray(cliente.coberturas) && cliente.coberturas.length > 0) {
-      return cliente.coberturas[0].parentesco || "Sin definir";
-    }
-    
-    return "Sin parentesco";
-  };
-  
-  // Función para obtener el ID del grupo familiar
-  const getGrupoFamiliarId = (cliente) => {
-    // Si el cliente no tiene grupo familiar, asignar "N/A"
-    if (!cliente.grupo_familiar_id) {
-      return "N/A";
-    }
-  
-    return cliente.grupo_familiar_id;
-  };
-  
-  
-  // Renderizar paginación
- // Renderizar los botones de paginación
-const renderPaginationItems = () => {
-  const pages = [];
 
-  // Botón para ir a la primera página
-  pages.push(
-    <Pagination.First 
-      key="first" 
-      onClick={() => paginate(1)} 
-      disabled={currentPage === 1} // Desactivar si ya estamos en la primera página
-    />
-  );
-
-  // Botón para ir a la página anterior
-  pages.push(
-    <Pagination.Prev 
-      key="prev" 
-      onClick={() => paginate(currentPage - 1)} 
-      disabled={currentPage === 1} // Desactivar si estamos en la primera página
-    />
-  );
-
-  // Generar los números de página
-  const startPage = Math.max(1, currentPage - 2);
-  const endPage = Math.min(totalPages, currentPage + 2);
-
-  if (startPage > 1) {
-    pages.push(<Pagination.Ellipsis key="ellipsis-start" disabled />);
-  }
-
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push(
-      <Pagination.Item 
-        key={i} 
-        active={i === currentPage}
-        onClick={() => paginate(i)} // Cambiar a la página correspondiente
-      >
-        {i}
-      </Pagination.Item>
-    );
-  }
-
-  if (endPage < totalPages) {
-    pages.push(<Pagination.Ellipsis key="ellipsis-end" disabled />);
-  }
-
-  // Botón para ir a la página siguiente
-  pages.push(
-    <Pagination.Next 
-      key="next" 
-      onClick={() => paginate(currentPage + 1)} 
-      disabled={currentPage === totalPages || totalPages === 0} // Desactivar si ya estamos en la última página
-    />
-  );
-
-  // Botón para ir a la última página
-  pages.push(
-    <Pagination.Last 
-      key="last" 
-      onClick={() => paginate(totalPages)} 
-      disabled={currentPage === totalPages || totalPages === 0} // Desactivar si estamos en la última página
-    />
-  );
-
-  return pages;
-};
- 
-  // Función para formatear fecha
-  const formatDate = (dateString) => {
-    if (!dateString) return "No registrado";
-    
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString();
-    } catch (e) {
-      return dateString;
-    }
-  };
-  
-  // Renderizar los filtros activos como pills/badges
+  /* UI principal */
   const renderActiveFiltersPills = () => {
-    // Si no hay filtros activos, no mostrar nada
-    if (!Object.values(activeFilters).some(value => value)) {
-      return null;
-    }
-    
+    if (!Object.values(activeFilters).some(value => value)) return null;
     return (
       <div className="d-flex flex-wrap mt-2">
         {activeFilters.nuevos30Dias && (
           <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
             Clientes nuevos (30 días)
-            <Button 
-              variant="link" 
-              className="p-0 ms-2 text-white" 
-              onClick={() => removeFilter('nuevos30Dias')}
-              style={{ fontSize: '10px', textDecoration: 'none' }}
-            >
+            <Button variant="link" className="p-0 ms-2 text-white" onClick={() => removeFilter('nuevos30Dias')} style={{ fontSize: '10px', textDecoration: 'none' }}>
               <FaTimes />
             </Button>
           </Badge>
         )}
-        
         {activeFilters.conPolizasActivas && (
           <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
             Con pólizas activas
-            <Button 
-              variant="link" 
-              className="p-0 ms-2 text-white" 
-              onClick={() => removeFilter('conPolizasActivas')}
-              style={{ fontSize: '10px', textDecoration: 'none' }}
-            >
+            <Button variant="link" className="p-0 ms-2 text-white" onClick={() => removeFilter('conPolizasActivas')} style={{ fontSize: '10px', textDecoration: 'none' }}>
               <FaTimes />
             </Button>
           </Badge>
         )}
-        
         {activeFilters.sinGrupoFamiliar && (
           <Badge bg="primary" className="me-2 mb-1 py-2 px-3">
             Sin grupo familiar
-            <Button 
-              variant="link" 
-              className="p-0 ms-2 text-white" 
-              onClick={() => removeFilter('sinGrupoFamiliar')}
-              style={{ fontSize: '10px', textDecoration: 'none' }}
-            >
+            <Button variant="link" className="p-0 ms-2 text-white" onClick={() => removeFilter('sinGrupoFamiliar')} style={{ fontSize: '10px', textDecoration: 'none' }}>
               <FaTimes />
             </Button>
           </Badge>
@@ -483,7 +354,7 @@ const renderPaginationItems = () => {
       </div>
     );
   };
-  
+
   const renderClientesTable = () => {
     if (loading) {
       return (
@@ -493,15 +364,11 @@ const renderPaginationItems = () => {
         </div>
       );
     }
-  
+
     if (error) {
-      return (
-        <div className="alert alert-danger" role="alert">
-          {error}
-        </div>
-      );
+      return <div className="alert alert-danger" role="alert">{error}</div>;
     }
-  
+
     if (!Array.isArray(filteredClientes) || filteredClientes.length === 0) {
       return (
         <div className="text-center p-5">
@@ -515,7 +382,9 @@ const renderPaginationItems = () => {
         </div>
       );
     }
-  
+
+    const current = currentItems;
+
     return (
       <>
         <div className="table-responsive">
@@ -528,122 +397,73 @@ const renderPaginationItems = () => {
                 <th>Código Postal</th>
                 <th>Parentesco</th>
                 <th>Teléfono</th>
-                <th>ID GF</th>
-                <th>ESTADO GF</th>
+                <th>Proceso</th>
                 <th className="text-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
-  {currentItems.map(cliente => ( // Asegúrate de que uses currentItems
-    cliente.grupoFamiliarIds.map((grupoId, index) => (
-      <tr key={`${cliente.id}-${grupoId}`}>
-        <td>{cliente.id || "Sin ID"}</td>
-        <td>{renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}</td>
-        <td>{formatDate(cliente.fecha_nacimiento)}</td>
-        <td>{cliente.codigo_postal || "No registrado"}</td>
-        <td>{getParentesco(cliente)}</td>
-        <td>{cliente.telefono || "No registrado"}</td>
-        <td>{renderGrupoFamiliarLink(grupoId)}</td>
-        <td>
-  {(() => {
-    // Busca el estado del grupo familiar actual (grupoId de la fila)
-    const estado = (cliente.grupo_estados || []).find(g => g.id === grupoId)?.estado || "Sin estado";
+              {current.map(cliente => {
+                const grupos = cliente.grupos || [];
+                const unico = grupos.length === 1 ? grupos[0] : null;
 
-    let variant = "secondary";
-    switch (estado.toLowerCase()) {
-      case "activo":
-        variant = "success";
-        break;
-      case "inactivo":
-        variant = "danger";
-        break;
-      case "cotización":
-        variant = "warning";
-        break;
-      case "pendiente":
-        variant = "info";
-        break;
-      default:
-        variant = "secondary";
-    }
-
-    return (
-      <Badge pill bg={variant}>
-        {estado}
-      </Badge>
-    );
-  })()}
-</td>
-
-        <td className="text-center">
-          <Button 
-            variant="outline-primary" 
-            size="sm"
-            onClick={() => handleOpenViewModal(cliente, grupoId)}
-          >
-            <FaEye />
-          </Button>
-          <Button 
-            variant="outline-success" 
-            size="sm"
-            onClick={() => handleOpenEditModal(cliente)}
-          >
-            <FaEdit />
-          </Button>
-          <Button 
-            variant="outline-danger" 
-            size="sm"
-            onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
-          >
-            <FaTrashAlt />
-          </Button>
-        </td>
-      </tr>
-    ))
-  ))}
-</tbody>
+                return (
+                  <tr key={cliente.id}>
+                    <td>{cliente.id || "Sin ID"}</td>
+                    <td>{renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}</td>
+                    <td>{formatDate(cliente.fecha_nacimiento)}</td>
+                    <td>{cliente.codigo_postal || "No registrado"}</td>
+                    <td>{getParentesco(cliente)}</td>
+                    <td>{cliente.telefono || "No registrado"}</td>
+                    <td><ProcesoCell grupos={grupos} /></td>
+                    <td className="text-center">
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => handleOpenViewModal(cliente, unico?.id || cliente.grupo_familiar_id)}
+                        className="me-1"
+                      >
+                        <FaEye />
+                      </Button>
+                      <Button
+                        variant="outline-success"
+                        size="sm"
+                        onClick={() => handleOpenEditModal(cliente)}
+                        className="me-1"
+                      >
+                        <FaEdit />
+                      </Button>
+                      <Button
+                        variant="outline-danger"
+                        size="sm"
+                        onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
+                      >
+                        <FaTrashAlt />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </Table>
         </div>
-  
-        {/* Mostrar paginación si es necesario */}
+
         <div className="d-flex justify-content-between align-items-center mt-3">
           <Pagination>{renderPaginationItems()}</Pagination>
         </div>
       </>
     );
   };
-    
-  // Función para determinar el color del badge según el estado
-  const getStatusBadgeColor = (status) => {
-    if (!status) return "secondary";
-    
-    switch (status.toString().toLowerCase()) {
-      case "activo":
-        return "success";
-      case "inactivo":
-        return "danger";
-      case "pendiente":
-        return "warning";
-      default:
-        return "info";
-    }
-  };
 
   return (
     <div className="lista-clientes-container">
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h1 className="page-title">Lista de Clientes</h1>
-        <Button 
-          variant="primary"
-          as={Link}
-          to="/clientes/crear"
-          className="d-flex align-items-center"
-        >
+        <Button variant="primary" as={Link} to="/clientes/crear" className="d-flex align-items-center">
           <FaUserPlus className="me-2" />
           Nuevo Cliente
         </Button>
       </div>
-      
+
       <Card className="mb-4">
         <Card.Body>
           <div className="filter-container">
@@ -660,94 +480,42 @@ const renderPaginationItems = () => {
                   </Button>
                 </InputGroup>
               </div>
-              
+
               <div className="col-md-3 mb-3 mb-md-0">
-                <Form.Select 
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="activo">Activos</option>
-                  <option value="inactivo">Inactivos</option>
-                  <option value="pendiente">Pendientes</option>
-                </Form.Select>
+              <Form.Select
+  value={filterStatus}
+  onChange={(e) => setFilterStatus(e.target.value)}
+>
+  <option value="all">Todos los estados (Proceso)</option>
+  <option value="cotizacion">Cotización</option>
+  <option value="seguimiento">Seguimiento</option>   {/* <- sin espacio */}
+  <option value="toma de datos">Toma de Datos</option>
+  <option value="inscripcion inicial">Inscripción Inicial</option>
+  <option value="descartado">Descartado</option>
+  <option value="sin-proceso">Sin proceso</option>
+</Form.Select>
+
+
               </div>
-              
+
               <div className="col-md-3 d-flex gap-2">
                 <div className="position-relative flex-grow-1" ref={filterRef}>
-                  <Button 
-                    variant="outline-secondary" 
-                    className="w-100 d-flex align-items-center justify-content-center"
-                    onClick={() => setShowFiltersPopover(!showFiltersPopover)}
-                  >
-                    <FaFilter className="me-2" />
-                    Filtros
-                  </Button>
                   
-                  <Overlay
-                    show={showFiltersPopover}
-                    target={filterRef.current}
-                    placement="bottom"
-                    container={filterRef.current}
-                    containerPadding={20}
-                  >
-                    <Popover id="filters-popover" style={{ minWidth: '200px' }}>
-                      <Popover.Header as="h3">Filtros adicionales</Popover.Header>
-                      <Popover.Body>
-                        <div className="d-grid gap-2">
-                          <Button 
-                            variant={activeFilters.nuevos30Dias ? "primary" : "outline-primary"}
-                            size="sm"
-                            onClick={() => applyFilter('nuevos30Dias', !activeFilters.nuevos30Dias)}
-                            className="text-start"
-                          >
-                            Clientes nuevos (30 días)
-                          </Button>
-                          <Button 
-                            variant={activeFilters.conPolizasActivas ? "primary" : "outline-primary"}
-                            size="sm"
-                            onClick={() => applyFilter('conPolizasActivas', !activeFilters.conPolizasActivas)}
-                            className="text-start"
-                          >
-                            Con pólizas activas
-                          </Button>
-                          <Button 
-                            variant={activeFilters.sinGrupoFamiliar ? "primary" : "outline-primary"}
-                            size="sm"
-                            onClick={() => applyFilter('sinGrupoFamiliar', !activeFilters.sinGrupoFamiliar)}
-                            className="text-start"
-                          >
-                            Sin grupo familiar
-                          </Button>
-                          <hr />
-                          <Button 
-                            variant="outline-secondary"
-                            size="sm"
-                            onClick={clearAllFilters}
-                          >
-                            Limpiar filtros
-                          </Button>
-                        </div>
-                      </Popover.Body>
-                    </Popover>
-                  </Overlay>
                 </div>
-                
+
                 <Button variant="outline-secondary">
                   <FaFileExport />
                 </Button>
               </div>
             </div>
-            
-            {/* Mostrar filtros activos como badges */}
+
             {renderActiveFiltersPills()}
           </div>
         </Card.Body>
       </Card>
-      
+
       {renderClientesTable()}
-      
-      {/* Modal de Edición */}
+
       <EditClienteModal
         show={showEditModal}
         onHide={() => setShowEditModal(false)}
@@ -755,28 +523,18 @@ const renderPaginationItems = () => {
         clienteData={clienteDataToEdit}
         onClienteUpdated={handleClienteUpdated}
       />
-      
-      {/* Modal de Visualización */}
+
       <DetalleClienteModal
         show={showViewModal}
         onHide={() => setShowViewModal(false)}
         clienteData={clienteToView}
-        grupoFamiliarId={clienteToView?.grupoFamiliarId} 
+        grupoFamiliarId={clienteToView?.grupoFamiliarId}
       />
-      
-      {/* Toast de notificación */}
+
       <ToastContainer className="p-3" position="top-end">
-        <Toast 
-          show={showToast} 
-          onClose={() => setShowToast(false)} 
-          delay={3000} 
-          autohide
-          bg={toastVariant}
-        >
+        <Toast show={showToast} onClose={() => setShowToast(false)} delay={3000} autohide bg={toastVariant}>
           <Toast.Header closeButton={true}>
-            <strong className="me-auto">
-              {toastVariant === "success" ? "Éxito" : "Error"}
-            </strong>
+            <strong className="me-auto">{toastVariant === "success" ? "Éxito" : "Error"}</strong>
           </Toast.Header>
           <Toast.Body className={toastVariant === "success" ? "text-white" : ""}>
             {toastMessage}

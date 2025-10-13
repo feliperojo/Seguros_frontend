@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
+// en tu entry (p.ej. index.js)
+import 'bootstrap/dist/css/bootstrap.min.css';
 import { formatMoneyDisplay } from "../../services/ingresos";
-const Prospectogrupo = ({ formData, onChange, readOnly }) => {
-
+import NuevaTareaModal from "../Tareas/NuevaTareaModal";
+const Prospectogrupo = ({ formData, onChange, readOnly, grupoFamiliarId }) => {
+  const [showGestion, setShowGestion] = useState(false);
 
   // Formato 3-3-sin límite: 123-456-xxxx...
   const formatPhone = (raw) => {
@@ -16,6 +19,18 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
     const formatted = formatPhone(e.target.value);
     onChange({ target: { name, value: formatted, type: 'text' } });
   };
+
+
+// intenta varias rutas donde podría estar el grupo
+ const resolvedGrupoId =
+   (grupoFamiliarId ??                      // 👈 prioridad: viene del path
+    formData?.grupo_familiar_id ??
+    formData?.grupoFamiliarId ??
+    formData?.grupo?.id ??
+    formData?.grupo_id ??
+    null);
+
+console.log("Padre -> resolvedGrupoId:", resolvedGrupoId);
 
 
  
@@ -282,6 +297,34 @@ const Prospectogrupo = ({ formData, onChange, readOnly }) => {
           </div>
         </div>
       </div>
+      <div className="card mb-4">
+        <div className="card-header d-flex justify-content-between align-items-center">
+          <h6 className="mb-0">Utilidades</h6>
+          <div className="d-flex gap-2">
+          <button
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={() => {
+                    console.log('click Nueva Gestión', { readOnly, showGestionBefore: showGestion });
+                    setShowGestion(true);
+                  }}
+                  
+                >
+                  <i className="fas fa-tasks me-1"></i> Nueva Gestión
+                </button>
+          </div>
+        </div>
+      </div>
+
+      <NuevaTareaModal
+  show={showGestion}
+  onHide={() => setShowGestion(false)}
+  grupoFamiliarId={resolvedGrupoId}         // <-- ahora pasa un valor más seguro
+  // clienteId={formData?.cliente_id}      // opcional
+/>
+
+
+    
+
     </>
   );
 };
