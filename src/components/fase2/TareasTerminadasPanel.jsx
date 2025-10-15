@@ -4,7 +4,7 @@ import apiRequest from "../../services/api";
 
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
-  "done", "completed", "complete", "finished", "resolved", "closed", "completada",
+  "done", "completed", "complete", "finished", "resolved", "closed", "completada", "terminada",
 ]);
 
 export default function TareasTerminadasPanel({
@@ -16,10 +16,10 @@ export default function TareasTerminadasPanel({
   onEdit = () => {},
   emptyMessage = "No se tienen tareas terminadas.",
 }) {
-  const [items, setItems] = useState([]);     // ← datos ya normalizados desde el back
+  const [items, setItems] = useState([]);       // datos normalizados
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
-  const [term, setTerm] = useState("");
+  const [term, setTerm] = useState("");         // 👈 SOLO UNA VEZ
 
   // ==== Helpers ====
   const formatDate = (v) => {
@@ -42,28 +42,44 @@ export default function TareasTerminadasPanel({
   };
 
   const getList = (res) => {
-    if (Array.isArray(res?.data?.data)) return res.data.data; // Laravel paginado clásico
-    if (Array.isArray(res?.data)) return res.data;            // JSON con data + meta
-    if (Array.isArray(res)) return res;                       // Array directo
+    if (Array.isArray(res?.data?.data)) return res.data.data; // axios: {data:{data:[...]}}
+    if (Array.isArray(res?.data)) return res.data;            // apiRequest devolvió JSON
+    if (Array.isArray(res)) return res;                       // array directo
     return [];
   };
 
+  // Normaliza y DERIVA fechaTermino si no viene explícita
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
     const nota = t?.nota ?? t?.note ?? t?.descripcion ?? t?.description ?? t?.detalle ?? "";
+
+    const fechaTermino =
+      t?.fechaTermino ??
+      t?.finished_at ??
+      t?.completed_at ??
+      t?.closed_at ??
+      t?.fecha_cierre ??
+      t?.fecha_termino ??
+      t?.fecha_fin ??
+      t?.fecha ??           // fallback a "fecha" (creación) si no hay otra
+      t?.fechaLimite ??
+      t?.due_at ??
+      t?.scheduled_at ??
+      null;
+
     return {
       id: t?.id,
       titulo: t?.titulo || t?.concepto || (typeof nota === "string" ? nota : "") || "Tarea",
       responsable: t?.responsable ?? t?.asignado_a ?? t?.assignedUser?.name ?? t?.assigned_user?.name ?? "—",
       estado: rawEstado,
       fechaCreacion: t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null,
-      fechaTermino:
-        t?.fechaTermino ?? t?.finished_at ?? t?.completed_at ?? t?.closed_at ?? t?.terminada_en ?? t?.fecha_cierre ?? null,
+      fechaTermino,
       nota: (typeof nota === "string" ? nota.trim() : "") || "",
       __raw: t,
     };
   };
 
+  // Orden: terminada desc; si no hay, creada desc
   const sortTasks = (a, b) => {
     const at = a.fechaTermino ? new Date(a.fechaTermino).getTime() : -Infinity;
     const bt = b.fechaTermino ? new Date(b.fechaTermino).getTime() : -Infinity;
@@ -82,6 +98,7 @@ export default function TareasTerminadasPanel({
       case "resolved":
       case "closed":
       case "completada":
+      case "terminada":
         return "Completada";
       case "cancelled":
       case "canceled":
@@ -92,9 +109,8 @@ export default function TareasTerminadasPanel({
     }
   };
 
-  // ==== Fetch interno y autónomo ====
+  // ==== Fetch autónomo ====
   useEffect(() => {
-    // Si faltan IDs, muestra vacío controlado (el padre no decide nada)
     if (!clienteId || !grupoId) {
       setItems([]);
       setLoading(false);
@@ -113,13 +129,11 @@ export default function TareasTerminadasPanel({
           "GET"
         );
 
-        // Filtrar a "terminadas"
         const list = getList(res).filter((t) => {
           const st = String(t?.estado ?? t?.status ?? "").toLowerCase();
-          return COMPLETED_STATES.has(st);
+          return COMPLETED_STATES.has(st); // incluye "completed"
         });
 
-        // Desdup, normalizar, ordenar
         const unique = Object.values(
           list.reduce((acc, t) => {
             if (t && t.id != null) acc[t.id] = t;
@@ -145,7 +159,7 @@ export default function TareasTerminadasPanel({
     };
   }, [clienteId, grupoId, perPage]);
 
-  // ==== Búsqueda local ====
+  // ==== Búsqueda local (usa el ÚNICO 'term') ====
   const filtered = useMemo(() => {
     if (!term) return items;
     const q = term.toLowerCase();
@@ -166,7 +180,7 @@ export default function TareasTerminadasPanel({
       if (!map.has(key)) map.set(key, []);
       map.get(key).push(t);
     }
-    return Array.from(map.entries()); // [ [label, tasks[]], ... ]
+    return Array.from(map.entries());
   }, [filtered]);
 
   // ==== Render ====

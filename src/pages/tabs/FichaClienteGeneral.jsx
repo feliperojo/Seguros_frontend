@@ -27,10 +27,52 @@ export default function FichaClienteGeneral() {
   const toValidId = (v) => {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : null;
+    // si tu back acepta strings, podrías simplemente: return v ?? null;
   };
 
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
+
+  // Opcional: si quieres mantener mocks solo en desarrollo
+  const USE_DEMO = false;
+
+  const demoPendientes = [
+    {
+      id: 1,
+      titulo: "Médicos",
+      responsable: "Andrea",
+      estado: "pending",
+      fechaLimite: "2025-08-25",
+      fechaCreacion: "2025-08-15",
+    },
+    {
+      id: 2,
+      titulo: "Facturación Médica",
+      responsable: "Cata",
+      estado: "processing",
+      fechaLimite: "2025-08-30",
+      fechaCreacion: "2025-08-17",
+    },
+  ];
+
+  const demoTerminadas = [
+    {
+      id: 3,
+      titulo: "Médicos",
+      responsable: "Andrea",
+      estado: "completed",
+      fechaCreacion: "2025-08-10",
+      fechaTermino: "2025-08-20",
+    },
+    {
+      id: 4,
+      titulo: "Facturación Médica",
+      responsable: "Cata",
+      estado: "completed",
+      fechaCreacion: "2025-08-12",
+      fechaTermino: "2025-08-17",
+    },
+  ];
 
   return (
     <div className="row g-3">
@@ -96,56 +138,27 @@ export default function FichaClienteGeneral() {
       <div className="col-lg-6">
         <TareasPendientesPanel
           className="mb-3"
-          // ✅ ahora sí mandamos los IDs para que consulte al backend
           clienteId={clienteId}
           grupoId={grupoId}
           perPage={20}
-          // Mantén items como fallback por si el back no trae nada
-          items={[
-            {
-              id: 1,
-              titulo: "Médicos",
-              responsable: "Andrea",
-              estado: "pending",         // mejor en minúsculas si usas badges
-              fechaLimite: "2025-08-25",
-              fechaCreacion: "2025-08-15",
-            },
-            {
-              id: 2,
-              titulo: "Facturación Médica",
-              responsable: "Cata",
-              estado: "processing",
-              fechaLimite: "2025-08-30",
-              fechaCreacion: "2025-08-17",
-            },
-          ]}
+          emptyMessage="No se tienen tareas pendientes o en progreso."
+          // Si quieres ver mocks en desarrollo: items={USE_DEMO ? demoPendientes : []}
+          items={USE_DEMO ? demoPendientes : []}
           onCreate={() => console.log("crear tarea")}
           onOpen={(t) => console.log("abrir", t)}
           onEdit={(t) => console.log("editar", t)}
         />
 
-        <TareasTerminadasPanel
-          items={[
-            {
-              id: 3,
-              titulo: "Médicos",
-              responsable: "Andrea",
-              estado: "Completada",
-              fechaCreacion: "2025-08-10",
-              fechaTermino: "2025-08-20",
-            },
-            {
-              id: 4,
-              titulo: "Facturación Médica",
-              responsable: "Cata",
-              estado: "Completada",
-              fechaCreacion: "2025-08-12",
-              fechaTermino: "2025-08-17",
-            },
-          ]}
-          onOpen={(t) => console.log("abrir", t)}
-          onEdit={(t) => console.log("editar", t)}
-        />
+<TareasTerminadasPanel
+  /* también puedes comentar así pero NO después de un prop */
+  className="mb-3"
+  clienteId={clienteId}
+  grupoId={grupoId}
+  perPage={20}
+/>
+
+
+
       </div>
     </div>
   );
