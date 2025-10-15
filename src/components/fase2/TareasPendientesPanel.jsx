@@ -1,6 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { FaExternalLinkAlt, FaEdit } from "react-icons/fa";
 import apiRequest from "../../services/api";
+// 👇 importa tu modal real (está en src/components/Tareas/NuevaTareaModal.jsx)
+import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
@@ -13,13 +15,15 @@ export default function TareasPendientesPanel({
   onCreate = () => {},
   onOpen = () => {},
   onEdit = () => {},
+  emptyMessage = "No se tienen tareas pendientes o en progreso.",
 }) {
-  // ===== State =====
   const [autoItems, setAutoItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
 
-  // ===== Helpers =====
+  // Estado para abrir/cerrar tu modal existente
+  const [showNueva, setShowNueva] = useState(false);
+
   const formatDate = (v) => {
     if (!v) return "mm/dd/aaaa";
     const d = v instanceof Date ? v : new Date(v);
@@ -28,25 +32,17 @@ export default function TareasPendientesPanel({
       : d.toLocaleDateString("es-CO", { timeZone: "America/Bogota" });
   };
 
-  // Extrae la lista de tareas desde varias formas de respuesta
   const getList = (res) => {
-    if (Array.isArray(res?.data?.data)) return res.data.data; // Laravel paginado clásico
-    if (Array.isArray(res?.data)) return res.data;            // JSON con data array + meta
-    if (Array.isArray(res)) return res;                       // Array directo
+    if (Array.isArray(res?.data?.data)) return res.data.data;
+    if (Array.isArray(res?.data)) return res.data;
+    if (Array.isArray(res)) return res;
     return [];
   };
 
-  // Normaliza una tarea a nuestro modelo de UI
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "pending").toLowerCase();
-
     const nota =
-      t?.nota ??
-      t?.note ??
-      t?.descripcion ??
-      t?.description ??
-      t?.detalle ??
-      "";
+      t?.nota ?? t?.note ?? t?.descripcion ?? t?.description ?? t?.detalle ?? "";
 
     return {
       id: t?.id,
@@ -57,7 +53,7 @@ export default function TareasPendientesPanel({
         t?.assignedUser?.name ??
         t?.assigned_user?.name ??
         "—",
-      estado: rawEstado, // conservar tal cual; lo traducimos en render
+      estado: rawEstado,
       fechaLimite: t?.fechaLimite ?? t?.due_at ?? t?.scheduled_at ?? null,
       fechaCreacion: t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null,
       nota: (typeof nota === "string" ? nota.trim() : "") || "",
@@ -65,7 +61,6 @@ export default function TareasPendientesPanel({
     };
   };
 
-  // Ordena: due asc (null al final) y luego created desc
   const sortTasks = (a, b) => {
     const ad = a.fechaLimite ? new Date(a.fechaLimite).getTime() : Number.POSITIVE_INFINITY;
     const bd = b.fechaLimite ? new Date(b.fechaLimite).getTime() : Number.POSITIVE_INFINITY;
@@ -75,7 +70,6 @@ export default function TareasPendientesPanel({
     return bc - ac;
   };
 
-  // Traduce el estado a texto legible
   const estadoLabel = (estado) => {
     switch ((estado || "").toLowerCase()) {
       case "pending": return "Pendiente";
@@ -85,59 +79,49 @@ export default function TareasPendientesPanel({
     }
   };
 
-  // ===== Effect: carga desde backend (unificada, filtrando estados pendientes) =====
-  useEffect(() => {
+  // === fetch tareas (re-usable para refrescar tras crear) ===
+  const fetchTasks = useCallback(async () => {
     if (!clienteId || !grupoId) {
       setAutoItems([]);
       return;
     }
+    setLoading(true);
+    setErrMsg("");
+    try {
+      const qs = `include=assignedUser,concept,comments&per_page=${perPage}`;
+      const res = await apiRequest(
+        `tareas_operativas/cliente/${clienteId}/grupo/${grupoId}?${qs}`,
+        "GET"
+      );
 
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErrMsg("");
-      try {
-        // Petición unificada (el back ya puede devolver varias mezcladas)
-        const qs = `include=assignedUser,concept,comments&per_page=${perPage}`;
-        const res = await apiRequest(
-          `tareas_operativas/cliente/${clienteId}/grupo/${grupoId}?${qs}`,
-          "GET"
-        );
+      const merged = getList(res);
+      const filtered = merged.filter((t) =>
+        PENDING_STATES.has(String(t?.estado ?? t?.status ?? "").toLowerCase())
+      );
 
-        const merged = getList(res);
+      const unique = Object.values(
+        filtered.reduce((acc, t) => {
+          if (t && t.id != null) acc[t.id] = t;
+          return acc;
+        }, {})
+      )
+        .map(normalizeTask)
+        .sort(sortTasks);
 
-        // Filtrar por estados "pendientes" (pending, processing, in_progress)
-        const filtered = merged.filter((t) =>
-          PENDING_STATES.has(String(t?.estado ?? t?.status ?? "").toLowerCase())
-        );
-
-        // Desdup + normalizar + ordenar
-        const unique = Object.values(
-          filtered.reduce((acc, t) => {
-            if (t && t.id != null) acc[t.id] = t;
-            return acc;
-          }, {})
-        )
-          .map(normalizeTask)
-          .sort(sortTasks);
-
-        if (!cancelled) setAutoItems(unique);
-      } catch {
-        if (!cancelled) {
-          setErrMsg("No fue posible cargar las tareas.");
-          setAutoItems([]);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+      setAutoItems(unique);
+    } catch {
+      setErrMsg("No fue posible cargar las tareas.");
+      setAutoItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, [clienteId, grupoId, perPage]);
 
-  // ===== Data source (API vs props) =====
+  useEffect(() => {
+    fetchTasks();
+  }, [fetchTasks]);
+
+  // === fuente de datos (API vs props) ===
   const data = useMemo(() => {
     const byApi = Array.isArray(autoItems) ? autoItems : [];
     const byProp = Array.isArray(items) ? items : [];
@@ -145,12 +129,27 @@ export default function TareasPendientesPanel({
     return byProp.length ? byProp : byApi;
   }, [items, autoItems, clienteId, grupoId]);
 
-  // ===== Render =====
+  // === handlers modal existente ===
+  const openNueva = () => setShowNueva(true);
+  const closeNueva = () => setShowNueva(false);
+
+  // Cuando se crea, refrescamos y propagamos al padre si lo necesita
+  const handleCreated = async (newTask) => {
+    await fetchTasks();
+    onCreate(newTask);
+    closeNueva();
+  };
+
   return (
     <div className={`card ${className}`}>
       <div className="card-header d-flex justify-content-between align-items-center py-2">
         <strong className="text-primary">Tareas Pendientes</strong>
-        <button className="btn btn-sm btn-outline-primary" onClick={onCreate}>
+        <button
+          className="btn btn-sm btn-outline-primary"
+          onClick={openNueva}
+          disabled={!clienteId || !grupoId}
+          title={!clienteId || !grupoId ? "Selecciona un cliente/grupo para crear" : ""}
+        >
           + Crear Tarea
         </button>
       </div>
@@ -166,7 +165,7 @@ export default function TareasPendientesPanel({
         {!loading && errMsg && <div className="text-danger small">{errMsg}</div>}
 
         {!loading && !errMsg && (!data || data.length === 0) && (
-          <div className="text-muted small">No hay tareas pendientes.</div>
+          <div className="text-muted small">{emptyMessage}</div>
         )}
 
         {!loading && !errMsg && data?.map((t) => (
@@ -186,11 +185,8 @@ export default function TareasPendientesPanel({
               </div>
 
               {t.nota && (
-                <div className="mt-2">
-                  <div className="small">
-                    <strong>Nota:</strong>{" "}
-                    <span className="text-muted">{t.nota}</span>
-                  </div>
+                <div className="mt-2 small">
+                  <strong>Nota:</strong> <span className="text-muted">{t.nota}</span>
                 </div>
               )}
 
@@ -206,6 +202,16 @@ export default function TareasPendientesPanel({
           </div>
         ))}
       </div>
+
+      {/* Modal existente para crear tarea */}
+      <NuevaTareaModal
+        show={showNueva}
+        onHide={closeNueva}
+        onCreated={handleCreated}           // refresca lista cuando se crea
+        grupoFamiliarId={grupoId}
+        clienteId={clienteId}
+        // categoria="tarea_manual"          // opcional: usa el default de tu modal
+      />
     </div>
   );
 }

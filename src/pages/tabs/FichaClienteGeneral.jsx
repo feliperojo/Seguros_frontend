@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import ProductosButtons from "../../components/fase2/ProductosButtons";
 import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
@@ -9,70 +9,104 @@ import TareasTerminadasPanel from "../../components/fase2/TareasTerminadasPanel"
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
 
-  // ===== datos derivados =====
-  const gfId          = coberturaPrincipal?.grupo_familiar_id ?? cliente?.grupo_familiar_id ?? null;
-  const gfResponsable = coberturaPrincipal?.grupo_familiar?.responsable ?? "—";
-  const gfEstado      = coberturaPrincipal?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? "—";
-  const anoCobertura  = coberturaPrincipal?.ano_cobertura ?? "—";
-  const codigoPoliza  = coberturaPrincipal?.codigo_poliza ?? "—";
-  const companiaId    = coberturaPrincipal?.compania_id ?? cliente?.compania_id ?? "—";
+  // ===== helpers =====
+  const toValidId = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
 
-  const companiaNombre =
+  // ===== construir opciones de grupos disponibles =====
+  const grupoInicial =
+    coberturaPrincipal?.grupo_familiar_id ??
+    cliente?.grupo_familiar_id ??
+    null;
+
+  const grupos = useMemo(() => {
+    const arr = [];
+
+    // 1) desde coberturas (suele venir la info más rica)
+    for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
+      const id =
+        c?.grupo_familiar_id ??
+        c?.grupo_familiar?.id ??
+        c?.gf_id ??
+        null;
+      if (!toValidId(id)) continue;
+
+      arr.push({
+        id: toValidId(id),
+        responsable: c?.grupo_familiar?.responsable ?? c?.responsable ?? "—",
+        estado: c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? c?.estado_gf ?? c?.estado ?? "—",
+        anoCobertura: c?.ano_cobertura ?? c?.anio ?? c?.year ?? "—",
+        codigoPoliza: c?.codigo_poliza ?? c?.poliza ?? c?.policy_code ?? "—",
+        companiaId: c?.compania_id ?? c?.compania?.id ?? cliente?.compania_id ?? "—",
+        companiaNombre: c?.compania?.nombre ?? c?.compania_nombre ?? cliente?.compania_nombre ?? cliente?.compania ?? "—",
+        raw: c,
+      });
+    }
+
+    // 2) fallback: si no hubo coberturas, intenta desde el propio cliente
+    if (arr.length === 0 && toValidId(cliente?.grupo_familiar_id)) {
+      arr.push({
+        id: toValidId(cliente?.grupo_familiar_id),
+        responsable: cliente?.grupo_familiar?.responsable ?? "—",
+        estado: cliente?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? cliente?.estado ?? "—",
+        anoCobertura: coberturaPrincipal?.ano_cobertura ?? "—",
+        codigoPoliza: coberturaPrincipal?.codigo_poliza ?? "—",
+        companiaId: coberturaPrincipal?.compania_id ?? cliente?.compania_id ?? "—",
+        companiaNombre:
+          coberturaPrincipal?.compania?.nombre ??
+          cliente?.compania_nombre ??
+          cliente?.compania ??
+          "—",
+        raw: cliente?.grupo_familiar ?? null,
+      });
+    }
+
+    // desduplicar por id
+    const unique = Object.values(
+      arr.reduce((acc, g) => {
+        if (g?.id != null) acc[g.id] = acc[g.id] ?? g;
+        return acc;
+      }, {})
+    );
+
+    // orden simple por id asc
+    unique.sort((a, b) => a.id - b.id);
+    return unique;
+  }, [cliente, coberturaPrincipal]);
+
+  // ===== grupo seleccionado =====
+  const [selectedGrupoId, setSelectedGrupoId] = useState(toValidId(grupoInicial));
+
+  // si cambia el cliente / cobertura principal, reasigna default
+  useEffect(() => {
+    setSelectedGrupoId(toValidId(grupoInicial));
+  }, [grupoInicial]);
+
+  const currentGrupo = useMemo(() => {
+    if (!selectedGrupoId) return grupos[0] ?? null;
+    return grupos.find((g) => g.id === selectedGrupoId) ?? grupos[0] ?? null;
+  }, [grupos, selectedGrupoId]);
+
+  // ===== datos derivados visibles según grupo seleccionado =====
+  const gfId          = currentGrupo?.id ?? null;
+  const gfResponsable = currentGrupo?.responsable ?? "—";
+  const gfEstado      = currentGrupo?.estado ?? "—";
+  const anoCobertura  = currentGrupo?.anoCobertura ?? "—";
+  const codigoPoliza  = currentGrupo?.codigoPoliza ?? "—";
+  const companiaId    = currentGrupo?.companiaId ?? "—";
+  const companiaNombre = currentGrupo?.companiaNombre ??
     coberturaPrincipal?.compania?.nombre ??
     cliente?.compania_nombre ??
     cliente?.compania ??
     "—";
 
-  // Helper: asegura IDs numéricos o null
-  const toValidId = (v) => {
-    const n = Number(v);
-    return Number.isFinite(n) && n > 0 ? n : null;
-    // si tu back acepta strings, podrías simplemente: return v ?? null;
-  };
-
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
-  // Opcional: si quieres mantener mocks solo en desarrollo
+  // mocks opcionales
   const USE_DEMO = false;
-
-  const demoPendientes = [
-    {
-      id: 1,
-      titulo: "Médicos",
-      responsable: "Andrea",
-      estado: "pending",
-      fechaLimite: "2025-08-25",
-      fechaCreacion: "2025-08-15",
-    },
-    {
-      id: 2,
-      titulo: "Facturación Médica",
-      responsable: "Cata",
-      estado: "processing",
-      fechaLimite: "2025-08-30",
-      fechaCreacion: "2025-08-17",
-    },
-  ];
-
-  const demoTerminadas = [
-    {
-      id: 3,
-      titulo: "Médicos",
-      responsable: "Andrea",
-      estado: "completed",
-      fechaCreacion: "2025-08-10",
-      fechaTermino: "2025-08-20",
-    },
-    {
-      id: 4,
-      titulo: "Facturación Médica",
-      responsable: "Cata",
-      estado: "completed",
-      fechaCreacion: "2025-08-12",
-      fechaTermino: "2025-08-17",
-    },
-  ];
 
   return (
     <div className="row g-3">
@@ -81,6 +115,29 @@ export default function FichaClienteGeneral() {
         <div className="card">
           <div className="card-body">
             <h6 className="mb-3">Resumen</h6>
+
+            {/* Selector de Grupo Familiar (inteligente) */}
+            <div className="mb-2">
+              <label className="form-label small mb-1"><strong>Grupo Familiar</strong></label>
+              {grupos.length > 1 ? (
+                <select
+                  className="form-select form-select-sm"
+                  value={selectedGrupoId ?? ""}
+                  onChange={(e) => setSelectedGrupoId(toValidId(e.target.value))}
+                >
+                  {grupos.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      GF {g.id}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="small">GF {gfId ?? "—"}</div>
+              )}
+              <div className="form-text">
+                Cambia el grupo para ver información y tareas de ese grupo.
+              </div>
+            </div>
 
             <div className="row small g-2">
               <div className="col-md-6">
@@ -142,23 +199,21 @@ export default function FichaClienteGeneral() {
           grupoId={grupoId}
           perPage={20}
           emptyMessage="No se tienen tareas pendientes o en progreso."
-          // Si quieres ver mocks en desarrollo: items={USE_DEMO ? demoPendientes : []}
-          items={USE_DEMO ? demoPendientes : []}
+          items={USE_DEMO ? [] : []}
           onCreate={() => console.log("crear tarea")}
           onOpen={(t) => console.log("abrir", t)}
           onEdit={(t) => console.log("editar", t)}
         />
 
-<TareasTerminadasPanel
-  /* también puedes comentar así pero NO después de un prop */
-  className="mb-3"
-  clienteId={clienteId}
-  grupoId={grupoId}
-  perPage={20}
-/>
-
-
-
+        <TareasTerminadasPanel
+          className="mb-3"
+          clienteId={clienteId}
+          grupoId={grupoId}
+          perPage={20}
+          emptyMessage="No se tienen tareas terminadas."
+          onOpen={(t) => console.log("abrir", t)}
+          onEdit={(t) => console.log("editar", t)}
+        />
       </div>
     </div>
   );
