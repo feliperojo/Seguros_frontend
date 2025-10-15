@@ -3,10 +3,8 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
 const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", grupoFamiliarId, clienteId }) => {
-console.log("revisa, entramos al modal", grupoFamiliarId, clienteId)
   const hoy = new Date().toISOString().split("T")[0];
-// 👇 arriba del componente o dentro del componente
-const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10));
+  const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10));
 
   const [formData, setFormData] = useState({
     concept_id: "",
@@ -18,6 +16,9 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
     due_date: hoy,
   });
 
+  const sinGrupoEnPath = !toInt(grupoFamiliarId);
+  const tieneGrupoContexto = toInt(grupoFamiliarId) !== null;
+
   const [conceptos, setConceptos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -28,82 +29,71 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
   const [subconceptos, setSubconceptos] = useState([]);
   const [conceptoPadreId, setConceptoPadreId] = useState("");
   const [clienteQuery, setClienteQuery] = useState("");
-  const [clientesBase, setClientesBase] = useState([]);
-  const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
 
-  
-  const tieneGrupoContexto = toInt(grupoFamiliarId) !== null; // true si hay id de contexto
-
-  const handleClienteSeleccion = (cli, grupoElegido) => {
-    const ctxId   = toInt(grupoFamiliarId ?? formData.grupo_familiar_id);
-    const pickId  = toInt(grupoElegido?.grupo_familiar_id);
-    const cliId   = toInt(cli?.cliente_id ?? cli?.id);
-  
-    // ✅ Solo validamos si hay grupo en contexto y ambos ids son válidos
-    if (tieneGrupoContexto && ctxId && pickId && ctxId !== pickId) {
-      alert("⚠️ El cliente pertenece a otro grupo familiar. Por favor seleccione un miembro del grupo actual.");
-      return;
-    }
-  
-    setFormData(prev => ({
-      ...prev,
-      cliente_id: cliId || "",
-      // si no hay grupo elegido (caso agenda), usa el de contexto (si existe)
-      grupo_familiar_id: pickId || ctxId || "",
-    }));
-  
-    setClienteQuery(cli.nombre_completo);
-    setClientes([]);
-  };
-  
-  
   const normalize = (s = "") =>
     String(s)
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase();
 
+  const handleClienteSeleccion = (cli, grupoElegido) => {
+    const ctxId = toInt(grupoFamiliarId ?? formData.grupo_familiar_id);
+    const pickId = toInt(grupoElegido?.grupo_familiar_id);
+    const cliId = toInt(cli?.cliente_id ?? cli?.id);
 
-      useEffect(() => {
-        if (show) {
-          Promise.all([
-            apiRequest(`operational_concepts?only_parents=true`, "GET"),
-            apiRequest("cliente", "GET"),
-            apiRequest("grupo_familiar", "GET"),
-            apiRequest("users", "GET"),
-          ]).then(([conceptos, clientes, grupos, usuarios]) => {
-            setConceptosPadres(conceptos);
-            setConceptos([]);
-            setClientes(clientes);
-            setGrupos(grupos);
-            setUsuarios(usuarios);
-          });
-      
-          // Reset + prefill
-          setFormData({
-            concept_id: "",
-            note: "",
-            cliente_id: clienteId ?? "",            // <-- opcional
-            grupo_familiar_id: grupoFamiliarId ?? "", // <-- AQUI
-            assign_to_user_id: "",
-            scheduled_date: hoy,
-            due_date: hoy,
-          });
-        }
-      }, [show, categoria, grupoFamiliarId, clienteId]);
+    // Validar coincidencia de grupo
+    if (tieneGrupoContexto && ctxId && pickId && ctxId !== pickId) {
+      alert("⚠️ El cliente pertenece a otro grupo familiar. Por favor seleccione un miembro del grupo actual.");
+      return;
+    }
 
+    setFormData((prev) => ({
+      ...prev,
+      cliente_id: cliId || "",
+      grupo_familiar_id: pickId || ctxId || "",
+    }));
 
-      useEffect(() => {
-        // si llega/actualiza el grupo desde el padre mientras el modal está abierto
-        if (show && grupoFamiliarId && !formData.grupo_familiar_id) {
-          setFormData(prev => ({
-            ...prev,
-            grupo_familiar_id: String(grupoFamiliarId) // normaliza a string
-          }));
-        }
-      }, [grupoFamiliarId, show]); // <= importante
-      
-      
+    setClienteQuery(cli.nombre_completo);
+    setClientes([]);
+  };
+
+  useEffect(() => {
+    if (show) {
+      Promise.all([
+        apiRequest(`operational_concepts?only_parents=true`, "GET"),
+        apiRequest("cliente", "GET"),
+        apiRequest("grupo_familiar", "GET"),
+        apiRequest("users", "GET"),
+      ]).then(([conceptos, , grupos, usuarios]) => {
+        setConceptosPadres(conceptos);
+        setConceptos([]);
+        setClientes([]);
+        setGrupos(grupos);
+        setUsuarios(usuarios);
+      });
+
+      // Reset y prefill
+      setFormData({
+        concept_id: "",
+        note: "",
+        cliente_id: clienteId ?? "",
+        grupo_familiar_id: grupoFamiliarId ?? "",
+        assign_to_user_id: "",
+        scheduled_date: hoy,
+        due_date: hoy,
+      });
+    }
+  }, [show, categoria, grupoFamiliarId, clienteId]);
+
+  useEffect(() => {
+    if (show && grupoFamiliarId && !formData.grupo_familiar_id) {
+      setFormData((prev) => ({
+        ...prev,
+        grupo_familiar_id: String(grupoFamiliarId),
+      }));
+    }
+  }, [grupoFamiliarId, show]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -137,16 +127,15 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
     if (!validarCampos()) return;
     setLoading(true);
     try {
-      
       const response = await apiRequest("bitacora_operativa/create", "POST", {
         ...formData,
         action_type: "manual",
       });
-  
-      const conceptoSeleccionado = conceptos.find(c => c.id === parseInt(formData.concept_id));
-  
+
+      const conceptoSeleccionado = conceptos.find((c) => c.id === parseInt(formData.concept_id));
+
       const nuevaTarea = {
-        id: response?.task?.id || Date.now(), // usar el ID real si lo devuelve el backend
+        id: response?.task?.id || Date.now(),
         scheduled_date: formData.scheduled_date,
         due_date: formData.due_date,
         status: "pending",
@@ -155,11 +144,11 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
           note: formData.note,
           cliente: {
             nombre_completo:
-              clientes.find(c => c.id == formData.cliente_id)?.nombre_completo || "Cliente"
-          }
-        }
+              clientes.find((c) => c.id === formData.cliente_id)?.nombre_completo || "Cliente",
+          },
+        },
       };
-  
+
       if (onCreated) onCreated(nuevaTarea);
       onHide();
     } catch (error) {
@@ -168,9 +157,9 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
       setLoading(false);
     }
   };
-  
+
   const getCategoriaSeleccionada = () => {
-    const concepto = conceptos.find(c => c.id === parseInt(formData.concept_id));
+    const concepto = conceptos.find((c) => c.id === parseInt(formData.concept_id));
     return concepto?.category || null;
   };
 
@@ -187,11 +176,6 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
     }
   };
 
-  const clientesFiltrados = clienteQuery.trim()
-  ? clientes.filter(c => normalize(c.nombre_completo).includes(normalize(clienteQuery)))
-  : clientes;
-
-
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton>
@@ -207,44 +191,48 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
           )}
         </Modal.Title>
       </Modal.Header>
+
       <Modal.Body>
         <Form>
-        {(toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)) && (
-  <div className="mb-2">
-    <span className="badge bg-info">
-      Grupo #{toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)}
-    </span>
-  </div>
-)}
+          {(toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)) && (
+            <div className="mb-2">
+              <span className="badge bg-info">
+                Grupo #{toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)}
+              </span>
+            </div>
+          )}
 
-
-          {/* Solo mostrar selector de Grupo si NO viene desde el padre */}
-{!formData.grupo_familiar_id && (
-  <Form.Group className="mt-3">
-    <Form.Label>Grupo Familiar</Form.Label>
-    <Form.Select
-      name="grupo_familiar_id"
-      value={formData.grupo_familiar_id}
-      onChange={handleChange}
-      isInvalid={!!errors.grupo_familiar_id}
-    >
-      <option value="">Seleccionar grupo</option>
-      {grupos.map((g) => (
-        <option key={g.id} value={g.id}>
-          {g.nombre || `Grupo #${g.id}`}
-        </option>
-      ))}
-    </Form.Select>
-    <Form.Control.Feedback type="invalid">{errors.grupo_familiar_id}</Form.Control.Feedback>
-  </Form.Group>
-)}
+          {/* Selector de grupo (solo si no viene desde el padre) */}
+          {!formData.grupo_familiar_id && (
+            <Form.Group className="mt-3">
+              <Form.Label>Grupo Familiar</Form.Label>
+              <Form.Select
+                name="grupo_familiar_id"
+                value={formData.grupo_familiar_id}
+                onChange={handleChange}
+                isInvalid={!!errors.grupo_familiar_id}
+              >
+                <option value="">Seleccionar grupo</option>
+                {grupos.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.nombre || `Grupo #${g.id}`}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Control.Feedback type="invalid">
+                {errors.grupo_familiar_id}
+              </Form.Control.Feedback>
+            </Form.Group>
+          )}
 
           <Form.Group>
             <Form.Label>Concepto Principal</Form.Label>
             <Form.Select value={conceptoPadreId} onChange={handlePadreChange}>
               <option value="">Seleccionar</option>
               {conceptosPadres.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
               ))}
             </Form.Select>
           </Form.Group>
@@ -260,10 +248,14 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
               >
                 <option value="">Seleccionar</option>
                 {conceptos.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
                 ))}
               </Form.Select>
-              <Form.Control.Feedback type="invalid">{errors.concept_id}</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">
+                {errors.concept_id}
+              </Form.Control.Feedback>
             </Form.Group>
           )}
 
@@ -278,89 +270,88 @@ const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseIn
               placeholder="Escribe una justificación o detalle de la tarea..."
               isInvalid={!!errors.note}
             />
-            <Form.Control.Feedback type="invalid">{errors.note}</Form.Control.Feedback>
+            <Form.Control.Feedback type="invalid">
+              {errors.note}
+            </Form.Control.Feedback>
           </Form.Group>
 
           <Form.Group className="mt-3">
-  <Form.Label>Cliente</Form.Label>
+            <Form.Label>Cliente</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Buscar cliente por nombre..."
+              value={clienteQuery}
+              onChange={async (e) => {
+                const value = e.target.value;
+                setClienteQuery(value);
 
-  {/* Buscador */}
-  <Form.Control
-    type="text"
-    placeholder="Buscar cliente por nombre..."
-    value={clienteQuery}
-onChange={async (e) => {
-  const value = e.target.value;
-  setClienteQuery(value);
+                if (value.length >= 3) {
+                  try {
+                    const result = await apiRequest(
+                      `cliente/buscar-con-grupos?q=${encodeURIComponent(value)}`,
+                      "GET"
+                    );
 
-  if (value.length >= 3) {
-    try {
-      const result = await apiRequest(
-        `cliente/buscar-con-grupos?q=${encodeURIComponent(value)}`,
-        "GET"
-      );
+                    const list = Array.isArray(result?.data)
+                      ? result.data
+                      : Array.isArray(result)
+                      ? result
+                      : [];
 
-      // 🔧 normaliza respuesta y asegura grupos: []
-      const list = Array.isArray(result?.data) ? result.data
-                 : Array.isArray(result)      ? result
-                 : [];
-      const normalized = list.map(c => ({
-        // usa el id que venga, pero garantiza un "cliente_id"
-        cliente_id: c.cliente_id ?? c.id ?? null,
-        nombre_completo: c.nombre_completo ?? "",
-        grupos: Array.isArray(c.grupos) ? c.grupos : [],   // 👈 importante
-      }));
+                    const normalized = list.map((c) => ({
+                      cliente_id: c.cliente_id ?? c.id ?? null,
+                      nombre_completo: c.nombre_completo ?? "",
+                      grupos: Array.isArray(c.grupos) ? c.grupos : [],
+                    }));
 
-      setClientes(normalized);
-    } catch (err) {
-      console.error("Error al buscar clientes:", err);
-      setClientes([]);
-    }
-  } else {
-    setClientes([]);
-  }
-}}
+                    setClientes(normalized);
+                  } catch (err) {
+                    console.error("Error al buscar clientes:", err);
+                    setClientes([]);
+                  }
+                } else {
+                  setClientes([]);
+                }
+              }}
+              className="mb-2"
+            />
 
-    className="mb-2"
-  />
+            {clientes.length > 0 && (
+              <div className="border rounded p-2 bg-light">
+                {clientes.map((cli, idx) => (
+                  <div
+                    key={`${cli.cliente_id ?? cli.id ?? "cli"}-${idx}`}
+                    className="mb-2"
+                  >
+                    <strong>{cli.nombre_completo}</strong>
+                    <ul className="list-unstyled ms-3 mb-1">
+                      {(cli.grupos ?? []).map((g, i) => (
+                        <li
+                          key={`${cli.cliente_id}-${g.grupo_familiar_id}-${g.parentesco || "NA"}-${i}`}
+                        >
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() => handleClienteSeleccion(cli, g)}
+                          >
+                            GF {g.grupo_familiar_id} / {g.parentesco || "Sin parentesco"}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
 
-  {/* 🔹 Render dinámico con sublistas */}
-  {clientes.length > 0 && (
-  <div className="border rounded p-2 bg-light">
-    {clientes.map((cli) => (
-      <div key={cli.cliente_id ?? cli.id ?? crypto.randomUUID()} className="mb-2">
-        <strong>{cli.nombre_completo}</strong>
-        <ul className="list-unstyled ms-3 mb-1">
-        {(cli.grupos ?? []).map((g) => (
-  <li key={`${cli.cliente_id}-${g.grupo_familiar_id}-${g.parentesco}`}>
-    <button
-      type="button"
-      className="btn btn-sm btn-outline-primary"
-      onClick={() => handleClienteSeleccion(cli, g)}
-    >
-      GF {g.grupo_familiar_id} / {g.parentesco}
-    </button>
-  </li>
-))}
+            {clienteQuery.length >= 3 && clientes.length === 0 && (
+              <small className="text-muted">Sin resultados para “{clienteQuery}”.</small>
+            )}
 
-
-        </ul>
-      </div>
-    ))}
-  </div>
-)}
-
-
-  {/* Mensaje si no hay resultados */}
-  {clienteQuery.length >= 3 && clientes.length === 0 && (
-    <small className="text-muted">Sin resultados para “{clienteQuery}”.</small>
-  )}
-
-  <Form.Control.Feedback type="invalid">
-    {errors.cliente_id}
-  </Form.Control.Feedback>
-</Form.Group>
-
+            <Form.Control.Feedback type="invalid">
+              {errors.cliente_id}
+            </Form.Control.Feedback>
+          </Form.Group>
 
           <Form.Group className="mt-3">
             <Form.Label>Asignar a</Form.Label>
@@ -372,13 +363,16 @@ onChange={async (e) => {
             >
               <option value="">Seleccionar usuario</option>
               {usuarios.map((u) => (
-                <option key={u.id} value={u.id}>{u.name}</option>
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
               ))}
             </Form.Select>
-            <Form.Control.Feedback type="invalid">{errors.assign_to_user_id}</Form.Control.Feedback>
+            <Form.Control.Feedback type="invalid">
+              {errors.assign_to_user_id}
+            </Form.Control.Feedback>
           </Form.Group>
 
-          {/* ✅ Fechas si hay usuario asignado */}
           {formData.assign_to_user_id && (
             <>
               <Form.Group className="mt-3">
@@ -404,8 +398,11 @@ onChange={async (e) => {
           )}
         </Form>
       </Modal.Body>
+
       <Modal.Footer>
-        <Button variant="secondary" onClick={onHide}>Cancelar</Button>
+        <Button variant="secondary" onClick={onHide}>
+          Cancelar
+        </Button>
         <Button variant="primary" onClick={handleSubmit} disabled={loading}>
           {loading ? <Spinner size="sm" animation="border" /> : "Guardar"}
         </Button>

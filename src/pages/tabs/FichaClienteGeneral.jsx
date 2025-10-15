@@ -10,19 +10,27 @@ export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
 
   // ===== datos derivados =====
-  const gfId          = coberturaPrincipal?.grupo_familiar_id ?? cliente?.grupo_familiar_id ?? "—";
+  const gfId          = coberturaPrincipal?.grupo_familiar_id ?? cliente?.grupo_familiar_id ?? null;
   const gfResponsable = coberturaPrincipal?.grupo_familiar?.responsable ?? "—";
   const gfEstado      = coberturaPrincipal?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? "—";
   const anoCobertura  = coberturaPrincipal?.ano_cobertura ?? "—";
   const codigoPoliza  = coberturaPrincipal?.codigo_poliza ?? "—";
   const companiaId    = coberturaPrincipal?.compania_id ?? cliente?.compania_id ?? "—";
 
-  // NUEVO: nombre de la compañía con fallback por compatibilidad
   const companiaNombre =
     coberturaPrincipal?.compania?.nombre ??
     cliente?.compania_nombre ??
     cliente?.compania ??
     "—";
+
+  // Helper: asegura IDs numéricos o null
+  const toValidId = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const clienteId = toValidId(cliente?.id);
+  const grupoId   = toValidId(gfId);
 
   return (
     <div className="row g-3">
@@ -47,7 +55,7 @@ export default function FichaClienteGeneral() {
               <div className="col-md-6">
                 <div><strong>Asesor:</strong> {gfResponsable}</div>
                 <div><strong>Edad:</strong> {cliente?.edad ?? "—"}</div>
-                <div><strong>ID Grupo Familiar:</strong> {gfId}</div>
+                <div><strong>ID Grupo Familiar:</strong> {gfId ?? "—"}</div>
                 <div><strong>ID Compañía:</strong> {companiaId}</div>
                 <div><strong>Código Póliza:</strong> {codigoPoliza}</div>
                 <div><strong>Año Cobertura:</strong> {anoCobertura}</div>
@@ -68,17 +76,16 @@ export default function FichaClienteGeneral() {
               idiomaOptions={["Spanish", "English"]}
               relacionOptions={["Cónyuge", "Hijo/a", "Padre/Madre", "Hermano/a", "Amigo/a", "Otro"]}
             />
-       
 
             <ProductosButtons
-            className="mb-3"
-              coberturas={cliente.coberturas}
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
               onSelectCobertura={(c) => console.log("Producto (GF):", c)}
             />
 
             <CotizacionesButtons
-            className="mb-3"
-              coberturas={cliente.coberturas}
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
               onSelectCobertura={(c) => console.log("Cotización:", c)}
             />
           </div>
@@ -89,12 +96,17 @@ export default function FichaClienteGeneral() {
       <div className="col-lg-6">
         <TareasPendientesPanel
           className="mb-3"
+          // ✅ ahora sí mandamos los IDs para que consulte al backend
+          clienteId={clienteId}
+          grupoId={grupoId}
+          perPage={20}
+          // Mantén items como fallback por si el back no trae nada
           items={[
             {
               id: 1,
               titulo: "Médicos",
               responsable: "Andrea",
-              estado: "Pendiente",
+              estado: "pending",         // mejor en minúsculas si usas badges
               fechaLimite: "2025-08-25",
               fechaCreacion: "2025-08-15",
             },
@@ -102,7 +114,7 @@ export default function FichaClienteGeneral() {
               id: 2,
               titulo: "Facturación Médica",
               responsable: "Cata",
-              estado: "Procesando",
+              estado: "processing",
               fechaLimite: "2025-08-30",
               fechaCreacion: "2025-08-17",
             },
