@@ -233,7 +233,7 @@ export default function TareasPendientesPanel({
                   onClick={() => openResponder(t.__raw ?? t)}
                   disabled={loadingResponder}
                 >
-                  Detalle <FaExternalLinkAlt className="ms-1" />
+                  Responder <FaExternalLinkAlt className="ms-1" />
                 </button>
 
              
