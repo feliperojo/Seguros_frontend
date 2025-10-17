@@ -1,15 +1,15 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { FaExternalLinkAlt, FaEdit } from "react-icons/fa";
 import apiRequest from "../../services/api";
-// 👇 importa tu modal real (está en src/components/Tareas/NuevaTareaModal.jsx)
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
+import ResponderOportunidadModal from "../Tareas/ResponderOportunidadModa";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
 export default function TareasPendientesPanel({
   className = "",
   items,
-  clienteId,
+  clienteId,      // <-- ya viene desestructurado
   grupoId,
   perPage = 20,
   onCreate = () => {},
@@ -20,9 +20,12 @@ export default function TareasPendientesPanel({
   const [autoItems, setAutoItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
-
-  // Estado para abrir/cerrar tu modal existente
   const [showNueva, setShowNueva] = useState(false);
+
+  // Modal responder
+  const [showResponder, setShowResponder] = useState(false);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [loadingResponder, setLoadingResponder] = useState(false);
 
   const formatDate = (v) => {
     if (!v) return "mm/dd/aaaa";
@@ -39,25 +42,68 @@ export default function TareasPendientesPanel({
     return [];
   };
 
+  const fetchTaskDetail = useCallback(async (task) => {
+    const raw = task?.__raw ?? task;
+
+    // Cliente puede venir en raw.log.cliente o raw.cliente
+    const cliente = raw?.log?.cliente ?? raw?.cliente ?? null;
+
+    // Fechas pueden venir con varios nombres
+    const scheduled_date =
+      raw?.scheduled_date ?? raw?.scheduled_at ?? raw?.fechaProgramada ?? null;
+
+    const due_date =
+      raw?.due_date ?? raw?.due_at ?? raw?.fechaLimite ?? null;
+
+    return {
+      ...raw,
+      scheduled_date,
+      due_date,
+      log: {
+        ...(raw.log || {}),
+        cliente: cliente || {
+          id: clienteId,
+          nombre_completo: "Cliente", // Aquí se ajusta para tener un valor por defecto
+          telefono: "",
+          estado_cliente: "cliente",
+        },
+      },
+    };
+}, [clienteId]);
+
+  
+  
+  const openResponder = async (taskLite) => {
+    const full = await fetchTaskDetail(taskLite);
+    console.log('full task details:', full);
+    setSelectedTask(full);
+    setShowResponder(true);
+  };
+
+  const closeResponder = (updated) => {
+    setShowResponder(false);
+    setSelectedTask(null);
+    if (updated) fetchTasks();
+  };
+
+  const handleUpdated = async () => {
+    await fetchTasks();
+  };
+
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "pending").toLowerCase();
     const nota =
       t?.nota ?? t?.note ?? t?.descripcion ?? t?.description ?? t?.detalle ?? "";
-
     return {
       id: t?.id,
       titulo: t?.titulo || t?.concepto || (typeof nota === "string" ? nota : "") || "Tarea",
       responsable:
-        t?.responsable ??
-        t?.asignado_a ??
-        t?.assignedUser?.name ??
-        t?.assigned_user?.name ??
-        "—",
+        t?.responsable ?? t?.asignado_a ?? t?.assignedUser?.name ?? t?.assigned_user?.name ?? "—",
       estado: rawEstado,
       fechaLimite: t?.fechaLimite ?? t?.due_at ?? t?.scheduled_at ?? null,
       fechaCreacion: t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null,
       nota: (typeof nota === "string" ? nota.trim() : "") || "",
-      __raw: t,
+      __raw: t.__raw ?? t,
     };
   };
 
@@ -79,7 +125,6 @@ export default function TareasPendientesPanel({
     }
   };
 
-  // === fetch tareas (re-usable para refrescar tras crear) ===
   const fetchTasks = useCallback(async () => {
     if (!clienteId || !grupoId) {
       setAutoItems([]);
@@ -88,25 +133,21 @@ export default function TareasPendientesPanel({
     setLoading(true);
     setErrMsg("");
     try {
-      const qs = `include=assignedUser,concept,comments&per_page=${perPage}`;
+      const qs = `include=log,log.cliente,concept,comments,assignedUser&per_page=${perPage}`;
       const res = await apiRequest(
         `tareas_operativas/cliente/${clienteId}/grupo/${grupoId}?${qs}`,
         "GET"
       );
-
       const merged = getList(res);
       const filtered = merged.filter((t) =>
         PENDING_STATES.has(String(t?.estado ?? t?.status ?? "").toLowerCase())
       );
-
       const unique = Object.values(
         filtered.reduce((acc, t) => {
           if (t && t.id != null) acc[t.id] = t;
           return acc;
         }, {})
-      )
-        .map(normalizeTask)
-        .sort(sortTasks);
+      ).map(normalizeTask).sort(sortTasks);
 
       setAutoItems(unique);
     } catch {
@@ -117,11 +158,8 @@ export default function TareasPendientesPanel({
     }
   }, [clienteId, grupoId, perPage]);
 
-  useEffect(() => {
-    fetchTasks();
-  }, [fetchTasks]);
+  useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
-  // === fuente de datos (API vs props) ===
   const data = useMemo(() => {
     const byApi = Array.isArray(autoItems) ? autoItems : [];
     const byProp = Array.isArray(items) ? items : [];
@@ -129,11 +167,9 @@ export default function TareasPendientesPanel({
     return byProp.length ? byProp : byApi;
   }, [items, autoItems, clienteId, grupoId]);
 
-  // === handlers modal existente ===
   const openNueva = () => setShowNueva(true);
   const closeNueva = () => setShowNueva(false);
 
-  // Cuando se crea, refrescamos y propagamos al padre si lo necesita
   const handleCreated = async (newTask) => {
     await fetchTasks();
     onCreate(newTask);
@@ -157,7 +193,7 @@ export default function TareasPendientesPanel({
       <div className="card-body">
         {loading && (
           <div className="d-flex align-items-center text-muted small">
-            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
+            <span className="spinner-border spinner-border-sm me-2" />
             Cargando…
           </div>
         )}
@@ -168,6 +204,7 @@ export default function TareasPendientesPanel({
           <div className="text-muted small">{emptyMessage}</div>
         )}
 
+        {/* ✅ SOLO UN map (quitamos el duplicado) */}
         {!loading && !errMsg && data?.map((t) => (
           <div key={t.id} className="card mb-3 shadow-sm border-0">
             <div className="card-body py-3">
@@ -191,27 +228,37 @@ export default function TareasPendientesPanel({
               )}
 
               <div className="mt-2 d-flex gap-2">
-                <button className="btn btn-sm btn-primary" onClick={() => onOpen(t)}>
-                  Abrir <FaExternalLinkAlt className="ms-1" />
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => openResponder(t.__raw ?? t)}
+                  disabled={loadingResponder}
+                >
+                  Detalle <FaExternalLinkAlt className="ms-1" />
                 </button>
-                <button className="btn btn-sm btn-outline-primary" onClick={() => onEdit(t)}>
-                  Editar <FaEdit className="ms-1" />
-                </button>
+
+             
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Modal existente para crear tarea */}
       <NuevaTareaModal
         show={showNueva}
         onHide={closeNueva}
-        onCreated={handleCreated}           // refresca lista cuando se crea
+        onCreated={handleCreated}
         grupoFamiliarId={grupoId}
         clienteId={clienteId}
-        // categoria="tarea_manual"          // opcional: usa el default de tu modal
       />
+
+      {selectedTask && (
+        <ResponderOportunidadModal
+          show={showResponder}
+          onHide={closeResponder}
+          tarea={selectedTask}
+          onUpdated={handleUpdated}
+        />
+      )}
     </div>
   );
 }
