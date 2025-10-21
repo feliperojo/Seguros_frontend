@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";   
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import { FaMapMarkerAlt } from "react-icons/fa";
@@ -199,7 +200,7 @@ const normalizeMember = (m, idx) => {
 // para crear cobertura con cliente existente
 const yaEstaEnElGrupo = (clienteId, members) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
-
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`; 
 
 
 // ===== Helpers Dirección =====
@@ -414,6 +415,7 @@ const TomaDeDatos = ({
   const [editingMember, setEditingMember] = useState(null);
   const [openExistente, setOpenExistente] = useState(false);
 
+  const navigate = useNavigate();     
 // 1) normalizados (primero)
 const normalized = useMemo(
   () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
@@ -729,6 +731,8 @@ const onUpdateLocal = useCallback(
           grupoValor === "G3" ? "bg-warning text-dark" :
           grupoValor === "G4" ? "bg-danger" :
           "bg-secondary";
+
+          const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
         return (
           <div className="card shadow-sm mb-3" key={itemId}>
             {/* Header */}
@@ -744,7 +748,23 @@ const onUpdateLocal = useCallback(
                 </div>
 
                 <div className="flex-grow-1 text-center">
-                  <span className="fw-semibold text-dark">{fullName(m)}</span>
+                  {/* ✅ NUEVO: nombre clickeable si hay clienteId */}
+                  {clienteId ? (
+                    <span
+                      role="button"
+                      className="fw-semibold text-primary text-decoration-none"
+                      title={`Abrir ficha del cliente #${clienteId}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation(); // evita toggles del acordeón
+                        navigate(CLIENTE_FICHA_PATH(clienteId));
+                      }}
+                    >
+                      {fullName(m)}
+                    </span>
+                  ) : (
+                    <span className="fw-semibold text-dark">{fullName(m)}</span>
+                  )}
                 </div>
 
                 <div

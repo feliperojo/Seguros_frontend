@@ -1,13 +1,21 @@
-import React from "react";
+// CotizacionesButtons.jsx
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
 /** CotizacionesButtons
- *  Muestra coberturas con estados de cotización (no "Grupo Familiar")
+ *  Muestra coberturas en estados de cotización y abre la ficha al hacer click.
  */
 export default function CotizacionesButtons({
   className = "",
   coberturas = [],
   onSelectCobertura = () => {},
+  prefetch = true,                              // 👈 GET antes de navegar (opcional)
+  toFichaPath = (gfId) => `/grupo_familiar/${gfId}`, // 👈 ruta destino
 }) {
+  const navigate = useNavigate();
+  const [loadingId, setLoadingId] = useState(null);
+
   const ESTADOS_COTIZACION = [
     "Prospecto",
     "Cotización",
@@ -16,10 +24,11 @@ export default function CotizacionesButtons({
     "Inscripción Inicial",
   ];
 
-  const Btn = ({ title, subtitle, right, onClick }) => (
+  const Btn = ({ title, subtitle, right, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
+      disabled={loading}
       className="btn btn-light border w-100 text-dark py-2 rounded-1 shadow-sm d-flex align-items-center justify-content-between text-start"
       style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
     >
@@ -29,7 +38,9 @@ export default function CotizacionesButtons({
           <div className="small text-muted text-truncate">{subtitle}</div>
         ) : null}
       </span>
-      <span className="badge bg-white border text-secondary rounded-pill">GF {right}</span>
+      <span className="badge bg-white border text-secondary rounded-pill">
+        {loading ? "…" : `GF ${right}`}
+      </span>
     </button>
   );
 
@@ -37,6 +48,24 @@ export default function CotizacionesButtons({
     const estado = c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre;
     return estado && ESTADOS_COTIZACION.includes(estado);
   });
+
+  const handleOpenFicha = async (c) => {
+    onSelectCobertura?.(c); // conserva tu flujo actual
+    const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id;
+    if (!gfId) return;
+
+    try {
+      setLoadingId(gfId);
+      if (prefetch) {
+        await GrupoFamiliarService.getFullById(gfId); // idempotente
+      }
+    } catch (e) {
+      console.warn("Prefetch GF falló:", e?.message || e);
+    } finally {
+      setLoadingId(null);
+      navigate(toFichaPath(gfId)); // 👉 redirección
+    }
+  };
 
   return (
     <div className={`card ${className}`}>
@@ -46,20 +75,25 @@ export default function CotizacionesButtons({
           <div className="row g-2">
             {filtradas.map((c) => {
               const estado = c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? "-";
+              const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
+              const loading = loadingId === gfId;
               return (
                 <div className="col-md-6" key={c.id}>
                   <Btn
                     title={estado}
                     subtitle={c.cobertura_tipo || ""}
-                    right={c.grupo_familiar?.id ?? c.grupo_familiar_id ?? "-"}
-                    onClick={() => onSelectCobertura(c)}
+                    right={gfId}
+                    loading={loading}
+                    onClick={() => handleOpenFicha(c)}
                   />
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="text-center text-muted small">Sin coberturas en estados de cotización</div>
+          <div className="text-center text-muted small">
+            Sin coberturas en estados de cotización
+          </div>
         )}
       </div>
     </div>

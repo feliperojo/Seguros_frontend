@@ -99,6 +99,8 @@ const App = () => {
       {/* 🔹 Ficha con tabs: layout + rutas hijas */}
       <Route path="/clientes/:id/ficha" element={<FichaClienteLayout />}>
           {/* index = pestaña "General" */}
+          <Route path="clientes" element={<ListaClientes />} />
+
           <Route index element={<FichaClienteGeneral />} />
           {/* cuando tengas más pestañas, las agregas aquí:
               <Route path="historial" element={<FichaClienteHistorial />} />

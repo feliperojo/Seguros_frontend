@@ -1,7 +1,11 @@
+// FichaClienteLayout.jsx
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import apiRequest from "../services/api";
 import { FichaClienteContext } from "../context/fichaClienteContext";
+
+// ===== NUEVO: Ruta absoluta a la lista de clientes =====
+const LISTA_CLIENTES_PATH = "/Clientes/lista"; // cámbiala a "/clientes/lista" si tu ruta es minúscula
 
 // helpers de fecha
 const parseLocalYMD = (s) => {
@@ -11,7 +15,8 @@ const parseLocalYMD = (s) => {
   const [_, y, mo, d] = m;
   return new Date(Number(y), Number(mo) - 1, Number(d));
 };
-const formatDate = (iso) => (iso ? (isNaN(parseLocalYMD(iso)) ? iso : parseLocalYMD(iso).toLocaleDateString()) : "—");
+const formatDate = (iso) =>
+  iso ? (isNaN(parseLocalYMD(iso)) ? iso : parseLocalYMD(iso).toLocaleDateString()) : "—";
 const calcEdad = (dateStr) => {
   const birth = parseLocalYMD(dateStr);
   if (!birth || isNaN(birth)) return null;
@@ -65,7 +70,7 @@ const TABS = [
   { id: "tareas",      label: "Tareas" },
   { id: "calendario",  label: "Calendario" },
   { id: "comentarios", label: "Comentarios" },
-  { id: "clientes",    label: "Clientes" },
+  { id: "clientes",    label: "Clientes" },   // 👈 este lo enviaremos a LISTA_CLIENTES_PATH
   { id: "directorio",  label: "Directorio" },
 ];
 
@@ -83,7 +88,6 @@ export default function FichaClienteLayout() {
       const raw = res?.data ?? res;
       const row = Array.isArray(raw) ? raw[0] : raw;
       const norm = normalizeCliente(row);
-      console.log(norm)
       if (!norm) throw new Error("Respuesta vacía para el cliente");
       setCliente(norm);
     } catch (err) {
@@ -101,50 +105,59 @@ export default function FichaClienteLayout() {
   const coberturaPrincipal = useMemo(() => {
     if (!cliente?.coberturas?.length) return null;
     return (
-      cliente.coberturas.find(c => c.grupo_familiar_id === cliente.grupo_familiar_id) ||
+      cliente.coberturas.find((c) => c.grupo_familiar_id === cliente.grupo_familiar_id) ||
       cliente.coberturas[0]
     );
   }, [cliente]);
 
   const titulo = cliente?.nombre_completo || "Ficha de Cliente";
 
-  const ctxValue = useMemo(() => ({
-    id,
-    cliente,
-    loading,
-    error,
-    refresh: fetchCliente,
-    formatDate,
-    coberturaPrincipal,
-  }), [id, cliente, loading, error, fetchCliente, coberturaPrincipal]);
+  const ctxValue = useMemo(
+    () => ({
+      id,
+      cliente,
+      loading,
+      error,
+      refresh: fetchCliente,
+      formatDate,
+      coberturaPrincipal,
+    }),
+    [id, cliente, loading, error, fetchCliente, coberturaPrincipal]
+  );
 
   return (
     <FichaClienteContext.Provider value={ctxValue}>
-     <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
+      <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
         <div className="text-center mb-2">
           <h5 className="mb-0 text-primary fw-semibold">{titulo}</h5>
         </div>
 
         <div className="d-flex justify-content-center flex-wrap gap-2 pb-2 border-bottom mb-3">
-          {TABS.map((t) => (
-            <NavLink
-              key={t.id}
-              to={t.id === "" ? "." : t.id}
-              end={t.id === ""}
-              className={({ isActive }) =>
-                "btn btn-sm " + (isActive ? "btn-secondary" : "btn-light border")
-              }
-            >
-              {t.label}
-            </NavLink>
-          ))}
+          {TABS.map((t) => {
+            const isClientes = t.id === "clientes";
+            const to = isClientes ? LISTA_CLIENTES_PATH : (t.id === "" ? "." : t.id);
+            return (
+              <NavLink
+                key={t.id}
+                to={to}
+                end={t.id === "" && !isClientes} // mantiene end solo para "General"
+                className={({ isActive }) =>
+                  "btn btn-sm " + (isActive ? "btn-secondary" : "btn-light border")
+                }
+              >
+                {t.label}
+              </NavLink>
+            );
+          })}
         </div>
 
         {loading && <div className="alert alert-info">Cargando cliente…</div>}
         {error && (
           <div className="alert alert-danger d-flex justify-content-between align-items-center">
             <div>{error}</div>
-            <button className="btn btn-sm btn-light" onClick={fetchCliente}>Reintentar</button>
+            <button className="btn btn-sm btn-light" onClick={fetchCliente}>
+              Reintentar
+            </button>
           </div>
         )}
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";   
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
@@ -138,7 +139,8 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
   };
 };
 
-
+/* ---------- Ruta a ficha ---------- */
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;   // ✅ NUEVO
 
 /* ---------- Subcomponente: Acordeón editable por miembro ---------- */
 const MemberAccordionForm = ({ member, readOnly, onChange }) => {
@@ -588,15 +590,17 @@ const ProspectoDatos = ({
             </div>
           ) : (
             <div className="row">
-              {familyMembers.map((member) => (
-                <div key={member.id} className="col-md-12 mb-3">
+                           {familyMembers.map((member) => {
+                const clienteId = member?.cliente_id ?? member?.cliente?.id ?? null; // ✅ NUEVO
+                const nombre = getMemberDisplayName(member);
+                return (
+                  <div key={member.id} className="col-md-12 mb-3">
                   <div className="card border">
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
                         <span className={`badge bg-${getTypeColor(member.tipo)}`}>
                           {member.tipo}
                         </span>
-                        {/* Botón de lápiz REMOVIDO: edición se hace en el acordeón */}
                       </div>
 
                       <div className="d-flex align-items-center">
@@ -608,7 +612,21 @@ const ProspectoDatos = ({
                         </div>
 
                         <div className="flex-grow-1 text-center">
-                          <h6 className="mb-1">{getMemberDisplayName(member)}</h6>
+                          {/* ✅ NUEVO: nombre clickeable si hay clienteId */}
+                          {clienteId ? (
+                            <Link
+                              to={CLIENTE_FICHA_PATH(clienteId)}
+                              className="text-decoration-none"
+                              title={`Abrir ficha del cliente #${clienteId}`}
+                              // target="_blank"
+                              // rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()} // no interferir con otros handlers
+                            >
+                              <h6 className="mb-1 text-primary">{nombre}</h6>
+                            </Link>
+                          ) : (
+                            <h6 className="mb-1">{nombre}</h6>
+                          )}
                         </div>
 
                         <div className="text-end" style={{ minWidth: 180 }}>
@@ -633,11 +651,12 @@ const ProspectoDatos = ({
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+    </div>
 
       {/* Modal SOLO para añadir nuevo miembro */}
       <MemberModal
