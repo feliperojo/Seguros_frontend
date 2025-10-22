@@ -478,12 +478,21 @@ const ProspectoDatos = ({
 
     if (res?.miembro?.cliente || res?.miembro) {
       const mSrv = res.miembro;
+   // Intenta extraer el ID real de la cobertura de distintas formas
+   const coberturaId =
+     mSrv.cobertura_id ??
+     mSrv?.cobertura?.id ??
+     res?.cobertura?.id ??
+     res?.id ??
+     null;
       const merged = {
         ...mSrv,
         tipo: mSrv.tipo || payload.tipo,
         parentesco: mSrv.parentesco || payload.tipo,
         estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
         cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
+        cobertura_id: coberturaId,      // 👈 marca que YA existe en BD
+     _remote_created: true,    
         origen: "existente",
       };
       setFamilyMembers((prev) => [...prev, recomputeDerived(merged)]);

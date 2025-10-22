@@ -648,25 +648,24 @@ const clientesPayload = existentes
   .filter(Boolean) // Eliminar nulls/undefined
   .map(stripNulls);
       
-      // 👈 Actualizar cobertura_tipo si se cambió el producto
-           
-      const coberturasPayload = (familyMembers || [])
-               .filter(m => m?.cliente_id) // al menos debe existir cliente
-               .map(m => {
-                 const cobertura = mapCoberturaFromMember(m, id);
-                 // si no hay cobertura_id, forzamos alta (upsert)
-                 if (!m.cobertura_id) {
-                   cobertura.id = null;
-                   cobertura.cliente_id = m.cliente_id;
-                   cobertura.estado_cobertura = m.estado_cobertura ?? "Sí";
-                   cobertura.cobertura_tipo =
-                     productoCotizacion?.label || m.cobertura_tipo || "Plan de salud";
-                 }
-                 if (productoCotizacion?.label) {
-                   cobertura.cobertura_tipo = productoCotizacion.label;
-                 }
-                 return stripNulls(cobertura);
-               });
+
+  const coberturasPayload = (familyMembers || [])
+     // 👇 Solo clientes reales y SOLO coberturas que ya tienen ID (UPDATE). 
+     // Si no hay cobertura_id, NO mandes nada (ya fue creada por el modal).
+     .filter(m => m?.cliente_id && m?.cobertura_id)
+   .map(m => {
+     const cobertura = mapCoberturaFromMember(m, id);
+          // 👇 Forzamos UPDATE explícito
+          cobertura.id = m.cobertura_id;
+          cobertura.cliente_id = m.cliente_id;
+
+     if (productoCotizacion?.label) {
+       cobertura.cobertura_tipo = productoCotizacion.label;
+     }
+     return stripNulls(cobertura);
+    });
+// quita los nulls del caso (1)
+
                     // 🔎 DEBUG: verifica que cada cobertura lleve fecha_activacion
      try {
        console.table(
