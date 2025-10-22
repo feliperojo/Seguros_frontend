@@ -104,6 +104,8 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
     tipo: tipoSel,
     estado_cobertura: estadoCobertura,
     cobertura_tipo: coberturaTipo,
+    origen: "existente", 
+   cobertura_id: null, 
     cliente_id: c.id,
     idioma: c.idioma || "",
     ingreso_anual: c.ingreso_anual || 0,
@@ -482,6 +484,7 @@ const ProspectoDatos = ({
         parentesco: mSrv.parentesco || payload.tipo,
         estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
         cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
+        origen: "existente",
       };
       setFamilyMembers((prev) => [...prev, recomputeDerived(merged)]);
     } else {
@@ -659,13 +662,13 @@ const ProspectoDatos = ({
       />
 
        {/* Modal EXISTENTE */}
-       <ClienteExistenteModal
-        open={openExistente}
-        onClose={()=>setOpenExistente(false)}
-        grupoFamiliarId={grupoFamiliarId}
-        onCreateCoberturaDeClienteExistente={onCreateCoberturaDeClienteExistente}
-        defaultCoberturaTipo="Plan de salud"
-      />
+   <ClienteExistenteModal
+   open={openExistente}
+   onClose={()=>setOpenExistente(false)}
+   grupoFamiliarId={grupoFamiliarId}
+   onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+   defaultCoberturaTipo={defaultCoberturaTipo}
+ />
     </>
   );
 };
