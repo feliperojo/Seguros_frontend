@@ -665,32 +665,60 @@ const onUpdateLocal = useCallback(
         cobertura_tipo: payload.cobertura_tipo,
         estado_cobertura: payload.estado_cobertura,
       });
-
-      if (res?.miembro?.cliente || res?.miembro) {
-        setFamilyMembers((prev) => [...(prev ?? []), normalizeMember(res.miembro, (prev?.length ?? 0))]);
-      } else {
-        const c = clienteSeleccionado || {};
-        const aggi = normalizeMember(
-          {
-            ...payload,
-            cliente: {
-              id: c.id,
-              primer_nombre: c.primer_nombre,
-              segundo_nombre: c.segundo_nombre,
-              apellidos: c.apellidos,
-              nombre_completo:
-                c.nombre_completo ||
-                [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" "),
-              genero: c.genero || "",
-              fecha_nacimiento: c.fecha_nacimiento || "",
-              idioma: c.idioma || "",
-            },
-            cliente_id: c.id,
-          },
-          (familyMembers?.length ?? 0)
-        );
-        setFamilyMembers((prev) => [...(prev ?? []), aggi]);
-      }
+        if (res?.miembro?.cliente || res?.miembro) {
+             const mSrv = res.miembro;
+             // intenta sacar el id real de la cobertura de varias posibles rutas
+             const coberturaId =
+               mSrv.cobertura_id ??
+               mSrv?.cobertura?.id ??
+               res?.cobertura?.id ??
+               res?.id ??
+               null;
+        
+             const merged = normalizeMember(
+               {
+                 ...mSrv,
+                 tipo: mSrv.tipo || payload.tipo,
+                 parentesco: mSrv.parentesco || payload.tipo,
+                 estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
+                 cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
+                 cobertura_id: coberturaId,     // 👈 marca que YA existe en BD
+                 _remote_created: true,         // 👈 bandera para depurar si hace falta
+               },
+               (familyMembers?.length ?? 0)
+             );
+             setFamilyMembers((prev) => [...(prev ?? []), merged]);
+           } else {
+             // fallback local si el server no devolvió shape completo
+             const c = clienteSeleccionado || {};
+             const nombreCompleto =
+               c.nombre_completo ||
+               [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" ");
+             const local = normalizeMember(
+               {
+                 cliente_id: c.id,
+                 cobertura_id: null,
+                 tipo: payload.tipo,
+                 parentesco: payload.tipo,
+                 estado_cobertura: payload.estado_cobertura,
+                 cobertura_tipo: payload.cobertura_tipo,
+                 cliente: {
+                   id: c.id,
+                   primer_nombre: c.primer_nombre,
+                   segundo_nombre: c.segundo_nombre,
+                   apellidos: c.apellidos,
+                   nombre_completo: nombreCompleto,
+                   genero: c.genero || "",
+                   fecha_nacimiento: c.fecha_nacimiento || "",
+                   idioma: c.idioma || "",
+                 },
+                 _remote_created: true,
+               },
+               (familyMembers?.length ?? 0)
+             );
+             setFamilyMembers((prev) => [...(prev ?? []), local]);
+           }
+      
       return res;
     },
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length]
@@ -1676,7 +1704,7 @@ const onUpdateLocal = useCallback(
   onClose={() => setOpenExistente(false)}
   grupoFamiliarId={grupoFamiliarId}
   onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
-  defaultCoberturaTipo="Plan de salud"
+  defaultCoberturaTipo={defaultCoberturaTipo}
 />
 
     </div>
