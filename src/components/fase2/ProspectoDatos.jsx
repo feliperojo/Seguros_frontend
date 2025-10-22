@@ -7,24 +7,8 @@ import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from
 import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
+import { getTypeColor } from "../../utils/parentescoColors";
 /* ---------- Helpers de UI ---------- */
-const getTypeColor = (tipo) => {
-  switch (tipo) {
-    case "Tomador": return "primary";
-    case "Conyuge": return "info";
-    case "Hijo/a": return "success";
-    case "Hermano":
-    case "Dependiente": return "secondary";
-    case "Padre": return "dark";
-    case "Madre": return "danger";
-    case "Nieto":
-    case "Abuelo/a":
-    case "Suegro/a":
-    case "Tio/a":
-    case "Sobrino/a": return "warning";
-    default: return "secondary";
-  }
-};
 
 /* ---------- Helpers de datos ---------- */
 const calcAge = (iso) => {

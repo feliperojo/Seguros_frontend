@@ -14,7 +14,7 @@ import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
 import LanguageSelect from "../selects/LanguageSelect";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal"; // ajusta la ruta si difiere
-
+import { getTypeColor } from "../../utils/parentescoColors";
 
 import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
 
@@ -739,8 +739,8 @@ const onUpdateLocal = useCallback(
             <div className="card-header bg-white border-0 px-4 py-3">
               <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
-                  <span className="fw-semibold" style={{ color: "#0d6efd" }}>
-                    {m.tipo || "Miembro"}
+                 <span className={`badge bg-${getTypeColor(m.tipo)}`}>
+                     {m.tipo || "Miembro"}
                   </span>
                   <div className="mt-2">
                     <UserCoverageIcon status={m.estado_cobertura} size={50} />
