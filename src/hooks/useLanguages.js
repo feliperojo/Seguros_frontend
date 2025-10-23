@@ -18,21 +18,24 @@ export default function useLanguages({ sort = true } = {}) {
 
   const languages = useMemo(() => {
     if (!sort) return items || [];
-
-    // 1️⃣ Ordena todos normalmente
-    const sorted = [...(items || [])].sort((a, b) =>
-      (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })
-    );
-
-    // 2️⃣ Mueve “Spanish” al principio si existe
-    const spanishIndex = sorted.findIndex((l) => l.name.toLowerCase() === "spanish");
-    if (spanishIndex > 0) {
-      const [spanish] = sorted.splice(spanishIndex, 1);
-      sorted.unshift(spanish);
-    }
-
+  
+    // Prioridad fija: primero EN, luego ES
+    const PRIORITY = ["en", "es"];
+    const weight = (code) => {
+      const i = PRIORITY.indexOf((code || "").toLowerCase());
+      return i === -1 ? PRIORITY.length : i; // otros van después de los prioritarios
+    };
+  
+    // Orden final: prioridad (en, es) -> alfabético por nombre
+    const sorted = [...(items || [])].sort((a, b) => {
+      const byPriority = weight(a.code) - weight(b.code);
+      if (byPriority !== 0) return byPriority;
+      return (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" });
+    });
+  
     return sorted;
   }, [items, sort]);
+  
 
   return { languages, loading, error };
 }
