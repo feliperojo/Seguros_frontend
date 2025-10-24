@@ -431,7 +431,10 @@ const payerOptions = useMemo(
   () => buildPayerOptions(normalized),
   [normalized]
 );
-
+const payerOptionsWithOther = useMemo(
+  () => [...(payerOptions || []), { value: "OTRO", label: "Otro (externo)" }],
+  [payerOptions]
+);
   const [openCopy, setOpenCopy] = useState(false);
 
 const duplicateToRootFromCliente = (m, cliente) => {
@@ -601,6 +604,14 @@ const onUpdateLocal = useCallback(
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
     let v = type === "checkbox" ? !!checked : value;
+
+    if (name === "pagador_id") {
+      const vv =
+        value === "OTRO" || value === "" || value == null
+          ? null
+          : Number.isNaN(Number(value)) ? null : Number(value);
+      return patchRoot(idx, { pagador_id: vv });
+    }
   
     // ⬇️ Máscaras
     if (name === "social") v = formatSSN(v);       // 3-2-4
@@ -1565,13 +1576,20 @@ const onUpdateLocal = useCallback(
         </Field>
 
         <Field label="Pagador" className="col-md-3">
-              <PayerSelect
-                options={payerOptions}
-                value={m.pagador_id ?? ""}
-                onChange={onChange}
-                disabled={readOnly}
-              />
-            </Field>
+            <PayerSelect
+              options={payerOptionsWithOther}
+              // Si viene null/""/undefined de BD, mostrar "OTRO" en el select
+              value={
+                m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
+                  ? "OTRO"
+                  : String(m.pagador_id)
+              }
+              onChange={onChange}
+              disabled={readOnly}
+            />
+          </Field>
+
+
 
 
         <Field label="Tipo de Pago" className="col-md-3">
