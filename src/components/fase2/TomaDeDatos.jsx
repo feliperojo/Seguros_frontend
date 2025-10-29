@@ -20,6 +20,12 @@ import { getCompanyNameById, getCompanyColor } from "../../services/companies"; 
 
 
 /* =================== Utils =================== */
+const isTomador = (m = {}) => {
+  const v1 = String(m.tipo || "").toLowerCase();
+  const v2 = String(m.parentesco || "").toLowerCase();
+  return v1 === "tomador" || v2 === "tomador";
+};
+
 
 // Capitaliza cada palabra (soporta acentos y guiones)
 const toTitle = (s = "") =>
@@ -421,7 +427,16 @@ const normalized = useMemo(
   () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
   [familyMembers]
 );
-
+const sortedNormalized = useMemo(() => {
+  return normalized
+    .map((m, i) => ({ m, i }))
+    .sort((a, b) => {
+      const pa = isTomador(a.m) ? 0 : 1;
+      const pb = isTomador(b.m) ? 0 : 1;
+      return pa - pb || a.i - b.i; // estable
+    })
+    .map(x => x.m);
+}, [normalized]);
 
 // 2) compañías (puede ir antes o después, no depende de normalized)
 const { companies, loading: companiesLoading } = useCompanies();
@@ -758,7 +773,8 @@ const onUpdateLocal = useCallback(
 )}
 
 
-      {normalized.map((m, idx) => {
+{sortedNormalized.map((m, idx) => {
+
         const itemId = `member-${m.id ?? idx}`;
         const leftRightWidth = 180;
         const c = getC(m);
@@ -1711,12 +1727,13 @@ const onUpdateLocal = useCallback(
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
-      <CopiarDatosModal
+<CopiarDatosModal
   open={openCopy}
   onClose={() => setOpenCopy(false)}
-  members={normalized}          // usa los normalizados para tener root+cliente
+  members={sortedNormalized}   // ← antes: normalized
   onApply={applyCopySelection}
 />
+
 <ClienteExistenteModal
   open={openExistente}
   onClose={() => setOpenExistente(false)}
