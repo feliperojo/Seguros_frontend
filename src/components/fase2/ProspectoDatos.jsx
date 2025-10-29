@@ -10,6 +10,13 @@ import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
 /* ---------- Helpers de UI ---------- */
 
+const isTomador = (m = {}) => {
+  const v1 = String(m.tipo || "").toLowerCase();
+  const v2 = String(m.parentesco || "").toLowerCase();
+  return v1 === "tomador" || v2 === "tomador";
+};
+
+
 /* ---------- Helpers de datos ---------- */
 const calcAge = (iso) => {
   if (!iso) return "";
@@ -507,6 +514,16 @@ const ProspectoDatos = ({
     }
     return res;
   };
+  // Render: Tomador primero, resto en su orden original
+const sortedMembers = familyMembers
+.map((m, i) => ({ m, i }))                   // guardamos índice original
+.sort((a, b) => {
+  const pa = isTomador(a.m) ? 0 : 1;
+  const pb = isTomador(b.m) ? 0 : 1;
+  return pa - pb || a.i - b.i;               // estable
+})
+.map(x => x.m);
+
 
   /* --------------------------- Render --------------------------- */
   return (
@@ -586,7 +603,7 @@ const ProspectoDatos = ({
             </div>
           ) : (
             <div className="row">
-                           {familyMembers.map((member) => {
+                           {sortedMembers.map((member) => {
                 const clienteId = member?.cliente_id ?? member?.cliente?.id ?? null; // ✅ NUEVO
                 const nombre = getMemberDisplayName(member);
                 return (
