@@ -35,7 +35,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   // Expandir automáticamente el menú basado en la ruta actual
   useEffect(() => {
-    if (location.pathname.includes('/Clientes')) {
+    if (location.pathname.toLowerCase().includes('/clientes')) {
       setExpandedMenu('clientes');
     } else if (location.pathname.includes('/Grupofamiliar')) {
       setExpandedMenu('grupos');
@@ -116,6 +116,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
               <Link to="/Clientes/crear" className={`submenu-link ${isActive('/Clientes/crear') ? 'active' : ''}`}>
                 <FaUserPlus /> Crear Cliente
+              </Link>
+              <Link to="/clientes/contacto" className={`submenu-link ${isActive('/clientes/contacto') ? 'active' : ''}`}>                <FaUserPlus /> Contactos
               </Link>
             </div>
           )}

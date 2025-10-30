@@ -166,15 +166,21 @@ export default function FichaClienteGeneral() {
             <hr />
 
             <PersonaContactoCard
-              className="mb-3"
-              primary={false}
-              addAnother={false}
-              onTogglePrimary={(v) => console.log("primary?", v)}
-              onToggleAddAnother={(v) => console.log("add another?", v)}
-              onChange={(form) => console.log("persona de contacto >", form)}
-              idiomaOptions={["Spanish", "English"]}
-              relacionOptions={["Cónyuge", "Hijo/a", "Padre/Madre", "Hermano/a", "Amigo/a", "Otro"]}
-            />
+  className="mb-3"
+  clienteId={clienteId}           // <- importante
+  grupoFamiliarId={grupoId}       // <- importante
+  primary={false}
+  addAnother={false}
+  onTogglePrimary={(v) => console.log("primary?", v)}
+  onToggleAddAnother={(v) => console.log("add another?", v)}
+  onChange={(form) => console.log("persona de contacto >", form)}
+  onSaved={({ contacto, link }) => {
+    // refrescar UI si quieres
+  }}
+  idiomaOptions={["Spanish", "English"]}
+  relacionOptions={["Cónyuge", "Hijo/a", "Padre/Madre", "Hermano/a", "Amigo/a", "Otro"]}
+/>
+
 
             <ProductosButtons
               className="mb-3"

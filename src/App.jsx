@@ -26,6 +26,7 @@ import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
 import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
+import ContactosAdmin from "./pages/ContactosAdmin";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
@@ -92,6 +93,8 @@ const App = () => {
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
+        <Route path="/clientes/contacto" element={<ContactosAdmin />} />
+        
 
 
       
