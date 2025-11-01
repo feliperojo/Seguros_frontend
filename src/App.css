@@ -111,3 +111,163 @@
   background-color: #0d6efd;
   color: white;
 }
+/* Avatar redondo con gradiente sutil */
+.avatar-circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 120% at 30% 20%, #dbeafe 0%, #eff6ff 40%, #ffffff 100%);
+  border: 1px solid rgba(0,0,0,.06);
+}
+
+.avatar-initials {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #1d4ed8; /* azul */
+  letter-spacing: .5px;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Badge “subtle” fallback si tu Bootstrap no trae *-subtle */
+.bg-success-subtle { background-color: #d1fae5 !important; color: #065f46 !important; }
+.text-success-emphasis { color: #065f46 !important; }
+.bg-secondary-subtle { background-color: #e5e7eb !important; color: #374151 !important; }
+.text-secondary-emphasis { color: #374151 !important; }
+.bg-primary-subtle { background-color: #dbeafe !important; color: #1d4ed8 !important; }
+.text-primary-emphasis { color: #1d4ed8 !important; }
+/* =========== ContactosAsociadosAccordion – Styles =========== */
+
+/* Paleta base (puedes ajustar a tu brand) */
+:root {
+  --caa-border: rgba(0, 0, 0, .06);
+  --caa-border-strong: rgba(0, 0, 0, .12);
+  --caa-shadow: 0 6px 18px rgba(16, 24, 40, .06);
+
+  --caa-primary: #1d4ed8;     /* azul para acentos */
+  --caa-primary-soft: #dbeafe;
+
+  --caa-note-bg: #f6f7f9;
+
+  --caa-pill-green-bg: #d1fae5;
+  --caa-pill-green-fg: #065f46;
+
+  --caa-pill-mint-bg: #e6fffb;
+  --caa-pill-mint-fg: #075985;
+
+  --caa-pill-gray-bg: #e5e7eb;
+  --caa-pill-gray-fg: #374151;
+
+  --caa-pill-blue-bg: #e0f2fe;
+  --caa-pill-blue-fg: #075985;
+
+  --caa-pill-wa-bg: #e7f8ed;  /* WhatsApp friendly */
+  --caa-pill-wa-fg: #0a6c3a;
+}
+
+/* -------- Cards -------- */
+.caa-card {
+  border: 1px solid var(--caa-border);
+}
+.caa-card:hover {
+  border-color: var(--caa-border-strong);
+}
+.caa-shadow {
+  box-shadow: var(--caa-shadow);
+}
+
+/* -------- Avatar con iniciales -------- */
+.caa-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 120% at 30% 20%, #dbeafe 0%, #eff6ff 40%, #ffffff 100%);
+  border: 1px solid var(--caa-border);
+}
+.caa-avatar span {
+  font-weight: 700;
+  font-size: .9rem;
+  letter-spacing: .5px;
+  color: var(--caa-primary);
+}
+
+/* Monoespaciada para números */
+.caa-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* -------- Pills por tipo -------- */
+.caa-pill-green { background: var(--caa-pill-green-bg); color: var(--caa-pill-green-fg); }
+.caa-pill-mint  { background: var(--caa-pill-mint-bg);  color: var(--caa-pill-mint-fg); }
+.caa-pill-gray  { background: var(--caa-pill-gray-bg);  color: var(--caa-pill-gray-fg); }
+.caa-pill-blue  { background: var(--caa-pill-blue-bg);  color: var(--caa-pill-blue-fg); }
+.caa-pill-wa    { background: var(--caa-pill-wa-bg);    color: var(--caa-pill-wa-fg); }
+
+/* Nota / descripción */
+.caa-note {
+  background: var(--caa-note-bg);
+  border-radius: .75rem;
+}
+
+/* -------- Botón copiar número -------- */
+.caa-copy {
+  background: transparent;
+  border: 1px solid var(--caa-border);
+  border-radius: 10px;
+  padding: 4px 10px;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: .25rem;
+  transition: background .15s ease, border-color .15s ease, transform .05s ease-in-out;
+}
+.caa-copy:hover {
+  background: #f8fafc;
+  border-color: var(--caa-border-strong);
+}
+.caa-copy:active {
+  transform: scale(.98);
+}
+
+/* -------- Acordeón -------- */
+.accordion-item.caa-acc {
+  border: 0;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.accordion-button.caa-acc-btn {
+  font-weight: 600;
+}
+.accordion-button.caa-acc-btn .caa-sub {
+  opacity: .9;
+  font-weight: 400;
+}
+
+/* Contador del título */
+.badge.caa-count {
+  background: var(--caa-primary-soft);
+  color: var(--caa-primary);
+}
+
+/* -------- Modo oscuro opcional -------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --caa-border: rgba(255, 255, 255, .09);
+    --caa-border-strong: rgba(255, 255, 255, .16);
+    --caa-shadow: 0 8px 20px rgba(0, 0, 0, .45);
+    --caa-note-bg: #111827;
+  }
+
+  .caa-card { background-color: #0b1220; }
+  .caa-avatar { border-color: var(--caa-border-strong); }
+  .caa-copy:hover { background: rgba(255,255,255,.04); }
+}
+
