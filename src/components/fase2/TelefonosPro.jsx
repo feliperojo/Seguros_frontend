@@ -1,4 +1,8 @@
 import React from "react";
+// TelefonosPro.jsx
+import countryCodes from "../../services/countryCodes"; // ajusta la ruta si es necesario
+
+
 
 /**
  * TelefonosPro
@@ -10,7 +14,40 @@ import React from "react";
  * - readOnly: boolean
  * - types: lista de tipos disponibles
  * - max: máximo de teléfonos permitidos (null = sin límite)
+ * 
+ * 
+ * 
  */
+
+// helpers locales en TelefonosPro.jsx
+
+// Convierte "co" => 🇨🇴
+const flagEmoji = (iso = "") => {
+  const cc = (iso || "").toUpperCase();
+  if (cc.length !== 2) return "🏳️";
+  const base = 127397;
+  return String.fromCodePoint(...[...cc].map(c => base + c.charCodeAt(0)));
+};
+
+const CountryFlagSelect = ({ valueIso, onChange, disabled }) => {
+  return (
+    <select
+      className="form-select form-select-sm"
+      value={valueIso || ""}              // "" => sin país
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+    >
+      <option value="">—</option>
+      {countryCodes.map(({ iso, country, code }) => (
+        <option key={iso} value={iso}>
+          {flagEmoji(iso)} +{String(code)} ({country})
+        </option>
+      ))}
+    </select>
+  );
+};
+
+
 export default function TelefonosPro({
   value = [],
   onChange = () => {},
@@ -23,15 +60,15 @@ export default function TelefonosPro({
 
   const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-  const emit = (next) => {
-    // Garantiza que haya como máximo un principal
-    const hasPrincipal = next.some((p) => !!p.principal);
-    const normalized = next.map((p, i) => ({
-      id: p.id ?? `${i}-${p.tipo ?? ""}-${p.numero ?? ""}`,
-      tipo: (p.tipo || "").trim() || "Móvil",
-      numero: (p.numero || "").trim(),
-      principal: !!p.principal
-    }));
+    const emit = (next) => {
+        const hasPrincipal = next.some((p) => !!p.principal);
+        const normalized = next.map((p, i) => ({
+          ...p, // 👈 conserva iso, indicativo y cualquier otro campo
+          id: p.id ?? `${i}-${p.tipo ?? ""}-${p.numero ?? ""}`,
+          tipo: (p.tipo || "Móvil").trim(),
+          numero: (p.numero || "").trim(),
+          principal: !!p.principal,
+        }));
     // Si hay varios marcados por error, deja sólo el primero
     if (hasPrincipal) {
       let seen = false;
@@ -45,14 +82,20 @@ export default function TelefonosPro({
     onChange(normalized);
   };
 
-  const addPhone = () => {
+    const DEFAULT_ISO = "co"; // o "us"
+    const findCountry = (iso) => countryCodes.find(c => c.iso === iso);
+  
+    const addPhone = () => {
     if (readOnly) return;
     if (max && phones.length >= max) return;
-    const newItem = {
+        const def = findCountry(DEFAULT_ISO);
+        const newItem = {
       id: uid(),
       tipo: "Móvil",
       numero: "",
-      principal: phones.length === 0 // el primero por defecto principal
+            principal: phones.length === 0,
+            iso: def?.iso || "",
+            indicativo: def ? String(def.code).replace(/\D+/g, "") : "",
     };
     emit([...(phones || []), newItem]);
   };
@@ -111,16 +154,36 @@ export default function TelefonosPro({
                   </select>
                 </div>
 
-                <div className="col-12 col-md-6">
-                  <label className="form-label small mb-1">Número</label>
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="+1 305..."
-                    value={p.numero || ""}
-                    onChange={(e) => updateAt(idx, { numero: e.target.value })}
-                    disabled={readOnly}
-                  />
-                </div>
+        {/* Número con bandera + indicativo */}
+<div className="col-12 col-md-6">
+  <label className="form-label small mb-1">Número</label>
+  <div className="input-group input-group-sm">
+    <span className="input-group-text p-0" style={{ border: "none" }}>
+      <div style={{ width: 190 }}>
+        <CountryFlagSelect
+          valueIso={p.iso || ""}
+          disabled={readOnly}
+          onChange={(iso) => {
+            const found = countryCodes.find(c => c.iso === iso);
+            const indicativo = found ? String(found.code).replace(/\D+/g, "") : "";
+            updateAt(idx, { iso: (iso || "").toLowerCase(), indicativo });
+          }}
+          
+        />
+      </div>
+    </span>
+    <span className="input-group-text">+{p.indicativo || ""}</span>
+    <input
+      className="form-control"
+      placeholder="333-333-444…"
+      value={p.numero || ""}
+      onChange={(e) => updateAt(idx, { numero: e.target.value })}
+      disabled={readOnly}
+    />
+  </div>
+  
+</div>
+
 
                 <div className="col-8 col-md-2">
                   <div className="form-check mt-4">
@@ -159,6 +222,24 @@ export default function TelefonosPro({
 }
 
 /* ================= Helpers opcionales (migración) ================= */
+const DEFAULT_ISO = "co"; // o "us"
+const findCountry = (iso) => countryCodes.find(c => c.iso === iso);
+
+const addPhone = () => {
+  if (readOnly) return;
+  if (max && phones.length >= max) return;
+
+  const def = findCountry(DEFAULT_ISO);
+  const newItem = {
+    id: uid(),
+    tipo: "Móvil",
+    numero: "",
+    principal: phones.length === 0,
+    iso: def?.iso || "",
+    indicativo: def ? String(def.code) : ""
+  };
+  emit([...(phones || []), newItem]);
+};
 
 /**
  * Convierte campos “legado” a arreglo estructurado.
@@ -187,10 +268,19 @@ export function toStructuredPhones(legacy = {}) {
  * Retorna: { telefono, secundario, whatsapp_num, principal }
  */
 export function toLegacyFields(phones = []) {
-  const principal = phones.find((p) => p.principal)?.numero || "";
-  const movil = phones.find((p) => (p.tipo || "").toLowerCase().includes("móvil"))?.numero || "";
-  const trabajo = phones.find((p) => (p.tipo || "").toLowerCase().includes("trabajo"))?.numero || "";
-  const whatsapp = phones.find((p) => (p.tipo || "").toLowerCase().includes("whatsapp"))?.numero || "";
+  const decorate = (p) =>
+    p ? (`+${p.indicativo || ""} ${p.numero || ""}`).trim() : "";
+
+  const principalObj = phones.find((p) => p.principal);
+  const movilObj     = phones.find((p) => (p.tipo || "").toLowerCase().includes("móvil"));
+  const trabajoObj   = phones.find((p) => (p.tipo || "").toLowerCase().includes("trabajo"));
+  const waObj        = phones.find((p) => (p.tipo || "").toLowerCase().includes("whatsapp"));
+
+  const principal = decorate(principalObj);
+  const movil     = decorate(movilObj);
+  const trabajo   = decorate(trabajoObj);
+  const whatsapp  = decorate(waObj);
+
   return {
     telefono: movil || principal || "",
     secundario: trabajo || "",
@@ -198,3 +288,4 @@ export function toLegacyFields(phones = []) {
     principal
   };
 }
+

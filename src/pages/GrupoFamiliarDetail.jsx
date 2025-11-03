@@ -10,9 +10,9 @@ import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
- import { normalizePhones, toStructuredPhones } from "../utils/phones";
- import { formatPhone334 } from "../utils/formatters";
 
+
+ import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
 
 // ================== Helpers ==================
 
@@ -103,14 +103,11 @@ const mapClienteForSave = (m) => {
     idioma: pick("idioma"),
     ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
     nota: pick("nota"),
-    telefono: pick("telefono"),
-    secundario: pick("secundario"),
-    whatsapp_num: pick("whatsapp_num"),
-        // ✅ NUEVO: arreglo de teléfonos a guardar
-        telefonos: normalizePhones(
-          Array.isArray(c.telefonos) ? c.telefonos : [],
-          formatPhone334
-        ),
+        telefono: pick("telefono"),       // (si aún los usas como compatibilidad)
+        secundario: pick("secundario"),
+        whatsapp_num: pick("whatsapp_num"),
+        // ✅ Arreglo principal con ISO/indicativo para la BD
+        telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
 
     email: pick("email"),
     direccion: pick("direccion"),
@@ -140,6 +137,7 @@ const mapClienteForSave = (m) => {
     whatsapp: pick("whatsapp") === true,
     telegram: pick("telegram") === true,
     texto_sms: pick("texto_sms") === true,
+    
   };
 
   // Solo agregar 'id' si es un cliente REAL de la BD
@@ -286,13 +284,9 @@ const mapFullToMembers = (fullRaw) => {
 
 
      // si no trae, lo reconstruimos desde legacy para que el componente funcione ya.
-       telefonos: Array.isArray(cli.telefonos)
-         ? cli.telefonos
-         : toStructuredPhones({
-             telefono: cli.telefono,
-             secundario: cli.secundario,
-             whatsapp_num: cli.whatsapp_num,
-           }),
+             // ✅ Hidratar con ISO + indicativo cuando ya vienen en arreglo (tu BD actual)
+       // ✅ soporta string JSON o array; si sigue vacío, cae a legacy
+       telefonos: inflatePhones(cli.telefonos || [], "co"),
 
         // dirección
         direccion: cli.direccion || "",
@@ -550,6 +544,7 @@ const handleCreateMemberRemote = async (memberData) => {
       idioma: memberData.idioma || null,
       ingreso_anual: ingresoAnual,
       nota: memberData.nota || null,
+      telefonos: toApiPhones(memberData.telefonos || []),
     },
     parentesco: memberData.parentesco || memberData.tipo || "Tomador",
     cobertura: {

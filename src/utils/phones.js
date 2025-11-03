@@ -11,16 +11,22 @@ export function ensureOnePrimary(arr = []) {
       return next;
     });
   }
-  
-  export function normalizePhones(arr = [], formatFn) {
-    const cleaned = (Array.isArray(arr) ? arr : []).map((p, i) => ({
-      id: p.id ?? `${i}-${p.tipo ?? ""}-${p.numero ?? ""}`,
-      tipo: (p.tipo || "").trim() || "Móvil",
-      numero: formatFn ? formatFn(String(p.numero || "")) : String(p.numero || "").trim(),
-      principal: !!p.principal
-    }));
-    return ensureOnePrimary(cleaned);
+ // utils/phones.js
+export function normalizePhones(arr = [], formatFn) {
+    return arr.map((p, i) => {
+      const cleanIndic = String(p.indicativo ?? "").replace(/\D+/g, "");
+      const cleanNum   = formatFn ? formatFn(p.numero ?? "") : (p.numero ?? "");
+      return {
+        id: p.id ?? `ph-${i}`,
+        tipo: (p.tipo || "Móvil").trim(),
+        numero: cleanNum,
+        principal: !!p.principal,
+        iso: (p.iso || "").toLowerCase(),
+        indicativo: cleanIndic,
+      };
+    });
   }
+  
   
   export function toStructuredPhones(legacy = {}) {
     const out = [];

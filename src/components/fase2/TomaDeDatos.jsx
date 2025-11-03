@@ -10,6 +10,9 @@ import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
+import { inflatePhones } from "../../utils/phone-mappers";
+
+
 
 import LanguageSelect from "../selects/LanguageSelect";
 // ✅ SOLO una vez, y todos aquí:
@@ -26,6 +29,7 @@ import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 
 
+import { fromApiPhones } from "../../utils/phone-mappers";
 
 
 
@@ -211,6 +215,10 @@ const normalizeMember = (m, idx) => {
       whatsapp: !!m.whatsapp,
       telegram: !!m.telegram,
       texto_sms: !!m.texto_sms,
+     
+      telefonos: inflatePhones(m?.cliente?.telefonos || [], "co"),
+
+
     },
   };
 };
@@ -585,30 +593,43 @@ const onUpdateLocal = useCallback(
     );
   };
 
-  // ❗Clave: además de actualizar cliente, duplicamos TODOS los campos a la raíz
   const patchCliente = (idx, patch) => {
     setFamilyMembers((prev) =>
       (prev ?? []).map((m, i) => {
         if (i !== idx) return m;
   
-     
-        
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
-         let nextCliente = { ...base, ...patch };
-      // ✅ Si actualizan telefonos, guardamos el ARRAY y (opcional) derivamos legacy para UI
-      if (Array.isArray(patch.telefonos)) {
-        const normalized = normalizePhones(patch.telefonos, formatPhone334);
-        nextCliente.telefonos = normalized;
-        // Deriva legacy para compatibilidad visual/filtros (NO se sobreescribe en backend)
-        const legacy = toLegacyFields(normalized);
-        nextCliente = { ...nextCliente, ...legacy };
-      }
+        let nextCliente = { ...base, ...patch };
+  
+        // 👇 DECLARAR dupe ANTES DE USARLO
+        const dupe = {};
+  
+        // ✅ Teléfonos: limpiar y derivar legacy sin usar dupe antes de declararlo
+        if (Array.isArray(patch.telefonos)) {
+          const cleaned = (patch.telefonos || []).map((t, j) => ({
+            id: t.id ?? `ph-${j}`,
+            tipo: (t.tipo || "Móvil").trim(),
+            numero: formatPhone334 ? formatPhone334(t.numero ?? "") : (t.numero ?? ""),
+            principal: !!t.principal,
+            iso: String(t.iso || "").toLowerCase(),
+            indicativo: String(t.indicativo || "").replace(/\D+/g, ""),
+          }));
+          nextCliente.telefonos = cleaned;
+  
+          // Derivar legacy PARA COMPATIBILIDAD (esto sí puede tocar dupe)
+          const legacy = toLegacyFields(cleaned);
+          dupe.telefono = legacy.telefono;
+          dupe.secundario = legacy.secundario;
+          dupe.whatsapp_num = legacy.whatsapp_num;
+          dupe.principal = legacy.principal;
+        }
   
         // Derivados
-        if ("fecha_nacimiento" in patch)
+        if ("fecha_nacimiento" in patch) {
           nextCliente.edad = calcAge(patch.fecha_nacimiento);
+        }
   
-        // Forzar nombre completo bonito (raíz + cliente)
+        // Nombre completo bonito
         const nombreCompleto = [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
           .map(toTitle)
           .filter(Boolean)
@@ -622,29 +643,21 @@ const onUpdateLocal = useCallback(
           nextCliente.idioma = patch.idioma ?? "";
         }
   
-        // Duplicados hacia la raíz
-        const dupe = {};
+        // Duplicados a la raíz
         DUPLICATE_TO_ROOT.forEach((k) => {
           if (k in nextCliente) dupe[k] = nextCliente[k];
         });
-        if (nombreCompleto) dupe.nombreCompleto = nombreCompleto;
-        dupe.nombre_completo = nombreCompleto;
-
-      // Duplicamos legacy derivados a la raíz SOLO para no romper vistas antiguas
-      if (Array.isArray(patch.telefonos)) {
-        const legacy = toLegacyFields(nextCliente.telefonos || []);
-        dupe.telefono = legacy.telefono;
-        dupe.secundario = legacy.secundario;
-        dupe.whatsapp_num = legacy.whatsapp_num;
-        dupe.principal = legacy.principal;
-      }
+        if (nombreCompleto) {
+          dupe.nombreCompleto = nombreCompleto;
+          dupe.nombre_completo = nombreCompleto;
+        }
   
-        // Merge + derivados finales
         const merged = { ...m, ...dupe, cliente: nextCliente };
         return recomputeDerived(merged);
       })
     );
   };
+  
   
 
   const onChangeFactory = (idx) => (e) => {
