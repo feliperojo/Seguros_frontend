@@ -10,6 +10,9 @@ import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
+ import { normalizePhones, toStructuredPhones } from "../utils/phones";
+ import { formatPhone334 } from "../utils/formatters";
+
 
 // ================== Helpers ==================
 
@@ -103,6 +106,12 @@ const mapClienteForSave = (m) => {
     telefono: pick("telefono"),
     secundario: pick("secundario"),
     whatsapp_num: pick("whatsapp_num"),
+        // ✅ NUEVO: arreglo de teléfonos a guardar
+        telefonos: normalizePhones(
+          Array.isArray(c.telefonos) ? c.telefonos : [],
+          formatPhone334
+        ),
+
     email: pick("email"),
     direccion: pick("direccion"),
     calle: pick("calle"),
@@ -274,6 +283,16 @@ const mapFullToMembers = (fullRaw) => {
         whatsapp_num: cli.whatsapp_num || "",
         email: cli.email || "",
         nota: cli.nota || "",
+
+
+     // si no trae, lo reconstruimos desde legacy para que el componente funcione ya.
+       telefonos: Array.isArray(cli.telefonos)
+         ? cli.telefonos
+         : toStructuredPhones({
+             telefono: cli.telefono,
+             secundario: cli.secundario,
+             whatsapp_num: cli.whatsapp_num,
+           }),
 
         // dirección
         direccion: cli.direccion || "",

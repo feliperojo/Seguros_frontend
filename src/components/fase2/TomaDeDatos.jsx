@@ -10,13 +10,24 @@ import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
-import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
-import LanguageSelect from "../selects/LanguageSelect";
-import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
-import ClienteExistenteModal from "../fase2/ClienteExistenteModal"; // ajusta la ruta si difiere
-import { getTypeColor } from "../../utils/parentescoColors";
 
-import { getCompanyNameById, getCompanyColor } from "../../services/companies"; // si vas a mostrar chips/colores
+import LanguageSelect from "../selects/LanguageSelect";
+// ✅ SOLO una vez, y todos aquí:
+import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
+
+// ✅ SOLO desde utils/phones (no también desde TelefonosPro)
+import { normalizePhones, toLegacyFields } from "../../utils/phones";
+
+// ✅ TelefonosPro solo como default, sin named exports para evitar conflicto
+import TelefonosPro from "./TelefonosPro";
+
+import { getTypeColor } from "../../utils/parentescoColors";
+import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
+import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
+
+
+
+
 
 
 /* =================== Utils =================== */
@@ -109,7 +120,8 @@ const getC = (m) => (m?.cliente ? m.cliente : m);
 
 /** Normaliza a { root..., cliente:{...} } */
 const normalizeMember = (m, idx) => {
-  if (m?.cliente && typeof m.cliente === "object") return m;
+  if (m?.cliente && typeof m.cliente === "object") 
+    return m;
 
   const primerRaw  = m.primer_nombre || "";
   const segundoRaw = m.segundo_nombre || "";
@@ -579,8 +591,18 @@ const onUpdateLocal = useCallback(
       (prev ?? []).map((m, i) => {
         if (i !== idx) return m;
   
+     
+        
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
-        const nextCliente = { ...base, ...patch };
+         let nextCliente = { ...base, ...patch };
+      // ✅ Si actualizan telefonos, guardamos el ARRAY y (opcional) derivamos legacy para UI
+      if (Array.isArray(patch.telefonos)) {
+        const normalized = normalizePhones(patch.telefonos, formatPhone334);
+        nextCliente.telefonos = normalized;
+        // Deriva legacy para compatibilidad visual/filtros (NO se sobreescribe en backend)
+        const legacy = toLegacyFields(normalized);
+        nextCliente = { ...nextCliente, ...legacy };
+      }
   
         // Derivados
         if ("fecha_nacimiento" in patch)
@@ -607,6 +629,15 @@ const onUpdateLocal = useCallback(
         });
         if (nombreCompleto) dupe.nombreCompleto = nombreCompleto;
         dupe.nombre_completo = nombreCompleto;
+
+      // Duplicamos legacy derivados a la raíz SOLO para no romper vistas antiguas
+      if (Array.isArray(patch.telefonos)) {
+        const legacy = toLegacyFields(nextCliente.telefonos || []);
+        dupe.telefono = legacy.telefono;
+        dupe.secundario = legacy.secundario;
+        dupe.whatsapp_num = legacy.whatsapp_num;
+        dupe.principal = legacy.principal;
+      }
   
         // Merge + derivados finales
         const merged = { ...m, ...dupe, cliente: nextCliente };
@@ -1117,46 +1148,16 @@ const onUpdateLocal = useCallback(
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                              <Field label="Teléfono" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="telefono"
-                                      value={c.telefono ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      inputMode="numeric"
-                                      maxLength={12}               
-                                    
-                                    />
-                                  </Field>
-
-                                  <Field label="Tel. Secundario" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="secundario"
-                                      value={c.secundario ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      inputMode="numeric"
-                                      maxLength={12}
-                                      
-                                    />
-                                  </Field>
-
-                                  <Field label="WhatsApp" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="whatsapp_num"
-                                      value={c.whatsapp_num ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      inputMode="numeric"
-                                      maxLength={12}
-                                      
-                                    />
-                                  </Field>
+                              
 
                             
+                              <Field label="Teléfonos" className="col-12">
+                                <TelefonosPro
+                                  value={Array.isArray(c.telefonos) ? c.telefonos : []}
+                                  onChange={(arr) => patchCliente(idx, { telefonos: arr })}
+                                  readOnly={readOnly}
+                                />
+                              </Field>
 
 
                                 <Field label="Nota" className="col-12">
@@ -1170,45 +1171,6 @@ const onUpdateLocal = useCallback(
                                   />
                                 </Field>
 
-                                <div className="col-12">
-                                  <div className="small fw-semibold text-muted mb-1">Servicios de Mensajería</div>
-
-                                  <div className="form-check form-check-inline">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      id={`svc-wa-${itemId}`}
-                                      checked={!!c.whatsapp}
-                                      onChange={toggleClienteBool(idx, "whatsapp")}
-                                      disabled={readOnly}
-                                    />
-                                    <label className="form-check-label" htmlFor={`svc-wa-${itemId}`}>WhatsApp</label>
-                                  </div>
-
-                                  <div className="form-check form-check-inline">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      id={`svc-tg-${itemId}`}
-                                      checked={!!c.telegram}
-                                      onChange={toggleClienteBool(idx, "telegram")}
-                                      disabled={readOnly}
-                                    />
-                                    <label className="form-check-label" htmlFor={`svc-tg-${itemId}`}>Telegram</label>
-                                  </div>
-
-                                  <div className="form-check form-check-inline">
-                                    <input
-                                      className="form-check-input"
-                                      type="checkbox"
-                                      id={`svc-sms-${itemId}`}
-                                      checked={!!c.texto_sms}
-                                      onChange={toggleClienteBool(idx, "texto_sms")}
-                                      disabled={readOnly}
-                                    />
-                                    <label className="form-check-label" htmlFor={`svc-sms-${itemId}`}>Texto SMS</label>
-                                  </div>
-                                </div>
 
                                 <Field label="Email" className="col-md-6">
                                   <input
