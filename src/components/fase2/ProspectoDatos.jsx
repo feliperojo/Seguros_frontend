@@ -8,6 +8,10 @@ import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
+
+import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
+
+
 /* ---------- Helpers de UI ---------- */
 
 const isTomador = (m = {}) => {
@@ -462,6 +466,9 @@ const ProspectoDatos = ({
     );
   };
 
+  const removeMemberLocal = (memberId) =>
+    setFamilyMembers(prev => prev.filter(m => m.id !== memberId));
+
   const createRemote = async (payload) => {
     if (typeof onCreateMemberRemote === "function") {
       await onCreateMemberRemote(payload);
@@ -614,6 +621,15 @@ const sortedMembers = familyMembers
                         <span className={`badge bg-${getTypeColor(member.tipo)}`}>
                           {member.tipo}
                         </span>
+                        <CoberturaDeleteButton
+    member={member}
+    readOnly={readOnly}
+    service={GrupoFamiliarService}     // 👈 usa el service con DELETE correcto
+    removeLocal={removeMemberLocal}    // 👈 limpia el estado
+    // allowDeleteTomador={false} // opcional
+    // onDeleted={(m) => console.log("Eliminado:", m)}
+  />
+
                       </div>
 
                       <div className="d-flex align-items-center">

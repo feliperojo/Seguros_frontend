@@ -386,13 +386,26 @@ useEffect(() => {
 
                           <td>{grupo.persona_contacto || "-"}</td>
                           <td>
-                            <Badge
-                              pill
-                              bg={getGrupoEstado(grupo).variant}
-                            >
-                              {getGrupoEstado(grupo).estado}
-                            </Badge>
-                          </td>
+                                  {grupo.id ? (
+                                    <Badge
+                                      as={Link}
+                                      to={`/grupo_familiar/${grupo.id}`}     // mismo destino que el ID
+                                      bg={getGrupoEstado(grupo).variant}
+                                      pill
+                                      className="text-decoration-none"
+                                      title="Ver detalle del grupo"
+                                      onClick={(e) => e.stopPropagation()}   // por si el <tr> fuese clickable
+                                      style={{ cursor: "pointer" }}
+                                    >
+                                      {getGrupoEstado(grupo).estado}
+                                    </Badge>
+                                  ) : (
+                                    <Badge pill bg={getGrupoEstado(grupo).variant}>
+                                      {getGrupoEstado(grupo).estado}
+                                    </Badge>
+                                  )}
+                                </td>
+
                           <td>
                             <div className="d-flex justify-content-center gap-2">
                               <Button
