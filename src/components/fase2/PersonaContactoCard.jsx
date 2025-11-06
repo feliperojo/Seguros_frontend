@@ -1,12 +1,12 @@
-// ContactosAsociadosAccordion.jsx
+
 import React, { useEffect, useMemo, useState } from "react";
 import TelefonosInput from "./TelefonosInput";
 import {
-  fetchClienteContacto,
-  upsertContacto,
-  linkClienteContacto,
-  updateLinkClienteContacto,
-} from "../../services/contactosService";
+     fetchClienteContacto,
+     upsertClienteComoContacto,
+     linkClienteContacto,
+     updateLinkClienteContacto,
+   } from "../../services/contactosService";
 import { joinNameParts } from "../../utils/names";
 
 export default function ContactosAsociadosAccordion({
@@ -82,16 +82,20 @@ export default function ContactosAsociadosAccordion({
     try {
       setSaving(true);
 
-      // 1) upsert contacto
-      const contactoRes = await upsertContacto({
-        nombre_completo: (form.nombre_completo || "").trim(),
-        idioma: form.idioma || "",
-        telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
-        email_principal: form.email_principal || null,
-      });
-      const contacto = contactoRes?.contacto || contactoRes || {};
-      const contactoId = contacto.id;
-
+     // 1) Crear o registrar un CLIENTE como contacto
+     const contactoRes = await upsertClienteComoContacto({
+      nombre_completo: (form.nombre_completo || "").trim(),
+      idioma: form.idioma || "",
+      telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
+      email_principal: form.email_principal || null,
+      telefono: Array.isArray(form.telefonos) && form.telefonos[0]?.numero
+        ? form.telefonos[0].numero
+        : null,
+      nota: form.nota || null,
+    });
+    const contacto = contactoRes?.contacto || {};
+    const contactoId = contacto?.id;
+    
       // 2) vínculo
       const perteneceBool = (form.perteneceGF || "").toString().toLowerCase().startsWith("s");
       const payloadLink = {

@@ -1,9 +1,10 @@
-import apiRequest from "../services/api"; // tu helper existente
+import apiRequest from "../services/api";
 import { splitFullName } from "../utils/names";
 
-
-
-// Busca el vínculo si ya existe (cliente y/o grupo)
+/** ----------------------------------------------------------------
+ *  LISTAR VÍNCULOS (cliente ↔ contacto) POR CLIENTE/GRUPO
+ *  GET /cliente-contacto?cliente_id=&grupo_familiar_id=
+ *  ---------------------------------------------------------------- */
 export async function fetchClienteContacto({ clienteId, grupoFamiliarId }) {
   const qs = new URLSearchParams();
   if (clienteId) qs.append("cliente_id", clienteId);
@@ -11,18 +12,74 @@ export async function fetchClienteContacto({ clienteId, grupoFamiliarId }) {
   return apiRequest(`/cliente-contacto?${qs.toString()}`, "GET");
 }
 
-// Crea/actualiza contacto en el directorio
-export async function upsertContacto(payload) {
-    const { nombres, apellidos } = splitFullName(payload.nombre_completo || "");
-    const body = {
-      ...payload,
-      nombres,
-      apellidos,
-      nombre_completo: `${nombres} ${apellidos}`.trim(),
-    };
-    return apiRequest("/contactos", "POST", body);
+
+/**
+ * Crea un CLIENTE que actuará como “contacto” usando POST /cliente/create
+ * Enviamos SOLO nombre (sin telefono/telefonos) para evitar errores.
+ */
+
+// contactosService.js
+
+/**
+ * Crea un CLIENTE que actuará como “contacto” usando POST /cliente/create
+ * Enviamos telefonos como ARRAY (no string).
+ */
+export async function upsertClienteComoContacto(payload) {
+  const { nombres, apellidos } = splitFullName(payload.nombre_completo || "");
+
+  const partes = (nombres || "").trim().split(/\s+/);
+  const primer_nombre = partes[0] || null;
+  const segundo_nombre = partes.length > 1 ? partes.slice(1).join(" ") : null;
+
+  const body = {
+    clientes: [
+      {
+        nombre_completo: `${[nombres, apellidos].filter(Boolean).join(" ")}`.trim(),
+        primer_nombre,
+        segundo_nombre,
+        apellidos: apellidos || null,
+
+        // opcionales seguros
+        idioma: payload.idioma || null,
+
+        // 👇 ENVIAR COMO ARRAY (cumple con 'nullable|array')
+        telefonos: Array.isArray(payload.telefonos) ? payload.telefonos : [],
+
+        // otros campos opcionales
+        // telefono es un varchar simple, no afecta al validador
+        telefono: Array.isArray(payload.telefonos) && payload.telefonos[0]?.numero
+          ? payload.telefonos[0].numero
+          : null,
+
+        activo: true,
+        es_prospecto: false,
+        estado_cliente: "contacto",
+      },
+    ],
+  };
+
+  const res = await apiRequest("/cliente/create", "POST", body);
+  const creado = res?.clientes?.[0] || null;
+
+  if (!creado?.id) {
+    throw new Error("No se recibió el id del contacto creado.");
   }
-// Crea vínculo cliente/grupo ↔ contacto
+
+  return {
+    contacto: {
+      id: creado.id,
+      nombre_completo: creado.nombre_completo ?? body.clientes[0].nombre_completo,
+      idioma: body.clientes[0].idioma,
+      // devolvemos el array original para la UI
+      telefonos: body.clientes[0].telefonos,
+      email: null,
+    },
+  };
+}
+/** ----------------------------------------------------------------
+ *  CREAR VÍNCULO (cliente/grupo ↔ contacto)
+ *  POST /cliente-contacto
+ *  ---------------------------------------------------------------- */
 export async function linkClienteContacto({
   clienteId,
   grupoFamiliarId,
@@ -31,21 +88,24 @@ export async function linkClienteContacto({
   perteneceAlGrupo = false,
   esPersonaContacto = false,
   prioridad = 0,
-  nota = ""
+  nota = "",
 }) {
   return apiRequest("/cliente-contacto", "POST", {
     cliente_id: clienteId ?? null,
     grupo_familiar_id: grupoFamiliarId ?? null,
-    contacto_id: contactoId,
+    contacto_id: contactoId, // ahora es otro cliente.id
     relacion,
     pertenece_al_grupo: !!perteneceAlGrupo,
     es_persona_contacto: !!esPersonaContacto,
     prioridad,
-    nota
+    nota,
   });
 }
 
-// Actualiza el vínculo (si ya existe)
+/** ----------------------------------------------------------------
+ *  ACTUALIZAR VÍNCULO
+ *  PUT /cliente-contacto/:id
+ *  ---------------------------------------------------------------- */
 export async function updateLinkClienteContacto(linkId, patch) {
   return apiRequest(`/cliente-contacto/${linkId}`, "PUT", patch);
 }

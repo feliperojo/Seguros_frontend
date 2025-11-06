@@ -2,14 +2,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import apiRequest from "../services/api";
 
-// util: capitaliza cada palabra
+// === utilidades ===
+
+// Capitaliza cada palabra
 const toTitle = (s = "") =>
   (s ?? "")
     .toString()
     .toLowerCase()
     .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
 
-// subcomponente: fila teléfono
+// Separa primer y segundo nombre
+const splitNames = (n = "") => {
+  const parts = (n || "").trim().split(/\s+/);
+  const primer_nombre = parts[0] || null;
+  const segundo_nombre = parts.length > 1 ? parts.slice(1).join(" ") : null;
+  return { primer_nombre, segundo_nombre };
+};
+
+// === subcomponente: fila teléfono ===
 function PhoneRow({ value, onChange, onRemove }) {
   const tipos = ["Móvil", "Trabajo", "WhatsApp", "Casa", "Otro"];
   return (
@@ -40,7 +50,9 @@ function PhoneRow({ value, onChange, onRemove }) {
           className="form-check-input"
           type="checkbox"
           checked={!!value.principal}
-          onChange={(e) => onChange({ ...value, principal: !!e.target.checked })}
+          onChange={(e) =>
+            onChange({ ...value, principal: !!e.target.checked })
+          }
           id={`chk-${value.id || Math.random()}`}
         />
         <label className="form-check-label small">Principal</label>
@@ -58,6 +70,7 @@ function PhoneRow({ value, onChange, onRemove }) {
   );
 }
 
+// === componente principal ===
 export default function ContactosAdmin() {
   // ====== búsqueda/listado ======
   const [q, setQ] = useState("");
@@ -79,28 +92,29 @@ export default function ContactosAdmin() {
   const [model, setModel] = useState(empty);
   const [saving, setSaving] = useState(false);
 
-  // ====== vínculos del contacto ======
+  // ====== vínculos del cliente ======
   const [links, setLinks] = useState([]);
   const [loadingLinks, setLoadingLinks] = useState(false);
 
-  // buscar con debounce
+  // ====== buscar clientes ======
   useEffect(() => {
     if (debRef.current) clearTimeout(debRef.current);
     debRef.current = setTimeout(async () => {
       const term = q.trim();
+      if (term.length < 2) { setRows([]); setLoadingList(false); return; }
       setLoadingList(true);
       try {
-// GET /contactos?s=...  (Laravel pagina: { data, links, meta })
-      const res = await apiRequest(
-            `/contactos?s=${encodeURIComponent(term)}&per_page=20`,
-            "GET"
-          );
-          const list = Array.isArray(res?.data?.data)
-            ? res.data.data                          // cuando apiRequest no unwrapea
-            : Array.isArray(res?.data)
-              ? res.data                              // si ya unwrapea .data
-              : Array.isArray(res) ? res : [];
-          setRows(list);
+        // ✅ Buscar clientes
+        const res = await apiRequest(
+          `/cliente/buscar?nombre=${encodeURIComponent(term)}`,
+          "GET"
+        );
+        const list = Array.isArray(res?.data)
+          ? res.data
+          : Array.isArray(res)
+          ? res
+          : [];
+        setRows(list);
       } catch (e) {
         console.error(e);
         setRows([]);
@@ -110,58 +124,73 @@ export default function ContactosAdmin() {
     }, 300);
     return () => clearTimeout(debRef.current);
   }, [q]);
-  
 
-  // cargar un contacto al seleccionar
- // cargar un contacto al seleccionar
-const loadContact = async (id) => {
+  // ====== cargar cliente seleccionado ======
+  const loadContact = async (id) => {
     if (!id) return;
-  
-   // 1) Detalle del contacto
-   try {
-     const detail = await apiRequest(`/contactos/${id}`, "GET");
-     const c = detail?.data || detail || {};
-     const telefonos = Array.isArray(c.telefonos) ? c.telefonos : [];
-     setModel({
-       id: c.id,
-       nombres: c.nombres || "",
-       apellidos: c.apellidos || "",
-       nombre_completo: c.nombre_completo || "",
-       idioma: c.idioma || "",
-       email_principal: c.email_principal || "",
-       telefonos,
-       nota: c.nota || "",
-     });
-   } catch (e) {
-     console.error("Error cargando contacto:", e);
-     setModel(empty);
-     setLinks([]);
-     return; // no sigas si el contacto no cargó
-   }
-  
-   try {
-     const v = await apiRequest(`/cliente-contacto?contacto_id=${id}`, "GET");
-     const links = Array.isArray(v?.data?.data)
-       ? v.data.data
-       : Array.isArray(v?.data)
-         ? v.data
-         : Array.isArray(v) ? v : [];
-     setLinks(links);
-   } catch (e) {
-     console.error("Error cargando vínculos:", e);
-     setLinks([]);
-   } finally {
-     setLoadingLinks(false);
-   }
+
+    // 1️⃣ Detalle del cliente
+    try {
+      const detail = await apiRequest(`/cliente/${id}`, "GET");
+      const c = detail?.data || detail || {};
+
+      let telefonos = [];
+      if (Array.isArray(c.telefonos)) {
+        telefonos = c.telefonos;
+      } else if (
+        typeof c.telefonos === "string" &&
+        c.telefonos.trim().startsWith("[")
+      ) {
+        try {
+          telefonos = JSON.parse(c.telefonos);
+        } catch (_) {}
+      }
+
+      setModel({
+        id: c.id,
+        nombres: [c.primer_nombre, c.segundo_nombre]
+          .filter(Boolean)
+          .join(" ") || "",
+        apellidos: c.apellidos || "",
+        nombre_completo: c.nombre_completo || "",
+        idioma: c.idioma || "",
+        email_principal: c.email || "",
+        telefonos,
+        nota: c.nota || "",
+      });
+    } catch (e) {
+      console.error("Error cargando cliente:", e);
+      setModel(empty);
+      setLinks([]);
+      return;
+    }
+
+    // 2️⃣ vínculos cliente_contacto
+    try {
+      setLoadingLinks(true);
+      const v = await apiRequest(`/cliente-contacto?contacto_id=${id}`, "GET");
+      const links = Array.isArray(v?.data?.data)
+        ? v.data.data
+        : Array.isArray(v?.data)
+        ? v.data
+        : Array.isArray(v)
+        ? v
+        : [];
+      setLinks(links);
+    } catch (e) {
+      console.error("Error cargando vínculos:", e);
+      setLinks([]);
+    } finally {
+      setLoadingLinks(false);
+    }
   };
-  
-  // handler: campos texto con capitalización
+
+  // ====== handlers de campos ======
   const setField = (k, v) => {
-    if (k === "nombres" || k === "apellidos") v = toTitle(v);
-    if (k === "nombre_completo") v = toTitle(v);
+    if (k === "nombres" || k === "apellidos" || k === "nombre_completo")
+      v = toTitle(v);
     setModel((m) => {
       const next = { ...m, [k]: v };
-      // si editan nombres/apellidos, refresca nombre_completo
       if (k === "nombres" || k === "apellidos") {
         next.nombre_completo = toTitle(
           [next.nombres, next.apellidos].filter(Boolean).join(" ")
@@ -171,15 +200,20 @@ const loadContact = async (id) => {
     });
   };
 
-  // teléfonos
+  // ====== manejo de teléfonos ======
   const addPhone = () =>
-    setModel((m) => ({ ...m, telefonos: [...(m.telefonos || []), { tipo: "", numero: "", principal: false }] }));
+    setModel((m) => ({
+      ...m,
+      telefonos: [...(m.telefonos || []), { tipo: "", numero: "", principal: false }],
+    }));
+
   const updatePhone = (idx, val) =>
     setModel((m) => {
       const arr = [...(m.telefonos || [])];
       arr[idx] = val;
       return { ...m, telefonos: arr };
     });
+
   const removePhone = (idx) =>
     setModel((m) => {
       const arr = [...(m.telefonos || [])];
@@ -187,36 +221,51 @@ const loadContact = async (id) => {
       return { ...m, telefonos: arr };
     });
 
-  // guardar (PUT)
+  // ====== guardar cambios ======
   const save = async () => {
     if (!model.id) return;
     setSaving(true);
     try {
+      const { primer_nombre, segundo_nombre } = splitNames(model.nombres || "");
+
       const payload = {
-        nombres: model.nombres?.trim() || null,
+        primer_nombre,
+        segundo_nombre,
         apellidos: model.apellidos?.trim() || null,
         nombre_completo: model.nombre_completo?.trim() || null,
         idioma: model.idioma || null,
-        email_principal: model.email_principal || null,
+        email: model.email_principal || null,
         telefonos: model.telefonos || [],
         nota: model.nota || null,
+        telefono:
+          Array.isArray(model.telefonos) && model.telefonos[0]?.numero
+            ? model.telefonos[0].numero
+            : null,
+        estado_cliente: "Cliente",
       };
-      await apiRequest(`/contactos/${model.id}`, "PUT", payload);
-      // refresca fila en tabla
+
+      await apiRequest(`/cliente/${model.id}`, "PUT", payload);
+
+      // refrescar listado
       setRows((prev) =>
         prev.map((r) =>
-          r.id === model.id ? { ...r, nombre_completo: model.nombre_completo, idioma: model.idioma } : r
+          r.id === model.id
+            ? {
+                ...r,
+                nombre_completo: payload.nombre_completo ?? r.nombre_completo,
+                idioma: payload.idioma ?? r.idioma,
+                telefono: payload.telefono ?? r.telefono,
+              }
+            : r
         )
       );
     } catch (e) {
       console.error(e);
-      // aquí podrías mostrar un toast
     } finally {
       setSaving(false);
     }
   };
 
-  // limpiar/crear nuevo (si quisieras ampliar a creación)
   const resetForm = () => {
     setModel(empty);
     setLinks([]);
@@ -224,14 +273,15 @@ const loadContact = async (id) => {
 
   const canSave = useMemo(() => !!model.id, [model.id]);
 
+  // ====== render ======
   return (
     <div className="container-fluid py-3">
       <div className="row g-3">
-        {/* ==== Columna izquierda: buscador + directorio ==== */}
+        {/* === Columna izquierda === */}
         <div className="col-lg-5">
           <div className="card">
             <div className="card-body">
-              <h5 className="mb-3">Directorio de Contactos</h5>
+              <h5 className="mb-3">Directorio de Clientes</h5>
 
               <div className="mb-2">
                 <input
@@ -242,12 +292,15 @@ const loadContact = async (id) => {
                 />
               </div>
 
-              <div className="table-responsive" style={{ maxHeight: 420, overflow: "auto" }}>
+              <div
+                className="table-responsive"
+                style={{ maxHeight: 420, overflow: "auto" }}
+              >
                 <table className="table table-sm align-middle">
                   <thead className="table-light">
                     <tr>
                       <th>Nombre</th>
-                      <th>Idioma</th>
+                      <th>Tipo</th>
                       <th>Teléfono</th>
                       <th style={{ width: 80 }}></th>
                     </tr>
@@ -268,14 +321,16 @@ const loadContact = async (id) => {
                     ) : (
                       rows.map((r) => {
                         const firstPhone =
-                          Array.isArray(r.telefonos) && r.telefonos.length > 0
-                            ? r.telefonos[0]?.numero
-                            : r.telefono_principal_normalizado || "—";
+                          r.telefono ||
+                          (Array.isArray(r.telefonos) && r.telefonos[0]?.numero) ||
+                          "—";
                         return (
                           <tr key={r.id}>
-                            <td className="fw-semibold">{r.nombre_completo}</td>
-                            <td>{r.idioma || "—"}</td>
-                            <td>{firstPhone || "—"}</td>
+                            <td className="fw-semibold">
+                              {r.nombre_completo}
+                            </td>
+                            <td>{r.estado_cliente || "—"}</td>
+                            <td>{firstPhone}</td>
                             <td className="text-end">
                               <button
                                 className="btn btn-outline-primary btn-sm"
@@ -295,14 +350,17 @@ const loadContact = async (id) => {
           </div>
         </div>
 
-        {/* ==== Columna derecha: edición + vínculos ==== */}
+        {/* === Columna derecha === */}
         <div className="col-lg-7">
           <div className="card mb-3">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5 className="mb-0">Editar Contacto</h5>
+                <h5 className="mb-0">Editar Cliente</h5>
                 <div className="btn-group">
-                  <button className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
+                  <button
+                    className="btn btn-outline-secondary btn-sm"
+                    onClick={resetForm}
+                  >
                     Nuevo / Limpiar
                   </button>
                   <button
@@ -338,11 +396,11 @@ const loadContact = async (id) => {
                   <input
                     className="form-control form-control-sm"
                     value={model.nombre_completo}
-                    onChange={(e) => setField("nombre_completo", e.target.value)}
+                    onChange={(e) =>
+                      setField("nombre_completo", e.target.value)
+                    }
                   />
                 </div>
-
-               
 
                 <div className="col-md-4">
                   <label className="form-label small">Idioma</label>
@@ -369,12 +427,17 @@ const loadContact = async (id) => {
                 <div className="col-12">
                   <div className="d-flex justify-content-between align-items-center">
                     <label className="form-label small mb-1">Teléfonos</label>
-                    <button className="btn btn-outline-success btn-sm" onClick={addPhone}>
+                    <button
+                      className="btn btn-outline-success btn-sm"
+                      onClick={addPhone}
+                    >
                       + Agregar Teléfono
                     </button>
                   </div>
                   {(model.telefonos || []).length === 0 && (
-                    <div className="text-muted small mb-2">Sin teléfonos.</div>
+                    <div className="text-muted small mb-2">
+                      Sin teléfonos.
+                    </div>
                   )}
                   {(model.telefonos || []).map((p, idx) => (
                     <PhoneRow
@@ -389,6 +452,7 @@ const loadContact = async (id) => {
             </div>
           </div>
 
+          {/* vínculos */}
           <div className="card">
             <div className="card-body">
               <h6 className="mb-2">Grupos familiares asociados</h6>
@@ -406,12 +470,13 @@ const loadContact = async (id) => {
                         <th>Relación</th>
                         <th>¿Pertenece GF?</th>
                         <th>Nota</th>
-                        
                       </tr>
                     </thead>
                     <tbody>
                       {links.map((v) => (
-                        <tr key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}>
+                        <tr
+                          key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}
+                        >
                           <td>{v.grupo_familiar_id || "—"}</td>
                           <td>
                             {v.cliente?.nombre_completo
@@ -421,7 +486,6 @@ const loadContact = async (id) => {
                           <td>{v.relacion || "—"}</td>
                           <td>{v.pertenece_al_grupo ? "Sí" : "No"}</td>
                           <td>{v.nota || "—"}</td>
-                        
                         </tr>
                       ))}
                     </tbody>
@@ -429,7 +493,8 @@ const loadContact = async (id) => {
                 </div>
               )}
               <div className="form-text">
-                * Solo lectura aquí. La asociación se gestiona en la ficha del cliente/grupo.
+                * Solo lectura aquí. La asociación se gestiona en la ficha del
+                cliente/grupo.
               </div>
             </div>
           </div>
