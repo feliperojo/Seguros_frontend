@@ -1,6 +1,10 @@
 import apiRequest from "../services/api";
 import { splitFullName } from "../utils/names";
 
+
+
+export const searchClientes = (nombre) =>
+  apiRequest(`/cliente/buscar?nombre=${encodeURIComponent(nombre)}`, 'GET');
 /** ----------------------------------------------------------------
  *  LISTAR VÍNCULOS (cliente ↔ contacto) POR CLIENTE/GRUPO
  *  GET /cliente-contacto?cliente_id=&grupo_familiar_id=

@@ -8,6 +8,8 @@ import {
      updateLinkClienteContacto,
    } from "../../services/contactosService";
 import { joinNameParts } from "../../utils/names";
+import { searchClientes } from "../../services/contactosService";
+import { useRef } from "react";
 
 export default function ContactosAsociadosAccordion({
   clienteId = null,
@@ -21,6 +23,17 @@ export default function ContactosAsociadosAccordion({
   const [items, setItems] = useState([]); // [{contacto, link}]
   const [linkEditar, setLinkEditar] = useState(null); // si algún día quieres editar
   const [saving, setSaving] = useState(false);
+
+  // Modo de creación de contacto: 'nuevo' | 'existente'
+const [modo, setModo] = useState('nuevo');
+
+// Picker de cliente existente
+const [term, setTerm] = useState('');
+const [candidatos, setCandidatos] = useState([]);  // resultados de búsqueda
+const [sel, setSel] = useState(null);              // cliente seleccionado
+const [loadingPicker, setLoadingPicker] = useState(false);
+const searchDebRef = useRef(null);
+
 
   // ---- form local (crear/editar) ----
   const [form, setForm] = useState({
@@ -45,10 +58,14 @@ export default function ContactosAsociadosAccordion({
       email_principal: "",
     });
 
-  const puedeGuardar = useMemo(
-    () => (form.nombre_completo || "").trim().length > 0 && (clienteId || grupoFamiliarId),
-    [form.nombre_completo, clienteId, grupoFamiliarId]
-  );
+     const puedeGuardar = useMemo(() => {
+         const tieneContexto = !!(clienteId || grupoFamiliarId);
+         const datosCompletos =
+           modo === 'existente'
+             ? !!sel?.id && (form.relacion || '').trim().length > 0   // exigir relación cuando es existente
+             : (form.nombre_completo || '').trim().length > 0;
+         return tieneContexto && datosCompletos;
+       }, [modo, sel, form.nombre_completo, form.relacion, clienteId, grupoFamiliarId]);
 
   // ---- carga inicial ----
   const cargar = async () => {
@@ -73,6 +90,31 @@ export default function ContactosAsociadosAccordion({
     }
   };
 
+  useEffect(() => {
+    if (modo !== 'existente') return;
+    if (searchDebRef.current) clearTimeout(searchDebRef.current);
+  
+    searchDebRef.current = setTimeout(async () => {
+      const q = term.trim();
+      if (q.length < 2) { setCandidatos([]); return; }
+      setLoadingPicker(true);
+      try {
+        const res = await searchClientes(q);
+        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        // evita seleccionarse a sí mismo
+        setCandidatos(list.filter(x => x.id !== clienteId));
+      } catch (e) {
+        console.error(e);
+        setCandidatos([]);
+      } finally {
+        setLoadingPicker(false);
+      }
+    }, 300);
+  
+    return () => clearTimeout(searchDebRef.current);
+  }, [term, modo, clienteId]);
+  
+
   useEffect(() => { cargar(); }, [clienteId, grupoFamiliarId]);
 
   // ---- guardar (crea o actualiza vínculo) ----
@@ -83,19 +125,35 @@ export default function ContactosAsociadosAccordion({
       setSaving(true);
 
      // 1) Crear o registrar un CLIENTE como contacto
+  let contacto = {};
+   let contactoId = null;
+
+   if (modo === 'existente') {
+     // Validaciones rápidas
+     if (!sel?.id) throw new Error('Debe seleccionar un cliente existente.');
+     if (sel.id === clienteId) throw new Error('No puedes asociar el mismo cliente como contacto.');
+     contactoId = sel.id;
+     contacto = {
+       id: sel.id,
+       nombre_completo: sel.nombre_completo,
+       idioma: sel.idioma,
+       telefonos: sel.telefonos || (sel.telefono ? [{ numero: sel.telefono }] : []),
+     };
+   } else {
+     // Cliente nuevo como contacto (flujo actual)
      const contactoRes = await upsertClienteComoContacto({
-      nombre_completo: (form.nombre_completo || "").trim(),
-      idioma: form.idioma || "",
-      telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
-      email_principal: form.email_principal || null,
-      telefono: Array.isArray(form.telefonos) && form.telefonos[0]?.numero
-        ? form.telefonos[0].numero
-        : null,
-      nota: form.nota || null,
-    });
-    const contacto = contactoRes?.contacto || {};
-    const contactoId = contacto?.id;
-    
+       nombre_completo: (form.nombre_completo || "").trim(),
+       idioma: form.idioma || "",
+       telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
+       email_principal: form.email_principal || null,
+       telefono: Array.isArray(form.telefonos) && form.telefonos[0]?.numero
+         ? form.telefonos[0].numero
+         : null,
+       nota: form.nota || null,
+     });
+     contacto = contactoRes?.contacto || {};
+     contactoId = contacto?.id;
+   }    
       // 2) vínculo
       const perteneceBool = (form.perteneceGF || "").toString().toLowerCase().startsWith("s");
       const payloadLink = {
@@ -136,6 +194,8 @@ export default function ContactosAsociadosAccordion({
       // 4) limpiar para poder crear otro
       setLinkEditar(null);
       resetForm();
+   setSel(null);
+   setTerm('');
       // Si usas Bootstrap collapse, puedes cerrarlo con data-bs attributes desde el botón si prefieres
     } catch (e) {
       console.error(e);
@@ -252,23 +312,114 @@ export default function ContactosAsociadosAccordion({
           >
             <div className="accordion-body">
               <div className="row g-2">
-                <div className="col-12">
-                  <label className="form-label small mb-1">Nombre Completo</label>
-                  <input
-                    className="form-control form-control-sm"
-                    placeholder="Nombre Completo"
-                    value={form.nombre_completo}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const formatted = raw
-                        .toLowerCase()
-                        .replace(/\b\w/g, (ch) => ch.toUpperCase())
-                        .replace(/\s+/g, " ");
-                      update("nombre_completo", formatted);
-                    }}
-                    disabled={readOnly}
-                  />
-                </div>
+              <div className="col-12 mb-2">
+  <div className="btn-group" role="group" aria-label="Modo de contacto">
+    <input
+      type="radio"
+      className="btn-check"
+      name="modoContacto"
+      id="modoNuevo"
+      autoComplete="off"
+      checked={modo === 'nuevo'}
+      onChange={() => setModo('nuevo')}
+      disabled={readOnly}
+    />
+    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoNuevo">
+      Cliente nuevo
+    </label>
+
+    <input
+      type="radio"
+      className="btn-check"
+      name="modoContacto"
+      id="modoExistente"
+      autoComplete="off"
+      checked={modo === 'existente'}
+      onChange={() => setModo('existente')}
+      disabled={readOnly}
+    />
+    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoExistente">
+      Cliente existente
+    </label>
+  </div>
+</div>
+
+                {/* MODO NUEVO: campos del cliente */}
+{modo === 'nuevo' ? (
+  <div className="col-12">
+    <label className="form-label small mb-1">Nombre Completo</label>
+    <input
+      className="form-control form-control-sm"
+      placeholder="Nombre Completo"
+      value={form.nombre_completo}
+      onChange={(e) => {
+        const raw = e.target.value;
+        const formatted = raw
+          .toLowerCase()
+          .replace(/\b\w/g, (ch) => ch.toUpperCase())
+          .replace(/\s+/g, " ");
+        update("nombre_completo", formatted);
+      }}
+      disabled={readOnly}
+    />
+  </div>
+) : (
+  // MODO EXISTENTE: buscador y tabla de candidatos
+  <div className="col-12">
+    <label className="form-label small mb-1">Buscar cliente existente</label>
+    <input
+      className="form-control form-control-sm"
+      placeholder="Escribe al menos 2 letras…"
+      value={term}
+      onChange={(e) => { setTerm(e.target.value); setSel(null); }}
+      disabled={readOnly}
+    />
+    <div className="table-responsive border rounded mt-2" style={{ maxHeight: 220, overflow: 'auto' }}>
+      <table className="table table-sm align-middle mb-0">
+        <thead className="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th>Idioma</th>
+            <th>Teléfono</th>
+            <th style={{ width: 90 }}></th>
+          </tr>
+        </thead>
+        <tbody>
+          {loadingPicker ? (
+            <tr><td colSpan={4} className="text-center text-muted py-2">Buscando…</td></tr>
+          ) : candidatos.length === 0 ? (
+            <tr><td colSpan={4} className="text-center text-muted py-2">Sin resultados.</td></tr>
+          ) : (
+            candidatos.map(c => {
+              const tel = c.telefono || (Array.isArray(c.telefonos) && c.telefonos[0]?.numero) || '—';
+              const isSel = sel?.id === c.id;
+              return (
+                <tr key={c.id} className={isSel ? 'table-primary' : ''}>
+                  <td className="fw-semibold">{c.nombre_completo}</td>
+                  <td>{c.idioma || '—'}</td>
+                  <td>{tel}</td>
+                  <td className="text-end">
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${isSel ? 'btn-secondary' : 'btn-outline-primary'}`}
+                      onClick={() => setSel(isSel ? null : c)}
+                    >
+                      {isSel ? 'Quitar' : 'Elegir'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
+    {sel?.id && (
+      <div className="form-text mt-1">Seleccionado: <strong>{sel.nombre_completo}</strong></div>
+    )}
+  </div>
+)}
+
 
                 <div className="col-12">
                   <TelefonosInput
