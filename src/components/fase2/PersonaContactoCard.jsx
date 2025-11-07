@@ -114,8 +114,42 @@ const searchDebRef = useRef(null);
     return () => clearTimeout(searchDebRef.current);
   }, [term, modo, clienteId]);
   
+// --- 📌 useEffect para pintar teléfonos del cliente seleccionado ---
+useEffect(() => {
+  if (modo !== 'existente') return;
+  if (!sel?.id) {
+    // Si se deselecciona, limpiamos los teléfonos
+    setForm(f => ({ ...f, telefonos: [] }));
+    return;
+  }
+  const tels = normalizeTelefonos(sel);
+  setForm(f => ({
+    ...f,
+    telefonos: tels,              // <- Aquí se pintan los teléfonos
+    idioma: f.idioma || sel.idioma || "",
+  }));
+}, [sel, modo]);
 
   useEffect(() => { cargar(); }, [clienteId, grupoFamiliarId]);
+
+  // --- Helper para normalizar teléfonos del cliente ---
+const normalizeTelefonos = (c) => {
+  if (!c) return [];
+  if (Array.isArray(c.telefonos)) {
+    return c.telefonos
+      .map((t, i) => ({
+        tipo: t?.tipo || "Móvil",
+        numero: t?.numero || "",
+        principal: t?.principal ?? i === 0,
+      }))
+      .filter(t => (t.numero || "").trim().length > 0);
+  }
+  const numeroPlano = c.telefono || "";
+  return (numeroPlano || "").trim()
+    ? [{ tipo: "Móvil", numero: numeroPlano, principal: true }]
+    : [];
+};
+
 
   // ---- guardar (crea o actualiza vínculo) ----
   const handleSave = async () => {
