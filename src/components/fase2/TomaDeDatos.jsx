@@ -1,94 +1,47 @@
 import React, { useMemo, useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";   
+import { useNavigate } from "react-router-dom";
+import { FaMapMarkerAlt } from "react-icons/fa";
+
+// Services
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../../services/ingresos";
+
+// Components
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MemberModal from "./MemberModal";
-import { FaMapMarkerAlt } from "react-icons/fa";
-import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import {  computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../../services/ingresos";
 import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
-import useCompanies from "../../hooks/useCompanies";
-import { buildPayerOptions } from "../../utils/payers";
+import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
-import { inflatePhones } from "../../utils/phone-mappers";
-
-
-
 import LanguageSelect from "../selects/LanguageSelect";
-// ✅ SOLO una vez, y todos aquí:
-import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
-
-// ✅ SOLO desde utils/phones (no también desde TelefonosPro)
-import { normalizePhones, toLegacyFields } from "../../utils/phones";
-
-// ✅ TelefonosPro solo como default, sin named exports para evitar conflicto
 import TelefonosPro from "./TelefonosPro";
-
-import { getTypeColor } from "../../utils/parentescoColors";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
-import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 
+// Hooks
+import useCompanies from "../../hooks/useCompanies";
 
-import { fromApiPhones } from "../../utils/phone-mappers";
+// Utils
+import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
+import { toLegacyFields } from "../../utils/phones";
+import { inflatePhones } from "../../utils/phone-mappers";
+import { getTypeColor } from "../../utils/parentescoColors";
+import { buildPayerOptions } from "../../utils/payers";
 
-
-
-
-/* =================== Utils =================== */
-const isTomador = (m = {}) => {
-  const v1 = String(m.tipo || "").toLowerCase();
-  const v2 = String(m.parentesco || "").toLowerCase();
-  return v1 === "tomador" || v2 === "tomador";
-};
-
-
-// Capitaliza cada palabra (soporta acentos y guiones)
-const toTitle = (s = "") =>
-  (s ?? "")
-    .toString()
-    .toLowerCase()
-    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
-
-    
-// Campos de nombre a capitalizar
+/* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
+const MONEY_FIELDS = new Set(["ingreso_por_periodo", "ingreso_anual", "ingreso_por_periodo_ocasional", "precio"]);
+const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
-const fullName = (m) => {
-  const c = m?.cliente ?? m ?? {};
-  const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
-    .filter(Boolean)
-    .join(" ");
-  return composed || c.nombre_completo || m?.nombreCompleto || "Sin nombre";
-};
-
-const Field = ({ label, children, className = "col-md-6" }) => (
-  <div className={className}>
-    <label className="form-label small fw-semibold text-muted">{label}</label>
-    {children}
-  </div>
-);
-
-
-
-// Campos que pertenecen al objeto cliente (todas las secciones)
 const CLIENTE_FIELDS = new Set([
-  // principales
-  "primer_nombre","segundo_nombre","apellidos","fecha_nacimiento","edad","genero","idioma",
-  // contacto
-  "telefono","secundario","whatsapp_num","email","nota",
-  // dirección
-  "direccion","calle","apto","ciudad","estado","codigo_postal","condado","dir_correspondencia",
-  // migratorio
-  "social","status","auscis","tarjeta_numero","fecha_emision","fecha_expiracion","categoria",
-  // empleo/ingreso
-  "tipo_ingreso","actividad_economica","empleador","telefono_empleador","periodo_ingreso",
-  "ingreso_por_periodo","ingreso_anual","nota_ingreso_ocasional","periodo_ingreso_ocasional",
-  "ingreso_por_periodo_ocasional",
-  // toggles
-  "whatsapp","telegram","texto_sms",
+  "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma",
+  "telefono", "secundario", "whatsapp_num", "email", "nota",
+  "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia",
+  "social", "status", "auscis", "tarjeta_numero", "fecha_emision", "fecha_expiracion", "categoria",
+  "tipo_ingreso", "actividad_economica", "empleador", "telefono_empleador", "periodo_ingreso",
+  "ingreso_por_periodo", "ingreso_anual", "nota_ingreso_ocasional", "periodo_ingreso_ocasional",
+  "ingreso_por_periodo_ocasional", "whatsapp", "telegram", "texto_sms"
 ]);
 
-// Campos del nivel raíz (cobertura/meta)
 const ROOT_FIELDS = new Set([
   "parentesco", "estado_cobertura", "codigo_poliza", "vigencia", "tipo",
   "fecha_activacion", "ano_cobertura", "elegibilidad",
@@ -97,17 +50,28 @@ const ROOT_FIELDS = new Set([
   "fecha_cancelacion", "fecha_retiro", "nota_retiro", "grupo", "nota_cancel"
 ]);
 
-const MONEY_FIELDS = new Set([
-  "ingreso_por_periodo",
-  "ingreso_anual",
-  "ingreso_por_periodo_ocasional",
-  "precio", // si quieres que precio también se formatee
-]);
-
-const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
-
-// 👇 Duplicamos a la raíz TODOS los campos de cliente (así el mapper del padre siempre los ve)
 const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
+
+/* =================== UTILIDADES =================== */
+const isTomador = (m = {}) => {
+  const v1 = String(m.tipo || "").toLowerCase();
+  const v2 = String(m.parentesco || "").toLowerCase();
+  return v1 === "tomador" || v2 === "tomador";
+};
+
+const toTitle = (s = "") =>
+  (s ?? "")
+    .toString()
+    .toLowerCase()
+    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+
+const fullName = (m) => {
+  const c = m?.cliente ?? m ?? {};
+  const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
+    .filter(Boolean)
+    .join(" ");
+  return composed || c.nombre_completo || m?.nombreCompleto || "Sin nombre";
+};
 
 const calcAge = (iso) => {
   if (!iso) return "";
@@ -122,20 +86,32 @@ const calcAge = (iso) => {
 
 const getC = (m) => (m?.cliente ? m.cliente : m);
 
-/** Normaliza a { root..., cliente:{...} } */
-const normalizeMember = (m, idx) => {
-  if (m?.cliente && typeof m.cliente === "object") 
-    return m;
+const buildDireccion = (src) =>
+  [src.calle, src.apto, src.ciudad, src.estado, src.codigo_postal]
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
 
-  const primerRaw  = m.primer_nombre || "";
+const yaEstaEnElGrupo = (clienteId, members) =>
+  members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
+
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
+
+/* =================== NORMALIZACIÓN =================== */
+const normalizeMember = (m, idx) => {
+  if (m?.cliente && typeof m.cliente === "object") return m;
+
+  const primerRaw = m.primer_nombre || "";
   const segundoRaw = m.segundo_nombre || "";
-  const apellRaw   = m.apellidos || "";
-  const fecha   = m.fecha_nacimiento || "";
-  const edad    = calcAge(fecha);
-  const primer  = toTitle(primerRaw);
-   const segundo = toTitle(segundoRaw);
-   const apell   = toTitle(apellRaw);
-   const nombre  = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g," ").trim();
+  const apellRaw = m.apellidos || "";
+  const fecha = m.fecha_nacimiento || "";
+  const edad = calcAge(fecha);
+  const primer = toTitle(primerRaw);
+  const segundo = toTitle(segundoRaw);
+  const apell = toTitle(apellRaw);
+  const nombre = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
+
   return {
     id: m.id ?? idx + 1,
     cliente_id: m.cliente_id ?? m.id ?? null,
@@ -151,10 +127,7 @@ const normalizeMember = (m, idx) => {
     plan: m.plan ?? null,
     metal: m.metal ?? null,
     red: m.red ?? null,
-    grupo: m.grupo || "", 
-    
-
-    // duplicados mínimos para cabecera
+    grupo: m.grupo || "",
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
@@ -165,8 +138,6 @@ const normalizeMember = (m, idx) => {
     ingreso_anual: m.ingreso_anual || "",
     nombreCompleto: nombre,
     nota: m.nota || "",
-
-    // objeto cliente completo
     cliente: {
       id: m.cliente_id ?? m.id ?? null,
       primer_nombre: primer,
@@ -177,13 +148,11 @@ const normalizeMember = (m, idx) => {
       fecha_nacimiento: fecha,
       edad,
       idioma: m.idioma || "",
-
       telefono: m.telefono || "",
       secundario: m.secundario || "",
       whatsapp_num: m.whatsapp_num || "",
       email: m.email || "",
       nota: m.nota || "",
-
       direccion: m.direccion || "",
       calle: m.calle || "",
       apto: m.apto || "",
@@ -192,7 +161,6 @@ const normalizeMember = (m, idx) => {
       codigo_postal: m.codigo_postal || "",
       condado: m.condado || "",
       dir_correspondencia: m.dir_correspondencia || "",
-
       social: m.social || "",
       status: m.status || "",
       auscis: m.auscis || "",
@@ -200,7 +168,6 @@ const normalizeMember = (m, idx) => {
       fecha_emision: m.fecha_emision || "",
       fecha_expiracion: m.fecha_expiracion || "",
       categoria: m.categoria || "",
-
       tipo_ingreso: m.tipo_ingreso || "",
       actividad_economica: m.actividad_economica || "",
       empleador: m.empleador || "",
@@ -211,203 +178,17 @@ const normalizeMember = (m, idx) => {
       nota_ingreso_ocasional: m.nota_ingreso_ocasional || "",
       periodo_ingreso_ocasional: m.periodo_ingreso_ocasional || "",
       ingreso_por_periodo_ocasional: m.ingreso_por_periodo_ocasional || "",
-
       whatsapp: !!m.whatsapp,
       telegram: !!m.telegram,
       texto_sms: !!m.texto_sms,
-     
-      telefonos: inflatePhones(m?.cliente?.telefonos || [], "co"),
-
-
-    },
+      telefonos: inflatePhones(m?.cliente?.telefonos || [], "co")
+    }
   };
 };
 
-// para crear cobertura con cliente existente
-const yaEstaEnElGrupo = (clienteId, members) =>
-  members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
-const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`; 
-
-
-// ===== Helpers Dirección =====
-const buildDireccion = (src) =>
-  [src.calle, src.apto, src.ciudad, src.estado, src.codigo_postal]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-
-const AddressSection = ({ c, onChange, readOnly }) => {
-  const [copyDir, setCopyDir] = React.useState(false);
-
-  // Cuando cambie un campo de dirección:
-  const handleAddressChange = (e) => {
-    // 1) Propagar cambio del campo original
-    onChange(e);
-
-    // 2) Calcular 'direccion' con el valor nuevo
-    const { name, value } = e.target;
-    const next = {
-      ...c,
-      [name]: value,
-    };
-    const direccionConcatenada = buildDireccion(next);
-
-    // 3) Enviar un evento sintético para actualizar 'direccion'
-    onChange({
-      target: { name: "direccion", value: direccionConcatenada, type: "text" },
-    });
-    const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';  // false en TOMA_DATOS
-    // 4) Si el toggle está activo, sincronizar dir_correspondencia también
-    if (copyDir) {
-      onChange({
-        target: {
-          name: "dir_correspondencia",
-          value: direccionConcatenada,
-          type: "text",
-        },
-      });
-    }
-  };
-
-  const handleCopyToggle = (e) => {
-    const checked = !!e.target.checked;
-    setCopyDir(checked);
-    if (checked) {
-      const direccionConcatenada = buildDireccion(c);
-      onChange({
-        target: {
-          name: "dir_correspondencia",
-          value: direccionConcatenada,
-          type: "text",
-        },
-      });
-    }
-  };
-
-  const direccionVisual = c.direccion || buildDireccion(c) || "";
-  const openMap = () => {
-    window.open("https://www.unitedstateszipcodes.org/", "_blank");
-  };
-  return (
-    <>
-      <div className="row g-3">
-      <Field label="Dirección de Residencia" className="col-10">
-  <div className="d-flex align-items-center position-relative">
-    <input
-      className="form-control form-control-sm pe-5" // deja espacio para el ícono
-      name="direccion"
-      value={direccionVisual}
-      onChange={onChange}
-      disabled={readOnly}
-      placeholder="Dirección completa (auto)"
-    />
-    <FaMapMarkerAlt
-      className="text-primary fs-5 position-absolute"
-      style={{
-        right: "10px",
-        cursor: readOnly ? "not-allowed" : "pointer",
-        opacity: readOnly ? 0.5 : 1,
-      }}
-      onClick={!readOnly ? openMap : undefined}
-      title="Abrir mapa / ZIP codes"
-    />
-  </div>
-</Field>
-
-        <Field label="Calle" className="col-md-4">
-          <input
-            className="form-control form-control-sm"
-            name="calle"
-            value={c.calle ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="APT" className="col-md-2">
-          <input
-            className="form-control form-control-sm"
-            name="apto"
-            value={c.apto ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Ciudad" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="ciudad"
-            value={c.ciudad ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Estado" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="estado"
-            value={c.estado ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Código Postal" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="codigo_postal"
-            value={c.codigo_postal ?? ""}
-            onChange={handleAddressChange}
-            disabled={readOnly}
-          />
-        </Field>
-        <Field label="Condado" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="condado"
-            value={c.condado ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Dirección de Correspondencia" className="col-md-9">
-          <input
-            className="form-control form-control-sm"
-            name="dir_correspondencia"
-            value={c.dir_correspondencia ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <div className="col-md-3 d-flex align-items-center">
-          <div className="form-check mt-3">
-            <input
-              className="form-check-input"
-              type="checkbox"
-              id="copy-dir-toggle"
-              checked={copyDir}
-              onChange={handleCopyToggle}
-              disabled={readOnly}
-            />
-            <label className="form-check-label" htmlFor="copy-dir-toggle">
-              Copiar Dirección
-            </label>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
-
-// === Derivados coherentes con ProspectoDatos ===
 const recomputeDerived = (m) => {
-  const fecha =
-    (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
+  const fecha = (m.fecha_nacimiento ?? m?.cliente?.fecha_nacimiento ?? "") || "";
   const edad = calcAge(fecha);
-
   const nombre = fullName(m);
 
   return {
@@ -418,70 +199,21 @@ const recomputeDerived = (m) => {
     cliente: {
       ...(m.cliente || {}),
       edad,
-      nombre_completo:
-        (m?.cliente?.nombre_completo && toTitle(m?.cliente?.nombre_completo)) ||
-        nombre,
-    },
+      nombre_completo: (m?.cliente?.nombre_completo && toTitle(m?.cliente?.nombre_completo)) || nombre
+    }
   };
 };
 
-/* ======================================================= */
-const TomaDeDatos = ({
-  familyMembers,
-  setFamilyMembers,
-  canAdd = false,
-  readOnly = false,
-  isProspecto = false,
-  defaultCoberturaTipo = "Plan de salud",
-  onCreateMemberRemote,   // alta remota para NUEVO
-  onBlockedAddClick,
-  grupoFamiliarId,
-}) => {
-  const [openModal, setOpenModal] = useState(false);
-  const [editingMember, setEditingMember] = useState(null);
-  const [openExistente, setOpenExistente] = useState(false);
-
-  const navigate = useNavigate();     
-// 1) normalizados (primero)
-const normalized = useMemo(
-  () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
-  [familyMembers]
-);
-const sortedNormalized = useMemo(() => {
-  return normalized
-    .map((m, i) => ({ m, i }))
-    .sort((a, b) => {
-      const pa = isTomador(a.m) ? 0 : 1;
-      const pb = isTomador(b.m) ? 0 : 1;
-      return pa - pb || a.i - b.i; // estable
-    })
-    .map(x => x.m);
-}, [normalized]);
-
-// 2) compañías (puede ir antes o después, no depende de normalized)
-const { companies, loading: companiesLoading } = useCompanies();
-
-// 3) opciones de pagadores (derivado de normalized)
-const payerOptions = useMemo(
-  () => buildPayerOptions(normalized),
-  [normalized]
-);
-const payerOptionsWithOther = useMemo(
-  () => [...(payerOptions || []), { value: "OTRO", label: "Otro (externo)" }],
-  [payerOptions]
-);
-  const [openCopy, setOpenCopy] = useState(false);
-
 const duplicateToRootFromCliente = (m, cliente) => {
-  // duplica a raíz los campos de cliente que ya usas en tu mapper/UX
   const dupe = {};
   [
-    "primer_nombre","segundo_nombre","apellidos","fecha_nacimiento","edad","genero","idioma",
-    "telefono","secundario","whatsapp_num","email","nota",
-    "direccion","calle","apto","ciudad","estado","codigo_postal","condado","dir_correspondencia",
-  ].forEach(k => { if (k in cliente) dupe[k] = cliente[k]; });
+    "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma",
+    "telefono", "secundario", "whatsapp_num", "email", "nota",
+    "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia"
+  ].forEach(k => {
+    if (k in cliente) dupe[k] = cliente[k];
+  });
 
-  // nombreCompleto derivado
   const nombreCompleto =
     cliente.nombre_completo ||
     [cliente.primer_nombre, cliente.segundo_nombre, cliente.apellidos].filter(Boolean).join(" ");
@@ -490,121 +222,270 @@ const duplicateToRootFromCliente = (m, cliente) => {
   return { ...m, ...dupe };
 };
 
-const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
-  const src = (familyMembers || []).find(
-    m => (m.id ?? m.cliente_id) === sourceId
-  );
-  if (!src) return;
+/* =================== COMPONENTES AUXILIARES =================== */
+const Field = ({ label, children, className = "col-md-6" }) => (
+  <div className={className}>
+    <label className="form-label small fw-semibold text-muted">{label}</label>
+    {children}
+  </div>
+);
 
-  setFamilyMembers(prev =>
-    (prev || []).map(m => {
-      const mid = m.id ?? m.cliente_id;
-      if (!targetIds.includes(mid)) return m;
+const AddressSection = ({ c, onChange, readOnly }) => {
+  const [copyDir, setCopyDir] = useState(false);
 
-      let next = { ...m };
+  const handleAddressChange = (e) => {
+    onChange(e);
 
-      // 1) Campos raíz (cobertura)
-      fieldKeys.forEach(k => {
-        // por seguridad, no pises IDs ni campos inexistentes
-        if (k in src) next[k] = src[k];
+    const { name, value } = e.target;
+    const next = { ...c, [name]: value };
+    const direccionConcatenada = buildDireccion(next);
+
+    onChange({
+      target: { name: "direccion", value: direccionConcatenada, type: "text" }
+    });
+
+    if (copyDir) {
+      onChange({
+        target: { name: "dir_correspondencia", value: direccionConcatenada, type: "text" }
       });
+    }
+  };
 
-      // 2) Bloque Dirección (cliente)
-      if (copyAddress) {
-        const srcCli = src.cliente || {};
-        const dstCliBase = next.cliente && typeof next.cliente === "object" ? next.cliente : {};
-        const newCli = { ...dstCliBase };
-        ADDRESS_FIELDS.forEach(k => {
-          if (k in srcCli) newCli[k] = srcCli[k];
-          else if (k in src) newCli[k] = src[k]; // por si algunos vienen en raíz
-        });
-        next.cliente = newCli;
-        next = duplicateToRootFromCliente(next, newCli);
-      }
+  const handleCopyToggle = (e) => {
+    const checked = !!e.target.checked;
+    setCopyDir(checked);
+    if (checked) {
+      const direccionConcatenada = buildDireccion(c);
+      onChange({
+        target: { name: "dir_correspondencia", value: direccionConcatenada, type: "text" }
+      });
+    }
+  };
 
-      return next;
-    })
+  const direccionVisual = c.direccion || buildDireccion(c) || "";
+  const openMap = () => window.open("https://www.unitedstateszipcodes.org/", "_blank");
+
+  return (
+    <div className="row g-3">
+      <Field label="Dirección de Residencia" className="col-10">
+        <div className="d-flex align-items-center position-relative">
+          <input
+            className="form-control form-control-sm pe-5"
+            name="direccion"
+            value={direccionVisual}
+            onChange={onChange}
+            disabled={readOnly}
+            placeholder="Dirección completa (auto)"
+          />
+          <FaMapMarkerAlt
+            className="text-primary fs-5 position-absolute"
+            style={{
+              right: "10px",
+              cursor: readOnly ? "not-allowed" : "pointer",
+              opacity: readOnly ? 0.5 : 1
+            }}
+            onClick={!readOnly ? openMap : undefined}
+            title="Abrir mapa / ZIP codes"
+          />
+        </div>
+      </Field>
+
+      <Field label="Calle" className="col-md-4">
+        <input
+          className="form-control form-control-sm"
+          name="calle"
+          value={c.calle ?? ""}
+          onChange={handleAddressChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="APT" className="col-md-2">
+        <input
+          className="form-control form-control-sm"
+          name="apto"
+          value={c.apto ?? ""}
+          onChange={handleAddressChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="Ciudad" className="col-md-3">
+        <input
+          className="form-control form-control-sm"
+          name="ciudad"
+          value={c.ciudad ?? ""}
+          onChange={handleAddressChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="Estado" className="col-md-3">
+        <input
+          className="form-control form-control-sm"
+          name="estado"
+          value={c.estado ?? ""}
+          onChange={handleAddressChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="Código Postal" className="col-md-3">
+        <input
+          className="form-control form-control-sm"
+          name="codigo_postal"
+          value={c.codigo_postal ?? ""}
+          onChange={handleAddressChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="Condado" className="col-md-3">
+        <input
+          className="form-control form-control-sm"
+          name="condado"
+          value={c.condado ?? ""}
+          onChange={onChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <Field label="Dirección de Correspondencia" className="col-md-9">
+        <input
+          className="form-control form-control-sm"
+          name="dir_correspondencia"
+          value={c.dir_correspondencia ?? ""}
+          onChange={onChange}
+          disabled={readOnly}
+        />
+      </Field>
+
+      <div className="col-md-3 d-flex align-items-center">
+        <div className="form-check mt-3">
+          <input
+            className="form-check-input"
+            type="checkbox"
+            id="copy-dir-toggle"
+            checked={copyDir}
+            onChange={handleCopyToggle}
+            disabled={readOnly}
+          />
+          <label className="form-check-label" htmlFor="copy-dir-toggle">
+            Copiar Dirección
+          </label>
+        </div>
+      </div>
+    </div>
   );
 };
 
-const onCreateLocal = useCallback(
-  (payload) => {
-    const newId =
-      (familyMembers?.length
-        ? Math.max(...familyMembers.map((m) => m.id || 0))
-        : 0) + 1;
+/* =================== COMPONENTE PRINCIPAL =================== */
+const TomaDeDatos = ({
+  familyMembers,
+  setFamilyMembers,
+  canAdd = false,
+  readOnly = false,
+  isProspecto = false,
+  defaultCoberturaTipo = "Plan de salud",
+  onCreateMemberRemote,
+  onBlockedAddClick,
+  grupoFamiliarId
+}) => {
+  const [openModal, setOpenModal] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
+  const [openExistente, setOpenExistente] = useState(false);
+  const [openCopy, setOpenCopy] = useState(false);
 
-    // idioma e ingreso sincronizados raíz/cliente
-    const ingreso =
-      payload.ingreso_anual ??
-      payload.ingresoAnual ??
-      payload?.cliente?.ingreso_anual ??
-      0;
+  const navigate = useNavigate();
 
-    const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+  // Normalización y ordenamiento
+  const normalized = useMemo(
+    () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
+    [familyMembers]
+  );
 
-    const base = {
-      fecha_retiro: null, // default coherente
-      ...payload,
-      id: newId,
-      ingreso_anual: ingreso,
-      idioma,
-      cliente: {
-        ...(payload.cliente || {}),
+  const sortedNormalized = useMemo(() => {
+    return normalized
+      .map((m, i) => ({ m, i }))
+      .sort((a, b) => {
+        const pa = isTomador(a.m) ? 0 : 1;
+        const pb = isTomador(b.m) ? 0 : 1;
+        return pa - pb || a.i - b.i;
+      })
+      .map(x => x.m);
+  }, [normalized]);
+
+  // Compañías y pagadores
+  const { companies, loading: companiesLoading } = useCompanies();
+  const payerOptions = useMemo(() => buildPayerOptions(normalized), [normalized]);
+  const payerOptionsWithOther = useMemo(
+    () => [...(payerOptions || []), { value: "OTRO", label: "Otro (externo)" }],
+    [payerOptions]
+  );
+
+  /* =================== HANDLERS =================== */
+  const onCreateLocal = useCallback(
+    (payload) => {
+      const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
+      const ingreso = payload.ingreso_anual ?? payload.ingresoAnual ?? payload?.cliente?.ingreso_anual ?? 0;
+      const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+
+      const base = {
+        fecha_retiro: null,
+        ...payload,
+        id: newId,
         ingreso_anual: ingreso,
         idioma,
-      },
-    };
+        cliente: {
+          ...(payload.cliente || {}),
+          ingreso_anual: ingreso,
+          idioma
+        }
+      };
 
-    const normalized = normalizeMember(base, newId - 1);
-    const withDerived = recomputeDerived(normalized);
+      const normalized = normalizeMember(base, newId - 1);
+      const withDerived = recomputeDerived(normalized);
+      setFamilyMembers(prev => [...(prev ?? []), withDerived]);
+      setOpenModal(false);
+    },
+    [familyMembers, setFamilyMembers]
+  );
 
-    setFamilyMembers((prev) => ([...(prev ?? []), withDerived]));
-    setOpenModal(false);
-  },
-  [familyMembers, setFamilyMembers]
-);
+  const onUpdateLocal = useCallback(
+    (id, payload) => {
+      setFamilyMembers(prev =>
+        (prev ?? []).map(m => {
+          if ((m.id ?? null) !== id) return m;
+          const merged = { ...m, ...payload, id };
+          return recomputeDerived(merged);
+        })
+      );
+    },
+    [setFamilyMembers]
+  );
 
-const onUpdateLocal = useCallback(
-  (id, payload) => {
-    setFamilyMembers((prev) =>
-      (prev ?? []).map((m) => {
-        if ((m.id ?? null) !== id) return m;
-        const merged = { ...m, ...payload, id };
-        return recomputeDerived(merged);
-      })
-    );
-  },
-  [setFamilyMembers]
-);
-
-
-  /* ---------- UI ---------- */
   const handleAdd = () => {
     if (!canAdd) return onBlockedAddClick?.();
     setEditingMember(null);
     setOpenModal(true);
   };
 
-  /* ---------- Patchers (edición en local para “Guardar” global) ---------- */
   const patchRoot = (idx, patch) => {
-    setFamilyMembers((prev) =>
+    setFamilyMembers(prev =>
       (prev ?? []).map((m, i) => (i === idx ? { ...m, ...patch } : m))
     );
   };
 
   const patchCliente = (idx, patch) => {
-    setFamilyMembers((prev) =>
+    setFamilyMembers(prev =>
       (prev ?? []).map((m, i) => {
         if (i !== idx) return m;
-  
+
         const base = m?.cliente && typeof m.cliente === "object" ? m.cliente : {};
         let nextCliente = { ...base, ...patch };
-  
-        // 👇 DECLARAR dupe ANTES DE USARLO
         const dupe = {};
-  
-        // ✅ Teléfonos: limpiar y derivar legacy sin usar dupe antes de declararlo
+
+        // Teléfonos
         if (Array.isArray(patch.telefonos)) {
           const cleaned = (patch.telefonos || []).map((t, j) => ({
             id: t.id ?? `ph-${j}`,
@@ -612,24 +493,23 @@ const onUpdateLocal = useCallback(
             numero: formatPhone334 ? formatPhone334(t.numero ?? "") : (t.numero ?? ""),
             principal: !!t.principal,
             iso: String(t.iso || "").toLowerCase(),
-            indicativo: String(t.indicativo || "").replace(/\D+/g, ""),
+            indicativo: String(t.indicativo || "").replace(/\D+/g, "")
           }));
           nextCliente.telefonos = cleaned;
-  
-          // Derivar legacy PARA COMPATIBILIDAD (esto sí puede tocar dupe)
+
           const legacy = toLegacyFields(cleaned);
           dupe.telefono = legacy.telefono;
           dupe.secundario = legacy.secundario;
           dupe.whatsapp_num = legacy.whatsapp_num;
           dupe.principal = legacy.principal;
         }
-  
-        // Derivados
+
+        // Edad
         if ("fecha_nacimiento" in patch) {
           nextCliente.edad = calcAge(patch.fecha_nacimiento);
         }
-  
-        // Nombre completo bonito
+
+        // Nombre completo
         const nombreCompleto = [nextCliente.primer_nombre, nextCliente.segundo_nombre, nextCliente.apellidos]
           .map(toTitle)
           .filter(Boolean)
@@ -637,79 +517,72 @@ const onUpdateLocal = useCallback(
         if (nombreCompleto) {
           nextCliente.nombre_completo = nombreCompleto;
         }
-  
-        // Sincronía de idioma raíz/cliente
+
+        // Idioma
         if ("idioma" in patch) {
           nextCliente.idioma = patch.idioma ?? "";
         }
-  
-        // Duplicados a la raíz
-        DUPLICATE_TO_ROOT.forEach((k) => {
+
+        // Duplicar a raíz
+        DUPLICATE_TO_ROOT.forEach(k => {
           if (k in nextCliente) dupe[k] = nextCliente[k];
         });
         if (nombreCompleto) {
           dupe.nombreCompleto = nombreCompleto;
           dupe.nombre_completo = nombreCompleto;
         }
-  
+
         const merged = { ...m, ...dupe, cliente: nextCliente };
         return recomputeDerived(merged);
       })
     );
   };
-  
-  
 
   const onChangeFactory = (idx) => (e) => {
     const { name, value, type, checked } = e.target;
     let v = type === "checkbox" ? !!checked : value;
 
+    // Pagador especial
     if (name === "pagador_id") {
-      const vv =
-        value === "OTRO" || value === "" || value == null
-          ? null
-          : Number.isNaN(Number(value)) ? null : Number(value);
+      const vv = value === "OTRO" || value === "" || value == null
+        ? null
+        : Number.isNaN(Number(value)) ? null : Number(value);
       return patchRoot(idx, { pagador_id: vv });
     }
-  
-    // ⬇️ Máscaras
-    if (name === "social") v = formatSSN(v);       // 3-2-4
-    if (name === "auscis") v = formatUSCIS(v);     // A + 3-3-3
-    if (PHONE_FIELDS.has(name)) v = formatPhone334(v); // Teléfono
-  
-    // dinero
+
+    // Máscaras
+    if (name === "social") v = formatSSN(v);
+    if (name === "auscis") v = formatUSCIS(v);
+    if (PHONE_FIELDS.has(name)) v = formatPhone334(v);
+
+    // Dinero
     if (MONEY_FIELDS.has(name)) v = sanitizeMoneyInput(v);
-  
-    // capitalización de nombres
+
+    // Capitalización
     if (NAME_FIELDS.has(name)) v = toTitle(v);
-  
+
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
-  
-    // cálculo ingreso anual (igual que ya tenías)
-      if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
-          const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
-          const perRaw  = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
-          // perRaw viene en “centavos”; pásalo a dólares para el cálculo:
-          const perDollars = (parseMoney(String(perRaw)) || 0) / 100;
-          patch.ingreso_anual = formatMoney2(computeAnnual(periodo, perDollars));
-        }
-       
+
+    // Cálculo ingreso anual
+    if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
+      const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
+      const perRaw = name === "ingreso_por_periodo" ? v : (current.ingreso_por_periodo ?? "");
+      const perDollars = (parseMoney(String(perRaw)) || 0) / 100;
+      patch.ingreso_anual = formatMoney2(computeAnnual(periodo, perDollars));
+    }
+
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
-        
-    if (ROOT_FIELDS.has(name))   return patchRoot(idx, patch);
+    if (ROOT_FIELDS.has(name)) return patchRoot(idx, patch);
     return patchCliente(idx, patch);
   };
-  
-  
-  
+
   const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
     const cur = getC(normalized[idx] || {});
     const val = cur?.[fieldName];
     const formatted = formatMoney2(val);
     const patch = { [fieldName]: formatted };
-  
-    // si salimos de ingreso_por_periodo, recalcula anual otra vez para “ajustar” los 2 decimales
+
     if (fieldName === "ingreso_por_periodo") {
       patch.ingreso_anual = formatMoney2(
         computeAnnual(cur.periodo_ingreso ?? "", formatted)
@@ -717,108 +590,126 @@ const onUpdateLocal = useCallback(
     }
     return isCliente ? patchCliente(idx, patch) : patchRoot(idx, patch);
   };
-  
 
-  const toggleClienteBool = (idx, key) => (e) => patchCliente(idx, { [key]: !!e.target.checked });
+  const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+    const src = (familyMembers || []).find(m => (m.id ?? m.cliente_id) === sourceId);
+    if (!src) return;
 
-  /* ---------- Crear cobertura para CLIENTE EXISTENTE ---------- */
+    setFamilyMembers(prev =>
+      (prev || []).map(m => {
+        const mid = m.id ?? m.cliente_id;
+        if (!targetIds.includes(mid)) return m;
+
+        let next = { ...m };
+
+        fieldKeys.forEach(k => {
+          if (k in src) next[k] = src[k];
+        });
+
+        if (copyAddress) {
+          const srcCli = src.cliente || {};
+          const dstCliBase = next.cliente && typeof next.cliente === "object" ? next.cliente : {};
+          const newCli = { ...dstCliBase };
+          ADDRESS_FIELDS.forEach(k => {
+            if (k in srcCli) newCli[k] = srcCli[k];
+            else if (k in src) newCli[k] = src[k];
+          });
+          next.cliente = newCli;
+          next = duplicateToRootFromCliente(next, newCli);
+        }
+
+        return next;
+      })
+    );
+  };
+
   const handleCreateCoberturaExistente = useCallback(
     async (payload, clienteSeleccionado) => {
       if (!grupoFamiliarId || !payload?.cliente_id) return;
       if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
-      
 
       const res = await GrupoFamiliarService.createCoberturaSimple({
         grupo_familiar_id: grupoFamiliarId,
         cliente_id: payload.cliente_id,
         parentesco: payload.tipo,
         cobertura_tipo: payload.cobertura_tipo,
-        estado_cobertura: payload.estado_cobertura,
+        estado_cobertura: payload.estado_cobertura
       });
-        if (res?.miembro?.cliente || res?.miembro) {
-             const mSrv = res.miembro;
-             // intenta sacar el id real de la cobertura de varias posibles rutas
-             const coberturaId =
-               mSrv.cobertura_id ??
-               mSrv?.cobertura?.id ??
-               res?.cobertura?.id ??
-               res?.id ??
-               null;
-        
-             const merged = normalizeMember(
-               {
-                 ...mSrv,
-                 tipo: mSrv.tipo || payload.tipo,
-                 parentesco: mSrv.parentesco || payload.tipo,
-                 estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
-                 cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
-                 cobertura_id: coberturaId,     // 👈 marca que YA existe en BD
-                 _remote_created: true,         // 👈 bandera para depurar si hace falta
-               },
-               (familyMembers?.length ?? 0)
-             );
-             setFamilyMembers((prev) => [...(prev ?? []), merged]);
-           } else {
-             // fallback local si el server no devolvió shape completo
-             const c = clienteSeleccionado || {};
-             const nombreCompleto =
-               c.nombre_completo ||
-               [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" ");
-             const local = normalizeMember(
-               {
-                 cliente_id: c.id,
-                 cobertura_id: null,
-                 tipo: payload.tipo,
-                 parentesco: payload.tipo,
-                 estado_cobertura: payload.estado_cobertura,
-                 cobertura_tipo: payload.cobertura_tipo,
-                 cliente: {
-                   id: c.id,
-                   primer_nombre: c.primer_nombre,
-                   segundo_nombre: c.segundo_nombre,
-                   apellidos: c.apellidos,
-                   nombre_completo: nombreCompleto,
-                   genero: c.genero || "",
-                   fecha_nacimiento: c.fecha_nacimiento || "",
-                   idioma: c.idioma || "",
-                 },
-                 _remote_created: true,
-               },
-               (familyMembers?.length ?? 0)
-             );
-             setFamilyMembers((prev) => [...(prev ?? []), local]);
-           }
-      
+
+      if (res?.miembro?.cliente || res?.miembro) {
+        const mSrv = res.miembro;
+        const coberturaId = mSrv.cobertura_id ?? mSrv?.cobertura?.id ?? res?.cobertura?.id ?? res?.id ?? null;
+
+        const merged = normalizeMember(
+          {
+            ...mSrv,
+            tipo: mSrv.tipo || payload.tipo,
+            parentesco: mSrv.parentesco || payload.tipo,
+            estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
+            cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
+            cobertura_id: coberturaId,
+            _remote_created: true
+          },
+          (familyMembers?.length ?? 0)
+        );
+        setFamilyMembers(prev => [...(prev ?? []), merged]);
+      } else {
+        const c = clienteSeleccionado || {};
+        const nombreCompleto = c.nombre_completo ||
+          [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" ");
+        const local = normalizeMember(
+          {
+            cliente_id: c.id,
+            cobertura_id: null,
+            tipo: payload.tipo,
+            parentesco: payload.tipo,
+            estado_cobertura: payload.estado_cobertura,
+            cobertura_tipo: payload.cobertura_tipo,
+            cliente: {
+              id: c.id,
+              primer_nombre: c.primer_nombre,
+              segundo_nombre: c.segundo_nombre,
+              apellidos: c.apellidos,
+              nombre_completo: nombreCompleto,
+              genero: c.genero || "",
+              fecha_nacimiento: c.fecha_nacimiento || "",
+              idioma: c.idioma || ""
+            },
+            _remote_created: true
+          },
+          (familyMembers?.length ?? 0)
+        );
+        setFamilyMembers(prev => [...(prev ?? []), local]);
+      }
+
       return res;
     },
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length]
   );
 
-  /* ============================ Render ============================ */
+  /* =================== RENDER =================== */
   return (
     <div className="container-fluid p-0">
       {!readOnly && (
-  <div className="d-flex justify-content-between align-items-center mb-3">
-    <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
-    <div className="btn-group">
-  {canAdd ? (
-    <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
-  ) : (
-    <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
-  )}
-  <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
-    <i className="fas fa-users me-1" /> Miembros existentes
-  </button>
-  <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
-    <i className="fas fa-copy me-1" /> Copiar
-  </button>
-</div>
-  </div>
-)}
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
+          <div className="btn-group">
+            {canAdd ? (
+              <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
+            ) : (
+              <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
+            )}
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
+              <i className="fas fa-users me-1" /> Miembros existentes
+            </button>
+            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
+              <i className="fas fa-copy me-1" /> Copiar
+            </button>
+          </div>
+        </div>
+      )}
 
-
-{sortedNormalized.map((m, idx) => {
-
+      {sortedNormalized.map((m, idx) => {
         const itemId = `member-${m.id ?? idx}`;
         const leftRightWidth = 180;
         const c = getC(m);
@@ -831,15 +722,16 @@ const onUpdateLocal = useCallback(
           grupoValor === "G4" ? "bg-danger" :
           "bg-secondary";
 
-          const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
+        const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
+
         return (
           <div className="card shadow-sm mb-3" key={itemId}>
             {/* Header */}
             <div className="card-header bg-white border-0 px-4 py-3">
               <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
-                 <span className={`badge bg-${getTypeColor(m.tipo)}`}>
-                     {m.tipo || "Miembro"}
+                  <span className={`badge bg-${getTypeColor(m.tipo)}`}>
+                    {m.tipo || "Miembro"}
                   </span>
                   <div className="mt-2">
                     <UserCoverageIcon status={m.estado_cobertura} size={50} />
@@ -847,15 +739,15 @@ const onUpdateLocal = useCallback(
                 </div>
 
                 <div className="flex-grow-1 text-center">
-                  {/* ✅ NUEVO: nombre clickeable si hay clienteId */}
                   {clienteId ? (
                     <span
                       role="button"
                       className="fw-semibold text-primary text-decoration-none"
+                      style={{ cursor: 'pointer' }}
                       title={`Abrir ficha del cliente #${clienteId}`}
                       onClick={(e) => {
                         e.preventDefault();
-                        e.stopPropagation(); // evita toggles del acordeón
+                        e.stopPropagation();
                         navigate(CLIENTE_FICHA_PATH(clienteId));
                       }}
                     >
@@ -867,28 +759,27 @@ const onUpdateLocal = useCallback(
                 </div>
 
                 <div
-                className="d-flex align-items-center justify-content-end ms-3"
-                style={{ width: leftRightWidth }}
-              >
-                <div className="text-start me-3">
-                  <div className="small">
-                    <span className="text-muted">Edad: </span>
-                    <span className="fw-semibold text-muted">
-                      {c.edad ?? m.edad ?? "N/A"}
-                    </span>
-                  </div>
-                  <div className="small text-muted">
-                    Género: {c.genero ?? m.genero ?? "—"}
-                  </div>
-                  <div className="small">
-                    Grupo:{" "}
-                    <span className={`badge ${badgeClass}`}>
-                      {grupoValor || "—"}
-                    </span>
+                  className="d-flex align-items-center justify-content-end ms-3"
+                  style={{ width: leftRightWidth }}
+                >
+                  <div className="text-start me-3">
+                    <div className="small">
+                      <span className="text-muted">Edad: </span>
+                      <span className="fw-semibold text-muted">
+                        {c.edad ?? m.edad ?? "N/A"}
+                      </span>
+                    </div>
+                    <div className="small text-muted">
+                      Género: {c.genero ?? m.genero ?? "—"}
+                    </div>
+                    <div className="small">
+                      Grupo:{" "}
+                      <span className={`badge ${badgeClass}`}>
+                        {grupoValor || "—"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-
               </div>
             </div>
 
@@ -941,38 +832,38 @@ const onUpdateLocal = useCallback(
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                              <Field label="Primer Nombre" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="primer_nombre"
-                                      value={c.primer_nombre ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      style={{ textTransform: "capitalize" }}
-                                    />
-                                  </Field>
+                                <Field label="Primer Nombre" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="primer_nombre"
+                                    value={c.primer_nombre ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    style={{ textTransform: "capitalize" }}
+                                  />
+                                </Field>
 
-                                  <Field label="Segundo Nombre" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="segundo_nombre"
-                                      value={c.segundo_nombre ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      style={{ textTransform: "capitalize" }}
-                                    />
-                                  </Field>
+                                <Field label="Segundo Nombre" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="segundo_nombre"
+                                    value={c.segundo_nombre ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    style={{ textTransform: "capitalize" }}
+                                  />
+                                </Field>
 
-                                  <Field label="Apellidos" className="col-md-4">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="apellidos"
-                                      value={c.apellidos ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      style={{ textTransform: "capitalize" }}
-                                    />
-                                  </Field>
+                                <Field label="Apellidos" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="apellidos"
+                                    value={c.apellidos ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    style={{ textTransform: "capitalize" }}
+                                  />
+                                </Field>
 
                                 <Field label="Fecha de Nacimiento" className="col-md-4">
                                   <input
@@ -984,6 +875,7 @@ const onUpdateLocal = useCallback(
                                     disabled={readOnly}
                                   />
                                 </Field>
+
                                 <Field label="Edad" className="col-md-2">
                                   <input
                                     type="number"
@@ -993,6 +885,7 @@ const onUpdateLocal = useCallback(
                                     readOnly
                                   />
                                 </Field>
+
                                 <Field label="Género" className="col-md-3">
                                   <select
                                     className="form-select form-select-sm"
@@ -1007,13 +900,13 @@ const onUpdateLocal = useCallback(
                                     <option value="Otro">Otro</option>
                                   </select>
                                 </Field>
+
                                 <Field label="Idioma" className="col-md-3">
-                                <LanguageSelect
+                                  <LanguageSelect
                                     name="idioma"
                                     value={c.idioma ?? ""}
                                     onChange={onChange}
                                     disabled={readOnly}
-                                    // getValue={(l)=>l.code}   // opcional si prefieres guardar el code
                                     className="form-select form-select-sm"
                                   />
                                 </Field>
@@ -1044,18 +937,17 @@ const onUpdateLocal = useCallback(
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                              <Field label="Social" className="col-md-6">
-                                <input
-                                  className="form-control form-control-sm"
-                                  name="social"
-                                  value={c.social ?? ""}
-                                  onChange={onChange}
-                                  disabled={readOnly}
-                                  inputMode="numeric"
-                                  maxLength={11}            // 123-45-6789
-                                  
-                                />
-                              </Field>
+                                <Field label="Social" className="col-md-6">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="social"
+                                    value={c.social ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    inputMode="numeric"
+                                    maxLength={11}
+                                  />
+                                </Field>
 
                                 <Field label="Status" className="col-md-6">
                                   <select
@@ -1082,18 +974,16 @@ const onUpdateLocal = useCallback(
                                 </Field>
 
                                 <Field label="A/USCIS" className="col-md-6">
-                                    <input
-                                      className="form-control form-control-sm"
-                                      name="auscis"
-                                      value={c.auscis ?? ""}
-                                      onChange={onChange}
-                                      disabled={readOnly}
-                                      inputMode="numeric"
-                                      maxLength={12}            // A123-456-789  (use 13 if you show A-123-456-789)
-                                      
-                                    />
-                                  </Field>
-
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="auscis"
+                                    value={c.auscis ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    inputMode="numeric"
+                                    maxLength={12}
+                                  />
+                                </Field>
 
                                 <Field label="Tarjeta #" className="col-md-6">
                                   <input
@@ -1115,6 +1005,7 @@ const onUpdateLocal = useCallback(
                                     disabled={readOnly}
                                   />
                                 </Field>
+
                                 <Field label="Fecha Expiración" className="col-md-3">
                                   <input
                                     type="date"
@@ -1125,6 +1016,7 @@ const onUpdateLocal = useCallback(
                                     disabled={readOnly}
                                   />
                                 </Field>
+
                                 <Field label="Categoría" className="col-md-6">
                                   <input
                                     className="form-control form-control-sm"
@@ -1161,29 +1053,13 @@ const onUpdateLocal = useCallback(
                           >
                             <div className="accordion-body">
                               <div className="row g-3">
-                              
-
-                            
-                              <Field label="Teléfonos" className="col-12">
-                                <TelefonosPro
-                                  value={Array.isArray(c.telefonos) ? c.telefonos : []}
-                                  onChange={(arr) => patchCliente(idx, { telefonos: arr })}
-                                  readOnly={readOnly}
-                                />
-                              </Field>
-
-
-                                <Field label="Nota" className="col-12">
-                                  <textarea
-                                    rows={3}
-                                    className="form-control form-control-sm"
-                                    name="nota"
-                                    value={c.nota ?? ""}
-                                    onChange={onChange}
-                                    disabled={readOnly}
+                                <Field label="Teléfonos" className="col-12">
+                                  <TelefonosPro
+                                    value={Array.isArray(c.telefonos) ? c.telefonos : []}
+                                    onChange={(arr) => patchCliente(idx, { telefonos: arr })}
+                                    readOnly={readOnly}
                                   />
                                 </Field>
-
 
                                 <Field label="Email" className="col-md-6">
                                   <input
@@ -1194,6 +1070,17 @@ const onUpdateLocal = useCallback(
                                     onChange={onChange}
                                     disabled={readOnly}
                                     placeholder="correo@dominio.com"
+                                  />
+                                </Field>
+
+                                <Field label="Nota" className="col-12">
+                                  <textarea
+                                    rows={3}
+                                    className="form-control form-control-sm"
+                                    name="nota"
+                                    value={c.nota ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
                                   />
                                 </Field>
                               </div>
@@ -1221,13 +1108,9 @@ const onUpdateLocal = useCallback(
                             aria-labelledby={`direccion-${itemId}`}
                             data-bs-parent={`#sub-accordion-${itemId}`}
                           >
-                              <div className="accordion-body">
-                                <AddressSection c={c} onChange={onChange} readOnly={readOnly} idBase={itemId} />
-                              </div>
-
-
-
-                              
+                            <div className="accordion-body">
+                              <AddressSection c={c} onChange={onChange} readOnly={readOnly} />
+                            </div>
                           </div>
                         </div>
 
@@ -1322,30 +1205,30 @@ const onUpdateLocal = useCallback(
                                 </Field>
 
                                 <Field label="Ingreso por Período ($)" className="col-md-4">
-                                      <input
-                                        className="form-control form-control-sm"
-                                        inputMode="decimal"           // teclado numérico en móvil
-                                        name="ingreso_por_periodo"
-                                        value={c.ingreso_por_periodo ?? ""}
-                                        onChange={onChange}
-                                        onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo")} // ← formatea 2 decimales
-                                        disabled={readOnly}
-                                        placeholder="0.00"
-                                      />
-                                    </Field>
+                                  <input
+                                    className="form-control form-control-sm"
+                                    inputMode="decimal"
+                                    name="ingreso_por_periodo"
+                                    value={c.ingreso_por_periodo ?? ""}
+                                    onChange={onChange}
+                                    onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo")}
+                                    disabled={readOnly}
+                                    placeholder="0.00"
+                                  />
+                                </Field>
 
-                                    <Field label="Ingreso Anual ($)" className="col-md-4">
-                                      <input
-                                        className="form-control form-control-sm"
-                                        inputMode="decimal"
-                                        name="ingreso_anual"
-                                        value={c.ingreso_anual ?? ""}
-                                        onChange={onChange}
-                                        onBlur={onBlurMoneyFactory(idx, "ingreso_anual")}
-                                        disabled={readOnly}      // o readOnly={!readOnly} si no quieres permitir edición manual
-                                        placeholder="0.00"
-                                      />
-                                    </Field>
+                                <Field label="Ingreso Anual ($)" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    inputMode="decimal"
+                                    name="ingreso_anual"
+                                    value={c.ingreso_anual ?? ""}
+                                    onChange={onChange}
+                                    onBlur={onBlurMoneyFactory(idx, "ingreso_anual")}
+                                    disabled={readOnly}
+                                    placeholder="0.00"
+                                  />
+                                </Field>
 
                                 <div className="col-12">
                                   <div className="small fw-semibold text-muted mt-2">Ingreso Ocasional</div>
@@ -1370,6 +1253,7 @@ const onUpdateLocal = useCallback(
                                     onChange={onChange}
                                     disabled={readOnly}
                                   >
+                                    <option value="">Seleccione</option>
                                     <option value="HOUR">HOUR</option>
                                     <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
                                     <option value="WEEKLY">WEEKLY</option>
@@ -1395,299 +1279,277 @@ const onUpdateLocal = useCallback(
                             </div>
                           </div>
                         </div>
-                        
-                         
 
-                              {/* MEDIOS DE PAGO */}
-
-                                   
-                                <MediosPagoAccordionItem
-                                itemId={itemId}
-                                clienteId={m.cliente_id || m?.cliente?.id || m.id}
-                                parentId={`sub-accordion-${itemId}`}
-                              />
-
-
-
-                        {/* Fin sub-acordeones */}
+                        {/* Medios de Pago */}
+                        <MediosPagoAccordionItem
+                          itemId={itemId}
+                          clienteId={m.cliente_id || m?.cliente?.id || m.id}
+                          parentId={`sub-accordion-${itemId}`}
+                        />
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Datos Cobertura */}
-                {/* Datos Cobertura */}
-<div className="accordion-item">
-  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
-    <button
-      className="accordion-button collapsed py-3 px-4"
-      type="button"
-      data-bs-toggle="collapse"
-      data-bs-target={`#collapse-cobertura-${itemId}`}
-      aria-expanded="false"
-      aria-controls={`collapse-cobertura-${itemId}`}
-    >
-      <i className="fas fa-shield-alt me-2 text-muted" />
-      <span className="fw-semibold">Datos Cobertura</span>
-    </button>
-  </h2>
+                <div className="accordion-item">
+                  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
+                    <button
+                      className="accordion-button collapsed py-3 px-4"
+                      type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target={`#collapse-cobertura-${itemId}`}
+                      aria-expanded="false"
+                      aria-controls={`collapse-cobertura-${itemId}`}
+                    >
+                      <i className="fas fa-shield-alt me-2 text-muted" />
+                      <span className="fw-semibold">Datos Cobertura</span>
+                    </button>
+                  </h2>
 
-  <div
-    id={`collapse-cobertura-${itemId}`}
-    className="accordion-collapse collapse"
-    aria-labelledby={`cobertura-${itemId}`}
-    data-bs-parent={`#accordion-${itemId}`}
-  >
-    <div className="accordion-body px-4 py-4">
+                  <div
+                    id={`collapse-cobertura-${itemId}`}
+                    className="accordion-collapse collapse"
+                    aria-labelledby={`cobertura-${itemId}`}
+                    data-bs-parent={`#accordion-${itemId}`}
+                  >
+                    <div className="accordion-body px-4 py-4">
+                      <div className="row g-3">
+                        <Field label="Código Póliza" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            type="text"
+                            name="codigo_poliza"
+                            value={m.codigo_poliza || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="ID Póliza"
+                          />
+                        </Field>
 
-      {/* Row 1 */}
-      <div className="row g-3">
-        <Field label="Código Póliza" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            type="text"
-            name="codigo_poliza"
-            value={m.codigo_poliza || ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="ID Póliza"
-          />
-        </Field>
+                        <Field label="Fecha de Activación" className="col-md-3">
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            name="fecha_activacion"
+                            value={(m.fecha_activacion || "").slice(0, 10)}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          />
+                        </Field>
 
-        <Field label="Fecha de Activación" className="col-md-3">
-          <input
-            type="date"
-            className="form-control form-control-sm"
-            name="fecha_activacion"
-            value={(m.fecha_activacion || "").slice(0, 10)}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
+                        <Field label="Año de Cobertura" className="col-md-3">
+                          <input
+                            type="number"
+                            min="2000"
+                            max="2100"
+                            className="form-control form-control-sm"
+                            name="ano_cobertura"
+                            value={m.ano_cobertura || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="aaaa"
+                          />
+                        </Field>
 
-        <Field label="Año de Cobertura" className="col-md-3">
-          <input
-            type="number"
-            min="2000"
-            max="2100"
-            className="form-control form-control-sm"
-            name="ano_cobertura"
-            value={m.ano_cobertura || ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="aaaa"
-          />
-        </Field>
+                        <Field label="Elegibilidad" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            name="elegibilidad"
+                            value={m.elegibilidad || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="Elegibilidad"
+                          />
+                        </Field>
+                      </div>
 
-        <Field label="Elegibilidad" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="elegibilidad"
-            value={m.elegibilidad || ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="Elegibilidad"
-          />
-        </Field>
-      </div>
+                      <div className="row g-3">
+                        <Field label="Compañía" className="col-md-3">
+                          <CompanySelect
+                            companies={companies}
+                            value={m.compania_id ?? m.compania?.id ?? ""}
+                            onChange={onChange}
+                            disabled={readOnly || companiesLoading}
+                          />
+                        </Field>
 
-      {/* Row 2 */}
-      <div className="row g-3">
-      <Field label="Compañía" className="col-md-3">
-        <CompanySelect
-          companies={companies}
-          value={m.compania_id ?? m.compania?.id ?? ""}
-          onChange={onChange}                    // <-- works with onChangeFactory(e)
-          disabled={readOnly || companiesLoading}
-        />
-      </Field>
+                        <Field label="Plan" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            name="plan"
+                            value={m.plan || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="Nombre del plan"
+                          />
+                        </Field>
 
+                        <Field label="Metal" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="metal"
+                            value={m.metal || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          >
+                            <option value="">Seleccione…</option>
+                            <option value="BRONCE">BRONCE</option>
+                            <option value="SILVER">SILVER</option>
+                            <option value="GOLD">GOLD</option>
+                            <option value="PLATINUM">PLATINUM</option>
+                          </select>
+                        </Field>
 
+                        <Field label="Red" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="red"
+                            value={m.red || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          >
+                            <option value="">Seleccione…</option>
+                            <option value="HMO">HMO</option>
+                            <option value="EPO">EPO</option>
+                            <option value="PPO">PPO</option>
+                            <option value="POS">POS</option>
+                          </select>
+                        </Field>
+                      </div>
 
-        <Field label="Plan" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="plan"
-            value={m.plan || ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="Nombre del plan"
-          />
-        </Field>
+                      <div className="row g-3">
+                        <Field label="Cobertura" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="estado_cobertura"
+                            value={m.estado_cobertura || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          >
+                            <option value="">Seleccione…</option>
+                            <option value="Sí">Sí</option>
+                            <option value="No">No</option>
+                            <option value="Medicare">Medicare</option>
+                            <option value="Medicaid">Medicaid</option>
+                          </select>
+                        </Field>
 
-        <Field label="Metal" className="col-md-3">
-          <select
-            className="form-select form-select-sm"
-            name="metal"
-            value={m.metal || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          >
-            <option value="">Seleccione…</option>
-            <option value="BRONCE">BRONCE</option>
-            <option value="SILVER">SILVER</option>
-            <option value="GOLD">GOLD</option>
-            <option value="PLATINUM">PLATINUM</option>
-          </select>
-        </Field>
+                        <Field label="Pagador" className="col-md-3">
+                          <PayerSelect
+                            options={payerOptionsWithOther}
+                            value={
+                              m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
+                                ? "OTRO"
+                                : String(m.pagador_id)
+                            }
+                            onChange={onChange}
+                            disabled={readOnly}
+                          />
+                        </Field>
 
-        <Field label="Red" className="col-md-3">
-          <select
-            className="form-select form-select-sm"
-            name="red"
-            value={m.red || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          >
-            <option value="">Seleccione…</option>
-            <option value="HMO">HMO</option>
-            <option value="EPO">EPO</option>
-            <option value="PPO">PPO</option>
-            <option value="POS">POS</option>
-          </select>
-        </Field>
-      </div>
+                        <Field label="Tipo de Pago" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="tipo_pago"
+                            value={m.tipo_pago || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          >
+                            <option value="">Seleccione…</option>
+                            <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
+                            <option value="CTE PAGA">CTE PAGA</option>
+                            <option value="MES A MES">MES A MES</option>
+                          </select>
+                        </Field>
 
-      {/* Row 3 */}
-      <div className="row g-3">
-        <Field label="Cobertura" className="col-md-3">
-          <select
-            className="form-select form-select-sm"
-            name="estado_cobertura"
-            value={m.estado_cobertura || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          >
-            <option value="">Seleccione…</option>
-            <option value="Sí">Sí</option>
-            <option value="No">No</option>
-            <option value="Medicare">Medicare</option>
-            <option value="Medicaid">Medicaid</option>
-          </select>
-        </Field>
+                        <Field label="Dia de Pago" className="col-md-3">
+                          <input
+                            type="number"
+                            className="form-control form-control-sm"
+                            name="dia_pago"
+                            value={m.dia_pago || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          />
+                        </Field>
+                      </div>
 
-        <Field label="Pagador" className="col-md-3">
-            <PayerSelect
-              options={payerOptionsWithOther}
-              // Si viene null/""/undefined de BD, mostrar "OTRO" en el select
-              value={
-                m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
-                  ? "OTRO"
-                  : String(m.pagador_id)
-              }
-              onChange={onChange}
-              disabled={readOnly}
-            />
-          </Field>
+                      <div className="row g-3">
+                        <Field label="Precio ($)" className="col-md-3">
+                          <input
+                            type="number"
+                            step="0.01"
+                            className="form-control form-control-sm"
+                            name="precio"
+                            value={m.precio ?? ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="0.00"
+                          />
+                        </Field>
 
+                        <Field label="Fecha de Cancelación" className="col-md-3">
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            name="fecha_cancelacion"
+                            value={(m.fecha_cancelacion || "").slice(0, 10)}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          />
+                        </Field>
 
+                        <Field label="Fecha de Retiro" className="col-md-3">
+                          <input
+                            type="date"
+                            className="form-control form-control-sm"
+                            name="fecha_retiro"
+                            value={(m.fecha_retiro || "").slice(0, 10)}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          />
+                        </Field>
 
+                        <Field label="Nota de Retiro" className="col-md-3">
+                          <input
+                            className="form-control form-control-sm"
+                            name="nota_retiro"
+                            value={m.nota_retiro ?? m.nota_cancel ?? ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                            placeholder="Notas…"
+                          />
+                        </Field>
+                      </div>
 
-        <Field label="Tipo de Pago" className="col-md-3">
-          <select
-            className="form-select form-select-sm"
-            name="tipo_pago"
-            value={m.tipo_pago || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          >
-            <option value="">Seleccione…</option>
-            <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
-            <option value="CTE PAGA">CTE PAGA</option>
-            <option value="MES A MES">MES A MES</option>
-          </select>
-        </Field>
-
-        <Field label="Dia de Pago" className="col-md-3">
-          <input
-            type="number"
-            className="form-control form-control-sm"
-            name="dia_pago"
-            value={m.dia_pago || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-      </div>
-
-      {/* Row 4 */}
-      <div className="row g-3">
-
-        <Field label="Precio ($)" className="col-md-3">
-          <input
-            type="number"
-            step="0.01"
-            className="form-control form-control-sm"
-            name="precio"
-            value={m.precio ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="0.00"
-          />
-        </Field>
-
-        <Field label="Fecha de Cancelación" className="col-md-3">
-          <input
-            type="date"
-            className="form-control form-control-sm"
-            name="fecha_cancelacion"
-            value={(m.fecha_cancelacion || "").slice(0, 10)}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Fecha de Retiro" className="col-md-3">
-          <input
-            type="date"
-            className="form-control form-control-sm"
-            name="fecha_retiro"
-            value={(m.fecha_retiro || "").slice(0, 10)}
-            onChange={onChange}
-            disabled={readOnly}
-          />
-        </Field>
-
-        <Field label="Nota de Retiro" className="col-md-3">
-          <input
-            className="form-control form-control-sm"
-            name="nota_retiro"
-            value={m.nota_retiro ?? m.nota_cancel ?? ""}
-            onChange={onChange}
-            disabled={readOnly}
-            placeholder="Notas…"
-          />
-        </Field>
-      </div>
-      <div className="row g-3">
-      <Field label="Grupo" className="col-md-3">
-          <select
-            className="form-select form-select-sm"
-            name="grupo"
-            value={m.grupo || ""}
-            onChange={onChange}
-            disabled={readOnly}
-          >
-            <option value="">Seleccione…</option>
-            <option value="G1">G1</option>
-            <option value="G2">G2</option>
-            <option value="G3">G3</option>
-            <option value="G4">G4</option>
-          </select>
-        </Field>
-      </div>
-
-    </div>
-  </div>
-</div>
-
+                      <div className="row g-3">
+                        <Field label="Grupo" className="col-md-3">
+                          <select
+                            className="form-select form-select-sm"
+                            name="grupo"
+                            value={m.grupo || ""}
+                            onChange={onChange}
+                            disabled={readOnly}
+                          >
+                            <option value="">Seleccione…</option>
+                            <option value="G1">G1</option>
+                            <option value="G2">G2</option>
+                            <option value="G3">G3</option>
+                            <option value="G4">G4</option>
+                          </select>
+                        </Field>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         );
       })}
 
-      {/* Modal único: SOLO para añadir */}
+      {/* Modales */}
       <MemberModal
         open={openModal}
         onClose={() => setOpenModal(false)}
@@ -1702,21 +1564,21 @@ const onUpdateLocal = useCallback(
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
       />
-<CopiarDatosModal
-  open={openCopy}
-  onClose={() => setOpenCopy(false)}
-  members={sortedNormalized}   // ← antes: normalized
-  onApply={applyCopySelection}
-/>
 
-<ClienteExistenteModal
-  open={openExistente}
-  onClose={() => setOpenExistente(false)}
-  grupoFamiliarId={grupoFamiliarId}
-  onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
-  defaultCoberturaTipo={defaultCoberturaTipo}
-/>
+      <CopiarDatosModal
+        open={openCopy}
+        onClose={() => setOpenCopy(false)}
+        members={sortedNormalized}
+        onApply={applyCopySelection}
+      />
 
+      <ClienteExistenteModal
+        open={openExistente}
+        onClose={() => setOpenExistente(false)}
+        grupoFamiliarId={grupoFamiliarId}
+        onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+        defaultCoberturaTipo={defaultCoberturaTipo}
+      />
     </div>
   );
 };

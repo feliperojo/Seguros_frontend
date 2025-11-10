@@ -1,39 +1,46 @@
-
-import React, { useEffect, useMemo, useState } from "react";
-import TelefonosInput from "./TelefonosInput";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import TelefonosPro from "./TelefonosPro"; // ⬅️ reemplazo directo de TelefonosInput
 import {
-     fetchClienteContacto,
-     upsertClienteComoContacto,
-     linkClienteContacto,
-     updateLinkClienteContacto,
-   } from "../../services/contactosService";
+  fetchClienteContacto,
+  upsertClienteComoContacto,
+  linkClienteContacto,
+  updateLinkClienteContacto,
+  searchClientes,
+} from "../../services/contactosService";
 import { joinNameParts } from "../../utils/names";
-import { searchClientes } from "../../services/contactosService";
-import { useRef } from "react";
 
 export default function ContactosAsociadosAccordion({
   clienteId = null,
   grupoFamiliarId = null,
   className = "",
   idiomaOptions = ["Spanish", "English"],
-  relacionOptions = ["Cónyuge","Hijo/a","Padre","Madre","Sobrino","Tio/a","Hermano/a","Amigo/a","Otro"],
+  relacionOptions = [
+    "Cónyuge",
+    "Hijo/a",
+    "Padre",
+    "Madre",
+    "Sobrino",
+    "Tio/a",
+    "Hermano/a",
+    "Amigo/a",
+    "Otro",
+  ],
   readOnly = false,
 }) {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]); // [{contacto, link}]
-  const [linkEditar, setLinkEditar] = useState(null); // si algún día quieres editar
+  const [linkEditar, setLinkEditar] = useState(null);
   const [saving, setSaving] = useState(false);
 
   // Modo de creación de contacto: 'nuevo' | 'existente'
-const [modo, setModo] = useState('nuevo');
+  const [modo, setModo] = useState("nuevo");
 
-// Picker de cliente existente
-const [term, setTerm] = useState('');
-const [candidatos, setCandidatos] = useState([]);  // resultados de búsqueda
-const [sel, setSel] = useState(null);              // cliente seleccionado
-const [loadingPicker, setLoadingPicker] = useState(false);
-const searchDebRef = useRef(null);
-
+  // Picker de cliente existente
+  const [term, setTerm] = useState("");
+  const [candidatos, setCandidatos] = useState([]);
+  const [sel, setSel] = useState(null);
+  const [loadingPicker, setLoadingPicker] = useState(false);
+  const searchDebRef = useRef(null);
 
   // ---- form local (crear/editar) ----
   const [form, setForm] = useState({
@@ -58,14 +65,14 @@ const searchDebRef = useRef(null);
       email_principal: "",
     });
 
-     const puedeGuardar = useMemo(() => {
-         const tieneContexto = !!(clienteId || grupoFamiliarId);
-         const datosCompletos =
-           modo === 'existente'
-             ? !!sel?.id && (form.relacion || '').trim().length > 0   // exigir relación cuando es existente
-             : (form.nombre_completo || '').trim().length > 0;
-         return tieneContexto && datosCompletos;
-       }, [modo, sel, form.nombre_completo, form.relacion, clienteId, grupoFamiliarId]);
+  const puedeGuardar = useMemo(() => {
+    const tieneContexto = !!(clienteId || grupoFamiliarId);
+    const datosCompletos =
+      modo === "existente"
+        ? !!sel?.id && (form.relacion || "").trim().length > 0
+        : (form.nombre_completo || "").trim().length > 0;
+    return tieneContexto && datosCompletos;
+  }, [modo, sel, form.nombre_completo, form.relacion, clienteId, grupoFamiliarId]);
 
   // ---- carga inicial ----
   const cargar = async () => {
@@ -73,7 +80,13 @@ const searchDebRef = useRef(null);
     try {
       setLoading(true);
       const res = await fetchClienteContacto({ clienteId, grupoFamiliarId });
-      const arr = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : (res ? [res] : []));
+      const arr = Array.isArray(res?.data)
+        ? res.data
+        : Array.isArray(res)
+        ? res
+        : res
+        ? [res]
+        : [];
       const normalizados = arr.map((l) => ({
         contacto: l.contacto || {},
         link: {
@@ -91,18 +104,21 @@ const searchDebRef = useRef(null);
   };
 
   useEffect(() => {
-    if (modo !== 'existente') return;
+    if (modo !== "existente") return;
     if (searchDebRef.current) clearTimeout(searchDebRef.current);
-  
+
     searchDebRef.current = setTimeout(async () => {
       const q = term.trim();
-      if (q.length < 2) { setCandidatos([]); return; }
+      if (q.length < 2) {
+        setCandidatos([]);
+        return;
+      }
       setLoadingPicker(true);
       try {
         const res = await searchClientes(q);
-        const list = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : []);
+        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
         // evita seleccionarse a sí mismo
-        setCandidatos(list.filter(x => x.id !== clienteId));
+        setCandidatos(list.filter((x) => x.id !== clienteId));
       } catch (e) {
         console.error(e);
         setCandidatos([]);
@@ -110,84 +126,99 @@ const searchDebRef = useRef(null);
         setLoadingPicker(false);
       }
     }, 300);
-  
+
     return () => clearTimeout(searchDebRef.current);
   }, [term, modo, clienteId]);
-  
-// --- 📌 useEffect para pintar teléfonos del cliente seleccionado ---
-useEffect(() => {
-  if (modo !== 'existente') return;
-  if (!sel?.id) {
-    // Si se deselecciona, limpiamos los teléfonos
-    setForm(f => ({ ...f, telefonos: [] }));
-    return;
-  }
-  const tels = normalizeTelefonos(sel);
-  setForm(f => ({
-    ...f,
-    telefonos: tels,              // <- Aquí se pintan los teléfonos
-    idioma: f.idioma || sel.idioma || "",
-  }));
-}, [sel, modo]);
 
-  useEffect(() => { cargar(); }, [clienteId, grupoFamiliarId]);
+  // --- pinta teléfonos del cliente seleccionado ---
+  useEffect(() => {
+    if (modo !== "existente") return;
+    if (!sel?.id) {
+      setForm((f) => ({ ...f, telefonos: [] }));
+      return;
+    }
+    const tels = normalizeTelefonos(sel);
+    setForm((f) => ({
+      ...f,
+      telefonos: tels,
+      idioma: f.idioma || sel.idioma || "",
+    }));
+  }, [sel, modo]);
 
-  // --- Helper para normalizar teléfonos del cliente ---
-const normalizeTelefonos = (c) => {
-  if (!c) return [];
-  if (Array.isArray(c.telefonos)) {
-    return c.telefonos
-      .map((t, i) => ({
-        tipo: t?.tipo || "Móvil",
-        numero: t?.numero || "",
-        principal: t?.principal ?? i === 0,
-      }))
-      .filter(t => (t.numero || "").trim().length > 0);
-  }
-  const numeroPlano = c.telefono || "";
-  return (numeroPlano || "").trim()
-    ? [{ tipo: "Móvil", numero: numeroPlano, principal: true }]
-    : [];
-};
+  useEffect(() => {
+    cargar();
+  }, [clienteId, grupoFamiliarId]);
 
+  // --- Helper para normalizar teléfonos del cliente existente o nuevo ---
+  const normalizeTelefonos = (c) => {
+    if (!c) return [];
+    // Si viene arreglo estructurado (preferido)
+    if (Array.isArray(c.telefonos)) {
+      return c.telefonos
+        .map((t, i) => ({
+          id: t?.id ?? `${i}-${t?.tipo ?? "Móvil"}`,
+          tipo: t?.tipo || "Móvil",
+          numero: t?.numero || "",
+          principal: t?.principal ?? i === 0,
+          iso: (t?.iso || "").toLowerCase() || undefined,
+          indicativo: t?.indicativo || "",
+        }))
+        .filter((t) => (t.numero || "").trim().length > 0);
+    }
+    // Compatibilidad: si sólo hay un campo plano
+    const numeroPlano = c.telefono || "";
+    return (numeroPlano || "").trim()
+      ? [
+          {
+            id: "legacy-1",
+            tipo: "Móvil",
+            numero: numeroPlano,
+            principal: true,
+            iso: "co",
+            indicativo: "57",
+          },
+        ]
+      : [];
+  };
 
   // ---- guardar (crea o actualiza vínculo) ----
   const handleSave = async () => {
     if (readOnly || !puedeGuardar) return;
-
     try {
       setSaving(true);
 
-     // 1) Crear o registrar un CLIENTE como contacto
-  let contacto = {};
-   let contactoId = null;
+      // 1) Crear o registrar un CLIENTE como contacto
+      let contacto = {};
+      let contactoId = null;
 
-   if (modo === 'existente') {
-     // Validaciones rápidas
-     if (!sel?.id) throw new Error('Debe seleccionar un cliente existente.');
-     if (sel.id === clienteId) throw new Error('No puedes asociar el mismo cliente como contacto.');
-     contactoId = sel.id;
-     contacto = {
-       id: sel.id,
-       nombre_completo: sel.nombre_completo,
-       idioma: sel.idioma,
-       telefonos: sel.telefonos || (sel.telefono ? [{ numero: sel.telefono }] : []),
-     };
-   } else {
-     // Cliente nuevo como contacto (flujo actual)
-     const contactoRes = await upsertClienteComoContacto({
-       nombre_completo: (form.nombre_completo || "").trim(),
-       idioma: form.idioma || "",
-       telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
-       email_principal: form.email_principal || null,
-       telefono: Array.isArray(form.telefonos) && form.telefonos[0]?.numero
-         ? form.telefonos[0].numero
-         : null,
-       nota: form.nota || null,
-     });
-     contacto = contactoRes?.contacto || {};
-     contactoId = contacto?.id;
-   }    
+      if (modo === "existente") {
+        if (!sel?.id) throw new Error("Debe seleccionar un cliente existente.");
+        if (sel.id === clienteId) throw new Error("No puedes asociar el mismo cliente como contacto.");
+        contactoId = sel.id;
+        contacto = {
+          id: sel.id,
+          nombre_completo: sel.nombre_completo,
+          idioma: sel.idioma,
+          telefonos: normalizeTelefonos(sel), // mantiene shape estructurado
+        };
+      } else {
+        // Cliente nuevo como contacto
+        const contactoRes = await upsertClienteComoContacto({
+          nombre_completo: (form.nombre_completo || "").trim(),
+          idioma: form.idioma || "",
+          telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
+          email_principal: form.email_principal || null,
+          // compat: si backend aún guarda 'telefono' plano, enviamos el principal
+          telefono:
+            Array.isArray(form.telefonos) && form.telefonos.find((x) => x.principal)?.numero
+              ? form.telefonos.find((x) => x.principal)?.numero
+              : null,
+          nota: form.nota || null,
+        });
+        contacto = contactoRes?.contacto || {};
+        contactoId = contacto?.id;
+      }
+
       // 2) vínculo
       const perteneceBool = (form.perteneceGF || "").toString().toLowerCase().startsWith("s");
       const payloadLink = {
@@ -212,14 +243,12 @@ const normalizeTelefonos = (c) => {
       } else {
         linkRes = await linkClienteContacto(payloadLink);
       }
-      const linkFinal = linkEditar?.id ? linkRes : (linkRes?.link || linkRes);
+      const linkFinal = linkEditar?.id ? linkRes : linkRes?.link || linkRes;
 
       // 3) reflejar en UI
       if (linkEditar?.id) {
         setItems((prev) =>
-          prev.map((it) =>
-            it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it
-          )
+          prev.map((it) => (it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it))
         );
       } else {
         setItems((prev) => [{ contacto, link: linkFinal }, ...prev]);
@@ -228,9 +257,8 @@ const normalizeTelefonos = (c) => {
       // 4) limpiar para poder crear otro
       setLinkEditar(null);
       resetForm();
-   setSel(null);
-   setTerm('');
-      // Si usas Bootstrap collapse, puedes cerrarlo con data-bs attributes desde el botón si prefieres
+      setSel(null);
+      setTerm("");
     } catch (e) {
       console.error(e);
       alert("No se pudo guardar el contacto.");
@@ -249,18 +277,18 @@ const normalizeTelefonos = (c) => {
     const relacion = link?.relacion || "—";
     const pertenece = link?.pertenece_al_grupo ? "Sí" : "No";
     const nota = link?.nota || "—";
-  
+
     // Ordena: primero los "principal: true"
-    const telsOrdenados = [...telefonos].sort((a, b) =>
-      (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
+    const telsOrdenados = [...telefonos].sort(
+      (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
     );
-  
-    // Helper para formatear el número
+
+    // Helper para formatear el número (usa 'indicativo')
     const fmt = (t) => {
-      const cc = t?.codigo ? `${t.codigo} ` : "";
+      const cc = t?.indicativo ? `+${t.indicativo} ` : "";
       return `${cc}${t?.numero || ""}`.trim();
     };
-  
+
     return (
       <div className="card mb-2">
         <div className="card-body">
@@ -270,10 +298,12 @@ const normalizeTelefonos = (c) => {
               <span className="badge bg-light text-dark">{relacion}</span>
             )}
           </div>
-  
+
           <div className="mt-2 small">
-            <div className="mb-1"><strong>Idioma:</strong> {idioma}</div>
-  
+            <div className="mb-1">
+              <strong>Idioma:</strong> {idioma}
+            </div>
+
             {/* --- Teléfonos (lista) --- */}
             <div className="mb-1">
               <strong>Teléfonos:</strong>
@@ -282,16 +312,16 @@ const normalizeTelefonos = (c) => {
               ) : (
                 <ul className="list-unstyled ms-2 mb-0 mt-1">
                   {telsOrdenados.map((t, idx) => (
-                    <li key={idx} className="d-flex align-items-center gap-2 mb-1">
+                    <li key={t.id ?? idx} className="d-flex align-items-center gap-2 mb-1">
                       <span>{fmt(t)}</span>
-  
+
                       {/* Tipo: Movil/Trabajo/Casa/... */}
                       {t?.tipo && (
                         <span className="badge bg-secondary-subtle text-secondary-emphasis">
                           {t.tipo}
                         </span>
                       )}
-  
+
                       {/* Principal */}
                       {t?.principal && (
                         <span className="badge bg-success-subtle text-success-emphasis">
@@ -303,16 +333,20 @@ const normalizeTelefonos = (c) => {
                 </ul>
               )}
             </div>
-  
-            <div className="mb-1"><strong>Pertenece GF:</strong> {pertenece}</div>
+
+            <div className="mb-1">
+              <strong>Pertenece GF:</strong> {pertenece}
+            </div>
             <hr className="my-2" />
-            <div><strong>Nota:</strong> {nota}</div>
+            <div>
+              <strong>Nota:</strong> {nota}
+            </div>
           </div>
         </div>
       </div>
     );
   };
-  
+
   return (
     <div className={className}>
       {/* Título + contador */}
@@ -346,121 +380,142 @@ const normalizeTelefonos = (c) => {
           >
             <div className="accordion-body">
               <div className="row g-2">
-              <div className="col-12 mb-2">
-  <div className="btn-group" role="group" aria-label="Modo de contacto">
-    <input
-      type="radio"
-      className="btn-check"
-      name="modoContacto"
-      id="modoNuevo"
-      autoComplete="off"
-      checked={modo === 'nuevo'}
-      onChange={() => setModo('nuevo')}
-      disabled={readOnly}
-    />
-    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoNuevo">
-      Cliente nuevo
-    </label>
+                <div className="col-12 mb-2">
+                  <div className="btn-group" role="group" aria-label="Modo de contacto">
+                    <input
+                      type="radio"
+                      className="btn-check"
+                      name="modoContacto"
+                      id="modoNuevo"
+                      autoComplete="off"
+                      checked={modo === "nuevo"}
+                      onChange={() => setModo("nuevo")}
+                      disabled={readOnly}
+                    />
+                    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoNuevo">
+                      Cliente nuevo
+                    </label>
 
-    <input
-      type="radio"
-      className="btn-check"
-      name="modoContacto"
-      id="modoExistente"
-      autoComplete="off"
-      checked={modo === 'existente'}
-      onChange={() => setModo('existente')}
-      disabled={readOnly}
-    />
-    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoExistente">
-      Cliente existente
-    </label>
-  </div>
-</div>
+                    <input
+                      type="radio"
+                      className="btn-check"
+                      name="modoContacto"
+                      id="modoExistente"
+                      autoComplete="off"
+                      checked={modo === "existente"}
+                      onChange={() => setModo("existente")}
+                      disabled={readOnly}
+                    />
+                    <label className="btn btn-outline-secondary btn-sm" htmlFor="modoExistente">
+                      Cliente existente
+                    </label>
+                  </div>
+                </div>
 
-                {/* MODO NUEVO: campos del cliente */}
-{modo === 'nuevo' ? (
-  <div className="col-12">
-    <label className="form-label small mb-1">Nombre Completo</label>
-    <input
-      className="form-control form-control-sm"
-      placeholder="Nombre Completo"
-      value={form.nombre_completo}
-      onChange={(e) => {
-        const raw = e.target.value;
-        const formatted = raw
-          .toLowerCase()
-          .replace(/\b\w/g, (ch) => ch.toUpperCase())
-          .replace(/\s+/g, " ");
-        update("nombre_completo", formatted);
-      }}
-      disabled={readOnly}
-    />
-  </div>
-) : (
-  // MODO EXISTENTE: buscador y tabla de candidatos
-  <div className="col-12">
-    <label className="form-label small mb-1">Buscar cliente existente</label>
-    <input
-      className="form-control form-control-sm"
-      placeholder="Escribe al menos 2 letras…"
-      value={term}
-      onChange={(e) => { setTerm(e.target.value); setSel(null); }}
-      disabled={readOnly}
-    />
-    <div className="table-responsive border rounded mt-2" style={{ maxHeight: 220, overflow: 'auto' }}>
-      <table className="table table-sm align-middle mb-0">
-        <thead className="table-light">
-          <tr>
-            <th>Nombre</th>
-            <th>Idioma</th>
-            <th>Teléfono</th>
-            <th style={{ width: 90 }}></th>
-          </tr>
-        </thead>
-        <tbody>
-          {loadingPicker ? (
-            <tr><td colSpan={4} className="text-center text-muted py-2">Buscando…</td></tr>
-          ) : candidatos.length === 0 ? (
-            <tr><td colSpan={4} className="text-center text-muted py-2">Sin resultados.</td></tr>
-          ) : (
-            candidatos.map(c => {
-              const tel = c.telefono || (Array.isArray(c.telefonos) && c.telefonos[0]?.numero) || '—';
-              const isSel = sel?.id === c.id;
-              return (
-                <tr key={c.id} className={isSel ? 'table-primary' : ''}>
-                  <td className="fw-semibold">{c.nombre_completo}</td>
-                  <td>{c.idioma || '—'}</td>
-                  <td>{tel}</td>
-                  <td className="text-end">
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${isSel ? 'btn-secondary' : 'btn-outline-primary'}`}
-                      onClick={() => setSel(isSel ? null : c)}
+                {modo === "nuevo" ? (
+                  <div className="col-12">
+                    <label className="form-label small mb-1">Nombre Completo</label>
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="Nombre Completo"
+                      value={form.nombre_completo}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const formatted = raw
+                          .toLowerCase()
+                          .replace(/\b\w/g, (ch) => ch.toUpperCase())
+                          .replace(/\s+/g, " ");
+                        update("nombre_completo", formatted);
+                      }}
+                      disabled={readOnly}
+                    />
+                  </div>
+                ) : (
+                  <div className="col-12">
+                    <label className="form-label small mb-1">Buscar cliente existente</label>
+                    <input
+                      className="form-control form-control-sm"
+                      placeholder="Escribe al menos 2 letras…"
+                      value={term}
+                      onChange={(e) => {
+                        setTerm(e.target.value);
+                        setSel(null);
+                      }}
+                      disabled={readOnly}
+                    />
+                    <div
+                      className="table-responsive border rounded mt-2"
+                      style={{ maxHeight: 220, overflow: "auto" }}
                     >
-                      {isSel ? 'Quitar' : 'Elegir'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })
-          )}
-        </tbody>
-      </table>
-    </div>
-    {sel?.id && (
-      <div className="form-text mt-1">Seleccionado: <strong>{sel.nombre_completo}</strong></div>
-    )}
-  </div>
-)}
+                      <table className="table table-sm align-middle mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Nombre</th>
+                            <th>Idioma</th>
+                            <th>Teléfono</th>
+                            <th style={{ width: 90 }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {loadingPicker ? (
+                            <tr>
+                              <td colSpan={4} className="text-center text-muted py-2">
+                                Buscando…
+                              </td>
+                            </tr>
+                          ) : candidatos.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="text-center text-muted py-2">
+                                Sin resultados.
+                              </td>
+                            </tr>
+                          ) : (
+                            candidatos.map((c) => {
+                              const tel =
+                                c.telefono ||
+                                (Array.isArray(c.telefonos) && c.telefonos[0]?.numero) ||
+                                "—";
+                              const isSel = sel?.id === c.id;
+                              return (
+                                <tr key={c.id} className={isSel ? "table-primary" : ""}>
+                                  <td className="fw-semibold">{c.nombre_completo}</td>
+                                  <td>{c.idioma || "—"}</td>
+                                  <td>{tel}</td>
+                                  <td className="text-end">
+                                    <button
+                                      type="button"
+                                      className={`btn btn-sm ${
+                                        isSel ? "btn-secondary" : "btn-outline-primary"
+                                      }`}
+                                      onClick={() => setSel(isSel ? null : c)}
+                                    >
+                                      {isSel ? "Quitar" : "Elegir"}
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {sel?.id && (
+                      <div className="form-text mt-1">
+                        Seleccionado: <strong>{sel.nombre_completo}</strong>
+                      </div>
+                    )}
+                  </div>
+                )}
 
-
+                {/* ⬇️ TelefonosPro en lugar de TelefonosInput */}
                 <div className="col-12">
-                  <TelefonosInput
-                    value={form.telefonos}
-                    onChange={(v) => update("telefonos", v)}
-                    readOnly={readOnly}
-                  />
+                <TelefonosPro
+  value={form.telefonos}
+  onChange={(v) => update("telefonos", v)}
+  readOnly={readOnly}
+  uiPreset="clean"            // ⬅️ layout limpio SOLO aquí
+  countrySelectWidth={200}    // ⬅️ ancho fijo del select (opcional)
+/>
                 </div>
 
                 <div className="col-12 col-md-6">
@@ -473,7 +528,9 @@ const normalizeTelefonos = (c) => {
                   >
                     <option value="">Seleccione...</option>
                     {idiomaOptions.map((op) => (
-                      <option key={op} value={op}>{op}</option>
+                      <option key={op} value={op}>
+                        {op}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -501,7 +558,9 @@ const normalizeTelefonos = (c) => {
                   >
                     <option value="">Seleccione...</option>
                     {relacionOptions.map((op) => (
-                      <option key={op} value={op}>{op}</option>
+                      <option key={op} value={op}>
+                        {op}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -523,7 +582,10 @@ const normalizeTelefonos = (c) => {
                     <button
                       type="button"
                       className="btn btn-light btn-sm"
-                      onClick={() => { setLinkEditar(null); resetForm(); }}
+                      onClick={() => {
+                        setLinkEditar(null);
+                        resetForm();
+                      }}
                       disabled={saving}
                     >
                       Limpiar
@@ -534,7 +596,7 @@ const normalizeTelefonos = (c) => {
                       onClick={handleSave}
                       disabled={!puedeGuardar || saving}
                     >
-                      {saving ? "Guardando..." : (linkEditar ? "Actualizar" : "Guardar contacto")}
+                      {saving ? "Guardando..." : linkEditar ? "Actualizar" : "Guardar contacto"}
                     </button>
                   </div>
                 )}
@@ -548,7 +610,11 @@ const normalizeTelefonos = (c) => {
       {loading && <div className="text-muted small">Cargando contactos…</div>}
 
       {items.map(({ contacto, link }) => (
-        <ContactoCard key={`${link?.id || contacto?.id || Math.random()}`} contacto={contacto} link={link} />
+        <ContactoCard
+          key={`${link?.id || contacto?.id || Math.random()}`}
+          contacto={contacto}
+          link={link}
+        />
       ))}
 
       {!loading && items.length === 0 && (
