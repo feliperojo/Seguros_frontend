@@ -182,91 +182,106 @@ export default function ContactosAsociadosAccordion({
   };
 
   // ---- guardar (crea o actualiza vínculo) ----
-  const handleSave = async () => {
-    if (readOnly || !puedeGuardar) return;
-    try {
-      setSaving(true);
+  // ---- guardar (crea o actualiza vínculo) ----
+const handleSave = async () => {
+  if (readOnly || !puedeGuardar) return;
+  try {
+    setSaving(true);
 
-      // 1) Crear o registrar un CLIENTE como contacto
-      let contacto = {};
-      let contactoId = null;
+    let contacto = {};
+    let contactoId = null;
 
-      if (modo === "existente") {
-        if (!sel?.id) throw new Error("Debe seleccionar un cliente existente.");
-        if (sel.id === clienteId) throw new Error("No puedes asociar el mismo cliente como contacto.");
-        contactoId = sel.id;
-        contacto = {
-          id: sel.id,
-          nombre_completo: sel.nombre_completo,
-          idioma: sel.idioma,
-          telefonos: normalizeTelefonos(sel), // mantiene shape estructurado
-        };
-      } else {
-        // Cliente nuevo como contacto
-        const contactoRes = await upsertClienteComoContacto({
-          nombre_completo: (form.nombre_completo || "").trim(),
-          idioma: form.idioma || "",
-          telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
-          email_principal: form.email_principal || null,
-          // compat: si backend aún guarda 'telefono' plano, enviamos el principal
-          telefono:
-            Array.isArray(form.telefonos) && form.telefonos.find((x) => x.principal)?.numero
-              ? form.telefonos.find((x) => x.principal)?.numero
-              : null,
-          nota: form.nota || null,
-        });
-        contacto = contactoRes?.contacto || {};
-        contactoId = contacto?.id;
-      }
+    if (modo === "existente") {
+      if (!sel?.id) throw new Error("Debe seleccionar un cliente existente.");
+      if (sel.id === clienteId) throw new Error("No puedes asociar el mismo cliente como contacto.");
 
-      // 2) vínculo
-      const perteneceBool = (form.perteneceGF || "").toString().toLowerCase().startsWith("s");
-      const payloadLink = {
-        clienteId,
-        grupoFamiliarId,
-        contactoId,
-        relacion: form.relacion || null,
-        perteneceAlGrupo: perteneceBool,
-        esPersonaContacto: false,
-        prioridad: 0,
-        nota: form.nota || "",
+      // 1) Tomar lo que el usuario dejó en el UI (form.telefonos)
+      const telefonosFinales = Array.isArray(form.telefonos) ? form.telefonos : [];
+
+      // 2) Upsert del cliente EXISTENTE con los teléfonos nuevos
+      //    (si tu servicio no acepta 'id' para upsert, cambia a tu endpoint de update)
+      const upsertRes = await upsertClienteComoContacto({
+        id: sel.id, // ← importante para que sea update
+        nombre_completo: sel.nombre_completo,
+        idioma: form.idioma || sel.idioma || "",
+        telefonos: telefonosFinales,
+        // compat: si tu backend aún usa 'telefono' plano, mandamos el principal
+        telefono: telefonosFinales.find((x) => x.principal)?.numero || null,
+        email_principal: form.email_principal || sel.email_principal || null,
+        nota: form.nota || null,
+      });
+
+      contacto = upsertRes?.contacto || {
+        id: sel.id,
+        nombre_completo: sel.nombre_completo,
+        idioma: form.idioma || sel.idioma || "",
+        telefonos: telefonosFinales,
       };
-
-      let linkRes;
-      if (linkEditar?.id) {
-        linkRes = await updateLinkClienteContacto(linkEditar.id, {
-          relacion: payloadLink.relacion,
-          pertenece_al_grupo: payloadLink.perteneceAlGrupo,
-          es_persona_contacto: payloadLink.esPersonaContacto,
-          nota: payloadLink.nota,
-        });
-      } else {
-        linkRes = await linkClienteContacto(payloadLink);
-      }
-      const linkFinal = linkEditar?.id ? linkRes : linkRes?.link || linkRes;
-
-      // 3) reflejar en UI
-      if (linkEditar?.id) {
-        setItems((prev) =>
-          prev.map((it) => (it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it))
-        );
-      } else {
-        setItems((prev) => [{ contacto, link: linkFinal }, ...prev]);
-      }
-
-      // 4) limpiar para poder crear otro
-      setLinkEditar(null);
-      resetForm();
-      setSel(null);
-      setTerm("");
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo guardar el contacto.");
-    } finally {
-      setSaving(false);
+      contactoId = contacto.id;
+    } else {
+      // Cliente NUEVO como contacto (igual que ya tenías)
+      const contactoRes = await upsertClienteComoContacto({
+        nombre_completo: (form.nombre_completo || "").trim(),
+        idioma: form.idioma || "",
+        telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
+        email_principal: form.email_principal || null,
+        telefono:
+          Array.isArray(form.telefonos) && form.telefonos.find((x) => x.principal)?.numero
+            ? form.telefonos.find((x) => x.principal)?.numero
+            : null,
+        nota: form.nota || null,
+      });
+      contacto = contactoRes?.contacto || {};
+      contactoId = contacto?.id;
     }
-  };
 
+    // 3) Crear/Actualizar vínculo (igual que ya tenías)
+    const perteneceBool = (form.perteneceGF || "").toString().toLowerCase().startsWith("s");
+    const payloadLink = {
+      clienteId,
+      grupoFamiliarId,
+      contactoId,
+      relacion: form.relacion || null,
+      perteneceAlGrupo: perteneceBool,
+      esPersonaContacto: false,
+      prioridad: 0,
+      nota: form.nota || "",
+    };
+
+    let linkRes;
+    if (linkEditar?.id) {
+      linkRes = await updateLinkClienteContacto(linkEditar.id, {
+        relacion: payloadLink.relacion,
+        pertenece_al_grupo: payloadLink.perteneceAlGrupo,
+        es_persona_contacto: payloadLink.esPersonaContacto,
+        nota: payloadLink.nota,
+      });
+    } else {
+      linkRes = await linkClienteContacto(payloadLink);
+    }
+    const linkFinal = linkEditar?.id ? linkRes : linkRes?.link || linkRes;
+
+    // 4) reflejar en UI
+    if (linkEditar?.id) {
+      setItems((prev) =>
+        prev.map((it) => (it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it))
+      );
+    } else {
+      setItems((prev) => [{ contacto, link: linkFinal }, ...prev]);
+    }
+
+    // 5) limpiar
+    setLinkEditar(null);
+    resetForm();
+    setSel(null);
+    setTerm("");
+  } catch (e) {
+    console.error(e);
+    alert("No se pudo guardar el contacto.");
+  } finally {
+    setSaving(false);
+  }
+};
   // ---- helpers de UI ----
   const ContactoCard = ({ contacto = {}, link = {} }) => {
     const nombre =
@@ -515,6 +530,7 @@ export default function ContactosAsociadosAccordion({
   readOnly={readOnly}
   uiPreset="clean"            // ⬅️ layout limpio SOLO aquí
   countrySelectWidth={200}    // ⬅️ ancho fijo del select (opcional)
+  formatByCountry={true}   // ← activa la máscara visual
 />
                 </div>
 

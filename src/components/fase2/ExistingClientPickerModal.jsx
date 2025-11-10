@@ -87,7 +87,7 @@ function ExistingClientPickerModal({
                         return (
                           <tr key={r.id} className={isSel ? 'table-primary' : ''}>
                             <td className="fw-semibold">{r.nombre_completo}</td>
-                            <td>{r.idioma || '—'}</td>
+                            <td>{r.tipo_cliente || '—'}</td>
                             <td>{tel}</td>
                             <td className="text-end">
                               <button

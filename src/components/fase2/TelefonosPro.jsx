@@ -1,342 +1,288 @@
-import React from "react";
+// src/components/TelefonosPro.jsx
+import React, { useMemo, useCallback } from "react";
 import countryCodes from "../../services/countryCodes";
+import { formatPhone334 } from "../../utils/formatters";
+import "../../styles/TelefonosPro.css";
 
-/**
- * TelefonosPro – responsive, profesional y retro-compatible
- */
+/* Helpers */
+function ensureOnePrimary(arr = []) {
+  let seen = false;
+  return (arr || []).map((p) => {
+    const next = { ...p, principal: !!p.principal };
+    if (next.principal) {
+      if (!seen) seen = true;
+      else next.principal = false;
+    }
+    return next;
+  });
+}
+const norm = (s) => String(s ?? "").trim();
+const cleanNumber = (s) => String(s ?? "").replace(/[^\d-]/g, "");
 
-const flagEmoji = (iso = "") => {
-  const cc = (iso || "").toUpperCase();
-  if (cc.length !== 2) return "🏳️";
-  const base = 127397;
-  return String.fromCodePoint(...[...cc].map((c) => base + c.charCodeAt(0)));
+const codeToIso = new Map(
+  (countryCodes || []).map((c) => [
+    String(c.code || "").replace(/\D+/g, ""),
+    String(c.iso || "").toLowerCase(),
+  ])
+);
+const isoToCode = new Map(
+  (countryCodes || []).map((c) => [
+    String(c.iso || "").toLowerCase(),
+    String(c.code || "").replace(/\D+/g, ""),
+  ])
+);
+
+const isoToFlag = (iso) => {
+  const x = String(iso || "").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(x)) return "🏳️";
+  const codePoints = [...x].map((ch) => 0x1f1e6 - 65 + ch.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
 };
 
-function CountryFlagSelect({ valueIso, onChange, disabled, uiPreset = "default" }) {
+const COUNTRY_OPTIONS = (countryCodes || []).map((c) => {
+  const iso = String(c.iso || "").toLowerCase();
+  const code = String(c.code || "").replace(/\D+/g, "");
+  const flag = c.flag || isoToFlag(iso);
+  const label = `${flag} ${iso.toUpperCase()} (+${code})`;
+  return { value: iso, label, iso, code, flag, name: c.name || iso.toUpperCase() };
+});
+
+function completeIsoIndic({ iso, indicativo }, fallbackIso = "co") {
+  let outIso = String(iso || "").toLowerCase();
+  let outInd = String(indicativo || "").replace(/\D+/g, "");
+  if (!outIso && outInd) outIso = codeToIso.get(outInd) || fallbackIso;
+  if (!outInd && outIso) outInd = isoToCode.get(outIso) || "";
+  return { iso: outIso, indicativo: outInd };
+}
+
+/* Country select */
+function CountrySelectWithFlags({ value, onChange, disabled }) {
+  const iso = String(value || "").toLowerCase();
+  const handle = (e) => onChange?.(String(e.target.value || "").toLowerCase());
   return (
     <select
-      className="form-select form-select-sm country-select"
-      value={valueIso || ""}
-      onChange={(e) => onChange(e.target.value)}
+      className="form-select form-select-sm tp-select-country"
+      value={iso}
+      onChange={handle}
       disabled={disabled}
-      aria-label="Seleccionar país del número telefónico"
-      title="Seleccionar país"
     >
-      <option value="">{uiPreset === "default" ? "—" : "— Seleccione país —"}</option>
-      {countryCodes.map(({ iso, country, code }) => (
-        <option key={iso} value={iso}>
-          {flagEmoji(iso)}{" "}
-          {uiPreset === "default" ? `+${String(code)} (${country})` : country}
+      {COUNTRY_OPTIONS.map((opt) => (
+        <option key={opt.iso} value={opt.iso}>
+          {opt.label}
         </option>
       ))}
     </select>
   );
 }
 
-export default function TelefonosPro({
-  value = [],
-  onChange = () => {},
-  readOnly = false,
-  types = ["Móvil", "Trabajo", "Casa", "Whatsapp", "Emergencia", "Otro"],
-  max = null,
-  className = "",
-  uiPreset = "default",
-  variant = "inline",
-}) {
-  const phones = Array.isArray(value) ? value : [];
-  const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  const effectivePreset = uiPreset === "auto" ? "clean" : uiPreset;
+/* Row */
+function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
+  const local = useMemo(() => item || {}, [item]);
+  const patch = (p) => onPatch?.(index, p);
 
-  const emit = (next) => {
-    const normalized = next.map((p, i) => ({
-      ...p,
-      id: p.id ?? `${i}-${p.tipo ?? ""}-${p.numero ?? ""}`,
-      tipo: (p.tipo || "Móvil").trim(),
-      numero: (p.numero || "").trim(),
-      principal: !!p.principal,
-      iso: (p.iso || "").toLowerCase() || undefined,
-      indicativo: (p.indicativo || "").replace(/\D+/g, ""),
-    }));
-    let seen = false;
-    for (const p of normalized) {
-      if (p.principal) {
-        if (!seen) seen = true; else p.principal = false;
-      }
-    }
-    onChange(normalized);
+  const handleIso = (newIso) => {
+    const pair = completeIsoIndic({ iso: newIso, indicativo: local.indicativo });
+    patch({ iso: pair.iso, indicativo: pair.indicativo });
   };
 
-  const DEFAULT_ISO = "co";
-  const findCountry = (iso) => countryCodes.find((c) => c.iso === iso);
-
-  const addPhone = () => {
-    if (readOnly) return;
-    if (max && phones.length >= max) return;
-    const def = findCountry(DEFAULT_ISO);
-    emit([
-      ...(phones || []),
-      {
-        id: uid(),
-        tipo: "Móvil",
-        numero: "",
-        principal: phones.length === 0,
-        iso: def?.iso || "",
-        indicativo: def ? String(def.code).replace(/\D+/g, "") : "",
-      },
-    ]);
+  const handleIndicativo = (e) => {
+    const val = String(e.target.value || "").replace(/\D+/g, "");
+    const pair = completeIsoIndic({ iso: local.iso, indicativo: val });
+    patch({ indicativo: pair.indicativo, iso: pair.iso });
   };
 
-  const removePhone = (idx) => {
-    if (readOnly) return;
-    const next = phones.filter((_, i) => i !== idx);
-    if (!next.some((p) => p.principal) && next.length > 0) next[0].principal = true;
-    emit(next);
+  // aplica formato visual mientras escribe
+  const handleNumero = (e) => {
+    const formatted = formatPhone334(String(e.target.value || ""));
+    patch({ numero: formatted });
   };
 
-  const updateAt = (idx, patch) => {
-    if (readOnly) return;
-    emit(phones.map((p, i) => (i === idx ? { ...p, ...patch } : p)));
-  };
-
-  const togglePrincipal = (idx) => {
-    if (readOnly) return;
-    emit(phones.map((p, i) => ({ ...p, principal: i === idx })));
-  };
+  const handleTipo = (e) => patch({ tipo: norm(e.target.value) || "Móvil" });
+  const handlePrimary = () => onMakePrimary?.(index);
+  const handleRemove = () => onRemove?.(index);
 
   return (
-    <div className={className}>
-      {/* ---- estilos locales sutiles ---- */}
-      <style>{`
-        .phone-card {
-          border: 1px solid var(--bs-border-color);
-          border-radius: .75rem;
-          background: var(--bs-body-bg);
-          transition: box-shadow .15s ease-in-out, border-color .15s;
-        }
-        .phone-card:hover { box-shadow: 0 .25rem .75rem rgba(0,0,0,.05); }
-
-        .country-select { width: 100%; }
-
-        .input-group-sm .input-group-text { 
-          min-width: 3.25rem;
-          font-size: 0.875rem;
-        }
-
-        .actions-slot { min-height: 2rem; }
-
-        /* Toolbar de acciones (Principal + Eliminar) */
-        .actions-top {
-          display: flex;
-          align-items: center;
-          gap: .5rem;
-          min-height: 28px;
-          flex-wrap: wrap;
-        }
-        .actions-top .form-check {
-          margin: 0;
-          display: flex;
-          align-items: center;
-          gap: .375rem;
-        }
-        .icon-btn-28 {
-          width: 28px; height: 28px;
-          display: inline-flex;
-          align-items: center; justify-content: center;
-          padding: 0;
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
-
-        .btn-del {
-          --bs-btn-border-radius: .5rem;
-        }
-        .form-label { 
-          font-weight: 500;
-          margin-bottom: 0.25rem;
-        }
-
-        /* Ajustes para espacios reducidos */
-        @media (max-width: 991.98px) {
-          .phone-card { padding: 0.75rem !important; }
-        }
-      `}</style>
-
-      <div className="d-flex justify-content-between align-items-center mb-2">
-        <label className="form-label mb-0">Teléfonos</label>
+    <div className="tp-phone-card">
+      <div className="tp-card-header">
+        <div className="form-check m-0">
+          <input
+            className="form-check-input"
+            type="radio"
+            name="telefono-principal"
+            id={`principal-${index}`}
+            checked={!!local.principal}
+            onChange={handlePrimary}
+            disabled={readOnly}
+          />
+          <label className="form-check-label small text-muted" htmlFor={`principal-${index}`}>
+            Principal
+          </label>
+        </div>
         {!readOnly && (
-          <button type="button" className="btn btn-sm btn-primary" onClick={addPhone}>
-            + Agregar
+          <button
+            type="button"
+            className="btn btn-sm btn-link text-danger p-0 tp-btn-delete"
+            onClick={handleRemove}
+            title="Eliminar teléfono"
+          >
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+              <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+            </svg>
           </button>
         )}
       </div>
 
-      {phones.length === 0 ? (
-        <div className="text-muted small">Sin teléfonos.</div>
-      ) : (
-        <div className="vstack gap-3">
-          {phones.map((p, idx) => (
-            <div key={p.id ?? idx} className="phone-card p-3">
-              {variant === "stacked" ? (
-                /* ===== Stacked ===== */
-                <div className="row g-3">
-                  <div className="col-12 col-md-4">
-                    <label className="form-label small mb-1">Tipo</label>
-                    <select
-                      className="form-select form-select-sm"
-                      value={p.tipo || ""}
-                      onChange={(e) => updateAt(idx, { tipo: e.target.value })}
-                      disabled={readOnly}
-                    >
-                      {types.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
+      <div className="tp-card-body">
+        <div className="row g-2">
+          <div className="col-12 col-sm-6 col-lg-4">
+            <label className="form-label small mb-1 text-muted">Tipo</label>
+            <select
+              className="form-select form-select-sm"
+              value={local.tipo || "Móvil"}
+              onChange={handleTipo}
+              disabled={readOnly}
+            >
+              <option value="Móvil">Móvil</option>
+              <option value="Trabajo">Trabajo</option>
+              <option value="Casa">Casa</option>
+              <option value="Whatsapp">Whatsapp</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
 
-                  <div className="col-12 col-md-8">
-                    <label className="form-label small mb-1">Número</label>
-                    <div className="row g-2">
-                      <div className="col-12 col-sm-6">
-                        <CountryFlagSelect
-                          valueIso={p.iso || ""}
-                          onChange={(iso) => {
-                            const found = findCountry(iso);
-                            const indicativo = found ? String(found.code).replace(/\D+/g, "") : "";
-                            updateAt(idx, { iso: (iso || "").toLowerCase(), indicativo });
-                          }}
-                          disabled={readOnly}
-                          uiPreset={effectivePreset}
-                        />
-                      </div>
-                      <div className="col-12 col-sm-6">
-                        <div className="input-group input-group-sm">
-                          <span className="input-group-text">+{p.indicativo || ""}</span>
-                          <input
-                            className="form-control"
-                            placeholder="333 333 444..."
-                            inputMode="tel"
-                            value={p.numero || ""}
-                            onChange={(e) => updateAt(idx, { numero: e.target.value })}
-                            disabled={readOnly}
-                            maxLength={22}
-                          />
-                        </div>
-                      </div>
-                    </div>
+          <div className="col-12 col-sm-6 col-lg-4">
+            <label className="form-label small mb-1 text-muted">País</label>
+            <CountrySelectWithFlags
+              value={local.iso}
+              onChange={handleIso}
+              disabled={readOnly}
+            />
+          </div>
 
-                    <div className="d-flex flex-wrap gap-3 justify-content-between justify-content-md-end align-items-center mt-2 actions-slot">
-                      <div className="form-check m-0">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id={`principal-${idx}`}
-                          checked={!!p.principal}
-                          onChange={() => togglePrincipal(idx)}
-                          disabled={readOnly}
-                        />
-                        <label className="form-check-label small" htmlFor={`principal-${idx}`}>
-                          Principal
-                        </label>
-                      </div>
-                      {!readOnly && (
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger btn-sm btn-del"
-                          onClick={() => removePhone(idx)}
-                        >
-                          Eliminar
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* ===== Inline (alineación mejorada) ===== */
-                
-                <div className="row g-2">
-                  <div className="actions-top mb-2">
-                      <div className="form-check">
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id={`principal-${idx}`}
-                          checked={!!p.principal}
-                          onChange={() => togglePrincipal(idx)}
-                          disabled={readOnly}
-                        />
-                        <label className="form-check-label small" htmlFor={`principal-${idx}`}>
-                          Principal
-                        </label>
-                      </div>
-
-                      {!readOnly && (
-                        <button
-                          type="button"
-                          className="btn btn-outline-danger btn-sm icon-btn-28"
-                          onClick={() => removePhone(idx)}
-                          title="Eliminar teléfono"
-                        >
-                          {/* SVG trash (sin dependencias) */}
-                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
-                            <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
-                            <path fillRule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
-                          </svg>
-                        </button>
-                      )}
-                    </div>
-                  {/* Columna izquierda: acciones + tipo */}
-                  <div className="col-12 col-md-3">
-                    {/* Barra de acciones alineada */}
-                    
-
-                    
-                    <select
-                      className="form-select form-select-sm"
-                      value={p.tipo || ""}
-                      onChange={(e) => updateAt(idx, { tipo: e.target.value })}
-                      disabled={readOnly}
-                    >
-                      {types.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Columna derecha: número */}
-                  <div className="col-12 col-md-9">
-                    
-                    <div className="d-flex gap-2 align-items-start">
-                      <div style={{ minWidth: "160px", maxWidth: "200px" }}>
-                        <CountryFlagSelect
-                          valueIso={p.iso || ""}
-                          onChange={(iso) => {
-                            const found = findCountry(iso);
-                            const indicativo = found ? String(found.code).replace(/\D+/g, "") : "";
-                            updateAt(idx, { iso: (iso || "").toLowerCase(), indicativo });
-                          }}
-                          disabled={readOnly}
-                          uiPreset={effectivePreset}
-                        />
-                      </div>
-                      <div className="input-group input-group-sm flex-grow-1">
-                        <span className="input-group-text">+{p.indicativo || ""}</span>
-                        <input
-                          className="form-control"
-                          placeholder="333 333 444..."
-                          inputMode="tel"
-                          value={p.numero || ""}
-                          onChange={(e) => updateAt(idx, { numero: e.target.value })}
-                          disabled={readOnly}
-                          maxLength={22}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+          <div className="col-12 col-lg-4">
+            <label className="form-label small mb-1 text-muted">Número</label>
+            <div className="input-group input-group-sm">
+              <span className="input-group-text tp-indicativo">+{local.indicativo || ""}</span>
+              <input
+                className="form-control form-control-sm"
+                value={local.numero || ""}
+                onChange={handleNumero}
+                disabled={readOnly}
+                placeholder="333-333-3333"
+                inputMode="tel"
+              />
             </div>
-          ))}
+          </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* Principal */
+export default function TelefonosPro({
+  value = [],
+  onChange = () => {},
+  readOnly = false,
+  fallbackIso = "co",
+  addLabel = "Agregar teléfono",
+}) {
+  const data = useMemo(() => {
+    const base = Array.isArray(value) ? value : [];
+    const mapped = base.map((p, i) => {
+      const iso = String(p?.iso || "").toLowerCase();
+      const indicativo = String(p?.indicativo || "").replace(/\D+/g, "");
+      const completed = completeIsoIndic({ iso, indicativo }, fallbackIso);
+      const numeroFormatted = formatPhone334(String(p?.numero ?? "")); // mostrar formateado
+      return {
+        id: p.id ?? `ph-${i}`,
+        tipo: norm(p?.tipo) || "Móvil",
+        numero: numeroFormatted,
+        principal: !!p?.principal,
+        iso: completed.iso,
+        indicativo: completed.indicativo,
+      };
+    });
+    return ensureOnePrimary(mapped);
+  }, [value, fallbackIso]);
+
+  const emit = useCallback(
+    (arr) => {
+      const cleaned = ensureOnePrimary(arr).map((p) => ({
+        id: p.id,
+        tipo: p.tipo || "Móvil",
+        numero: String(p.numero || ""), // mantenemos el formato visual
+        principal: !!p.principal,
+        iso: String(p.iso || "").toLowerCase(),
+        indicativo: String(p.indicativo || "").replace(/\D+/g, ""),
+      }));
+      onChange(cleaned);
+    },
+    [onChange]
+  );
+
+  const addPhone = () => {
+    const firstIso = data?.[0]?.iso || fallbackIso;
+    const firstIndic = isoToCode.get(firstIso) || "";
+    emit([
+      ...data,
+      {
+        id: `ph-${Date.now().toString(36)}`,
+        iso: firstIso,
+        indicativo: firstIndic,
+        numero: "",
+        tipo: "Móvil",
+        principal: data.length === 0,
+      },
+    ]);
+  };
+
+  const removeAt = (idx) => {
+    const next = data.filter((_, i) => i !== idx);
+    if (!next.some((x) => x.principal) && next[0]) next[0].principal = true;
+    emit(next);
+  };
+
+  const patchAt = (idx, patch) => {
+    const next = data.map((it, i) => (i === idx ? { ...it, ...patch } : it));
+    emit(next);
+  };
+
+  const makePrimary = (idx) => {
+    const next = data.map((it, i) => ({ ...it, principal: i === idx }));
+    emit(next);
+  };
+
+  return (
+    <div className="telefonos-pro-wrapper">
+      {data.length === 0 ? (
+        <div className="text-muted small text-center py-3">No hay teléfonos registrados</div>
+      ) : (
+        data.map((item, idx) => (
+          <PhoneRow
+            key={item.id ?? idx}
+            item={item}
+            index={idx}
+            onPatch={patchAt}
+            onRemove={removeAt}
+            onMakePrimary={makePrimary}
+            readOnly={readOnly}
+          />
+        ))
+      )}
+
+      {!readOnly && (
+        <button
+          type="button"
+          className="btn btn-outline-primary btn-sm w-100"
+          onClick={addPhone}
+        >
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: 6 }}>
+            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
+          </svg>
+          {addLabel}
+        </button>
       )}
     </div>
   );
