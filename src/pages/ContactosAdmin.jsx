@@ -2,7 +2,52 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import apiRequest from "../services/api";
 
-// === utilidades ===
+// ⬇️ componentes ya existentes en tu proyecto
+import LanguageSelect from "../components/selects/LanguageSelect";
+import TelefonosPro from "../components/fase2/TelefonosPro";
+
+// Rutas base de navegación (ajústalas a tu router real)
+// ⬇️ ya lo tienes
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
+
+// ⬇️ nuevo
+const GRUPO_FICHA_PATH = (id) => `/grupo_familiar/${id}`;
+
+export const renderClienteLink = (clienteId, label = null) => {
+  if (!clienteId) return "—";
+  return (
+    <Link
+      to={CLIENTE_FICHA_PATH(clienteId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-decoration-none"
+      title="Abrir ficha del cliente en una nueva pestaña"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {label ?? clienteId}
+    </Link>
+  );
+};
+
+// ⬇️ nuevo: link al grupo
+export const renderGrupoLink = (grupoId, label = null) => {
+  if (!grupoId) return "—";
+  return (
+    <Link
+      to={GRUPO_FICHA_PATH(grupoId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-decoration-none"
+      title={`Abrir grupo #${grupoId} en una nueva pestaña`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {label ?? `#${grupoId}`}
+    </Link>
+  );
+};
+
+
+/* ================= utilidades ================= */
 
 // Capitaliza cada palabra
 const toTitle = (s = "") =>
@@ -19,58 +64,8 @@ const splitNames = (n = "") => {
   return { primer_nombre, segundo_nombre };
 };
 
-// === subcomponente: fila teléfono ===
-function PhoneRow({ value, onChange, onRemove }) {
-  const tipos = ["Móvil", "Trabajo", "WhatsApp", "Casa", "Otro"];
-  return (
-    <div className="d-flex gap-2 align-items-center mb-2">
-      <select
-        className="form-select form-select-sm"
-        style={{ maxWidth: 160 }}
-        value={value.tipo || ""}
-        onChange={(e) => onChange({ ...value, tipo: e.target.value })}
-      >
-        <option value="">Tipo…</option>
-        {tipos.map((t) => (
-          <option key={t} value={t}>
-            {t}
-          </option>
-        ))}
-      </select>
+/* ================ componente principal ================= */
 
-      <input
-        className="form-control form-control-sm"
-        placeholder="Número"
-        value={value.numero || ""}
-        onChange={(e) => onChange({ ...value, numero: e.target.value })}
-      />
-
-      <div className="form-check ms-1">
-        <input
-          className="form-check-input"
-          type="checkbox"
-          checked={!!value.principal}
-          onChange={(e) =>
-            onChange({ ...value, principal: !!e.target.checked })
-          }
-          id={`chk-${value.id || Math.random()}`}
-        />
-        <label className="form-check-label small">Principal</label>
-      </div>
-
-      <button
-        type="button"
-        className="btn btn-outline-danger btn-sm"
-        onClick={onRemove}
-        title="Quitar teléfono"
-      >
-        <i className="fas fa-trash" />
-      </button>
-    </div>
-  );
-}
-
-// === componente principal ===
 export default function ContactosAdmin() {
   // ====== búsqueda/listado ======
   const [q, setQ] = useState("");
@@ -101,10 +96,13 @@ export default function ContactosAdmin() {
     if (debRef.current) clearTimeout(debRef.current);
     debRef.current = setTimeout(async () => {
       const term = q.trim();
-      if (term.length < 2) { setRows([]); setLoadingList(false); return; }
+      if (term.length < 2) {
+        setRows([]);
+        setLoadingList(false);
+        return;
+      }
       setLoadingList(true);
       try {
-        // ✅ Buscar clientes
         const res = await apiRequest(
           `/cliente/buscar?nombre=${encodeURIComponent(term)}`,
           "GET"
@@ -137,20 +135,27 @@ export default function ContactosAdmin() {
       let telefonos = [];
       if (Array.isArray(c.telefonos)) {
         telefonos = c.telefonos;
-      } else if (
-        typeof c.telefonos === "string" &&
-        c.telefonos.trim().startsWith("[")
-      ) {
+      } else if (typeof c.telefonos === "string" && c.telefonos.trim().startsWith("[")) {
         try {
           telefonos = JSON.parse(c.telefonos);
         } catch (_) {}
       }
 
+      // ✅ normalización para TelefonosPro
+      telefonos = (telefonos || [])
+        .filter((t) => (t?.numero || "").trim().length > 0)
+        .map((t, i) => ({
+          id: t?.id ?? `${i}-${t?.tipo ?? "Móvil"}`,
+          tipo: t?.tipo || "Móvil",
+          numero: t?.numero || "",
+          principal: !!t?.principal || i === 0,
+          iso: (t?.iso || "").toLowerCase() || undefined,
+          indicativo: t?.indicativo || "",
+        }));
+
       setModel({
         id: c.id,
-        nombres: [c.primer_nombre, c.segundo_nombre]
-          .filter(Boolean)
-          .join(" ") || "",
+        nombres: [c.primer_nombre, c.segundo_nombre].filter(Boolean).join(" ") || "",
         apellidos: c.apellidos || "",
         nombre_completo: c.nombre_completo || "",
         idioma: c.idioma || "",
@@ -187,39 +192,15 @@ export default function ContactosAdmin() {
 
   // ====== handlers de campos ======
   const setField = (k, v) => {
-    if (k === "nombres" || k === "apellidos" || k === "nombre_completo")
-      v = toTitle(v);
+    if (k === "nombres" || k === "apellidos" || k === "nombre_completo") v = toTitle(v);
     setModel((m) => {
       const next = { ...m, [k]: v };
       if (k === "nombres" || k === "apellidos") {
-        next.nombre_completo = toTitle(
-          [next.nombres, next.apellidos].filter(Boolean).join(" ")
-        );
+        next.nombre_completo = toTitle([next.nombres, next.apellidos].filter(Boolean).join(" "));
       }
       return next;
     });
   };
-
-  // ====== manejo de teléfonos ======
-  const addPhone = () =>
-    setModel((m) => ({
-      ...m,
-      telefonos: [...(m.telefonos || []), { tipo: "", numero: "", principal: false }],
-    }));
-
-  const updatePhone = (idx, val) =>
-    setModel((m) => {
-      const arr = [...(m.telefonos || [])];
-      arr[idx] = val;
-      return { ...m, telefonos: arr };
-    });
-
-  const removePhone = (idx) =>
-    setModel((m) => {
-      const arr = [...(m.telefonos || [])];
-      arr.splice(idx, 1);
-      return { ...m, telefonos: arr };
-    });
 
   // ====== guardar cambios ======
   const save = async () => {
@@ -227,6 +208,9 @@ export default function ContactosAdmin() {
     setSaving(true);
     try {
       const { primer_nombre, segundo_nombre } = splitNames(model.nombres || "");
+      const principal = Array.isArray(model.telefonos)
+        ? model.telefonos.find((x) => x.principal)
+        : null;
 
       const payload = {
         primer_nombre,
@@ -237,10 +221,7 @@ export default function ContactosAdmin() {
         email: model.email_principal || null,
         telefonos: model.telefonos || [],
         nota: model.nota || null,
-        telefono:
-          Array.isArray(model.telefonos) && model.telefonos[0]?.numero
-            ? model.telefonos[0].numero
-            : null,
+        telefono: principal?.numero ?? null, // ← compat: teléfono plano (principal)
         estado_cliente: "Cliente",
       };
 
@@ -273,11 +254,12 @@ export default function ContactosAdmin() {
 
   const canSave = useMemo(() => !!model.id, [model.id]);
 
-  // ====== render ======
+  /* ===================== render ===================== */
+
   return (
     <div className="container-fluid py-3">
       <div className="row g-3">
-        {/* === Columna izquierda === */}
+        {/* === Columna izquierda: listado === */}
         <div className="col-lg-5">
           <div className="card">
             <div className="card-body">
@@ -292,10 +274,7 @@ export default function ContactosAdmin() {
                 />
               </div>
 
-              <div
-                className="table-responsive"
-                style={{ maxHeight: 420, overflow: "auto" }}
-              >
+              <div className="table-responsive" style={{ maxHeight: 420, overflow: "auto" }}>
                 <table className="table table-sm align-middle">
                   <thead className="table-light">
                     <tr>
@@ -326,9 +305,7 @@ export default function ContactosAdmin() {
                           "—";
                         return (
                           <tr key={r.id}>
-                            <td className="fw-semibold">
-                              {r.nombre_completo}
-                            </td>
+                            <td className="fw-semibold">{r.nombre_completo}</td>
                             <td>{r.estado_cliente || "—"}</td>
                             <td>{firstPhone}</td>
                             <td className="text-end">
@@ -350,24 +327,17 @@ export default function ContactosAdmin() {
           </div>
         </div>
 
-        {/* === Columna derecha === */}
+        {/* === Columna derecha: edición === */}
         <div className="col-lg-7">
           <div className="card mb-3">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <h5 className="mb-0">Editar Cliente</h5>
                 <div className="btn-group">
-                  <button
-                    className="btn btn-outline-secondary btn-sm"
-                    onClick={resetForm}
-                  >
+                  <button className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
                     Nuevo / Limpiar
                   </button>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={save}
-                    disabled={!canSave || saving}
-                  >
+                  <button className="btn btn-primary btn-sm" onClick={save} disabled={!canSave || saving}>
                     {saving ? "Guardando…" : "Guardar"}
                   </button>
                 </div>
@@ -396,23 +366,23 @@ export default function ContactosAdmin() {
                   <input
                     className="form-control form-control-sm"
                     value={model.nombre_completo}
-                    onChange={(e) =>
-                      setField("nombre_completo", e.target.value)
-                    }
+                    onChange={(e) => setField("nombre_completo", e.target.value)}
                   />
                 </div>
 
                 <div className="col-md-4">
                   <label className="form-label small">Idioma</label>
-                  <select
-                    className="form-select form-select-sm"
+                  <LanguageSelect
+                    name="idioma"
                     value={model.idioma || ""}
                     onChange={(e) => setField("idioma", e.target.value)}
-                  >
-                    <option value="">Seleccione…</option>
-                    <option>Spanish</option>
-                    <option>English</option>
-                  </select>
+                    includeEmpty
+                    includeOther
+                    getValue={(l) => l.name}   // o (l) => l.code si prefieres guardar el code
+                    getLabel={(l) => l.name}
+                    className="form-select form-select-sm"
+                    placeholder="Seleccione"
+                  />
                 </div>
 
                 <div className="col-md-8">
@@ -425,28 +395,18 @@ export default function ContactosAdmin() {
                 </div>
 
                 <div className="col-12">
-                  <div className="d-flex justify-content-between align-items-center">
-                    <label className="form-label small mb-1">Teléfonos</label>
-                    <button
-                      className="btn btn-outline-success btn-sm"
-                      onClick={addPhone}
-                    >
-                      + Agregar Teléfono
-                    </button>
-                  </div>
-                  {(model.telefonos || []).length === 0 && (
-                    <div className="text-muted small mb-2">
-                      Sin teléfonos.
-                    </div>
+                  <label className="form-label small mb-1">Teléfonos</label>
+                  <TelefonosPro
+                    value={model.telefonos}
+                    onChange={(list) => setField("telefonos", list)}
+                    readOnly={false}
+                    uiPreset="clean"
+                    countrySelectWidth={200}
+                    formatByCountry
+                  />
+                  {(!model.telefonos || model.telefonos.length === 0) && (
+                    <div className="text-muted small mt-1">Sin teléfonos.</div>
                   )}
-                  {(model.telefonos || []).map((p, idx) => (
-                    <PhoneRow
-                      key={idx}
-                      value={p}
-                      onChange={(val) => updatePhone(idx, val)}
-                      onRemove={() => removePhone(idx)}
-                    />
-                  ))}
                 </div>
               </div>
             </div>
@@ -473,28 +433,69 @@ export default function ContactosAdmin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {links.map((v) => (
-                        <tr
-                          key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}
-                        >
-                          <td>{v.grupo_familiar_id || "—"}</td>
-                          <td>
-                            {v.cliente?.nombre_completo
-                              ? v.cliente.nombre_completo
-                              : v.cliente_nombre || "—"}
-                          </td>
-                          <td>{v.relacion || "—"}</td>
-                          <td>{v.pertenece_al_grupo ? "Sí" : "No"}</td>
-                          <td>{v.nota || "—"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+  {links.map((v) => {
+    const gfId = v.grupo_familiar_id;
+    const clienteId = v.cliente_id;
+    const clienteNombre =
+      v.cliente?.nombre_completo?.trim?.() ||
+      v.cliente_nombre ||
+      "—";
+
+    return (
+      <tr
+        key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}
+      >
+        {/* 🔗 ID del Grupo Familiar */}
+        <td>
+          {gfId ? (
+            <a
+              href={`/grupo_familiar/${gfId}`}
+              className="text-decoration-none link-primary fw-semibold"
+              target="_blank"
+              rel="noreferrer"
+              title={`Abrir ficha del grupo familiar #${gfId}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {gfId}
+            </a>
+          ) : (
+            "—"
+          )}
+        </td>
+
+        {/* 🔗 Nombre del Cliente */}
+        <td>
+          {clienteId ? (
+            <a
+              href={`/clientes/${clienteId}/ficha`}
+              className="text-decoration-none link-primary fw-semibold"
+              target="_blank"
+              rel="noreferrer"
+              title={`Abrir ficha del cliente ${clienteNombre}`}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {clienteNombre}
+            </a>
+          ) : (
+            clienteNombre
+          )}
+        </td>
+
+        {/* Resto de columnas */}
+        <td>{v.relacion || "—"}</td>
+        <td>{v.pertenece_al_grupo ? "Sí" : "No"}</td>
+        <td>{v.nota || "—"}</td>
+      </tr>
+    );
+  })}
+</tbody>
+
+
                   </table>
                 </div>
               )}
               <div className="form-text">
-                * Solo lectura aquí. La asociación se gestiona en la ficha del
-                cliente/grupo.
+                * Solo lectura aquí. La asociación se gestiona en la ficha del cliente/grupo.
               </div>
             </div>
           </div>

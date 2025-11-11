@@ -8,17 +8,17 @@ import {
   linkClienteContacto,
   updateLinkClienteContacto,
   searchClientes,
+  deleteLinkClienteContacto, // ⬅️ NUEVO: eliminar vínculo
 } from "../../services/contactosService";
 
-// 👇 renderizamos los subcomponentes que ya creaste
+// 👇 subcomponentes existentes
 import ContactForm from "../Contacto/ContactForm";
 import ContactoCard from "../Contacto/ContactoCard";
 
-export default function ContactosAsociadosAccordion({
+export default function PersonaContactoCard({
   clienteId = null,
   grupoFamiliarId = null,
   className = "",
-  // idiomaOptions ya no es necesario: lo gestiona LanguageSelect dentro de ContactForm
   relacionOptions = [
     "Cónyuge",
     "Hijo/a",
@@ -34,7 +34,7 @@ export default function ContactosAsociadosAccordion({
 }) {
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState([]); // [{contacto, link}]
-  const [linkEditar, setLinkEditar] = useState(null);
+  const [linkEditar, setLinkEditar] = useState(null); // se conserva por compat, pero no se usa para editar
   const [saving, setSaving] = useState(false);
 
   // Modo de creación de contacto: 'nuevo' | 'existente'
@@ -279,6 +279,20 @@ export default function ContactosAsociadosAccordion({
     }
   };
 
+  // ==== SOLO ELIMINAR RELACIÓN (no borrar cliente) ====
+  const handleDeleteLink = async (linkId) => {
+    if (readOnly) return;
+    const ok = window.confirm("¿Quitar este contacto asociado? (No elimina el cliente)");
+    if (!ok) return;
+    try {
+      await deleteLinkClienteContacto(linkId);
+      setItems((prev) => prev.filter((it) => it.link.id !== linkId));
+    } catch (e) {
+      console.error(e);
+      alert("No se pudo eliminar la relación.");
+    }
+  };
+
   return (
     <div className={className}>
       {/* Título + contador */}
@@ -321,8 +335,10 @@ export default function ContactosAsociadosAccordion({
                 saving={saving}
                 puedeGuardar={puedeGuardar}
                 onSave={handleSave}
-                onReset={() => { setLinkEditar(null); resetForm(); }}
-
+                onReset={() => {
+                  setLinkEditar(null);
+                  resetForm();
+                }}
                 // picker existente
                 term={term}
                 setTerm={setTerm}
@@ -330,7 +346,6 @@ export default function ContactosAsociadosAccordion({
                 sel={sel}
                 setSel={setSel}
                 loadingPicker={loadingPicker}
-
                 // selects
                 relacionOptions={relacionOptions}
               />
@@ -347,6 +362,9 @@ export default function ContactosAsociadosAccordion({
           key={`${link?.id || contacto?.id || Math.random()}`}
           contacto={contacto}
           link={link}
+          // ⬇️ ahora mostramos el botón “Quitar” en la tarjeta
+          onDelete={() => handleDeleteLink(link.id)}
+          readOnly={readOnly}
         />
       ))}
 

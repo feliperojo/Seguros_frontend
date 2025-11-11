@@ -1,7 +1,14 @@
+// src/components/Contacto/ContactoCard.jsx
 import React from "react";
 import { joinNameParts } from "../../utils/names";
 
-export default function ContactoCard({ contacto = {}, link = {} }) {
+export default function ContactoCard({
+  contacto = {},
+  link = {},
+  onEdit,
+  onDelete,
+  readOnly = false,
+}) {
   const nombre =
     contacto?.nombre_completo ||
     joinNameParts(contacto?.nombres || "", contacto?.apellidos || "");
@@ -14,7 +21,6 @@ export default function ContactoCard({ contacto = {}, link = {} }) {
   const telsOrdenados = [...telefonos].sort(
     (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
   );
-
   const fmt = (t) => {
     const cc = t?.indicativo ? `+${t.indicativo} ` : "";
     return `${cc}${t?.numero || ""}`.trim();
@@ -23,13 +29,42 @@ export default function ContactoCard({ contacto = {}, link = {} }) {
   return (
     <div className="card mb-2">
       <div className="card-body">
-        <div className="d-flex align-items-start justify-content-between flex-wrap">
-          <h6 className="fw-semibold mb-2">{nombre}</h6>
-          {relacion && relacion !== "—" && (
-            <span className="badge bg-light text-dark">{relacion}</span>
+        {/* Encabezado con acciones */}
+        <div className="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+          <div className="d-flex align-items-center gap-2">
+            <h6 className="fw-semibold mb-0">{nombre}</h6>
+            {relacion && relacion !== "—" && (
+              <span className="badge bg-light text-dark">{relacion}</span>
+            )}
+          </div>
+
+          {!readOnly && (onEdit || onDelete) && (
+            <div className="btn-group btn-group-sm">
+              {onEdit && (
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={onEdit}
+                  title="Editar relación"
+                >
+                  Editar
+                </button>
+              )}
+              {onDelete && (
+                <button
+                  type="button"
+                  className="btn btn-outline-danger"
+                  onClick={onDelete}
+                  title="Quitar relación"
+                >
+                  Quitar
+                </button>
+              )}
+            </div>
           )}
         </div>
 
+        {/* Contenido */}
         <div className="mt-2 small">
           <div className="mb-1">
             <strong>Idioma:</strong> {idioma}

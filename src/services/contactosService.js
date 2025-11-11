@@ -113,3 +113,9 @@ export async function linkClienteContacto({
 export async function updateLinkClienteContacto(linkId, patch) {
   return apiRequest(`/cliente-contacto/${linkId}`, "PUT", patch);
 }
+// ...exports existentes (fetchClienteContacto, upsertClienteComoContacto, etc.)
+
+export async function deleteLinkClienteContacto(linkId) {
+  // DELETE solo del vínculo cliente-contacto
+  return await apiRequest(`/cliente-contacto/${linkId}`, "DELETE");
+}
