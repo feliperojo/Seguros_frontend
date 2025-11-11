@@ -1,7 +1,7 @@
-// src/components/contacto/ContactosAsociadosAccordion.jsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
+import ContactForm from "./ContactForm";
+import ContactoCard from "./ContactoCard";
 
-// 👇 usamos tus servicios existentes
 import {
   fetchClienteContacto,
   upsertClienteComoContacto,
@@ -10,15 +10,10 @@ import {
   searchClientes,
 } from "../../services/contactosService";
 
-// 👇 renderizamos los subcomponentes que ya creaste
-import ContactForm from "../Contacto/ContactForm";
-import ContactoCard from "../Contacto/ContactoCard";
-
 export default function ContactosAsociadosAccordion({
   clienteId = null,
   grupoFamiliarId = null,
   className = "",
-  // idiomaOptions ya no es necesario: lo gestiona LanguageSelect dentro de ContactForm
   relacionOptions = [
     "Cónyuge",
     "Hijo/a",
@@ -37,17 +32,16 @@ export default function ContactosAsociadosAccordion({
   const [linkEditar, setLinkEditar] = useState(null);
   const [saving, setSaving] = useState(false);
 
-  // Modo de creación de contacto: 'nuevo' | 'existente'
   const [modo, setModo] = useState("nuevo");
 
-  // Picker de cliente existente (con debounce)
+  // Picker
   const [term, setTerm] = useState("");
   const [candidatos, setCandidatos] = useState([]);
   const [sel, setSel] = useState(null);
   const [loadingPicker, setLoadingPicker] = useState(false);
   const searchDebRef = useRef(null);
 
-  // ---- form local (crear/editar) ----
+  // Form
   const [form, setForm] = useState({
     nombre_completo: "",
     idioma: "",
@@ -79,19 +73,13 @@ export default function ContactosAsociadosAccordion({
     return tieneContexto && datosCompletos;
   }, [modo, sel, form.nombre_completo, form.relacion, clienteId, grupoFamiliarId]);
 
-  // ---- carga inicial ----
+  // Carga inicial
   const cargar = async () => {
     if (!clienteId && !grupoFamiliarId) return;
     try {
       setLoading(true);
       const res = await fetchClienteContacto({ clienteId, grupoFamiliarId });
-      const arr = Array.isArray(res?.data)
-        ? res.data
-        : Array.isArray(res)
-        ? res
-        : res
-        ? [res]
-        : [];
+      const arr = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : res ? [res] : [];
       const normalizados = arr.map((l) => ({
         contacto: l.contacto || {},
         link: {
@@ -107,12 +95,9 @@ export default function ContactosAsociadosAccordion({
       setLoading(false);
     }
   };
+  useEffect(() => { cargar(); }, [clienteId, grupoFamiliarId]);
 
-  useEffect(() => {
-    cargar();
-  }, [clienteId, grupoFamiliarId]);
-
-  // ---- búsqueda con debounce ----
+  // Búsqueda con debounce
   useEffect(() => {
     if (modo !== "existente") return;
     if (searchDebRef.current) clearTimeout(searchDebRef.current);
@@ -127,7 +112,6 @@ export default function ContactosAsociadosAccordion({
       try {
         const res = await searchClientes(q);
         const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
-        // evita seleccionarse a sí mismo
         setCandidatos(list.filter((x) => x.id !== clienteId));
       } catch {
         setCandidatos([]);
@@ -139,7 +123,7 @@ export default function ContactosAsociadosAccordion({
     return () => clearTimeout(searchDebRef.current);
   }, [term, modo, clienteId]);
 
-  // --- pinta teléfonos/idioma cuando se elige cliente existente ---
+  // Pintar teléfonos/idioma cuando se elige cliente existente
   useEffect(() => {
     if (modo !== "existente") return;
     if (!sel?.id) {
@@ -154,7 +138,7 @@ export default function ContactosAsociadosAccordion({
     }));
   }, [sel, modo]);
 
-  // --- Helper para normalizar teléfonos del cliente existente o nuevo ---
+  // Normalizador de teléfonos
   const normalizeTelefonos = (c) => {
     if (!c) return [];
     if (Array.isArray(c.telefonos)) {
@@ -171,20 +155,11 @@ export default function ContactosAsociadosAccordion({
     }
     const numeroPlano = c.telefono || "";
     return (numeroPlano || "").trim()
-      ? [
-          {
-            id: "legacy-1",
-            tipo: "Móvil",
-            numero: numeroPlano,
-            principal: true,
-            iso: "co",
-            indicativo: "57",
-          },
-        ]
+      ? [{ id: "legacy-1", tipo: "Móvil", numero: numeroPlano, principal: true, iso: "co", indicativo: "57" }]
       : [];
   };
 
-  // ---- guardar (crea o actualiza vínculo) ----
+  // Guardar (misma lógica que venías usando)
   const handleSave = async () => {
     if (readOnly || !puedeGuardar) return;
     try {
@@ -200,11 +175,11 @@ export default function ContactosAsociadosAccordion({
         const telefonosFinales = Array.isArray(form.telefonos) ? form.telefonos : [];
 
         const upsertRes = await upsertClienteComoContacto({
-          id: sel.id, // ← update
+          id: sel.id, // ← importante para update
           nombre_completo: sel.nombre_completo,
           idioma: form.idioma || sel.idioma || "",
           telefonos: telefonosFinales,
-          telefono: telefonosFinales.find((x) => x.principal)?.numero || null, // compat plano
+          telefono: telefonosFinales.find((x) => x.principal)?.numero || null, // compat
           email_principal: form.email_principal || sel.email_principal || null,
           nota: form.nota || null,
         });
@@ -257,16 +232,12 @@ export default function ContactosAsociadosAccordion({
       }
       const linkFinal = linkEditar?.id ? linkRes : linkRes?.link || linkRes;
 
-      // reflejar en UI
       if (linkEditar?.id) {
-        setItems((prev) =>
-          prev.map((it) => (it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it))
-        );
+        setItems((prev) => prev.map((it) => (it.link.id === linkEditar.id ? { contacto, link: linkFinal } : it)));
       } else {
         setItems((prev) => [{ contacto, link: linkFinal }, ...prev]);
       }
 
-      // limpiar
       setLinkEditar(null);
       resetForm();
       setSel(null);
@@ -281,15 +252,11 @@ export default function ContactosAsociadosAccordion({
 
   return (
     <div className={className}>
-      {/* Título + contador */}
       <div className="d-flex align-items-center mb-2">
-        <h6 className="mb-0">
-          <i className="bi bi-people-fill me-2" /> Contactos Asociados
-        </h6>
+        <h6 className="mb-0"><i className="bi bi-people-fill me-2" /> Contactos Asociados</h6>
         <span className="badge bg-secondary ms-2">{items.length}</span>
       </div>
 
-      {/* Acordeón: Crear / Editar */}
       <div className="accordion mb-3" id="accordionContactos">
         <div className="accordion-item">
           <h2 className="accordion-header" id="headingNuevo">
@@ -304,13 +271,7 @@ export default function ContactosAsociadosAccordion({
               {linkEditar ? "Editar contacto" : "Agregar contacto"}
             </button>
           </h2>
-
-          <div
-            id="collapseNuevo"
-            className="accordion-collapse collapse"
-            aria-labelledby="headingNuevo"
-            data-bs-parent="#accordionContactos"
-          >
+          <div id="collapseNuevo" className="accordion-collapse collapse" aria-labelledby="headingNuevo" data-bs-parent="#accordionContactos">
             <div className="accordion-body">
               <ContactForm
                 modo={modo}
@@ -322,16 +283,12 @@ export default function ContactosAsociadosAccordion({
                 puedeGuardar={puedeGuardar}
                 onSave={handleSave}
                 onReset={() => { setLinkEditar(null); resetForm(); }}
-
-                // picker existente
                 term={term}
                 setTerm={setTerm}
                 candidatos={candidatos}
                 sel={sel}
                 setSel={setSel}
                 loadingPicker={loadingPicker}
-
-                // selects
                 relacionOptions={relacionOptions}
               />
             </div>
@@ -339,15 +296,10 @@ export default function ContactosAsociadosAccordion({
         </div>
       </div>
 
-      {/* Lista de tarjetas */}
       {loading && <div className="text-muted small">Cargando contactos…</div>}
 
       {items.map(({ contacto, link }) => (
-        <ContactoCard
-          key={`${link?.id || contacto?.id || Math.random()}`}
-          contacto={contacto}
-          link={link}
-        />
+        <ContactoCard key={`${link?.id || contacto?.id || Math.random()}`} contacto={contacto} link={link} />
       ))}
 
       {!loading && items.length === 0 && (
