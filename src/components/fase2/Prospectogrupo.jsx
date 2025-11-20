@@ -1,29 +1,41 @@
 // src/components/Prospectogrupo.jsx
-import React, { useState, useEffect } from 'react';
-import 'bootstrap/dist/css/bootstrap.min.css';
+import React, { useState, useEffect } from "react";
+import "bootstrap/dist/css/bootstrap.min.css";
 import { formatMoneyDisplay } from "../../services/ingresos";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 
-// ✅ nuevos imports
 import RequerimientosModal from "../RequerimientosModal";
 import DriveUrlModal from "../GrupoFamiliar/DriveUrlModal";
+import HistorialRenovacionesModal from "../GrupoFamiliar/HistorialRenovacionesModal";
+import RenovacionCoberturasModal from "../GrupoFamiliar/RenovacionCoberturasModal";
 
-const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) => {
+const Prospectogrupo = ({
+  formData = {},
+  onChange,
+  readOnly,
+  grupoFamiliarId,
+}) => {
   const [showGestion, setShowGestion] = useState(false);
 
-  // ✅ estados para botones/modales nuevos
+  // Modales de utilidades
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
   const [showDriveModal, setShowDriveModal] = useState(false);
+  const [showHistorialRenovaciones, setShowHistorialRenovaciones] =
+    useState(false);
+  const [showRenovacionModal, setShowRenovacionModal] = useState(false);
+
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
 
   // Si el padre actualiza formData.drive_url, sincronizamos
   useEffect(() => {
-    if (formData?.drive_url !== undefined) setDriveUrl(formData.drive_url || "");
+    if (formData?.drive_url !== undefined) {
+      setDriveUrl(formData.drive_url || "");
+    }
   }, [formData?.drive_url]);
 
-  // 3-3-resto
+  // ---- helpers teléfono (se mantienen) ----
   const formatPhone = (raw) => {
-    const digits = String(raw || '').replace(/\D+/g, '');
+    const digits = String(raw || "").replace(/\D+/g, "");
     if (digits.length <= 3) return digits;
     if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
     return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
@@ -31,17 +43,17 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
 
   const handlePhoneChange = (name) => (e) => {
     const formatted = formatPhone(e.target.value);
-    onChange?.({ target: { name, value: formatted, type: 'text' } });
+    onChange?.({ target: { name, value: formatted, type: "text" } });
   };
 
-  // Resuelve el id de grupo de varias fuentes
+  // Resolver id de grupo desde distintas fuentes
   const resolvedGrupoId =
-    (grupoFamiliarId ??
-      formData?.grupo_familiar_id ??
-      formData?.grupoFamiliarId ??
-      formData?.grupo?.id ??
-      formData?.grupo_id ??
-      null);
+    grupoFamiliarId ??
+    formData?.grupo_familiar_id ??
+    formData?.grupoFamiliarId ??
+    formData?.grupo?.id ??
+    formData?.grupo_id ??
+    null;
 
   return (
     <>
@@ -118,7 +130,9 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
                 onChange={onChange}
                 readOnly
               />
-              <div className="form-text">Sumatoria de los ingresos de cada miembro.</div>
+              <div className="form-text">
+                Sumatoria de los ingresos de cada miembro.
+              </div>
             </div>
             <div className="col-md-3">
               <label className="form-label">Personas en Cobertura</label>
@@ -129,7 +143,9 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
                 value={formData.personasCobertura ?? 0}
                 readOnly
               />
-              <div className="form-text">Se calcula con miembros en “Sí” y sin retiro.</div>
+              <div className="form-text">
+                Se calcula con miembros en “Sí” y sin retiro.
+              </div>
             </div>
             <div className="col-md-3">
               <label className="form-label">Personas en Taxes</label>
@@ -140,7 +156,9 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
                 value={formData.personasTaxes ?? 0}
                 readOnly
               />
-              <div className="form-text">Se calcula con el número de miembros (cards).</div>
+              <div className="form-text">
+                Se calcula con el número de miembros (cards).
+              </div>
             </div>
           </div>
         </div>
@@ -150,29 +168,37 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
       <div className="card mb-4">
         <div className="card-header d-flex justify-content-between align-items-center">
           <h6 className="mb-0">Utilidades</h6>
-          <div className="d-flex gap-2">
-            {/* ✅ Requerimientos */}
+          <div className="d-flex gap-2 flex-wrap">
+            {/* Requerimientos */}
             <button
               className="btn btn-outline-success btn-sm d-flex align-items-center"
               onClick={() => setShowDocumentosModal(true)}
               disabled={!resolvedGrupoId}
-              title={!resolvedGrupoId ? "Primero debe existir el Grupo Familiar" : "Abrir requerimientos"}
+              title={
+                !resolvedGrupoId
+                  ? "Primero debe existir el Grupo Familiar"
+                  : "Abrir requerimientos"
+              }
             >
               <i className="bi bi-folder2-open me-2"></i> Requerimientos
             </button>
 
-            {/* ✅ Agregar/Editar URL de Drive */}
+            {/* Agregar/Editar URL de Drive */}
             <button
               className="btn btn-outline-primary btn-sm d-flex align-items-center"
               onClick={() => setShowDriveModal(true)}
               disabled={!resolvedGrupoId}
-              title={!resolvedGrupoId ? "Primero debe existir el Grupo Familiar" : "Agregar/editar URL de Drive"}
+              title={
+                !resolvedGrupoId
+                  ? "Primero debe existir el Grupo Familiar"
+                  : "Agregar/editar URL de Drive"
+              }
             >
               <i className="bi bi-pencil-square me-2"></i>
               {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
             </button>
 
-            {/* (Opcional) Abrir Drive si ya hay URL */}
+            {/* Abrir Drive si ya hay URL */}
             {driveUrl && (
               <button
                 className="btn btn-outline-success btn-sm d-flex align-items-center"
@@ -182,6 +208,36 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
                 <i className="bi bi-folder2-open me-2"></i> Abrir Drive
               </button>
             )}
+
+            {/* Renovar coberturas (flujo principal) */}
+            <button
+              className="btn btn-outline-warning btn-sm d-flex align-items-center"
+              onClick={() => setShowRenovacionModal(true)}
+              disabled={!resolvedGrupoId}
+              title={
+                !resolvedGrupoId
+                  ? "Guarda primero el grupo familiar para renovar coberturas"
+                  : "Iniciar proceso de renovación de coberturas"
+              }
+            >
+              <i className="bi bi-arrow-repeat me-2"></i>
+              Renovar coberturas
+            </button>
+
+            {/* Historial de renovaciones (lista de años / snapshots) */}
+            <button
+              className="btn btn-outline-secondary btn-sm d-flex align-items-center"
+              onClick={() => setShowHistorialRenovaciones(true)}
+              disabled={!resolvedGrupoId}
+              title={
+                !resolvedGrupoId
+                  ? "Guarda primero el grupo familiar para ver el historial"
+                  : "Ver historial de renovaciones y versiones por año"
+              }
+            >
+              <i className="bi bi-clock-history me-2"></i>
+              Historial renovaciones
+            </button>
 
             {/* Nueva Gestión (ya existente) */}
             <button
@@ -194,7 +250,7 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
         </div>
       </div>
 
-      {/* Modales */}
+      {/* Modales existentes */}
       <NuevaTareaModal
         show={showGestion}
         onHide={() => setShowGestion(false)}
@@ -214,9 +270,24 @@ const Prospectogrupo = ({ formData = {}, onChange, readOnly, grupoFamiliarId }) 
         initialUrl={driveUrl}
         onSave={(newUrl) => {
           setDriveUrl(newUrl);
-          // si quieres reflejar en el padre:
-          onChange?.({ target: { name: 'drive_url', value: newUrl, type: 'text' } });
+          onChange?.({
+            target: { name: "drive_url", value: newUrl, type: "text" },
+          });
         }}
+      />
+
+      {/* Modal: proceso de renovación (borrador + confirmación) */}
+      <RenovacionCoberturasModal
+        show={showRenovacionModal}
+        onHide={() => setShowRenovacionModal(false)}
+        grupoFamiliarId={resolvedGrupoId}
+      />
+
+      {/* Modal: historial de renovaciones / versiones por año */}
+      <HistorialRenovacionesModal
+        show={showHistorialRenovaciones}
+        onHide={() => setShowHistorialRenovaciones(false)}
+        grupoFamiliarId={resolvedGrupoId}
       />
     </>
   );
