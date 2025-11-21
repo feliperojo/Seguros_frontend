@@ -6,6 +6,7 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
   const [versiones, setVersiones] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState(null);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     if (show && grupoFamiliarId) {
@@ -17,6 +18,7 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
     try {
       setLoading(true);
       setSelectedVersion(null);
+      setDeleteError("");
 
       const response = await apiRequest(
         `/grupo_familiar/${grupoFamiliarId}/versiones-historial`,
@@ -27,8 +29,11 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
 
       let lista = [];
 
+      // Soporta respuesta paginada de Laravel: { data: [ ... ] }
       if (Array.isArray(response)) {
         lista = response;
+      } else if (Array.isArray(response?.data?.data)) {
+        lista = response.data.data;
       } else if (Array.isArray(response?.data)) {
         lista = response.data;
       }
@@ -37,6 +42,7 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
     } catch (err) {
       console.error("❌ Error cargando historial:", err);
       setVersiones([]);
+      setDeleteError("No se pudo cargar el historial de renovaciones.");
     } finally {
       setLoading(false);
     }
@@ -71,7 +77,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
     ? snapshot.coberturas
     : [];
 
-  // Clientes guardados en el snapshot
   const clientesSnapshot = Array.isArray(snapshot?.clientes)
     ? snapshot.clientes
     : [];
@@ -87,14 +92,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
     }).format(num);
   };
 
-  const formatBool = (val) => (val ? "Sí" : "No");
-
-  const anioOrigen = selectedVersion?.anio_origen ?? selectedVersion?.anio;
-  const anioDestino =
-    selectedVersion?.anio_destino ??
-    (selectedVersion?.anio != null ? selectedVersion.anio + 1 : undefined);
-
-  // Convierte keys de cliente a etiquetas legibles
   const formatClienteLabel = (key) => {
     const map = {
       nombre_completo: "Nombre completo",
@@ -120,17 +117,14 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
 
     if (map[key]) return map[key];
 
-    // Por defecto: "fecha_creacion" -> "Fecha Creacion"
     return key
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
-  // Formatea valores de cliente (fechas, nulls, etc.)
   const formatClienteValue = (key, value) => {
     if (value === null || value === undefined || value === "") return "—";
 
-    // Fechas
     if (
       typeof value === "string" &&
       key.toLowerCase().includes("fecha") &&
@@ -143,6 +137,66 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
     }
 
     return String(value);
+  };
+
+  const anioOrigen = selectedVersion?.anio_origen ?? selectedVersion?.anio;
+  const anioDestino =
+    selectedVersion?.anio_destino ??
+    (selectedVersion?.anio != null ? selectedVersion.anio + 1 : undefined);
+
+  /* ========= ELIMINAR VERSIÓN ========= */
+  const handleDeleteVersion = async (version) => {
+    if (!version) return;
+
+    const anio = version.anio_origen ?? version.anio ?? "¿?";
+    const versionId = version.id; // 👈 ahora EXIGIMOS que venga el id real
+
+    if (!versionId) {
+      setDeleteError(
+        `No se pudo identificar la versión del año ${anio} para eliminarla (no se recibió el ID).`
+      );
+      return;
+    }
+
+    const ok = window.confirm(
+      `¿Seguro que quieres eliminar la versión de renovación del año ${anio}? ` +
+        `Solo se elimina el historial, las coberturas actuales NO se tocan.`
+    );
+    if (!ok) return;
+
+    try {
+      setDeleteError("");
+
+      await apiRequest(
+        `/grupo_familiar/${grupoFamiliarId}/versiones-historial/${versionId}`,
+        "DELETE"
+      );
+
+      // Quitarla de la lista en el UI
+      setVersiones((prev) => prev.filter((v) => v.id !== versionId));
+
+      if (selectedVersion && selectedVersion.id === versionId) {
+        setSelectedVersion(null);
+      }
+    } catch (err) {
+      console.error("Error eliminando versión:", err);
+
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.message;
+
+      if (status === 404) {
+        setDeleteError(
+          msg ||
+            `La versión del año ${anio} ya no existe (probablemente ya fue eliminada).`
+        );
+        // Por si acaso, recargamos la lista desde el backend
+        await cargarVersiones();
+      } else {
+        setDeleteError(
+          msg || "Ocurrió un error al intentar eliminar la versión."
+        );
+      }
+    }
   };
 
   return (
@@ -159,6 +213,12 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
             <div className="border-end pe-3" style={{ width: "30%" }}>
               <h6>Versiones / años disponibles</h6>
 
+              {deleteError && (
+                <div className="alert alert-danger small py-2">
+                  {deleteError}
+                </div>
+              )}
+
               {loading && <p className="text-muted">Cargando historial…</p>}
 
               {!loading && versiones.length === 0 && (
@@ -171,20 +231,29 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                 versiones.length > 0 &&
                 versiones.map((v) => {
                   const aOrigen = v.anio_origen ?? v.anio;
-                  // aDestino ya no se muestra aquí, solo el año origen
+                  const isSelected = selectedVersion?.id === v.id;
+
                   return (
-                    <button
-                      key={v.id}
-                      className={
-                        "btn w-100 mb-2 text-start " +
-                        (selectedVersion?.id === v.id
-                          ? "btn-primary"
-                          : "btn-outline-primary")
-                      }
-                      onClick={() => setSelectedVersion(v)}
-                    >
-                      {aOrigen ?? "¿?"}
-                    </button>
+                    <div className="d-flex mb-2" key={v.id ?? `${aOrigen}-${Math.random()}`}>
+                      <button
+                        className={
+                          "btn flex-grow-1 text-start " +
+                          (isSelected ? "btn-primary" : "btn-outline-primary")
+                        }
+                        onClick={() => setSelectedVersion(v)}
+                      >
+                        {aOrigen ?? "¿?"}
+                      </button>
+                      {/* Botón de eliminar */}
+                      <button
+                        type="button"
+                        className="btn btn-outline-danger ms-1"
+                        title="Eliminar esta versión de renovación"
+                        onClick={() => handleDeleteVersion(v)}
+                      >
+                        ×
+                      </button>
+                    </div>
                   );
                 })}
             </div>
@@ -200,7 +269,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
 
               {selectedVersion && (
                 <>
-                  {/* Encabezado de la versión */}
                   <div className="d-flex justify-content-between align-items-center mb-3">
                     <div>
                       <h5 className="mb-1">
@@ -229,7 +297,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                     </div>
                   </div>
 
-                  {/* Resumen del grupo */}
                   {snapshot ? (
                     <>
                       <div className="row mb-3">
@@ -260,7 +327,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                         </div>
                       </div>
 
-                      {/* Coberturas en este año */}
                       <h6 className="mb-3 mt-4">Coberturas en este año</h6>
 
                       {coberturas.length === 0 && (
@@ -274,7 +340,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                           {coberturas.map((c, idx) => {
                             const itemId = `cov-${idx}`;
 
-                            // Buscar datos del cliente correspondiente
                             const cliente = clientesSnapshot.find((cli) => {
                               return (
                                 cli.id === c.cliente_id ||
@@ -312,7 +377,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                                 >
                                   <div className="accordion-body">
                                     <div className="row">
-                                      {/* Primera columna - Cobertura */}
                                       <div className="col-md-4">
                                         <p>
                                           <strong>Cliente ID:</strong>{" "}
@@ -340,7 +404,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                                         </p>
                                       </div>
 
-                                      {/* Segunda columna - Cobertura */}
                                       <div className="col-md-4">
                                         <p>
                                           <strong>Compañía:</strong>{" "}
@@ -372,7 +435,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                                         </p>
                                       </div>
 
-                                      {/* Tercera columna - Cobertura */}
                                       <div className="col-md-4">
                                         <p>
                                           <strong>Precio:</strong>{" "}
@@ -401,7 +463,6 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                                       </div>
                                     </div>
 
-                                    {/* Datos del cliente en acordeón propio */}
                                     {cliente && (
                                       <>
                                         <hr />

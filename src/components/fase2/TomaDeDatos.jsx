@@ -734,7 +734,15 @@ const TomaDeDatos = ({
                     {m.tipo || "Miembro"}
                   </span>
                   <div className="mt-2">
-                    <UserCoverageIcon status={m.estado_cobertura} size={50} />
+                  <UserCoverageIcon
+  status={m.estado_cobertura}
+  fechaRetiro={m.fecha_retiro}
+  fechaCancelacion={m.fecha_cancelacion}
+  fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
+  size={50}
+/>
+
+
                   </div>
                 </div>
 

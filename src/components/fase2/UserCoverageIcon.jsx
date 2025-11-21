@@ -1,6 +1,5 @@
+// src/components/fase2/UserCoverageIcon.jsx
 import React from "react";
-
-
 
 const UserCoverageIcon = React.memo(function UserCoverageIcon({
   status,
@@ -10,78 +9,179 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   showCheck: showCheckProp,
   color: colorProp,
   title = "Estado de cobertura",
+  // 🔹 props para la lógica
+  fechaRetiro,
+  fechaCancelacion,
+  fechaActivacion,   // 👈 NUEVO
 }) {
-  // Decidir color por estado si no te pasan color
+  const normalizedStatus = String(status || "").toLowerCase();
+  const hasRetiro = !!fechaRetiro;
+  const hasCancel = !!fechaCancelacion;
+
+  const shortDate = (d) =>
+    d ? String(d).slice(0, 10) : "";
+
+  /* ================== COLOR ================== */
   let color = colorProp;
+
   if (!color) {
-    if (status === "Sí") color = "#1aa860";      // verde
-    else if (!status || status === "") color = "#6c757d"; // gris
-    else color = "#dc3545";                       // rojo
+    if (hasRetiro) {
+      // RETIRADO
+      color = "#6c757d"; // gris
+    } else if (
+      hasCancel &&
+      (normalizedStatus === "no" ||
+        normalizedStatus === "medicare" ||
+        normalizedStatus === "medicaid")
+    ) {
+      // CANCELADO
+      color = "#ffc107"; // amarillo
+    } else if (normalizedStatus === "sí") {
+      // ACTIVO
+      color = "#1aa860"; // verde
+    } else if (
+      normalizedStatus === "no" ||
+      normalizedStatus === "medicare" ||
+      normalizedStatus === "medicaid"
+    ) {
+      // INACTIVO / MEDICARE / MEDICAID sin cancel ni retiro
+      color = "#dc3545"; // rojo
+    } else if (!status || status === "") {
+      // SIN DATO
+      color = "#6c757d"; // gris
+    } else {
+      color = "#6c757d";
+    }
   }
 
-  // Decidir si mostrar check si no te lo pasan
-  let showCheck = typeof showCheckProp === "boolean"
-    ? showCheckProp
-    : status === "Sí";
+  /* ================== CHECK ================== */
+  const showCheck =
+    typeof showCheckProp === "boolean"
+      ? showCheckProp
+      : !hasRetiro && !hasCancel && normalizedStatus === "sí";
 
-  // Ajustes de layout del wrapper
+  /* ================== ETIQUETA ================== */
+  let label = "";
+
+  if (hasRetiro) {
+    label = "Retirado";
+  } else if (normalizedStatus === "sí") {
+    label = "Activo";
+  } else if (
+    normalizedStatus === "no" ||
+    normalizedStatus === "medicare" ||
+    normalizedStatus === "medicaid"
+  ) {
+    if (hasCancel) {
+      label = "Cancelado";
+    } else if (normalizedStatus === "medicare") {
+      label = "Medicare";
+    } else if (normalizedStatus === "medicaid") {
+      label = "Medicaid";
+    } else {
+      label = "Inactivo";
+    }
+  } else if (!status || status === "") {
+    label = "Sin estado";
+  }
+
+  /* ================== FECHA A MOSTRAR ================== */
+  let dateLabel = "";
+
+  if (hasRetiro && fechaRetiro) {
+    // 👇 prioridad total cuando está retirado
+    dateLabel = `${shortDate(fechaRetiro)}`;
+  } else if (!hasRetiro && hasCancel && fechaCancelacion) {
+    // 👇 solo cancelación cuando no hay retiro
+    dateLabel = `${shortDate(fechaCancelacion)}`;
+  } else if (
+    !hasRetiro &&
+    !hasCancel &&
+    normalizedStatus === "sí" &&
+    fechaActivacion
+  ) {
+    // 👇 solo activación cuando está activo sin retiro ni cancelación
+    dateLabel = `${shortDate(fechaActivacion)}`;
+  }
+
+  /* ================== LAYOUT ================== */
   const wrapperStyle = {
     width: size,
-    height: size * 0.86, // relación que imitaba el mock
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
     ...style,
+  };
+
+  const iconWrapperStyle = {
+    position: "relative",
+    width: size,
+    height: size * 0.86,
   };
 
   return (
     <div
-      className={`position-relative ${className || ""}`}
+      className={`${className || ""}`}
       style={wrapperStyle}
       role="img"
       aria-label={title}
       title={title}
     >
-      {/* Usuario (cabeza + hombros) */}
-      <svg
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        style={{ display: "block" }}
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="8" r="3.25" stroke={color} strokeWidth="1.8" />
-        <path
-          d="M5 19c1.5-3 4.2-4.2 7-4.2S17.5 16 19 19"
-          stroke={color}
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      {/* Icono de usuario */}
+      <div style={iconWrapperStyle}>
+        <svg
+          width={size}
+          height={size}
+          viewBox="0 0 24 24"
+          fill="none"
+          style={{ display: "block" }}
+          aria-hidden="true"
+        >
+          <circle cx="12" cy="8" r="3.25" stroke={color} strokeWidth="1.8" />
+          <path
+            d="M5 19c1.5-3 4.2-4.2 7-4.2S17.5 16 19 19"
+            stroke={color}
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
 
-      {/* Check (si aplica) */}
-      {showCheck && (
-  <svg
-    className="position-absolute"
-    width={size * 0.40}   // un poco más pequeño que antes
-    height={size * 0.40}
-    viewBox="0 0 24 24"
-    style={{
-      left: size * 0.65,  // lo mueve más a la derecha
-      top: size * -0.10,  // lo sube un poco más
-    }}
-    aria-hidden="true"
-  >
-    <path
-      d="M20 6L9 17l-5-5"
-      fill="none"
-      stroke={color}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-)}
+        {/* Check (si aplica) */}
+        {showCheck && (
+          <svg
+            className="position-absolute"
+            width={size * 0.4}
+            height={size * 0.4}
+            viewBox="0 0 24 24"
+            style={{
+              left: size * 0.65,
+              top: size * -0.1,
+            }}
+            aria-hidden="true"
+          >
+            <path
+              d="M20 6L9 17l-5-5"
+              fill="none"
+              stroke={color}
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        )}
+      </div>
 
+      {/* Etiqueta + fecha bajo el icono */}
+      {(label || dateLabel) && (
+        <div
+          className="text-muted small text-center"
+          style={{ fontSize: size * 0.3, lineHeight: 1.15 }}
+        >
+          {label && <div>{label}</div>}
+          {dateLabel && <div>{dateLabel}</div>}
+        </div>
+      )}
     </div>
   );
 });
