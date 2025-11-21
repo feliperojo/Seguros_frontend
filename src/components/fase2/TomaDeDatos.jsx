@@ -404,16 +404,22 @@ const TomaDeDatos = ({
     [familyMembers]
   );
 
-  const sortedNormalized = useMemo(() => {
-    return normalized
-      .map((m, i) => ({ m, i }))
-      .sort((a, b) => {
-        const pa = isTomador(a.m) ? 0 : 1;
-        const pb = isTomador(b.m) ? 0 : 1;
-        return pa - pb || a.i - b.i;
-      })
-      .map(x => x.m);
-  }, [normalized]);
+  // Mantener miembro + índice original
+const sortedWithIndex = useMemo(() => {
+  return normalized
+    .map((m, i) => ({ m, idx: i })) // idx = posición en familyMembers/normalized
+    .sort((a, b) => {
+      const pa = isTomador(a.m) ? 0 : 1;
+      const pb = isTomador(b.m) ? 0 : 1;
+      return pa - pb || a.idx - b.idx;
+    });
+}, [normalized]);
+
+// Solo los miembros (para cosas que no necesitan el índice)
+const sortedNormalized = useMemo(
+  () => sortedWithIndex.map((x) => x.m),
+  [sortedWithIndex]
+);
 
   // Compañías y pagadores
   const { companies, loading: companiesLoading } = useCompanies();
@@ -709,12 +715,12 @@ const TomaDeDatos = ({
         </div>
       )}
 
-      {sortedNormalized.map((m, idx) => {
-        const itemId = `member-${m.id ?? idx}`;
-        const leftRightWidth = 180;
-        const c = getC(m);
-        const onChange = onChangeFactory(idx);
-        const grupoValor = (m.grupo ?? "").toUpperCase();
+{sortedWithIndex.map(({ m, idx }) => {
+  const itemId = `member-${m.id ?? idx}`;
+  const leftRightWidth = 180;
+  const c = getC(m);
+  const onChange = onChangeFactory(idx); // ✅ idx = índice original en familyMembers
+  const grupoValor = (m.grupo ?? "").toUpperCase();
         const badgeClass =
           grupoValor === "G1" ? "bg-primary" :
           grupoValor === "G2" ? "bg-success" :
