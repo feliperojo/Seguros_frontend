@@ -1,4 +1,6 @@
 // src/components/TelefonosPro.jsx
+import Select from "react-select";
+
 import React, { useMemo, useCallback } from "react";
 import countryCodes from "../../services/countryCodes";
 import { formatPhone334 } from "../../utils/formatters";
@@ -56,24 +58,61 @@ function completeIsoIndic({ iso, indicativo }, fallbackIso = "co") {
 }
 
 /* Country select */
+/* Country select con react-select (banderas compatibles con Chrome/Firefox) */
+const countrySelectStyles = {
+  control: (base, state) => ({
+    ...base,
+    minHeight: "calc(1.5em + .5rem + 2px)",     // tamaño tipo form-select-sm
+    height: "calc(1.5em + .5rem + 2px)",
+    borderRadius: "0.2rem",
+    fontSize: "0.875rem",
+    boxShadow: state.isFocused ? base.boxShadow : "none",
+    borderColor: state.isFocused ? "#80bdff" : base.borderColor,
+  }),
+  valueContainer: (base) => ({
+    ...base,
+    padding: "0 8px",
+  }),
+  indicatorsContainer: (base) => ({
+    ...base,
+    padding: "0 4px",
+  }),
+  menu: (base) => ({
+    ...base,
+    zIndex: 9999, // para que no quede debajo de otros elementos
+  }),
+};
+
 function CountrySelectWithFlags({ value, onChange, disabled }) {
   const iso = String(value || "").toLowerCase();
-  const handle = (e) => onChange?.(String(e.target.value || "").toLowerCase());
+
+  const selectedOption =
+    COUNTRY_OPTIONS.find((opt) => opt.iso === iso) || null;
+
+  const handleChange = (option) => {
+    // mantenemos la API: devolvemos solo el ISO en minúsculas
+    onChange?.(option ? String(option.iso || option.value || "").toLowerCase() : "");
+  };
+
   return (
-    <select
-      className="form-select form-select-sm tp-select-country"
-      value={iso}
-      onChange={handle}
-      disabled={disabled}
-    >
-      {COUNTRY_OPTIONS.map((opt) => (
-        <option key={opt.iso} value={opt.iso}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
+    <Select
+      classNamePrefix="tp-country-select"
+      // para que se vea como un input normal de Bootstrap
+      className="tp-country-select-wrapper"
+      options={COUNTRY_OPTIONS}
+      // usamos nuestras propiedades internas
+      getOptionLabel={(opt) => opt.label} // "🇨🇴 CO (+57)"
+      getOptionValue={(opt) => opt.iso}
+      value={selectedOption}
+      onChange={handleChange}
+      isDisabled={disabled}
+      styles={countrySelectStyles}
+      menuPlacement="auto"
+      isSearchable={true}
+    />
   );
 }
+
 
 /* Row */
 function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
@@ -156,10 +195,11 @@ function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
           <div className="col-12 col-sm-6 col-lg-4">
             <label className="form-label small mb-1 text-muted">País</label>
             <CountrySelectWithFlags
-              value={local.iso}
-              onChange={handleIso}
-              disabled={readOnly}
-            />
+  value={local.iso}
+  onChange={handleIso}
+  disabled={readOnly}
+/>
+
           </div>
 
           <div className="col-12 col-lg-4">

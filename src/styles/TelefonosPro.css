@@ -133,3 +133,16 @@
       font-size: 0.68rem;
     }
   }
+
+  /* Ajustar ancho y que parezca un form-select-sm */
+.tp-country-select-wrapper {
+  font-size: 0.875rem;
+}
+
+.tp-country-select__control {
+  border-radius: 0.2rem;
+}
+
+.tp-country-select__menu {
+  z-index: 9999; /* por si hay modales */
+}
