@@ -81,9 +81,11 @@ function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
   const patch = (p) => onPatch?.(index, p);
 
   const handleIso = (newIso) => {
-    const pair = completeIsoIndic({ iso: newIso, indicativo: local.indicativo });
+    // Forzamos a que el indicativo se recalcule a partir del ISO seleccionado
+    const pair = completeIsoIndic({ iso: newIso, indicativo: "" });
     patch({ iso: pair.iso, indicativo: pair.indicativo });
   };
+  
 
   const handleIndicativo = (e) => {
     const val = String(e.target.value || "").replace(/\D+/g, "");
