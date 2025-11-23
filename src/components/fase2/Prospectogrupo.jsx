@@ -8,6 +8,7 @@ import RequerimientosModal from "../RequerimientosModal";
 import DriveUrlModal from "../GrupoFamiliar/DriveUrlModal";
 import HistorialRenovacionesModal from "../GrupoFamiliar/HistorialRenovacionesModal";
 import RenovacionCoberturasModal from "../GrupoFamiliar/RenovacionCoberturasModal";
+import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 
 const Prospectogrupo = ({
   formData = {},
@@ -17,12 +18,13 @@ const Prospectogrupo = ({
 }) => {
   const [showGestion, setShowGestion] = useState(false);
 
-  // Modales de utilidades
+
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
   const [showDriveModal, setShowDriveModal] = useState(false);
-  const [showHistorialRenovaciones, setShowHistorialRenovaciones] =
-    useState(false);
+  const [showHistorialRenovaciones, setShowHistorialRenovaciones] = useState(false);
   const [showRenovacionModal, setShowRenovacionModal] = useState(false);
+  const [showHistorialCambios, setShowHistorialCambios] = useState(false);
+  
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
 
@@ -169,6 +171,22 @@ const Prospectogrupo = ({
         <div className="card-header d-flex justify-content-between align-items-center">
           <h6 className="mb-0">Utilidades</h6>
           <div className="d-flex gap-2 flex-wrap">
+
+            {/* Historial de Cambios */}
+            <button
+              className="btn btn-outline-dark btn-sm d-flex align-items-center"
+              onClick={() => setShowHistorialCambios(true)}
+              disabled={!resolvedGrupoId}
+              title={
+                !resolvedGrupoId
+                  ? "Guarda primero el grupo familiar para ver el historial de cambios"
+                  : "Ver historial de modificaciones del grupo"
+              }
+            >
+              <i className="bi bi-clock-history me-2"></i>
+              Historial cambios
+            </button>
+
             {/* Requerimientos */}
             <button
               className="btn btn-outline-success btn-sm d-flex align-items-center"
@@ -289,6 +307,13 @@ const Prospectogrupo = ({
         onHide={() => setShowHistorialRenovaciones(false)}
         grupoFamiliarId={resolvedGrupoId}
       />
+      <HistorialCambiosModal
+  show={showHistorialCambios}
+  onClose={() => setShowHistorialCambios(false)}
+  modelo="GrupoFamiliar"
+  modeloId={resolvedGrupoId}
+/>
+
     </>
   );
 };

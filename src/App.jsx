@@ -30,6 +30,9 @@ import ContactosAdmin from "./pages/ContactosAdmin";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
+import FichaClienteHistorial from "./pages/tabs/FichaClienteHistorial";
+
+
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
   return localStorage.getItem("auth_token") !== null;
@@ -105,6 +108,7 @@ const App = () => {
           <Route path="clientes" element={<ListaClientes />} />
 
           <Route index element={<FichaClienteGeneral />} />
+          <Route path="historial" element={<FichaClienteHistorial />} />
           {/* cuando tengas más pestañas, las agregas aquí:
               <Route path="historial" element={<FichaClienteHistorial />} />
               <Route path="tareas" element={<FichaClienteTareas />} />
