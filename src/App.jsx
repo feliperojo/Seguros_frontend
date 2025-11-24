@@ -32,6 +32,10 @@ import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
 import FichaClienteHistorial from "./pages/tabs/FichaClienteHistorial";
 
+import FichaClienteRingCentral from "./pages/tabs/FichaClienteRingCentral";
+
+// dentro de <Route path="/clientes/:id/ficha" ...>
+<Route path="ringcentral" element={<FichaClienteRingCentral />} />
 
 // Función para verificar si el usuario está autenticado
 const isAuthenticated = () => {
@@ -109,6 +113,7 @@ const App = () => {
 
           <Route index element={<FichaClienteGeneral />} />
           <Route path="historial" element={<FichaClienteHistorial />} />
+          <Route path="ringcentral" element={<FichaClienteRingCentral />} />
           {/* cuando tengas más pestañas, las agregas aquí:
               <Route path="historial" element={<FichaClienteHistorial />} />
               <Route path="tareas" element={<FichaClienteTareas />} />
