@@ -15,6 +15,7 @@ const FIELD_LABELS = {
   metal: "Metal",
   red: "Red",
   coberturas: "Coberturas y miembros",
+  codigo_poliza: "Código de póliza",
 };
 
 const formatDateTime = (value) => {
@@ -77,7 +78,7 @@ const COB_FIELDS = [
   "elegibilidad",
 ];
 
-// Detecta cambios entre dos listas de coberturas
+// Detecta cambios entre dos listas de coberturas (campo "coberturas" completo)
 const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
   const prevList = normalizeCoberturas(anteriorVal);
   const newList = normalizeCoberturas(nuevoVal);
@@ -199,6 +200,11 @@ export default function HistorialCambiosModal({
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Modo de vista (solo tiene sentido para GrupoFamiliar)
+  const [viewMode, setViewMode] = useState("grupo"); // "grupo" | "clientes"
+
+  const isGrupo = modelo === "GrupoFamiliar";
+
 
   // Cargar historial cuando se abre el modal
   useEffect(() => {
@@ -227,8 +233,6 @@ export default function HistorialCambiosModal({
 
   if (!show) return null;
 
-  const handleSelect = (row) => setSelected(row);
-
   const renderDetalleCambios = () => {
     if (!selected) {
       return (
@@ -249,21 +253,116 @@ export default function HistorialCambiosModal({
       );
     }
 
+    // Cabecera común (fecha, usuario, acción)
+    const header = (
+      <div className="mb-2 small text-muted">
+        <strong>Fecha:</strong> {formatDateTime(selected.created_at)}
+        <br />
+        <strong>Usuario:</strong> {selected.usuario}
+        <br />
+        <strong>Acción:</strong>{" "}
+        <span className="badge bg-secondary">{selected.accion}</span>
+        {selected.total_cambios !== undefined && (
+          <>
+            <br />
+            <strong>Total cambios:</strong> {selected.total_cambios}
+          </>
+        )}
+      </div>
+    );
+
+    // ==========================
+    // CASO 1: Modelo NO GrupoFamiliar
+    // ==========================
+    if (!isGrupo) {
+      // Historial de Cliente (u otros modelos planos)
+      return (
+        <>
+          <div className="mb-2 small text-muted">
+            <strong>Fecha:</strong> {formatDateTime(selected.created_at)}<br />
+            <strong>Usuario:</strong> {selected.usuario}<br />
+            <strong>Acción:</strong>{" "}
+            <span className="badge bg-secondary">{selected.accion}</span><br />
+            <strong>Total cambios:</strong> {Object.keys(cambios).length}
+          </div>
+    
+          <div className="table-responsive">
+            <table className="table table-sm">
+              <thead>
+                <tr>
+                  <th>Campo</th>
+                  <th>Anterior</th>
+                  <th>Nuevo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.keys(cambios).map((campo) => {
+                  const info = cambios[campo];
+                  const label = FIELD_LABELS[campo] || campo;
+                  return (
+                    <tr key={campo}>
+                      <td>{label}</td>
+                      <td>{formatValue(info.anterior)}</td>
+                      <td>{formatValue(info.nuevo)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
+      );
+    }
+    
+    // ==========================
+    // CASO 2: GrupoFamiliar (lógica especial coberturas + toggle)
+    // ==========================
+
+    // Agrupar campos tipo "cobertura_63.plan"
+    const coverageGroups = {};
+    const normalFields = [];
+
+    keys.forEach((campo) => {
+      const match = campo.match(/^cobertura_(\d+)\.(.+)$/);
+      if (match) {
+        const [, coberturaId, fieldKey] = match;
+        if (!coverageGroups[coberturaId]) coverageGroups[coberturaId] = [];
+        coverageGroups[coberturaId].push({ campo, fieldKey });
+      } else {
+        normalFields.push(campo);
+      }
+    });
+
+    const coberturaClientes = selected.cobertura_clientes || {};
+
     return (
       <>
-        <div className="mb-2 small text-muted">
-          <strong>Fecha:</strong> {formatDateTime(selected.created_at)}
-          <br />
-          <strong>Usuario:</strong> {selected.usuario}
-          <br />
-          <strong>Acción:</strong>{" "}
-          <span className="badge bg-secondary">{selected.accion}</span>
-          {selected.total_cambios !== undefined && (
-            <>
-              <br />
-              <strong>Total cambios:</strong> {selected.total_cambios}
-            </>
-          )}
+        {header}
+
+        {/* Toggle de vista solo para GrupoFamiliar */}
+        <div className="mb-2">
+          <div className="btn-group btn-group-sm" role="group">
+            <button
+              type="button"
+              className={
+                "btn btn-outline-secondary" +
+                (viewMode === "grupo" ? " active" : "")
+              }
+              onClick={() => setViewMode("grupo")}
+            >
+              Grupo / Coberturas
+            </button>
+            <button
+              type="button"
+              className={
+                "btn btn-outline-secondary" +
+                (viewMode === "clientes" ? " active" : "")
+              }
+              onClick={() => setViewMode("clientes")}
+            >
+              Clientes
+            </button>
+          </div>
         </div>
 
         <div className="table-responsive">
@@ -276,16 +375,36 @@ export default function HistorialCambiosModal({
               </tr>
             </thead>
             <tbody>
-              {keys.map((campo) => {
+              {/* Campos "normales" (no por cobertura) */}
+              {normalFields.map((campo) => {
                 const info = cambios[campo] || {};
                 const label = FIELD_LABELS[campo] || campo;
 
+                const isClienteField = campo.startsWith("cliente.");
+
+                // En modo GRUPO ocultamos campos de cliente
+                if (viewMode === "grupo" && isClienteField) return null;
+
+                // En modo CLIENTES solo queremos cliente.*
+                if (viewMode === "clientes") {
+                  if (!isClienteField) return null;
+
+                  const same =
+                    JSON.stringify(info.anterior) ===
+                    JSON.stringify(info.nuevo);
+                  if (same) return null;
+                }
+
                 if (campo === "coberturas") {
+                  if (viewMode === "clientes") return null;
                   return (
                     <tr key={campo}>
                       <td>{label}</td>
                       <td colSpan={2}>
-                        {renderCoberturasDiffCell(info.anterior, info.nuevo)}
+                        {renderCoberturasDiffCell(
+                          info.anterior,
+                          info.nuevo
+                        )}
                       </td>
                     </tr>
                   );
@@ -299,6 +418,95 @@ export default function HistorialCambiosModal({
                   </tr>
                 );
               })}
+
+              {/* Bloques agrupados por cobertura_XY.* */}
+              {Object.keys(coverageGroups)
+                .sort((a, b) => Number(a) - Number(b))
+                .map((coberturaId) => {
+                  const fieldsForCoverage = coverageGroups[coberturaId];
+
+                  const hasClientFields = fieldsForCoverage.some((f) =>
+                    f.fieldKey.startsWith("cliente.")
+                  );
+                  const hasNonClientFields = fieldsForCoverage.some(
+                    (f) => !f.fieldKey.startsWith("cliente.")
+                  );
+
+                  if (viewMode === "grupo" && !hasNonClientFields) {
+                    return null;
+                  }
+                  if (viewMode === "clientes" && !hasClientFields) {
+                    return null;
+                  }
+
+                  let clienteNombre = "";
+                  const clienteField = fieldsForCoverage.find(
+                    ({ fieldKey }) => fieldKey === "cliente.nombre_completo"
+                  );
+
+                  if (clienteField) {
+                    const infoCliente =
+                      cambios[clienteField.campo] || {};
+                    clienteNombre =
+                      infoCliente.nuevo || infoCliente.anterior || "";
+                  }
+
+                  const nombreHeader =
+                    (coberturaClientes &&
+                      coberturaClientes[coberturaId]) ||
+                    clienteNombre ||
+                    "";
+
+                  return (
+                    <React.Fragment key={`cov-${coberturaId}`}>
+                      <tr className="table-light">
+                        <td colSpan={3}>
+                          <strong>
+                            Cobertura #{coberturaId}
+                            {nombreHeader ? ` – ${nombreHeader}` : ""}
+                          </strong>
+                        </td>
+                      </tr>
+
+                      {fieldsForCoverage.map(({ campo, fieldKey }) => {
+                        const isClienteField =
+                          fieldKey.startsWith("cliente.");
+
+                        if (viewMode === "grupo" && isClienteField) {
+                          return null;
+                        }
+                        if (viewMode === "clientes") {
+                          if (!isClienteField) return null;
+
+                          const infoTmp = cambios[campo] || {};
+                          const same =
+                            JSON.stringify(infoTmp.anterior) ===
+                            JSON.stringify(infoTmp.nuevo);
+                          if (same) return null;
+                        }
+
+                        if (
+                          fieldKey === "cliente.nombre_completo" &&
+                          nombreHeader
+                        ) {
+                          return null;
+                        }
+
+                        const info = cambios[campo] || {};
+                        const niceLabel =
+                          FIELD_LABELS[fieldKey] || fieldKey;
+
+                        return (
+                          <tr key={campo}>
+                            <td>{niceLabel}</td>
+                            <td>{formatValue(info.anterior)}</td>
+                            <td>{formatValue(info.nuevo)}</td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  );
+                })}
             </tbody>
           </table>
         </div>
@@ -325,7 +533,7 @@ export default function HistorialCambiosModal({
         >
           <div className="modal-content">
             <div className="modal-header">
-              <h5 className="modal-title">Historial de cambios</h5>
+              <h5 className="modal-title">Historial de cambios este</h5>
               <button
                 type="button"
                 className="btn-close"
@@ -371,14 +579,17 @@ export default function HistorialCambiosModal({
                           const totalCambios =
                             row.total_cambios ??
                             Object.keys(row.cambios || {}).length;
-                          const isActive = selected && selected.id === row.id;
+                          const isActive =
+                            selected && selected.id === row.id;
 
                           return (
                             <tr
                               key={row.id}
-                              className={isActive ? "table-primary" : ""}
+                              className={
+                                isActive ? "table-primary" : ""
+                              }
                               style={{ cursor: "pointer" }}
-                              onClick={() => handleSelect(row)}
+                              onClick={() => setSelected(row)}
                             >
                               <td>{formatDateTime(row.created_at)}</td>
                               <td>{row.usuario}</td>

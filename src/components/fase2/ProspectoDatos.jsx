@@ -363,6 +363,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
             <div className="form-text mt-2">
               Los cambios se guardarán con el botón <strong>Guardar</strong> del formulario principal.
             </div>
+
           </div>
         </div>
       </div>
@@ -613,6 +614,7 @@ const sortedMembers = familyMembers
                            {sortedMembers.map((member) => {
                 const clienteId = member?.cliente_id ?? member?.cliente?.id ?? null; // ✅ NUEVO
                 const nombre = getMemberDisplayName(member);
+                const isExisting = member.origen === "existente";
                 return (
                   <div key={member.id} className="col-md-12 mb-3">
                   <div className="card border">
@@ -671,17 +673,30 @@ const sortedMembers = familyMembers
                         </div>
                       </div>
 
-                      {/* Acordeón editable */}
-                      <MemberAccordionForm
-                        member={member}
-                        readOnly={readOnly}
-                        onChange={(patch) => updateMemberLocal(member.id, patch)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+                   {/* ✅ Si NO es cliente existente, mostramos el acordeón normal */}
+          {!isExisting && (
+            <MemberAccordionForm
+              member={member}
+              readOnly={readOnly}
+              onChange={(patch) => updateMemberLocal(member.id, patch)}
+            />
+          )}
+
+          {/* ✅ Si es cliente existente, NO mostramos el acordeón
+              y en su lugar mostramos solo el mensaje */}
+          {isExisting && (
+            <div className="alert alert-info mt-3 mb-0 small">
+              Este miembro proviene de un <strong>cliente ya existente</strong>. Para
+              actualizar sus datos personales (nombre, fecha de nacimiento, género,
+              idioma, ingreso, etc.), primero guarda los cambios de este grupo y luego
+              edita la ficha del cliente desde el módulo <strong>Clientes</strong>.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+})}
           </div>
         )}
       </div>

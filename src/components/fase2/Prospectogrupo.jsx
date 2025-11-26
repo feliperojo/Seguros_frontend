@@ -9,6 +9,8 @@ import DriveUrlModal from "../GrupoFamiliar/DriveUrlModal";
 import HistorialRenovacionesModal from "../GrupoFamiliar/HistorialRenovacionesModal";
 import RenovacionCoberturasModal from "../GrupoFamiliar/RenovacionCoberturasModal";
 import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
+import ContactosGrupoModal from "../Contacto/ContactosGrupoModal";
+
 
 const Prospectogrupo = ({
   formData = {},
@@ -24,7 +26,8 @@ const Prospectogrupo = ({
   const [showHistorialRenovaciones, setShowHistorialRenovaciones] = useState(false);
   const [showRenovacionModal, setShowRenovacionModal] = useState(false);
   const [showHistorialCambios, setShowHistorialCambios] = useState(false);
-  
+  const [showContactosModal, setShowContactosModal] = useState(false);
+
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
 
@@ -171,6 +174,21 @@ const Prospectogrupo = ({
         <div className="card-header d-flex justify-content-between align-items-center">
           <h6 className="mb-0">Utilidades</h6>
           <div className="d-flex gap-2 flex-wrap">
+            {/* Contactos relacionados */}
+<button
+  className="btn btn-outline-info btn-sm d-flex align-items-center"
+  onClick={() => setShowContactosModal(true)}
+  disabled={!resolvedGrupoId}
+  title={
+    !resolvedGrupoId
+      ? "Guarda primero el grupo familiar para ver los contactos relacionados"
+      : "Ver contactos relacionados a este grupo familiar"
+  }
+>
+  <i className="bi bi-people me-2"></i>
+  Contactos
+</button>
+
 
             {/* Historial de Cambios */}
             <button
@@ -313,6 +331,13 @@ const Prospectogrupo = ({
   modelo="GrupoFamiliar"
   modeloId={resolvedGrupoId}
 />
+<ContactosGrupoModal
+  show={showContactosModal}
+  onHide={() => setShowContactosModal(false)}
+  grupoFamiliarId={resolvedGrupoId}
+  readOnly={true}
+/>
+
 
     </>
   );
