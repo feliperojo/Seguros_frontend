@@ -4,8 +4,24 @@ import { FaCircle, FaPhone } from "react-icons/fa";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
 
-// ===== Helpers =====
+// =======================================================
+// Constantes
+// =======================================================
 
+// Solo trabajaremos con estas extensiones
+const ALLOWED_EXTENSION_IDS = [
+  "63007828023",
+  "63011175023",
+  "63015547023",
+  "63015557023",
+  "63015562023",
+];
+
+// =======================================================
+// Helpers
+// =======================================================
+
+// Extrae el teléfono que se enviará a RingCentral
 const getRingcentralPhoneFromCliente = (cliente) => {
   if (!cliente) return null;
 
@@ -15,6 +31,7 @@ const getRingcentralPhoneFromCliente = (cliente) => {
     const principal = telefonos.find((t) => t?.principal) || telefonos[0];
 
     if (principal) {
+      // Intentar campos ya normalizados
       const candidates = [
         principal.numero_e164,
         principal.numeroE164,
@@ -32,6 +49,7 @@ const getRingcentralPhoneFromCliente = (cliente) => {
         }
       }
 
+      // Armar desde cod_pais + número
       const code =
         (principal.cod_pais ??
           principal.code ??
@@ -48,6 +66,7 @@ const getRingcentralPhoneFromCliente = (cliente) => {
     }
   }
 
+  // Fallback: campos planos
   const fallbackCandidates = [
     cliente.telefono,
     cliente.whatsapp_num,
@@ -64,26 +83,19 @@ const getRingcentralPhoneFromCliente = (cliente) => {
   return cleaned.startsWith("+") ? cleaned : `+${cleaned}`;
 };
 
+// Intenta separar nombre y apellidos para RingCentral
 const getRingcentralNamesFromCliente = (cliente) => {
   if (!cliente) return { firstName: "", lastName: "" };
 
-  const firstNameFromFields =
-    cliente.primer_nombre ||
-    cliente.nombre ||
-    null;
+  const firstNameFromFields = cliente.primer_nombre || cliente.nombre || null;
 
   const lastNameFromFields =
     cliente.apellidos ||
-    cliente.primer_apellido ||
-    cliente.segundo_apellido
-      ? [
-          cliente.primer_apellido,
-          cliente.segundo_apellido,
-          cliente.apellidos,
-        ]
+    (cliente.primer_apellido || cliente.segundo_apellido
+      ? [cliente.primer_apellido, cliente.segundo_apellido]
           .filter(Boolean)
           .join(" ")
-      : null;
+      : null);
 
   if (firstNameFromFields || lastNameFromFields) {
     return {
@@ -102,63 +114,183 @@ const getRingcentralNamesFromCliente = (cliente) => {
   return { firstName, lastName };
 };
 
-const summarizeRingcentralResponse = (resp) => {
+// Resumen para el endpoint de CREACIÓN (/ringcentral/contacto-multiple)
+const summarizeCreateResponse = (resp) => {
   if (!resp || typeof resp !== "object") {
-    return "Respuesta inesperada de RingCentral. Revisa la consola del navegador.";
+    return "Respuesta inesperada de RingCentral al crear contactos.";
   }
-  const resultados = resp.resultados || resp.results || {};
-  const entries = Array.isArray(resultados)
-    ? resultados
-    : Object.entries(resultados);
 
-  if (entries.length === 0) {
-    return "RingCentral respondió sin resultados por extensión.";
+  const resultados = resp.resultados || {};
+  const values = Object.values(resultados);
+
+  if (values.length === 0) {
+    return "RingCentral respondió sin resultados por extensión al crear.";
   }
 
   let creados = 0;
   let yaExiste = 0;
-  let actualizados = 0;
   let errores = 0;
 
-  entries.forEach((entry) => {
-    const value = Array.isArray(resultados) ? entry : entry[1];
-    const status = (value?.status || "").toLowerCase();
-    const action = (value?.action || "").toLowerCase();
+  values.forEach((value) => {
+    if (!value) return;
+    const status = (value.status ?? "").toString().toLowerCase();
 
-    if (status.includes("creado") || action === "created") creados++;
-    else if (status.includes("ya existe")) yaExiste++;
-    else if (action === "updated" || status.includes("actualizado"))
-      actualizados++;
-    else if (status.includes("error") || status.includes("fallo")) errores++;
+    if (status.includes("creado")) {
+      creados++;
+    } else if (status.includes("ya existe")) {
+      yaExiste++;
+    } else if (status.includes("error") || status.includes("fallo")) {
+      errores++;
+    }
   });
 
   const partes = [];
   if (creados > 0) partes.push(`${creados} extensión(es) con contacto creado`);
-  if (actualizados > 0)
-    partes.push(`${actualizados} extensión(es) con contacto actualizado`);
   if (yaExiste > 0)
     partes.push(`${yaExiste} extensión(es) donde el contacto ya existía`);
   if (errores > 0) partes.push(`${errores} extensión(es) con error`);
 
   const resumen = partes.length > 0 ? partes.join(" · ") : "Estado desconocido";
-  return `RingCentral: ${resumen}.`;
+  return `RingCentral (crear): ${resumen}.`;
 };
+
+// Resumen para el endpoint de ACTUALIZACIÓN GLOBAL (/ringcentral/actualizar-contacto)
+const summarizeUpdateResponse = (resp) => {
+  if (!resp || typeof resp !== "object") {
+    return "Respuesta inesperada de RingCentral al actualizar contactos.";
+  }
+
+  const results = Array.isArray(resp.results) ? resp.results : [];
+  if (results.length === 0) {
+    return "RingCentral respondió sin resultados por extensión al actualizar.";
+  }
+
+  let actualizados = 0;
+  let sinMapping = 0;
+  let errores = 0;
+
+  results.forEach((r) => {
+    const action = (r.action ?? "").toString().toLowerCase();
+    const success = Boolean(r.success);
+
+    if (action === "updated" && success) {
+      actualizados++;
+    } else if (action === "no_mapping") {
+      sinMapping++;
+    } else if (!success) {
+      errores++;
+    }
+  });
+
+  const partes = [];
+  if (actualizados > 0)
+    partes.push(`${actualizados} extensión(es) actualizada(s) correctamente`);
+  if (sinMapping > 0)
+    partes.push(
+      `${sinMapping} extensión(es) sin contact_id registrado (no se pudo actualizar)`
+    );
+  if (errores > 0) partes.push(`${errores} extensión(es) con error`);
+
+  const resumen = partes.length > 0 ? partes.join(" · ") : "Estado desconocido";
+  return `RingCentral (actualizar): ${resumen}.`;
+};
+
+// =======================================================
+// Componente
+// =======================================================
 
 export default function FichaClienteRingcentral() {
   const { cliente } = useFichaCliente();
-  const [saving, setSaving] = useState(false);
+
+  const [savingGlobal, setSavingGlobal] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null);
   const [ringLinked, setRingLinked] = useState(false);
 
-  useEffect(() => {
-    setRingLinked(Boolean(cliente?.es_prospecto));
-  }, [cliente]);
+  // Lista de extensiones
+  const [extensions, setExtensions] = useState([]);
+  // Info por extensión: { [id]: { loading, updating, exists, contact, error } }
+  const [extensionsInfo, setExtensionsInfo] = useState({});
 
+  // Mantener estado visual "vinculado"
+  // Cargar estado global desde la tabla ringcentral_contacts
+useEffect(() => {
+  const fetchRingcentralState = async () => {
+    if (!cliente?.id) {
+      setRingLinked(false);
+      return;
+    }
+
+    try {
+      const resp = await apiRequest(
+        `/ringcentral/estado-cliente/${cliente.id}`,
+        "GET"
+      );
+
+      if (resp?.success) {
+        // Si tiene al menos un mapeo, consideramos que está vinculado
+        setRingLinked(Boolean(resp.hasAny));
+
+        // Marcar en las tarjetas qué extensiones ya tienen contacto
+        if (Array.isArray(resp.extensions)) {
+          setExtensionsInfo((prev) => {
+            const next = { ...prev };
+            resp.extensions.forEach((extId) => {
+              next[extId] = {
+                ...(next[extId] || {}),
+                exists: true,   // esto hará que se muestre el mensajito verde
+              };
+            });
+            return next;
+          });
+        }
+      } else {
+        setRingLinked(false);
+      }
+    } catch (err) {
+      console.error("Error al obtener estado RingCentral:", err);
+      setRingLinked(false);
+    }
+  };
+
+  fetchRingcentralState();
+}, [cliente?.id]);
+
+  // Teléfono para RingCentral (lo usamos también en consultas por extensión)
   const ringPhone = useMemo(
     () => getRingcentralPhoneFromCliente(cliente),
     [cliente]
   );
 
+  // Notas para identificar origen + IDs (también se usan en consultas por extensión)
+  const vantumNotes = `Origen: Vantum | cliente_id=${cliente?.id ?? ""}${
+    cliente?.grupo_familiar_id
+      ? " | grupo_familiar_id=" + cliente.grupo_familiar_id
+      : ""
+  }`;
+
+  // Cargar extensiones disponibles desde el back (listarExtensiones)
+  useEffect(() => {
+    const fetchExtensions = async () => {
+      try {
+        const resp = await apiRequest("/ringcentral/extensiones", "GET");
+        if (resp?.success && Array.isArray(resp.extensiones)) {
+          // 🔴 Aquí filtramos solo las extensiones que nos interesan
+          const filtered = resp.extensiones.filter((ext) =>
+            ALLOWED_EXTENSION_IDS.includes(String(ext.id))
+          );
+          setExtensions(filtered);
+        } else {
+          console.warn("Respuesta inesperada al listar extensiones:", resp);
+        }
+      } catch (err) {
+        console.error("Error al listar extensiones RingCentral:", err);
+      }
+    };
+
+    fetchExtensions();
+  }, []);
+
+  // Cobertura principal (por ahora la primera)
   const coberturaInfo = useMemo(() => {
     if (Array.isArray(cliente?.coberturas) && cliente.coberturas.length > 0) {
       return cliente.coberturas[0];
@@ -177,6 +309,7 @@ export default function FichaClienteRingcentral() {
 
   const isLinkedToRingcentral = ringLinked;
 
+  // Validaciones mínimas
   const missingFields = useMemo(() => {
     const missing = [];
     if (!cliente?.id) missing.push("ID de cliente");
@@ -193,32 +326,45 @@ export default function FichaClienteRingcentral() {
     : "Aún no creado en RingCentral";
   const statusIconColor = isLinkedToRingcentral ? "#28a745" : "#dc3545";
 
-  const { firstName, lastName } = getRingcentralNamesFromCliente(cliente || {});
+  // Nombre / apellidos que enviaremos
+  const { firstName, lastName } = getRingcentralNamesFromCliente(
+    cliente || {}
+  );
 
-  const vantumNotes = `Origen: Vantum | cliente_id=${cliente?.id ?? ""}${
-    cliente?.grupo_familiar_id ? " | grupo_familiar_id=" + cliente.grupo_familiar_id : ""
-  }`;
-
-  const appBaseUrl =
-    import.meta.env?.VITE_APP_URL || window.location.origin;
-
+  // URL base de la app (para WebPage)
+  const appBaseUrl = import.meta.env?.VITE_APP_URL || window.location.origin;
   const webPageUrl =
     cliente?.id != null ? `${appBaseUrl}/clientes/${cliente.id}` : "";
 
-  const buildPayload = () => ({
-    firstName: firstName || cliente?.nombre_completo || "SIN_NOMBRE",
-    lastName: lastName || "SIN_APELLIDO",
-    mobilePhone: ringPhone,
-    email: cliente?.email || null,
-    company: companiaNombre || "Vantum",
-    webPage: webPageUrl || null,
-    notes: vantumNotes,
-    clienteId: cliente?.id ?? null,
-  });
+  // Payload común para crear/actualizar
+  const buildPayload = () => {
+    let safeFirstName =
+      firstName || cliente?.nombre_completo || "SIN_NOMBRE";
+    let safeLastName = lastName || "SIN_APELLIDO";
+
+    safeFirstName = safeFirstName.toString().trim().slice(0, 64) || "N/A";
+    safeLastName = safeLastName.toString().trim().slice(0, 64);
+
+    return {
+      firstName: safeFirstName,
+      lastName: safeLastName,
+      mobilePhone: ringPhone,
+      email: cliente?.email || null,
+      company: companiaNombre || "Vantum",
+      webPage: webPageUrl || null,
+      notes: vantumNotes,
+      clienteId: cliente?.id ?? null,
+    };
+  };
+
+  // =====================================================
+  // Acciones globales (todas las extensiones)
+  // =====================================================
 
   const handleCreate = async () => {
     if (!canSendToRingcentral) return;
-    setSaving(true);
+
+    setSavingGlobal(true);
     setStatusMessage("Enviando contacto a RingCentral…");
 
     try {
@@ -233,18 +379,18 @@ export default function FichaClienteRingcentral() {
 
       console.log("Respuesta RingCentral (create):", resp);
 
+      const resumen = summarizeCreateResponse(resp);
+
       const resultados = resp?.resultados || {};
-      const entries = Object.entries(resultados);
-      const anyOK = entries.some(([, v]) => {
-        const st = (v?.status || "").toLowerCase();
+      const entries = Object.values(resultados);
+      const anyOK = entries.some((v) => {
+        const st = (v?.status ?? "").toString().toLowerCase();
         return st.includes("creado") || st.includes("ya existe");
       });
-      const anyError = entries.some(([, v]) => {
-        const st = (v?.status || "").toLowerCase();
+      const anyError = entries.some((v) => {
+        const st = (v?.status ?? "").toString().toLowerCase();
         return st.includes("error") || st.includes("fallo");
       });
-
-      const resumen = summarizeRingcentralResponse(resp);
 
       if (anyOK && !anyError) {
         setStatusMessage(`✅ ${resumen}`);
@@ -259,18 +405,19 @@ export default function FichaClienteRingcentral() {
       console.error(err);
       setStatusMessage("❌ Error al crear el contacto en RingCentral.");
     } finally {
-      setSaving(false);
+      setSavingGlobal(false);
     }
   };
 
-  const handleUpdate = async () => {
+  const handleUpdateAll = async () => {
     if (!canSendToRingcentral) return;
-    setSaving(true);
-    setStatusMessage("Enviando actualización a RingCentral…");
+
+    setSavingGlobal(true);
+    setStatusMessage("Enviando actualización a todas las extensiones…");
 
     try {
       const payload = buildPayload();
-      console.log("Payload RingCentral (update):", payload);
+      console.log("Payload RingCentral (update all):", payload);
 
       const resp = await apiRequest(
         "/ringcentral/actualizar-contacto",
@@ -278,12 +425,12 @@ export default function FichaClienteRingcentral() {
         payload
       );
 
-      console.log("Respuesta RingCentral (update):", resp);
+      console.log("Respuesta RingCentral (update all):", resp);
 
-      const resumen = summarizeRingcentralResponse(resp);
-      const results = resp?.results || [];
+      const resumen = summarizeUpdateResponse(resp);
+      const results = Array.isArray(resp?.results) ? resp.results : [];
       const anySuccess = results.some((r) => r.success);
-      const anyError = results.some((r) => !r.success);
+      const anyError = results.some((r) => r.success === false);
 
       if (anySuccess && !anyError) {
         setStatusMessage(`✅ ${resumen}`);
@@ -298,9 +445,126 @@ export default function FichaClienteRingcentral() {
       console.error(err);
       setStatusMessage("❌ Error al actualizar el contacto en RingCentral.");
     } finally {
-      setSaving(false);
+      setSavingGlobal(false);
     }
   };
+
+  // =====================================================
+  // Acciones por extensión
+  // =====================================================
+
+  const updateExtensionInfo = (extensionId, partial) => {
+    setExtensionsInfo((prev) => ({
+      ...prev,
+      [extensionId]: {
+        ...(prev[extensionId] || {}),
+        ...partial,
+      },
+    }));
+  };
+
+  const handleConsultarExtension = async (extensionId) => {
+    if (!cliente?.id) return;
+  
+    updateExtensionInfo(extensionId, { loading: true, error: null });
+  
+    try {
+      const resp = await apiRequest(
+        "/ringcentral/consultar-contacto-extension",
+        "POST",
+        {
+          clienteId: cliente.id,
+          extensionId,
+        }
+      );
+  
+      if (resp?.exists && resp.contact) {
+        updateExtensionInfo(extensionId, {
+          loading: false,
+          exists: true,
+          contact: resp.contact,
+          error: null,
+        });
+      } else {
+        updateExtensionInfo(extensionId, {
+          loading: false,
+          exists: false,
+          contact: null,
+          error: null,
+        });
+      }
+    } catch (err) {
+      updateExtensionInfo(extensionId, {
+        loading: false,
+        error: "Error al consultar contacto en RingCentral.",
+      });
+    }
+  };
+  
+  const handleUpdateExtension = async (extensionId) => {
+    if (!canSendToRingcentral || !cliente?.id) return;
+  
+    const info = extensionsInfo[extensionId] || {};
+    const contactId = info.contact?.id; // puede venir de la consulta previa
+  
+    updateExtensionInfo(extensionId, {
+      updating: true,
+      error: null,
+    });
+    setStatusMessage(
+      `Enviando actualización a la extensión ${extensionId}…`
+    );
+  
+    try {
+      const payload = buildPayload();
+  
+      const resp = await apiRequest(
+        "/ringcentral/actualizar-contacto-extension",
+        "PUT",
+        {
+          ...payload,
+          extensionId,
+          clienteId: cliente.id,
+          contactId, // si existe, el back lo usa directamente
+        }
+      );
+  
+      console.log(
+        `Respuesta actualizar-contacto-extension (${extensionId}):`,
+        resp
+      );
+  
+      if (resp?.success) {
+        setStatusMessage(
+          `✅ Contacto actualizado correctamente en la extensión ${extensionId}.`
+        );
+        setRingLinked(true);
+        await handleConsultarExtension(extensionId); // refrescar datos
+      } else {
+        const msg =
+          resp?.message ||
+          "No se pudo actualizar el contacto en esta extensión.";
+        setStatusMessage(
+          `❌ No se pudo actualizar el contacto en la extensión ${extensionId}.`
+        );
+        updateExtensionInfo(extensionId, { error: msg });
+      }
+    } catch (err) {
+      console.error("Error al actualizar contacto por extensión:", err);
+      setStatusMessage(
+        `❌ Error al actualizar el contacto en la extensión ${extensionId}.`
+      );
+      updateExtensionInfo(extensionId, {
+        error: "Error al actualizar contacto en RingCentral.",
+      });
+    } finally {
+      updateExtensionInfo(extensionId, { updating: false });
+    }
+  };
+  
+  // =====================================================
+  // Render
+  // =====================================================
 
   if (!cliente) {
     return (
@@ -317,6 +581,7 @@ export default function FichaClienteRingcentral() {
           <div className="card-body">
             <h6 className="mb-3">Integración con RingCentral</h6>
 
+            {/* Datos del cliente */}
             <div className="row small mb-2">
               <div className="col-md-6">
                 <div>
@@ -385,6 +650,7 @@ export default function FichaClienteRingcentral() {
 
             <hr />
 
+            {/* Estado visual */}
             <div className="d-flex align-items-center mb-2">
               <span className="me-2">
                 <strong>Estado RingCentral:</strong>
@@ -397,26 +663,9 @@ export default function FichaClienteRingcentral() {
               <span className={statusColorClass}>{statusLabel}</span>
             </div>
 
-            <div className="mb-2 small">
-              <strong>Datos que se enviarán a RingCentral:</strong>
-              <ul className="mb-0">
-                <li>Nombre: {cliente.nombre_completo ?? "—"}</li>
-                <li>
-                  Teléfono móvil para RingCentral:{" "}
-                  {ringPhone ? (
-                    <>
-                      <FaPhone className="me-1" /> {ringPhone}
-                    </>
-                  ) : (
-                    <span className="text-danger">No definido</span>
-                  )}
-                </li>
-                <li>Email (opcional): {cliente.email ?? "—"}</li>
-                <li>Notas: {vantumNotes}</li>
-                {webPageUrl && <li>Link Vantum: {webPageUrl}</li>}
-              </ul>
-            </div>
+           
 
+            {/* Alertas de validación */}
             <div className="mt-3">
               {canSendToRingcentral ? (
                 <div className="alert alert-info py-2 mb-3 small">
@@ -438,26 +687,162 @@ export default function FichaClienteRingcentral() {
               )}
             </div>
 
-            <div className="d-flex gap-2 mt-2">
+            {/* Botones globales */}
+            <div className="d-flex gap-2 mt-2 mb-3">
               <button
                 type="button"
                 className="btn btn-sm btn-primary"
-                disabled={!canSendToRingcentral || saving}
+                disabled={!canSendToRingcentral || savingGlobal}
                 onClick={handleCreate}
               >
-                {saving ? "Procesando…" : "Crear en RingCentral"}
+                {savingGlobal ? "Procesando…" : "Crear en RingCentral"}
               </button>
 
-            <button
+              <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
-                disabled={!canSendToRingcentral || saving}
-                onClick={handleUpdate}
+                disabled={!canSendToRingcentral || savingGlobal}
+                onClick={handleUpdateAll}
               >
-                {saving ? "Procesando…" : "Actualizar en RingCentral"}
+                {savingGlobal
+                  ? "Procesando…"
+                  : "Actualizar en todas las extensiones"}
               </button>
             </div>
 
+            {/* Sección por extensión */}
+            <hr />
+            <h6 className="mb-2">Detalle por extensión</h6>
+            <div className="small mb-2 text-muted">
+              Aquí puedes ver en qué extensiones existe el contacto y consultar
+              los datos actuales en RingCentral por extensión.
+            </div>
+
+            {extensions.length === 0 ? (
+              <div className="alert alert-light small">
+                No se pudieron cargar las extensiones de RingCentral o aún no hay
+                ninguna configurada.
+              </div>
+            ) : (
+              <div className="row">
+                {extensions.map((ext) => {
+                  const info = extensionsInfo[ext.id] || {};
+                  const { loading, updating, exists, contact, error } = info;
+
+                  return (
+                    <div className="col-md-6 mb-3" key={ext.id}>
+                      <div className="border rounded p-2 h-100">
+                        <div className="d-flex justify-content-between align-items-center mb-1">
+                          <div>
+                            <strong>{ext.name || "Extensión"}</strong>
+                            {ext.extensionNumber && (
+                              <span className="ms-1 text-muted">
+                                (Ext {ext.extensionNumber})
+                              </span>
+                            )}
+                          </div>
+                          <span className="badge bg-light text-muted">
+                            ID: {ext.id}
+                          </span>
+                        </div>
+
+                        {/* Estado de contacto en esta extensión */}
+                        {loading ? (
+                          <div className="small text-info mb-2">
+                            Consultando datos en RingCentral…
+                          </div>
+                        ) : exists === true ? (
+                          <div className="small text-success mb-2">
+                            Contacto registrado en esta extensión.
+                          </div>
+                        ) : exists === false ? (
+                          <div className="small text-warning mb-2">
+                            No existe contacto registrado para este cliente en
+                            esta extensión.
+                          </div>
+                        ) : (
+                          <div className="small text-muted mb-2">
+                            Aún no se ha consultado esta extensión.
+                          </div>
+                        )}
+
+                        {error && (
+                          <div className="alert alert-danger py-1 small mb-2">
+                            {error}
+                          </div>
+                        )}
+
+                        {/* Comparación RingCentral vs Vantum si hay contacto */}
+                        {contact && (
+                          <div className="small mb-2">
+                            <div className="row">
+                              <div className="col-6">
+                                <strong>RingCentral</strong>
+                                <ul className="mb-0">
+                                  <li>
+                                    Nombre:{" "}
+                                    {`${contact.firstName || ""} ${
+                                      contact.lastName || ""
+                                    }`.trim() || "—"}
+                                  </li>
+                                  <li>
+                                    Teléfono: {contact.mobilePhone ?? "—"}
+                                  </li>
+                                  <li>Email: {contact.email ?? "—"}</li>
+                                  <li>Empresa: {contact.company ?? "—"}</li>
+                                  <li>Notas: {contact.notes ?? "—"}</li>
+                                </ul>
+                              </div>
+                              <div className="col-6">
+                                <strong>Vantum</strong>
+                                <ul className="mb-0">
+                                  <li>
+                                    Nombre: {cliente.nombre_completo ?? "—"}
+                                  </li>
+                                  <li>Teléfono: {ringPhone ?? "—"}</li>
+                                  <li>Email: {cliente.email ?? "—"}</li>
+                                  <li>Empresa: {companiaNombre ?? "—"}</li>
+                                  <li>Notas: {vantumNotes}</li>
+                                </ul>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Botones por extensión */}
+                        <div className="d-flex gap-2 mt-2">
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-primary"
+                            onClick={() =>
+                              handleConsultarExtension(ext.id)
+                            }
+                            disabled={loading}
+                          >
+                            {loading ? "Consultando…" : "Consultar"}
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-success"
+                            onClick={() => handleUpdateExtension(ext.id)}
+                            disabled={
+                              !canSendToRingcentral || updating
+                            }
+                          >
+                            {updating
+                              ? "Actualizando…"
+                              : "Actualizar esta extensión"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Mensaje de estado global */}
             {statusMessage && (
               <div className="alert alert-secondary mt-3 mb-0 py-2 small">
                 {statusMessage}
@@ -466,8 +851,9 @@ export default function FichaClienteRingcentral() {
 
             <div className="mt-3 small text-muted">
               Usa <strong>“Crear en RingCentral”</strong> para registrar este
-              cliente como contacto. Después podrás usar{" "}
-              <strong>“Actualizar en RingCentral”</strong> si cambian sus datos.
+              cliente como contacto en las extensiones configuradas. Luego podrás
+              usar <strong>“Actualizar en todas las extensiones”</strong> o
+              actualizar de forma individual por extensión.
             </div>
           </div>
         </div>
