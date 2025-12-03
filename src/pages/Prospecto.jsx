@@ -68,12 +68,10 @@ const mapGrupoApiToForm = (g) => ({
 
  // helper local
  const moneyToDecimal = (v) => {
-   const cents = parseMoney(String(v ?? ""));
-   if (!Number.isFinite(cents)) return 0;
-   const dec = cents / 100;
-   return Math.min(Number(dec.toFixed(2)), 99999999.99);
- };
-
+     const num = parseMoney(String(v ?? ""));
+     if (!Number.isFinite(num)) return 0;
+     return Math.min(Number(num), 99999999.99);
+   };
  // --- arriba del componente, junto a otros helpers ---
 const getLoggedUserName = () => {
   try {
@@ -246,14 +244,15 @@ useEffect(() => {
         const base = mapClienteFromMember(m);
       
         // Fuerza ingreso_anual numérico para el backend
-         const limpio = typeof m.ingreso_anual === "number"
-           ? m.ingreso_anual
-           : parseMoney(String(m.ingreso_anual ?? ""));
-      
-        return {
-          ...base,
-          ingreso_anual: moneyToDecimal(m.ingreso_anual),
-        };
+        const raw = m.ingreso_anual ?? base.ingreso_anual;
+          const limpio = typeof raw === "number"
+            ? raw
+            : parseMoney(String(raw ?? ""));
+        
+          return {
+            ...base,
+            ingreso_anual: moneyToDecimal(limpio),   // ahora numérico y consistente
+          };
       });
       
       // (opcional) debug antes del POST

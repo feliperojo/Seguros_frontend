@@ -152,6 +152,12 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
  useEffect(() => {
     if (isEditing) return;
     const v = member?.ingreso_anual;
+    console.log(
+      "[ACC useEffect] miembro",
+      member.id,
+      "ingreso_anual crudo desde state =",
+      v
+    );
     if (v === null || v === undefined || v === "") {
       setMoneyStr("");
     } else {
@@ -167,12 +173,32 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   const handleMoneyChange = (e) => {
     const raw = sanitizeMoneyInput(e.target.value);
     setMoneyStr(raw);
+    console.log(
+      "[ACC handleMoneyChange] miembro",
+      member.id,
+      "raw input=",
+      raw,
+      "sanitized=",
+      sanitized
+    );
+    setMoneyStr(sanitized);
+  
   };
 
   // Al entrar: modo edición (sin miles, separador único)
   const handleMoneyFocus = () => {
     setIsEditing(true);
     setMoneyStr((s) => sanitizeMoneyInput(s));
+    console.log(
+      "[ACC handleMoneyFocus] miembro",
+      member.id,
+      "moneyStr antes=",
+      s,
+      "después sanitize=",
+      sanitized
+    );
+    return sanitized;
+  
   };
 
   // Al salir: commit al padre + formateo bonito
@@ -180,6 +206,12 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     const num = parseMoney(moneyStr);
     onChange({ ingreso_anual: Number.isFinite(num) ? num : 0 });
     setMoneyStr((s) => (s ? formatMoney2(s) : ""));
+    console.log(
+      "[ACC handleMoneyBlur] miembro",
+      member.id,
+      "moneyStr formateado final=",
+      formatted
+    );
     setIsEditing(false);
   };
 
@@ -430,38 +462,52 @@ const ProspectoDatos = ({
   
      // Crear local: garantizar fecha_retiro = null por defecto
      const createLocal = async (payload) => {
+      console.log("[createLocal] payload recibido desde Modal =", payload);
+    
       const newId = familyMembers.length
         ? Math.max(...familyMembers.map((m) => m.id || 0)) + 1
         : 1;
     
-     // normaliza ingreso a número
-     const normalizedIngreso =
-       payload.ingreso_anual ??
-       payload.ingresoAnual ??
-       payload?.cliente?.ingreso_anual ??
-       0;
+      const rawIngreso =
+        payload.ingreso_anual ??
+        payload.ingresoAnual ??
+        payload?.cliente?.ingreso_anual ??
+        0;
     
-     // sincroniza idioma (raíz y cliente)
-     const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+      const normalizedIngreso =
+        typeof rawIngreso === "number" ? rawIngreso : parseMoney(rawIngreso);
+    
+      console.log(
+        "[createLocal] rawIngreso=",
+        rawIngreso,
+        "-> normalizedIngreso=",
+        normalizedIngreso
+      );
+    
+      const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
     
       const merged = recomputeDerived({
         fecha_retiro: null,
         ...payload,
-       ingreso_anual: normalizedIngreso,
-       idioma,
-       cliente: {
-         ...(payload.cliente || {}),
-         ingreso_anual: normalizedIngreso,
-         idioma,
-       },
+        ingreso_anual: normalizedIngreso,
+        idioma,
+        cliente: {
+          ...(payload.cliente || {}),
+          ingreso_anual: normalizedIngreso,
+          idioma,
+        },
         id: newId,
       });
+    
+      console.log("[createLocal] merged final para state =", merged);
     
       setFamilyMembers((prev) => [...prev, merged]);
       setModalOpen(false);
     };
     
+    
   const updateLocal = async (id, payload) => {
+    console.log("[updateLocal] id =", id, "payload recibido desde Modal =", payload);
     setFamilyMembers((prev) =>
       prev.map((m) => (m.id === id ? recomputeDerived({ ...payload, id }) : m))
     );
@@ -469,6 +515,7 @@ const ProspectoDatos = ({
 
   const removeMemberLocal = (memberId) =>
     setFamilyMembers(prev => prev.filter(m => m.id !== memberId));
+  
 
   const createRemote = async (payload) => {
     if (typeof onCreateMemberRemote === "function") {
@@ -674,24 +721,13 @@ const sortedMembers = familyMembers
                       </div>
 
                    {/* ✅ Si NO es cliente existente, mostramos el acordeón normal */}
-          {!isExisting && (
-            <MemberAccordionForm
-              member={member}
-              readOnly={readOnly}
-              onChange={(patch) => updateMemberLocal(member.id, patch)}
-            />
-          )}
+         {/* Siempre mostramos el formulario, sin importar el origen */}
+<MemberAccordionForm
+  member={member}
+  readOnly={readOnly}
+  onChange={(patch) => updateMemberLocal(member.id, patch)}
+/>
 
-          {/* ✅ Si es cliente existente, NO mostramos el acordeón
-              y en su lugar mostramos solo el mensaje */}
-          {isExisting && (
-            <div className="alert alert-info mt-3 mb-0 small">
-              Este miembro proviene de un <strong>cliente ya existente</strong>. Para
-              actualizar sus datos personales (nombre, fecha de nacimiento, género,
-              idioma, ingreso, etc.), primero guarda los cambios de este grupo y luego
-              edita la ficha del cliente desde el módulo <strong>Clientes</strong>.
-            </div>
-          )}
         </div>
       </div>
     </div>

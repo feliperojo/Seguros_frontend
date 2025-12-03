@@ -91,7 +91,7 @@ const mapClienteForSave = (m) => {
   });
 
   const clienteIdReal = m.cliente_id ?? c.id ?? null;
-  const esClienteReal = clienteIdReal && Number(clienteIdReal) > 50;
+  const esClienteReal = !!clienteIdReal;  // cualquier id válido cuenta
 
   const payload = {
     primer_nombre: pick("primer_nombre"),
@@ -141,10 +141,10 @@ const mapClienteForSave = (m) => {
   };
 
   // Solo agregar 'id' si es un cliente REAL de la BD
-  if (esClienteReal) {
-    payload.id = clienteIdReal;
-  }
-
+ 
+if (esClienteReal) {
+  payload.id = Number(clienteIdReal);
+}
   return stripNulls(payload);
 };
 
