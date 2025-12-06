@@ -103,6 +103,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
   const genero = c.genero || "Masculino";
 
   return {
+    id: c.id || `temp-${Date.now()}-${Math.random()}`, // Asegurar ID único
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
@@ -116,10 +117,11 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
     estado_cobertura: estadoCobertura,
     cobertura_tipo: coberturaTipo,
     origen: "existente", 
-   cobertura_id: null, 
+    cobertura_id: null, 
     cliente_id: c.id,
     idioma: c.idioma || "",
     ingreso_anual: c.ingreso_anual || 0,
+    nota: c.nota || "",
     cliente: {
       id: c.id,
       primer_nombre: primer,
@@ -132,6 +134,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
       telefono: c.telefono || "",
       idioma: c.idioma || "",
       ingreso_anual: c.ingreso_anual || 0,
+      nota: c.nota || "",
     },
   };
 };
@@ -172,46 +175,49 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
 
   const handleMoneyChange = (e) => {
     const raw = sanitizeMoneyInput(e.target.value);
-    setMoneyStr(raw);
+    const sanitized = raw; // Ya está sanitizado
+    setMoneyStr(sanitized);
     console.log(
       "[ACC handleMoneyChange] miembro",
       member.id,
       "raw input=",
-      raw,
+      e.target.value,
       "sanitized=",
       sanitized
     );
-    setMoneyStr(sanitized);
-  
   };
 
   // Al entrar: modo edición (sin miles, separador único)
   const handleMoneyFocus = () => {
     setIsEditing(true);
-    setMoneyStr((s) => sanitizeMoneyInput(s));
-    console.log(
-      "[ACC handleMoneyFocus] miembro",
-      member.id,
-      "moneyStr antes=",
-      s,
-      "después sanitize=",
-      sanitized
-    );
-    return sanitized;
-  
+    setMoneyStr((s) => {
+      const sanitized = sanitizeMoneyInput(s);
+      console.log(
+        "[ACC handleMoneyFocus] miembro",
+        member.id,
+        "moneyStr antes=",
+        s,
+        "después sanitize=",
+        sanitized
+      );
+      return sanitized;
+    });
   };
 
   // Al salir: commit al padre + formateo bonito
   const handleMoneyBlur = () => {
     const num = parseMoney(moneyStr);
     onChange({ ingreso_anual: Number.isFinite(num) ? num : 0 });
-    setMoneyStr((s) => (s ? formatMoney2(s) : ""));
-    console.log(
-      "[ACC handleMoneyBlur] miembro",
-      member.id,
-      "moneyStr formateado final=",
-      formatted
-    );
+    setMoneyStr((s) => {
+      const formatted = s ? formatMoney2(s) : "";
+      console.log(
+        "[ACC handleMoneyBlur] miembro",
+        member.id,
+        "moneyStr formateado final=",
+        formatted
+      );
+      return formatted;
+    });
     setIsEditing(false);
   };
 
@@ -525,10 +531,28 @@ const ProspectoDatos = ({
     }
   };
 
-  // Crear cobertura para CLIENTE EXISTENTE (cuando hay grupoFamiliarId)
+  // Crear cobertura para CLIENTE EXISTENTE (cuando hay grupoFamiliarId) o agregar localmente (cuando no hay)
   const handleCreateCoberturaExistente = async (payload, clienteSeleccionado) => {
-    if (!grupoFamiliarId || !payload?.cliente_id) return;
+    if (!payload?.cliente_id || !clienteSeleccionado?.id) return;
     if (yaEstaEnElGrupo(payload.cliente_id, familyMembers)) return;
+
+    // Si NO hay grupoFamiliarId, agregar localmente (modo creación)
+    if (!grupoFamiliarId) {
+      // Si hay un handler externo, usarlo
+      if (onCreateCoberturaDeClienteExistente) {
+        await onCreateCoberturaDeClienteExistente(payload, clienteSeleccionado);
+        return;
+      }
+      // Si no, agregar localmente
+      const mLocal = mapClienteToMember(
+        clienteSeleccionado,
+        payload.tipo,
+        payload.cobertura_tipo || defaultCoberturaTipo,
+        payload.estado_cobertura || "Sí"
+      );
+      setFamilyMembers((prev) => [...prev, recomputeDerived(mLocal)]);
+      return;
+    }
 
     const res = await GrupoFamiliarService.createCoberturaSimple({
       grupo_familiar_id: grupoFamiliarId,
@@ -540,6 +564,7 @@ const ProspectoDatos = ({
 
     if (res?.miembro?.cliente || res?.miembro) {
       const mSrv = res.miembro;
+      const cli = mSrv.cliente || clienteSeleccionado || {};
    // Intenta extraer el ID real de la cobertura de distintas formas
    const coberturaId =
      mSrv.cobertura_id ??
@@ -547,18 +572,47 @@ const ProspectoDatos = ({
      res?.cobertura?.id ??
      res?.id ??
      null;
+      // Asegurar que tenemos todos los datos del cliente
       const merged = {
-        ...mSrv,
+        id: mSrv.id || cli.id || `temp-${Date.now()}-${Math.random()}`,
+        cliente_id: cli.id || payload.cliente_id,
+        cobertura_id: coberturaId,
+        primer_nombre: mSrv.primer_nombre || cli.primer_nombre || cli.nombre || "",
+        segundo_nombre: mSrv.segundo_nombre || cli.segundo_nombre || "",
+        apellidos: mSrv.apellidos || cli.apellidos || cli.apellido || "",
+        nombreCompleto: mSrv.nombreCompleto || mSrv.nombre_completo || cli.nombre_completo || 
+          `${cli.primer_nombre || cli.nombre || ""} ${cli.segundo_nombre || ""} ${cli.apellidos || cli.apellido || ""}`.trim(),
+        genero: mSrv.genero || cli.genero || "",
+        fecha_nacimiento: mSrv.fecha_nacimiento || cli.fecha_nacimiento || "",
+        edad: mSrv.edad || calcAge(mSrv.fecha_nacimiento || cli.fecha_nacimiento),
+        idioma: mSrv.idioma || cli.idioma || "",
+        ingreso_anual: mSrv.ingreso_anual || cli.ingreso_anual || 0,
+        nota: mSrv.nota || cli.nota || "",
         tipo: mSrv.tipo || payload.tipo,
         parentesco: mSrv.parentesco || payload.tipo,
         estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
         cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
-        cobertura_id: coberturaId,      // 👈 marca que YA existe en BD
-     _remote_created: true,    
+        _remote_created: true,    
         origen: "existente",
+        cliente: {
+          id: cli.id || payload.cliente_id,
+          primer_nombre: cli.primer_nombre || cli.nombre || "",
+          segundo_nombre: cli.segundo_nombre || "",
+          apellidos: cli.apellidos || cli.apellido || "",
+          nombre_completo: cli.nombre_completo || 
+            `${cli.primer_nombre || cli.nombre || ""} ${cli.segundo_nombre || ""} ${cli.apellidos || cli.apellido || ""}`.trim(),
+          genero: cli.genero || "",
+          fecha_nacimiento: cli.fecha_nacimiento || "",
+          edad: calcAge(cli.fecha_nacimiento),
+          telefono: cli.telefono || "",
+          idioma: cli.idioma || "",
+          ingreso_anual: cli.ingreso_anual || 0,
+          nota: cli.nota || "",
+        },
       };
       setFamilyMembers((prev) => [...prev, recomputeDerived(merged)]);
     } else {
+      // Si no viene del servidor, usar el cliente seleccionado directamente
       const mLocal = mapClienteToMember(
         clienteSeleccionado,
         payload.tipo,
@@ -658,12 +712,18 @@ const sortedMembers = familyMembers
             </div>
           ) : (
             <div className="row">
-                           {sortedMembers.map((member) => {
+                           {sortedMembers.map((member, index) => {
                 const clienteId = member?.cliente_id ?? member?.cliente?.id ?? null; // ✅ NUEVO
                 const nombre = getMemberDisplayName(member);
                 const isExisting = member.origen === "existente";
+                // Usar una key más robusta: cliente_id + id + índice como fallback
+                const uniqueKey = member.cliente_id 
+                  ? `cliente-${member.cliente_id}-${member.id || index}` 
+                  : member.id 
+                    ? `member-${member.id}` 
+                    : `temp-${index}`;
                 return (
-                  <div key={member.id} className="col-md-12 mb-3">
+                  <div key={uniqueKey} className="col-md-12 mb-3">
                   <div className="card border">
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">

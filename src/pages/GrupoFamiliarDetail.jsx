@@ -640,7 +640,7 @@ const handleCreateMemberRemote = async (memberData) => {
       delete cliNuevo.id;
 
        let cov = mapCoberturaFromMember(m, id);
-       if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion.label;
+       if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion?.label;
 
        await GrupoFamiliarService.appendMiembro(id, {
          request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -678,7 +678,7 @@ const clientesPayload = existentes
           cobertura.cliente_id = m.cliente_id;
 
      if (productoCotizacion?.label) {
-       cobertura.cobertura_tipo = productoCotizacion.label;
+       cobertura.cobertura_tipo = productoCotizacion?.label;
      }
      return stripNulls(cobertura);
     });
@@ -886,14 +886,15 @@ const clientesPayload = existentes
           )}
              </div>
                 {/* 👈 Nuevo: Mostrar producto seleccionado */}
+             {productoCotizacion && (
              <div className="card mb-4 border-0 shadow-sm">
                       <div className="card-body py-3">
                         <div className="d-flex align-items-center justify-content-between">
                           <div className="d-flex align-items-center">
                             <i className="fas fa-shield-alt text-primary me-2"></i>
                             <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
-                            <span className={`badge bg-${productoCotizacion.color} fs-6`}>
-                              {productoCotizacion.label}
+                            <span className={`badge bg-${productoCotizacion?.color || 'secondary'} fs-6`}>
+                              {productoCotizacion?.label || 'Sin plan'}
                       </span>
                     </div>
                     {isEditing && (
@@ -909,6 +910,7 @@ const clientesPayload = existentes
                   </div>
                 </div>
               </div>
+             )}
 
         {/* Captación + económicos */}
         <Prospectogrupo

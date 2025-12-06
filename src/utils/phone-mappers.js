@@ -10,6 +10,17 @@ const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice
 export function fromApiPhones(arr = [], fallbackIso = "co") {
   if (!Array.isArray(arr)) return [];
   return arr.map((p, i) => {
+    // Validar que p no sea null o undefined
+    if (!p || typeof p !== "object") {
+      return {
+        id: uid(),
+        tipo: "Móvil",
+        numero: "",
+        principal: false,
+        iso: fallbackIso,
+        indicativo: ""
+      };
+    }
     const iso = String(p.iso || "").toLowerCase();
     const cc  = String(p.indicativo || "").replace(/\D+/g, "") || (isoToCode.get(iso) || "");
     return {
@@ -26,16 +37,30 @@ export function fromApiPhones(arr = [], fallbackIso = "co") {
 // ✅ nuevo: acepta array o string JSON y rellena iso/indicativo
 export function inflatePhones(raw, fallbackIso = "co") {
   let base = [];
-  if (Array.isArray(raw)) base = raw;
-  else if (typeof raw === "string") {
+  if (Array.isArray(raw)) {
+    // Filtrar valores null/undefined antes de procesar
+    base = raw.filter(p => p != null);
+  } else if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) base = parsed;
+      if (Array.isArray(parsed)) {
+        base = parsed.filter(p => p != null);
+      }
     } catch (_) { /* ignore */ }
   }
 
   const arr = fromApiPhones(base, fallbackIso);
   return arr.map(p => {
+    if (!p || typeof p !== "object") {
+      return {
+        id: uid(),
+        tipo: "Móvil",
+        numero: "",
+        principal: false,
+        iso: fallbackIso,
+        indicativo: ""
+      };
+    }
     let iso = (p.iso || "").toLowerCase();
     let indicativo = String(p.indicativo || "").replace(/\D+/g, "");
     if (!iso && indicativo) iso = (codeToIso.get(indicativo) || fallbackIso);

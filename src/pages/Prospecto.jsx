@@ -8,9 +8,11 @@ import ProspectoDatos from '../components/fase2/ProspectoDatos';
 import TomaDeDatos from '../components/fase2/TomaDeDatos';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import ClienteService from '../services/ClienteService';
-import { mapGrupoFromForm, mapClienteFromMember } from '../adapters/prospecto.mapper';
+import { mapGrupoFromForm, mapClienteFromMember, stripNulls } from '../adapters/prospecto.mapper';
 import { calcIngresoFamiliar, sanitizeMoneyInput, parseMoney } from '../services/ingresos';
 import ProspectoService from "../services/ProspectoService";
+import apiRequest from '../services/api';
+import { toApiPhones } from '../utils/phone-mappers';
 
 
 const normalizeCode = (s) =>
@@ -220,6 +222,93 @@ useEffect(() => {
     });
   };
 
+  // Handler para agregar cliente existente (cuando no hay grupoId aún)
+  const handleClienteExistenteLocal = async (payload, clienteSeleccionado) => {
+    if (!clienteSeleccionado?.id) return;
+    
+    // Verificar que no esté ya en el grupo
+    const yaExiste = familyMembers.some(
+      (m) => m.cliente_id === clienteSeleccionado.id || m?.cliente?.id === clienteSeleccionado.id
+    );
+    if (yaExiste) {
+      alert("Este cliente ya está agregado al grupo familiar");
+      return;
+    }
+
+    // Mapear cliente a miembro local (sin crear cobertura aún, porque no hay grupoId)
+    const mapClienteToMember = (c, tipoSel, coberturaTipo, estadoCobertura) => {
+      const toTitle = (s = "") =>
+        s
+          .toLowerCase()
+          .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+      
+      const calcAge = (iso) => {
+        if (!iso) return "";
+        const b = new Date(iso);
+        if (isNaN(b)) return "";
+        const t = new Date();
+        let a = t.getFullYear() - b.getFullYear();
+        const m = t.getMonth() - b.getMonth();
+        if (m < 0 || (m === 0 && t.getDate() < b.getDate())) a--;
+        return a;
+      };
+
+      const primer = toTitle(c.primer_nombre || c.nombre || "");
+      const segundo = toTitle(c.segundo_nombre || "");
+      const apell = toTitle(c.apellidos || c.apellido || "");
+      const fecha = c.fecha_nacimiento || c.fechaNacimiento || "";
+      const nombreCompleto =
+        c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
+      const edad = calcAge(fecha);
+      const genero = c.genero || "Masculino";
+
+      return {
+        id: c.id || `temp-${Date.now()}-${Math.random()}`,
+        primer_nombre: primer,
+        segundo_nombre: segundo,
+        apellidos: apell,
+        nombreCompleto,
+        genero,
+        edad,
+        fecha_nacimiento: fecha,
+        fecha_retiro: null,
+        parentesco: tipoSel,
+        tipo: tipoSel,
+        estado_cobertura: estadoCobertura,
+        cobertura_tipo: coberturaTipo,
+        origen: "existente",
+        cobertura_id: null,
+        cliente_id: c.id,
+        idioma: c.idioma || "",
+        ingreso_anual: c.ingreso_anual || 0,
+        nota: c.nota || "",
+        cliente: {
+          id: c.id,
+          primer_nombre: primer,
+          segundo_nombre: segundo,
+          apellidos: apell,
+          nombre_completo: nombreCompleto,
+          genero,
+          fecha_nacimiento: fecha,
+          edad,
+          telefono: c.telefono || "",
+          idioma: c.idioma || "",
+          ingreso_anual: c.ingreso_anual || 0,
+          nota: c.nota || "",
+        },
+      };
+    };
+
+    const nuevoMiembro = mapClienteToMember(
+      clienteSeleccionado,
+      payload.tipo,
+      payload.cobertura_tipo || productoCotizacion?.label || "Plan de salud",
+      payload.estado_cobertura || "Sí"
+    );
+
+    setFamilyMembers((prev) => [...prev, nuevoMiembro]);
+  };
+
   const handleSubmit = async () => {
     try {
       setSaving(true);
@@ -239,8 +328,12 @@ useEffect(() => {
       const newGrupoId = grupoRes?.id || grupoRes?.grupo?.id || grupoRes?.data?.id;
       if (!newGrupoId) throw new Error("No se obtuvo id del grupo");
 
-      // 2) Crear TODOS los clientes en una sola petición
-      const clientesPayload = familyMembers.map((m) => {
+      // 2) Separar miembros: nuevos vs existentes
+      const miembrosNuevos = familyMembers.filter(m => !m.cliente_id && m.origen !== "existente");
+      const miembrosExistentes = familyMembers.filter(m => m.cliente_id && m.origen === "existente");
+
+      // 2a) Crear solo los clientes NUEVOS en una sola petición
+      const clientesPayload = miembrosNuevos.map((m) => {
         const base = mapClienteFromMember(m);
       
         // Fuerza ingreso_anual numérico para el backend
@@ -265,19 +358,112 @@ useEffect(() => {
         const lista = cliRes?.data || cliRes?.clientes || cliRes;
         createdClients = (Array.isArray(lista) ? lista : []).map((c, idx) => ({
           clienteId: c.id,
-          miembro: familyMembers[idx],
+          miembro: miembrosNuevos[idx],
         }));
       }
 
-      // 3) Crear coberturas (una por cliente)
-      for (const { clienteId, miembro } of createdClients) {
+      // 2b) Actualizar clientes existentes con los datos modificados
+      for (const miembro of miembrosExistentes) {
+        if (!miembro.cliente_id) continue;
+
+        // Mapear los datos del miembro a formato de cliente para actualizar
+        const c = miembro?.cliente || {};
+        const pick = (k) => (miembro[k] ?? c[k] ?? null);
+        const date10 = (v) => (v ? String(v).slice(0, 10) : null);
+        
+        // Construir nombre completo
+        const buildNombreCompleto = (o = {}) =>
+          [o.primer_nombre, o.segundo_nombre, o.apellidos]
+            .map(v => (v || "").toString().trim())
+            .filter(Boolean)
+            .join(" ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const nombre_completo = buildNombreCompleto({
+          primer_nombre: pick("primer_nombre"),
+          segundo_nombre: pick("segundo_nombre"),
+          apellidos: pick("apellidos"),
+        });
+
+        // Normalizar ingreso
+        const moneyToDecimal = (v) => {
+          const num = parseMoney(String(v ?? ""));
+          if (!Number.isFinite(num)) return 0;
+          return Math.min(Number(num.toFixed(2)), 99999999.99);
+        };
+
+        const clientePayload = stripNulls({
+          id: Number(miembro.cliente_id),
+          primer_nombre: pick("primer_nombre"),
+          segundo_nombre: pick("segundo_nombre"),
+          apellidos: pick("apellidos"),
+          nombre_completo,
+          fecha_nacimiento: date10(pick("fecha_nacimiento")),
+          genero: pick("genero"),
+          idioma: pick("idioma"),
+          ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
+          nota: pick("nota"),
+          telefono: pick("telefono"),
+          secundario: pick("secundario"),
+          whatsapp_num: pick("whatsapp_num"),
+          telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
+          email: pick("email"),
+          direccion: pick("direccion"),
+          calle: pick("calle"),
+          apto: pick("apto"),
+          ciudad: pick("ciudad"),
+          estado: pick("estado"),
+          codigo_postal: pick("codigo_postal"),
+          condado: pick("condado"),
+          dir_correspondencia: pick("dir_correspondencia"),
+          social: pick("social"),
+          status: pick("status"),
+          auscis: pick("auscis"),
+          tarjeta_numero: pick("tarjeta_numero"),
+          fecha_emision: date10(pick("fecha_emision")),
+          fecha_expiracion: date10(pick("fecha_expiracion")),
+          categoria: pick("categoria"),
+          tipo_ingreso: pick("tipo_ingreso"),
+          actividad_economica: pick("actividad_economica"),
+          empleador: pick("empleador"),
+          telefono_empleador: pick("telefono_empleador"),
+          periodo_ingreso: pick("periodo_ingreso"),
+          ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")),
+          nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
+          periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
+          ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
+          whatsapp: pick("whatsapp") === true,
+          telegram: pick("telegram") === true,
+          texto_sms: pick("texto_sms") === true,
+        });
+
+        // Actualizar el cliente en el servidor
+        try {
+          await apiRequest(`cliente/${miembro.cliente_id}`, "PUT", clientePayload);
+          console.log(`✅ Cliente ${miembro.cliente_id} actualizado correctamente`);
+        } catch (error) {
+          console.error(`❌ Error al actualizar cliente ${miembro.cliente_id}:`, error);
+          // Continuar con el siguiente cliente aunque falle uno
+        }
+      }
+
+      // 2c) Preparar clientes existentes para crear coberturas
+      const clientesExistentes = miembrosExistentes.map(m => ({
+        clienteId: m.cliente_id,
+        miembro: m,
+      }));
+
+      // 3) Crear coberturas para TODOS (nuevos + existentes)
+      const todosLosClientes = [...createdClients, ...clientesExistentes];
+      for (const { clienteId, miembro } of todosLosClientes) {
         await GrupoFamiliarService.createCoberturaSimple({
           grupo_familiar_id: newGrupoId,
           cliente_id: clienteId,
           estado_cobertura: miembro.estado_cobertura || "Sí",
           fecha_retiro: null,
           parentesco: miembro.parentesco || miembro.tipo || "Tomador",
-          cobertura_tipo: productoCotizacion?.label
+          cobertura_tipo: miembro.cobertura_tipo || productoCotizacion?.label
         });
       }
 
@@ -318,8 +504,8 @@ useEffect(() => {
         <div className="d-flex align-items-center">
           <i className="fas fa-shield-alt text-primary me-2"></i>
           <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
-          <span className={`badge bg-${productoCotizacion.color} fs-6`}>
-            {productoCotizacion.label}
+          <span className={`badge bg-${productoCotizacion?.color || 'secondary'} fs-6`}>
+            {productoCotizacion?.label || 'Sin plan'}
           </span>
         </div>
         <button
@@ -358,7 +544,12 @@ useEffect(() => {
                   canAdd={true}
                   readOnly={false}
                   isProspecto={true}
+                  estadoActual={estadoActual}
+                  grupoFamiliarId={grupoId}
+                  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
+                  onCreateCoberturaDeClienteExistente={grupoId ? undefined : handleClienteExistenteLocal}
                   onDerivedCounts={handleDerivedCounts}
+                  onBlockedAddClick={() => alert("No puedes agregar miembros en este estado")}
                 />
                 
                 ) : estadoActual?.toUpperCase() === "TOMA_DATOS" ? (
@@ -375,7 +566,12 @@ useEffect(() => {
                   canAdd={true}
                   readOnly={false}
                   isProspecto={true}
+                  estadoActual={estadoActual}
+                  grupoFamiliarId={grupoId}
+                  defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
+                  onCreateCoberturaDeClienteExistente={grupoId ? undefined : handleClienteExistenteLocal}
                   onDerivedCounts={handleDerivedCounts}
+                  onBlockedAddClick={() => alert("No puedes agregar miembros en este estado")}
                 />
                 
                 
