@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
-import { Spinner, Card, Badge } from "react-bootstrap";
+import { Spinner } from "react-bootstrap";
 import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
 
 const toValidId = (v) => {
@@ -92,15 +92,30 @@ export default function FichaClienteComentarios() {
     cargarComentarios();
   }, [grupoFamiliarId]);
 
-  // Formatear fecha
+  // Formatear fecha - formato más compacto y moderno
   const formatFecha = (fecha) => {
     if (!fecha) return "Sin fecha";
     try {
       const d = new Date(fecha);
       if (isNaN(d)) return fecha;
+      
+      const ahora = new Date();
+      const diffMs = ahora - d;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+      
+      // Formato relativo para fechas recientes
+      if (diffMins < 1) return "Hace un momento";
+      if (diffMins < 60) return `Hace ${diffMins} min`;
+      if (diffHours < 24) return `Hace ${diffHours} h`;
+      if (diffDays === 1) return "Ayer";
+      if (diffDays < 7) return `Hace ${diffDays} días`;
+      
+      // Formato completo para fechas más antiguas
       return d.toLocaleString("es-ES", {
         year: "numeric",
-        month: "long",
+        month: "short",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
@@ -186,69 +201,100 @@ export default function FichaClienteComentarios() {
 
   if (!cliente) {
     return (
-      <div className="alert alert-info">
-        No se encontró información del cliente.
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800">
+        <div className="flex items-center gap-2">
+          <i className="fas fa-info-circle"></i>
+          <span>No se encontró información del cliente.</span>
+        </div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="card mb-3">
-        <div className="card-header d-flex justify-content-between align-items-center">
-          <h6 className="mb-0">
-            <i className="fas fa-comments me-2 text-primary"></i>
-            Comentarios del Grupo Familiar
-          </h6>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => setShowModal(true)}
-          >
-            <i className="fas fa-plus me-1"></i>
-            Agregar Comentario
-          </button>
+      {/* Header principal con diseño moderno */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        {/* Header con gradiente sutil */}
+        <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-6 py-5 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+                <i className="fas fa-comments text-white text-sm"></i>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800 m-0">Comentarios</h2>
+                <p className="text-sm text-gray-500 m-0 mt-0.5">Historial de comentarios del grupo familiar</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium text-sm shadow-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+            >
+              <i className="fas fa-plus text-xs"></i>
+              <span>Nuevo Comentario</span>
+            </button>
+          </div>
         </div>
-        <div className="card-body">
+
+        {/* Contenido */}
+        <div className="p-6">
           {!grupoFamiliarId ? (
-            <div className="alert alert-warning">
-              <i className="fas fa-exclamation-triangle me-2"></i>
-              No hay grupo familiar asociado a este cliente.
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
+                  <i className="fas fa-exclamation-triangle text-amber-600 text-sm"></i>
+                </div>
+                <div>
+                  <p className="text-amber-800 font-medium m-0">No hay grupo familiar asociado</p>
+                  <p className="text-amber-700 text-sm m-0 mt-1">Este cliente no tiene un grupo familiar asociado.</p>
+                </div>
+              </div>
             </div>
           ) : (
             <>
-              <div className="mb-3">
-                <small className="text-muted">
-                  <i className="fas fa-info-circle me-1"></i>
-                  Grupo Familiar: <strong>GF #{grupoFamiliarId}</strong>
-                </small>
+              {/* Badge de grupo familiar */}
+              <div className="mb-6">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-full">
+                  <i className="fas fa-users text-gray-500 text-xs"></i>
+                  <span className="text-sm text-gray-600">
+                    Grupo Familiar: <span className="font-semibold text-gray-800">GF #{grupoFamiliarId}</span>
+                  </span>
+                </div>
               </div>
 
               {loading ? (
-                <div className="text-center py-4">
-                  <Spinner animation="border" variant="primary" />
-                  <p className="text-muted mt-2">Cargando comentarios...</p>
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Spinner animation="border" variant="primary" className="mb-4" />
+                  <p className="text-gray-500 text-sm font-medium">Cargando comentarios...</p>
                 </div>
               ) : error ? (
-                <div className="alert alert-danger">
-                  <i className="fas fa-exclamation-circle me-2"></i>
-                  {error}
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                      <i className="fas fa-exclamation-circle text-red-600 text-sm"></i>
+                    </div>
+                    <p className="text-red-800 font-medium m-0">{error}</p>
+                  </div>
                 </div>
               ) : comentarios.length === 0 ? (
-                <div className="text-center py-5">
-                  <i className="fas fa-comments fa-3x text-muted mb-3 opacity-50"></i>
-                  <p className="text-muted">
-                    No hay comentarios registrados para este grupo familiar.
+                <div className="flex flex-col items-center justify-center py-16">
+                  <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
+                    <i className="fas fa-comments text-gray-400 text-2xl"></i>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No hay comentarios aún</h3>
+                  <p className="text-gray-500 text-sm mb-6 text-center max-w-sm">
+                    Comienza a agregar comentarios para este grupo familiar y mantén un registro de las interacciones.
                   </p>
                   <button
-                    className="btn btn-outline-primary btn-sm"
                     onClick={() => setShowModal(true)}
+                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
                   >
-                    <i className="fas fa-plus me-1"></i>
-                    Agregar primer comentario
+                    <i className="fas fa-plus text-xs"></i>
+                    <span>Agregar primer comentario</span>
                   </button>
                 </div>
               ) : (
-                <div className="d-flex flex-column gap-3">
+                <div className="space-y-4">
                   {comentarios.map((comentario, index) => {
                     const fecha = comentario.created_at || comentario.createdAt || comentario.fecha;
                     const concepto = getConceptoNombre(comentario);
@@ -257,40 +303,57 @@ export default function FichaClienteComentarios() {
                     const nota = comentario.note || comentario.nota || comentario.comment || "Sin contenido";
 
                     return (
-                      <Card key={comentario.id || index} className="shadow-sm border-start border-primary border-3">
-                        <Card.Body>
-                          <div className="d-flex justify-content-between align-items-start mb-2">
-                            <div className="flex-grow-1">
-                              <div className="d-flex align-items-center gap-2 mb-2">
-                                <Badge bg="info" className="me-2">
-                                  <i className="fas fa-comment-dots me-1"></i>
-                                  {concepto}
-                                </Badge>
-                                <small className="text-muted">
-                                  <i className="fas fa-user me-1"></i>
-                                  {usuario}
-                                </small>
+                      <div
+                        key={comentario.id || index}
+                        className="group relative bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition-all duration-200 hover:border-gray-300"
+                      >
+                        {/* Línea vertical decorativa */}
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-blue-400 rounded-l-xl"></div>
+                        
+                        {/* Header del comentario */}
+                        <div className="flex items-start justify-between mb-4">
+                          <div className="flex-1">
+                            {/* Badge de concepto */}
+                            <div className="flex items-center gap-2 mb-3">
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium border border-blue-100">
+                                <i className="fas fa-tag text-[10px]"></i>
+                                {concepto}
+                              </span>
+                            </div>
+                            
+                            {/* Información del usuario */}
+                            <div className="flex items-center gap-4 text-sm">
+                              <div className="flex items-center gap-2 text-gray-600">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                                  <i className="fas fa-user text-gray-500 text-xs"></i>
+                                </div>
+                                <span className="font-medium">{usuario}</span>
                               </div>
                               {clienteNombre && clienteNombre !== "Cliente" && (
-                                <small className="text-muted d-block mb-2">
-                                  <i className="fas fa-user-circle me-1"></i>
-                                  Cliente: {clienteNombre}
-                                </small>
+                                <div className="flex items-center gap-2 text-gray-500">
+                                  <i className="fas fa-user-circle text-xs"></i>
+                                  <span className="text-xs">{clienteNombre}</span>
+                                </div>
                               )}
                             </div>
-                            <small className="text-muted text-nowrap">
-                              <i className="fas fa-clock me-1"></i>
-                              {formatFecha(fecha)}
-                            </small>
                           </div>
                           
-                          <div className="mt-2">
-                            <p className="mb-0" style={{ whiteSpace: "pre-wrap" }}>
+                          {/* Fecha */}
+                          <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full">
+                            <i className="fas fa-clock text-[10px]"></i>
+                            <span className="font-medium">{formatFecha(fecha)}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Contenido del comentario */}
+                        <div className="pl-2">
+                          <div className="prose prose-sm max-w-none">
+                            <p className="text-gray-700 leading-relaxed m-0 whitespace-pre-wrap">
                               {nota}
                             </p>
                           </div>
-                        </Card.Body>
-                      </Card>
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
