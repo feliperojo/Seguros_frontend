@@ -551,7 +551,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                       : "Buscar cliente por nombre..."
                 }
                 value={clienteQuery}
-                className="shadow-sm"
+                className="shadow-sm mb-2"
                 disabled={loadingCliente}
                 onChange={async (e) => {
                   const value = e.target.value;
@@ -595,7 +595,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                     setClientes([]);
                   }
                 }}
-                className="mb-2"
               />
               {!formData.cliente_id && clienteId && (
                 <Form.Text className="text-muted d-block mt-1">
