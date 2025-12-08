@@ -1,5 +1,17 @@
 @import "https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css";
 
+/* Contenedor principal del dashboard */
+.dashboard-container {
+  display: flex;
+  min-height: 100vh;
+  position: relative;
+}
+
+.dashboard-content {
+  width: 100%;
+  min-height: 100vh;
+}
+
 /* Botón de alerta de tareas */
 .tarea-alerta-button {
   background: transparent !important; /* quitar fondo morado */

@@ -1,8 +1,10 @@
 // FichaClienteLayout.jsx
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import apiRequest from "../services/api";
 import { FichaClienteContext } from "../context/fichaClienteContext";
+import Sidebar from "../components/Sidebar";
+import "../styles/MainLayout.css";
 
 // ===== NUEVO: Ruta absoluta a la lista de clientes =====
 const LISTA_CLIENTES_PATH = "/Clientes/lista"; // cámbiala a "/clientes/lista" si tu ruta es minúscula
@@ -79,6 +81,8 @@ export default function FichaClienteLayout() {
   const [loading, setLoading] = useState(true);
   const [cliente, setCliente] = useState(null);
   const [error, setError] = useState(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const sidebarRef = useRef(null);
 
   const fetchCliente = useCallback(async () => {
     setLoading(true);
@@ -101,6 +105,26 @@ export default function FichaClienteLayout() {
   useEffect(() => {
     if (id) fetchCliente();
   }, [id, fetchCliente]);
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const handleClickOutside = (e) => {
+    if (
+      sidebarRef.current &&
+      !sidebarRef.current.contains(e.target) &&
+      isSidebarOpen
+    ) {
+      setIsSidebarOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("mousedown", handleClickOutside);
+    return () =>
+      document.removeEventListener("mousedown", handleClickOutside);
+  }, [isSidebarOpen]);
 
   const coberturaPrincipal = useMemo(() => {
     if (!cliente?.coberturas?.length) return null;
@@ -127,41 +151,50 @@ export default function FichaClienteLayout() {
 
   return (
     <FichaClienteContext.Provider value={ctxValue}>
-      <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
-        <div className="text-center mb-2">
-          <h5 className="mb-0 text-primary fw-semibold">{titulo}</h5>
+      <div className="dashboard-container">
+        <div ref={sidebarRef}>
+          <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
         </div>
+        <div className={`main-content ${isSidebarOpen ? "expanded" : "collapsed"}`}>
+          <div className="dashboard-content">
+            <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
+              <div className="text-center mb-2">
+                <h5 className="mb-0 text-primary fw-semibold">{titulo}</h5>
+              </div>
 
-        <div className="d-flex justify-content-center flex-wrap gap-2 pb-2 border-bottom mb-3">
-          {TABS.map((t) => {
-            const isClientes = t.id === "clientes";
-            const to = isClientes ? LISTA_CLIENTES_PATH : (t.id === "" ? "." : t.id);
-            return (
-              <NavLink
-                key={t.id}
-                to={to}
-                end={t.id === "" && !isClientes} // mantiene end solo para "General"
-                className={({ isActive }) =>
-                  "btn btn-sm " + (isActive ? "btn-secondary" : "btn-light border")
-                }
-              >
-                {t.label}
-              </NavLink>
-            );
-          })}
-        </div>
+              <div className="d-flex justify-content-center flex-wrap gap-2 pb-2 border-bottom mb-3">
+                {TABS.map((t) => {
+                  const isClientes = t.id === "clientes";
+                  const to = isClientes ? LISTA_CLIENTES_PATH : (t.id === "" ? "." : t.id);
+                  return (
+                    <NavLink
+                      key={t.id}
+                      to={to}
+                      end={t.id === "" && !isClientes} // mantiene end solo para "General"
+                      className={({ isActive }) =>
+                        "btn btn-sm " + (isActive ? "btn-secondary" : "btn-light border")
+                      }
+                    >
+                      {t.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
 
-        {loading && <div className="alert alert-info">Cargando cliente…</div>}
-        {error && (
-          <div className="alert alert-danger d-flex justify-content-between align-items-center">
-            <div>{error}</div>
-            <button className="btn btn-sm btn-light" onClick={fetchCliente}>
-              Reintentar
-            </button>
+              {loading && <div className="alert alert-info">Cargando cliente…</div>}
+              {error && (
+                <div className="alert alert-danger d-flex justify-content-between align-items-center">
+                  <div>{error}</div>
+                  <button className="btn btn-sm btn-light" onClick={fetchCliente}>
+                    Reintentar
+                  </button>
+                </div>
+              )}
+
+              {!loading && !error && <Outlet />}
+            </div>
           </div>
-        )}
-
-        {!loading && !error && <Outlet />}
+        </div>
       </div>
     </FichaClienteContext.Provider>
   );

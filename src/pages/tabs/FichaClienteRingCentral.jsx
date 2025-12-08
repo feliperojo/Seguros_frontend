@@ -568,241 +568,357 @@ useEffect(() => {
 
   if (!cliente) {
     return (
-      <div className="alert alert-info">
-        Cargando información del cliente…
+      <div className="flex items-center justify-center p-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800">
+          <p className="text-sm font-medium">Cargando información del cliente…</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="row justify-content-center">
-      <div className="col-12 col-lg-9 col-xl-8">
-        <div className="card h-100 shadow-sm">
-          <div className="card-body">
-            <h6 className="mb-3">Integración con RingCentral</h6>
+    <div className="flex justify-center w-full px-4 py-6">
+      <div className="w-full max-w-5xl">
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4 border-b border-blue-800">
+            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <FaPhone className="text-blue-200" />
+              Integración con RingCentral
+            </h2>
+          </div>
 
-            {/* Datos del cliente */}
-            <div className="row small mb-2">
-              <div className="col-md-6">
-                <div>
-                  <strong>Cliente:</strong> {cliente.nombre_completo ?? "—"}
-                </div>
-                <div>
-                  <strong>ID Cliente:</strong> {cliente.id ?? "—"}
-                </div>
-                <div>
-                  <strong>Teléfono:</strong>{" "}
-                  {Array.isArray(cliente.telefonos) &&
-                  cliente.telefonos.length > 0 ? (
-                    <span>
-                      {cliente.telefonos
-                        .filter((t) => t.numero)
-                        .map((t, idx) => (
-                          <span
-                            key={idx}
-                            style={{ display: "inline-block", marginRight: 8 }}
-                          >
-                            {t.principal ? (
-                              <>
-                                <i
-                                  className="fas fa-star text-warning"
-                                  title="Principal"
-                                ></i>{" "}
-                                {t.cod_pais}
-                                {t.numero}
-                              </>
-                            ) : (
-                              <>
-                                {t.cod_pais}
-                                {t.numero}
-                              </>
-                            )}
-                          </span>
-                        ))}
+          <div className="p-6 space-y-6">
+
+            {/* Información del Cliente */}
+            <div className="bg-gray-50 rounded-lg border border-gray-200 p-5">
+              <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                Información del Cliente
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Cliente:</span>
+                    <span className="text-gray-900">{cliente.nombre_completo ?? "—"}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">ID Cliente:</span>
+                    <span className="text-gray-900 font-mono text-xs bg-white px-2 py-1 rounded border border-gray-300">
+                      {cliente.id ?? "—"}
                     </span>
-                  ) : (
-                    "—"
-                  )}
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Teléfono:</span>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.isArray(cliente.telefonos) && cliente.telefonos.length > 0 ? (
+                        cliente.telefonos
+                          .filter((t) => t.numero)
+                          .map((t, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 bg-white px-2 py-1 rounded border border-gray-300 text-gray-900"
+                            >
+                              {t.principal && (
+                                <span className="text-yellow-500" title="Principal">★</span>
+                              )}
+                              <span className="font-mono text-xs">
+                                {t.cod_pais}
+                                {t.numero}
+                              </span>
+                            </span>
+                          ))
+                      ) : (
+                        <span className="text-gray-500">—</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Email:</span>
+                    <span className="text-gray-900 break-all">{cliente.email ?? "—"}</span>
+                  </div>
                 </div>
-                <div>
-                  <strong>Email:</strong> {cliente.email ?? "—"}
-                </div>
-              </div>
 
-              <div className="col-md-6">
-                <div>
-                  <strong>Grupo Familiar:</strong>{" "}
-                  {cliente.grupo_familiar_id
-                    ? `GF ${cliente.grupo_familiar_id}`
-                    : "—"}
-                </div>
-                <div>
-                  <strong>Compañía:</strong> {companiaNombre}
-                </div>
-                <div>
-                  <strong>Año cobertura:</strong> {anoCobertura}
-                </div>
-                <div>
-                  <strong>Código póliza:</strong> {codigoPoliza}
+                <div className="space-y-3">
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Grupo Familiar:</span>
+                    <span className="text-gray-900">
+                      {cliente.grupo_familiar_id ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded bg-purple-100 text-purple-800 text-xs font-medium">
+                          GF {cliente.grupo_familiar_id}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Compañía:</span>
+                    <span className="text-gray-900">{companiaNombre}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Año cobertura:</span>
+                    <span className="text-gray-900">{anoCobertura}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Código póliza:</span>
+                    <span className="text-gray-900 font-mono text-xs">{codigoPoliza}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <hr />
+            {/* Estado RingCentral */}
+            <div className="bg-white rounded-lg border border-gray-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  Estado de Vinculación
+                </h3>
+                <div className="flex items-center gap-2">
+                  <FaCircle
+                    size={12}
+                    style={{ color: statusIconColor }}
+                    className="animate-pulse"
+                  />
+                  <span className={`text-sm font-medium ${
+                    isLinkedToRingcentral 
+                      ? "text-green-600" 
+                      : "text-red-600"
+                  }`}>
+                    {statusLabel}
+                  </span>
+                </div>
+              </div>
 
-            {/* Estado visual */}
-            <div className="d-flex align-items-center mb-2">
-              <span className="me-2">
-                <strong>Estado RingCentral:</strong>
-              </span>
-              <FaCircle
-                size={10}
-                className="me-2"
-                style={{ color: statusIconColor }}
-              />
-              <span className={statusColorClass}>{statusLabel}</span>
-            </div>
-
-           
-
-            {/* Alertas de validación */}
-            <div className="mt-3">
+              {/* Alertas de validación */}
               {canSendToRingcentral ? (
-                <div className="alert alert-info py-2 mb-3 small">
-                  Los datos mínimos para enviar a RingCentral están completos.
-                  Revisa que el teléfono móvil tenga formato internacional
-                  (por ejemplo, <code>+181355512533</code>) antes de proceder.
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">Datos completos</p>
+                      <p className="text-blue-700">
+                        Los datos mínimos para enviar a RingCentral están completos.
+                        Revisa que el teléfono móvil tenga formato internacional
+                        (por ejemplo, <code className="bg-blue-100 px-1 rounded">+181355512533</code>) antes de proceder.
+                      </p>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="alert alert-warning py-2 mb-3 small">
-                  <strong>No se puede enviar a RingCentral.</strong> Para crear
-                  o actualizar el contacto, completa primero estos campos en la
-                  ficha del cliente:
-                  <ul className="mb-0">
-                    {missingFields.map((f) => (
-                      <li key={f}>{f}</li>
-                    ))}
-                  </ul>
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 mt-0.5">
+                      <svg className="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="text-sm text-yellow-800">
+                      <p className="font-semibold mb-2">No se puede enviar a RingCentral</p>
+                      <p className="text-yellow-700 mb-2">
+                        Para crear o actualizar el contacto, completa primero estos campos en la ficha del cliente:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-yellow-700">
+                        {missingFields.map((f) => (
+                          <li key={f}>{f}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
                 </div>
               )}
-            </div>
 
-            {/* Botones globales */}
-            <div className="d-flex gap-2 mt-2 mb-3">
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={!canSendToRingcentral || savingGlobal}
-                onClick={handleCreate}
-              >
-                {savingGlobal ? "Procesando…" : "Crear en RingCentral"}
-              </button>
+              {/* Botones globales */}
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  className="flex-1 min-w-[200px] px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                  disabled={!canSendToRingcentral || savingGlobal}
+                  onClick={handleCreate}
+                >
+                  {savingGlobal ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Procesando…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                      Crear en RingCentral
+                    </>
+                  )}
+                </button>
 
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-secondary"
-                disabled={!canSendToRingcentral || savingGlobal}
-                onClick={handleUpdateAll}
-              >
-                {savingGlobal
-                  ? "Procesando…"
-                  : "Actualizar en todas las extensiones"}
-              </button>
+                <button
+                  type="button"
+                  className="flex-1 min-w-[200px] px-4 py-2.5 bg-white border-2 border-gray-300 hover:border-gray-400 text-gray-700 font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                  disabled={!canSendToRingcentral || savingGlobal}
+                  onClick={handleUpdateAll}
+                >
+                  {savingGlobal ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Procesando…
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      Actualizar en todas las extensiones
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             {/* Sección por extensión */}
-            <hr />
-            <h6 className="mb-2">Detalle por extensión</h6>
-            <div className="small mb-2 text-muted">
-              Aquí puedes ver en qué extensiones existe el contacto y consultar
-              los datos actuales en RingCentral por extensión.
-            </div>
-
-            {extensions.length === 0 ? (
-              <div className="alert alert-light small">
-                No se pudieron cargar las extensiones de RingCentral o aún no hay
-                ninguna configurada.
+            <div className="bg-white rounded-lg border border-gray-200 p-5">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                  Detalle por Extensión
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Aquí puedes ver en qué extensiones existe el contacto y consultar los datos actuales en RingCentral por extensión.
+                </p>
               </div>
-            ) : (
-              <div className="row">
-                {extensions.map((ext) => {
-                  const info = extensionsInfo[ext.id] || {};
-                  const { loading, updating, exists, contact, error } = info;
 
-                  return (
-                    <div className="col-md-6 mb-3" key={ext.id}>
-                      <div className="border rounded p-2 h-100">
-                        <div className="d-flex justify-content-between align-items-center mb-1">
+              {extensions.length === 0 ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 text-center">
+                  <svg className="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <p className="text-sm text-gray-600">
+                    No se pudieron cargar las extensiones de RingCentral o aún no hay ninguna configurada.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {extensions.map((ext) => {
+                    const info = extensionsInfo[ext.id] || {};
+                    const { loading, updating, exists, contact, error } = info;
+
+                    return (
+                      <div
+                        key={ext.id}
+                        className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors duration-200"
+                      >
+                        {/* Header de extensión */}
+                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
                           <div>
-                            <strong>{ext.name || "Extensión"}</strong>
+                            <h4 className="font-semibold text-gray-900">
+                              {ext.name || "Extensión"}
+                            </h4>
                             {ext.extensionNumber && (
-                              <span className="ms-1 text-muted">
-                                (Ext {ext.extensionNumber})
-                              </span>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Ext {ext.extensionNumber}
+                              </p>
                             )}
                           </div>
-                          <span className="badge bg-light text-muted">
+                          <span className="px-2.5 py-1 bg-white border border-gray-300 rounded text-xs font-mono text-gray-600">
                             ID: {ext.id}
                           </span>
                         </div>
 
-                        {/* Estado de contacto en esta extensión */}
+                        {/* Estado de contacto */}
                         {loading ? (
-                          <div className="small text-info mb-2">
+                          <div className="flex items-center gap-2 mb-3 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-700">
+                            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
                             Consultando datos en RingCentral…
                           </div>
                         ) : exists === true ? (
-                          <div className="small text-success mb-2">
-                            Contacto registrado en esta extensión.
+                          <div className="flex items-center gap-2 mb-3 p-2 bg-green-50 border border-green-200 rounded text-sm text-green-700">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            Contacto registrado en esta extensión
                           </div>
                         ) : exists === false ? (
-                          <div className="small text-warning mb-2">
-                            No existe contacto registrado para este cliente en
-                            esta extensión.
+                          <div className="flex items-center gap-2 mb-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-700">
+                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            No existe contacto registrado para este cliente
                           </div>
                         ) : (
-                          <div className="small text-muted mb-2">
-                            Aún no se ha consultado esta extensión.
+                          <div className="mb-3 p-2 bg-gray-100 border border-gray-200 rounded text-sm text-gray-600">
+                            Aún no se ha consultado esta extensión
                           </div>
                         )}
 
                         {error && (
-                          <div className="alert alert-danger py-1 small mb-2">
+                          <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-700">
                             {error}
                           </div>
                         )}
 
-                        {/* Comparación RingCentral vs Vantum si hay contacto */}
+                        {/* Comparación RingCentral vs Vantum */}
                         {contact && (
-                          <div className="small mb-2">
-                            <div className="row">
-                              <div className="col-6">
-                                <strong>RingCentral</strong>
-                                <ul className="mb-0">
+                          <div className="mb-3 p-3 bg-white border border-gray-200 rounded-lg">
+                            <div className="grid grid-cols-2 gap-4 text-xs">
+                              <div>
+                                <h5 className="font-semibold text-blue-700 mb-2 pb-1 border-b border-blue-200">
+                                  RingCentral
+                                </h5>
+                                <ul className="space-y-1.5 text-gray-700">
                                   <li>
-                                    Nombre:{" "}
-                                    {`${contact.firstName || ""} ${
-                                      contact.lastName || ""
-                                    }`.trim() || "—"}
+                                    <span className="font-medium">Nombre:</span>{" "}
+                                    {`${contact.firstName || ""} ${contact.lastName || ""}`.trim() || "—"}
                                   </li>
                                   <li>
-                                    Teléfono: {contact.mobilePhone ?? "—"}
+                                    <span className="font-medium">Teléfono:</span>{" "}
+                                    <span className="font-mono">{contact.mobilePhone ?? "—"}</span>
                                   </li>
-                                  <li>Email: {contact.email ?? "—"}</li>
-                                  <li>Empresa: {contact.company ?? "—"}</li>
-                                  <li>Notas: {contact.notes ?? "—"}</li>
+                                  <li>
+                                    <span className="font-medium">Email:</span>{" "}
+                                    <span className="break-all">{contact.email ?? "—"}</span>
+                                  </li>
+                                  <li>
+                                    <span className="font-medium">Empresa:</span> {contact.company ?? "—"}
+                                  </li>
+                                  <li className="text-xs">
+                                    <span className="font-medium">Notas:</span>{" "}
+                                    <span className="break-words">{contact.notes ?? "—"}</span>
+                                  </li>
                                 </ul>
                               </div>
-                              <div className="col-6">
-                                <strong>Vantum</strong>
-                                <ul className="mb-0">
+                              <div>
+                                <h5 className="font-semibold text-green-700 mb-2 pb-1 border-b border-green-200">
+                                  Vantum
+                                </h5>
+                                <ul className="space-y-1.5 text-gray-700">
                                   <li>
-                                    Nombre: {cliente.nombre_completo ?? "—"}
+                                    <span className="font-medium">Nombre:</span> {cliente.nombre_completo ?? "—"}
                                   </li>
-                                  <li>Teléfono: {ringPhone ?? "—"}</li>
-                                  <li>Email: {cliente.email ?? "—"}</li>
-                                  <li>Empresa: {companiaNombre ?? "—"}</li>
-                                  <li>Notas: {vantumNotes}</li>
+                                  <li>
+                                    <span className="font-medium">Teléfono:</span>{" "}
+                                    <span className="font-mono">{ringPhone ?? "—"}</span>
+                                  </li>
+                                  <li>
+                                    <span className="font-medium">Email:</span>{" "}
+                                    <span className="break-all">{cliente.email ?? "—"}</span>
+                                  </li>
+                                  <li>
+                                    <span className="font-medium">Empresa:</span> {companiaNombre ?? "—"}
+                                  </li>
+                                  <li className="text-xs">
+                                    <span className="font-medium">Notas:</span>{" "}
+                                    <span className="break-words">{vantumNotes}</span>
+                                  </li>
                                 </ul>
                               </div>
                             </div>
@@ -810,50 +926,100 @@ useEffect(() => {
                         )}
 
                         {/* Botones por extensión */}
-                        <div className="d-flex gap-2 mt-2">
+                        <div className="flex flex-col sm:flex-row gap-2 mt-4">
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-primary"
-                            onClick={() =>
-                              handleConsultarExtension(ext.id)
-                            }
+                            className="flex-1 px-3 py-2 bg-white border-2 border-blue-500 hover:bg-blue-50 text-blue-700 font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
+                            onClick={() => handleConsultarExtension(ext.id)}
                             disabled={loading}
                           >
-                            {loading ? "Consultando…" : "Consultar"}
+                            {loading ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Consultando…
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                Consultar
+                              </>
+                            )}
                           </button>
 
                           <button
                             type="button"
-                            className="btn btn-sm btn-outline-success"
+                            className="flex-1 px-3 py-2 bg-white border-2 border-green-500 hover:bg-green-50 text-green-700 font-medium rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed text-sm flex items-center justify-center gap-2"
                             onClick={() => handleUpdateExtension(ext.id)}
-                            disabled={
-                              !canSendToRingcentral || updating
-                            }
+                            disabled={!canSendToRingcentral || updating}
                           >
-                            {updating
-                              ? "Actualizando…"
-                              : "Actualizar esta extensión"}
+                            {updating ? (
+                              <>
+                                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Actualizando…
+                              </>
+                            ) : (
+                              <>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                Actualizar
+                              </>
+                            )}
                           </button>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             {/* Mensaje de estado global */}
             {statusMessage && (
-              <div className="alert alert-secondary mt-3 mb-0 py-2 small">
-                {statusMessage}
+              <div className={`rounded-lg p-4 border ${
+                statusMessage.includes("✅") 
+                  ? "bg-green-50 border-green-200 text-green-800"
+                  : statusMessage.includes("⚠️")
+                  ? "bg-yellow-50 border-yellow-200 text-yellow-800"
+                  : "bg-red-50 border-red-200 text-red-800"
+              }`}>
+                <div className="flex items-start gap-2">
+                  <div className="flex-shrink-0 mt-0.5">
+                    {statusMessage.includes("✅") ? (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : statusMessage.includes("⚠️") ? (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <p className="text-sm font-medium">{statusMessage}</p>
+                </div>
               </div>
             )}
 
-            <div className="mt-3 small text-muted">
-              Usa <strong>“Crear en RingCentral”</strong> para registrar este
-              cliente como contacto en las extensiones configuradas. Luego podrás
-              usar <strong>“Actualizar en todas las extensiones”</strong> o
-              actualizar de forma individual por extensión.
+            {/* Información adicional */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <span className="font-semibold">Instrucciones:</span> Usa <strong>"Crear en RingCentral"</strong> para registrar este
+                cliente como contacto en las extensiones configuradas. Luego podrás
+                usar <strong>"Actualizar en todas las extensiones"</strong> o
+                actualizar de forma individual por extensión.
+              </p>
             </div>
           </div>
         </div>

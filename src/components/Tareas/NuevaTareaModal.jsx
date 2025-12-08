@@ -2,6 +2,9 @@ import React, { useEffect, useState } from "react";
 import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+const getAuthToken = () => localStorage.getItem("auth_token");
+
 const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", grupoFamiliarId, clienteId }) => {
   const hoy = new Date().toISOString().split("T")[0];
   const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10));
@@ -34,6 +37,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [clienteQuery, setClienteQuery] = useState("");
   const [clienteFicha, setClienteFicha] = useState(null); // Cliente de la ficha actual
   const [loadingCliente, setLoadingCliente] = useState(false);
+  const [archivos, setArchivos] = useState([]); // Array de archivos (imágenes, PDF, Word)
+  const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const normalize = (s = "") =>
     String(s)
@@ -125,18 +131,26 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       }
 
       // Reset y prefill
+      const clienteIdValido = clienteId ? String(clienteId) : "";
       setFormData({
         concept_id: "",
         note: "",
-        cliente_id: clienteId ?? "",
-        grupo_familiar_id: grupoFamiliarId ?? "",
+        cliente_id: clienteIdValido,
+        grupo_familiar_id: grupoFamiliarId ? String(grupoFamiliarId) : "",
         assign_to_user_id: "",
         scheduled_date: hoy,
         due_date: hoy,
       });
+      console.log("🔄 FormData reseteado con cliente_id:", clienteIdValido);
       // Reset tipo de acción a comentario por defecto
       setTipoAccion("comentario");
       setErrors({});
+      // Limpiar archivos
+      archivos.forEach((arch) => {
+        if (arch.preview) URL.revokeObjectURL(arch.preview);
+      });
+      setArchivos([]);
+      setIsDragging(false);
     }
   }, [show, categoria, grupoFamiliarId, clienteId]);
 
@@ -149,13 +163,17 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     }
     
     // Si hay clienteId pero no está en formData, establecerlo
-    if (show && clienteId && !formData.cliente_id) {
-      setFormData((prev) => ({
-        ...prev,
-        cliente_id: String(clienteId),
-      }));
+    if (show && clienteId) {
+      const clienteIdStr = String(clienteId);
+      if (!formData.cliente_id || formData.cliente_id === "") {
+        console.log("🔧 Estableciendo cliente_id desde prop:", clienteIdStr);
+        setFormData((prev) => ({
+          ...prev,
+          cliente_id: clienteIdStr,
+        }));
+      }
     }
-  }, [grupoFamiliarId, clienteId, show]);
+  }, [grupoFamiliarId, clienteId, show, formData.cliente_id]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -176,31 +194,204 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     }
   };
 
+  // Funciones para manejar archivos (imágenes, PDF, Word)
+  const validarArchivo = (file) => {
+    const tiposPermitidos = [
+      "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ];
+    const extensionesPermitidas = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx"];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    // Validar por tipo MIME o extensión
+    const tieneTipoValido = tiposPermitidos.includes(file.type);
+    const tieneExtensionValida = extensionesPermitidas.some(ext => 
+      file.name.toLowerCase().endsWith(ext)
+    );
+
+    if (!tieneTipoValido && !tieneExtensionValida) {
+      alert("⚠️ Solo se permiten archivos de imagen (JPG, PNG, GIF, WEBP), PDF y Word (DOC, DOCX)");
+      return false;
+    }
+
+    if (file.size > maxSize) {
+      alert("⚠️ El archivo es demasiado grande. El tamaño máximo es 10MB");
+      return false;
+    }
+
+    return true;
+  };
+
+  const esImagen = (file) => {
+    return file.type?.startsWith("image/") || 
+           /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+  };
+
+  const agregarArchivos = (files) => {
+    const archivosArray = Array.from(files);
+    const archivosValidos = archivosArray.filter(validarArchivo);
+    
+    if (archivosValidos.length !== archivosArray.length) {
+      return; // Ya se mostró el error en validarArchivo
+    }
+
+    const nuevosArchivos = archivosValidos.map((file) => {
+      const esImg = esImagen(file);
+      return {
+        file,
+        id: Date.now() + Math.random(),
+        preview: esImg ? URL.createObjectURL(file) : null,
+        nombre: file.name,
+        tipo: esImg ? "imagen" : file.type?.includes("pdf") ? "pdf" : "word",
+      };
+    });
+
+    setArchivos((prev) => [...prev, ...nuevosArchivos]);
+  };
+
+  const eliminarArchivo = (id) => {
+    setArchivos((prev) => {
+      const archivo = prev.find((arch) => arch.id === id);
+      if (archivo && archivo.preview) {
+        URL.revokeObjectURL(archivo.preview);
+      }
+      return prev.filter((arch) => arch.id !== id);
+    });
+  };
+
+  const subirArchivos = async (bitacoraId) => {
+    if (archivos.length === 0) return;
+
+    setSubiendoArchivos(true);
+    const token = getAuthToken();
+
+    if (!token) {
+      alert("Token no encontrado. Por favor inicia sesión.");
+      setSubiendoArchivos(false);
+      return;
+    }
+
+    try {
+      // Usar el nuevo endpoint específico para bitácora operativa
+      const uploadPromises = archivos.map(async (archivo) => {
+        const formData = new FormData();
+        formData.append("archivo", archivo.file);
+
+        const response = await fetch(`${API_BASE_URL}/adjuntos/bitacora/${bitacoraId}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.message || "Error al subir archivo";
+          throw new Error(errorMessage);
+        }
+
+        return response.json();
+      });
+
+      await Promise.all(uploadPromises);
+      console.log("✅ Todos los archivos subidos exitosamente");
+    } catch (err) {
+      console.error("❌ Error al subir archivos:", err);
+      throw err; // Re-lanzar para que el código que llama pueda manejarlo
+    } finally {
+      setSubiendoArchivos(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      agregarArchivos(files);
+    }
+  };
+
+  const handleFileInput = (e) => {
+    const files = e.target.files;
+    if (files.length > 0) {
+      agregarArchivos(files);
+    }
+    e.target.value = ""; // Reset input para permitir seleccionar el mismo archivo
+  };
+
   const validarCampos = () => {
+    console.log("🔍 Validando campos...", formData);
     const nuevosErrores = {};
-    if (!formData.concept_id) nuevosErrores.concept_id = "El concepto es obligatorio";
-    if (!formData.note.trim()) nuevosErrores.note = "La nota es obligatoria";
-    if (!formData.cliente_id) nuevosErrores.cliente_id = "El cliente es obligatorio";
+    
+    if (!formData.concept_id || formData.concept_id === "") {
+      console.log("❌ concept_id faltante:", formData.concept_id);
+      nuevosErrores.concept_id = "El concepto es obligatorio";
+    }
+    
+    if (!formData.note || !formData.note.trim()) {
+      console.log("❌ note faltante o vacía:", formData.note);
+      nuevosErrores.note = "La nota es obligatoria";
+    }
+    
+    if (!formData.cliente_id || formData.cliente_id === "") {
+      console.log("❌ cliente_id faltante:", formData.cliente_id);
+      nuevosErrores.cliente_id = "El cliente es obligatorio";
+    }
     
     // Solo validar asignación y fechas si es una tarea
     if (tipoAccion === "tarea") {
-      if (!formData.assign_to_user_id) nuevosErrores.assign_to_user_id = "Debes asignar la tarea a un usuario";
-      if (!formData.scheduled_date) nuevosErrores.scheduled_date = "La fecha programada es obligatoria";
-      if (!formData.due_date) nuevosErrores.due_date = "La fecha de vencimiento es obligatoria";
+      if (!formData.assign_to_user_id || formData.assign_to_user_id === "") {
+        console.log("❌ assign_to_user_id faltante para tarea");
+        nuevosErrores.assign_to_user_id = "Debes asignar la tarea a un usuario";
+      }
+      if (!formData.scheduled_date || formData.scheduled_date === "") {
+        console.log("❌ scheduled_date faltante para tarea");
+        nuevosErrores.scheduled_date = "La fecha programada es obligatoria";
+      }
+      if (!formData.due_date || formData.due_date === "") {
+        console.log("❌ due_date faltante para tarea");
+        nuevosErrores.due_date = "La fecha de vencimiento es obligatoria";
+      }
     }
     
+    console.log("📋 Errores encontrados:", nuevosErrores);
     setErrors(nuevosErrores);
-    return Object.keys(nuevosErrores).length === 0;
+    const esValido = Object.keys(nuevosErrores).length === 0;
+    console.log("✅ Validación", esValido ? "PASÓ" : "FALLÓ");
+    return esValido;
   };
 
   const handleSubmit = async () => {
-    if (!validarCampos()) return;
+    console.log("🔵 handleSubmit llamado");
+    
+    if (!validarCampos()) {
+      console.log("❌ Validación falló");
+      return;
+    }
+    
+    console.log("✅ Validación pasada, iniciando guardado...");
     setLoading(true);
+    
     try {
       // Preparar payload según el tipo de acción
       const payload = {
         ...formData,
-        action_type: "manual",
+        action_type: tipoAccion, // Enviar "tarea" o "comentario" según el tipo de acción
+        tipo: tipoAccion, // Enviar "tarea" o "comentario" según el modal utilizado
       };
 
       // Si es comentario, no enviar asignación ni fechas
@@ -210,7 +401,74 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         delete payload.due_date;
       }
 
+      console.log("📤 Enviando payload:", payload);
       const response = await apiRequest("bitacora_operativa/create", "POST", payload);
+      console.log("✅ Respuesta recibida:", response);
+
+      // Obtener el ID del log creado para subir los archivos
+      let logId = response?.id || response?.log?.id || response?.data?.id || response?.bitacora?.id;
+      
+      // Si no viene en la respuesta, buscar el registro recién creado
+      if (!logId && payload.grupo_familiar_id) {
+        console.log("🔍 Buscando ID del registro recién creado...");
+        try {
+          // Esperar un momento para que el registro se guarde en la BD
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Buscar el último registro creado con estos parámetros específicos
+          const buscarResponse = await apiRequest(
+            `bitacora_operativa?grupo_familiar_id=${payload.grupo_familiar_id}&per_page=10`,
+            "GET"
+          );
+          
+          const lista = buscarResponse?.data || buscarResponse || [];
+          const registros = Array.isArray(lista) ? lista : [];
+          
+          // Buscar el registro que coincida con los parámetros enviados
+          const registroReciente = registros.find(reg => {
+            const conceptMatch = String(reg.concept_id) === String(payload.concept_id);
+            const noteMatch = reg.note === payload.note || reg.note?.trim() === payload.note?.trim();
+            const clienteMatch = String(reg.cliente_id) === String(payload.cliente_id);
+            const tipoMatch = (reg.tipo === payload.tipo) || (reg.action_type === payload.action_type);
+            
+            return conceptMatch && noteMatch && clienteMatch && tipoMatch;
+          });
+          
+          if (registroReciente) {
+            logId = registroReciente.id || registroReciente.log?.id;
+            console.log("✅ ID encontrado mediante búsqueda:", logId);
+          } else {
+            console.warn("⚠️ No se encontró el registro recién creado en la búsqueda");
+          }
+        } catch (err) {
+          console.error("❌ Error al buscar el registro:", err);
+        }
+      }
+      
+      // Subir archivos si hay alguno y se obtuvo el logId
+      if (logId && archivos.length > 0) {
+        console.log("📤 Subiendo archivos al logId:", logId);
+        try {
+          await subirArchivos(logId);
+          console.log("✅ Archivos subidos exitosamente");
+        } catch (err) {
+          console.error("❌ Error al subir archivos:", err);
+          const mensajeError = err.message || "Error desconocido al subir archivos";
+          
+          // Mensaje más específico según el tipo de error
+          if (mensajeError.includes("foreign key") || mensajeError.includes("documento_id")) {
+            alert("⚠️ Se creó el comentario exitosamente, pero los archivos no pudieron subirse.\n\n" +
+                  "El sistema de adjuntos requiere una configuración adicional en el backend.\n" +
+                  "Por favor, contacte al administrador del sistema.");
+          } else {
+            alert(`⚠️ Se creó el comentario pero hubo un error al subir algunos archivos:\n${mensajeError}`);
+          }
+          // No bloqueamos el flujo si falla la subida de archivos
+        }
+      } else if (archivos.length > 0 && !logId) {
+        console.error("❌ No se pudo obtener el ID del log creado:", response);
+        alert("⚠️ Se creó el comentario pero no se pudieron subir los archivos porque no se pudo obtener el ID del registro. Por favor, intente nuevamente.");
+      }
 
       const conceptoSeleccionado = conceptos.find((c) => c.id === parseInt(formData.concept_id));
 
@@ -243,10 +501,16 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         },
       };
 
-      if (onCreated) onCreated(nuevaTarea);
+      if (onCreated) {
+        console.log("📞 Llamando onCreated callback");
+        onCreated(nuevaTarea);
+      }
+      
+      console.log("✅ Comentario/Tarea creada exitosamente");
       onHide();
     } catch (error) {
-      alert(`❌ Error al guardar el ${tipoAccion === "comentario" ? "comentario" : "tarea"}`);
+      console.error("❌ Error completo:", error);
+      alert(`❌ Error al guardar el ${tipoAccion === "comentario" ? "comentario" : "tarea"}: ${error.message || "Error desconocido"}`);
     } finally {
       setLoading(false);
     }
@@ -453,6 +717,128 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                 ? "Este comentario será visible en el historial del cliente"
                 : "Describe los detalles y objetivos de esta tarea"}
             </Form.Text>
+          </Form.Group>
+
+          {/* Área de carga de archivos */}
+          <Form.Group className="mt-3">
+            <Form.Label>
+              <i className="fas fa-paperclip me-2 text-info"></i>
+              Archivos adjuntos (opcional)
+            </Form.Label>
+            <div
+              className={`border rounded p-4 text-center ${
+                isDragging ? "border-primary bg-light" : "border-secondary"
+              }`}
+              style={{
+                borderStyle: "dashed",
+                cursor: "pointer",
+                transition: "all 0.3s ease",
+                backgroundColor: isDragging ? "#e7f3ff" : "transparent",
+              }}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => document.getElementById("file-input-archivos").click()}
+            >
+              <input
+                id="file-input-archivos"
+                type="file"
+                multiple
+                accept="image/*,.pdf,.doc,.docx"
+                onChange={handleFileInput}
+                style={{ display: "none" }}
+              />
+              <div>
+                <i className="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                <p className="mb-1">
+                  {isDragging ? (
+                    <strong className="text-primary">Suelta los archivos aquí</strong>
+                  ) : (
+                    <>
+                      <strong>Arrastra archivos aquí</strong> o haz clic para seleccionar
+                    </>
+                  )}
+                </p>
+                <small className="text-muted">
+                  Formatos: JPG, PNG, GIF, WEBP, PDF, DOC, DOCX (máx. 10MB cada uno)
+                </small>
+              </div>
+            </div>
+
+            {/* Vista previa de archivos */}
+            {archivos.length > 0 && (
+              <div className="mt-3">
+                <div className="d-flex flex-wrap gap-2">
+                  {archivos.map((archivo) => (
+                    <div
+                      key={archivo.id}
+                      className="position-relative border rounded p-2"
+                      style={{ 
+                        width: "120px", 
+                        height: "120px",
+                        backgroundColor: "#f8f9fa"
+                      }}
+                    >
+                      {archivo.tipo === "imagen" && archivo.preview ? (
+                        <>
+                          <img
+                            src={archivo.preview}
+                            alt={archivo.nombre}
+                            className="rounded"
+                            style={{
+                              width: "100%",
+                              height: "80px",
+                              objectFit: "cover",
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                          {archivo.tipo === "pdf" ? (
+                            <i className="fas fa-file-pdf fa-3x text-danger mb-2"></i>
+                          ) : (
+                            <i className="fas fa-file-word fa-3x text-primary mb-2"></i>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-danger position-absolute top-0 end-0"
+                        style={{
+                          borderRadius: "50%",
+                          width: "24px",
+                          height: "24px",
+                          padding: 0,
+                          fontSize: "12px",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          eliminarArchivo(archivo.id);
+                        }}
+                        title="Eliminar archivo"
+                      >
+                        <i className="fas fa-times"></i>
+                      </button>
+                      <div
+                        className="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white text-truncate p-1"
+                        style={{ fontSize: "9px" }}
+                        title={archivo.nombre}
+                      >
+                        {archivo.nombre.length > 18
+                          ? `${archivo.nombre.substring(0, 18)}...`
+                          : archivo.nombre}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {subiendoArchivos && (
+                  <div className="mt-2 text-center">
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    <small className="text-muted">Subiendo archivos...</small>
+                  </div>
+                )}
+              </div>
+            )}
           </Form.Group>
 
           <Form.Group className="mt-3">
@@ -828,10 +1214,11 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       </Modal.Body>
 
       <Modal.Footer className="border-top-0 pt-3">
-        <Button variant="outline-secondary" onClick={onHide} disabled={loading}>
+        <Button type="button" variant="outline-secondary" onClick={onHide} disabled={loading}>
           Cancelar
         </Button>
         <Button 
+          type="button"
           variant={tipoAccion === "comentario" ? "info" : "primary"} 
           onClick={handleSubmit} 
           disabled={loading}
