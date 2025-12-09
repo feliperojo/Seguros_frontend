@@ -7,6 +7,7 @@ function CompanySelect({
   onChange,
   disabled,
   name = "compania_id",       // <-- default field name
+      className = "form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm",
 }) {
   const handleChange = (e) => {
     const raw = e.target.value;
@@ -22,7 +23,7 @@ function CompanySelect({
 
   return (
     <select
-      className="form-select"
+      className={className}
       name={name}
       value={value ?? ""}
       onChange={handleChange}

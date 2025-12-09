@@ -353,6 +353,8 @@ const GrupoFamiliarDetail = () => {
   const [advancing, setAdvancing] = useState(false);
 
 const [grupoVersion, setGrupoVersion] = useState(null);
+  const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showSaveDropdown, setShowSaveDropdown] = useState(false);
 
   const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
   const showToast = (type, title, message) => {
@@ -438,6 +440,23 @@ console.log("Ingreso Familiar:", total);
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Cerrar dropdowns al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showActionsDropdown && !event.target.closest('.relative.inline-block')) {
+        setShowActionsDropdown(false);
+      }
+      if (showSaveDropdown && !event.target.closest('.relative.inline-flex')) {
+        setShowSaveDropdown(false);
+      }
+    };
+
+    if (showActionsDropdown || showSaveDropdown) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [showActionsDropdown, showSaveDropdown]);
 // Mantener ingresoFamiliar sincronizado con los miembros (detalle/edición)
 useEffect(() => {
   if (!Array.isArray(familyMembers) || !formData) return;
@@ -730,8 +749,8 @@ const clientesPayload = existentes
 
   if (loading) {
     return (
-      <div className="container py-5 text-center text-muted">
-        <div className="spinner-border me-2" role="status" />
+      <div className="container mx-auto px-4 py-12 text-center text-gray-500">
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 inline-block mr-2" role="status" />
         Cargando...
       </div>
     );
@@ -739,12 +758,12 @@ const clientesPayload = existentes
 
   if (loadError) {
     return (
-      <div className="container py-5">
-        <div className="alert alert-danger d-flex align-items-center">
-          <i className="fa fa-triangle-exclamation me-2" />
+      <div className="container mx-auto px-4 py-12">
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg flex items-center">
+          <i className="fa fa-triangle-exclamation mr-2" />
           <div>{loadError}</div>
         </div>
-        <button className="btn btn-outline-primary" onClick={reload}>
+        <button className="mt-4 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-600 hover:text-white transition-colors" onClick={reload}>
           Reintentar
         </button>
       </div>
@@ -758,18 +777,18 @@ const clientesPayload = existentes
   
 
   return (
-    <div className="container-fluid bg-light min-vh-100 py-4">
-     <div className="container py-4">
-  <div className="card shadow-sm border-0 rounded-4 bg-white px-4 py-4">
+    <div className="w-full bg-gray-100 min-h-screen py-4">
+     <div className="container mx-auto px-4 py-4">
+  <div className="bg-white shadow-sm border-0 rounded-2xl px-4 py-4">
     {/* Aquí dentro va TODO el contenido actual */}
 
         {/* Toast flotante */}
         <div
-          className="toast-container position-fixed top-0 end-0 p-3"
+          className="fixed top-0 right-0 p-3"
           style={{ zIndex: 1080 }}
         >
           <div
-            className={`toast show ${toast.show ? "opacity-100" : "opacity-0"}`}
+            className={`bg-white border rounded-lg shadow-lg ${toast.show ? "opacity-100" : "opacity-0"}`}
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
@@ -779,17 +798,25 @@ const clientesPayload = existentes
               pointerEvents: toast.show ? "auto" : "none"
             }}
           >
-            <div className={`toast-header bg-${toast.type} text-white`}>
-              <strong className="me-auto">{toast.title || "Notificación"}</strong>
+            <div className={`px-4 py-2 rounded-t-lg ${
+              toast.type === "success" ? "bg-green-600" :
+              toast.type === "danger" ? "bg-red-600" :
+              toast.type === "warning" ? "bg-yellow-600" :
+              toast.type === "info" ? "bg-blue-600" :
+              "bg-gray-600"
+            } text-white flex items-center justify-between`}>
+              <strong className="flex-1">{toast.title || "Notificación"}</strong>
               <button
                 type="button"
-                className="btn-close btn-close-white ms-2 mb-1"
+                className="ml-2 mb-1 text-white hover:text-gray-200 text-xl leading-none"
                 aria-label="Close"
                 onClick={() => setToast((t) => ({ ...t, show: false }))}
-              />
+              >
+                ×
+              </button>
             </div>
             {toast.message && (
-              <div className="toast-body bg-white text-dark">
+              <div className="px-4 py-3 bg-white text-gray-900 rounded-b-lg">
                 {toast.message}
               </div>
             )}
@@ -809,101 +836,122 @@ const clientesPayload = existentes
 
 
 
-        <div className="d-flex justify-content-end mb-3">
+        <div className="flex justify-end mb-3">
           {readOnly ? (
-            <div className="btn-toolbar gap-2">
-              <button className="btn btn-primary" onClick={() => setIsEditing(true)}>Editar</button>
+            <div className="flex gap-2">
+              <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" onClick={() => setIsEditing(true)}>Editar</button>
 
-              <div className="btn-group">
+              <div className="relative inline-block">
                 <button
                   type="button"
-                  className="btn btn-outline-secondary dropdown-toggle"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
+                  className="px-4 py-2 border border-gray-600 text-gray-600 rounded hover:bg-gray-600 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowActionsDropdown(!showActionsDropdown);
+                  }}
                   disabled={advancing}
                 >
                   Acciones
                 </button>
-                <ul className="dropdown-menu dropdown-menu-end">
-                  {nextOf(estadoActual) && (
-                    <li>
-                      <button
-                        className="dropdown-item"
-                        disabled={advancing}
-                        onClick={async () => {
-                          const from = (estadoActual || "").toUpperCase();
-                          const to = nextOf(from);
-                          if (!canAdvance(from, to, { formData, familyMembers })) {
-                            showToast("warning", "No disponible", "No puedes avanzar todavía.");
-                            return;
-                          }
-                          const ok = window.confirm(`¿Pasar a ${to}?`);
-                          if (!ok) return;
-                          await advanceState(to);
-                        }}
-                      >
-                        Pasar a {nextOf(estadoActual)} →
-                      </button>
-                    </li>
-                  )}
-                </ul>
+                {showActionsDropdown && (
+                  <ul className="absolute right-0 mt-2 bg-white border rounded-lg shadow-lg z-10 min-w-[200px]">
+                    {nextOf(estadoActual) && (
+                      <li>
+                        <button
+                          className="block w-full text-left px-4 py-2 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={advancing}
+                          onClick={async () => {
+                            setShowActionsDropdown(false);
+                            const from = (estadoActual || "").toUpperCase();
+                            const to = nextOf(from);
+                            if (!canAdvance(from, to, { formData, familyMembers })) {
+                              showToast("warning", "No disponible", "No puedes avanzar todavía.");
+                              return;
+                            }
+                            const ok = window.confirm(`¿Pasar a ${to}?`);
+                            if (!ok) return;
+                            await advanceState(to);
+                          }}
+                        >
+                          Pasar a {nextOf(estadoActual)} →
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
               </div>
             </div>
           ) : (
-            <div className="btn-toolbar gap-2">
+            <div className="flex gap-2">
               <button
-                className="btn btn-secondary"
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => { setIsEditing(false); reload(); }}
                 disabled={saving || advancing}
               >
                 Cancelar
               </button>
 
-              <div className="btn-group">
-                <button className="btn btn-success" onClick={() => handleSave(false)} disabled={saving || advancing}>
-                  {saving ? (<><span className="spinner-border spinner-border-sm me-2" />Guardando…</>) : "Guardar"}
+              <div className="relative inline-flex">
+                <button className="px-4 py-2 bg-green-600 text-white rounded-l hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => handleSave(false)} disabled={saving || advancing}>
+                  {saving ? (<><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block mr-2" />Guardando…</>) : "Guardar"}
                 </button>
                 <button
                   type="button"
-                  className="btn btn-success dropdown-toggle dropdown-toggle-split"
-                  data-bs-toggle="dropdown"
-                  aria-expanded="false"
+                  className="px-2 py-2 bg-green-600 text-white rounded-r border-l border-green-700 hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowSaveDropdown(!showSaveDropdown);
+                  }}
                   disabled={saving || advancing || !nextOf(estadoActual)}
                 >
-                  <span className="visually-hidden">Toggle</span>
+                  <span className="sr-only">Toggle</span>
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
                 </button>
-                <ul className="dropdown-menu dropdown-menu-end">
-                  {nextOf(estadoActual) && (
-                    <li>
-                      <button className="dropdown-item" onClick={() => handleSave(true)} disabled={saving || advancing}>
-                        Guardar y pasar a {nextOf(estadoActual)} →
-                      </button>
-                    </li>
-                  )}
-                </ul>
+                {showSaveDropdown && (
+                  <ul className="absolute right-0 mt-2 bg-white border rounded-lg shadow-lg z-10 min-w-[250px] top-full">
+                    {nextOf(estadoActual) && (
+                      <li>
+                        <button className="block w-full text-left px-4 py-2 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
+                          setShowSaveDropdown(false);
+                          handleSave(true);
+                        }} disabled={saving || advancing}>
+                          Guardar y pasar a {nextOf(estadoActual)} →
+                        </button>
+                      </li>
+                    )}
+                  </ul>
+                )}
               </div>
             </div>
           )}
              </div>
                 {/* 👈 Nuevo: Mostrar producto seleccionado */}
              {productoCotizacion && (
-             <div className="card mb-4 border-0 shadow-sm">
-                      <div className="card-body py-3">
-                        <div className="d-flex align-items-center justify-content-between">
-                          <div className="d-flex align-items-center">
-                            <i className="fas fa-shield-alt text-primary me-2"></i>
-                            <span className="fw-bold text-muted me-2">Plan seleccionado:</span>
-                            <span className={`badge bg-${productoCotizacion?.color || 'secondary'} fs-6`}>
+             <div className="bg-white mb-4 border-0 shadow-sm rounded-lg">
+                      <div className="p-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <i className="fas fa-shield-alt text-blue-600 mr-2"></i>
+                            <span className="font-bold text-gray-500 mr-2">Plan seleccionado:</span>
+                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                              productoCotizacion?.color === 'primary' ? 'bg-blue-600 text-white' :
+                              productoCotizacion?.color === 'success' ? 'bg-green-600 text-white' :
+                              productoCotizacion?.color === 'info' ? 'bg-cyan-600 text-white' :
+                              productoCotizacion?.color === 'warning' ? 'bg-yellow-600 text-white' :
+                              'bg-gray-600 text-white'
+                            }`}>
                               {productoCotizacion?.label || 'Sin plan'}
                       </span>
                     </div>
                     {isEditing && (
                       <button
                         type="button"
-                        className="btn btn-sm btn-outline-primary"
+                        className="px-3 py-1.5 text-sm border border-blue-600 text-blue-600 rounded hover:bg-blue-600 hover:text-white transition-colors"
                         onClick={() => setShowProductModal(true)}
                       >
-                        <i className="fas fa-edit me-1"></i>
+                        <i className="fas fa-edit mr-1"></i>
                         Cambiar plan
                       </button>
                     )}

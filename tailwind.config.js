@@ -8,7 +8,13 @@ export default {
   // Esto evita conflictos con Bootstrap
   important: true,
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // Definir primary para Tailwind usando el mismo valor que Bootstrap
+        // Esto asegura consistencia cuando se use bg-primary de Tailwind
+        primary: '#0d6efd', // Azul Bootstrap estándar
+      },
+    },
   },
   plugins: [],
   // Configuración para evitar conflictos con Bootstrap

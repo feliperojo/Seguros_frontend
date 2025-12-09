@@ -4,7 +4,6 @@ import Select from "react-select";
 import React, { useMemo, useCallback } from "react";
 import countryCodes from "../../services/countryCodes";
 import { formatPhone334 } from "../../utils/formatters";
-import "../../styles/TelefonosPro.css";
 
 /* Helpers */
 function ensureOnePrimary(arr = []) {
@@ -62,12 +61,15 @@ function completeIsoIndic({ iso, indicativo }, fallbackIso = "co") {
 const countrySelectStyles = {
   control: (base, state) => ({
     ...base,
-    minHeight: "calc(1.5em + .5rem + 2px)",     // tamaño tipo form-select-sm
+    minHeight: "calc(1.5em + .5rem + 2px)",
     height: "calc(1.5em + .5rem + 2px)",
-    borderRadius: "0.2rem",
+    borderRadius: "0.375rem",
     fontSize: "0.875rem",
-    boxShadow: state.isFocused ? base.boxShadow : "none",
-    borderColor: state.isFocused ? "#80bdff" : base.borderColor,
+    borderColor: state.isFocused ? "#3b82f6" : "#d1d5db",
+    boxShadow: state.isFocused ? "0 0 0 3px rgba(59, 130, 246, 0.1)" : "none",
+    "&:hover": {
+      borderColor: state.isFocused ? "#3b82f6" : "#9ca3af",
+    },
   }),
   valueContainer: (base) => ({
     ...base,
@@ -79,7 +81,33 @@ const countrySelectStyles = {
   }),
   menu: (base) => ({
     ...base,
-    zIndex: 9999, // para que no quede debajo de otros elementos
+    zIndex: 9999,
+    position: "absolute",
+  }),
+  menuPortal: (base) => ({
+    ...base,
+    zIndex: 9999,
+  }),
+  menuList: (base) => ({
+    ...base,
+    maxHeight: "200px",
+    padding: "4px",
+  }),
+  option: (base, state) => ({
+    ...base,
+    fontSize: "0.875rem",
+    padding: "8px 12px",
+    backgroundColor: state.isSelected
+      ? "#3b82f6"
+      : state.isFocused
+      ? "#eff6ff"
+      : "white",
+    color: state.isSelected ? "white" : "#1f2937",
+    cursor: "pointer",
+    "&:active": {
+      backgroundColor: "#3b82f6",
+      color: "white",
+    },
   }),
 };
 
@@ -94,14 +122,15 @@ function CountrySelectWithFlags({ value, onChange, disabled }) {
     onChange?.(option ? String(option.iso || option.value || "").toLowerCase() : "");
   };
 
+  // Asegurar que document.body esté disponible
+  const menuPortalTarget = typeof document !== "undefined" ? document.body : null;
+
   return (
     <Select
       classNamePrefix="tp-country-select"
-      // para que se vea como un input normal de Bootstrap
       className="tp-country-select-wrapper"
       options={COUNTRY_OPTIONS}
-      // usamos nuestras propiedades internas
-      getOptionLabel={(opt) => opt.label} // "🇨🇴 CO (+57)"
+      getOptionLabel={(opt) => opt.label}
       getOptionValue={(opt) => opt.iso}
       value={selectedOption}
       onChange={handleChange}
@@ -109,6 +138,8 @@ function CountrySelectWithFlags({ value, onChange, disabled }) {
       styles={countrySelectStyles}
       menuPlacement="auto"
       isSearchable={true}
+      menuPortalTarget={menuPortalTarget}
+      menuShouldScrollIntoView={false}
     />
   );
 }
@@ -143,26 +174,24 @@ function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
   const handleRemove = () => onRemove?.(index);
 
   return (
-    <div className="tp-phone-card">
-      <div className="tp-card-header">
-        <div className="form-check m-0">
+    <div className="bg-white border border-gray-200 rounded-lg mb-3 transition-all duration-200 hover:shadow-md hover:border-gray-300 overflow-hidden">
+      <div className="flex justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
+        <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
-            className="form-check-input"
             type="radio"
             name="telefono-principal"
             id={`principal-${index}`}
             checked={!!local.principal}
             onChange={handlePrimary}
             disabled={readOnly}
+            className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 focus:ring-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           />
-          <label className="form-check-label small text-muted" htmlFor={`principal-${index}`}>
-            Principal
-          </label>
-        </div>
+          <span className="text-xs font-medium text-gray-600">Principal</span>
+        </label>
         {!readOnly && (
           <button
             type="button"
-            className="btn btn-sm btn-link text-danger p-0 tp-btn-delete"
+            className="p-1 text-red-500 hover:text-red-700 transition-opacity opacity-70 hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1 rounded"
             onClick={handleRemove}
             title="Eliminar teléfono"
           >
@@ -174,12 +203,14 @@ function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
         )}
       </div>
 
-      <div className="tp-card-body">
-        <div className="row g-2">
-          <div className="col-12 col-sm-6 col-lg-4">
-            <label className="form-label small mb-1 text-muted">Tipo</label>
+      <div className="p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 mb-1.5">
+              Tipo
+            </label>
             <select
-              className="form-select form-select-sm"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:bg-gray-50 disabled:cursor-not-allowed bg-white"
               value={local.tipo || "Móvil"}
               onChange={handleTipo}
               disabled={readOnly}
@@ -192,22 +223,27 @@ function PhoneRow({ item, index, onPatch, onRemove, onMakePrimary, readOnly }) {
             </select>
           </div>
 
-          <div className="col-12 col-sm-6 col-lg-4">
-            <label className="form-label small mb-1 text-muted">País</label>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 mb-1.5">
+              País
+            </label>
             <CountrySelectWithFlags
-  value={local.iso}
-  onChange={handleIso}
-  disabled={readOnly}
-/>
-
+              value={local.iso}
+              onChange={handleIso}
+              disabled={readOnly}
+            />
           </div>
 
-          <div className="col-12 col-lg-4">
-            <label className="form-label small mb-1 text-muted">Número</label>
-            <div className="input-group input-group-sm">
-              <span className="input-group-text tp-indicativo">+{local.indicativo || ""}</span>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-gray-600 mb-1.5">
+              Número
+            </label>
+            <div className="flex">
+              <span className="inline-flex items-center px-3 py-2 text-sm font-semibold text-gray-700 bg-gray-50 border border-r-0 border-gray-300 rounded-l-lg">
+                +{local.indicativo || ""}
+              </span>
               <input
-                className="form-control form-control-sm"
+                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-r-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
                 value={local.numero || ""}
                 onChange={handleNumero}
                 disabled={readOnly}
@@ -297,9 +333,11 @@ export default function TelefonosPro({
   };
 
   return (
-    <div className="telefonos-pro-wrapper">
+    <div className="space-y-3">
       {data.length === 0 ? (
-        <div className="text-muted small text-center py-3">No hay teléfonos registrados</div>
+        <div className="text-gray-500 text-sm text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+          No hay teléfonos registrados
+        </div>
       ) : (
         data.map((item, idx) => (
           <PhoneRow
@@ -317,10 +355,10 @@ export default function TelefonosPro({
       {!readOnly && (
         <button
           type="button"
-          className="btn btn-outline-primary btn-sm w-100"
+          className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-blue-700 bg-blue-50 border border-blue-300 rounded-lg hover:bg-blue-100 hover:border-blue-400 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
           onClick={addPhone}
         >
-          <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: 6 }}>
+          <svg width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
             <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
           </svg>
           {addLabel}

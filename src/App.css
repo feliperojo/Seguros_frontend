@@ -139,8 +139,15 @@
 .text-success-emphasis { color: #065f46 !important; }
 .bg-secondary-subtle { background-color: #e5e7eb !important; color: #374151 !important; }
 .text-secondary-emphasis { color: #374151 !important; }
-.bg-primary-subtle { background-color: #dbeafe !important; color: #1d4ed8 !important; }
-.text-primary-emphasis { color: #1d4ed8 !important; }
+/* NOTA: .bg-primary y .text-primary están definidos en bootstrap-primary-override.css */
+/* Estas clases son para variantes "subtle" y "emphasis", no reemplazan .bg-primary */
+.bg-primary-subtle { 
+  background-color: var(--bs-primary-bg-subtle, #cfe2ff) !important; 
+  color: var(--bs-primary-text-emphasis, #084298) !important; 
+}
+.text-primary-emphasis { 
+  color: var(--bs-primary-text-emphasis, #084298) !important; 
+}
 /* =========== ContactosAsociadosAccordion – Styles =========== */
 
 /* Paleta base (puedes ajustar a tu brand) */

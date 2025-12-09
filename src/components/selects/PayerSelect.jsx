@@ -1,10 +1,10 @@
 import React from "react";
 
 /** options: [{value,label}] */
-export default function PayerSelect({ options = [], value, onChange, disabled }) {
+export default function PayerSelect({ options = [], value, onChange, disabled, className = "form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm" }) {
   return (
     <select
-      className="form-select form-select-sm"
+      className={className}
       name="pagador_id"
       value={value ?? ""}
       onChange={(e) => onChange({ target: { name: "pagador_id", value: Number(e.target.value) || "", type: "select-one" } })}

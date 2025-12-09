@@ -144,20 +144,19 @@ const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;   // ✅ NUEVO
 
 /* ---------- Subcomponente: Acordeón editable por miembro ---------- */
 const MemberAccordionForm = ({ member, readOnly, onChange }) => {
-  const accId = `acc-m-${member.id}`;
-  const hdrId = `hdr-m-${member.id}`;
-  const colId = `col-m-${member.id}`;
-
-
+  // Estado para controlar si el acordeón está abierto o cerrado
+  const [isOpen, setIsOpen] = useState(false);
+  
   const [moneyStr, setMoneyStr] = useState("");
   const [isEditing, setIsEditing] = useState(false);
-   // Hidrata la máscara cuando cambie el valor real del miembro
- useEffect(() => {
+  
+  // Hidrata la máscara cuando cambie el valor real del miembro
+  useEffect(() => {
     if (isEditing) return;
     const v = member?.ingreso_anual;
     console.log(
       "[ACC useEffect] miembro",
-      member.id,
+      member?.id,
       "ingreso_anual crudo desde state =",
       v
     );
@@ -179,7 +178,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     setMoneyStr(sanitized);
     console.log(
       "[ACC handleMoneyChange] miembro",
-      member.id,
+      member?.id,
       "raw input=",
       e.target.value,
       "sanitized=",
@@ -194,7 +193,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
       const sanitized = sanitizeMoneyInput(s);
       console.log(
         "[ACC handleMoneyFocus] miembro",
-        member.id,
+        member?.id,
         "moneyStr antes=",
         s,
         "después sanitize=",
@@ -212,7 +211,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
       const formatted = s ? formatMoney2(s) : "";
       console.log(
         "[ACC handleMoneyBlur] miembro",
-        member.id,
+        member?.id,
         "moneyStr formateado final=",
         formatted
       );
@@ -221,187 +220,222 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     setIsEditing(false);
   };
 
-
-
   const fechaBase = (member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || "")
     .toString()
     .slice(0, 10);
 
-    const { languages = [] } = useLanguages();
-     const resolveIdiomaName = (v) => {
-       const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
-       const vv = normalize(v);
-       if (!vv) return "";
-       const found = languages.find(
-         (l) => normalize(l.code) === vv || normalize(l.name) === vv
-       );
-       return found?.name ?? v; // si no lo encuentra, muestra lo que venga
-     };
+  const { languages = [] } = useLanguages();
+  const resolveIdiomaName = (v) => {
+    const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
+    const vv = normalize(v);
+    if (!vv) return "";
+    const found = languages.find(
+      (l) => normalize(l.code) === vv || normalize(l.name) === vv
+    );
+    return found?.name ?? v; // si no lo encuentra, muestra lo que venga
+  };
 
   return (
-    <div className="accordion mt-3" id={accId}>
-      <div className="accordion-item">
-        <h2 className="accordion-header" id={hdrId}>
-          <button
-            className="accordion-button collapsed"
-            type="button"
-            data-bs-toggle="collapse"
-            data-bs-target={`#${colId}`}
-            aria-expanded="false"
-            aria-controls={colId}
-          >
-            Datos del {member.tipo}
-          </button>
-        </h2>
-
-        <div
-          id={colId}
-          className="accordion-collapse collapse"
-          aria-labelledby={hdrId}
-          data-bs-parent={`#${accId}`}
+    <div className="mt-2">
+      {/* Header del acordeón */}
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-4 py-3 flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:ring-offset-1 rounded-lg transition-all duration-200 shadow-sm ${
+          isOpen 
+            ? "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200" 
+            : "bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-800 border border-gray-200"
+        }`}
+        aria-expanded={isOpen}
+      >
+        <span className={`text-sm ${isOpen ? "font-semibold" : "font-medium"}`}>
+          Datos del {member.tipo || "Miembro"}
+        </span>
+        <svg
+          className={`w-4 h-4 transition-all duration-200 ${
+            isOpen ? "transform rotate-180 text-blue-500" : "text-gray-500"
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
         >
-          <div className="accordion-body">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <label className="form-label">Primer Nombre</label>
-                <input
-                    className="form-control form-control-sm"
-                    value={member.primer_nombre || ""}
-                    disabled={readOnly}
-                    onChange={handleName("primer_nombre", onChange)}
-                    style={{ textTransform: "capitalize" }}   // 👈 añade esto
-                  />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
 
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Segundo nombre</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={member.segundo_nombre || ""}
-                  disabled={readOnly}
-                  onChange={handleName("segundo_nombre", onChange)}
-                  style={{ textTransform: "capitalize" }}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Apellidos</label>
-                <input
-                  className="form-control form-control-sm"
-                  value={member.apellidos || ""}
-                  disabled={readOnly}
-                  onChange={handleName("apellidos", onChange)}
-                  style={{ textTransform: "capitalize" }}
-                />
-              </div>
+      {/* Contenido del acordeón */}
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isOpen ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="px-4 py-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Primer Nombre
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                value={member.primer_nombre || ""}
+                disabled={readOnly}
+                onChange={handleName("primer_nombre", onChange)}
+                style={{ textTransform: "capitalize" }}
+              />
+            </div>
 
-              <div className="col-md-4">
-              <label className="form-label">Idioma</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Segundo nombre
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                value={member.segundo_nombre || ""}
+                disabled={readOnly}
+                onChange={handleName("segundo_nombre", onChange)}
+                style={{ textTransform: "capitalize" }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Apellidos
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                value={member.apellidos || ""}
+                disabled={readOnly}
+                onChange={handleName("apellidos", onChange)}
+                style={{ textTransform: "capitalize" }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Idioma
+              </label>
               <select
-                      className="form-select form-select-sm"
-                      value={resolveIdiomaName(member.idioma ?? member?.cliente?.idioma ?? "")}
-                      disabled={readOnly}
-                      onChange={(e) => {
-                        const selectedName = e.target.value;
-                        const lang = languages.find(l => l.name === selectedName);
-                        onChange({
-                          idioma: lang?.name ?? selectedName,
-                          cliente: {
-                            ...(member.cliente || {}),
-                            idioma: lang?.name ?? selectedName, // mantén ambos sincronizados
-                          },
-                        });
-                      }}
-                    >
-                      <option value="">Seleccione</option>
-                      {languages.map((lang) => (
-                        <option key={lang.code} value={lang.name}>{lang.name}</option>
-                      ))}
-                    </select>
-
-              </div>
-
-              <div className="col-md-4">
-                <label className="form-label">Fecha de Nacimiento</label>
-                <input
-                  type="date"
-                  className="form-control form-control-sm"
-                  value={fechaBase}
-                  disabled={readOnly}
-                  onChange={handle("fecha_nacimiento")}
-                />
-              </div>
-
-              <div className="col-md-4">
-                <label className="form-label">Edad</label>
-                <input
-                  className="form-control form-control-sm"
-                  disabled
-                  value={member.edad ?? ""}
-                />
-              </div>
-
-              <div className="col-md-4">
-                <label className="form-label">Género</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={member.genero || member?.cliente?.genero || ""}
-                  disabled={readOnly}
-                  onChange={handle("genero")}
-                >
-                  <option value="">Seleccione</option>
-                  <option>Masculino</option>
-                  <option>Femenino</option>
-                  <option>Otro</option>
-                </select>
-              </div>
-
-              <div className="col-md-4">
-      <label className="form-label">Ingreso Anual</label>
-      <input
-        className="form-control form-control-sm"
-        inputMode="decimal"
-        value={
-          readOnly
-            ? formatMoneyDisplay(member.ingreso_anual ?? 0)
-            : moneyStr
-        }
-        disabled={readOnly}
-        onChange={handleMoneyChange}
-        onBlur={handleMoneyBlur}
-        onFocus={handleMoneyFocus}
-        placeholder="0,00"
-      />
-    </div>
-              <div className="col-md-4">
-                <label className="form-label">¿Está en Cobertura?</label>
-                <select
-                  className="form-select form-select-sm"
-                  value={member.estado_cobertura || ""}
-                  disabled={readOnly}
-                  onChange={handle("estado_cobertura")}
-                >
-                  <option value="Sí">Sí</option>
-                  <option value="No">No</option>
-                   <option value="Medicare">Medicare</option>
-                   <option value="Medicaid">Medicaid</option>
-                </select>
-              </div>
-
-              <div className="col-md-12">
-                <label className="form-label">Nota</label>
-                <textarea
-                  className="form-control form-control-sm"
-                  value={member.nota || ""}
-                  disabled={readOnly}
-                  onChange={handle("nota")}
-                />
-              </div>
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                value={resolveIdiomaName(member.idioma ?? member?.cliente?.idioma ?? "")}
+                disabled={readOnly}
+                onChange={(e) => {
+                  const selectedName = e.target.value;
+                  const lang = languages.find(l => l.name === selectedName);
+                  onChange({
+                    idioma: lang?.name ?? selectedName,
+                    cliente: {
+                      ...(member.cliente || {}),
+                      idioma: lang?.name ?? selectedName, // mantén ambos sincronizados
+                    },
+                  });
+                }}
+              >
+                <option value="">Seleccione</option>
+                {languages.map((lang) => (
+                  <option key={lang.code} value={lang.name}>{lang.name}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="form-text mt-2">
-              Los cambios se guardarán con el botón <strong>Guardar</strong> del formulario principal.
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha de Nacimiento
+              </label>
+              <input
+                type="date"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                value={fechaBase}
+                disabled={readOnly}
+                onChange={handle("fecha_nacimiento")}
+              />
             </div>
 
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Edad
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed shadow-sm"
+                disabled
+                value={member.edad ?? ""}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Género
+              </label>
+              <select
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                value={member.genero || member?.cliente?.genero || ""}
+                disabled={readOnly}
+                onChange={handle("genero")}
+              >
+                <option value="">Seleccione</option>
+                <option>Masculino</option>
+                <option>Femenino</option>
+                <option>Otro</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Ingreso Anual
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                inputMode="decimal"
+                value={
+                  readOnly
+                    ? formatMoneyDisplay(member.ingreso_anual ?? 0)
+                    : moneyStr
+                }
+                disabled={readOnly}
+                onChange={handleMoneyChange}
+                onBlur={handleMoneyBlur}
+                onFocus={handleMoneyFocus}
+                placeholder="0,00"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ¿Está en Cobertura?
+              </label>
+              <select
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                value={member.estado_cobertura || ""}
+                disabled={readOnly}
+                onChange={handle("estado_cobertura")}
+              >
+                <option value="Sí">Sí</option>
+                <option value="No">No</option>
+                <option value="Medicare">Medicare</option>
+                <option value="Medicaid">Medicaid</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nota
+              </label>
+              <textarea
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed resize-y min-h-[80px]"
+                value={member.nota || ""}
+                disabled={readOnly}
+                onChange={handle("nota")}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 text-sm text-gray-600">
+            Los cambios se guardarán con el botón <strong>Guardar</strong> del formulario principal.
           </div>
         </div>
       </div>

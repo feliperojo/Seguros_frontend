@@ -1,0 +1,102 @@
+/* 
+ * Bootstrap Primary Color Override
+ * 
+ * Este archivo asegura que --bs-primary se defina de forma consistente
+ * en todos los navegadores, evitando diferencias entre Chrome, Firefox, etc.
+ * 
+ * Se carga DESPUÉS de Bootstrap pero ANTES de otros estilos personalizados.
+ * 
+ * Color elegido: #0d6efd (azul Bootstrap estándar)
+ * Este es el valor por defecto de Bootstrap 5.3.7 y garantiza consistencia.
+ */
+
+:root {
+  /* Variable principal de Bootstrap - define el color primario */
+  --bs-primary: #0d6efd !important;
+  --bs-primary-rgb: 13, 110, 253 !important;
+  
+  /* Variantes del color primario para Bootstrap */
+  --bs-primary-bg-subtle: #cfe2ff !important;
+  --bs-primary-border-subtle: #9ec5fe !important;
+  --bs-primary-text-emphasis: #084298 !important;
+  
+  /* Asegurar consistencia en todos los estados */
+  --bs-primary-hover: #0b5ed7 !important;
+  --bs-primary-active: #0a58ca !important;
+}
+
+/* Clases de Bootstrap que usan primary - asegurar consistencia */
+.bg-primary {
+  background-color: var(--bs-primary) !important;
+}
+
+.text-primary {
+  color: var(--bs-primary) !important;
+}
+
+.border-primary {
+  border-color: var(--bs-primary) !important;
+}
+
+.btn-primary {
+  background-color: var(--bs-primary) !important;
+  border-color: var(--bs-primary) !important;
+}
+
+.btn-primary:hover {
+  background-color: var(--bs-primary-hover) !important;
+  border-color: var(--bs-primary-hover) !important;
+}
+
+.btn-primary:active,
+.btn-primary:focus,
+.btn-primary.active {
+  background-color: var(--bs-primary-active) !important;
+  border-color: var(--bs-primary-active) !important;
+}
+
+.btn-outline-primary {
+  color: var(--bs-primary) !important;
+  border-color: var(--bs-primary) !important;
+}
+
+.btn-outline-primary:hover {
+  background-color: var(--bs-primary) !important;
+  border-color: var(--bs-primary) !important;
+  color: #fff !important;
+}
+
+.badge.bg-primary {
+  background-color: var(--bs-primary) !important;
+}
+
+.alert-primary {
+  background-color: var(--bs-primary-bg-subtle) !important;
+  border-color: var(--bs-primary-border-subtle) !important;
+  color: var(--bs-primary-text-emphasis) !important;
+}
+
+.table-primary,
+.table-primary > th,
+.table-primary > td {
+  background-color: var(--bs-primary) !important;
+  color: #fff !important;
+}
+
+.progress-bar.bg-primary {
+  background-color: var(--bs-primary) !important;
+}
+
+/* Para react-bootstrap y otros componentes que usan variant="primary" */
+[class*="bg-primary"],
+[class*="text-primary"],
+[class*="border-primary"] {
+  /* Fallback para cualquier clase que contenga primary */
+}
+
+/* Asegurar que los links con clase primary también funcionen */
+a.text-primary,
+a.text-primary:hover,
+a.text-primary:focus {
+  color: var(--bs-primary) !important;
+}

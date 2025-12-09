@@ -16,6 +16,7 @@ import PayerSelect from "../selects/PayerSelect";
 import LanguageSelect from "../selects/LanguageSelect";
 import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
+import MediosPagoSection from "../MediosPagoSection";
 
 // Hooks
 import useCompanies from "../../hooks/useCompanies";
@@ -97,6 +98,64 @@ const yaEstaEnElGrupo = (clienteId, members) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
 
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
+
+/* =================== COMPONENTE ACORDEÓN TAILWIND =================== */
+const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  // Pasar isOpen a los hijos si es una función
+  const renderChildren = () => {
+    if (typeof children === 'function') {
+      return children(isOpen);
+    }
+    return children;
+  };
+
+  return (
+    <div className="mb-2">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full px-4 py-3 flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:ring-offset-1 rounded-lg transition-all duration-200 shadow-sm ${
+          isOpen 
+            ? "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200" 
+            : "bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-800 border border-gray-200"
+        }`}
+        aria-expanded={isOpen}
+      >
+        <div className="flex items-center gap-2.5">
+          {icon && <span className={`text-base ${isOpen ? "text-blue-500" : "text-gray-500"}`}>{icon}</span>}
+          <span className={`text-sm ${isOpen ? "font-semibold" : "font-medium"}`}>{title}</span>
+        </div>
+        <svg
+          className={`w-4 h-4 transition-all duration-200 ${
+            isOpen ? "transform rotate-180 text-blue-500" : "text-gray-500"
+          }`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </button>
+
+      <div
+        className={`overflow-hidden transition-all duration-300 ease-in-out ${
+          isOpen ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="px-4 py-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+          {renderChildren()}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 /* =================== NORMALIZACIÓN =================== */
 const normalizeMember = (m, idx) => {
@@ -798,53 +857,21 @@ const sortedNormalized = useMemo(
             </div>
 
             {/* Acordeones */}
-            <div className="card-body p-0">
-              <div className="accordion accordion-flush" id={`accordion-${itemId}`}>
+            <div className="card-body p-4">
+              <div className="space-y-2">
                 {/* Datos Cliente */}
-                <div className="accordion-item">
-                  <h2 className="accordion-header" id={`cliente-${itemId}`}>
-                    <button
-                      className="accordion-button collapsed py-3 px-4"
-                      type="button"
-                      data-bs-toggle="collapse"
-                      data-bs-target={`#collapse-cliente-${itemId}`}
-                      aria-expanded="false"
-                      aria-controls={`collapse-cliente-${itemId}`}
+                <AccordionItem
+                  id={`cliente-${itemId}`}
+                  title="Datos Cliente"
+                  icon={<i className="fas fa-user" />}
+                >
+                  <div className="space-y-2">
+                    {/* Principales */}
+                    <AccordionItem
+                      id={`datos-principales-${itemId}`}
+                      title="Datos Principales"
                     >
-                      <i className="fas fa-user me-2 text-muted" />
-                      <span className="fw-semibold">Datos Cliente</span>
-                    </button>
-                  </h2>
-
-                  <div
-                    id={`collapse-cliente-${itemId}`}
-                    className="accordion-collapse collapse"
-                    aria-labelledby={`cliente-${itemId}`}
-                    data-bs-parent={`#accordion-${itemId}`}
-                  >
-                    <div className="accordion-body px-4 py-4">
-                      <div className="accordion" id={`sub-accordion-${itemId}`}>
-                        {/* Principales */}
-                        <div className="accordion-item">
-                          <h2 className="accordion-header" id={`datos-principales-${itemId}`}>
-                            <button
-                              className="accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              data-bs-target={`#collapse-principales-${itemId}`}
-                              aria-expanded="false"
-                              aria-controls={`collapse-principales-${itemId}`}
-                            >
-                              Datos Principales
-                            </button>
-                          </h2>
-                          <div
-                            id={`collapse-principales-${itemId}`}
-                            className="accordion-collapse collapse"
-                            aria-labelledby={`datos-principales-${itemId}`}
-                            data-bs-parent={`#sub-accordion-${itemId}`}
-                          >
-                            <div className="accordion-body">
+                      <div>
                               <div className="row g-3">
                                 <Field label="Primer Nombre" className="col-md-4">
                                   <input
@@ -902,7 +929,7 @@ const sortedNormalized = useMemo(
 
                                 <Field label="Género" className="col-md-3">
                                   <select
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="genero"
                                     value={c.genero ?? ""}
                                     onChange={onChange}
@@ -921,35 +948,19 @@ const sortedNormalized = useMemo(
                                     value={c.idioma ?? ""}
                                     onChange={onChange}
                                     disabled={readOnly}
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   />
                                 </Field>
                               </div>
-                            </div>
-                          </div>
-                        </div>
+                      </div>
+                    </AccordionItem>
 
-                        {/* Estatus migratorio */}
-                        <div className="accordion-item">
-                          <h2 className="accordion-header" id={`estatus-${itemId}`}>
-                            <button
-                              className="accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              data-bs-target={`#collapse-estatus-${itemId}`}
-                              aria-expanded="false"
-                              aria-controls={`collapse-estatus-${itemId}`}
-                            >
-                              Estatus migratorio
-                            </button>
-                          </h2>
-                          <div
-                            id={`collapse-estatus-${itemId}`}
-                            className="accordion-collapse collapse"
-                            aria-labelledby={`estatus-${itemId}`}
-                            data-bs-parent={`#sub-accordion-${itemId}`}
-                          >
-                            <div className="accordion-body">
+                    {/* Estatus migratorio */}
+                    <AccordionItem
+                      id={`estatus-${itemId}`}
+                      title="Estatus migratorio"
+                    >
+                      <div>
                               <div className="row g-3">
                                 <Field label="Social" className="col-md-6">
                                   <input
@@ -965,7 +976,7 @@ const sortedNormalized = useMemo(
 
                                 <Field label="Status" className="col-md-6">
                                   <select
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="status"
                                     value={c.status ?? ""}
                                     onChange={onChange}
@@ -1041,31 +1052,15 @@ const sortedNormalized = useMemo(
                                   />
                                 </Field>
                               </div>
-                            </div>
-                          </div>
-                        </div>
+                      </div>
+                    </AccordionItem>
 
-                        {/* Contacto */}
-                        <div className="accordion-item">
-                          <h2 className="accordion-header" id={`datos-contacto-${itemId}`}>
-                            <button
-                              className="accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              data-bs-target={`#collapse-contacto-${itemId}`}
-                              aria-expanded="false"
-                              aria-controls={`collapse-contacto-${itemId}`}
-                            >
-                              Datos de Contacto
-                            </button>
-                          </h2>
-                          <div
-                            id={`collapse-contacto-${itemId}`}
-                            className="accordion-collapse collapse"
-                            aria-labelledby={`datos-contacto-${itemId}`}
-                            data-bs-parent={`#sub-accordion-${itemId}`}
-                          >
-                            <div className="accordion-body">
+                    {/* Contacto */}
+                    <AccordionItem
+                      id={`datos-contacto-${itemId}`}
+                      title="Datos de Contacto"
+                    >
+                      <div>
                               <div className="row g-3">
                                 <Field label="Teléfonos" className="col-12">
                                   <TelefonosPro
@@ -1098,61 +1093,29 @@ const sortedNormalized = useMemo(
                                   />
                                 </Field>
                               </div>
-                            </div>
-                          </div>
-                        </div>
+                      </div>
+                    </AccordionItem>
 
-                        {/* Dirección */}
-                        <div className="accordion-item">
-                          <h2 className="accordion-header" id={`direccion-${itemId}`}>
-                            <button
-                              className="accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              data-bs-target={`#collapse-direccion-${itemId}`}
-                              aria-expanded="false"
-                              aria-controls={`collapse-direccion-${itemId}`}
-                            >
-                              Dirección
-                            </button>
-                          </h2>
-                          <div
-                            id={`collapse-direccion-${itemId}`}
-                            className="accordion-collapse collapse"
-                            aria-labelledby={`direccion-${itemId}`}
-                            data-bs-parent={`#sub-accordion-${itemId}`}
-                          >
-                            <div className="accordion-body">
+                    {/* Dirección */}
+                    <AccordionItem
+                      id={`direccion-${itemId}`}
+                      title="Dirección"
+                    >
+                      <div>
                               <AddressSection c={c} onChange={onChange} readOnly={readOnly} />
-                            </div>
-                          </div>
-                        </div>
+                      </div>
+                    </AccordionItem>
 
-                        {/* Empleo e Ingreso */}
-                        <div className="accordion-item">
-                          <h2 className="accordion-header" id={`empleo-ingreso-${itemId}`}>
-                            <button
-                              className="accordion-button collapsed"
-                              type="button"
-                              data-bs-toggle="collapse"
-                              data-bs-target={`#collapse-empleo-ingreso-${itemId}`}
-                              aria-expanded="false"
-                              aria-controls={`collapse-empleo-ingreso-${itemId}`}
-                            >
-                              Datos de Empleo e Ingreso
-                            </button>
-                          </h2>
-                          <div
-                            id={`collapse-empleo-ingreso-${itemId}`}
-                            className="accordion-collapse collapse"
-                            aria-labelledby={`empleo-ingreso-${itemId}`}
-                            data-bs-parent={`#sub-accordion-${itemId}`}
-                          >
-                            <div className="accordion-body">
+                    {/* Empleo e Ingreso */}
+                    <AccordionItem
+                      id={`empleo-ingreso-${itemId}`}
+                      title="Datos de Empleo e Ingreso"
+                    >
+                      <div>
                               <div className="row g-3">
                                 <Field label="Tipo de Ingreso" className="col-md-6">
                                   <select
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="tipo_ingreso"
                                     value={c.tipo_ingreso ?? ""}
                                     onChange={onChange}
@@ -1202,7 +1165,7 @@ const sortedNormalized = useMemo(
 
                                 <Field label="Período de Ingreso" className="col-md-4">
                                   <select
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="periodo_ingreso"
                                     value={c.periodo_ingreso ?? ""}
                                     onChange={onChange}
@@ -1261,7 +1224,7 @@ const sortedNormalized = useMemo(
 
                                 <Field label="Período de Ingreso Ocasional" className="col-md-6">
                                   <select
-                                    className="form-select form-select-sm"
+                                    className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="periodo_ingreso_ocasional"
                                     value={c.periodo_ingreso_ocasional ?? ""}
                                     onChange={onChange}
@@ -1290,44 +1253,31 @@ const sortedNormalized = useMemo(
                                   />
                                 </Field>
                               </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Medios de Pago */}
-                        <MediosPagoAccordionItem
-                          itemId={itemId}
-                          clienteId={m.cliente_id || m?.cliente?.id || m.id}
-                          parentId={`sub-accordion-${itemId}`}
-                        />
                       </div>
-                    </div>
+                    </AccordionItem>
+
+                    {/* Medios de Pago */}
+                    <AccordionItem
+                      id={`medios-pago-${itemId}`}
+                      title="Medios de Pago"
+                    >
+                      {(isOpen) => (
+                        <MediosPagoSection 
+                          clienteId={m.cliente_id || m?.cliente?.id || m.id} 
+                          isOpen={isOpen}
+                        />
+                      )}
+                    </AccordionItem>
                   </div>
-                </div>
+                </AccordionItem>
 
                 {/* Datos Cobertura */}
-                <div className="accordion-item">
-                  <h2 className="accordion-header" id={`cobertura-${itemId}`}>
-                    <button
-                      className="accordion-button collapsed py-3 px-4"
-                      type="button"
-                      data-bs-toggle="collapse"
-                      data-bs-target={`#collapse-cobertura-${itemId}`}
-                      aria-expanded="false"
-                      aria-controls={`collapse-cobertura-${itemId}`}
-                    >
-                      <i className="fas fa-shield-alt me-2 text-muted" />
-                      <span className="fw-semibold">Datos Cobertura</span>
-                    </button>
-                  </h2>
-
-                  <div
-                    id={`collapse-cobertura-${itemId}`}
-                    className="accordion-collapse collapse"
-                    aria-labelledby={`cobertura-${itemId}`}
-                    data-bs-parent={`#accordion-${itemId}`}
-                  >
-                    <div className="accordion-body px-4 py-4">
+                <AccordionItem
+                  id={`cobertura-${itemId}`}
+                  title="Datos Cobertura"
+                  icon={<i className="fas fa-shield-alt" />}
+                >
+                  <div>
                       <div className="row g-3">
                         <Field label="Código Póliza" className="col-md-3">
                           <input
@@ -1401,7 +1351,7 @@ const sortedNormalized = useMemo(
 
                         <Field label="Metal" className="col-md-3">
                           <select
-                            className="form-select form-select-sm"
+                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                             name="metal"
                             value={m.metal || ""}
                             onChange={onChange}
@@ -1417,7 +1367,7 @@ const sortedNormalized = useMemo(
 
                         <Field label="Red" className="col-md-3">
                           <select
-                            className="form-select form-select-sm"
+                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                             name="red"
                             value={m.red || ""}
                             onChange={onChange}
@@ -1435,7 +1385,7 @@ const sortedNormalized = useMemo(
                       <div className="row g-3">
                         <Field label="Cobertura" className="col-md-3">
                           <select
-                            className="form-select form-select-sm"
+                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                             name="estado_cobertura"
                             value={m.estado_cobertura || ""}
                             onChange={onChange}
@@ -1464,7 +1414,7 @@ const sortedNormalized = useMemo(
 
                         <Field label="Tipo de Pago" className="col-md-3">
                           <select
-                            className="form-select form-select-sm"
+                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                             name="tipo_pago"
                             value={m.tipo_pago || ""}
                             onChange={onChange}
@@ -1540,7 +1490,7 @@ const sortedNormalized = useMemo(
                       <div className="row g-3">
                         <Field label="Grupo" className="col-md-3">
                           <select
-                            className="form-select form-select-sm"
+                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                             name="grupo"
                             value={m.grupo || ""}
                             onChange={onChange}
@@ -1554,9 +1504,8 @@ const sortedNormalized = useMemo(
                           </select>
                         </Field>
                       </div>
-                    </div>
                   </div>
-                </div>
+                </AccordionItem>
               </div>
             </div>
           </div>
