@@ -11,6 +11,11 @@ import {
 } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
+// Constantes para subir archivos
+const RAW = import.meta.env.VITE_API_BASE_URL || "";
+const API_BASE_URL = RAW.replace(/\/+$/, "") || "/api";
+const getAuthToken = () => localStorage.getItem("auth_token");
+
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -29,15 +34,273 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [scheduledDate, setScheduledDate] = useState(tarea?.scheduled_date || "");
   const [dueDate, setDueDate] = useState(tarea?.due_date || "");
 
+  // ✅ Nuevos estados para manejo de archivos
+  const [archivos, setArchivos] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  
+  // ✅ Estados para adjuntos de comentarios
+  const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
+  const [loadingAdjuntos, setLoadingAdjuntos] = useState({}); // { comentarioId: boolean }
+  const [archivoPreview, setArchivoPreview] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
+
   // Comentarios de esta tarea desde el historial
   const comentariosDeEstaTarea = historial
     .filter(h => h.tipo === 'tarea' && h.id === tarea?.id)
     .flatMap(h => h.comentarios || []);
 
+  // ✅ Funciones helper para archivos
+  const validarArchivo = (file) => {
+    const tiposPermitidos = [
+      "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+      "application/pdf",
+      "application/msword",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ];
+    const extensionesPermitidas = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf", ".doc", ".docx"];
+    const maxSize = 10 * 1024 * 1024; // 10MB
+
+    const tieneTipoValido = tiposPermitidos.includes(file.type);
+    const tieneExtensionValida = extensionesPermitidas.some(ext => 
+      file.name.toLowerCase().endsWith(ext)
+    );
+
+    if (!tieneTipoValido && !tieneExtensionValida) {
+      alert("⚠️ Solo se permiten archivos de imagen (JPG, PNG, GIF, WEBP), PDF y Word (DOC, DOCX)");
+      return false;
+    }
+
+    if (file.size > maxSize) {
+      alert("⚠️ El archivo es demasiado grande. El tamaño máximo es 10MB");
+      return false;
+    }
+
+    return true;
+  };
+
+  const esImagen = (file) => {
+    return file.type?.startsWith("image/") || 
+           /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
+  };
+
+  const agregarArchivos = (files) => {
+    const archivosArray = Array.from(files);
+    const archivosValidos = archivosArray.filter(validarArchivo);
+    
+    if (archivosValidos.length !== archivosArray.length) {
+      return;
+    }
+
+    const nuevosArchivos = archivosValidos.map((file) => {
+      const esImg = esImagen(file);
+      return {
+        file,
+        id: Date.now() + Math.random(),
+        preview: esImg ? URL.createObjectURL(file) : null,
+        nombre: file.name,
+        tipo: esImg ? "imagen" : file.type?.includes("pdf") ? "pdf" : "word",
+      };
+    });
+
+    setArchivos((prev) => [...prev, ...nuevosArchivos]);
+  };
+
+  const eliminarArchivo = (id) => {
+    setArchivos((prev) => {
+      const archivo = prev.find((arch) => arch.id === id);
+      if (archivo && archivo.preview) {
+        URL.revokeObjectURL(archivo.preview);
+      }
+      return prev.filter((arch) => arch.id !== id);
+    });
+  };
+
+  const handleFileInput = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      agregarArchivos(e.target.files);
+    }
+    e.target.value = ""; // Reset input
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      agregarArchivos(e.dataTransfer.files);
+    }
+  };
+
+  // ✅ Función para subir archivos a bitácora
+  const subirArchivosBitacora = async (bitacoraId) => {
+    if (archivos.length === 0) {
+      console.warn("⚠️ No hay archivos para subir");
+      return;
+    }
+
+    if (!bitacoraId) {
+      console.error("❌ No se proporcionó bitacoraId para subir archivos");
+      throw new Error("No se pudo obtener el ID de la bitácora para subir los archivos");
+    }
+
+    const token = getAuthToken();
+    if (!token) {
+      alert("Token no encontrado. Por favor inicia sesión.");
+      throw new Error("Token no encontrado");
+    }
+
+    console.log(`📤 Subiendo ${archivos.length} archivo(s) a bitácora ID: ${bitacoraId}`);
+    
+    // Construir URL correctamente
+    const endpoint = `/adjuntos/bitacora/${bitacoraId}`;
+    const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    console.log(`📡 URL completa: ${url}`);
+    console.log(`📡 API_BASE_URL: ${API_BASE_URL}`);
+
+    setSubiendoArchivos(true);
+    try {
+      const uploadPromises = archivos.map(async (archivo, index) => {
+        console.log(`📎 Subiendo archivo ${index + 1}/${archivos.length}: ${archivo.nombre}`);
+        
+        const formData = new FormData();
+        // Usar "archivo" como nombre del campo (según el patrón del proyecto)
+        formData.append("archivo", archivo.file);
+
+        console.log(`📦 FormData creado, tamaño: ${archivo.file.size} bytes, tipo: ${archivo.file.type}`);
+
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            // NO incluir Content-Type, el navegador lo establece automáticamente con el boundary
+          },
+          body: formData,
+        });
+
+        console.log(`📥 Respuesta recibida para ${archivo.nombre}:`, {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage = errorData.message || errorData.error || `Error ${response.status}: ${response.statusText}`;
+          console.error(`❌ Error al subir ${archivo.nombre}:`, errorMessage, errorData);
+          throw new Error(`Error al subir ${archivo.nombre}: ${errorMessage}`);
+        }
+
+        const result = await response.json();
+        console.log(`✅ Archivo ${archivo.nombre} subido exitosamente:`, result);
+        return result;
+      });
+
+      const results = await Promise.all(uploadPromises);
+      console.log("✅ Todos los archivos subidos exitosamente a bitácora:", results);
+      return results;
+    } catch (err) {
+      console.error("❌ Error al subir archivos a bitácora:", err);
+      throw err;
+    } finally {
+      setSubiendoArchivos(false);
+    }
+  };
+
+  // ✅ Función para cargar adjuntos de un comentario
+  // Ahora usa el comentarioId directamente si el comentario tiene adjuntos en su estructura
+  const cargarAdjuntosComentario = async (comentarioId, comentarioData = null) => {
+    if (!comentarioId || adjuntosComentarios[comentarioId]) return;
+
+    // Evitar cargar si ya se está cargando
+    if (loadingAdjuntos[comentarioId]) return;
+
+    setLoadingAdjuntos((prev) => ({ ...prev, [comentarioId]: true }));
+
+    try {
+      let data = [];
+      
+      // Primero verificar si el comentario ya tiene adjuntos en su estructura
+      if (comentarioData?.adjuntos && Array.isArray(comentarioData.adjuntos)) {
+        data = comentarioData.adjuntos;
+        console.log(`✅ Adjuntos encontrados en estructura del comentario ${comentarioId}:`, data.length);
+      } else {
+        // Si no, intentar cargar desde endpoint específico del comentario
+        try {
+          const response = await apiRequest(`tareas_operativas/comentarios/${comentarioId}/adjuntos`, "GET");
+          data = Array.isArray(response) ? response : response?.data || response?.adjuntos || [];
+          console.log(`✅ Adjuntos cargados desde endpoint para comentario ${comentarioId}:`, data.length);
+        } catch (endpointErr) {
+          // Si no existe el endpoint, dejar vacío (no mostrar adjuntos de otros comentarios)
+          console.log(`ℹ️ No se encontraron adjuntos específicos para el comentario ${comentarioId}`);
+          data = [];
+        }
+      }
+
+      setAdjuntosComentarios((prev) => ({
+        ...prev,
+        [comentarioId]: data,
+      }));
+    } catch (err) {
+      // No mostrar error si es "Too Many Attempts" - solo loguear
+      if (err.message?.includes("Too Many Attempts")) {
+        console.warn(`⚠️ Rate limit alcanzado al cargar adjuntos del comentario ${comentarioId}`);
+      } else {
+        console.error(`Error al cargar adjuntos del comentario ${comentarioId}:`, err);
+      }
+      setAdjuntosComentarios((prev) => ({
+        ...prev,
+        [comentarioId]: [],
+      }));
+    } finally {
+      setLoadingAdjuntos((prev) => ({ ...prev, [comentarioId]: false }));
+    }
+  };
+
+  // ✅ Funciones helper para adjuntos
+  const esImagenAdjunto = (adj) => {
+    return adj.tipo_mime?.startsWith("image/") || 
+           /\.(jpg|jpeg|png|gif|webp)$/i.test(adj.nombre_original || "");
+  };
+
+  const esPDF = (adj) => {
+    return adj.tipo_mime === "application/pdf" || 
+           /\.pdf$/i.test(adj.nombre_original || "");
+  };
+
+  const esWord = (adj) => {
+    return adj.tipo_mime?.includes("word") || 
+           /\.(doc|docx)$/i.test(adj.nombre_original || "");
+  };
+
+  const abrirPreview = (adjunto) => {
+    const esImg = esImagenAdjunto(adjunto);
+    const esPdf = esPDF(adjunto);
+    const esDoc = esWord(adjunto);
+    
+    setArchivoPreview({
+      adjunto,
+      tipo: esImg ? "imagen" : esPdf ? "pdf" : esDoc ? "word" : "otro"
+    });
+    setErrorCargaArchivo(false);
+    setShowPreviewModal(true);
+  };
+
   useEffect(() => {
     if (show && tarea?.id) {
       // Log para depuración
       console.log('🔍 Tarea completa recibida:', tarea);
+      console.log('📋 Estructura completa de la tarea (JSON):', JSON.stringify(tarea, null, 2));
       console.log('📋 Concepto:', tarea?.log?.titulo || tarea?.concepto);
       console.log('📝 Nota:', tarea?.log?.nota || tarea?.nota);
       console.log('👤 Asignado por (responsable):', tarea?.log?.responsable);
@@ -45,6 +308,13 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       console.log('👤 Asignado a (asignado_a):', tarea?.asignado_a);
       console.log('📅 Fecha programada:', tarea?.scheduled_date);
       console.log('⏰ Fecha vencimiento:', tarea?.due_date);
+      console.log('🔑 Posibles logIds:', {
+        'tarea?.id': tarea?.id,
+        'tarea?.log?.id': tarea?.log?.id,
+        'tarea?.log_id': tarea?.log_id,
+        'tarea?.bitacora_id': tarea?.bitacora_id,
+        'tarea?.log?.bitacora_id': tarea?.log?.bitacora_id
+      });
 
       // Cargar historial del cliente
       if (tarea.log?.cliente?.id) {
@@ -70,9 +340,29 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             
             console.log('📜 Historial procesado:', historialUnico.length);
             setHistorial(historialUnico);
+
+            // ✅ Cargar adjuntos de cada comentario usando los datos del comentario directamente
+            historialUnico.forEach((h, index) => {
+              setTimeout(() => {
+                if (h.comentarios && h.comentarios.length > 0) {
+                  h.comentarios.forEach((c) => {
+                    if (c.id) {
+                      // Pasar el objeto del comentario completo para verificar si tiene adjuntos
+                      cargarAdjuntosComentario(c.id, c);
+                    }
+                  });
+                }
+              }, index * 200); // Espaciar las peticiones 200ms entre cada una para evitar rate limiting
+            });
           })
           .catch(error => {
-            console.error("❌ Error al cargar historial:", error);
+            // Manejar específicamente el error "Too Many Attempts"
+            if (error.message?.includes("Too Many Attempts")) {
+              console.warn("⚠️ Rate limit alcanzado al cargar historial. Intente más tarde.");
+              // No mostrar error al usuario, solo mantener el historial vacío
+            } else {
+              console.error("❌ Error al cargar historial:", error);
+            }
             setHistorial([]);
           })
           .finally(() => setLoadingHistorial(false));
@@ -89,17 +379,116 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     setComentariosEnEdicion({});
     setComentariosHistorialEnEdicion({});
     setResponseNote("");
+
+    // ✅ Limpiar archivos al cerrar o cambiar tarea
+    if (!show) {
+      archivos.forEach((arch) => {
+        if (arch.preview) {
+          URL.revokeObjectURL(arch.preview);
+        }
+      });
+      setArchivos([]);
+    }
   }, [show, tarea]);
 
   const handleAgregarComentario = async () => {
-    if (!responseNote.trim()) return;
+    if (!responseNote.trim() && archivos.length === 0) {
+      alert("Por favor, escribe un comentario o adjunta al menos un archivo.");
+      return;
+    }
+    
     setLoading(true);
     try {
-      await apiRequest(
+      console.log("📤 Creando comentario...", {
+        tareaId: tarea.id,
+        comment: responseNote || " ",
+        archivosCount: archivos.length
+      });
+
+      const data = await apiRequest(
         `tareas_operativas/${tarea.id}/comentarios`,
         "POST",
-        { comment: responseNote }
+        { comment: responseNote || " " }
       );
+
+      console.log("✅ Respuesta del comentario:", data);
+
+      // ✅ Si el comentario tiene adjuntos en la respuesta, guardarlos directamente
+      if (data?.comment?.id && data?.comment?.adjuntos) {
+        setAdjuntosComentarios((prev) => ({
+          ...prev,
+          [data.comment.id]: Array.isArray(data.comment.adjuntos) ? data.comment.adjuntos : [],
+        }));
+        console.log(`✅ Adjuntos guardados para comentario ${data.comment.id}:`, data.comment.adjuntos);
+      }
+
+      // ✅ Obtener el log_id para subir archivos
+      // El log_id puede venir en diferentes lugares de la respuesta
+      let logId = data?.log_id || 
+                  data?.log?.id || 
+                  data?.bitacora_id ||
+                  data?.data?.log_id ||
+                  data?.data?.log?.id;
+
+      // Si no viene en la respuesta, intentar obtenerlo de la tarea
+      if (!logId) {
+        // Intentar desde diferentes ubicaciones en el objeto tarea
+        logId = tarea?.log?.id || 
+                tarea?.log_id ||
+                tarea?.id || // A veces el id de la tarea es el log_id
+                tarea?.bitacora_id;
+        
+        console.log("🔍 Intentando obtener logId de la tarea:", {
+          "tarea?.log?.id": tarea?.log?.id,
+          "tarea?.log_id": tarea?.log_id,
+          "tarea?.id": tarea?.id,
+          "tarea?.bitacora_id": tarea?.bitacora_id
+        });
+      }
+
+      // Si aún no tenemos logId, buscar en el historial YA CARGADO (evitar petición extra)
+      if (!logId && historial.length > 0) {
+        console.log("🔍 Buscando logId en el historial ya cargado...");
+        // Buscar la entrada del historial que corresponde a esta tarea
+        const entradaTarea = historial.find(h => 
+          h.tipo === 'tarea' && (h.id === tarea.id || h.tarea_id === tarea.id)
+        );
+        
+        if (entradaTarea) {
+          logId = entradaTarea.id || entradaTarea.log_id;
+          console.log("✅ logId obtenido del historial cargado:", logId);
+        }
+      }
+
+      console.log("🔍 logId final obtenido:", logId, {
+        "data?.log_id": data?.log_id,
+        "data?.log?.id": data?.log?.id,
+        "data?.bitacora_id": data?.bitacora_id,
+        "tarea?.log?.id": tarea?.log?.id,
+        "tarea?.id": tarea?.id
+      });
+
+      // ✅ Subir archivos si hay alguno
+      if (archivos.length > 0) {
+        if (!logId) {
+          console.error("❌ No se pudo obtener el log_id para subir archivos");
+          console.error("📋 Datos completos de la respuesta:", JSON.stringify(data, null, 2));
+          console.error("📋 Tarea completa:", JSON.stringify(tarea, null, 2));
+          alert("⚠️ Se creó el comentario pero no se pudo obtener el ID necesario para subir los archivos.\n\nPor favor, verifique la consola para más detalles o contacte al administrador.");
+        } else {
+          try {
+            // Esperar un momento para que el backend procese el comentario
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            console.log(`📤 Intentando subir ${archivos.length} archivo(s) con logId: ${logId}`);
+            await subirArchivosBitacora(logId);
+            console.log("✅ Archivos subidos exitosamente");
+          } catch (err) {
+            console.error("❌ Error al subir archivos:", err);
+            alert(`⚠️ Se creó el comentario pero hubo un error al subir algunos archivos:\n${err.message || err}`);
+          }
+        }
+      }
 
       const tareaActualizada = {
         ...tarea,
@@ -108,18 +497,49 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
 
       if (onUpdated) onUpdated(tareaActualizada);
 
-      // Recargar historial
-      await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
-        .then((data) => {
-          const historialData = Array.isArray(data.data) ? data.data : [];
+      // ✅ Recargar historial solo si es necesario (después de un delay para evitar rate limiting)
+      // Esperar un momento antes de recargar para que el backend procese todo
+      setTimeout(async () => {
+        try {
+          const historialResponse = await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET");
+          const historialData = Array.isArray(historialResponse.data) ? historialResponse.data : [];
           setHistorial(historialData);
-        });
+          
+          // ✅ Recargar adjuntos de comentarios
+          historialData.forEach((h) => {
+            if (h.comentarios && h.comentarios.length > 0) {
+              h.comentarios.forEach((c) => {
+                if (c.id) {
+                  // Pasar el objeto del comentario completo para verificar si tiene adjuntos
+                  cargarAdjuntosComentario(c.id, c);
+                }
+              });
+            }
+          });
+        } catch (err) {
+          console.error("❌ Error al recargar historial:", err);
+          // No mostrar error al usuario, solo loguear
+        }
+      }, 1000); // Esperar 1 segundo antes de recargar
     
+      // ✅ Limpiar formulario
+      archivos.forEach((arch) => {
+        if (arch.preview) {
+          URL.revokeObjectURL(arch.preview);
+        }
+      });
+      setArchivos([]);
       setResponseNote("");
       onHide(true);
     } catch (error) {
       console.error("❌ Error al agregar el comentario:", error);
-      alert("Error al agregar el comentario");
+      
+      // Manejar específicamente el error "Too Many Attempts"
+      if (error.message?.includes("Too Many Attempts")) {
+        alert("⚠️ Demasiados intentos. Por favor, espere un momento antes de intentar nuevamente.");
+      } else {
+        alert(`Error al agregar el comentario: ${error.message || "Error desconocido"}`);
+      }
     } finally {
       setLoading(false);
     }
@@ -129,21 +549,87 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     setLoading(true);
     try {
       if (
-        responseNote.trim() !== "" &&
+        (responseNote.trim() !== "" || archivos.length > 0) &&
         (comentariosDeEstaTarea.length === 0 ||
           comentariosDeEstaTarea[comentariosDeEstaTarea.length - 1]?.comment !== responseNote)
       ) {
-        await apiRequest(
+        console.log("📤 Creando comentario antes de completar...", {
+          tareaId: tarea.id,
+          comment: responseNote || " ",
+          archivosCount: archivos.length
+        });
+
+        const data = await apiRequest(
           `tareas_operativas/${tarea.id}/comentarios`,
           "POST",
-          { comment: responseNote }
+          { comment: responseNote || " " }
         );
+
+        console.log("✅ Respuesta del comentario:", data);
+
+        // ✅ Obtener el log_id para subir archivos
+        let logId = data?.log_id || 
+                    data?.log?.id || 
+                    data?.bitacora_id ||
+                    data?.data?.log_id ||
+                    data?.data?.log?.id;
+
+        // Si no viene en la respuesta, intentar obtenerlo de la tarea
+        if (!logId) {
+          logId = tarea?.log?.id || 
+                  tarea?.log_id ||
+                  tarea?.id ||
+                  tarea?.bitacora_id;
+        }
+
+        // Si aún no tenemos logId, buscar en el historial YA CARGADO (evitar petición extra)
+        if (!logId && historial.length > 0) {
+          console.log("🔍 Buscando logId en el historial ya cargado...");
+          const entradaTarea = historial.find(h => 
+            h.tipo === 'tarea' && (h.id === tarea.id || h.tarea_id === tarea.id)
+          );
+          if (entradaTarea) {
+            logId = entradaTarea.id || entradaTarea.log_id;
+            console.log("✅ logId obtenido del historial cargado:", logId);
+          }
+        }
+
+        console.log("🔍 logId final obtenido:", logId);
+
+        if (archivos.length > 0) {
+          if (!logId) {
+            console.error("❌ No se pudo obtener el log_id para subir archivos");
+            console.error("📋 Datos completos de la respuesta:", JSON.stringify(data, null, 2));
+            console.error("📋 Tarea completa:", JSON.stringify(tarea, null, 2));
+            alert("⚠️ Se creó el comentario pero no se pudo obtener el ID necesario para subir los archivos.\n\nPor favor, verifique la consola para más detalles.");
+          } else {
+            try {
+              // Esperar un momento para que el backend procese el comentario
+              await new Promise(resolve => setTimeout(resolve, 500));
+              
+              console.log(`📤 Intentando subir ${archivos.length} archivo(s) con logId: ${logId}`);
+              await subirArchivosBitacora(logId);
+              console.log("✅ Archivos subidos exitosamente");
+            } catch (err) {
+              console.error("❌ Error al subir archivos:", err);
+              alert(`⚠️ Se creó el comentario pero hubo un error al subir algunos archivos:\n${err.message || err}`);
+            }
+          }
+        }
       }
 
       await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT");
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
+      
+      // ✅ Limpiar archivos
+      archivos.forEach((arch) => {
+        if (arch.preview) URL.revokeObjectURL(arch.preview);
+      });
+      setArchivos([]);
+      setResponseNote("");
+      
       onHide(true);
     } catch (error) {
       console.error("❌ Error al completar:", error);
@@ -327,7 +813,87 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const notaTarea = tarea?.log?.nota || tarea?.log?.note || tarea?.nota || tarea?.note || "Sin nota";
   const asignadoPor = tarea?.log?.responsable || tarea?.responsable || tarea?.log?.user?.name || tarea?.creado_por || tarea?.asignado_a || "N/A";
 
+  // ✅ Componente para mostrar adjuntos de un comentario
+  const MostrarAdjuntosComentario = ({ comentarioId }) => {
+    const adjuntos = adjuntosComentarios[comentarioId] || [];
+    const cargando = loadingAdjuntos[comentarioId];
+
+    if (cargando) {
+      return (
+        <div className="d-flex justify-content-center p-2">
+          <Spinner size="sm" />
+        </div>
+      );
+    }
+
+    if (adjuntos.length === 0) return null;
+
+    return (
+      <div className="d-flex flex-wrap gap-2 mt-2">
+        {adjuntos.map((adjunto) => {
+          const esImg = esImagenAdjunto(adjunto);
+          const esPdf = esPDF(adjunto);
+          const esDoc = esWord(adjunto);
+
+          return (
+            <div
+              key={adjunto.id}
+              className="position-relative border rounded"
+              style={{
+                width: "100px",
+                height: "100px",
+                cursor: "pointer",
+                overflow: "hidden",
+                backgroundColor: "#f8f9fa"
+              }}
+              onClick={() => abrirPreview(adjunto)}
+              title="Haz clic para previsualizar"
+            >
+              {esImg ? (
+                <img
+                  src={adjunto.url}
+                  alt={adjunto.nombre_original || "Imagen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover"
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    e.target.parentElement.innerHTML = '<i class="fas fa-image text-muted" style="font-size: 2rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></i>';
+                  }}
+                />
+              ) : esPdf ? (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file-pdf text-danger" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "PDF"}
+                  </small>
+                </div>
+              ) : esDoc ? (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file-word text-primary" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "Word"}
+                  </small>
+                </div>
+              ) : (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file text-secondary" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "Archivo"}
+                  </small>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
+    <>
     <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
       <Modal.Header closeButton>
         <Modal.Title>
@@ -336,8 +902,8 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       </Modal.Header>
       <Modal.Body>
         <Row>
-          {/* Columna izquierda: Tarea */}
-          <Col md={6} style={{ borderRight: "1px solid #e9ecef" }}>
+          {/* Columna completa: Tarea */}
+          <Col md={12}>
             {/* Banner destacado de la tarea actual */}
             <div
               className="mb-3 p-3 rounded shadow"
@@ -480,6 +1046,15 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                             <small className="text-muted">
                               {new Date(c.fecha).toLocaleString()}
                             </small>
+                            {/* ✅ Mostrar adjuntos del comentario */}
+                            {/* Cargar adjuntos si no se han cargado aún */}
+                            {(() => {
+                              if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                                // Cargar adjuntos usando los datos del comentario
+                                setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+                              }
+                              return <MostrarAdjuntosComentario comentarioId={c.id} />;
+                            })()}
                             {!esCerrada && (
                               <div className="mt-1">
                                 <Button
@@ -522,166 +1097,116 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                   placeholder="Escribe tu respuesta aquí..."
                   style={{ border: "2px solid #667eea" }}
                 />
-              </div>
-            )}
-          </Col>
 
-          {/* Columna derecha: Historial */}
-          <Col md={6} style={{ overflowY: "auto", maxHeight: "calc(100vh - 250px)" }}>
-            <h6 className="mb-3">📜 Historial del Cliente</h6>
-            {loadingHistorial ? (
-              <div className="text-center">
-                <Spinner animation="border" />
-              </div>
-            ) : historial.length === 0 ? (
-              <p className="text-muted">No hay historial disponible.</p>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                {historial.map((h, idx) => (
+                {/* ✅ Área de carga de archivos */}
+                <Form.Group className="mt-3">
+                  <Form.Label>
+                    <i className="fas fa-paperclip me-2 text-info"></i>
+                    Archivos adjuntos (opcional)
+                  </Form.Label>
                   <div
-                    key={idx}
-                    className="p-3 rounded"
+                    className={`border rounded p-3 text-center ${
+                      isDragging ? "border-primary bg-light" : "border-secondary"
+                    }`}
                     style={{
-                      background: "#fff",
-                      border: "1px solid #dee2e6",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
+                      borderStyle: "dashed",
+                      cursor: "pointer",
+                      transition: "all 0.3s ease",
+                      backgroundColor: isDragging ? "#e7f3ff" : "transparent",
                     }}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => document.getElementById("file-input-comentario").click()}
                   >
-                    <div className="d-flex justify-content-between align-items-start">
-                      <strong>
-                        {h.tipo === "bitacora" && "📝 Acción"}
-                        {h.tipo === "tarea" && "📌 Tarea"}:{" "}
-                        <span style={{ 
-                          color: h.tipo === "bitacora" ? "#0d6efd" : "#dc3545"
-                        }}>
-                          {h.concepto}
-                        </span>
-                      </strong>
-                      {h.estado && (
-                        <Badge
-                          bg={
-                            h.estado === "completed"
-                              ? "success"
-                              : h.estado === "pending"
-                                ? "warning"
-                                : "info"
-                          }
-                        >
-                          {h.estado === "completed" ? "Completada" : h.estado === "pending" ? "Pendiente" : "En progreso"}
-                        </Badge>
+                    <input
+                      id="file-input-comentario"
+                      type="file"
+                      multiple
+                      accept="image/*,.pdf,.doc,.docx"
+                      onChange={handleFileInput}
+                      style={{ display: "none" }}
+                    />
+                    <div>
+                      <i className="fas fa-cloud-upload-alt fa-2x text-muted mb-2"></i>
+                      <p className="mb-1">
+                        {isDragging ? (
+                          <strong className="text-primary">Suelta los archivos aquí</strong>
+                        ) : (
+                          <>
+                            <strong>Arrastra archivos aquí</strong> o haz clic para seleccionar
+                          </>
+                        )}
+                      </p>
+                      <small className="text-muted">
+                        Formatos: JPG, PNG, GIF, WEBP, PDF, DOC, DOCX (máx. 10MB cada uno)
+                      </small>
+                    </div>
+                  </div>
+
+                  {/* ✅ Vista previa de archivos */}
+                  {archivos.length > 0 && (
+                    <div className="mt-3">
+                      <div className="d-flex flex-wrap gap-2">
+                        {archivos.map((archivo) => (
+                          <div
+                            key={archivo.id}
+                            className="position-relative border rounded p-2"
+                            style={{ 
+                              width: "120px", 
+                              height: "120px",
+                              backgroundColor: "#f8f9fa"
+                            }}
+                          >
+                            {archivo.tipo === "imagen" && archivo.preview ? (
+                              <>
+                                <img
+                                  src={archivo.preview}
+                                  alt={archivo.nombre}
+                                  className="rounded"
+                                  style={{
+                                    width: "100%",
+                                    height: "80px",
+                                    objectFit: "cover",
+                                  }}
+                                />
+                                <small className="d-block text-truncate mt-1" style={{ fontSize: "0.7rem" }}>
+                                  {archivo.nombre}
+                                </small>
+                              </>
+                            ) : (
+                              <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                                {archivo.tipo === "pdf" ? (
+                                  <i className="fas fa-file-pdf fa-3x text-danger mb-2"></i>
+                                ) : (
+                                  <i className="fas fa-file-word fa-3x text-primary mb-2"></i>
+                                )}
+                                <small className="text-center text-truncate" style={{ fontSize: "0.7rem", width: "100%" }}>
+                                  {archivo.nombre}
+                                </small>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="position-absolute top-0 end-0 btn btn-sm btn-danger p-1"
+                              style={{ width: "24px", height: "24px", fontSize: "0.7rem" }}
+                              onClick={() => eliminarArchivo(archivo.id)}
+                              title="Eliminar archivo"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {subiendoArchivos && (
+                        <div className="mt-2">
+                          <Spinner size="sm" className="me-2" />
+                          <small>Subiendo archivos...</small>
+                        </div>
                       )}
                     </div>
-                    
-                    <p className="mb-1 mt-2" style={{ whiteSpace: "pre-wrap" }}>
-                      {h.nota || "Sin detalles"}
-                    </p>
-
-                    <small className="text-muted">
-                      {new Date(h.fecha).toLocaleString()} | {h.usuario}
-                      {h.asignado_a && ` | Asignado a: ${h.asignado_a}`}
-                    </small>
-
-                    {/* Comentarios del historial */}
-                    {h.comentarios && h.comentarios.length > 0 && (
-                      <div
-                        className="mt-2 p-2 rounded"
-                        style={{
-                          background: "#f8f9fa",
-                          border: "1px solid #dee2e6",
-                          fontSize: "0.85rem"
-                        }}
-                      >
-                        <strong>💬 Comentarios:</strong>
-                        {h.comentarios.map((c) => {
-                          if (!c.id) return null;
-
-                          const estaEnEdicion = comentariosHistorialEnEdicion.hasOwnProperty(c.id);
-                          const fueActualizado = comentariosHistorialActualizados[c.id];
-
-                          return (
-                            <div 
-                              key={c.id} 
-                              style={{ 
-                                borderBottom: "1px solid #e9ecef", 
-                                padding: "6px 0",
-                                backgroundColor: fueActualizado ? '#d4edda' : 'transparent'
-                              }}
-                            >
-                              {fueActualizado && (
-                                <Badge bg="success" size="sm" className="mb-1">Actualizado ✓</Badge>
-                              )}
-                              
-                              {estaEnEdicion ? (
-                                <>
-                                  <Form.Control
-                                    as="textarea"
-                                    rows={2}
-                                    value={comentariosHistorialEnEdicion[c.id]}
-                                    onChange={(e) =>
-                                      setComentariosHistorialEnEdicion((prev) => ({
-                                        ...prev,
-                                        [c.id]: e.target.value,
-                                      }))
-                                    }
-                                    className="mb-2"
-                                  />
-                                  <div className="d-flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="success"
-                                      onClick={() => handleGuardarComentarioHistorial(c.id)}
-                                      disabled={!comentariosHistorialEnEdicion[c.id]?.trim()}
-                                    >
-                                      Guardar
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      onClick={() =>
-                                        setComentariosHistorialEnEdicion((prev) => {
-                                          const nuevo = { ...prev };
-                                          delete nuevo[c.id];
-                                          return nuevo;
-                                        })
-                                      }
-                                    >
-                                      Cancelar
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div>
-                                    <strong>{c.user}</strong>: {c.comment}
-                                  </div>
-                                  <small className="text-muted">
-                                    {c.fecha ? new Date(c.fecha).toLocaleString() : "Fecha inválida"}
-                                  </small>
-                                  {!esCerrada && (
-                                    <div className="mt-1">
-                                      <Button
-                                        size="sm"
-                                        variant="outline-secondary"
-                                        onClick={() =>
-                                          setComentariosHistorialEnEdicion((prev) => ({
-                                            ...prev,
-                                            [c.id]: c.comment,
-                                          }))
-                                        }
-                                      >
-                                        ✏️ Editar
-                                      </Button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  )}
+                </Form.Group>
               </div>
             )}
           </Col>
@@ -719,6 +1244,116 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         )}
       </Modal.Footer>
     </Modal>
+
+    {/* ✅ Modal de previsualización de archivos */}
+    {showPreviewModal && archivoPreview && (
+      <Modal 
+        show={showPreviewModal} 
+        onHide={() => {
+          setShowPreviewModal(false);
+          setArchivoPreview(null);
+          setErrorCargaArchivo(false);
+        }} 
+        size="lg" 
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {archivoPreview.tipo === "imagen" ? (
+              <i className="fas fa-image me-2"></i>
+            ) : archivoPreview.tipo === "pdf" ? (
+              <i className="fas fa-file-pdf me-2 text-danger"></i>
+            ) : (
+              <i className="fas fa-file-word me-2 text-primary"></i>
+            )}
+            {archivoPreview.adjunto.nombre_original || "Vista previa"}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {archivoPreview.tipo === "imagen" && (
+            <div className="text-center">
+              {errorCargaArchivo ? (
+                <div className="p-5">
+                  <i className="fas fa-exclamation-triangle text-warning" style={{ fontSize: "3rem" }}></i>
+                  <h5 className="mt-3">No se pudo cargar la imagen</h5>
+                  <p className="text-muted">La imagen puede requerir autenticación o no estar disponible.</p>
+                </div>
+              ) : (
+                <img
+                  src={archivoPreview.adjunto.url}
+                  alt={archivoPreview.adjunto.nombre_original || "Imagen"}
+                  className="img-fluid"
+                  style={{ maxHeight: "80vh", maxWidth: "100%", objectFit: "contain" }}
+                  onError={() => {
+                    console.error("Error al cargar imagen");
+                    setErrorCargaArchivo(true);
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {archivoPreview.tipo === "pdf" && (
+            <div style={{ height: "80vh", width: "100%" }}>
+              {errorCargaArchivo ? (
+                <div className="d-flex flex-column align-items-center justify-content-center p-5" style={{ minHeight: "400px" }}>
+                  <i className="fas fa-file-pdf text-danger" style={{ fontSize: "5rem" }}></i>
+                  <h5 className="mt-3 mb-2">No se puede previsualizar el PDF</h5>
+                  <p className="text-muted">El PDF puede requerir autenticación o no estar disponible para previsualización.</p>
+                  <p className="text-muted small">Por favor, descárgalo o ábrelo en una nueva pestaña para verlo.</p>
+                </div>
+              ) : (
+                <iframe
+                  src={`${archivoPreview.adjunto.url}#toolbar=0`}
+                  title={archivoPreview.adjunto.nombre_original || "PDF"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none"
+                  }}
+                  onError={() => {
+                    console.error("Error al cargar PDF en iframe");
+                    setErrorCargaArchivo(true);
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {(archivoPreview.tipo === "word" || archivoPreview.tipo === "otro") && (
+            <div className="d-flex flex-column align-items-center justify-content-center p-5" style={{ minHeight: "400px" }}>
+              <i className={`fas ${archivoPreview.tipo === "word" ? "fa-file-word text-primary" : "fa-file text-secondary"}`} style={{ fontSize: "5rem" }}></i>
+              <h5 className="mt-3 mb-2">
+                {archivoPreview.tipo === "word" ? "Documento Word" : "Archivo"}
+              </h5>
+              <p className="text-muted">Este tipo de archivo no se puede previsualizar en el navegador.</p>
+              <Button
+                variant="primary"
+                onClick={() => window.open(archivoPreview.adjunto.url, "_blank")}
+              >
+                <i className="fas fa-download me-2"></i>
+                Descargar archivo
+              </Button>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => {
+            setShowPreviewModal(false);
+            setArchivoPreview(null);
+            setErrorCargaArchivo(false);
+          }}>
+            Cerrar
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={() => window.open(archivoPreview.adjunto.url, "_blank")}
+          >
+            <i className="fas fa-external-link-alt me-2"></i>
+            Abrir en nueva pestaña
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    )}
+    </>
   );
 };
 
