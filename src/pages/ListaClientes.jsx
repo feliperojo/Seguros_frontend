@@ -212,12 +212,21 @@ const ListaClientes = () => {
     // Filtro por término de búsqueda (nombre, email, teléfono, social)
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
-      result = result.filter(cliente =>
-        (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(q)) ||
-        (cliente.email && cliente.email.toLowerCase().includes(q)) ||
-        (cliente.telefono && String(cliente.telefono).includes(searchTerm)) ||
-        (cliente.social && String(cliente.social).includes(searchTerm))
-      );
+      result = result.filter(cliente => {
+        // Buscar en nombre completo
+        if (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(q)) return true;
+        // Buscar en email
+        if (cliente.email && cliente.email.toLowerCase().includes(q)) return true;
+        // Buscar en teléfonos (array y campo legacy)
+        const telefonos = Array.isArray(cliente.telefonos) ? cliente.telefonos : [];
+        const tieneTelefonoEnArray = telefonos.some(t => 
+          String(t.numero || t.telefono || t.numero_e164 || t.numeroE164 || "").includes(searchTerm)
+        );
+        if (tieneTelefonoEnArray || (cliente.telefono && String(cliente.telefono).includes(searchTerm))) return true;
+        // Buscar en social
+        if (cliente.social && String(cliente.social).includes(searchTerm)) return true;
+        return false;
+      });
     }
 
     // Filtro por estado del proceso
@@ -365,6 +374,34 @@ const ListaClientes = () => {
       return cliente.coberturas[0].parentesco || "Sin definir";
     }
     return "Sin parentesco";
+  };
+
+  /**
+   * Obtiene el teléfono principal del cliente
+   * @param {Object} cliente - Objeto cliente
+   * @returns {string} Teléfono principal o null
+   */
+  const getTelefonoPrincipal = (cliente) => {
+    if (!cliente) return null;
+    
+    // Primero intentar obtener del array de telefonos
+    const telefonos = Array.isArray(cliente.telefonos) ? cliente.telefonos : [];
+    if (telefonos.length > 0) {
+      // Buscar el teléfono marcado como principal
+      const principal = telefonos.find((t) => t?.principal);
+      if (principal) {
+        // Intentar diferentes campos donde puede estar el número
+        return principal.numero || principal.telefono || principal.numero_e164 || principal.numeroE164 || null;
+      }
+      // Si no hay principal marcado, usar el primero
+      const primero = telefonos[0];
+      if (primero) {
+        return primero.numero || primero.telefono || primero.numero_e164 || primero.numeroE164 || null;
+      }
+    }
+    
+    // Fallback al campo legacy
+    return cliente.telefono || null;
   };
 
   // ========================================================================
@@ -758,7 +795,7 @@ const ListaClientes = () => {
                         <td>{formatDate(cliente.fecha_nacimiento)}</td>
                         <td>{cliente.codigo_postal || <span className="text-muted">—</span>}</td>
                         <td>{getParentesco(cliente)}</td>
-                        <td>{cliente.telefono || <span className="text-muted">—</span>}</td>
+                        <td>{getTelefonoPrincipal(cliente) || <span className="text-muted">—</span>}</td>
                         <td>
                           <ProcesoCell grupos={grupos} />
                         </td>

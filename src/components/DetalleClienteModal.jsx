@@ -80,6 +80,63 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
     }
   };
 
+  /**
+   * Obtiene los teléfonos del cliente desde el array telefonos
+   * @param {Object} clienteData - Datos del cliente
+   * @returns {Array} Array de teléfonos normalizados
+   */
+  const getTelefonosFromArray = (clienteData) => {
+    if (!clienteData) return [];
+
+    // Primero intentar obtener del array de telefonos
+    const telefonos = Array.isArray(clienteData.telefonos) ? clienteData.telefonos : [];
+    
+    if (telefonos.length > 0) {
+      return telefonos.map((t) => ({
+        numero: t.numero || t.telefono || t.numero_e164 || t.numeroE164 || "",
+        tipo: t.tipo || "Móvil",
+        principal: !!t.principal,
+        iso: t.iso || "",
+        indicativo: t.indicativo || "",
+      })).filter((t) => t.numero.trim() !== "");
+    }
+
+    // Fallback: construir desde campos legacy
+    const telefonosLegacy = [];
+    
+    if (clienteData.telefono) {
+      telefonosLegacy.push({
+        numero: clienteData.telefono,
+        tipo: "Móvil",
+        principal: true,
+        iso: "",
+        indicativo: "",
+      });
+    }
+    
+    if (clienteData.secundario) {
+      telefonosLegacy.push({
+        numero: clienteData.secundario,
+        tipo: "Secundario",
+        principal: false,
+        iso: "",
+        indicativo: "",
+      });
+    }
+    
+    if (clienteData.whatsapp_num && clienteData.whatsapp_num !== clienteData.telefono) {
+      telefonosLegacy.push({
+        numero: clienteData.whatsapp_num,
+        tipo: "WhatsApp",
+        principal: false,
+        iso: "",
+        indicativo: "",
+      });
+    }
+
+    return telefonosLegacy;
+  };
+
 
   useEffect(() => {
     if (show && grupoFamiliarId) {
@@ -227,91 +284,94 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
                     </h6>
                   </Card.Header>
                   <ListGroup variant="flush">
-                
-
-
+                    {(() => {
+                      const telefonos = getTelefonosFromArray(clienteData);
+                      
+                      if (telefonos.length === 0) {
+                        return (
+                          <>
                             <ListGroup.Item>
-                              <small className="text-muted d-block">Teléfono Principal</small>
+                              <small className="text-muted d-block">Teléfonos</small>
+                              <strong>
+                                <NotAvailable />
+                              </strong>
+                            </ListGroup.Item>
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Preferencias de Contacto</small>
+                              <div className="mt-1">
+                                {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
+                                  <Badge bg="success" className="me-1">WhatsApp</Badge>
+                                )}
+                                {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
+                                  <Badge bg="info" className="me-1">Telegram</Badge>
+                                )}
+                                {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
+                                  <Badge bg="secondary" className="me-1">SMS</Badge>
+                                )}
+                                {(
+                                  !clienteData?.whatsapp &&
+                                  !clienteData?.telegram &&
+                                  !clienteData?.texto_sms
+                                ) && <NotAvailable />}
+                              </div>
+                            </ListGroup.Item>
+                          </>
+                        );
+                      }
+
+                      return (
+                        <>
+                          {telefonos.map((tel, index) => (
+                            <ListGroup.Item key={index}>
+                              <small className="text-muted d-block">
+                                {tel.principal ? "Teléfono Principal" : tel.tipo}
+                              </small>
                               <strong className="d-flex align-items-center">
-                                {clienteData.telefono ? (
-                                  <>
-                                    <a
-                                      href={`tel:${clienteData.telefono}`}
-                                      title="Llamar"
-                                      style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
-                                    >
-                                      <FaPhoneAlt className="me-2" /> {clienteData.telefono}
-                                    </a>
-                                    
-                                  </>
-                                ) : (
-                                  <NotAvailable />
+                                <a
+                                  href={`tel:${tel.numero}`}
+                                  title="Llamar"
+                                  style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
+                                >
+                                  <FaPhoneAlt className="me-2" />
+                                  {tel.indicativo && tel.indicativo.trim() !== "" ? `+${tel.indicativo} ` : ""}
+                                  {tel.numero}
+                                </a>
+                                {tel.principal && (
+                                  <Badge bg="primary" pill className="ms-2">
+                                    Principal
+                                  </Badge>
+                                )}
+                                {tel.tipo.toLowerCase().includes("whatsapp") && (
+                                  <Badge bg="success" pill className="ms-2">
+                                    WhatsApp
+                                  </Badge>
                                 )}
                               </strong>
                             </ListGroup.Item>
-
-                            <ListGroup.Item>
-                              <small className="text-muted d-block">Teléfono Secundario</small>
-                              <strong className="d-flex align-items-center">
-                                {clienteData.secundario ? (
-                                  <a
-                                    href={`tel:${clienteData.secundario}`}
-                                    title="Llamar"
-                                    style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
-                                  >
-                                    <FaPhoneAlt className="me-2" /> {clienteData.secundario}
-                                  </a>
-                                ) : (
-                                  <NotAvailable />
-                                )}
-                              </strong>
-                            </ListGroup.Item>
-
-                            <ListGroup.Item>
-                              <small className="text-muted d-block">Teléfono WhatsApp</small>
-                              <strong className="d-flex align-items-center">
-                                {clienteData.whatsapp_num ? (
-                                  <>
-                                  <a
-                                    href={`tel:${clienteData.whatsapp_num}`}
-                                    title="Llamar"
-                                    style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
-                                  >
-                                    <FaPhoneAlt className="me-2" /> {clienteData.whatsapp_num}
-                                  </a>
-                                  {clienteData.whatsapp && (
-                                    <Badge bg="success" pill className="ms-2">
-                                      WhatsApp
-                                    </Badge>
-                                  )}
-                                  </>
-                                ) : (
-                                  <NotAvailable />
-                                )}
-                              </strong>
-                            </ListGroup.Item>
-
-                            <ListGroup.Item>
-                                <small className="text-muted d-block">Preferencias de Contacto</small>
-                                <div className="mt-1">
-                                  {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
-                                    <Badge bg="success" className="me-1">WhatsApp</Badge>
-                                  )}
-                                  {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
-                                    <Badge bg="info" className="me-1">Telegram</Badge>
-                                  )}
-                                  {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
-                                    <Badge bg="secondary" className="me-1">SMS</Badge>
-                                  )}
-                                  {(
-                                    !clienteData?.whatsapp &&
-                                    !clienteData?.telegram &&
-                                    !clienteData?.texto_sms
-                                  ) && <NotAvailable />}
-                                </div>
-                              </ListGroup.Item>
-
-                   
+                          ))}
+                          
+                          <ListGroup.Item>
+                            <small className="text-muted d-block">Preferencias de Contacto</small>
+                            <div className="mt-1">
+                              {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
+                                <Badge bg="success" className="me-1">WhatsApp</Badge>
+                              )}
+                              {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
+                                <Badge bg="info" className="me-1">Telegram</Badge>
+                              )}
+                              {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
+                                <Badge bg="secondary" className="me-1">SMS</Badge>
+                              )}
+                              {(
+                                !clienteData?.whatsapp &&
+                                !clienteData?.telegram &&
+                                !clienteData?.texto_sms
+                              ) && <NotAvailable />}
+                            </div>
+                          </ListGroup.Item>
+                        </>
+                      );
+                    })()}
                   </ListGroup>
                 </Card>
               </Col>
