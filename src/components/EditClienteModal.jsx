@@ -12,7 +12,11 @@ import MediosPagoTablas from './MediosPagoTablas';
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import CartaAutorizacion from "./Reports/CartaAutorizacion";
-import idiomas  from '../services/idiomas.js';    
+import idiomas  from '../services/idiomas.js';
+import TelefonosPro from "./fase2/TelefonosPro";
+import { toLegacyFields, toStructuredPhones } from "../utils/phones";
+import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
+import countryCodes from "../services/countryCodes";    
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
 const renderMediosPagoTab = () => (
@@ -116,8 +120,8 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
         telegram: false,
         texto_sms: false
       },
-      email: ""
-     
+      email: "",
+      telefonos: [] // Array de teléfonos en formato nuevo
     },
    
     // Sección 4: Dirección
@@ -179,6 +183,71 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     const cleaned = value.replace(/\D/g, "");
     const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
     return match ? `${match[1]}-${match[2]}-${match[3]}` : value;
+  };
+
+  // Función para convertir datos legacy de teléfonos al formato de array
+  const convertLegacyPhonesToArray = (data) => {
+    // Primero intentar usar el array de telefonos si existe
+    if (Array.isArray(data.telefonos) && data.telefonos.length > 0) {
+      return inflatePhones(data.telefonos, "us");
+    }
+    
+    // Si no, convertir desde campos legacy
+    const phones = [];
+    const codeToIso = new Map(
+      countryCodes.map((c) => [
+        String(c.code || "").replace(/\D+/g, ""),
+        String(c.iso || "").toLowerCase(),
+      ])
+    );
+    
+    // Función auxiliar para limpiar y obtener el número sin formato
+    const cleanPhoneNumber = (value) => {
+      if (!value) return "";
+      // Remover guiones y espacios, dejar solo dígitos
+      return String(value).replace(/[^\d]/g, "");
+    };
+    
+    if (data.telefono) {
+      const cod = String(data.cod_tel_1 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-1",
+        tipo: "Móvil",
+        numero: cleanPhoneNumber(data.telefono), // Dejar sin formato, TelefonosPro lo formateará
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    if (data.secundario) {
+      const cod = String(data.cod_tel_2 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-2",
+        tipo: "Trabajo",
+        numero: cleanPhoneNumber(data.secundario),
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    if (data.whatsapp_num) {
+      const cod = String(data.cod_tel_3 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-3",
+        tipo: "Whatsapp",
+        numero: cleanPhoneNumber(data.whatsapp_num),
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    return phones;
   };
   
   const handleBitacoraSuccess = () => {
@@ -318,7 +387,8 @@ const mapClienteDataToForm = (data) => {
         telegram: data.telegram || false,
         texto_sms: data.texto_sms || false
       },
-      email: data.email || ""
+      email: data.email || "",
+      telefonos: convertLegacyPhonesToArray(data) // Convertir datos legacy a array
     },
     direccion: {
       calle: data.calle || "",
@@ -470,6 +540,19 @@ useEffect(() => {
       formData.direccion.codigo_postal
     ].filter(Boolean).join(" ");
   
+    // Convertir array de telefonos a formato API
+    const telefonosArray = Array.isArray(formData.datosContacto.telefonos) 
+      ? toApiPhones(formData.datosContacto.telefonos)
+      : [];
+    
+    // Convertir array de telefonos a campos legacy para compatibilidad
+    const legacyPhones = toLegacyFields(telefonosArray);
+    
+    // Obtener códigos de país desde el array de telefonos
+    const principalPhone = telefonosArray.find(p => p.principal) || telefonosArray[0];
+    const trabajoPhone = telefonosArray.find(p => p.tipo?.toLowerCase().includes("trabajo"));
+    const whatsappPhone = telefonosArray.find(p => p.tipo?.toLowerCase().includes("whatsapp"));
+    
     const flatData = {
       // Datos principales
       ...formData.datosPrincipales,
@@ -477,9 +560,18 @@ useEffect(() => {
       // Status migratorio
       ...formData.statusMigratorio,
       
-      // Datos de contacto
-      ...formData.datosContacto,
+      // Datos de contacto - mantener campos legacy para compatibilidad
+      telefono: legacyPhones.telefono || "",
+      secundario: legacyPhones.secundario || "",
+      whatsapp_num: legacyPhones.whatsapp_num || "",
+      cod_tel_1: principalPhone?.indicativo || formData.datosContacto.cod_tel_1 || "",
+      cod_tel_2: trabajoPhone?.indicativo || formData.datosContacto.cod_tel_2 || "",
+      cod_tel_3: whatsappPhone?.indicativo || formData.datosContacto.cod_tel_3 || "",
+      nota: formData.datosContacto.nota || "",
       servicios_mensajeria: formData.datosContacto.servicios_mensajeria,
+      email: formData.datosContacto.email || "",
+      // Incluir array de telefonos en formato nuevo
+      telefonos: telefonosArray,
       
       // Incluir los campos individuales de dirección
       calle: formData.direccion.calle,
@@ -872,74 +964,25 @@ useEffect(() => {
       <h5 className="border-bottom pb-2 mb-3">Datos de Contacto</h5>
       
       <Row className="mb-3">
-        <Col md={4}>
+        <Col md={12}>
           <Form.Group>
-            <Form.Label>Teléfono</Form.Label>
-            <InputGroup>
-            <CountrySelectWithFlags
-                    selectedCode={formData.datosContacto.cod_tel_1}
-                    name="cod_tel_1"
-                    onChange={(field, value) => handleInputChange("datosContacto", field, value)}
-                  />
-             <Form.Control
-                      type="text"
-                      value={formData.datosContacto.telefono}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, "");
-                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
-                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
-
-                        handleInputChange("datosContacto", "telefono", formatted);
-                      }}
-                    />
-            </InputGroup>
-          </Form.Group>
-        </Col>
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>Tel. Secundario</Form.Label>
-            <InputGroup>
-            <CountrySelectWithFlags
-                        selectedCode={formData.datosContacto.cod_tel_2}
-                        name="cod_tel_2"
-                        onChange={(field, value) => handleInputChange("datosContacto", field, value)}
-                      />
-              <Form.Control
-                type="text"
-                value={formData.datosContacto.secundario}
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/\D/g, "");
-                  const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
-                  const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
-
-                  handleInputChange("datosContacto", "secundario", formatted);
-                }}
-               />
-            </InputGroup>
-          </Form.Group>
-        </Col>
-        <Col md={4}>
-          <Form.Group>
-            <Form.Label>WhatsApp</Form.Label>
-            <InputGroup>
-            <CountrySelectWithFlags
-                        selectedCode={formData.datosContacto.cod_tel_3}
-                        name="cod_tel_3"
-                        onChange={(field, value) => handleInputChange("datosContacto", field, value)}
-                      />
-                 <Form.Control
-                      type="text"
-                      value={formData.datosContacto.whatsapp_num}
-                      onChange={(e) => {
-                        const raw = e.target.value.replace(/\D/g, "");
-                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
-                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
-
-                        handleInputChange("datosContacto", "whatsapp_num", formatted);
-                      }}
-                    />
-
-            </InputGroup>
+            <Form.Label className="mb-2">Teléfonos</Form.Label>
+            <TelefonosPro
+              value={formData.datosContacto.telefonos || []}
+              onChange={(telefonos) => {
+                setFormData(prevData => ({
+                  ...prevData,
+                  datosContacto: {
+                    ...prevData.datosContacto,
+                    telefonos: telefonos
+                  }
+                }));
+                setHasChanges(true);
+              }}
+              readOnly={false}
+              fallbackIso="us"
+              addLabel="Agregar teléfono"
+            />
           </Form.Group>
         </Col>
       </Row>

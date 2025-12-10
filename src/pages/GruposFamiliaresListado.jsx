@@ -13,6 +13,7 @@ import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
+import ResumenGruposEstados from "../components/ResumenGruposEstados";
 import { Helmet } from "react-helmet-async";
 
 
@@ -43,6 +44,23 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const location = useLocation();
 
+  // Función para manejar el clic desde el componente de resumen
+  const handleEstadoClickFromResumen = (codigoEstado) => {
+    // Si se hace clic en "Todos los estados", resetear el filtro
+    if (codigoEstado === "Todos los estados") {
+      setSelectedStatus("Todos los estados");
+    } else {
+      // El código del estado ya viene en minúsculas (ej: "cotizacion", "toma_datos")
+      // que es exactamente lo que el endpoint espera
+      setSelectedStatus(codigoEstado);
+    }
+  };
+
+  const handleOpenRetiroModal = (grupo) => {
+    setGrupoParaRetiro(grupo);
+    setShowRetiroModal(true);
+  };
+
 useEffect(() => {
   const params = new URLSearchParams(location.search);
   const searchParam = params.get("search");
@@ -51,16 +69,33 @@ useEffect(() => {
   }
 }, [location.search]);
 
-
-  const handleOpenRetiroModal = (grupo) => {
-    setGrupoParaRetiro(grupo);
-    setShowRetiroModal(true);
-  };
-
   // Cargar grupos al montar el componente o cuando cambia el estado seleccionado
   useEffect(() => {
     fetchGrupos();
   }, [selectedStatus]);
+
+  // Función para mapear el código del estado al formato que espera el endpoint
+  const mapearEstadoParaEndpoint = (codigoEstado) => {
+    // Mapeo de códigos en minúsculas a códigos en mayúsculas que espera el API
+    const estadoMap = {
+      "prospecto": "PROSPECTO",
+      "cotizacion": "COTIZACION",
+      "seguimiento": "SEGUIMIENTO",
+      "toma_datos": "TOMA_DATOS",
+      "inscripcion_ini": "INSCRIPCION_INI",
+      "grupo_familiar": "GRUPO_FAMILIAR",
+      "descartado": "DESCARTADO"
+    };
+    
+    // Si el código ya está en mayúsculas, devolverlo tal cual
+    if (codigoEstado === codigoEstado.toUpperCase()) {
+      return codigoEstado;
+    }
+    
+    // Convertir a mayúsculas y buscar en el mapa
+    const codigoLower = codigoEstado.toLowerCase();
+    return estadoMap[codigoLower] || codigoEstado.toUpperCase();
+  };
 
   // Función para cargar grupos
   const fetchGrupos = async () => {
@@ -70,22 +105,46 @@ useEffect(() => {
       let endpoint = "grupo_familiar/grupos-familiares-full";
       // Añadir parámetros de filtro por estado si es necesario
       if (selectedStatus !== "Todos los estados") {
-        const estadoParam = selectedStatus.toLowerCase();
+        // Mapear el estado al formato correcto (mayúsculas)
+        const estadoParam = mapearEstadoParaEndpoint(selectedStatus);
         endpoint += `?estado=${estadoParam}`;
       }
       
+      console.log("🔍 [GruposFamiliaresListado] Estado seleccionado:", selectedStatus);
+      console.log("🔍 [GruposFamiliaresListado] Estado mapeado para endpoint:", selectedStatus !== "Todos los estados" ? mapearEstadoParaEndpoint(selectedStatus) : "N/A");
+      console.log("🔍 [GruposFamiliaresListado] Endpoint a llamar:", endpoint);
+      
       const response = await apiRequest(endpoint, "GET");
       
-
+      console.log("📦 [GruposFamiliaresListado] Respuesta completa del API:", response);
+      console.log("📦 [GruposFamiliaresListado] Tipo de respuesta:", typeof response);
+      console.log("📦 [GruposFamiliaresListado] response.status:", response?.status);
+      console.log("📦 [GruposFamiliaresListado] response.data:", response?.data);
+      console.log("📦 [GruposFamiliaresListado] Es array?", Array.isArray(response?.data));
+      console.log("📦 [GruposFamiliaresListado] Cantidad de grupos:", response?.data?.length);
 
       if (response && response.status === "success" && Array.isArray(response.data)) {
+        console.log("✅ [GruposFamiliaresListado] Grupos cargados correctamente:", response.data);
+        console.log("✅ [GruposFamiliaresListado] Primer grupo (ejemplo):", response.data[0]);
+        
+        // Si hay un filtro aplicado, verificar que los grupos coincidan
+        if (selectedStatus !== "Todos los estados") {
+          const estadoEsperado = mapearEstadoParaEndpoint(selectedStatus);
+          const gruposFiltrados = response.data.filter(grupo => {
+            const estadoGrupo = grupo.estado_codigo || grupo.estado?.toUpperCase();
+            return estadoGrupo === estadoEsperado;
+          });
+          console.log("🔍 [GruposFamiliaresListado] Grupos filtrados por estado:", gruposFiltrados.length);
+          console.log("🔍 [GruposFamiliaresListado] Estados encontrados en grupos:", response.data.map(g => ({ id: g.id, estado: g.estado, estado_codigo: g.estado_codigo })));
+        }
+        
         setGrupos(response.data);
       } else {
-        console.error("Respuesta inesperada:", response);
+        console.error("❌ [GruposFamiliaresListado] Respuesta inesperada:", response);
         setGrupos([]);
       }
     } catch (error) {
-      console.error("Error al cargar grupos familiares:", error);
+      console.error("❌ [GruposFamiliaresListado] Error al cargar grupos familiares:", error);
       // Mostrar alerta al usuario
       alert("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
     } finally {
@@ -225,8 +284,20 @@ useEffect(() => {
     return "Sin asignar";
   };
 
-  // Filtrar grupos según la búsqueda
+  // Filtrar grupos según la búsqueda y el estado seleccionado
   const filteredGrupos = grupos.filter(grupo => {
+    // Primero filtrar por estado si hay uno seleccionado
+    if (selectedStatus !== "Todos los estados") {
+      const estadoEsperado = mapearEstadoParaEndpoint(selectedStatus);
+      const estadoGrupo = grupo.estado_codigo || grupo.estado?.toUpperCase() || "";
+      
+      // Si el estado del grupo no coincide, excluirlo
+      if (estadoGrupo !== estadoEsperado) {
+        return false;
+      }
+    }
+
+    // Luego filtrar por búsqueda si hay término de búsqueda
     if (searchTerm === "") return true;
 
     // Buscar en persona de contacto
@@ -274,6 +345,13 @@ useEffect(() => {
        <Helmet>
               <title>Vantun/List Grupo Familiar</title>
             </Helmet>
+      
+      {/* Barra de resumen de estados */}
+      <ResumenGruposEstados 
+        onEstadoClick={handleEstadoClickFromResumen}
+        estadoSeleccionado={selectedStatus}
+      />
+
       <div className="d-flex justify-content-between align-items-center mb-4">
         <h4 className="mb-0">
           Lista de Grupos Familiares
@@ -308,9 +386,13 @@ useEffect(() => {
                 onChange={(e) => setSelectedStatus(e.target.value)}
               >
                 <option value="Todos los estados">Todos los estados</option>
-                <option value="Activo">Activos</option>
-                <option value="Inactivo">Inactivos</option>
-                <option value="Pendiente">Pendientes</option>
+                <option value="prospecto">Prospecto</option>
+                <option value="cotizacion">Cotización</option>
+                <option value="seguimiento">Seguimiento</option>
+                <option value="toma_datos">Toma de Datos</option>
+                <option value="inscripcion_ini">Inscripción Inicial</option>
+                <option value="grupo_familiar">Grupo Familiar</option>
+                <option value="descartado">Descartado</option>
               </Form.Select>
             </div>
             <div>
