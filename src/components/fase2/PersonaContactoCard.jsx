@@ -15,6 +15,9 @@ import {
 import ContactForm from "../Contacto/ContactForm";
 import ContactoCard from "../Contacto/ContactoCard";
 
+// 👇 Importar estilos
+import "../../styles/ContactosAsociadosAccordion.css";
+
 export default function PersonaContactoCard({
   clienteId = null,
   grupoFamiliarId = null,
@@ -36,6 +39,7 @@ export default function PersonaContactoCard({
   const [items, setItems] = useState([]); // [{contacto, link}]
   const [linkEditar, setLinkEditar] = useState(null); // se conserva por compat, pero no se usa para editar
   const [saving, setSaving] = useState(false);
+  const [accordionOpen, setAccordionOpen] = useState(false); // Control del estado del acordeón
 
   // Modo de creación de contacto: 'nuevo' | 'existente'
   const [modo, setModo] = useState("nuevo");
@@ -49,7 +53,10 @@ export default function PersonaContactoCard({
 
   // ---- form local (crear/editar) ----
   const [form, setForm] = useState({
-    nombre_completo: "",
+    primer_nombre: "",
+    segundo_nombre: "",
+    apellidos: "",
+    nombre_completo: "", // Mantener por compatibilidad
     idioma: "",
     perteneceGF: "No",
     relacion: "",
@@ -58,9 +65,27 @@ export default function PersonaContactoCard({
     email_principal: "",
   });
 
-  const update = (field, val) => setForm((f) => ({ ...f, [field]: val }));
+  const update = (field, val) => {
+    setForm((f) => {
+      const updated = { ...f, [field]: val };
+      // Si se actualizan campos de nombre, recalcular nombre_completo
+      if (["primer_nombre", "segundo_nombre", "apellidos"].includes(field)) {
+        const parts = [
+          updated.primer_nombre,
+          updated.segundo_nombre,
+          updated.apellidos
+        ].filter(Boolean);
+        updated.nombre_completo = parts.join(" ").trim();
+      }
+      return updated;
+    });
+  };
+  
   const resetForm = () =>
     setForm({
+      primer_nombre: "",
+      segundo_nombre: "",
+      apellidos: "",
       nombre_completo: "",
       idioma: "",
       perteneceGF: "No",
@@ -75,9 +100,9 @@ export default function PersonaContactoCard({
     const datosCompletos =
       modo === "existente"
         ? !!sel?.id && (form.relacion || "").trim().length > 0
-        : (form.nombre_completo || "").trim().length > 0;
+        : (form.primer_nombre || "").trim().length > 0 && (form.apellidos || "").trim().length > 0;
     return tieneContexto && datosCompletos;
-  }, [modo, sel, form.nombre_completo, form.relacion, clienteId, grupoFamiliarId]);
+  }, [modo, sel, form.primer_nombre, form.apellidos, form.relacion, clienteId, grupoFamiliarId]);
 
   // ---- carga inicial ----
   const cargar = async () => {
@@ -139,49 +164,85 @@ export default function PersonaContactoCard({
     return () => clearTimeout(searchDebRef.current);
   }, [term, modo, clienteId]);
 
+  // --- Limpiar datos cuando cambia el modo ---
+  useEffect(() => {
+    if (modo === "nuevo") {
+      // Al cambiar a modo nuevo, limpiar selección de cliente existente
+      setSel(null);
+      setTerm("");
+      setCandidatos([]);
+      // Mantener relación, perteneceGF y nota por si el usuario quiere reutilizarlos
+      setForm((f) => ({
+        ...f,
+        primer_nombre: f.primer_nombre || "",
+        segundo_nombre: f.segundo_nombre || "",
+        apellidos: f.apellidos || "",
+        telefonos: f.telefonos || [],
+        idioma: f.idioma || "",
+      }));
+    } else {
+      // Al cambiar a modo existente, limpiar campos de nombre
+      setForm((f) => ({
+        ...f,
+        primer_nombre: "",
+        segundo_nombre: "",
+        apellidos: "",
+        nombre_completo: "",
+        telefonos: [],
+        idioma: "",
+      }));
+    }
+  }, [modo]);
+
   // --- pinta teléfonos/idioma cuando se elige cliente existente ---
   useEffect(() => {
     if (modo !== "existente") return;
     if (!sel?.id) {
-      setForm((f) => ({ ...f, telefonos: [] }));
+      setForm((f) => ({ ...f, telefonos: [], idioma: "" }));
       return;
     }
     const tels = normalizeTelefonos(sel);
     setForm((f) => ({
       ...f,
       telefonos: tels,
-      idioma: f.idioma || sel.idioma || "",
+      idioma: sel.idioma || "",
     }));
   }, [sel, modo]);
 
   // --- Helper para normalizar teléfonos del cliente existente o nuevo ---
   const normalizeTelefonos = (c) => {
     if (!c) return [];
-    if (Array.isArray(c.telefonos)) {
+    
+    // Si tiene array de telefonos, normalizarlos
+    if (Array.isArray(c.telefonos) && c.telefonos.length > 0) {
       return c.telefonos
         .map((t, i) => ({
-          id: t?.id ?? `${i}-${t?.tipo ?? "Móvil"}`,
+          id: t?.id ?? `tel-${c.id}-${i}`,
           tipo: t?.tipo || "Móvil",
-          numero: t?.numero || "",
+          numero: (t?.numero || "").trim(),
           principal: t?.principal ?? i === 0,
-          iso: (t?.iso || "").toLowerCase() || undefined,
-          indicativo: t?.indicativo || "",
+          iso: (t?.iso || "co").toLowerCase(),
+          indicativo: t?.indicativo || "57",
         }))
         .filter((t) => (t.numero || "").trim().length > 0);
     }
+    
+    // Fallback: si tiene telefono plano (string), convertirlo
     const numeroPlano = c.telefono || "";
-    return (numeroPlano || "").trim()
-      ? [
-          {
-            id: "legacy-1",
-            tipo: "Móvil",
-            numero: numeroPlano,
-            principal: true,
-            iso: "co",
-            indicativo: "57",
-          },
-        ]
-      : [];
+    if ((numeroPlano || "").trim()) {
+      return [
+        {
+          id: `tel-legacy-${c.id || "new"}`,
+          tipo: "Móvil",
+          numero: numeroPlano.trim(),
+          principal: true,
+          iso: "co",
+          indicativo: "57",
+        },
+      ];
+    }
+    
+    return [];
   };
 
   // ---- guardar (crea o actualiza vínculo) ----
@@ -190,35 +251,37 @@ export default function PersonaContactoCard({
     try {
       setSaving(true);
 
+      const modoActual = modo; // Guardar el modo actual antes de cualquier cambio
       let contacto = {};
       let contactoId = null;
 
-      if (modo === "existente") {
+      if (modoActual === "existente") {
+        // MODO EXISTENTE: Solo crear vínculo, NO modificar ni crear cliente
         if (!sel?.id) throw new Error("Debe seleccionar un cliente existente.");
         if (sel.id === clienteId) throw new Error("No puedes asociar el mismo cliente como contacto.");
 
-        const telefonosFinales = Array.isArray(form.telefonos) ? form.telefonos : [];
-
-        const upsertRes = await upsertClienteComoContacto({
-          id: sel.id, // ← update
-          nombre_completo: sel.nombre_completo,
-          idioma: form.idioma || sel.idioma || "",
-          telefonos: telefonosFinales,
-          telefono: telefonosFinales.find((x) => x.principal)?.numero || null, // compat plano
-          email_principal: form.email_principal || sel.email_principal || null,
-          nota: form.nota || null,
-        });
-
-        contacto = upsertRes?.contacto || {
+        // Usar directamente el cliente seleccionado sin modificarlo
+        contacto = {
           id: sel.id,
-          nombre_completo: sel.nombre_completo,
-          idioma: form.idioma || sel.idioma || "",
-          telefonos: telefonosFinales,
+          nombre_completo: sel.nombre_completo || "",
+          idioma: sel.idioma || "",
+          telefonos: Array.isArray(sel.telefonos) ? sel.telefonos : (sel.telefono ? [{ numero: sel.telefono, principal: true }] : []),
         };
-        contactoId = contacto.id;
+        contactoId = sel.id;
       } else {
+        // MODO NUEVO: Crear nuevo cliente como contacto
+        // Construir nombre_completo desde los campos separados
+        const nombreCompleto = [
+          form.primer_nombre?.trim(),
+          form.segundo_nombre?.trim(),
+          form.apellidos?.trim()
+        ].filter(Boolean).join(" ");
+
         const contactoRes = await upsertClienteComoContacto({
-          nombre_completo: (form.nombre_completo || "").trim(),
+          nombre_completo: nombreCompleto,
+          primer_nombre: form.primer_nombre?.trim() || null,
+          segundo_nombre: form.segundo_nombre?.trim() || null,
+          apellidos: form.apellidos?.trim() || null,
           idioma: form.idioma || "",
           telefonos: Array.isArray(form.telefonos) ? form.telefonos : [],
           email_principal: form.email_principal || null,
@@ -271,9 +334,16 @@ export default function PersonaContactoCard({
       resetForm();
       setSel(null);
       setTerm("");
+      setModo("nuevo"); // Resetear a modo nuevo después de guardar
+      setAccordionOpen(false); // Cerrar acordeón después de guardar
+      
+      // Mensaje de éxito
+      if (modoActual === "existente") {
+        alert("Contacto asociado correctamente. El cliente existente no ha sido modificado.");
+      }
     } catch (e) {
       console.error(e);
-      alert("No se pudo guardar el contacto.");
+      alert(e.message || "No se pudo guardar el contacto.");
     } finally {
       setSaving(false);
     }
@@ -308,49 +378,49 @@ export default function PersonaContactoCard({
         <div className="accordion-item">
           <h2 className="accordion-header" id="headingNuevo">
             <button
-              className="accordion-button collapsed"
+              className={`accordion-button ${accordionOpen ? "" : "collapsed"}`}
               type="button"
-              data-bs-toggle="collapse"
-              data-bs-target="#collapseNuevo"
-              aria-expanded="false"
+              onClick={() => setAccordionOpen(!accordionOpen)}
+              aria-expanded={accordionOpen}
               aria-controls="collapseNuevo"
             >
               {linkEditar ? "Editar contacto" : "Agregar contacto"}
             </button>
           </h2>
 
-          <div
-            id="collapseNuevo"
-            className="accordion-collapse collapse"
-            aria-labelledby="headingNuevo"
-            data-bs-parent="#accordionContactos"
-          >
-            <div className="accordion-body">
-              <ContactForm
-                modo={modo}
-                setModo={setModo}
-                form={form}
-                update={update}
-                readOnly={readOnly}
-                saving={saving}
-                puedeGuardar={puedeGuardar}
-                onSave={handleSave}
-                onReset={() => {
-                  setLinkEditar(null);
-                  resetForm();
-                }}
-                // picker existente
-                term={term}
-                setTerm={setTerm}
-                candidatos={candidatos}
-                sel={sel}
-                setSel={setSel}
-                loadingPicker={loadingPicker}
-                // selects
-                relacionOptions={relacionOptions}
-              />
+          {accordionOpen && (
+            <div
+              id="collapseNuevo"
+              className="accordion-collapse collapse show contacto-accordion-open"
+              aria-labelledby="headingNuevo"
+            >
+              <div className="accordion-body">
+                <ContactForm
+                  modo={modo}
+                  setModo={setModo}
+                  form={form}
+                  update={update}
+                  readOnly={readOnly}
+                  saving={saving}
+                  puedeGuardar={puedeGuardar}
+                  onSave={handleSave}
+                  onReset={() => {
+                    setLinkEditar(null);
+                    resetForm();
+                  }}
+                  // picker existente
+                  term={term}
+                  setTerm={setTerm}
+                  candidatos={candidatos}
+                  sel={sel}
+                  setSel={setSel}
+                  loadingPicker={loadingPicker}
+                  // selects
+                  relacionOptions={relacionOptions}
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 

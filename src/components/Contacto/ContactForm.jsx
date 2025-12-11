@@ -68,23 +68,65 @@ export default function ContactForm({
 
       {/* Nombre o buscador, según el modo */}
       {modo === "nuevo" ? (
-        <div className="col-12">
-          <label className="form-label small mb-1">Nombre Completo</label>
-          <input
-            className="form-control form-control-sm"
-            placeholder="Nombre Completo"
-            value={form.nombre_completo}
-            onChange={(e) => {
-              const raw = e.target.value;
-              const formatted = raw
-                .toLowerCase()
-                .replace(/\b\w/g, (ch) => ch.toUpperCase())
-                .replace(/\s+/g, " ");
-              update("nombre_completo", formatted);
-            }}
-            disabled={readOnly}
-          />
-        </div>
+        <>
+          <div className="col-12 col-md-4">
+            <label className="form-label small mb-1">
+              Primer Nombre <span className="text-danger">*</span>
+            </label>
+            <input
+              className="form-control form-control-sm"
+              placeholder="Primer Nombre"
+              value={form.primer_nombre || ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const formatted = raw
+                  .toLowerCase()
+                  .replace(/\b\w/g, (ch) => ch.toUpperCase())
+                  .replace(/\s+/g, " ");
+                update("primer_nombre", formatted);
+              }}
+              disabled={readOnly}
+              required
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small mb-1">Segundo Nombre</label>
+            <input
+              className="form-control form-control-sm"
+              placeholder="Segundo Nombre (opcional)"
+              value={form.segundo_nombre || ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const formatted = raw
+                  .toLowerCase()
+                  .replace(/\b\w/g, (ch) => ch.toUpperCase())
+                  .replace(/\s+/g, " ");
+                update("segundo_nombre", formatted);
+              }}
+              disabled={readOnly}
+            />
+          </div>
+          <div className="col-12 col-md-4">
+            <label className="form-label small mb-1">
+              Apellidos <span className="text-danger">*</span>
+            </label>
+            <input
+              className="form-control form-control-sm"
+              placeholder="Apellidos"
+              value={form.apellidos || ""}
+              onChange={(e) => {
+                const raw = e.target.value;
+                const formatted = raw
+                  .toLowerCase()
+                  .replace(/\b\w/g, (ch) => ch.toUpperCase())
+                  .replace(/\s+/g, " ");
+                update("apellidos", formatted);
+              }}
+              disabled={readOnly}
+              required
+            />
+          </div>
+        </>
       ) : (
         <div className="col-12">
           <label className="form-label small mb-1">Buscar cliente existente</label>
@@ -146,12 +188,31 @@ export default function ContactForm({
         </div>
       )}
 
+      {/* Mensaje informativo para cliente existente */}
+      {modo === "existente" && sel?.id && (
+        <div className="col-12">
+          <div className="alert alert-info alert-sm py-2 px-3 mb-2" role="alert">
+            <small>
+              <i className="bi bi-info-circle me-1"></i>
+              <strong>Asociación de contacto:</strong> Solo se creará la relación con este cliente. 
+              Los datos del cliente (teléfono, idioma) no serán modificados.
+            </small>
+          </div>
+        </div>
+      )}
+
       {/* Teléfonos */}
       <div className="col-12">
+        <label className="form-label small mb-1">
+          Teléfonos
+          {modo === "existente" && sel?.id && (
+            <span className="text-muted ms-1">(Información del cliente, no modificable)</span>
+          )}
+        </label>
         <TelefonosPro
           value={form.telefonos}
           onChange={(v) => update("telefonos", v)}
-          readOnly={readOnly}
+          readOnly={readOnly || (modo === "existente" && !!sel?.id)}
           uiPreset="clean"
           countrySelectWidth={200}
           formatByCountry={true}
@@ -160,11 +221,16 @@ export default function ContactForm({
 
       {/* Idioma usando tu LanguageSelect */}
       <div className="col-12 col-md-6">
-        <label className="form-label small mb-1">Idioma</label>
+        <label className="form-label small mb-1">
+          Idioma
+          {modo === "existente" && sel?.id && (
+            <span className="text-muted ms-1">(Información del cliente, no modificable)</span>
+          )}
+        </label>
         <LanguageSelect
           value={form.idioma}
           onChange={(e) => update("idioma", e.target.value)}
-          disabled={readOnly}
+          disabled={readOnly || (modo === "existente" && !!sel?.id)}
           includeOther={true}
           includeEmpty={true}
           placeholder="Seleccione..."
@@ -173,9 +239,39 @@ export default function ContactForm({
         />
       </div>
 
+      {/* Relación - REQUERIDA para asociar contacto */}
+      <div className="col-12 col-md-6">
+        <label className="form-label small mb-1">
+          Relación <span className="text-danger">*</span>
+          {modo === "existente" && (
+            <span className="text-muted ms-1">(de la asociación)</span>
+          )}
+        </label>
+        <select
+          className="form-select form-select-sm"
+          value={form.relacion}
+          onChange={(e) => update("relacion", e.target.value)}
+          disabled={readOnly}
+          required
+        >
+          <option value="">Seleccione...</option>
+          {relacionOptions.map((op) => (
+            <option key={op} value={op}>{op}</option>
+          ))}
+        </select>
+        {modo === "existente" && !form.relacion && (
+          <small className="text-muted">Campo requerido para asociar el contacto</small>
+        )}
+      </div>
+
       {/* Pertenece GF */}
       <div className="col-12 col-md-6">
-        <label className="form-label small mb-1">¿Pertenece al Grupo Familiar?</label>
+        <label className="form-label small mb-1">
+          ¿Pertenece al Grupo Familiar?
+          {modo === "existente" && (
+            <span className="text-muted ms-1">(de la asociación)</span>
+          )}
+        </label>
         <select
           className="form-select form-select-sm"
           value={form.perteneceGF}
@@ -184,22 +280,6 @@ export default function ContactForm({
         >
           <option value="Si">Sí</option>
           <option value="No">No</option>
-        </select>
-      </div>
-
-      {/* Relación */}
-      <div className="col-12 col-md-6">
-        <label className="form-label small mb-1">Relación</label>
-        <select
-          className="form-select form-select-sm"
-          value={form.relacion}
-          onChange={(e) => update("relacion", e.target.value)}
-          disabled={readOnly}
-        >
-          <option value="">Seleccione...</option>
-          {relacionOptions.map((op) => (
-            <option key={op} value={op}>{op}</option>
-          ))}
         </select>
       </div>
 
@@ -223,7 +303,7 @@ export default function ContactForm({
             Limpiar
           </button>
           <button type="button" className="btn btn-primary btn-sm" onClick={onSave} disabled={!puedeGuardar || saving}>
-            {saving ? "Guardando..." : "Guardar contacto"}
+            {saving ? "Guardando..." : modo === "existente" ? "Asociar contacto" : "Guardar contacto"}
           </button>
         </div>
       )}

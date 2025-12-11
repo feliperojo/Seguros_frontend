@@ -136,4 +136,19 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
   }
+
+  /* Fix para asegurar que el acordeón muestre contenido cuando está abierto */
+  .accordion-collapse.contacto-accordion-open {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  .accordion-collapse.contacto-accordion-open .accordion-body {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
   

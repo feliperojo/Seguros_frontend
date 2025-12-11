@@ -29,16 +29,29 @@ export async function fetchClienteContacto({ clienteId, grupoFamiliarId }) {
  * Enviamos telefonos como ARRAY (no string).
  */
 export async function upsertClienteComoContacto(payload) {
-  const { nombres, apellidos } = splitFullName(payload.nombre_completo || "");
+  // Si vienen campos separados, usarlos directamente; si no, dividir nombre_completo
+  let primer_nombre, segundo_nombre, apellidos, nombre_completo;
 
-  const partes = (nombres || "").trim().split(/\s+/);
-  const primer_nombre = partes[0] || null;
-  const segundo_nombre = partes.length > 1 ? partes.slice(1).join(" ") : null;
+  if (payload.primer_nombre || payload.apellidos) {
+    // Usar campos separados si están disponibles
+    primer_nombre = payload.primer_nombre?.trim() || null;
+    segundo_nombre = payload.segundo_nombre?.trim() || null;
+    apellidos = payload.apellidos?.trim() || null;
+    nombre_completo = [primer_nombre, segundo_nombre, apellidos].filter(Boolean).join(" ").trim() || payload.nombre_completo?.trim() || "";
+  } else {
+    // Fallback: dividir nombre_completo si no vienen campos separados
+    const { nombres, apellidos: apellidosSplit } = splitFullName(payload.nombre_completo || "");
+    const partes = (nombres || "").trim().split(/\s+/);
+    primer_nombre = partes[0] || null;
+    segundo_nombre = partes.length > 1 ? partes.slice(1).join(" ") : null;
+    apellidos = apellidosSplit || null;
+    nombre_completo = `${[nombres, apellidosSplit].filter(Boolean).join(" ")}`.trim();
+  }
 
   const body = {
     clientes: [
       {
-        nombre_completo: `${[nombres, apellidos].filter(Boolean).join(" ")}`.trim(),
+        nombre_completo: nombre_completo,
         primer_nombre,
         segundo_nombre,
         apellidos: apellidos || null,
