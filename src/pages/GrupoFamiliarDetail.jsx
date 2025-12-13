@@ -72,7 +72,9 @@ const unwrapFull = (res) => res?.data ?? res ?? {};
 };
 
 
-// ===== Mapper local para GUARDAR todos los campos del cliente =====
+// ===== Mapper local para GUARDAR campos del cliente =====
+// IMPORTANTE: Para clientes existentes, solo envía los campos del acordeón
+// para evitar borrar datos que no están en el formulario (ej: teléfono)
 const mapClienteForSave = (m) => {
   // Validación de entrada
   if (!m) {
@@ -93,6 +95,38 @@ const mapClienteForSave = (m) => {
   const clienteIdReal = m.cliente_id ?? c.id ?? null;
   const esClienteReal = !!clienteIdReal;  // cualquier id válido cuenta
 
+  // ✅ CAMPOS DEL ACORDEÓN (según ProspectoDatos.jsx - MemberAccordionForm):
+  // - primer_nombre
+  // - segundo_nombre
+  // - apellidos
+  // - idioma
+  // - fecha_nacimiento
+  // - genero
+  // - ingreso_anual
+  // - nota
+  // (edad es calculado, no se guarda)
+  
+  // Si es un cliente EXISTENTE, solo enviar campos del acordeón
+  if (esClienteReal) {
+    const payload = {
+      id: Number(clienteIdReal),
+      primer_nombre: pick("primer_nombre"),
+      segundo_nombre: pick("segundo_nombre"),
+      apellidos: pick("apellidos"),
+      nombre_completo,
+      fecha_nacimiento: date10(pick("fecha_nacimiento")),
+      genero: pick("genero"),
+      idioma: pick("idioma"),
+      ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
+      nota: pick("nota"),
+    };
+    // Solo incluir campos que tienen valor (no null/undefined)
+    return Object.fromEntries(
+      Object.entries(payload).filter(([_, v]) => v !== null && v !== undefined)
+    );
+  }
+
+  // Si es un cliente NUEVO, incluir todos los campos necesarios
   const payload = {
     primer_nombre: pick("primer_nombre"),
     segundo_nombre: pick("segundo_nombre"),
@@ -103,12 +137,10 @@ const mapClienteForSave = (m) => {
     idioma: pick("idioma"),
     ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
     nota: pick("nota"),
-        telefono: pick("telefono"),       // (si aún los usas como compatibilidad)
-        secundario: pick("secundario"),
-        whatsapp_num: pick("whatsapp_num"),
-        // ✅ Arreglo principal con ISO/indicativo para la BD
-        telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
-
+    telefono: pick("telefono"),
+    secundario: pick("secundario"),
+    whatsapp_num: pick("whatsapp_num"),
+    telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
     email: pick("email"),
     direccion: pick("direccion"),
     calle: pick("calle"),
@@ -137,14 +169,8 @@ const mapClienteForSave = (m) => {
     whatsapp: pick("whatsapp") === true,
     telegram: pick("telegram") === true,
     texto_sms: pick("texto_sms") === true,
-    
   };
 
-  // Solo agregar 'id' si es un cliente REAL de la BD
- 
-if (esClienteReal) {
-  payload.id = Number(clienteIdReal);
-}
   return stripNulls(payload);
 };
 
@@ -966,7 +992,9 @@ const clientesPayload = existentes
           formData={formData}
           onChange={handleInputChange}
           readOnly={readOnly}
-          grupoFamiliarId={id} 
+          grupoFamiliarId={id}
+          onRefresh={reload} // Pasar función de reload para refrescar después de cancelar coberturas
+          estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(

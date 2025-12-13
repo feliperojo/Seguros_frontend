@@ -363,6 +363,7 @@ useEffect(() => {
       }
 
       // 2b) Actualizar clientes existentes con los datos modificados
+      // IMPORTANTE: Solo enviar campos del acordeón para evitar borrar datos existentes
       for (const miembro of miembrosExistentes) {
         if (!miembro.cliente_id) continue;
 
@@ -393,7 +394,11 @@ useEffect(() => {
           return Math.min(Number(num.toFixed(2)), 99999999.99);
         };
 
-        const clientePayload = stripNulls({
+        // ✅ SOLO campos del acordeón (según ProspectoDatos.jsx - MemberAccordionForm):
+        // - primer_nombre, segundo_nombre, apellidos, nombre_completo
+        // - fecha_nacimiento, genero, idioma
+        // - ingreso_anual, nota
+        const clientePayload = {
           id: Number(miembro.cliente_id),
           primer_nombre: pick("primer_nombre"),
           segundo_nombre: pick("segundo_nombre"),
@@ -404,43 +409,16 @@ useEffect(() => {
           idioma: pick("idioma"),
           ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
           nota: pick("nota"),
-          telefono: pick("telefono"),
-          secundario: pick("secundario"),
-          whatsapp_num: pick("whatsapp_num"),
-          telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
-          email: pick("email"),
-          direccion: pick("direccion"),
-          calle: pick("calle"),
-          apto: pick("apto"),
-          ciudad: pick("ciudad"),
-          estado: pick("estado"),
-          codigo_postal: pick("codigo_postal"),
-          condado: pick("condado"),
-          dir_correspondencia: pick("dir_correspondencia"),
-          social: pick("social"),
-          status: pick("status"),
-          auscis: pick("auscis"),
-          tarjeta_numero: pick("tarjeta_numero"),
-          fecha_emision: date10(pick("fecha_emision")),
-          fecha_expiracion: date10(pick("fecha_expiracion")),
-          categoria: pick("categoria"),
-          tipo_ingreso: pick("tipo_ingreso"),
-          actividad_economica: pick("actividad_economica"),
-          empleador: pick("empleador"),
-          telefono_empleador: pick("telefono_empleador"),
-          periodo_ingreso: pick("periodo_ingreso"),
-          ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")),
-          nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
-          periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
-          ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
-          whatsapp: pick("whatsapp") === true,
-          telegram: pick("telegram") === true,
-          texto_sms: pick("texto_sms") === true,
-        });
+        };
+
+        // Solo incluir campos que tienen valor (no null/undefined)
+        const payloadFinal = Object.fromEntries(
+          Object.entries(clientePayload).filter(([_, v]) => v !== null && v !== undefined)
+        );
 
         // Actualizar el cliente en el servidor
         try {
-          await apiRequest(`cliente/${miembro.cliente_id}`, "PUT", clientePayload);
+          await apiRequest(`cliente/${miembro.cliente_id}`, "PUT", payloadFinal);
           console.log(`✅ Cliente ${miembro.cliente_id} actualizado correctamente`);
         } catch (error) {
           console.error(`❌ Error al actualizar cliente ${miembro.cliente_id}:`, error);

@@ -4,10 +4,10 @@ import { formatMoneyDisplay } from "../../services/ingresos";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import RequerimientosModal from "../RequerimientosModal";
 import DriveUrlModal from "../GrupoFamiliar/DriveUrlModal";
-import HistorialRenovacionesModal from "../GrupoFamiliar/HistorialRenovacionesModal";
-import RenovacionCoberturasModal from "../GrupoFamiliar/RenovacionCoberturasModal";
 import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 import ContactosGrupoModal from "../Contacto/ContactosGrupoModal";
+import CambioVidaCancelacionModal from "../coberturas/CambioVidaCancelacionModal";
+import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCoberturasCanceladasModal";
 
 
 const Prospectogrupo = ({
@@ -15,16 +15,18 @@ const Prospectogrupo = ({
   onChange,
   readOnly,
   grupoFamiliarId,
+  onRefresh, // Función opcional para refrescar datos del grupo familiar
+  estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
 }) => {
   const [showGestion, setShowGestion] = useState(false);
 
 
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
   const [showDriveModal, setShowDriveModal] = useState(false);
-  const [showHistorialRenovaciones, setShowHistorialRenovaciones] = useState(false);
-  const [showRenovacionModal, setShowRenovacionModal] = useState(false);
   const [showHistorialCambios, setShowHistorialCambios] = useState(false);
   const [showContactosModal, setShowContactosModal] = useState(false);
+  const [showCambioVidaModal, setShowCambioVidaModal] = useState(false);
+  const [showHistorialCanceladasModal, setShowHistorialCanceladasModal] = useState(false);
 
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
@@ -57,6 +59,20 @@ const Prospectogrupo = ({
     formData?.grupo?.id ??
     formData?.grupo_id ??
     null;
+
+  // Estados permitidos para mostrar el botón de Renovaciones
+  // TOMA_DATOS, GRUPO_FAMILIAR (terminado), INSCRIPCION_INI
+  const estadosPermitidosRenovaciones = ["TOMA_DATOS", "GRUPO_FAMILIAR", "INSCRIPCION_INI"];
+  
+  // Normalizar estado actual a mayúsculas para comparación
+  const estadoNormalizado = estadoActual 
+    ? (typeof estadoActual === 'string' 
+        ? estadoActual.toUpperCase() 
+        : (estadoActual.codigo || estadoActual.code || estadoActual.nombre || "").toUpperCase())
+    : "";
+
+  // Verificar si el estado actual permite renovaciones
+  const puedeRenovar = estadosPermitidosRenovaciones.includes(estadoNormalizado);
 
   return (
     <>
@@ -272,36 +288,6 @@ const Prospectogrupo = ({
               </button>
             )}
 
-            {/* Renovar coberturas (flujo principal) */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-amber-50"
-              onClick={() => setShowRenovacionModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para renovar coberturas"
-                  : "Iniciar proceso de renovación de coberturas"
-              }
-            >
-              <i className="bi bi-arrow-repeat"></i>
-              Renovar coberturas
-            </button>
-
-            {/* Historial de renovaciones (lista de años / snapshots) */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-gray-400 text-gray-700 bg-gray-50 hover:bg-gray-100 hover:border-gray-500 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
-              onClick={() => setShowHistorialRenovaciones(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para ver el historial"
-                  : "Ver historial de renovaciones y versiones por año"
-              }
-            >
-              <i className="bi bi-clock-history"></i>
-              Historial renovaciones
-            </button>
-
             {/* Nueva Gestión (ya existente) */}
             <button
               className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
@@ -309,6 +295,38 @@ const Prospectogrupo = ({
             >
               <i className="fas fa-tasks"></i>
               Nueva Gestión
+            </button>
+
+            {/* Renovaciones / Cancelar coberturas - Solo visible en estados permitidos */}
+            {puedeRenovar && (
+              <button
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-50"
+                onClick={() => setShowCambioVidaModal(true)}
+                disabled={!resolvedGrupoId}
+                title={
+                  !resolvedGrupoId
+                    ? "Guarda primero el grupo familiar para cancelar coberturas"
+                    : "Cancelar coberturas por cambio de vida"
+                }
+              >
+                <i className="fas fa-exclamation-triangle"></i>
+                Renovaciones
+              </button>
+            )}
+
+            {/* Historial de coberturas canceladas */}
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-purple-50"
+              onClick={() => setShowHistorialCanceladasModal(true)}
+              disabled={!resolvedGrupoId}
+              title={
+                !resolvedGrupoId
+                  ? "Guarda primero el grupo familiar para ver el historial"
+                  : "Consultar historial de coberturas canceladas"
+              }
+            >
+              <i className="fas fa-history"></i>
+              Historial renovaciones
             </button>
           </div>
         </div>
@@ -340,19 +358,6 @@ const Prospectogrupo = ({
         }}
       />
 
-      {/* Modal: proceso de renovación (borrador + confirmación) */}
-      <RenovacionCoberturasModal
-        show={showRenovacionModal}
-        onHide={() => setShowRenovacionModal(false)}
-        grupoFamiliarId={resolvedGrupoId}
-      />
-
-      {/* Modal: historial de renovaciones / versiones por año */}
-      <HistorialRenovacionesModal
-        show={showHistorialRenovaciones}
-        onHide={() => setShowHistorialRenovaciones(false)}
-        grupoFamiliarId={resolvedGrupoId}
-      />
       <HistorialCambiosModal
   show={showHistorialCambios}
   onClose={() => setShowHistorialCambios(false)}
@@ -364,6 +369,26 @@ const Prospectogrupo = ({
   onHide={() => setShowContactosModal(false)}
   grupoFamiliarId={resolvedGrupoId}
   readOnly={true}
+/>
+
+<CambioVidaCancelacionModal
+  show={showCambioVidaModal}
+  onClose={() => setShowCambioVidaModal(false)}
+  grupoFamiliarId={resolvedGrupoId}
+  onSuccess={() => {
+    // Si hay una función de refresh del padre, usarla; si no, recargar la página
+    if (onRefresh && typeof onRefresh === "function") {
+      onRefresh();
+    } else {
+      window.location.reload();
+    }
+  }}
+/>
+
+<HistorialCoberturasCanceladasModal
+  show={showHistorialCanceladasModal}
+  onClose={() => setShowHistorialCanceladasModal(false)}
+  grupoFamiliarId={resolvedGrupoId}
 />
 
 

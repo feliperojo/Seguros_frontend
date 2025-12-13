@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Modal, Button, Table, Form, Badge, Collapse } from "react-bootstrap";
+import React, { useState, useCallback } from "react";
+import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
 import { FaFileExport, FaFilePdf, FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../services/generarPDFConfirmacion";
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
@@ -30,26 +30,37 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
     if (grupo?.drive_url) {
       setDriveUrl(grupo.drive_url);
     }
+    // Resetear las filas expandidas cuando cambia el grupo
+    setFilasExpandidas(new Set());
   }, [grupo]);
   
-
-  const toggleFila = (coberturaId) => {
-    const nuevasFilasExpandidas = new Set(filasExpandidas);
-    if (nuevasFilasExpandidas.has(coberturaId)) {
-      nuevasFilasExpandidas.delete(coberturaId);
-    } else {
-      nuevasFilasExpandidas.add(coberturaId);
+  // Resetear las filas expandidas cuando se cierra el modal
+  React.useEffect(() => {
+    if (!show) {
+      setFilasExpandidas(new Set());
     }
-    setFilasExpandidas(nuevasFilasExpandidas);
-  };
+  }, [show]);
+  
 
-  const renderDetalleExpandido = (cobertura) => {
+  const toggleFila = useCallback((coberturaId) => {
+    setFilasExpandidas(prev => {
+      const nuevasFilasExpandidas = new Set(prev);
+      if (nuevasFilasExpandidas.has(coberturaId)) {
+        nuevasFilasExpandidas.delete(coberturaId);
+      } else {
+        nuevasFilasExpandidas.add(coberturaId);
+      }
+      return nuevasFilasExpandidas;
+    });
+  }, []);
+
+  const renderDetalleExpandido = (cobertura, coberturaId) => {
+    const isExpanded = filasExpandidas.has(coberturaId);
+    
     return (
-      <tr>
-        <td colSpan="13" style={{ padding: 0, border: 'none' }}>
-          <Collapse in={filasExpandidas.has(cobertura.id || cobertura.codigo_poliza)}>
-            <div>
-              <div className="bg-light p-3 border-top" style={{ margin: '0' }}>
+      <tr style={{ display: isExpanded ? 'table-row' : 'none' }}>
+        <td colSpan="14" style={{ padding: 0, border: 'none' }}>
+          <div className="bg-light p-3 border-top" style={{ margin: '0' }}>
                 <div className="row">
                   <div className="col-md-12">
                     <h6 className="text-primary mb-3">
@@ -196,9 +207,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-          </Collapse>
+          </div>
         </td>
       </tr>
     );
@@ -409,7 +418,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                                   <td>{c.fecha_activacion ? parseDate(c.fecha_activacion) : "-"}</td>
                                   <td>{c.fecha_cancelacion ? parseDate(c.fecha_cancelacion) : "-"}</td>
                                 </tr>
-                                {renderDetalleExpandido(c)}
+                                {renderDetalleExpandido(c, coberturaId)}
                               </React.Fragment>
                             );
                           })}
