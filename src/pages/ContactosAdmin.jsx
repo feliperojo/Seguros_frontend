@@ -1,10 +1,12 @@
 // src/pages/ContactosAdmin.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import apiRequest from "../services/api";
 
 // ⬇️ componentes ya existentes en tu proyecto
 import LanguageSelect from "../components/selects/LanguageSelect";
 import TelefonosPro from "../components/fase2/TelefonosPro";
+import FormDireccion from "../components/FormDireccion";
 
 // Rutas base de navegación (ajústalas a tu router real)
 // ⬇️ ya lo tienes
@@ -76,6 +78,7 @@ export default function ContactosAdmin() {
   // ====== edición ======
   const empty = {
     id: null,
+    tipo_contacto: "persona", // "persona" o "empresa"
     nombres: "",
     apellidos: "",
     nombre_completo: "",
@@ -83,6 +86,16 @@ export default function ContactosAdmin() {
     telefonos: [],
     email_principal: "",
     nota: "",
+    direccion: {
+      calle: "",
+      apto: "",
+      ciudad: "",
+      estado: "",
+      codigo_postal: "",
+      condado: "",
+      dir_correspondencia: "",
+      copi_dir: false,
+    },
   };
   const [model, setModel] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -90,6 +103,10 @@ export default function ContactosAdmin() {
   // ====== vínculos del cliente ======
   const [links, setLinks] = useState([]);
   const [loadingLinks, setLoadingLinks] = useState(false);
+
+  // ====== estados para mostrar/ocultar secciones ======
+  const [showTelefonos, setShowTelefonos] = useState(false);
+  const [showDireccion, setShowDireccion] = useState(false);
 
   // ====== buscar clientes ======
   useEffect(() => {
@@ -153,8 +170,18 @@ export default function ContactosAdmin() {
           indicativo: t?.indicativo || "",
         }));
 
+      // Determinar tipo de contacto basado en estado_cliente
+      // Si estado_cliente es "empresa", es una empresa
+      // Si estado_cliente es "contacto" o no tiene primer_nombre/apellidos pero sí nombre_completo, es persona contacto
+      const estadoClienteLower = (c.estado_cliente || "").toLowerCase();
+      const esEmpresa = estadoClienteLower === "empresa" || 
+        (!c.primer_nombre && !c.apellidos && c.nombre_completo);
+      
+      const tipoContacto = esEmpresa ? "empresa" : "persona";
+
       setModel({
         id: c.id,
+        tipo_contacto: tipoContacto,
         nombres: [c.primer_nombre, c.segundo_nombre].filter(Boolean).join(" ") || "",
         apellidos: c.apellidos || "",
         nombre_completo: c.nombre_completo || "",
@@ -162,7 +189,25 @@ export default function ContactosAdmin() {
         email_principal: c.email || "",
         telefonos,
         nota: c.nota || "",
+        direccion: {
+          calle: c.calle || "",
+          apto: c.apto || "",
+          ciudad: c.ciudad || "",
+          estado: c.estado || "",
+          codigo_postal: c.codigo_postal || "",
+          condado: c.condado || "",
+          dir_correspondencia: c.dir_correspondencia || "",
+          copi_dir: false,
+        },
       });
+
+      // Mostrar automáticamente las secciones si hay datos
+      if (telefonos && telefonos.length > 0) {
+        setShowTelefonos(true);
+      }
+      if (c.calle || c.ciudad || c.estado || c.codigo_postal) {
+        setShowDireccion(true);
+      }
     } catch (e) {
       console.error("Error cargando cliente:", e);
       setModel(empty);
@@ -195,53 +240,161 @@ export default function ContactosAdmin() {
     if (k === "nombres" || k === "apellidos" || k === "nombre_completo") v = toTitle(v);
     setModel((m) => {
       const next = { ...m, [k]: v };
-      if (k === "nombres" || k === "apellidos") {
+      
+      // Si cambia el tipo de contacto, limpiar campos según corresponda
+      if (k === "tipo_contacto") {
+        if (v === "empresa") {
+          // Para empresa, limpiar nombres y apellidos, mantener nombre_completo para nombre comercial
+          next.nombres = "";
+          next.apellidos = "";
+        }
+      }
+      
+      // Actualizar nombre_completo solo para personas (nombres + apellidos)
+      if ((k === "nombres" || k === "apellidos") && next.tipo_contacto === "persona") {
         next.nombre_completo = toTitle([next.nombres, next.apellidos].filter(Boolean).join(" "));
       }
+      // Para empresas, el nombre_completo es el nombre comercial y se edita directamente
+      
       return next;
+    });
+  };
+
+  // Handler para cambios en dirección
+  const handleDireccionChange = (name, value, direccionCompleta) => {
+    setModel((m) => {
+      const updatedDireccion = {
+        ...(m.direccion || empty.direccion),
+        [name]: value,
+      };
+      return {
+        ...m,
+        direccion: updatedDireccion,
+      };
     });
   };
 
   // ====== guardar cambios ======
   const save = async () => {
-    if (!model.id) return;
     setSaving(true);
     try {
-      const { primer_nombre, segundo_nombre } = splitNames(model.nombres || "");
       const principal = Array.isArray(model.telefonos)
         ? model.telefonos.find((x) => x.principal)
         : null;
 
-      const payload = {
-        primer_nombre,
-        segundo_nombre,
-        apellidos: model.apellidos?.trim() || null,
-        nombre_completo: model.nombre_completo?.trim() || null,
-        idioma: model.idioma || null,
-        email: model.email_principal || null,
-        telefonos: model.telefonos || [],
-        nota: model.nota || null,
-        telefono: principal?.numero ?? null, // ← compat: teléfono plano (principal)
-        estado_cliente: "Cliente",
-      };
+      // Crear dirección concatenada como texto simple (compatibilidad con backend)
+      const direccionConcatenada = [
+        model.direccion?.calle,
+        model.direccion?.apto,
+        model.direccion?.ciudad,
+        model.direccion?.estado,
+        model.direccion?.codigo_postal,
+      ].filter(Boolean).join(" ");
 
-      await apiRequest(`/cliente/${model.id}`, "PUT", payload);
+      let payload;
+      
+      if (model.tipo_contacto === "empresa") {
+        // Para empresas: usar nombre_completo como nombre comercial
+        // estado_cliente será el nombre comercial (o "empresa" como valor fijo)
+        // Dejar primer_nombre y apellidos como null
+        payload = {
+          primer_nombre: null,
+          segundo_nombre: null,
+          apellidos: null,
+          nombre_completo: model.nombre_completo?.trim() || null,
+          idioma: model.idioma || null,
+          email: model.email_principal || null,
+          telefonos: model.telefonos || [],
+          nota: model.nota || null,
+          telefono: principal?.numero ?? null,
+          // Para empresas, guardamos "empresa" en estado_cliente
+          estado_cliente: "empresa",
+          activo: true,
+          es_prospecto: false,
+          // Datos de dirección - campos individuales
+          calle: model.direccion?.calle || null,
+          apto: model.direccion?.apto || null,
+          ciudad: model.direccion?.ciudad || null,
+          estado: model.direccion?.estado || null,
+          codigo_postal: model.direccion?.codigo_postal || null,
+          condado: model.direccion?.condado || null,
+          // Dirección concatenada (para compatibilidad)
+          direccion: direccionConcatenada || null,
+          // Dirección de correspondencia
+          dir_correspondencia: model.direccion?.dir_correspondencia || null,
+        };
+      } else {
+        // Para personas: usar campos normales
+        const { primer_nombre, segundo_nombre } = splitNames(model.nombres || "");
+        payload = {
+          primer_nombre,
+          segundo_nombre,
+          apellidos: model.apellidos?.trim() || null,
+          nombre_completo: model.nombre_completo?.trim() || null,
+          idioma: model.idioma || null,
+          email: model.email_principal || null,
+          telefonos: model.telefonos || [],
+          nota: model.nota || null,
+          telefono: principal?.numero ?? null,
+          // Para contactos personas, usar "contacto"
+          estado_cliente: "contacto",
+          activo: true,
+          es_prospecto: false,
+          // Datos de dirección - campos individuales
+          calle: model.direccion?.calle || null,
+          apto: model.direccion?.apto || null,
+          ciudad: model.direccion?.ciudad || null,
+          estado: model.direccion?.estado || null,
+          codigo_postal: model.direccion?.codigo_postal || null,
+          condado: model.direccion?.condado || null,
+          // Dirección concatenada (para compatibilidad)
+          direccion: direccionConcatenada || null,
+          // Dirección de correspondencia
+          dir_correspondencia: model.direccion?.dir_correspondencia || null,
+        };
+      }
 
-      // refrescar listado
-      setRows((prev) =>
-        prev.map((r) =>
-          r.id === model.id
-            ? {
-                ...r,
-                nombre_completo: payload.nombre_completo ?? r.nombre_completo,
-                idioma: payload.idioma ?? r.idioma,
-                telefono: payload.telefono ?? r.telefono,
-              }
-            : r
-        )
-      );
+      if (model.id) {
+        // Actualizar contacto existente
+        await apiRequest(`/cliente/${model.id}`, "PUT", payload);
+        
+        // refrescar listado
+        setRows((prev) =>
+          prev.map((r) =>
+            r.id === model.id
+              ? {
+                  ...r,
+                  nombre_completo: payload.nombre_completo ?? r.nombre_completo,
+                  idioma: payload.idioma ?? r.idioma,
+                  telefono: payload.telefono ?? r.telefono,
+                  estado_cliente: payload.estado_cliente ?? r.estado_cliente,
+                }
+              : r
+          )
+        );
+      } else {
+        // Crear nuevo contacto
+        const response = await apiRequest("/cliente/create", "POST", {
+          clientes: [payload]
+        });
+        
+        const nuevoContacto = response?.clientes?.[0] || response?.data?.clientes?.[0];
+        if (nuevoContacto?.id) {
+          // Actualizar el modelo con el ID del nuevo contacto
+          setModel({ ...model, id: nuevoContacto.id });
+          
+          // Recargar el contacto para tener todos los datos actualizados
+          await loadContact(nuevoContacto.id);
+          
+          // Limpiar búsqueda y recargar lista si es necesario
+          alert("Contacto creado exitosamente");
+        } else {
+          throw new Error("No se recibió el ID del contacto creado");
+        }
+      }
     } catch (e) {
-      console.error(e);
+      console.error("Error al guardar:", e);
+      alert(`Error al guardar: ${e.message || "Error desconocido"}`);
     } finally {
       setSaving(false);
     }
@@ -250,9 +403,18 @@ export default function ContactosAdmin() {
   const resetForm = () => {
     setModel(empty);
     setLinks([]);
+    setShowTelefonos(false);
+    setShowDireccion(false);
   };
 
-  const canSave = useMemo(() => !!model.id, [model.id]);
+  // Permitir guardar si hay nombre_completo (tanto para crear como para editar)
+  const canSave = useMemo(() => {
+    const tieneNombre = model.nombre_completo?.trim().length > 0;
+    return tieneNombre;
+  }, [model.nombre_completo]);
+  
+  const esPersona = model.tipo_contacto === "persona";
+  const esEmpresa = model.tipo_contacto === "empresa";
 
   /* ===================== render ===================== */
 
@@ -332,43 +494,89 @@ export default function ContactosAdmin() {
           <div className="card mb-3">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5 className="mb-0">Editar Cliente</h5>
+                <h5 className="mb-0">{model.id ? "Editar Cliente" : "Crear Nuevo Contacto"}</h5>
                 <div className="btn-group">
                   <button className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
                     Nuevo / Limpiar
                   </button>
                   <button className="btn btn-primary btn-sm" onClick={save} disabled={!canSave || saving}>
-                    {saving ? "Guardando…" : "Guardar"}
+                    {saving ? "Guardando…" : model.id ? "Guardar" : "Crear"}
                   </button>
                 </div>
               </div>
 
               <div className="row g-3">
-                <div className="col-md-6">
-                  <label className="form-label small">Nombres</label>
-                  <input
-                    className="form-control form-control-sm"
-                    value={model.nombres}
-                    onChange={(e) => setField("nombres", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label small">Apellidos</label>
-                  <input
-                    className="form-control form-control-sm"
-                    value={model.apellidos}
-                    onChange={(e) => setField("apellidos", e.target.value)}
-                  />
+                {/* Selector de tipo de contacto */}
+                <div className="col-12">
+                  <label className="form-label small">Tipo de Contacto *</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={model.tipo_contacto}
+                    onChange={(e) => setField("tipo_contacto", e.target.value)}
+                    disabled={!!model.id} // No permitir cambiar tipo si ya existe
+                  >
+                    <option value="persona">Persona</option>
+                    <option value="empresa">Empresa</option>
+                  </select>
+                  {model.id && (
+                    <small className="form-text text-muted">
+                      El tipo no puede cambiarse una vez creado el contacto
+                    </small>
+                  )}
                 </div>
 
-                <div className="col-md-6">
-                  <label className="form-label small">Nombre Completo</label>
-                  <input
-                    className="form-control form-control-sm"
-                    value={model.nombre_completo}
-                    onChange={(e) => setField("nombre_completo", e.target.value)}
-                  />
-                </div>
+                {/* Campos para Persona */}
+                {esPersona && (
+                  <>
+                    <div className="col-md-6">
+                      <label className="form-label small">Nombres</label>
+                      <input
+                        className="form-control form-control-sm"
+                        value={model.nombres}
+                        onChange={(e) => setField("nombres", e.target.value)}
+                        placeholder="Primer y segundo nombre"
+                      />
+                    </div>
+                    <div className="col-md-6">
+                      <label className="form-label small">Apellidos</label>
+                      <input
+                        className="form-control form-control-sm"
+                        value={model.apellidos}
+                        onChange={(e) => setField("apellidos", e.target.value)}
+                        placeholder="Apellidos"
+                      />
+                    </div>
+                    <div className="col-md-12">
+                      <label className="form-label small">Nombre Completo</label>
+                      <input
+                        className="form-control form-control-sm bg-light"
+                        value={model.nombre_completo}
+                        readOnly
+                        placeholder="Se genera automáticamente"
+                      />
+                      <small className="form-text text-muted">
+                        Se genera automáticamente a partir de nombres y apellidos
+                      </small>
+                    </div>
+                  </>
+                )}
+
+                {/* Campos para Empresa */}
+                {esEmpresa && (
+                  <div className="col-md-12">
+                    <label className="form-label small">Nombre Comercial / Razón Social *</label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={model.nombre_completo}
+                      onChange={(e) => setField("nombre_completo", e.target.value)}
+                      placeholder="Ingrese el nombre de la empresa"
+                      required
+                    />
+                    <small className="form-text text-muted">
+                      Este será el nombre comercial de la empresa
+                    </small>
+                  </div>
+                )}
 
                 <div className="col-md-4">
                   <label className="form-label small">Idioma</label>
@@ -394,33 +602,84 @@ export default function ContactosAdmin() {
                   />
                 </div>
 
+                {/* Botón para agregar/mostrar Teléfonos */}
                 <div className="col-12">
-                  <label className="form-label small mb-1">Teléfonos</label>
-                  <TelefonosPro
-                    value={model.telefonos}
-                    onChange={(list) => setField("telefonos", list)}
-                    readOnly={false}
-                    uiPreset="clean"
-                    countrySelectWidth={200}
-                    formatByCountry
-                  />
-                  {(!model.telefonos || model.telefonos.length === 0) && (
-                    <div className="text-muted small mt-1">Sin teléfonos.</div>
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <label className="form-label small mb-0">Teléfonos</label>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${showTelefonos ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                      onClick={() => setShowTelefonos(!showTelefonos)}
+                    >
+                      <i className={`bi ${showTelefonos ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
+                      {showTelefonos ? 'Ocultar' : 'Agregar Teléfono'}
+                    </button>
+                  </div>
+                  {showTelefonos && (
+                    <div className="mt-2">
+                      <TelefonosPro
+                        value={model.telefonos}
+                        onChange={(list) => setField("telefonos", list)}
+                        readOnly={false}
+                        uiPreset="clean"
+                        countrySelectWidth={200}
+                        formatByCountry
+                      />
+                      {(!model.telefonos || model.telefonos.length === 0) && (
+                        <div className="text-muted small mt-2">Sin teléfonos.</div>
+                      )}
+                    </div>
+                  )}
+                  {!showTelefonos && model.telefonos && model.telefonos.length > 0 && (
+                    <div className="text-muted small mt-1">
+                      {model.telefonos.length} teléfono(s) registrado(s)
+                    </div>
+                  )}
+                </div>
+
+                {/* Botón para agregar/mostrar Dirección */}
+                <div className="col-12 mt-3">
+                  <div className="d-flex justify-content-between align-items-center mb-2">
+                    <label className="form-label small mb-0">Dirección</label>
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${showDireccion ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                      onClick={() => setShowDireccion(!showDireccion)}
+                    >
+                      <i className={`bi ${showDireccion ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
+                      {showDireccion ? 'Ocultar' : 'Agregar Dirección'}
+                    </button>
+                  </div>
+                  {showDireccion && (
+                    <div className="mt-2 border-top pt-3">
+                      <FormDireccion
+                        formData={model.direccion || empty.direccion}
+                        onChange={handleDireccionChange}
+                        editable={true}
+                        hideCorrespondencia={true}
+                      />
+                    </div>
+                  )}
+                  {!showDireccion && model.direccion && (model.direccion.calle || model.direccion.ciudad) && (
+                    <div className="text-muted small mt-1">
+                      Dirección registrada: {[model.direccion.calle, model.direccion.ciudad].filter(Boolean).join(', ') || 'Dirección registrada'}
+                    </div>
                   )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* vínculos */}
-          <div className="card">
-            <div className="card-body">
-              <h6 className="mb-2">Grupos familiares asociados</h6>
-              {loadingLinks ? (
-                <div className="text-muted">Cargando…</div>
-              ) : links.length === 0 ? (
-                <div className="text-muted">Sin vínculos.</div>
-              ) : (
+          {/* vínculos - solo mostrar si el contacto ya existe */}
+          {model.id && (
+            <div className="card">
+              <div className="card-body">
+                <h6 className="mb-2">Grupos familiares asociados</h6>
+                {loadingLinks ? (
+                  <div className="text-muted">Cargando…</div>
+                ) : links.length === 0 ? (
+                  <div className="text-muted">Sin vínculos.</div>
+                ) : (
                 <div className="table-responsive">
                   <table className="table table-sm">
                     <thead className="table-light">
@@ -494,11 +753,12 @@ export default function ContactosAdmin() {
                   </table>
                 </div>
               )}
-              <div className="form-text">
-                * Solo lectura aquí. La asociación se gestiona en la ficha del cliente/grupo.
+                <div className="form-text">
+                  * Solo lectura aquí. La asociación se gestiona en la ficha del cliente/grupo.
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

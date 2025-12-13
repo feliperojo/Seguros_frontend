@@ -2,7 +2,7 @@ import React from "react";
 import { Form, Row, Col, InputGroup } from "react-bootstrap";
 import { FaMapMarkerAlt } from "react-icons/fa";
 
-const FormDireccion = ({ formData, onChange, editable = true }) => {
+const FormDireccion = ({ formData, onChange, editable = true, hideCorrespondencia = false }) => {
   // Función para manejar cambios en los campos
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -171,31 +171,34 @@ const FormDireccion = ({ formData, onChange, editable = true }) => {
         </Col>
       </Row>
 
-      <Row className="mb-3">
-        <Col md={10}>
-          <Form.Group>
-            <Form.Label>Dirección de Correspondencia</Form.Label>
-            <Form.Control
-              type="text"
-              name="dir_correspondencia"
-              value={formData.dir_correspondencia || ""}
+      {/* Ocultar dirección de correspondencia si hideCorrespondencia es true */}
+      {!hideCorrespondencia && (
+        <Row className="mb-3">
+          <Col md={10}>
+            <Form.Group>
+              <Form.Label>Dirección de Correspondencia</Form.Label>
+              <Form.Control
+                type="text"
+                name="dir_correspondencia"
+                value={formData.dir_correspondencia || ""}
+                onChange={handleChange}
+                onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                disabled={!editable}
+              />
+            </Form.Group>
+          </Col>
+          <Col md={2} className="d-flex align-items-end">
+            <Form.Check
+              type="checkbox"
+              label="Copiar Dirección"
+              name="copi_dir"
+              checked={formData.copi_dir || false}
               onChange={handleChange}
-              onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
               disabled={!editable}
             />
-          </Form.Group>
-        </Col>
-        <Col md={2} className="d-flex align-items-end">
-          <Form.Check
-            type="checkbox"
-            label="Copiar Dirección"
-            name="copi_dir"
-            checked={formData.copi_dir || false}
-            onChange={handleChange}
-            disabled={!editable}
-          />
-        </Col>
-      </Row>
+          </Col>
+        </Row>
+      )}
     </>
   );
 };

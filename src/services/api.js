@@ -51,5 +51,35 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
   return data;
 };
 
-export { apiRequest, genUUID };
+/**
+ * apiRequestFormData - Para subir archivos con FormData
+ * @param {string} endpoint - Ruta del endpoint
+ * @param {string} method - Método HTTP (POST, PUT)
+ * @param {FormData} formData - FormData con los archivos y campos
+ */
+const apiRequestFormData = async (endpoint, method = "POST", formData = null) => {
+  const token = getAuthToken();
+
+  const headers = {
+    Accept: "application/json",
+    // NO incluir Content-Type, el navegador lo establece automáticamente con el boundary
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+
+  const options = { method, headers };
+  if (formData) options.body = formData;
+
+  // Construye la URL final garantizando una sola barra
+  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+  const response = await fetch(url, options);
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data?.message || "Error en la petición");
+  }
+  return data;
+};
+
+export { apiRequest, apiRequestFormData, genUUID };
 export default apiRequest;

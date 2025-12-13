@@ -8,6 +8,7 @@ import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 import ContactosGrupoModal from "../Contacto/ContactosGrupoModal";
 import CambioVidaCancelacionModal from "../coberturas/CambioVidaCancelacionModal";
 import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCoberturasCanceladasModal";
+import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
 
 
 const Prospectogrupo = ({
@@ -27,6 +28,7 @@ const Prospectogrupo = ({
   const [showContactosModal, setShowContactosModal] = useState(false);
   const [showCambioVidaModal, setShowCambioVidaModal] = useState(false);
   const [showHistorialCanceladasModal, setShowHistorialCanceladasModal] = useState(false);
+  const [showGestorDocumentosModal, setShowGestorDocumentosModal] = useState(false);
 
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
@@ -328,6 +330,21 @@ const Prospectogrupo = ({
               <i className="fas fa-history"></i>
               Historial renovaciones
             </button>
+
+            {/* Gestor de Documentos */}
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-50"
+              onClick={() => setShowGestorDocumentosModal(true)}
+              disabled={!resolvedGrupoId}
+              title={
+                !resolvedGrupoId
+                  ? "Guarda primero el grupo familiar para gestionar documentos"
+                  : "Gestionar documentos y carpetas del grupo familiar"
+              }
+            >
+              <i className="fas fa-folder-open"></i>
+              Gestor de documentos
+            </button>
           </div>
         </div>
       </div>
@@ -388,6 +405,12 @@ const Prospectogrupo = ({
 <HistorialCoberturasCanceladasModal
   show={showHistorialCanceladasModal}
   onClose={() => setShowHistorialCanceladasModal(false)}
+  grupoFamiliarId={resolvedGrupoId}
+/>
+
+<GestorDocumentosGrupoFamiliar
+  show={showGestorDocumentosModal}
+  onHide={() => setShowGestorDocumentosModal(false)}
   grupoFamiliarId={resolvedGrupoId}
 />
 
