@@ -1,0 +1,284 @@
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import {
+  Card,
+  Form,
+  Button,
+  Spinner,
+  Alert,
+  Badge,
+  Accordion,
+} from "react-bootstrap";
+import { FaSave, FaCheckSquare, FaSquare, FaArrowLeft } from "react-icons/fa";
+import { toast } from "react-toastify";
+import { rolesService, permissionsService } from "../../services/adminApi";
+
+const RolePermissions = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [role, setRole] = useState(null);
+  const [permissions, setPermissions] = useState([]);
+  const [selectedPermissions, setSelectedPermissions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, [id]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [roleResponse, permissionsResponse] = await Promise.all([
+        rolesService.get(id),
+        permissionsService.listGrouped(),
+      ]);
+
+      setRole(roleResponse);
+      setSelectedPermissions(
+        roleResponse.permissions
+          ? roleResponse.permissions.map((p) => p.id)
+          : []
+      );
+
+      setPermissions(permissionsResponse.data || {});
+    } catch (err) {
+      setError(err.message || "Error al cargar datos");
+      toast.error("Error al cargar datos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTogglePermission = (permissionId) => {
+    setSelectedPermissions((prev) =>
+      prev.includes(permissionId)
+        ? prev.filter((id) => id !== permissionId)
+        : [...prev, permissionId]
+    );
+  };
+
+  const handleSelectAllInModule = (modulePermissions) => {
+    const moduleIds = modulePermissions.map((p) => p.id);
+    const allSelected = moduleIds.every((id) =>
+      selectedPermissions.includes(id)
+    );
+
+    if (allSelected) {
+      setSelectedPermissions((prev) =>
+        prev.filter((id) => !moduleIds.includes(id))
+      );
+    } else {
+      setSelectedPermissions((prev) => [
+        ...prev.filter((id) => !moduleIds.includes(id)),
+        ...moduleIds,
+      ]);
+    }
+  };
+
+  const handleSelectAll = () => {
+    const allIds = Object.values(permissions)
+      .flat()
+      .map((p) => p.id);
+    const allSelected = allIds.every((id) =>
+      selectedPermissions.includes(id)
+    );
+
+    if (allSelected) {
+      setSelectedPermissions([]);
+    } else {
+      setSelectedPermissions(allIds);
+    }
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      await rolesService.assignPermissions(id, selectedPermissions);
+      toast.success("Permisos guardados correctamente");
+      navigate("/admin/roles");
+    } catch (err) {
+      setError(err.message || "Error al guardar permisos");
+      toast.error("Error al guardar permisos");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="container-fluid py-4">
+        <div className="text-center py-5">
+          <Spinner animation="border" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </Spinner>
+        </div>
+      </div>
+    );
+  }
+
+  const modules = Object.keys(permissions);
+  const allIds = Object.values(permissions)
+    .flat()
+    .map((p) => p.id);
+  const allSelected = allIds.length > 0 && allIds.every((id) => selectedPermissions.includes(id));
+
+  return (
+    <div className="container-fluid py-4">
+      <Card>
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <div>
+            <Button
+              variant="link"
+              className="p-0 mb-2"
+              onClick={() => navigate("/admin/roles")}
+            >
+              <FaArrowLeft className="me-2" />
+              Volver a Roles
+            </Button>
+            <h4 className="mb-0">
+              Permisos del Rol: <strong>{role?.name}</strong>
+            </h4>
+          </div>
+          <div className="d-flex gap-2">
+            <Button
+              variant="outline-secondary"
+              onClick={handleSelectAll}
+              disabled={saving}
+            >
+              {allSelected ? (
+                <>
+                  <FaSquare className="me-2" />
+                  Limpiar Todo
+                </>
+              ) : (
+                <>
+                  <FaCheckSquare className="me-2" />
+                  Seleccionar Todo
+                </>
+              )}
+            </Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? (
+                <>
+                  <Spinner size="sm" className="me-2" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <FaSave className="me-2" />
+                  Guardar
+                </>
+              )}
+            </Button>
+          </div>
+        </Card.Header>
+        <Card.Body>
+          {error && (
+            <Alert variant="danger" dismissible onClose={() => setError(null)}>
+              {error}
+            </Alert>
+          )}
+
+          <Alert variant="info" className="mb-4">
+            <strong>{selectedPermissions.length}</strong> permiso(s) seleccionado(s) de{" "}
+            <strong>{allIds.length}</strong> disponibles
+          </Alert>
+
+          {modules.length === 0 ? (
+            <Alert variant="warning" className="text-center">
+              No hay permisos disponibles
+            </Alert>
+          ) : (
+            <Accordion defaultActiveKey={modules[0]} alwaysOpen>
+              {modules.map((module) => {
+                const modulePermissions = permissions[module];
+                const moduleIds = modulePermissions.map((p) => p.id);
+                const moduleAllSelected =
+                  moduleIds.length > 0 &&
+                  moduleIds.every((id) => selectedPermissions.includes(id));
+                const moduleSomeSelected = moduleIds.some((id) =>
+                  selectedPermissions.includes(id)
+                );
+
+                return (
+                  <Accordion.Item key={module} eventKey={module}>
+                    <Accordion.Header>
+                      <div className="d-flex justify-content-between align-items-center w-100 me-3">
+                        <span>
+                          <strong>{module}</strong>
+                          <Badge bg="secondary" className="ms-2">
+                            {modulePermissions.length}
+                          </Badge>
+                        </span>
+                        <Button
+                          variant="link"
+                          size="sm"
+                          className="text-decoration-none"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectAllInModule(modulePermissions);
+                          }}
+                        >
+                          {moduleAllSelected ? (
+                            <>
+                              <FaSquare className="me-1" />
+                              Limpiar Módulo
+                            </>
+                          ) : (
+                            <>
+                              <FaCheckSquare className="me-1" />
+                              Seleccionar Módulo
+                            </>
+                          )}
+                        </Button>
+                      </div>
+                    </Accordion.Header>
+                    <Accordion.Body>
+                      <div className="row">
+                        {modulePermissions.map((permission) => (
+                          <div key={permission.id} className="col-md-6 mb-2">
+                            <Form.Check
+                              type="checkbox"
+                              id={`perm-${permission.id}`}
+                              label={
+                                <div>
+                                  <strong>{permission.name}</strong>
+                                  {permission.description && (
+                                    <div className="text-muted small">
+                                      {permission.description}
+                                    </div>
+                                  )}
+                                  <Badge bg="secondary" className="ms-2">
+                                    {permission.slug}
+                                  </Badge>
+                                </div>
+                              }
+                              checked={selectedPermissions.includes(
+                                permission.id
+                              )}
+                              onChange={() =>
+                                handleTogglePermission(permission.id)
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </Accordion.Body>
+                  </Accordion.Item>
+                );
+              })}
+            </Accordion>
+          )}
+        </Card.Body>
+      </Card>
+    </div>
+  );
+};
+
+export default RolePermissions;
+

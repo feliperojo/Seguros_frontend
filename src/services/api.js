@@ -43,10 +43,55 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   const response = await fetch(url, options);
-  const data = await response.json().catch(() => ({}));
+  
+  let data = {};
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (parseError) {
+    data = { message: "Error al procesar la respuesta del servidor" };
+  }
 
   if (!response.ok) {
-    throw new Error(data?.message || "Error en la petición");
+    let errorMessage = data?.message || "Error en la petición";
+    
+    // Mensajes específicos según el código de estado
+    if (response.status === 401) {
+      errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
+      // Limpiar token inválido
+      localStorage.removeItem("auth_token");
+    } else if (response.status === 403) {
+      errorMessage = data?.message || "No tienes permisos para realizar esta acción";
+    } else if (response.status === 404) {
+      errorMessage = data?.message || "Recurso no encontrado";
+    } else if (response.status === 422) {
+      errorMessage = data?.message || "Error de validación";
+    } else if (response.status >= 500) {
+      errorMessage = data?.message || "Error del servidor. Por favor, intenta más tarde.";
+    }
+    
+    const error = new Error(errorMessage);
+    error.response = {
+      status: response.status,
+      data: data,
+      errors: data?.errors || null,
+      code: data?.code || null,
+      url: url,
+    };
+    
+    // Log para debugging en desarrollo
+    if (import.meta.env.DEV) {
+      console.error("❌ API Error:", {
+        url,
+        method,
+        status: response.status,
+        message: errorMessage,
+        data,
+        hasToken: !!token,
+      });
+    }
+    
+    throw error;
   }
   return data;
 };
@@ -73,10 +118,54 @@ const apiRequestFormData = async (endpoint, method = "POST", formData = null) =>
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
   const response = await fetch(url, options);
-  const data = await response.json().catch(() => ({}));
+  
+  let data = {};
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch (parseError) {
+    data = { message: "Error al procesar la respuesta del servidor" };
+  }
 
   if (!response.ok) {
-    throw new Error(data?.message || "Error en la petición");
+    let errorMessage = data?.message || "Error en la petición";
+    
+    // Mensajes específicos según el código de estado
+    if (response.status === 401) {
+      errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
+      localStorage.removeItem("auth_token");
+    } else if (response.status === 403) {
+      errorMessage = data?.message || "No tienes permisos para realizar esta acción";
+    } else if (response.status === 404) {
+      errorMessage = data?.message || "Recurso no encontrado";
+    } else if (response.status === 422) {
+      errorMessage = data?.message || "Error de validación";
+    } else if (response.status >= 500) {
+      errorMessage = data?.message || "Error del servidor. Por favor, intenta más tarde.";
+    }
+    
+    const error = new Error(errorMessage);
+    error.response = {
+      status: response.status,
+      data: data,
+      errors: data?.errors || null,
+      code: data?.code || null,
+      url: url,
+    };
+    
+    // Log para debugging en desarrollo
+    if (import.meta.env.DEV) {
+      console.error("❌ API Error (FormData):", {
+        url,
+        method,
+        status: response.status,
+        message: errorMessage,
+        data,
+        hasToken: !!token,
+      });
+    }
+    
+    throw error;
   }
   return data;
 };

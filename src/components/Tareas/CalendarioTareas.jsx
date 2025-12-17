@@ -10,7 +10,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [mesActual, setMesActual] = useState(hoy.getMonth());
   const [añoActual, setAñoActual] = useState(hoy.getFullYear());
 
-  const [tareas, setTareas] = useState(tareasIniciales);
+  const [tareas, setTareas] = useState(Array.isArray(tareasIniciales) ? tareasIniciales : []);
   const [showNuevaModal, setShowNuevaModal] = useState(false);
   const [showResponderModal, setShowResponderModal] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
@@ -38,29 +38,39 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
   });
 
   const abrirResponderTarea = (tarea) => {
+    if (!tarea) return;
     setTareaSeleccionada(tarea);
     setShowResponderModal(true);
   };
 
   const abrirDetalleDia = (lista) => {
+    if (!Array.isArray(lista)) return;
     setTareasDetalle(lista);
     setShowDetalleModal(true);
   };
 
   const onCreated = (nuevaTarea) => {
-    setTareas((prev) => [...prev, nuevaTarea]);
+    if (!nuevaTarea) return;
+    setTareas((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : [];
+      return [...prevArray, nuevaTarea];
+    });
     setToast({ show: true, message: "✅ Nueva tarea agregada", variant: "success" });
   };
 
   const onUpdated = (tareaActualizada) => {
-    setTareas((prev) =>
-      prev.map((t) => (t.id === tareaActualizada.id ? tareaActualizada : t))
-    );
+    if (!tareaActualizada || !tareaActualizada.id) return;
+    setTareas((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : [];
+      return prevArray.map((t) => (t && t.id === tareaActualizada.id ? tareaActualizada : t));
+    });
     setToast({ show: true, message: "✅ Tarea actualizada", variant: "info" });
   };
 
   const obtenerTodasTareasDelDia = (dia) => {
+    if (!Array.isArray(tareas)) return [];
     return tareas.filter((t) => {
+      if (!t) return false;
       const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
       return fecha.getDate() === dia && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual;
     });
@@ -73,9 +83,9 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
         
         if (response && Array.isArray(response)) {
           setUsuarios(response);
-          const usuarioDefault = response.find(u => u.id === currentUser.id);
+          const usuarioDefault = currentUser?.id ? response.find(u => u.id === currentUser?.id) : null;
           if (!usuarioSeleccionado) {
-            setUsuarioSeleccionado(usuarioDefault ? usuarioDefault.id : response[0].id);
+            setUsuarioSeleccionado(usuarioDefault ? usuarioDefault.id : (response[0]?.id || null));
           }
         }
         
@@ -97,6 +107,8 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
       
         if (response && Array.isArray(response.data)) {
           setTareas(response.data);
+        } else {
+          setTareas([]);
         }
         
       } catch (error) {
@@ -116,16 +128,18 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
 
   // Agrupar tareas por día según scheduled_date
   const tareasPorDia = {};
-  tareas
-    .filter((t) => t.status !== "completed")
-    .forEach((t) => {
-      const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
-      if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
-        const dia = fecha.getDate();
-        if (!tareasPorDia[dia]) tareasPorDia[dia] = [];
-        tareasPorDia[dia].push(t);
-      }
-    });
+  if (Array.isArray(tareas)) {
+    tareas
+      .filter((t) => t && t.status !== "completed")
+      .forEach((t) => {
+        const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
+        if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
+          const dia = fecha.getDate();
+          if (!tareasPorDia[dia]) tareasPorDia[dia] = [];
+          tareasPorDia[dia].push(t);
+        }
+      });
+  }
   
 
 
@@ -144,7 +158,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
   };
 
   const onDragStart = (e, tarea) => {
-    if (tarea.status === "completed") {
+    if (!tarea || tarea.status === "completed") {
       e.preventDefault();
       return;
     }
@@ -154,15 +168,15 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
   const onDrop = async (e, dia) => {
     e.preventDefault();
     const tareaId = e.dataTransfer.getData("tareaId");
-    if (!tareaId) return;
+    if (!tareaId || !Array.isArray(tareas)) return;
 
     const nuevaFecha = new Date(añoActual, mesActual, dia).toISOString().split("T")[0];
 
-    const tarea = tareas.find((t) => t.id === parseInt(tareaId));
+    const tarea = tareas.find((t) => t && t.id === parseInt(tareaId));
     if (!tarea) return;
 
-    let newDueDate = tarea.due_date;
-    if (new Date(nuevaFecha) > new Date(tarea.due_date)) {
+    let newDueDate = tarea.due_date || nuevaFecha;
+    if (tarea.due_date && new Date(nuevaFecha) > new Date(tarea.due_date)) {
       newDueDate = nuevaFecha;
     }
 
@@ -218,7 +232,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
       ➕ Nueva Tarea
     </Button>
 
-    {(currentUser.name === "Auxiliar" || currentUser.name === "Catalina") && (
+    {(currentUser?.name === "Auxiliar" || currentUser?.name === "Catalina") && (
       <Button variant="outline-dark" size="sm" onClick={() => {
   setFechaResumen(new Date());
   setShowResumen(true);
@@ -247,7 +261,7 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
       style={{ width: "220px" }}
       value={usuarioSeleccionado || ""}
       onChange={(e) => setUsuarioSeleccionado(parseInt(e.target.value))}
-      disabled={!(currentUser.name === "Admin" || currentUser.name === "Auxiliar" || currentUser.name === "Catalina")}
+      disabled={!(currentUser?.name === "Admin" || currentUser?.name === "Auxiliar" || currentUser?.name === "Catalina")}
 
     >
       {usuarios.length > 0 ? (
@@ -314,24 +328,27 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
               <div className="mt-2">
                 {tareasDia.length > 0 ? (
                   <>
-                    {tareasDia.slice(0, 5).map((t) => (
-                      <Badge
-                        key={t.id}
-                        bg={getBadgeColor(t.status)}
-                        className="d-block mb-1"
-                        style={{ fontSize: "0.75rem", cursor: "pointer" }}
-                        draggable={t.status !== "completed"}
-                        onDragStart={(e) => onDragStart(e, t)}
-                        onClick={(e) => {
-                          e.stopPropagation(); // Evita abrir el modal de detalle
-                          abrirResponderTarea(t); // Abre modal de responder
-                        }}
-                        
-                        
-                      >
-                         {t.log.cliente?.nombre_completo || "Sin Cliente"}
-                      </Badge>
-                    ))}
+                    {tareasDia.slice(0, 5).map((t) => {
+                      if (!t) return null;
+                      return (
+                        <Badge
+                          key={t.id}
+                          bg={getBadgeColor(t?.status)}
+                          className="d-block mb-1"
+                          style={{ fontSize: "0.75rem", cursor: "pointer" }}
+                          draggable={t?.status !== "completed"}
+                          onDragStart={(e) => onDragStart(e, t)}
+                          onClick={(e) => {
+                            e.stopPropagation(); // Evita abrir el modal de detalle
+                            abrirResponderTarea(t); // Abre modal de responder
+                          }}
+                          
+                          
+                        >
+                           {t.log?.cliente?.nombre_completo || "Sin Cliente"}
+                        </Badge>
+                      );
+                    })}
                     {tareasDia.length > 5 && (
                       <small
                         className="text-primary"
@@ -365,31 +382,40 @@ const [usuarios, setUsuarios] = useState([]); // Lista de usuarios
   </Modal.Header>
   <Modal.Body>
     <ListGroup>
-      {tareasDetalle.map((t) => (
-        <ListGroup.Item
-          key={t.id}
-          className="d-flex justify-content-between align-items-center"
-        >
-          <div>
-            <Badge bg={getBadgeColor(t.status)} className="me-2">
-              {getStatusLabel(t.status)}
-            </Badge>
-            <div className="fw-bold">
-              {t.log?.concept?.name || "Tarea"}
-            </div>
-            <div className="text-muted" style={{ fontSize: "0.85rem" }}>
-              {t.log?.cliente?.nombre_completo || "Sin Cliente"}
-            </div>
-          </div>
-          <Button
-            size="sm"
-            variant="outline-primary"
-            onClick={() => abrirResponderTarea(t)}
-          >
-            Ver / Responder
-          </Button>
+      {Array.isArray(tareasDetalle) && tareasDetalle.length > 0 ? (
+        tareasDetalle.map((t) => {
+          if (!t) return null;
+          return (
+            <ListGroup.Item
+              key={t.id}
+              className="d-flex justify-content-between align-items-center"
+            >
+              <div>
+                <Badge bg={getBadgeColor(t?.status)} className="me-2">
+                  {getStatusLabel(t?.status)}
+                </Badge>
+                <div className="fw-bold">
+                  {t.log?.concept?.name || "Tarea"}
+                </div>
+                <div className="text-muted" style={{ fontSize: "0.85rem" }}>
+                  {t.log?.cliente?.nombre_completo || "Sin Cliente"}
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline-primary"
+                onClick={() => abrirResponderTarea(t)}
+              >
+                Ver / Responder
+              </Button>
+            </ListGroup.Item>
+          );
+        })
+      ) : (
+        <ListGroup.Item className="text-center text-muted">
+          No hay tareas para mostrar
         </ListGroup.Item>
-      ))}
+      )}
     </ListGroup>
   </Modal.Body>
 </Modal>

@@ -34,31 +34,24 @@ import FichaClienteHistorial from "./pages/tabs/FichaClienteHistorial";
 import FichaClienteRingCentral from "./pages/tabs/FichaClienteRingCentral";
 import FichaClienteComentarios from "./pages/tabs/FichaClienteComentarios";
 
-// Función para verificar si el usuario está autenticado
-const isAuthenticated = () => {
-  return localStorage.getItem("auth_token") !== null;
-};
+// Módulo de Administración
+import UsersList from "./pages/admin/UsersList";
+import RolesList from "./pages/admin/RolesList";
+import RolePermissions from "./pages/admin/RolePermissions";
+import PermissionsList from "./pages/admin/PermissionsList";
+import AuditLogsList from "./pages/admin/AuditLogsList";
+
+import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
 
 // Layout protegido que envuelve todas las páginas
 const ProtectedLayout = () => {
-  const [checkingAuth, setCheckingAuth] = React.useState(true);
-  const [isAuth, setIsAuth] = React.useState(false);
-
-  React.useEffect(() => {
-    const token = localStorage.getItem("auth_token");
-    setIsAuth(!!token); // true si existe token
-    setCheckingAuth(false);
-  }, []);
-
-  if (checkingAuth) {
-    return (
-      <div style={{ textAlign: "center", marginTop: "50px" }}>
-        <p>Verificando sesión...</p>
-      </div>
-    );
-  }
-
-  return isAuth ? <MainLayout><Outlet /></MainLayout> : <Navigate to="/login" />;
+  return (
+    <ProtectedRoute>
+      <MainLayout>
+        <Outlet />
+      </MainLayout>
+    </ProtectedRoute>
+  );
 };
 
 
@@ -99,8 +92,47 @@ const App = () => {
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
         <Route path="/clientes/contacto" element={<ContactosAdmin />} />
         
-
-
+        {/* Rutas del Módulo de Administración - Protegidas por permisos */}
+        <Route
+          path="/admin/users"
+          element={
+            <PermissionRoute permission="users.view">
+              <UsersList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/roles"
+          element={
+            <PermissionRoute permission="roles.view">
+              <RolesList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/roles/:id/permissions"
+          element={
+            <PermissionRoute permission="roles.assign_permissions">
+              <RolePermissions />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/permissions"
+          element={
+            <PermissionRoute permission="permissions.view">
+              <PermissionsList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <PermissionRoute permission="users.view">
+              <AuditLogsList />
+            </PermissionRoute>
+          }
+        />
       
       </Route>
       {/* 🔹 Ficha con tabs: layout + rutas hijas */}

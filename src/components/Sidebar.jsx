@@ -3,15 +3,19 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile,
-  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar
+  FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
+  FaUserShield, FaShieldAlt, FaKey, FaHistory
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
 import SincronizarContactos from "../components/SincronizarContactos";
+import { useAuth } from "../context/AuthContext";
+import { useHasPermission } from "../hooks/useHasPermission";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
   const users = JSON.parse(localStorage.getItem("user"))?.name || "Usuario";
+  const { user } = useAuth();
 
   const location = useLocation();
 
@@ -19,6 +23,14 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   const [expandedMenu, setExpandedMenu] = useState(null);
 
   const navigate = useNavigate();
+
+  // Verificar permisos de administración usando el sistema de permisos
+  const canViewUsers = useHasPermission("users.view");
+  const canViewRoles = useHasPermission("roles.view");
+  const canViewPermissions = useHasPermission("permissions.view");
+  
+  // Mostrar menú de administración si tiene al menos uno de los permisos
+  const hasAdminAccess = canViewUsers || canViewRoles || canViewPermissions;
 
   const handleLogout = () => {
     localStorage.removeItem("auth_token");
@@ -43,6 +55,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       setExpandedMenu('informes');
     } else if (location.pathname.includes('/Herramientas')) {
       setExpandedMenu('herramientas');
+    } else if (location.pathname.includes('/admin')) {
+      setExpandedMenu('administracion');
     }
   }, [location]);
 
@@ -227,6 +241,45 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           )}
         </div>
 
+
+        {/* Administración - Con submenú (solo si tiene permisos) */}
+        {hasAdminAccess && (
+          <div className="nav-item">
+            <div
+              className={`nav-link ${location.pathname.includes('/admin') ? 'active' : ''}`}
+              onClick={(e) => isOpen && toggleSubmenu('administracion', e)}
+            >
+              <FaUserShield />
+              {isOpen && (
+                <>
+                  <span>Administración</span>
+                  {expandedMenu === 'administracion' ?
+                    <FaChevronDown className="submenu-icon" /> :
+                    <FaChevronRight className="submenu-icon" />
+                  }
+                </>
+              )}
+            </div>
+
+            {/* Submenú de Administración */}
+            {isOpen && expandedMenu === 'administracion' && (
+              <div className="submenu">
+                <Link to="/admin/users" className={`submenu-link ${isActive('/admin/users') ? 'active' : ''}`}>
+                  <FaUsers /> Usuarios
+                </Link>
+                <Link to="/admin/roles" className={`submenu-link ${isActive('/admin/roles') ? 'active' : ''}`}>
+                  <FaShieldAlt /> Roles
+                </Link>
+                <Link to="/admin/permissions" className={`submenu-link ${isActive('/admin/permissions') ? 'active' : ''}`}>
+                  <FaKey /> Permisos
+                </Link>
+                <Link to="/admin/audit-logs" className={`submenu-link ${isActive('/admin/audit-logs') ? 'active' : ''}`}>
+                  <FaHistory /> Auditoría
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Herramientas - Con submenú */}
         <div className="nav-item">

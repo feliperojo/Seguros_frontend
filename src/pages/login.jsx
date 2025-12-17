@@ -1,15 +1,19 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { toast, ToastContainer } from "react-toastify";
 
 import "bootstrap/dist/css/bootstrap.min.css";
+import "react-toastify/dist/ReactToastify.css";
 import "../styles/Login.css"; // Estilos personalizados
 import logo from "../assets/tampa.jpg"; // Ruta del logo
-import apiRequest from "../services/api"; // Importa el servicio de API
+import { useAuth } from "../context/AuthContext"; // Importa el contexto de autenticación
 
 const Login = () => {
   const navigate = useNavigate(); // Hook para redireccionar
+  const { login } = useAuth(); // Hook para login
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [formData, setFormData] = useState({
     email: "",
@@ -28,24 +32,36 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null); // Reiniciar el estado de error antes de la petición
+    setLoading(true);
 
     try {
-      const response = await apiRequest("login", "POST", formData);
+      const result = await login(formData.email, formData.password);
 
-      if (response.token) {
-        localStorage.setItem("auth_token", response.token);
-        localStorage.setItem("user", JSON.stringify(response.user));
-        
+      if (result.success) {
+        toast.success("Inicio de sesión exitoso");
         navigate("/"); // Redirigir al Dashboard
       } else {
-        throw new Error("Datos de usuario incorrectos");
+        // Mostrar el mensaje del backend directamente
+        // No construir mensajes de negocio aquí
+        const errorMessage = result.error || "Error al iniciar sesión";
+        setError(errorMessage);
+        toast.error(errorMessage);
       }
     } catch (err) {
-      if (err.message.includes("Failed to fetch")) {
-        setError("No se pudo conectar con el servidor. Intente más tarde.");
+      // Manejar errores de conexión
+      let errorMessage = "Error al iniciar sesión";
+      
+      if (err.message && err.message.includes("Failed to fetch")) {
+        errorMessage = "Error de conexión con el servidor";
       } else {
-        setError("Datos de usuario incorrectos");
+        // Mostrar el mensaje del error directamente
+        errorMessage = err.message || "Error al iniciar sesión";
       }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -122,11 +138,26 @@ const Login = () => {
 </div>
 
 
-          <button type="submit" className="btn custom-btn w-100 fw-bold">
-            Ingresar
+          <button 
+            type="submit" 
+            className="btn custom-btn w-100 fw-bold"
+            disabled={loading}
+          >
+            {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
       </div>
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </div>
   );
 };
