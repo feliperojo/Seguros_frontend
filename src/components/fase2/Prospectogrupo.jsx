@@ -278,18 +278,6 @@ const Prospectogrupo = ({
               {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
             </button>
 
-            {/* Abrir Drive si ya hay URL */}
-            {driveUrl && (
-              <button
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 transition-all duration-200"
-                onClick={() => window.open(driveUrl, "_blank")}
-                title="Abrir carpeta/archivo en Drive"
-              >
-                <i className="bi bi-folder2-open"></i>
-                Abrir Drive
-              </button>
-            )}
-
             {/* Nueva Gestión (ya existente) */}
             <button
               className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"

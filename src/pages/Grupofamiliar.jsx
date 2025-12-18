@@ -1018,8 +1018,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         responsable: policyData.responsable || "",
         carta_autorizacion: policyData.carta_autorizacion || "",
         llamada_cliente: policyData.llamada_cliente || "",        
-        elegibilidad_carta: policyData.elegibilidad_carta || "",
-         drive_url: driveUrl || ""
+        elegibilidad_carta: policyData.elegibilidad_carta || ""
+        // ✅ drive_url NO se incluye aquí - solo se maneja desde DriveUrlModal
       };
 
       let grupoFamiliarResponse;
@@ -1511,16 +1511,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
           <i className="bi bi-pencil-square me-2"></i>
           {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
         </Button>
-
-        {driveUrl && (
-          <Button
-            variant="outline-success"
-            className="d-flex align-items-center"
-            onClick={() => window.open(driveUrl, "_blank")}
-          >
-            <i className="bi bi-folder2-open me-2"></i> Abrir Drive
-          </Button>
-        )}
       </>
     )}
   </div>

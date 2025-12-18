@@ -438,17 +438,6 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                 {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
               </Button>
 
-              {driveUrl && (
-                <Button
-                  className="me-2"
-                  variant="outline-success"
-                  onClick={() => window.open(driveUrl, "_blank")}
-                >
-                  <FaFileExport className="me-2" />
-                  Abrir Drive
-                </Button>
-              )}
-
 
               <Button
                 variant="outline-primary"

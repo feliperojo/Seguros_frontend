@@ -4,18 +4,54 @@ import apiRequest from "../../services/api"; // Ajusta la ruta según tu estruct
 
 const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
   const [driveUrl, setDriveUrl] = useState(initialUrl);
+  const [urlGuardada, setUrlGuardada] = useState(initialUrl || ""); // URL almacenada en el backend
   const [loading, setLoading] = useState(false);
+  const [loadingUrl, setLoadingUrl] = useState(false); // Estado para cargar la URL del backend
   const [errorMessage, setErrorMessage] = useState("");
 
+  // ✅ Obtener la URL guardada del backend cuando se abre el modal
   useEffect(() => {
-    // Actualizar el estado cuando cambia initialUrl o cuando se abre el modal
-    // Esto asegura que el campo muestre el valor correcto al abrir el modal
-    setDriveUrl(initialUrl || "");
-    // Limpiar errores cuando se abre el modal
+    const fetchUrlGuardada = async () => {
+      if (show && grupoId) {
+        setLoadingUrl(true);
+        setErrorMessage("");
+        
+        try {
+          // Obtener los datos del grupo familiar para extraer drive_url
+          const response = await apiRequest(`grupo_familiar/show/${grupoId}`, "GET");
+          const urlDelBackend = response?.data?.drive_url || response?.drive_url || "";
+          
+          setUrlGuardada(urlDelBackend);
+          setDriveUrl(urlDelBackend); // También actualizar el campo de edición
+        } catch (error) {
+          // Si hay error al obtener, usar initialUrl como fallback
+          const urlFallback = initialUrl || "";
+          setUrlGuardada(urlFallback);
+          setDriveUrl(urlFallback);
+          
+          // Solo mostrar error si no es un 404 (puede ser que el grupo no exista aún)
+          if (error.response?.status !== 404) {
+            console.warn("No se pudo obtener la URL del backend:", error);
+          }
+        } finally {
+          setLoadingUrl(false);
+        }
+      } else if (show && !grupoId) {
+        // Si no hay grupoId, usar initialUrl como fallback
+        setUrlGuardada(initialUrl || "");
+        setDriveUrl(initialUrl || "");
+      }
+    };
+
+    fetchUrlGuardada();
+  }, [show, grupoId]); // Solo depende de show y grupoId, no de initialUrl
+
+  // Limpiar errores cuando se abre el modal
+  useEffect(() => {
     if (show) {
       setErrorMessage("");
     }
-  }, [initialUrl, show]);
+  }, [show]);
 
   const handleSave = async () => {
     // Validar que haya un grupoId
@@ -36,8 +72,11 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
         drive_url: urlNormalizada,
       });
 
-      // Notifica al componente padre con la URL guardada (o null si se eliminó)
+      // Actualizar la URL guardada localmente
       const urlFinal = urlNormalizada || "";
+      setUrlGuardada(urlFinal);
+
+      // Notifica al componente padre con la URL guardada (o null si se eliminó)
       onSave(urlFinal);
 
       // Cierra el modal solo si todo fue exitoso
@@ -78,8 +117,8 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
     }
   };
 
-  // Verificar si hay una URL guardada (initialUrl es la que viene del servidor)
-  const tieneUrlGuardada = initialUrl && initialUrl.trim();
+  // Verificar si hay una URL guardada (urlGuardada es la que viene del backend)
+  const tieneUrlGuardada = urlGuardada && urlGuardada.trim();
 
   return (
     <Modal show={show} onHide={onHide} centered size="lg">
@@ -92,8 +131,16 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
       <Modal.Body>
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
+        {/* Indicador de carga al obtener la URL */}
+        {loadingUrl && (
+          <div className="mb-3 text-center">
+            <Spinner animation="border" size="sm" className="me-2" />
+            <span className="text-muted">Cargando URL guardada...</span>
+          </div>
+        )}
+
         {/* Sección: URL Guardada Actual */}
-        {tieneUrlGuardada && (
+        {!loadingUrl && tieneUrlGuardada && (
           <div className="mb-4 p-3 bg-light border rounded">
             <div className="d-flex justify-content-between align-items-start mb-2">
               <div>
@@ -102,14 +149,14 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
                   URL Guardada Actualmente:
                 </h6>
                 <div className="text-break text-muted small mb-2" style={{ wordBreak: "break-all" }}>
-                  {initialUrl}
+                  {urlGuardada}
                 </div>
               </div>
               <Button
                 variant="outline-success"
                 size="sm"
-                onClick={() => window.open(initialUrl.trim(), "_blank")}
-                disabled={loading}
+                onClick={() => window.open(urlGuardada.trim(), "_blank")}
+                disabled={loading || loadingUrl}
                 title="Abrir URL guardada en nueva pestaña"
               >
                 <i className="bi bi-box-arrow-up-right me-1"></i>
@@ -136,7 +183,7 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
               placeholder="https://drive.google.com/..."
               value={driveUrl}
               onChange={(e) => setDriveUrl(e.target.value)}
-              disabled={loading}
+              disabled={loading || loadingUrl}
               className={tieneUrlGuardada ? "border-warning" : ""}
             />
             <Form.Text className="text-muted">
@@ -148,7 +195,7 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
         </Form>
 
         {/* Vista previa de la URL ingresada (si es diferente a la guardada) */}
-        {driveUrl && driveUrl.trim() && driveUrl.trim() !== (initialUrl || "").trim() && (
+        {!loadingUrl && driveUrl && driveUrl.trim() && driveUrl.trim() !== (urlGuardada || "").trim() && (
           <div className="mt-3 p-2 bg-info bg-opacity-10 border border-info rounded">
             <div className="d-flex justify-content-between align-items-center">
               <div className="flex-grow-1">
@@ -175,7 +222,7 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
         )}
 
         {/* Botón para abrir la URL actual del campo (si hay una y es válida) */}
-        {driveUrl && driveUrl.trim() && (
+        {!loadingUrl && driveUrl && driveUrl.trim() && (
           <div className="mt-3 text-center">
             <Button
               variant="outline-success"
@@ -200,7 +247,7 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
         <Button
           variant="primary"
           onClick={handleSave}
-          disabled={loading || !grupoId}
+          disabled={loading || loadingUrl || !grupoId}
         >
           {loading ? (
             <>
