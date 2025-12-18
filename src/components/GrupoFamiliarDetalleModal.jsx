@@ -27,9 +27,8 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
   };
 
   React.useEffect(() => {
-    if (grupo?.drive_url) {
-      setDriveUrl(grupo.drive_url);
-    }
+    // Actualizar driveUrl cuando cambia el grupo (incluyendo cuando es null o undefined)
+    setDriveUrl(grupo?.drive_url || "");
     // Resetear las filas expandidas cuando cambia el grupo
     setFilasExpandidas(new Set());
   }, [grupo]);

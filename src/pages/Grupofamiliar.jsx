@@ -71,6 +71,11 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
       if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
         setCoverageGroups(transformarCoberturasAcoverageGroups(initialData.coberturas || []));
       }
+
+      // Actualizar driveUrl cuando initialData cambia
+      if (initialData.drive_url !== undefined) {
+        setDriveUrl(initialData.drive_url || "");
+      }
     }
   }, [mode, initialData]);
 

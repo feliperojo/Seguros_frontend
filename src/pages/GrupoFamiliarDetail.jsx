@@ -119,6 +119,17 @@ const mapClienteForSave = (m) => {
       idioma: pick("idioma"),
       ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
       nota: pick("nota"),
+      dir_correspondencia: pick("dir_correspondencia"),
+      status: pick("status"),
+      tipo_ingreso: pick("tipo_ingreso"),
+      actividad_economica: pick("actividad_economica"),
+      empleador: pick("empleador"),
+      telefono_empleador: pick("telefono_empleador"),
+      periodo_ingreso: pick("periodo_ingreso"),
+      ingreso_por_periodo: moneyToDecimal(pick("ingreso_por_periodo")),
+      nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
+      periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
+      ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
     };
     // Solo incluir campos que tienen valor (no null/undefined)
     return Object.fromEntries(
@@ -257,7 +268,7 @@ const mapFullToMembers = (fullRaw) => {
       cliente_id: cli.id ?? null,
       cobertura_id: cov.id ?? null,
 
-      // datos “cliente” copiados a raíz para edición inline
+      // datos "cliente" copiados a raíz para edición inline
       primer_nombre: primer,
       segundo_nombre: segundo,
       apellidos: apell,
@@ -268,6 +279,15 @@ const mapFullToMembers = (fullRaw) => {
       idioma: cli.idioma || "",
       ingreso_anual: cli.ingreso_anual || "",
       nota: cli.nota || "",
+      periodo_ingreso: cli.periodo_ingreso || "",
+      ingreso_por_periodo: cli.ingreso_por_periodo || "",
+      tipo_ingreso: cli.tipo_ingreso || "",
+      actividad_economica: cli.actividad_economica || "",
+      empleador: cli.empleador || "",
+      telefono_empleador: cli.telefono_empleador || "",
+      nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
+      periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
+      ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
 
       // metadatos de cobertura
       parentesco: cov.parentesco || "Tomador",
