@@ -8,6 +8,7 @@ import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
+import { normalizeDateForInput } from "../../utils/formatters";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 
@@ -220,9 +221,9 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     setIsEditing(false);
   };
 
-  const fechaBase = (member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || "")
-    .toString()
-    .slice(0, 10);
+  const fechaBase = normalizeDateForInput(
+    member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || ""
+  );
 
   const { languages = [] } = useLanguages();
   const resolveIdiomaName = (v) => {
@@ -349,7 +350,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               <input
                 type="date"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                value={fechaBase}
+                value={normalizeDateForInput(fechaBase)}
                 disabled={readOnly}
                 onChange={handle("fecha_nacimiento")}
               />

@@ -12,6 +12,7 @@ import FormDireccion from "../components/FormDireccion";
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import { Helmet } from "react-helmet-async";
+import { normalizeDateForInput } from "../utils/formatters";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -547,7 +548,7 @@ const calcularIngresoAnual = (monto, periodo) => {
                 <input type="date" 
                 name="fecha_nacimiento" 
                 className="form-control" 
-                value={formData.fecha_nacimiento} 
+                value={normalizeDateForInput(formData.fecha_nacimiento)} 
                 onChange={handleChange}
                 max="2099-12-31"
                 min="1900-01-01" />

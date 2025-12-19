@@ -16,7 +16,8 @@ import idiomas  from '../services/idiomas.js';
 import TelefonosPro from "./fase2/TelefonosPro";
 import { toLegacyFields, toStructuredPhones } from "../utils/phones";
 import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
-import countryCodes from "../services/countryCodes";    
+import countryCodes from "../services/countryCodes";
+import { normalizeDateForInput } from "../utils/formatters";    
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
 const renderMediosPagoTab = () => (
@@ -355,7 +356,7 @@ const mapClienteDataToForm = (data) => {
       segundo_nombre: data.segundo_nombre || "",
       apellidos: data.apellidos || "",
       nombre_completo: data.nombre_completo || "",
-      fecha_nacimiento: data.fecha_nacimiento || "",
+      fecha_nacimiento: normalizeDateForInput(data.fecha_nacimiento),
       edad: data.edad || "",
       genero: data.genero || "",
       estado_cliente: data.estado_cliente || "cliente",
@@ -772,7 +773,7 @@ useEffect(() => {
             <Form.Label>Fecha de Nacimiento</Form.Label>
             <Form.Control
               type="date"
-              value={formData.datosPrincipales.fecha_nacimiento}
+              value={normalizeDateForInput(formData.datosPrincipales.fecha_nacimiento)}
               onChange={(e) => handleInputChange("datosPrincipales", "fecha_nacimiento", e.target.value)}
             max="2099-12-31"
             min="1900-01-01"

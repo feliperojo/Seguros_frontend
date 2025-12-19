@@ -52,3 +52,56 @@ export const formatPhoneFlexible = (raw = "") => {
 
 /** Quitar guiones para enviar al backend */
 export const unformatPhone = (raw = "") => onlyDigits(raw).slice(0, 15);
+
+/**
+ * Normaliza una fecha a formato YYYY-MM-DD para inputs type="date"
+ * Evita problemas de zona horaria al extraer solo la parte de la fecha
+ * sin convertir a objeto Date que puede alterar el día
+ * 
+ * @param {string|Date|null|undefined} fecha - Fecha en cualquier formato
+ * @returns {string} Fecha en formato YYYY-MM-DD o cadena vacía si no es válida
+ */
+export const normalizeDateForInput = (fecha) => {
+  if (!fecha) return "";
+  
+  // Si ya está en formato YYYY-MM-DD, devolverlo directamente
+  if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return fecha;
+  }
+  
+  // Si es un string ISO (ej: "2024-01-15T00:00:00.000Z"), extraer solo la parte de la fecha
+  if (typeof fecha === "string" && fecha.includes("T")) {
+    const datePart = fecha.split("T")[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+      return datePart;
+    }
+  }
+  
+  // Si es un objeto Date, usar métodos que no dependen de zona horaria
+  if (fecha instanceof Date) {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  
+  // Intentar parsear como string y extraer la parte de la fecha
+  if (typeof fecha === "string") {
+    // Intentar extraer YYYY-MM-DD del string
+    const match = fecha.match(/(\d{4}-\d{2}-\d{2})/);
+    if (match) {
+      return match[1];
+    }
+    
+    // Si no, intentar crear Date y usar métodos locales (último recurso)
+    const d = new Date(fecha);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  
+  return "";
+};

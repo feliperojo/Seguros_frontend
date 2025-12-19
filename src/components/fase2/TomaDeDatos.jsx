@@ -22,7 +22,7 @@ import MediosPagoSection from "../MediosPagoSection";
 import useCompanies from "../../hooks/useCompanies";
 
 // Utils
-import { formatSSN, formatUSCIS, formatPhone334 } from "../../utils/formatters";
+import { formatSSN, formatUSCIS, formatPhone334, normalizeDateForInput } from "../../utils/formatters";
 import { toLegacyFields } from "../../utils/phones";
 import { inflatePhones } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
@@ -911,7 +911,7 @@ const sortedNormalized = useMemo(
                                     type="date"
                                     className="form-control form-control-sm"
                                     name="fecha_nacimiento"
-                                    value={(c.fecha_nacimiento || "").slice(0,10)}
+                                    value={normalizeDateForInput(c.fecha_nacimiento || "")}
                                     onChange={onChange}
                                     disabled={readOnly}
                                   />

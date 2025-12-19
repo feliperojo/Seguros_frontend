@@ -57,17 +57,41 @@ export const toISODate = (v) => {
   if (typeof v === 'string') {
     // Acepta 'YYYY-MM-DD' (input type=date) ó 'MM/DD/YYYY'
     if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    
+    // Si es un string ISO con T (ej: "2024-01-15T00:00:00.000Z"), extraer solo la parte de la fecha
+    if (v.includes("T")) {
+      const datePart = v.split("T")[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+        return datePart;
+      }
+    }
+    
     const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
     if (m) {
       const [, M, D, Y] = m;
       const yyyy = (Y.length === 2 ? (Number(Y) + 2000) : Number(Y)).toString().padStart(4,'0');
       return `${yyyy}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
     }
+    // Último recurso: intentar parsear como Date
     const d = new Date(v);
-    return isNaN(d) ? null : d.toISOString().slice(0,10);
+    if (!isNaN(d.getTime())) {
+      // Usar métodos locales para evitar problemas de zona horaria
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+    return null;
   }
-  const d = new Date(v);
-  return isNaN(d) ? null : d.toISOString().slice(0,10);
+  // Si es un objeto Date, usar métodos locales
+  if (v instanceof Date) {
+    if (isNaN(v.getTime())) return null;
+    const year = v.getFullYear();
+    const month = String(v.getMonth() + 1).padStart(2, "0");
+    const day = String(v.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  return null;
 };
 
 // Convierte "" → null y normaliza a ISO

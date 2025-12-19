@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 import LanguageSelect from "../selects/LanguageSelect";
+import { normalizeDateForInput } from "../../utils/formatters";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -290,7 +291,7 @@ export default function MemberModalCreate({
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>
-                  <input type="date" className="form-control" name="fechaNacimiento" value={data.fechaNacimiento} onChange={onChange} disabled={readOnly}/>
+                  <input type="date" className="form-control" name="fechaNacimiento" value={normalizeDateForInput(data.fechaNacimiento)} onChange={onChange} disabled={readOnly}/>
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Edad</label>
