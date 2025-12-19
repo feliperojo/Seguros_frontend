@@ -270,28 +270,16 @@ const UsersList = () => {
   };
 
   const handleEdit = (user) => {
-    if (!canEdit) {
-      toast.error("No tienes permiso para editar usuarios");
-      return;
-    }
     setSelectedUser(user);
     setShowUserForm(true);
   };
 
   const handleView = (user) => {
-    if (!canView) {
-      toast.error("No tienes permiso para ver usuarios");
-      return;
-    }
     setSelectedUser(user);
     setShowUserForm(true);
   };
 
   const handleAssignRoles = (user) => {
-    if (!canAssignRoles) {
-      toast.error("No tienes permiso para asignar roles");
-      return;
-    }
     setSelectedUser(user);
     setShowRolesModal(true);
   };
@@ -318,18 +306,18 @@ const UsersList = () => {
             <FaUserPlus className="me-2" />
             Administración de Usuarios
           </h4>
-          {canCreate && (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setSelectedUser(null);
-                setShowUserForm(true);
-              }}
-            >
-              <FaUserPlus className="me-2" />
-              Crear Usuario
-            </Button>
-          )}
+          <Button
+            variant="primary"
+            onClick={() => {
+              setSelectedUser(null);
+              setShowUserForm(true);
+            }}
+            disabled={!canCreate}
+            title={canCreate ? "Crear Usuario" : "No tienes permisos para crear usuarios"}
+          >
+            <FaUserPlus className="me-2" />
+            Crear Usuario
+          </Button>
         </Card.Header>
         <Card.Body>
           <Form onSubmit={handleSearch} className="mb-4">
@@ -442,74 +430,64 @@ const UsersList = () => {
                           </td>
                           <td>
                             <div className="d-flex gap-2">
-                              {canView && (
-                                <Button
-                                  variant="info"
-                                  size="sm"
-                                  onClick={() => handleView(user)}
-                                  title="Ver detalles"
-                                >
-                                  <FaEye />
-                                </Button>
-                              )}
-                              {canEdit && (
-                                <Button
-                                  variant="warning"
-                                  size="sm"
-                                  onClick={() => handleEdit(user)}
-                                  title="Editar"
-                                  disabled={actionLoading === user.id}
-                                >
-                                  <FaEdit />
-                                </Button>
-                              )}
-                              {canAssignRoles && (
-                                <Button
-                                  variant="secondary"
-                                  size="sm"
-                                  onClick={() => handleAssignRoles(user)}
-                                  title="Asignar roles"
-                                  disabled={actionLoading === user.id}
-                                >
-                                  <FaKey />
-                                </Button>
-                              )}
-                              {canToggleStatus && (
-                                <Button
-                                  variant={user.status === "active" ? "danger" : "success"}
-                                  size="sm"
-                                  onClick={() => handleToggleStatus(user)}
-                                  title={
-                                    user.status === "active"
-                                      ? "Desactivar"
-                                      : "Activar"
-                                  }
-                                  disabled={actionLoading === user.id}
-                                >
-                                  {actionLoading === user.id ? (
-                                    <Spinner size="sm" />
-                                  ) : user.status === "active" ? (
-                                    <FaToggleOff />
-                                  ) : (
-                                    <FaToggleOn />
-                                  )}
-                                </Button>
-                              )}
-                              {canDelete && (
-                                <Button
-                                  variant="danger"
-                                  size="sm"
-                                  onClick={() => handleDelete(user)}
-                                  title="Eliminar"
-                                  disabled={actionLoading === user.id}
-                                >
-                                  {actionLoading === user.id ? (
-                                    <Spinner size="sm" />
-                                  ) : (
-                                    <FaTrashAlt />
-                                  )}
-                                </Button>
-                              )}
+                              <Button
+                                variant="info"
+                                size="sm"
+                                onClick={() => handleView(user)}
+                                title="Ver detalles"
+                              >
+                                <FaEye />
+                              </Button>
+                              <Button
+                                variant="warning"
+                                size="sm"
+                                onClick={() => handleEdit(user)}
+                                title={canEdit ? "Editar" : "Ver detalles (sin permisos para editar)"}
+                                disabled={actionLoading === user.id || !canEdit}
+                              >
+                                <FaEdit />
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => handleAssignRoles(user)}
+                                title={canAssignRoles ? "Asignar roles" : "Ver roles (sin permisos para modificar)"}
+                                disabled={actionLoading === user.id || !canAssignRoles}
+                              >
+                                <FaKey />
+                              </Button>
+                              <Button
+                                variant={user.status === "active" ? "danger" : "success"}
+                                size="sm"
+                                onClick={() => handleToggleStatus(user)}
+                                title={
+                                  canToggleStatus 
+                                    ? (user.status === "active" ? "Desactivar" : "Activar")
+                                    : "Ver estado (sin permisos para modificar)"
+                                }
+                                disabled={actionLoading === user.id || !canToggleStatus}
+                              >
+                                {actionLoading === user.id ? (
+                                  <Spinner size="sm" />
+                                ) : user.status === "active" ? (
+                                  <FaToggleOff />
+                                ) : (
+                                  <FaToggleOn />
+                                )}
+                              </Button>
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                onClick={() => handleDelete(user)}
+                                title={canDelete ? "Eliminar" : "Eliminar (sin permisos)"}
+                                disabled={actionLoading === user.id || !canDelete}
+                              >
+                                {actionLoading === user.id ? (
+                                  <Spinner size="sm" />
+                                ) : (
+                                  <FaTrashAlt />
+                                )}
+                              </Button>
                             </div>
                           </td>
                         </tr>
@@ -576,7 +554,7 @@ const UsersList = () => {
           show={showUserForm}
           onHide={handleFormClose}
           user={selectedUser}
-          isViewOnly={selectedUser && !canEdit}
+          isViewOnly={selectedUser ? !canEdit : !canCreate}
         />
       )}
 

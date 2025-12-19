@@ -10,7 +10,8 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   const [showModal, setShowModal] = useState(false);
   const [editingIndex, setEditingIndex] = useState(-1);
   const [currentMedioPago, setCurrentMedioPago] = useState({
-    forma_pago: 'tarjeta',
+    forma_pago: 'tarjeta_credito', // 'tarjeta_credito', 'tarjeta_debito', 'cuenta_bancaria'
+    tipo_tarjeta_pago: 'credito', // 'credito' o 'debito' (para compatibilidad con backend)
     quien_paga: '',
     titular: '',
     direccion: '',
@@ -60,7 +61,8 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   const handleAddClick = () => {
     setEditingIndex(-1);
     setCurrentMedioPago({
-      forma_pago: 'tarjeta',
+      forma_pago: 'tarjeta_credito', // Por defecto tarjeta de crédito
+      tipo_tarjeta_pago: 'credito',
       quien_paga: '',
       titular: '',
       direccion: '',
@@ -80,7 +82,21 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   // Manejador para editar medio de pago existente
   const handleEditClick = (index) => {
     setEditingIndex(index);
-    setCurrentMedioPago({...mediosPago[index]});
+    const medioPago = mediosPago[index];
+    // Convertir forma_pago del backend a formato interno
+    let formaPagoInterna = medioPago.forma_pago;
+    let tipoTarjetaPago = medioPago.tipo_tarjeta_pago || 'credito';
+    
+    // Si viene del backend como 'tarjeta', determinar si es crédito o débito
+    if (formaPagoInterna === 'tarjeta') {
+      formaPagoInterna = tipoTarjetaPago === 'debito' ? 'tarjeta_debito' : 'tarjeta_credito';
+    }
+    
+    setCurrentMedioPago({
+      ...medioPago,
+      forma_pago: formaPagoInterna,
+      tipo_tarjeta_pago: tipoTarjetaPago
+    });
     setError({ campo: '', mensaje: '' });
     setShowModal(true);
   };
@@ -140,7 +156,29 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     const { name, value } = e.target;
     setError({ campo: '', mensaje: '' }); // Limpiar errores previos
     
-    if (name === 'tipo_tarjeta') {
+    if (name === 'forma_pago') {
+      // Al cambiar el tipo de medio de pago
+      const updates = { [name]: value };
+      
+      if (value === 'tarjeta_credito') {
+        updates.tipo_tarjeta_pago = 'credito';
+      } else if (value === 'tarjeta_debito') {
+        updates.tipo_tarjeta_pago = 'debito';
+        updates.fecha_expiracion = '';
+        updates.cvv = '';
+      } else if (value === 'cuenta_bancaria') {
+        // Limpiar campos de tarjeta al cambiar a cuenta bancaria
+        updates.tipo_tarjeta = '';
+        updates.numero_tarjeta = '';
+        updates.fecha_expiracion = '';
+        updates.cvv = '';
+      }
+      
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        ...updates
+      }));
+    } else if (name === 'tipo_tarjeta') {
       // Al cambiar el tipo de tarjeta, resetear el número y CVV
       setCurrentMedioPago(prev => ({
         ...prev,
@@ -181,7 +219,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   // Validar formulario antes de guardar
   const validateForm = () => {
     // Validar según forma de pago
-    if (currentMedioPago.forma_pago === 'tarjeta') {
+    if (currentMedioPago.forma_pago === 'tarjeta_credito' || currentMedioPago.forma_pago === 'tarjeta_debito') {
       // Validar titular
       if (!currentMedioPago.titular.trim()) {
         setError({ campo: 'titular', mensaje: 'Debe ingresar el nombre del titular' });
@@ -202,18 +240,21 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
         return false;
       }
       
-      // Validar fecha de expiración
-      const fechaPattern = /^(0[1-9]|1[0-2])\/20\d{2}$/;
-      if (!fechaPattern.test(currentMedioPago.fecha_expiracion)) {
-        setError({ campo: 'fecha_expiracion', mensaje: 'Formato inválido. Use MM/AAAA' });
-        return false;
-      }
-      
-      // Validar CVV
-      if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
-        const longitudCVV = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
-        setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
-        return false;
+      // Validar fecha de expiración y CVV solo para tarjetas de crédito
+      if (currentMedioPago.forma_pago === 'tarjeta_credito') {
+        // Validar fecha de expiración
+        const fechaPattern = /^(0[1-9]|1[0-2])\/20\d{2}$/;
+        if (!fechaPattern.test(currentMedioPago.fecha_expiracion)) {
+          setError({ campo: 'fecha_expiracion', mensaje: 'Formato inválido. Use MM/AAAA' });
+          return false;
+        }
+        
+        // Validar CVV
+        if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
+          const longitudCVV = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
+          setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
+          return false;
+        }
       }
     } else if (currentMedioPago.forma_pago === 'cuenta_bancaria') {
       // Validar titular
@@ -247,9 +288,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     
     try {
       let response;
-      // Preparar datos, eliminando espacios del número de tarjeta para almacenamiento
+      // Preparar datos para el backend
+      // Convertir forma_pago interna a formato del backend
+      let formaPagoBackend = currentMedioPago.forma_pago;
+      if (formaPagoBackend === 'tarjeta_credito' || formaPagoBackend === 'tarjeta_debito') {
+        formaPagoBackend = 'tarjeta';
+      }
+      
       const payloadData = {
         ...currentMedioPago,
+        forma_pago: formaPagoBackend, // Convertir a formato del backend
         cliente_id: clienteId
       };
       
@@ -296,8 +344,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
  
   // Renderizar campos del formulario según tipo de pago
   const renderFormFields = () => {
-    switch (currentMedioPago.forma_pago) {
-      case 'tarjeta':
+    const formaPago = currentMedioPago.forma_pago;
+    
+    if (formaPago === 'tarjeta_credito' || formaPago === 'tarjeta_debito') {
         return (
           <>
             <div className="form-group mb-3">
@@ -355,40 +404,44 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                 )}
               </div>
             </div>
-            <div className="form-row">
-              <div className="form-group col-md-6 mb-3">
-                <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AAAA)</label>
-                <input
-                  type="text"
-                  className={`form-control ${error.campo === 'fecha_expiracion' ? 'is-invalid' : ''}`}
-                  id="fecha_expiracion"
-                  name="fecha_expiracion"
-                  placeholder="MM/AAAA"
-                  value={currentMedioPago.fecha_expiracion || ''}
-                  onChange={handleChange}
-                  required
-                />
-                {error.campo === 'fecha_expiracion' && (
-                  <div className="invalid-feedback">{error.mensaje}</div>
-                )}
+            {/* Mostrar fecha de expiración y CVV solo para tarjetas de crédito */}
+            {currentMedioPago.forma_pago === 'tarjeta_credito' && (
+              <div className="form-row">
+                <div className="form-group col-md-6 mb-3">
+                  <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AAAA)</label>
+                  <input
+                    type="text"
+                    className={`form-control ${error.campo === 'fecha_expiracion' ? 'is-invalid' : ''}`}
+                    id="fecha_expiracion"
+                    name="fecha_expiracion"
+                    placeholder="MM/AAAA"
+                    value={currentMedioPago.fecha_expiracion || ''}
+                    onChange={handleChange}
+                    required
+                  />
+                  {error.campo === 'fecha_expiracion' && (
+                    <div className="invalid-feedback">{error.mensaje}</div>
+                  )}
+                </div>
+                <div className="form-group col-md-6 mb-3">
+                  <label htmlFor="cvv">CVV</label>
+                  <input
+                    type="text"
+                    className={`form-control ${error.campo === 'cvv' ? 'is-invalid' : ''}`}
+                    id="cvv"
+                    name="cvv"
+                    value={currentMedioPago.cvv || ''}
+                    onChange={handleChange}
+                    placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? '4 dígitos' : '3 dígitos'}
+                    required
+                  />
+                  {error.campo === 'cvv' && (
+                    <div className="invalid-feedback">{error.mensaje}</div>
+                  )}
+                </div>
               </div>
-              <div className="form-group col-md-6 mb-3">
-                <label htmlFor="cvv">CVV</label>
-                <input
-                  type="text"
-                  className={`form-control ${error.campo === 'cvv' ? 'is-invalid' : ''}`}
-                  id="cvv"
-                  name="cvv"
-                  value={currentMedioPago.cvv || ''}
-                  onChange={handleChange}
-                  placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? '4 dígitos' : '3 dígitos'}
-                  required
-                />
-                {error.campo === 'cvv' && (
-                  <div className="invalid-feedback">{error.mensaje}</div>
-                )}
-              </div>
-              <div className="form-group mb-3">
+            )}
+            <div className="form-group mb-3">
               <label htmlFor="direccion">Dirección</label>
               <input
                 type="text"
@@ -399,10 +452,11 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                 onChange={handleChange}
               />
             </div>
-            </div>
           </>
         );
-      case 'cuenta_bancaria':
+    }
+    
+    if (formaPago === 'cuenta_bancaria') {
         return (
           <>
             <div className="form-group mb-3">
@@ -475,9 +529,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
             </div>
           </>
         );
-      default:
-        return null;
     }
+    
+    return null;
   };
 
   return (
@@ -536,11 +590,12 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                       className="form-control"
                       id="forma_pago"
                       name="forma_pago"
-                      value={currentMedioPago.forma_pago || 'tarjeta'}
+                      value={currentMedioPago.forma_pago || 'tarjeta_credito'}
                       onChange={handleChange}
                       required
                     >
-                      <option value="tarjeta">Tarjeta de Crédito/Débito</option>
+                      <option value="tarjeta_credito">Tarjeta de Crédito</option>
+                      <option value="tarjeta_debito">Tarjeta Débito</option>
                       <option value="cuenta_bancaria">Cuenta Bancaria</option>
                     </select>
                   </div>

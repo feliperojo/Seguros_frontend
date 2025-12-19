@@ -11,9 +11,11 @@ import {
 } from "react-bootstrap";
 import { FaSave, FaCheckSquare, FaSquare, FaArrowLeft } from "react-icons/fa";
 import { toast } from "react-toastify";
+import { useHasPermission } from "../../hooks/useHasPermission";
 import { rolesService, permissionsService } from "../../services/adminApi";
 
 const RolePermissions = () => {
+  const canManagePermissions = useHasPermission("roles.assign_permissions");
   const { id } = useParams();
   const navigate = useNavigate();
   const [role, setRole] = useState(null);
@@ -54,6 +56,10 @@ const RolePermissions = () => {
   };
 
   const handleTogglePermission = (permissionId) => {
+    if (!canManagePermissions) {
+      toast.error("No tienes permisos para modificar permisos");
+      return;
+    }
     setSelectedPermissions((prev) =>
       prev.includes(permissionId)
         ? prev.filter((id) => id !== permissionId)
@@ -62,6 +68,10 @@ const RolePermissions = () => {
   };
 
   const handleSelectAllInModule = (modulePermissions) => {
+    if (!canManagePermissions) {
+      toast.error("No tienes permisos para modificar permisos");
+      return;
+    }
     const moduleIds = modulePermissions.map((p) => p.id);
     const allSelected = moduleIds.every((id) =>
       selectedPermissions.includes(id)
@@ -80,6 +90,10 @@ const RolePermissions = () => {
   };
 
   const handleSelectAll = () => {
+    if (!canManagePermissions) {
+      toast.error("No tienes permisos para modificar permisos");
+      return;
+    }
     const allIds = Object.values(permissions)
       .flat()
       .map((p) => p.id);
@@ -95,6 +109,10 @@ const RolePermissions = () => {
   };
 
   const handleSave = async () => {
+    if (!canManagePermissions) {
+      toast.error("No tienes permisos para guardar permisos");
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
@@ -102,8 +120,36 @@ const RolePermissions = () => {
       toast.success("Permisos guardados correctamente");
       navigate("/admin/roles");
     } catch (err) {
-      setError(err.message || "Error al guardar permisos");
-      toast.error("Error al guardar permisos");
+      let errorMessage = "Error al guardar permisos";
+      
+      // Manejo específico de errores de validación (422)
+      if (err.response?.status === 422) {
+        // El backend ahora retorna mensajes claros sobre permisos inválidos
+        errorMessage = err.response?.data?.message || err.message || "Uno o más permisos seleccionados no son válidos";
+        
+        // Si hay errores específicos en el objeto errors, mostrarlos también
+        if (err.response?.data?.errors) {
+          const errorDetails = Object.values(err.response.data.errors).flat();
+          if (errorDetails.length > 0) {
+            errorMessage += ": " + errorDetails.join(", ");
+          }
+        }
+      } else if (err.response?.status === 500) {
+        errorMessage = err.response?.data?.message || "Error del servidor. Por favor, contacta al administrador.";
+      } else {
+        errorMessage = err.response?.data?.message || err.message || "Error al guardar permisos";
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      if (import.meta.env.DEV) {
+        console.error("Error al guardar permisos:", {
+          error: err,
+          status: err.response?.status,
+          data: err.response?.data,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -148,7 +194,8 @@ const RolePermissions = () => {
             <Button
               variant="outline-secondary"
               onClick={handleSelectAll}
-              disabled={saving}
+              disabled={saving || !canManagePermissions}
+              title={canManagePermissions ? "" : "No tienes permisos para modificar"}
             >
               {allSelected ? (
                 <>
@@ -162,19 +209,21 @@ const RolePermissions = () => {
                 </>
               )}
             </Button>
-            <Button variant="primary" onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <>
-                  <Spinner size="sm" className="me-2" />
-                  Guardando...
-                </>
-              ) : (
-                <>
-                  <FaSave className="me-2" />
-                  Guardar
-                </>
-              )}
-            </Button>
+            {canManagePermissions && (
+              <Button variant="primary" onClick={handleSave} disabled={saving}>
+                {saving ? (
+                  <>
+                    <Spinner size="sm" className="me-2" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="me-2" />
+                    Guardar
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         </Card.Header>
         <Card.Body>
@@ -223,6 +272,8 @@ const RolePermissions = () => {
                             e.stopPropagation();
                             handleSelectAllInModule(modulePermissions);
                           }}
+                          disabled={!canManagePermissions}
+                          title={canManagePermissions ? "" : "No tienes permisos para modificar"}
                         >
                           {moduleAllSelected ? (
                             <>
@@ -264,6 +315,7 @@ const RolePermissions = () => {
                               onChange={() =>
                                 handleTogglePermission(permission.id)
                               }
+                              disabled={!canManagePermissions}
                             />
                           </div>
                         ))}

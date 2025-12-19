@@ -105,65 +105,172 @@ export default function FichaClienteGeneral() {
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
+  // ===== formatear teléfonos del cliente =====
+  const telefonosFormateados = useMemo(() => {
+    const telefonos = Array.isArray(cliente?.telefonos) ? cliente.telefonos : [];
+    
+    if (telefonos.length === 0) {
+      // Fallback al campo legacy si no hay arreglo
+      return cliente?.telefono ? [cliente.telefono] : [];
+    }
+
+    // Ordenar: principal primero
+    const ordenados = [...telefonos].sort(
+      (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
+    );
+
+    // Formatear cada teléfono
+    return ordenados.map((t) => {
+      const indicativo = t?.indicativo ? `+${t.indicativo} ` : "";
+      const numero = t?.numero || "";
+      const tipo = t?.tipo ? ` (${t.tipo})` : "";
+      const principal = t?.principal ? " [Principal]" : "";
+      return `${indicativo}${numero}${tipo}${principal}`.trim();
+    });
+  }, [cliente?.telefonos, cliente?.telefono]);
+
   // mocks opcionales
   const USE_DEMO = false;
 
   return (
-    <div className="row g-3">
+    <div className="row g-4">
       {/* Columna izquierda */}
-      <div className="col-lg-6">
-        <div className="card">
+      <div className="col-lg-7">
+        <div className="card border">
           <div className="card-body">
-            <h6 className="mb-3">Resumen</h6>
-
-            {/* Selector de Grupo Familiar (inteligente) */}
-            <div className="mb-2">
-              <label className="form-label small mb-1"><strong>Grupo Familiar</strong></label>
-              {grupos.length > 1 ? (
-                <select
-                  className="form-select form-select-sm"
-                  value={selectedGrupoId ?? ""}
-                  onChange={(e) => setSelectedGrupoId(toValidId(e.target.value))}
-                >
-                  {grupos.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      GF {g.id}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="small">GF {gfId ?? "—"}</div>
-              )}
-              <div className="form-text">
-                Cambia el grupo para ver información y tareas de ese grupo.
+            {/* Header con título y selector de grupo */}
+            <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
+              <h6 className="mb-0 fw-semibold text-dark">RESUMEN DEL CLIENTE</h6>
+              <div style={{ minWidth: "180px" }}>
+                {grupos.length > 1 ? (
+                  <select
+                    className="form-select form-select-sm border-secondary"
+                    value={selectedGrupoId ?? ""}
+                    onChange={(e) => setSelectedGrupoId(toValidId(e.target.value))}
+                  >
+                    {grupos.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        Grupo Familiar {g.id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-end">
+                    <span className="text-dark fw-normal">GF {gfId ?? "—"}</span>
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="row small g-2">
-              <div className="col-md-6">
-                <div><strong>Nombre Completo:</strong> {cliente?.nombre_completo ?? "—"}</div>
-                <div><strong>Fecha de Nacimiento:</strong> {formatDate(cliente?.fecha_nacimiento)}</div>
-                <div><strong>Idioma:</strong> {cliente?.idioma || "—"}</div>
-                <div><strong>ID Cliente:</strong> {cliente?.id ?? "—"}</div>
-                <div><strong>Compañía:</strong> {companiaNombre}</div>
-                <div><strong>Estado:</strong> {cliente?.estado ?? "—"}</div>
-                <div><strong>Teléfono:</strong> {cliente?.telefono ?? "—"}</div>
-                <div><strong>Medio de Contacto:</strong> {cliente?.medio_contacto ?? "—"}</div>
-              </div>
-
-              <div className="col-md-6">
-                <div><strong>Asesor:</strong> {gfResponsable}</div>
-                <div><strong>Edad:</strong> {cliente?.edad ?? "—"}</div>
-                <div><strong>ID Grupo Familiar:</strong> {gfId ?? "—"}</div>
-                <div><strong>ID Compañía:</strong> {companiaId}</div>
-                <div><strong>Código Póliza:</strong> {codigoPoliza}</div>
-                <div><strong>Año Cobertura:</strong> {anoCobertura}</div>
-                <div><strong>Relación:</strong> {cliente?.parentesco ?? "—"}</div>
-                <div><strong>Estado GF:</strong> {gfEstado}</div>
+            {/* Sección: Datos Personales */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                DATOS PERSONALES
+              </h6>
+              <div className="row g-2">
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Nombre Completo</label>
+                    <div className="text-dark small">{cliente?.nombre_completo ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Fecha de Nacimiento</label>
+                    <div className="text-dark small">{formatDate(cliente?.fecha_nacimiento) ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Edad</label>
+                    <div className="text-dark small">{cliente?.edad ?? "—"} {cliente?.edad ? "años" : ""}</div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>ID Cliente</label>
+                    <div className="text-dark small">{cliente?.id ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Idioma</label>
+                    <div className="text-dark small">{cliente?.idioma || "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado</label>
+                    <div className="text-dark small">{cliente?.estado ?? "—"}</div>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <hr />
+            {/* Sección: Información de Contacto */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                INFORMACIÓN DE CONTACTO
+              </h6>
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="text-muted small d-block mb-1" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Teléfonos</label>
+                  {telefonosFormateados.length > 0 ? (
+                    <div className="d-flex flex-column gap-1">
+                      {telefonosFormateados.map((tel, idx) => (
+                        <div key={idx} className="text-dark small">
+                          {tel}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-muted small">—</div>
+                  )}
+                </div>
+                <div className="col-md-6">
+                  <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Medio de Contacto</label>
+                  <div className="text-dark small">{cliente?.medio_contacto ?? "—"}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sección: Grupo Familiar y Póliza */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                GRUPO FAMILIAR Y PÓLIZA
+              </h6>
+              <div className="row g-2">
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>ID Grupo Familiar</label>
+                    <div className="text-dark small">GF {gfId ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Asesor / Responsable</label>
+                    <div className="text-dark small fw-normal">{gfResponsable}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Relación</label>
+                    <div className="text-dark small">{cliente?.parentesco ?? "—"}</div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado del Grupo</label>
+                    <div className="text-dark small">{gfEstado}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Compañía</label>
+                    <div className="text-dark small fw-normal">{companiaNombre}</div>
+                    {companiaId !== "—" && (
+                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>ID: {companiaId}</div>
+                    )}
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Código de Póliza</label>
+                    <div className="text-dark small">{codigoPoliza}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Año de Cobertura</label>
+                    <div className="text-dark small">{anoCobertura}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <hr className="my-3 border-secondary opacity-25" />
 
             <PersonaContactoCard
   className="mb-3"
@@ -198,7 +305,7 @@ export default function FichaClienteGeneral() {
       </div>
 
       {/* Columna derecha */}
-      <div className="col-lg-6">
+      <div className="col-lg-5">
         <TareasPendientesPanel
           className="mb-3"
           clienteId={clienteId}

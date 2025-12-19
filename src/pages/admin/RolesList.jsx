@@ -100,10 +100,6 @@ const RolesList = () => {
   };
 
   const handleCreate = () => {
-    if (!canCreate) {
-      toast.error("No tienes permiso para crear roles");
-      return;
-    }
     setSelectedRole(null);
     setFormData({ name: "", slug: "", description: "" });
     setFormErrors({});
@@ -111,10 +107,6 @@ const RolesList = () => {
   };
 
   const handleEdit = (role) => {
-    if (!canEdit) {
-      toast.error("No tienes permiso para editar roles");
-      return;
-    }
     setSelectedRole(role);
     setFormData({
       name: role.name || "",
@@ -153,6 +145,17 @@ const RolesList = () => {
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
+    
+    if (selectedRole && !canEdit) {
+      toast.error("No tienes permisos para editar roles");
+      return;
+    }
+    
+    if (!selectedRole && !canCreate) {
+      toast.error("No tienes permisos para crear roles");
+      return;
+    }
+    
     setFormErrors({});
 
     try {
@@ -169,27 +172,38 @@ const RolesList = () => {
       console.error("Error al guardar rol:", err);
       
       if (err.response?.status === 422) {
-        const backendErrors = err.response.errors || err.response.data?.errors;
+        // El backend ahora retorna mensajes claros sobre validación
+        const backendErrors = err.response?.errors || err.response?.data?.errors;
+        const errorMessage = err.response?.data?.message;
+        
         if (backendErrors) {
           setFormErrors(backendErrors);
           const firstError = Object.values(backendErrors).flat()[0];
           if (firstError) {
             toast.error(firstError);
+          } else if (errorMessage) {
+            toast.error(errorMessage);
           }
+        } else if (errorMessage) {
+          // Si hay un mensaje general pero no errores específicos por campo
+          toast.error(errorMessage);
+          setFormErrors({ general: errorMessage });
         } else {
-          toast.error(err.response.data?.message || "Error de validación");
+          toast.error("Error de validación. Verifica los datos ingresados.");
         }
+      } else if (err.response?.status === 500) {
+        const errorMessage = err.response?.data?.message || "Error del servidor. Por favor, contacta al administrador.";
+        toast.error(errorMessage);
+        setFormErrors({ general: errorMessage });
       } else {
-        toast.error(err.message || "Error al guardar rol");
+        const errorMessage = err.response?.data?.message || err.message || "Error al guardar rol";
+        toast.error(errorMessage);
+        setFormErrors({ general: errorMessage });
       }
     }
   };
 
   const handleManagePermissions = (role) => {
-    if (!canManagePermissions) {
-      toast.error("No tienes permiso para gestionar permisos");
-      return;
-    }
     navigate(`/admin/roles/${role.id}/permissions`);
   };
 
@@ -203,12 +217,15 @@ const RolesList = () => {
             <FaKey className="me-2" />
             Administración de Roles
           </h4>
-          {canCreate && (
-            <Button variant="primary" onClick={handleCreate}>
-              <FaPlus className="me-2" />
-              Crear Rol
-            </Button>
-          )}
+          <Button 
+            variant="primary" 
+            onClick={handleCreate}
+            disabled={!canCreate}
+            title={canCreate ? "Crear Rol" : "No tienes permisos para crear roles"}
+          >
+            <FaPlus className="me-2" />
+            Crear Rol
+          </Button>
         </Card.Header>
         <Card.Body>
           <Form onSubmit={handleSearch} className="mb-4">
@@ -281,41 +298,37 @@ const RolesList = () => {
                         </td>
                         <td>
                           <div className="d-flex gap-2">
-                            {canManagePermissions && (
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                onClick={() => handleManagePermissions(role)}
-                                title="Gestionar permisos"
-                              >
-                                <FaKey />
-                              </Button>
-                            )}
-                            {canEdit && (
-                              <Button
-                                variant="warning"
-                                size="sm"
-                                onClick={() => handleEdit(role)}
-                                title="Editar"
-                              >
-                                <FaEdit />
-                              </Button>
-                            )}
-                            {canDelete && (
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleDelete(role)}
-                                title="Eliminar"
-                                disabled={actionLoading === role.id}
-                              >
-                                {actionLoading === role.id ? (
-                                  <Spinner size="sm" />
-                                ) : (
-                                  <FaTrashAlt />
-                                )}
-                              </Button>
-                            )}
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => handleManagePermissions(role)}
+                              title={canManagePermissions ? "Gestionar permisos" : "Ver permisos (sin permisos para modificar)"}
+                              disabled={!canManagePermissions}
+                            >
+                              <FaKey />
+                            </Button>
+                            <Button
+                              variant="warning"
+                              size="sm"
+                              onClick={() => handleEdit(role)}
+                              title={canEdit ? "Editar" : "Ver detalles (sin permisos para editar)"}
+                              disabled={!canEdit}
+                            >
+                              <FaEdit />
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              onClick={() => handleDelete(role)}
+                              title={canDelete ? "Eliminar" : "Eliminar (sin permisos)"}
+                              disabled={actionLoading === role.id || !canDelete}
+                            >
+                              {actionLoading === role.id ? (
+                                <Spinner size="sm" />
+                              ) : (
+                                <FaTrashAlt />
+                              )}
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -373,7 +386,9 @@ const RolesList = () => {
       <Modal show={showForm} onHide={() => setShowForm(false)} centered>
         <Modal.Header closeButton>
           <Modal.Title>
-            {selectedRole ? "Editar Rol" : "Crear Rol"}
+            {selectedRole 
+              ? (canEdit ? "Editar Rol" : "Detalles del Rol")
+              : (canCreate ? "Crear Rol" : "Detalles del Rol")}
           </Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleFormSubmit}>
@@ -390,6 +405,7 @@ const RolesList = () => {
                 }
                 isInvalid={!!formErrors.name}
                 required
+                disabled={selectedRole ? !canEdit : !canCreate}
               />
               <Form.Control.Feedback type="invalid">
                 {formErrors.name}
@@ -412,6 +428,7 @@ const RolesList = () => {
                 isInvalid={!!formErrors.slug}
                 required
                 placeholder="ej: admin, usuario, editor"
+                disabled={selectedRole ? !canEdit : !canCreate}
               />
               <Form.Control.Feedback type="invalid">
                 {formErrors.slug}
@@ -431,6 +448,7 @@ const RolesList = () => {
                   setFormData({ ...formData, description: e.target.value })
                 }
                 isInvalid={!!formErrors.description}
+                disabled={selectedRole ? !canEdit : !canCreate}
               />
               <Form.Control.Feedback type="invalid">
                 {formErrors.description}
@@ -458,11 +476,13 @@ const RolesList = () => {
               variant="secondary"
               onClick={() => setShowForm(false)}
             >
-              Cancelar
+              {(selectedRole ? canEdit : canCreate) ? "Cancelar" : "Cerrar"}
             </Button>
-            <Button variant="primary" type="submit">
-              {selectedRole ? "Actualizar" : "Crear"}
-            </Button>
+            {(selectedRole ? canEdit : canCreate) && (
+              <Button variant="primary" type="submit">
+                {selectedRole ? "Actualizar" : "Crear"}
+              </Button>
+            )}
           </Modal.Footer>
         </Form>
       </Modal>

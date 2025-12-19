@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Form, Button, Spinner, Alert } from "react-bootstrap";
 import { toast } from "react-toastify";
+import { useHasPermission } from "../../hooks/useHasPermission";
 import { usersService, rolesService } from "../../services/adminApi";
 
 const UserRolesModal = ({ show, onHide, user }) => {
+  const canAssignRoles = useHasPermission("users.assign_roles");
   const [loading, setLoading] = useState(false);
   const [roles, setRoles] = useState([]);
   const [selectedRoles, setSelectedRoles] = useState([]);
@@ -54,6 +56,10 @@ const UserRolesModal = ({ show, onHide, user }) => {
   };
 
   const handleToggleRole = (roleId) => {
+    if (!canAssignRoles) {
+      toast.error("No tienes permisos para modificar roles");
+      return;
+    }
     setSelectedRoles((prev) =>
       prev.includes(roleId)
         ? prev.filter((id) => id !== roleId)
@@ -62,6 +68,10 @@ const UserRolesModal = ({ show, onHide, user }) => {
   };
 
   const handleSelectAll = () => {
+    if (!canAssignRoles) {
+      toast.error("No tienes permisos para modificar roles");
+      return;
+    }
     if (selectedRoles.length === roles.length) {
       setSelectedRoles([]);
     } else {
@@ -71,6 +81,10 @@ const UserRolesModal = ({ show, onHide, user }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!canAssignRoles) {
+      toast.error("No tienes permisos para asignar roles");
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -78,8 +92,36 @@ const UserRolesModal = ({ show, onHide, user }) => {
       toast.success("Roles asignados correctamente");
       onHide();
     } catch (err) {
-      setError(err.message || "Error al asignar roles");
-      toast.error("Error al asignar roles");
+      let errorMessage = "Error al asignar roles";
+      
+      // Manejo específico de errores de validación (422)
+      if (err.response?.status === 422) {
+        // El backend ahora retorna mensajes claros sobre roles inválidos
+        errorMessage = err.response?.data?.message || err.message || "Uno o más roles seleccionados no son válidos";
+        
+        // Si hay errores específicos en el objeto errors, mostrarlos también
+        if (err.response?.data?.errors) {
+          const errorDetails = Object.values(err.response.data.errors).flat();
+          if (errorDetails.length > 0) {
+            errorMessage += ": " + errorDetails.join(", ");
+          }
+        }
+      } else if (err.response?.status === 500) {
+        errorMessage = err.response?.data?.message || "Error del servidor. Por favor, contacta al administrador.";
+      } else {
+        errorMessage = err.response?.data?.message || err.message || "Error al asignar roles";
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      if (import.meta.env.DEV) {
+        console.error("Error al asignar roles:", {
+          error: err,
+          status: err.response?.status,
+          data: err.response?.data,
+        });
+      }
     } finally {
       setLoading(false);
     }
@@ -105,6 +147,8 @@ const UserRolesModal = ({ show, onHide, user }) => {
               variant="outline-primary"
               size="sm"
               onClick={handleSelectAll}
+              disabled={!canAssignRoles}
+              title={canAssignRoles ? "" : "No tienes permisos para modificar roles"}
             >
               {selectedRoles.length === roles.length
                 ? "Limpiar Todo"
@@ -124,6 +168,7 @@ const UserRolesModal = ({ show, onHide, user }) => {
                   label={role.name}
                   checked={selectedRoles.includes(role.id)}
                   onChange={() => handleToggleRole(role.id)}
+                  disabled={!canAssignRoles}
                   className="mb-2"
                 />
               ))
@@ -138,18 +183,20 @@ const UserRolesModal = ({ show, onHide, user }) => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="secondary" onClick={onHide} disabled={loading}>
-            Cancelar
+            {canAssignRoles ? "Cancelar" : "Cerrar"}
           </Button>
-          <Button variant="primary" type="submit" disabled={loading}>
-            {loading ? (
-              <>
-                <Spinner size="sm" className="me-2" />
-                Guardando...
-              </>
-            ) : (
-              "Guardar"
-            )}
-          </Button>
+          {canAssignRoles && (
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <Spinner size="sm" className="me-2" />
+                  Guardando...
+                </>
+              ) : (
+                "Guardar"
+              )}
+            </Button>
+          )}
         </Modal.Footer>
       </Form>
     </Modal>
