@@ -31,6 +31,54 @@ export default function ContactForm({
   // combos
   relacionOptions = [],
 }) {
+  // ===== helper para formatear número con distribución 3-3-4 =====
+  const formatearNumeroTelefono = (numero) => {
+    if (!numero) return "";
+    // Remover todos los caracteres no numéricos
+    const soloDigitos = numero.toString().replace(/\D/g, "");
+    // Aplicar formato 3-3-4 si tiene 10 dígitos
+    if (soloDigitos.length === 10) {
+      return `${soloDigitos.slice(0, 3)}-${soloDigitos.slice(3, 6)}-${soloDigitos.slice(6)}`;
+    }
+    // Si no tiene 10 dígitos, devolver el número original
+    return numero;
+  };
+
+  // ===== helper para normalizar telefonos desde la base de datos =====
+  const normalizarTelefonos = (telefonos) => {
+    if (Array.isArray(telefonos)) {
+      return telefonos;
+    }
+    if (typeof telefonos === "string" && telefonos.trim().startsWith("[")) {
+      try {
+        const parsed = JSON.parse(telefonos);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  // ===== helper para formatear teléfono completo (indicativo + número) =====
+  const formatearTelefonoCompleto = (cliente) => {
+    // Normalizar telefonos: puede venir como array, string JSON, o null
+    const telefonos = normalizarTelefonos(cliente?.telefonos);
+    
+    // Priorizar array de telefonos si existe
+    if (telefonos.length > 0) {
+      const tel = telefonos[0];
+      const indicativo = tel?.indicativo ? `+${tel.indicativo} ` : "";
+      const numeroFormateado = formatearNumeroTelefono(tel?.numero || "");
+      return `${indicativo}${numeroFormateado}`.trim() || "—";
+    }
+    // Fallback al campo legacy
+    if (cliente?.telefono) {
+      return formatearNumeroTelefono(cliente.telefono);
+    }
+    return "—";
+  };
+
   return (
     <div className="row g-2">
       {/* Toggle modo */}
@@ -157,7 +205,7 @@ export default function ContactForm({
                   <tr><td colSpan={4} className="text-center text-muted py-2">Sin resultados.</td></tr>
                 ) : (
                   candidatos.map((c) => {
-                    const tel = c.telefono || (Array.isArray(c.telefonos) && c.telefonos[0]?.numero) || "—";
+                    const tel = formatearTelefonoCompleto(c);
                     const isSel = sel?.id === c.id;
                     return (
                       <tr key={c.id} className={isSel ? "table-primary" : ""}>

@@ -22,3 +22,5 @@ export const useHasRole = (roleSlug) => {
 
 export default useHasPermission;
 
+
+

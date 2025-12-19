@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Form, Button, Table, InputGroup, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../services/api";
+import { formatPhone334 } from "../utils/formatters";
 
 const ClienteExistente = ({ onClienteSeleccionado }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -62,6 +63,31 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
     return searchResults.slice(startIndex, startIndex + itemsPerPage);
   };
 
+  // Función para formatear y mostrar teléfonos del array telefonos
+  const formatTelefonos = (cliente) => {
+    // Priorizar array de telefonos si existe
+    if (Array.isArray(cliente.telefonos) && cliente.telefonos.length > 0) {
+      const telefonosOrdenados = [...cliente.telefonos].sort(
+        (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
+      );
+      
+      return telefonosOrdenados.map((tel) => {
+        const indicativo = tel?.indicativo ? `+${tel.indicativo} ` : "";
+        const numeroFormateado = formatPhone334(tel?.numero || "");
+        const tipo = tel?.tipo ? ` (${tel.tipo})` : "";
+        const principal = tel?.principal ? " ⭐" : "";
+        return `${indicativo}${numeroFormateado}${tipo}${principal}`;
+      }).join(", ");
+    }
+    
+    // Fallback: usar campo legacy telefono
+    if (cliente.telefono) {
+      return formatPhone334(cliente.telefono);
+    }
+    
+    return "-";
+  };
+
   return (
     <div>
       <Form>
@@ -111,7 +137,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                   <tr key={cliente.id}>
                     <td>{cliente.nombre_completo || `${cliente.nombre || ""} ${cliente.apellido || ""}`}</td>
                     <td>{cliente.estado_cliente || "-"}</td>
-                    <td>{cliente.telefono || "-"}</td>
+                    <td>{formatTelefonos(cliente)}</td>
                     <td>{cliente.fecha_nacimiento ? new Date(cliente.fecha_nacimiento).toLocaleDateString() : "-"}</td>
                     <td>
                       <Button variant="success" size="sm" onClick={() => onClienteSeleccionado?.(cliente)}>

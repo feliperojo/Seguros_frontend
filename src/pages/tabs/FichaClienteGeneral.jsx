@@ -105,9 +105,33 @@ export default function FichaClienteGeneral() {
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
+  // ===== helper para formatear número con distribución 3-3-4 =====
+  const formatearNumeroTelefono = (numero) => {
+    if (!numero) return "";
+    // Remover todos los caracteres no numéricos
+    const soloDigitos = numero.toString().replace(/\D/g, "");
+    // Aplicar formato 3-3-4 si tiene 10 dígitos
+    if (soloDigitos.length === 10) {
+      return `${soloDigitos.slice(0, 3)}-${soloDigitos.slice(3, 6)}-${soloDigitos.slice(6)}`;
+    }
+    // Si no tiene 10 dígitos, devolver el número original
+    return numero;
+  };
+
   // ===== formatear teléfonos del cliente =====
   const telefonosFormateados = useMemo(() => {
-    const telefonos = Array.isArray(cliente?.telefonos) ? cliente.telefonos : [];
+    // Normalizar telefonos: puede venir como array, string JSON, o null
+    let telefonos = [];
+    if (Array.isArray(cliente?.telefonos)) {
+      telefonos = cliente.telefonos;
+    } else if (typeof cliente?.telefonos === "string" && cliente.telefonos.trim().startsWith("[")) {
+      try {
+        telefonos = JSON.parse(cliente.telefonos);
+        if (!Array.isArray(telefonos)) telefonos = [];
+      } catch (_) {
+        telefonos = [];
+      }
+    }
     
     if (telefonos.length === 0) {
       // Fallback al campo legacy si no hay arreglo
@@ -122,10 +146,10 @@ export default function FichaClienteGeneral() {
     // Formatear cada teléfono
     return ordenados.map((t) => {
       const indicativo = t?.indicativo ? `+${t.indicativo} ` : "";
-      const numero = t?.numero || "";
+      const numeroFormateado = formatearNumeroTelefono(t?.numero || "");
       const tipo = t?.tipo ? ` (${t.tipo})` : "";
       const principal = t?.principal ? " [Principal]" : "";
-      return `${indicativo}${numero}${tipo}${principal}`.trim();
+      return `${indicativo}${numeroFormateado}${tipo}${principal}`.trim();
     });
   }, [cliente?.telefonos, cliente?.telefono]);
 

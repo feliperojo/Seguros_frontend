@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import apiRequest from "../services/api";
+import { formatPhone334 } from "../utils/formatters";
 
 // ⬇️ componentes ya existentes en tu proyecto
 import LanguageSelect from "../components/selects/LanguageSelect";
@@ -66,6 +67,41 @@ const splitNames = (n = "") => {
   return { primer_nombre, segundo_nombre };
 };
 
+// ===== helper para normalizar telefonos desde la base de datos =====
+const normalizarTelefonos = (telefonos) => {
+  if (Array.isArray(telefonos)) {
+    return telefonos;
+  }
+  if (typeof telefonos === "string" && telefonos.trim().startsWith("[")) {
+    try {
+      const parsed = JSON.parse(telefonos);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_) {
+      return [];
+    }
+  }
+  return [];
+};
+
+// ===== helper para formatear teléfono completo (indicativo + número) =====
+const formatearTelefonoCompleto = (cliente) => {
+  // Normalizar telefonos: puede venir como array, string JSON, o null
+  const telefonos = normalizarTelefonos(cliente?.telefonos);
+  
+  // Priorizar array de telefonos si existe
+  if (telefonos.length > 0) {
+    const tel = telefonos[0];
+    const indicativo = tel?.indicativo ? `+${tel.indicativo} ` : "";
+    const numeroFormateado = formatPhone334(tel?.numero || "");
+    return `${indicativo}${numeroFormateado}`.trim() || "—";
+  }
+  // Fallback al campo legacy
+  if (cliente?.telefono) {
+    return formatPhone334(cliente.telefono);
+  }
+  return "—";
+};
+
 /* ================ componente principal ================= */
 
 export default function ContactosAdmin() {
@@ -86,6 +122,7 @@ export default function ContactosAdmin() {
     telefonos: [],
     email_principal: "",
     nota: "",
+    estado_cliente: null,
     direccion: {
       calle: "",
       apto: "",
@@ -124,11 +161,25 @@ export default function ContactosAdmin() {
           `/cliente/buscar?nombre=${encodeURIComponent(term)}`,
           "GET"
         );
+        console.log("=== DATOS DE BÚSQUEDA DE CLIENTES ===");
+        console.log("Respuesta completa de la API:", res);
+        console.log("res.data:", res?.data);
+        console.log("res (directo):", res);
+        
         const list = Array.isArray(res?.data)
           ? res.data
           : Array.isArray(res)
           ? res
           : [];
+        console.log("Lista procesada que se guarda en rows:", list);
+        console.log("Primer elemento de la lista (ejemplo):", list[0]);
+        if (list[0]) {
+          console.log("Campos disponibles en el primer elemento:", Object.keys(list[0]));
+          console.log("estado_cliente del primer elemento:", list[0].estado_cliente);
+          console.log("telefonos del primer elemento:", list[0].telefonos);
+          console.log("telefono (legacy) del primer elemento:", list[0].telefono);
+        }
+        console.log("====================================");
         setRows(list);
       } catch (e) {
         console.error(e);
@@ -147,7 +198,18 @@ export default function ContactosAdmin() {
     // 1️⃣ Detalle del cliente
     try {
       const detail = await apiRequest(`/cliente/${id}`, "GET");
+      console.log("=== DATOS AL CARGAR CONTACTO INDIVIDUAL ===");
+      console.log("Respuesta completa de la API:", detail);
+      console.log("detail.data:", detail?.data);
+      console.log("detail (directo):", detail);
+      
       const c = detail?.data || detail || {};
+      console.log("Cliente procesado (c):", c);
+      console.log("Campos disponibles:", Object.keys(c));
+      console.log("estado_cliente:", c.estado_cliente);
+      console.log("telefonos:", c.telefonos);
+      console.log("telefono (legacy):", c.telefono);
+      console.log("==========================================");
 
       let telefonos = [];
       if (Array.isArray(c.telefonos)) {
@@ -189,6 +251,7 @@ export default function ContactosAdmin() {
         email_principal: c.email || "",
         telefonos,
         nota: c.nota || "",
+        estado_cliente: c.estado_cliente || null,
         direccion: {
           calle: c.calle || "",
           apto: c.apto || "",
@@ -415,6 +478,7 @@ export default function ContactosAdmin() {
   
   const esPersona = model.tipo_contacto === "persona";
   const esEmpresa = model.tipo_contacto === "empresa";
+  const esCliente = model.estado_cliente?.toLowerCase() === "cliente";
 
   /* ===================== render ===================== */
 
@@ -461,10 +525,7 @@ export default function ContactosAdmin() {
                       </tr>
                     ) : (
                       rows.map((r) => {
-                        const firstPhone =
-                          r.telefono ||
-                          (Array.isArray(r.telefonos) && r.telefonos[0]?.numero) ||
-                          "—";
+                        const firstPhone = formatearTelefonoCompleto(r);
                         return (
                           <tr key={r.id}>
                             <td className="fw-semibold">{r.nombre_completo}</td>
@@ -494,16 +555,33 @@ export default function ContactosAdmin() {
           <div className="card mb-3">
             <div className="card-body">
               <div className="d-flex justify-content-between align-items-center mb-2">
-                <h5 className="mb-0">{model.id ? "Editar Cliente" : "Crear Nuevo Contacto"}</h5>
+                <div className="d-flex align-items-center gap-2">
+                  <h5 className="mb-0">{model.id ? "Editar Cliente" : "Crear Nuevo Contacto"}</h5>
+                  {esCliente && (
+                    <span className="badge bg-warning text-dark">
+                      Solo lectura
+                    </span>
+                  )}
+                </div>
                 <div className="btn-group">
                   <button className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
                     Nuevo / Limpiar
                   </button>
-                  <button className="btn btn-primary btn-sm" onClick={save} disabled={!canSave || saving}>
+                  <button 
+                    className="btn btn-primary btn-sm" 
+                    onClick={save} 
+                    disabled={!canSave || saving || esCliente}
+                    title={esCliente ? "Los clientes no pueden ser editados desde aquí" : ""}
+                  >
                     {saving ? "Guardando…" : model.id ? "Guardar" : "Crear"}
                   </button>
                 </div>
               </div>
+              {esCliente && (
+                <div className="alert alert-warning alert-sm py-2 px-3 mb-3">
+                  <small><strong>Nota:</strong> Los clientes no pueden ser editados desde aquí. Use el botón "Nuevo / Limpiar" para crear un nuevo contacto.</small>
+                </div>
+              )}
 
               <div className="row g-3">
                 {/* Selector de tipo de contacto */}
@@ -513,7 +591,7 @@ export default function ContactosAdmin() {
                     className="form-select form-select-sm"
                     value={model.tipo_contacto}
                     onChange={(e) => setField("tipo_contacto", e.target.value)}
-                    disabled={!!model.id} // No permitir cambiar tipo si ya existe
+                    disabled={!!model.id || esCliente} // No permitir cambiar tipo si ya existe o es cliente
                   >
                     <option value="persona">Persona</option>
                     <option value="empresa">Empresa</option>
@@ -535,6 +613,8 @@ export default function ContactosAdmin() {
                         value={model.nombres}
                         onChange={(e) => setField("nombres", e.target.value)}
                         placeholder="Primer y segundo nombre"
+                        disabled={esCliente}
+                        readOnly={esCliente}
                       />
                     </div>
                     <div className="col-md-6">
@@ -544,6 +624,8 @@ export default function ContactosAdmin() {
                         value={model.apellidos}
                         onChange={(e) => setField("apellidos", e.target.value)}
                         placeholder="Apellidos"
+                        disabled={esCliente}
+                        readOnly={esCliente}
                       />
                     </div>
                     <div className="col-md-12">
@@ -571,6 +653,8 @@ export default function ContactosAdmin() {
                       onChange={(e) => setField("nombre_completo", e.target.value)}
                       placeholder="Ingrese el nombre de la empresa"
                       required
+                      disabled={esCliente}
+                      readOnly={esCliente}
                     />
                     <small className="form-text text-muted">
                       Este será el nombre comercial de la empresa
@@ -590,6 +674,7 @@ export default function ContactosAdmin() {
                     getLabel={(l) => l.name}
                     className="form-select form-select-sm"
                     placeholder="Seleccione"
+                    disabled={esCliente}
                   />
                 </div>
 
@@ -599,6 +684,8 @@ export default function ContactosAdmin() {
                     className="form-control form-control-sm"
                     value={model.nota || ""}
                     onChange={(e) => setField("nota", e.target.value)}
+                    disabled={esCliente}
+                    readOnly={esCliente}
                   />
                 </div>
 
@@ -606,21 +693,23 @@ export default function ContactosAdmin() {
                 <div className="col-12">
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <label className="form-label small mb-0">Teléfonos</label>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${showTelefonos ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                      onClick={() => setShowTelefonos(!showTelefonos)}
-                    >
-                      <i className={`bi ${showTelefonos ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
-                      {showTelefonos ? 'Ocultar' : 'Agregar Teléfono'}
-                    </button>
+                    {!esCliente && (
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${showTelefonos ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                        onClick={() => setShowTelefonos(!showTelefonos)}
+                      >
+                        <i className={`bi ${showTelefonos ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
+                        {showTelefonos ? 'Ocultar' : 'Agregar Teléfono'}
+                      </button>
+                    )}
                   </div>
                   {showTelefonos && (
                     <div className="mt-2">
                       <TelefonosPro
                         value={model.telefonos}
                         onChange={(list) => setField("telefonos", list)}
-                        readOnly={false}
+                        readOnly={esCliente}
                         uiPreset="clean"
                         countrySelectWidth={200}
                         formatByCountry
@@ -641,21 +730,23 @@ export default function ContactosAdmin() {
                 <div className="col-12 mt-3">
                   <div className="d-flex justify-content-between align-items-center mb-2">
                     <label className="form-label small mb-0">Dirección</label>
-                    <button
-                      type="button"
-                      className={`btn btn-sm ${showDireccion ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                      onClick={() => setShowDireccion(!showDireccion)}
-                    >
-                      <i className={`bi ${showDireccion ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
-                      {showDireccion ? 'Ocultar' : 'Agregar Dirección'}
-                    </button>
+                    {!esCliente && (
+                      <button
+                        type="button"
+                        className={`btn btn-sm ${showDireccion ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
+                        onClick={() => setShowDireccion(!showDireccion)}
+                      >
+                        <i className={`bi ${showDireccion ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
+                        {showDireccion ? 'Ocultar' : 'Agregar Dirección'}
+                      </button>
+                    )}
                   </div>
                   {showDireccion && (
                     <div className="mt-2 border-top pt-3">
                       <FormDireccion
                         formData={model.direccion || empty.direccion}
                         onChange={handleDireccionChange}
-                        editable={true}
+                        editable={!esCliente}
                         hideCorrespondencia={true}
                       />
                     </div>
