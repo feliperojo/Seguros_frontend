@@ -28,13 +28,17 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await apiRequest("/v1/auth/me", "GET");
       
-      // El backend puede retornar diferentes estructuras:
-      // Opción 1: { user: { roles, permissions }, roles, permissions }
-      // Opción 2: { data: { user: { roles, permissions } } }
-      // Opción 3: { user: { roles, permissions } } (roles y permissions dentro del user)
+      // Nueva estructura del backend:
+      // { success, message, data: { user: { roles: [...], permissions: [...] }, roles: [...], permissions: [...] } }
+      // Prioridad para permisos: data.permissions (array de strings) > data.user.permissions (objetos) > otros
+      // Prioridad para roles: data.user.roles (objetos completos) > data.roles (objetos) > otros
       const userData = response.data?.user || response.user || response;
-      const rolesData = userData?.roles || response.roles || [];
-      let permissionsData = userData?.permissions || response.permissions || [];
+      
+      // Extraer roles: preferir data.user.roles (objetos completos), luego data.roles
+      let rolesData = userData?.roles || response.data?.roles || response.roles || [];
+      
+      // Extraer permisos: preferir data.permissions (array de strings), luego data.user.permissions (objetos)
+      let permissionsData = response.data?.permissions || userData?.permissions || response.permissions || [];
       
       // Normalizar permisos: convertir objetos a strings y normalizar
       // Los permisos pueden venir como objetos { id, slug, name } o como strings
@@ -42,10 +46,14 @@ export const AuthProvider = ({ children }) => {
       
       // Log para debugging en desarrollo
       if (import.meta.env.DEV) {
-        console.log("✅ Permisos cargados:", {
-          raw: permissionsData,
-          normalized: normalizedPermissions,
-          count: normalizedPermissions.length,
+        console.log("✅ Datos del usuario cargados:", {
+          user: userData,
+          roles: rolesData,
+          permissions: {
+            raw: permissionsData,
+            normalized: normalizedPermissions,
+            count: normalizedPermissions.length,
+          },
         });
       }
       
@@ -102,19 +110,24 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem("auth_token", token);
         
         // Si el usuario viene en la respuesta del login, usarlo directamente
+        // Estructura del login puede ser: { data: { token, user: {...}, roles: [...], permissions: [...] } }
         if (userData) {
+          // Extraer roles y permisos con la misma lógica que loadUserData
+          const rolesData = userData.roles || response.data?.roles || [];
+          const permissionsData = response.data?.permissions || userData.permissions || [];
+          
           // Normalizar permisos del login
-          const normalizedPermissions = normalizePermissions(userData.permissions || []);
+          const normalizedPermissions = normalizePermissions(permissionsData);
           
           setUser(userData);
-          setRoles(userData.roles || []);
+          setRoles(Array.isArray(rolesData) ? rolesData : []);
           setPermissions(normalizedPermissions);
           setIsAuthenticated(true);
           
           // Guardar en localStorage
           localStorage.setItem("user", JSON.stringify(userData));
-          if (userData.roles && userData.roles.length > 0) {
-            localStorage.setItem("roles", JSON.stringify(userData.roles));
+          if (rolesData && Array.isArray(rolesData) && rolesData.length > 0) {
+            localStorage.setItem("roles", JSON.stringify(rolesData));
           }
           if (normalizedPermissions && normalizedPermissions.length > 0) {
             localStorage.setItem("permissions", JSON.stringify(normalizedPermissions));

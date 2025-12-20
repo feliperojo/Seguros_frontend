@@ -30,36 +30,54 @@ export const normalizePermission = (permission) => {
 };
 
 /**
- * Mapa de aliases para compatibilidad con permisos legacy
+ * Mapa de aliases para compatibilidad con permisos legacy y diferentes formatos
+ * Mapea entre formatos del backend (users.read, users.update) y frontend (users.view, users.edit)
  * Los permisos legacy (ej: "manage users") habilitan los permisos nuevos correspondientes
  */
 export const PERMISSION_ALIASES = {
-  // Usuarios - legacy "manage users" habilita todos los permisos de usuarios
-  "users.view": ["manage users", "view users"],
+  // Usuarios - mapeo entre backend (read/update) y frontend (view/edit)
+  "users.view": ["users.read", "manage users", "view users"],
+  "users.read": ["users.view", "manage users", "view users"], // Bidireccional
   "users.create": ["manage users", "create users"],
-  "users.edit": ["manage users", "edit users", "users.update", "update users"],
+  "users.edit": ["users.update", "manage users", "edit users", "update users"],
+  "users.update": ["users.edit", "manage users", "edit users", "update users"], // Bidireccional
+  "users.delete": ["manage users", "delete users"],
   "users.disable": ["manage users", "disable users", "users.toggle-status", "toggle status", "users.toggle_status"],
   "users.assign_roles": ["manage users", "assign roles", "users.assign-roles", "users.assign_roles", "assign user roles"],
   
-  // Roles - legacy "manage users" también habilita roles (comportamiento común)
-  "roles.view": ["manage users", "view roles"],
+  // Roles - mapeo entre backend (read/update) y frontend (view/edit)
+  "roles.view": ["roles.read", "manage users", "view roles"],
+  "roles.read": ["roles.view", "manage users", "view roles"], // Bidireccional
   "roles.create": ["manage users", "create roles"],
-  "roles.edit": ["manage users", "edit roles", "roles.update", "update roles"],
+  "roles.edit": ["roles.update", "manage users", "edit roles", "update roles"],
+  "roles.update": ["roles.edit", "manage users", "edit roles", "update roles"], // Bidireccional
   "roles.delete": ["manage users", "delete roles"],
   "roles.assign_permissions": ["manage users", "assign permissions", "roles.manage-permissions", "roles.manage_permissions", "manage role permissions"],
   
-  // Permisos - legacy "manage users" también habilita permisos
-  "permissions.view": ["manage users", "view permissions"],
+  // Permisos - mapeo entre backend (read) y frontend (view)
+  "permissions.view": ["permissions.read", "manage users", "view permissions"],
+  "permissions.read": ["permissions.view", "manage users", "view permissions"], // Bidireccional
+  "permissions.create": ["manage users", "create permissions"],
+  "permissions.update": ["permissions.edit", "manage users", "edit permissions", "update permissions"],
+  "permissions.edit": ["permissions.update", "manage users", "edit permissions", "update permissions"], // Bidireccional
+  "permissions.delete": ["manage users", "delete permissions"],
   "permissions.manage": ["manage users", "manage permissions"],
   
+  // Auditoría
+  "audit.view": ["audit.read", "view audit", "view audit logs"],
+  "audit.read": ["audit.view", "view audit", "view audit logs"], // Bidireccional
+  
   // Tareas
-  "tasks.view": ["view tasks"],
+  "tasks.view": ["tasks.read", "view tasks"],
+  "tasks.read": ["tasks.view", "view tasks"], // Bidireccional
   "tasks.create": ["create tasks"],
-  "tasks.edit": ["edit tasks"],
+  "tasks.edit": ["tasks.update", "edit tasks", "update tasks"],
+  "tasks.update": ["tasks.edit", "edit tasks", "update tasks"], // Bidireccional
   "tasks.delete": ["delete tasks"],
   
   // Reportes
-  "reports.view": ["view reports"],
+  "reports.view": ["reports.read", "view reports"],
+  "reports.read": ["reports.view", "view reports"], // Bidireccional
 };
 
 /**
