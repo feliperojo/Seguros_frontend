@@ -44,8 +44,8 @@ export const AuthProvider = ({ children }) => {
       // Los permisos pueden venir como objetos { id, slug, name } o como strings
       const normalizedPermissions = normalizePermissions(permissionsData);
       
-      // Log para debugging en desarrollo
-      if (import.meta.env.DEV) {
+      // Log para debugging (siempre en desarrollo, condicional en producción)
+      if (import.meta.env.DEV || import.meta.env.MODE === 'development') {
         console.log("✅ Datos del usuario cargados:", {
           user: userData,
           roles: rolesData,
@@ -53,6 +53,7 @@ export const AuthProvider = ({ children }) => {
             raw: permissionsData,
             normalized: normalizedPermissions,
             count: normalizedPermissions.length,
+            sample: normalizedPermissions.slice(0, 5), // Primeros 5 para debug
           },
         });
       }
@@ -197,17 +198,27 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasPermission = (permissionSlug) => {
-    if (!permissions || permissions.length === 0) return false;
+    if (!permissions || permissions.length === 0) {
+      if (import.meta.env.DEV) {
+        console.warn("⚠️ hasPermission: No hay permisos disponibles", { permissionSlug });
+      }
+      return false;
+    }
     
     // Normalizar el permiso solicitado
     const normalizedRequested = normalizePermission(permissionSlug);
-    if (!normalizedRequested) return false;
+    if (!normalizedRequested) {
+      if (import.meta.env.DEV) {
+        console.warn("⚠️ hasPermission: Permiso solicitado inválido", { permissionSlug });
+      }
+      return false;
+    }
     
     // Obtener aliases del permiso solicitado (incluye el permiso original)
     const aliases = getPermissionAliases(normalizedRequested);
     
     // Verificar si alguno de los permisos del usuario coincide con el permiso solicitado o sus aliases
-    return permissions.some((userPerm) => {
+    const hasAccess = permissions.some((userPerm) => {
       const normalizedUserPerm = normalizePermission(userPerm);
       
       // Verificar coincidencia exacta
@@ -222,6 +233,19 @@ export const AuthProvider = ({ children }) => {
       
       return false;
     });
+    
+    // Log para debugging en desarrollo
+    if (import.meta.env.DEV && !hasAccess) {
+      console.log("🔍 hasPermission - Acceso denegado:", {
+        requested: permissionSlug,
+        normalizedRequested,
+        aliases,
+        userPermissions: permissions.slice(0, 10), // Primeros 10 para no saturar
+        totalPermissions: permissions.length,
+      });
+    }
+    
+    return hasAccess;
   };
 
   const hasRole = (roleSlug) => {

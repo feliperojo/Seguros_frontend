@@ -15,9 +15,13 @@ export const normalizePermission = (permission) => {
   if (!permission) return "";
   
   // Si es un objeto, extraer slug o name
+  // Manejar explícitamente cuando slug es null (usar name en su lugar)
   let permString = "";
   if (typeof permission === "object") {
-    permString = permission.slug || permission.name || permission.permission || "";
+    // Si slug existe y no es null/undefined, usarlo; si no, usar name
+    permString = (permission.slug != null && permission.slug !== "") 
+      ? permission.slug 
+      : (permission.name || permission.permission || "");
   } else {
     permString = String(permission);
   }
