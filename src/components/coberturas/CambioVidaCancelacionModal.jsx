@@ -126,6 +126,15 @@ const CambioVidaCancelacionModal = ({
       setError("La fecha de cancelación es requerida.");
       return false;
     }
+    // Validar que la fecha de retiro no sea menor a la fecha de cancelación
+    if (fechaRetiro && fechaCancelacion) {
+      const fechaCancel = new Date(fechaCancelacion);
+      const fechaRet = new Date(fechaRetiro);
+      if (fechaRet < fechaCancel) {
+        setError("La fecha de retiro no puede ser menor a la fecha de cancelación.");
+        return false;
+      }
+    }
     return true;
   };
 
@@ -326,7 +335,6 @@ const CambioVidaCancelacionModal = ({
                       type="date"
                       value={fechaCancelacion}
                       onChange={(e) => setFechaCancelacion(e.target.value)}
-                      max={getFechaHoy()}
                       required
                     />
                     <Form.Text className="text-muted">
@@ -342,7 +350,7 @@ const CambioVidaCancelacionModal = ({
                       type="date"
                       value={fechaRetiro}
                       onChange={(e) => setFechaRetiro(e.target.value)}
-                      max={getFechaHoy()}
+                      min={fechaCancelacion || undefined}
                     />
                     <Form.Text className="text-muted">
                       Fecha en que el miembro se retira del grupo

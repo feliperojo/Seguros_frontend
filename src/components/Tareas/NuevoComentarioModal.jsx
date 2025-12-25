@@ -5,25 +5,21 @@ import apiRequest from "../../services/api";
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
 
-const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", grupoFamiliarId, clienteId }) => {
+const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, clienteId }) => {
   const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10));
-
-  const getHoy = () => new Date().toISOString().split("T")[0];
 
   const [formData, setFormData] = useState({
     concept_id: "",
     note: "",
     cliente_id: "",
     grupo_familiar_id: "",
-    assign_to_user_id: "",
-    scheduled_date: getHoy(),
-    due_date: getHoy(),
   });
+
+  const tieneGrupoContexto = toInt(grupoFamiliarId) !== null;
 
   const [conceptos, setConceptos] = useState([]);
   const [clientes, setClientes] = useState([]);
   const [grupos, setGrupos] = useState([]);
-  const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
   const [conceptosPadres, setConceptosPadres] = useState([]);
@@ -35,137 +31,61 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
-    setFormData((prev) => {
-      const ctxId = toInt(grupoFamiliarId ?? prev.grupo_familiar_id);
-      const pickId = toInt(grupoElegido?.grupo_familiar_id);
-      const cliId = toInt(cli?.cliente_id ?? cli?.id);
-      const tieneGrupoContexto = toInt(grupoFamiliarId) !== null;
+    const ctxId = toInt(grupoFamiliarId ?? formData.grupo_familiar_id);
+    const pickId = toInt(grupoElegido?.grupo_familiar_id);
+    const cliId = toInt(cli?.cliente_id ?? cli?.id);
 
-      if (tieneGrupoContexto && ctxId && pickId && ctxId !== pickId) {
-        alert("El cliente pertenece a otro grupo familiar. Por favor seleccione un miembro del grupo actual.");
-        return prev;
-      }
-
-      if (cliId !== toInt(clienteId)) {
-        setClienteFicha({
-          id: cliId,
-          nombre_completo: cli.nombre_completo || cli.nombre || "Cliente seleccionado",
-          email: cli.email || null,
-          telefono: cli.telefono || null,
-        });
-      }
-
-      const nombreDisplay = cli.nombre_completo || cli.nombre || "Cliente seleccionado";
-      const infoExtra = [];
-      if (cliId) infoExtra.push(`ID: ${cliId}`);
-      if (grupoElegido?.grupo_familiar_id) infoExtra.push(`GF #${grupoElegido.grupo_familiar_id}`);
-      
-      setClienteQuery(nombreDisplay + (infoExtra.length > 0 ? ` (${infoExtra.join(", ")})` : ""));
-      setClientes([]);
-
-      return {
-        ...prev,
-        cliente_id: cliId || "",
-        grupo_familiar_id: pickId || ctxId || "",
-      };
-    });
-  }, [grupoFamiliarId, clienteId]);
-
-  // Cargar datos iniciales y resetear formulario cuando se abre el modal
-  useEffect(() => {
-    if (!show) {
-      // Limpiar archivos cuando se cierra el modal
-      setArchivos((prevArchivos) => {
-        prevArchivos.forEach((arch) => {
-          if (arch.preview) URL.revokeObjectURL(arch.preview);
-        });
-        return [];
-      });
+    if (tieneGrupoContexto && ctxId && pickId && ctxId !== pickId) {
+      alert("El cliente pertenece a otro grupo familiar. Por favor seleccione un miembro del grupo actual.");
       return;
     }
 
-    // Resetear todo el estado cuando se abre el modal
-    const hoy = getHoy();
-    const clienteIdValido = clienteId ? String(clienteId) : "";
-    const grupoIdValido = grupoFamiliarId ? String(grupoFamiliarId) : "";
+    setFormData((prev) => ({
+      ...prev,
+      cliente_id: cliId || "",
+      grupo_familiar_id: pickId || ctxId || "",
+    }));
 
-    setFormData({
-      concept_id: "",
-      note: "",
-      cliente_id: clienteIdValido,
-      grupo_familiar_id: grupoIdValido,
-      assign_to_user_id: "",
-      scheduled_date: hoy,
-      due_date: hoy,
-    });
-    setErrors({});
-    setConceptoPadreId("");
-    setConceptos([]);
-    setClientes([]);
-    setClienteQuery("");
+    if (cliId !== toInt(clienteId)) {
+      setClienteFicha({
+        id: cliId,
+        nombre_completo: cli.nombre_completo || cli.nombre || "Cliente seleccionado",
+        email: cli.email || null,
+        telefono: cli.telefono || null,
+      });
+    }
 
-    // Cargar datos de la API
-    let isMounted = true;
+    const nombreDisplay = cli.nombre_completo || cli.nombre || "Cliente seleccionado";
+    const infoExtra = [];
+    if (cliId) infoExtra.push(`ID: ${cliId}`);
+    if (grupoElegido?.grupo_familiar_id) infoExtra.push(`GF #${grupoElegido.grupo_familiar_id}`);
     
-    // Cargar usuarios de forma separada para mejor manejo de errores
-    const cargarUsuarios = async () => {
-      try {
-        const response = await apiRequest("v1/users/list", "GET");
-        
-        // El endpoint retorna: { success: true, message: "...", data: [...] }
-        let usuariosData = [];
-        
-        if (response?.success && Array.isArray(response.data)) {
-          usuariosData = response.data;
-        } else if (Array.isArray(response)) {
-          // Fallback: si viene como array directo
-          usuariosData = response;
-        } else if (response?.data && Array.isArray(response.data)) {
-          // Fallback: si viene con data pero sin success
-          usuariosData = response.data;
-        }
-        
-        if (isMounted && show) {
-          setUsuarios(usuariosData);
-          console.log("✅ Usuarios cargados:", usuariosData.length, usuariosData);
-        }
-      } catch (err) {
-        console.error("❌ Error al cargar usuarios:", err);
-        if (isMounted && show) {
-          setUsuarios([]);
-        }
-      }
-    };
+    setClienteQuery(nombreDisplay + (infoExtra.length > 0 ? ` (${infoExtra.join(", ")})` : ""));
+    setClientes([]);
+  }, [grupoFamiliarId, clienteId, tieneGrupoContexto]);
 
-    // Cargar conceptos y grupos
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (!show) return;
+
     Promise.all([
-      apiRequest(`operational_concepts?only_parents=true`, "GET").catch(() => []),
-      apiRequest("grupo_familiar", "GET").catch(() => []),
+      apiRequest(`operational_concepts?only_parents=true`, "GET"),
+      apiRequest("grupo_familiar", "GET"),
     ]).then(([conceptos, grupos]) => {
-      if (isMounted && show) {
-        setConceptosPadres(Array.isArray(conceptos) ? conceptos : []);
-        setGrupos(Array.isArray(grupos) ? grupos : []);
-      }
+      setConceptosPadres(conceptos || []);
+      setConceptos([]);
+      setClientes([]);
+      setGrupos(grupos || []);
     }).catch((err) => {
       console.error("Error al cargar datos:", err);
-      if (isMounted && show) {
-        setConceptosPadres([]);
-        setGrupos([]);
-      }
     });
 
-    // Cargar usuarios
-    cargarUsuarios();
-
     // Cargar información del cliente de la ficha si hay clienteId
-    let clienteMounted = true;
-    
     if (clienteId) {
       setLoadingCliente(true);
-      
       apiRequest(`cliente/${clienteId}`, "GET")
         .then((cliente) => {
-          if (clienteMounted && show && cliente) {
+          if (cliente) {
             setClienteFicha({
               id: cliente.id || clienteId,
               nombre_completo: cliente.nombre_completo || cliente.nombre || "Cliente",
@@ -177,29 +97,52 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         })
         .catch((err) => {
           console.error("Error al cargar cliente:", err);
-          if (clienteMounted && show) {
-            setClienteFicha({
-              id: clienteId,
-              nombre_completo: "Cliente de la ficha",
-            });
-            setClienteQuery("Cliente de la ficha");
-          }
+          setClienteFicha({
+            id: clienteId,
+            nombre_completo: "Cliente de la ficha",
+          });
+          setClienteQuery("Cliente de la ficha");
         })
         .finally(() => {
-          if (clienteMounted) {
-            setLoadingCliente(false);
-          }
+          setLoadingCliente(false);
         });
     } else {
       setClienteFicha(null);
       setClienteQuery("");
     }
 
-    // Cleanup function
-    return () => {
-      isMounted = false;
-      clienteMounted = false;
-    };
+    // Reset formData
+    const clienteIdValido = clienteId ? String(clienteId) : "";
+    setFormData({
+      concept_id: "",
+      note: "",
+      cliente_id: clienteIdValido,
+      grupo_familiar_id: grupoFamiliarId ? String(grupoFamiliarId) : "",
+    });
+    setErrors({});
+    setConceptoPadreId("");
+    
+    // Limpiar archivos
+    archivos.forEach((arch) => {
+      if (arch.preview) URL.revokeObjectURL(arch.preview);
+    });
+    setArchivos([]);
+  }, [show, grupoFamiliarId, clienteId]);
+
+  // Establecer valores por defecto cuando cambian las props
+  useEffect(() => {
+    if (!show) return;
+    
+    setFormData((prev) => {
+      const updates = {};
+      if (grupoFamiliarId && !prev.grupo_familiar_id) {
+        updates.grupo_familiar_id = String(grupoFamiliarId);
+      }
+      if (clienteId && !prev.cliente_id) {
+        updates.cliente_id = String(clienteId);
+      }
+      return Object.keys(updates).length > 0 ? { ...prev, ...updates } : prev;
+    });
   }, [show, grupoFamiliarId, clienteId]);
 
   const handleChange = (e) => {
@@ -356,18 +299,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       nuevosErrores.cliente_id = "El cliente es obligatorio";
     }
     
-    if (!formData.assign_to_user_id || formData.assign_to_user_id === "") {
-      nuevosErrores.assign_to_user_id = "Debes asignar la tarea a un usuario";
-    }
-    
-    if (!formData.scheduled_date || formData.scheduled_date === "") {
-      nuevosErrores.scheduled_date = "La fecha programada es obligatoria";
-    }
-    
-    if (!formData.due_date || formData.due_date === "") {
-      nuevosErrores.due_date = "La fecha de vencimiento es obligatoria";
-    }
-    
     setErrors(nuevosErrores);
     return Object.keys(nuevosErrores).length === 0;
   };
@@ -382,8 +313,8 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     try {
       const payload = {
         ...formData,
-        action_type: "tarea",
-        tipo: "tarea",
+        action_type: "comentario",
+        tipo: "comentario",
       };
 
       const response = await apiRequest("bitacora_operativa/create", "POST", payload);
@@ -424,10 +355,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
           await subirArchivos(logId);
         } catch (err) {
           console.error("Error al subir archivos:", err);
-          alert(`Se creó la tarea pero hubo un error al subir algunos archivos:\n${err.message || "Error desconocido"}`);
+          alert(`Se creó el comentario pero hubo un error al subir algunos archivos:\n${err.message || "Error desconocido"}`);
         }
       } else if (archivos.length > 0 && !logId) {
-        alert("Se creó la tarea pero no se pudieron subir los archivos porque no se pudo obtener el ID del registro.");
+        alert("Se creó el comentario pero no se pudieron subir los archivos porque no se pudo obtener el ID del registro.");
       }
 
       const conceptoSeleccionado = conceptos.find((c) => c.id === parseInt(formData.concept_id));
@@ -444,12 +375,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         }
       }
 
-      const nuevaTarea = {
-        id: response?.task?.id || Date.now(),
-        tipo: "tarea",
-        scheduled_date: formData.scheduled_date,
-        due_date: formData.due_date,
-        status: "pending",
+      const nuevoComentario = {
+        id: response?.log?.id || Date.now(),
+        tipo: "comentario",
+        status: "comment",
         log: {
           concept: { name: conceptoSeleccionado?.name || "Concepto" },
           note: formData.note,
@@ -460,13 +389,13 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       };
 
       if (onCreated) {
-        onCreated(nuevaTarea);
+        onCreated(nuevoComentario);
       }
       
       onHide();
     } catch (error) {
-      console.error("Error al guardar tarea:", error);
-      alert(`Error al guardar la tarea: ${error.message || "Error desconocido"}`);
+      console.error("Error al guardar comentario:", error);
+      alert(`Error al guardar el comentario: ${error.message || "Error desconocido"}`);
     } finally {
       setLoading(false);
     }
@@ -475,7 +404,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton className="border-bottom">
-        <Modal.Title className="fw-normal">Nueva Tarea</Modal.Title>
+        <Modal.Title className="fw-normal">Nuevo Comentario</Modal.Title>
       </Modal.Header>
 
       <Modal.Body>
@@ -547,84 +476,20 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         )}
 
         <Form.Group className="mb-3">
-          <Form.Label>Descripción de la Tarea</Form.Label>
+          <Form.Label>Comentario</Form.Label>
           <Form.Control
             as="textarea"
             rows={4}
             name="note"
             value={formData.note}
             onChange={handleChange}
-            placeholder="Describa los detalles y objetivos de esta tarea..."
+            placeholder="Escriba su comentario..."
             isInvalid={!!errors.note}
           />
           <Form.Control.Feedback type="invalid">
             {errors.note}
           </Form.Control.Feedback>
         </Form.Group>
-
-        <Form.Group className="mb-3">
-          <Form.Label>Asignar a</Form.Label>
-          <Form.Select
-            name="assign_to_user_id"
-            value={formData.assign_to_user_id}
-            onChange={handleChange}
-            isInvalid={!!errors.assign_to_user_id}
-          >
-            <option value="">
-              {usuarios.length === 0 ? "Cargando usuarios..." : "Seleccionar usuario"}
-            </option>
-            {usuarios.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name || u.nombre || u.email || `Usuario ${u.id}`}
-              </option>
-            ))}
-          </Form.Select>
-          {usuarios.length === 0 && (
-            <Form.Text className="text-muted d-flex align-items-center">
-              <Spinner size="sm" animation="border" className="me-2" />
-              Cargando lista de usuarios...
-            </Form.Text>
-          )}
-          {usuarios.length > 0 && (
-            <Form.Text className="text-muted">
-              {usuarios.length} {usuarios.length === 1 ? "usuario disponible" : "usuarios disponibles"}
-            </Form.Text>
-          )}
-          <Form.Control.Feedback type="invalid">
-            {errors.assign_to_user_id}
-          </Form.Control.Feedback>
-        </Form.Group>
-
-        <div className="row mb-3">
-          <Form.Group className="col-md-6">
-            <Form.Label>Fecha Programada</Form.Label>
-            <Form.Control
-              type="date"
-              name="scheduled_date"
-              value={formData.scheduled_date}
-              onChange={handleChange}
-              isInvalid={!!errors.scheduled_date}
-            />
-            <Form.Control.Feedback type="invalid">
-              {errors.scheduled_date}
-            </Form.Control.Feedback>
-          </Form.Group>
-
-          <Form.Group className="col-md-6">
-            <Form.Label>Fecha de Vencimiento</Form.Label>
-            <Form.Control
-              type="date"
-              name="due_date"
-              value={formData.due_date}
-              onChange={handleChange}
-              isInvalid={!!errors.due_date}
-              min={formData.scheduled_date}
-            />
-            <Form.Control.Feedback type="invalid">
-              {errors.due_date}
-            </Form.Control.Feedback>
-          </Form.Group>
-        </div>
 
         <Form.Group className="mb-3">
           <Form.Label>Archivos adjuntos (opcional)</Form.Label>
@@ -635,10 +500,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               cursor: "pointer",
               backgroundColor: "#f8f9fa"
             }}
-            onClick={() => document.getElementById("file-input-tarea").click()}
+            onClick={() => document.getElementById("file-input-comentario").click()}
           >
             <input
-              id="file-input-tarea"
+              id="file-input-comentario"
               type="file"
               multiple
               accept="image/*,.pdf,.doc,.docx"
@@ -923,7 +788,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               Guardando...
             </>
           ) : (
-            "Crear Tarea"
+            "Guardar Comentario"
           )}
         </Button>
       </Modal.Footer>
@@ -931,4 +796,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   );
 };
 
-export default NuevaTareaModal;
+export default NuevoComentarioModal;
+
+

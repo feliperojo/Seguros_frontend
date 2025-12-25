@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
-import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
+import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -858,7 +858,7 @@ export default function FichaClienteComentarios() {
       </div>
 
       {/* Modal para agregar comentario */}
-      <NuevaTareaModal
+      <NuevoComentarioModal
         show={showModal}
         onHide={() => setShowModal(false)}
         onCreated={handleComentarioCreado}

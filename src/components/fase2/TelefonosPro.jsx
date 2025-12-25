@@ -33,17 +33,64 @@ const isoToCode = new Map(
   ])
 );
 
+// Función mejorada para generar banderas compatible con todos los navegadores
 const isoToFlag = (iso) => {
   const x = String(iso || "").toUpperCase();
   if (!/^[A-Z]{2}$/.test(x)) return "🏳️";
-  const codePoints = [...x].map((ch) => 0x1f1e6 - 65 + ch.charCodeAt(0));
-  return String.fromCodePoint(...codePoints);
+  
+  try {
+    // Método 1: Usar String.fromCodePoint (más moderno)
+    const codePoints = [...x].map((ch) => 0x1f1e6 - 65 + ch.charCodeAt(0));
+    const flag = String.fromCodePoint(...codePoints);
+    
+    // Verificar que el emoji se generó correctamente
+    if (flag && flag.length > 0 && flag !== String.fromCharCode(0x1f1e6)) {
+      return flag;
+    }
+  } catch (e) {
+    // Si falla, continuar con método alternativo
+  }
+  
+  try {
+    // Método 2: Usar String.fromCharCode (más compatible)
+    const char1 = String.fromCharCode(0x1f1e6 - 65 + x.charCodeAt(0));
+    const char2 = String.fromCharCode(0x1f1e6 - 65 + x.charCodeAt(1));
+    const flag = char1 + char2;
+    if (flag && flag.length > 0) {
+      return flag;
+    }
+  } catch (e) {
+    // Si falla, continuar con método alternativo
+  }
+  
+  try {
+    // Método 3: Usar escape Unicode (más compatible con builds)
+    const cp1 = 0x1f1e6 - 65 + x.charCodeAt(0);
+    const cp2 = 0x1f1e6 - 65 + x.charCodeAt(1);
+    return String.fromCodePoint(cp1, cp2);
+  } catch (e) {
+    // Si todo falla, retornar bandera genérica
+  }
+  
+  return "🏳️";
 };
 
+// Generar opciones de países con banderas de forma más robusta
 const COUNTRY_OPTIONS = (countryCodes || []).map((c) => {
   const iso = String(c.iso || "").toLowerCase();
   const code = String(c.code || "").replace(/\D+/g, "");
-  const flag = c.flag || isoToFlag(iso);
+  
+  // Priorizar bandera del objeto, luego generar una
+  let flag = c.flag;
+  if (!flag || flag.trim() === "") {
+    flag = isoToFlag(iso);
+  }
+  
+  // Asegurar que la bandera sea un string válido
+  if (typeof flag !== "string" || flag.trim() === "") {
+    flag = "🏳️";
+  }
+  
   const label = `${flag} ${iso.toUpperCase()} (+${code})`;
   return { value: iso, label, iso, code, flag, name: c.name || iso.toUpperCase() };
 });
@@ -111,6 +158,43 @@ const countrySelectStyles = {
   }),
 };
 
+// Componente para renderizar opciones con banderas de forma más robusta
+const formatOptionLabel = (option) => {
+  if (!option) return "";
+  
+  const flag = option.flag || "";
+  const iso = String(option.iso || "").toLowerCase();
+  const code = String(option.code || "").replace(/\D+/g, "");
+  
+  // Asegurar que la bandera se renderice correctamente
+  let displayFlag = flag;
+  if (!displayFlag || typeof displayFlag !== "string" || displayFlag.trim() === "") {
+    displayFlag = isoToFlag(iso);
+  }
+  if (!displayFlag || displayFlag.trim() === "") {
+    displayFlag = "🏳️";
+  }
+  
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      <span 
+        style={{ 
+          fontSize: "1.2em", 
+          lineHeight: "1", 
+          display: "inline-block",
+          minWidth: "1.5em",
+          textAlign: "center"
+        }}
+        role="img"
+        aria-label={`Bandera de ${iso.toUpperCase()}`}
+      >
+        {displayFlag}
+      </span>
+      <span>{iso.toUpperCase()} (+{code})</span>
+    </div>
+  );
+};
+
 function CountrySelectWithFlags({ value, onChange, disabled }) {
   const iso = String(value || "").toLowerCase();
 
@@ -130,8 +214,8 @@ function CountrySelectWithFlags({ value, onChange, disabled }) {
       classNamePrefix="tp-country-select"
       className="tp-country-select-wrapper"
       options={COUNTRY_OPTIONS}
-      getOptionLabel={(opt) => opt.label}
       getOptionValue={(opt) => opt.iso}
+      formatOptionLabel={formatOptionLabel}
       value={selectedOption}
       onChange={handleChange}
       isDisabled={disabled}

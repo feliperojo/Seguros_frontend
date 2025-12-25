@@ -65,16 +65,28 @@ const toTitle = (s = "") =>
         return;
       }
     
-      // Cuando no hay composición, normalizamos: todo a minúscula + primera en mayúscula por palabra
-      const normalized = tidy(
-        (raw || "")
-          .toLowerCase()
-          .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase())
-      );
+      // Normalizamos: todo a minúscula + primera en mayúscula por palabra
+      // Preservamos los espacios tal como los ingresa el usuario
+      const normalized = normalizeNameWithSpaces(raw || "");
     
       onChange({ [field]: normalized });
     };
     
+
+    // Normaliza nombres preservando espacios simples
+    // Normaliza múltiples espacios consecutivos a uno solo, pero preserva espacios al inicio/final si el usuario los ingresa
+    const normalizeNameWithSpaces = (s = "") => {
+      if (!s) return "";
+      
+      // Primero normalizar múltiples espacios a uno solo (pero preservar espacios al inicio/final temporalmente)
+      const withSingleSpaces = s.replace(/\s{2,}/g, " ");
+      
+      // Convertir a minúscula y capitalizar primera letra de cada palabra
+      // Preservar los espacios tal como están
+      return withSingleSpaces
+        .toLowerCase()
+        .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+    };
 
     const tidy = (s = "") => s.replace(/\s+/g, " ").trim();
 

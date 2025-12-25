@@ -1,7 +1,9 @@
 // src/components/fase2/Prospectogrupo.jsx
 import React, { useState, useEffect } from "react";
+import { Dropdown } from "react-bootstrap";
 import { formatMoneyDisplay } from "../../services/ingresos";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
+import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
 import RequerimientosModal from "../RequerimientosModal";
 import DriveUrlModal from "../GrupoFamiliar/DriveUrlModal";
 import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
@@ -20,7 +22,7 @@ const Prospectogrupo = ({
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
 }) => {
   const [showGestion, setShowGestion] = useState(false);
-
+  const [showComentarioModal, setShowComentarioModal] = useState(false);
 
   const [showDocumentosModal, setShowDocumentosModal] = useState(false);
   const [showDriveModal, setShowDriveModal] = useState(false);
@@ -278,14 +280,38 @@ const Prospectogrupo = ({
               {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
             </button>
 
-            {/* Nueva Gestión (ya existente) */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
-              onClick={() => setShowGestion(true)}
-            >
-              <i className="fas fa-tasks"></i>
-              Nueva Gestión
-            </button>
+            {/* Nueva Gestión - Dropdown con opciones */}
+            <Dropdown>
+              <Dropdown.Toggle 
+                variant="outline-primary" 
+                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
+                id="dropdown-nueva-gestion"
+                style={{ 
+                  backgroundColor: 'rgb(239 246 255)', 
+                  borderColor: 'rgb(147 197 253)',
+                  color: 'rgb(29 78 216)'
+                }}
+              >
+                <i className="fas fa-tasks"></i>
+                Nueva Gestión
+              </Dropdown.Toggle>
+              <Dropdown.Menu className="shadow-lg border-gray-200">
+                <Dropdown.Item 
+                  onClick={() => setShowGestion(true)}
+                  className="d-flex align-items-center gap-2 py-2"
+                >
+                  <i className="fas fa-tasks text-blue-600"></i>
+                  <span>Nueva Tarea</span>
+                </Dropdown.Item>
+                <Dropdown.Item 
+                  onClick={() => setShowComentarioModal(true)}
+                  className="d-flex align-items-center gap-2 py-2"
+                >
+                  <i className="fas fa-comment text-gray-600"></i>
+                  <span>Nuevo Comentario</span>
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
 
             {/* Renovaciones / Cancelar coberturas - Solo visible en estados permitidos */}
             {puedeRenovar && (
@@ -341,6 +367,12 @@ const Prospectogrupo = ({
       <NuevaTareaModal
         show={showGestion}
         onHide={() => setShowGestion(false)}
+        grupoFamiliarId={resolvedGrupoId}
+      />
+
+      <NuevoComentarioModal
+        show={showComentarioModal}
+        onHide={() => setShowComentarioModal(false)}
         grupoFamiliarId={resolvedGrupoId}
       />
 
