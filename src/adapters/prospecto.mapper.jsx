@@ -25,7 +25,61 @@ export const mapGrupoFromForm = (f = {}) => {
 
   const persona_contacto = buildPersonaContacto(f.nombre, f.apellidos);
 
-  return {
+  // Procesar tags (etiquetas): validar formato y enviar como array al backend
+  let tagsArray = null;
+  if (f.etiquetas) {
+    try {
+      let etiquetasArray = null;
+      
+      // Si es array, validar y usar directamente
+      if (Array.isArray(f.etiquetas)) {
+        // Validar que cada etiqueta tenga key, label y color
+        const validas = f.etiquetas.filter(tag => 
+          tag && 
+          typeof tag === "object" && 
+          tag.key && 
+          tag.label && 
+          tag.color &&
+          typeof tag.key === "string" &&
+          typeof tag.label === "string" &&
+          typeof tag.color === "string"
+        );
+        etiquetasArray = validas.length > 0 ? validas : null;
+      } 
+      // Si es string, intentar parsear (por si viene del backend como JSON string)
+      else if (typeof f.etiquetas === "string" && f.etiquetas.trim()) {
+        const parsed = JSON.parse(f.etiquetas);
+        if (Array.isArray(parsed)) {
+          // Validar formato de cada etiqueta
+          const validas = parsed.filter(tag => 
+            tag && 
+            typeof tag === "object" && 
+            tag.key && 
+            tag.label && 
+            tag.color
+          );
+          etiquetasArray = validas.length > 0 ? validas : null;
+        }
+      }
+      
+      // Enviar como array directamente (no como JSON string)
+      if (etiquetasArray && etiquetasArray.length > 0) {
+        tagsArray = etiquetasArray;
+        console.log("🏷️ [mapGrupoFromForm] Tags procesadas para enviar al backend:", {
+          cantidad: tagsArray.length,
+          tags: tagsArray
+        });
+      } else {
+        console.log("🏷️ [mapGrupoFromForm] No hay tags válidas para enviar");
+      }
+    } catch (error) {
+      console.error("❌ Error al procesar tags:", error);
+      // Si hay error, no enviar tags (null)
+      tagsArray = null;
+    }
+  }
+
+  const payload = {
     personas_taxes: toNumberOrZero(f.personasTaxes),
     personas_cobertura: toNumberOrZero(f.personasCobertura),
     ingreso_familiar_anual: toNumberOrZero(f.ingresoFamiliar),
@@ -47,7 +101,18 @@ export const mapGrupoFromForm = (f = {}) => {
 
     telefono_1: toNullIfEmpty(f.telefono1),
     telefono_2: toNullIfEmpty(f.telefono2),
+    
+    // Tags: enviar como array directamente (el backend espera "tags" como array)
+    tags: tagsArray,
   };
+
+  // Log del payload completo (sin datos sensibles)
+  console.log("📤 [mapGrupoFromForm] Payload completo para backend:", {
+    ...payload,
+    tags: tagsArray ? `[Array con ${tagsArray.length} tags]` : null
+  });
+
+  return payload;
 };
 
 // --- Fecha helpers ---

@@ -69,33 +69,48 @@ export const normalizeDateForInput = (fecha) => {
     return fecha;
   }
   
-  // Si es un string ISO (ej: "2024-01-15T00:00:00.000Z"), extraer solo la parte de la fecha
-  if (typeof fecha === "string" && fecha.includes("T")) {
-    const datePart = fecha.split("T")[0];
-    if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-      return datePart;
+  // Si es un string ISO (ej: "2024-01-15T00:00:00.000Z" o "2024-01-15T00:00:00")
+  // extraer solo la parte de la fecha para evitar problemas de zona horaria
+  if (typeof fecha === "string") {
+    // Intentar extraer YYYY-MM-DD del string (incluye casos con T y sin T)
+    const match = fecha.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
+    if (match) {
+      // Validar que la fecha sea válida
+      const year = parseInt(match[1], 10);
+      const month = parseInt(match[2], 10);
+      const day = parseInt(match[3], 10);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${match[1]}-${match[2]}-${match[3]}`;
+      }
+    }
+    
+    // Si tiene T, extraer solo la parte de la fecha
+    if (fecha.includes("T")) {
+      const datePart = fecha.split("T")[0];
+      if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+        return datePart;
+      }
     }
   }
   
-  // Si es un objeto Date, usar métodos que no dependen de zona horaria
+  // Si es un objeto Date, usar métodos locales
+  // Nota: Si el Date fue creado desde un string ISO, podría haber problemas de zona horaria
+  // pero en ese caso debería haberse manejado antes como string
   if (fecha instanceof Date) {
+    if (isNaN(fecha.getTime())) return "";
     const year = fecha.getFullYear();
     const month = String(fecha.getMonth() + 1).padStart(2, "0");
     const day = String(fecha.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   }
   
-  // Intentar parsear como string y extraer la parte de la fecha
+  // Último recurso: intentar parsear como string que no sea ISO
+  // Solo para formatos no estándar (MM/DD/YYYY, DD/MM/YYYY, etc.)
   if (typeof fecha === "string") {
-    // Intentar extraer YYYY-MM-DD del string
-    const match = fecha.match(/(\d{4}-\d{2}-\d{2})/);
-    if (match) {
-      return match[1];
-    }
-    
-    // Si no, intentar crear Date y usar métodos locales (último recurso)
     const d = new Date(fecha);
     if (!isNaN(d.getTime())) {
+      // Para formatos no ISO, usar métodos locales ya que no hay forma de saber
+      // si el string original representaba una fecha local o UTC
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
       const day = String(d.getDate()).padStart(2, "0");

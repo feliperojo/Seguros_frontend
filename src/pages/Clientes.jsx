@@ -13,6 +13,8 @@ import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import { Helmet } from "react-helmet-async";
 import { normalizeDateForInput } from "../utils/formatters";
+import TelefonosPro from "../components/fase2/TelefonosPro";
+import { toApiPhones } from "../utils/phone-mappers";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -66,7 +68,8 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     es_prospecto:false,
     estado_cliente: "cliente",
     primer_contacto: {}, // para guardar el objeto
-    primer_contacto_info: ""
+    primer_contacto_info: "",
+    telefonos: [] // Array para el componente TelefonosPro
   };
   const [idiomasList, setIdiomasList] = useState([]);
   const [formData, setFormData] = useState(INITIAL_FORM_STATE);
@@ -82,12 +85,9 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [logId, setLogId] = useState(null);
 
   
-  // En la inicialización de selectedCode en tu componente Clientes
+  // Código de país para teléfono del empleador (se mantiene para el paso 5)
 const [selectedCode, setSelectedCode] = useState({
-  telefono: "us",
-  secundario: "us",
-  whatsapp_num: "us",
-  telefono_empleador: "us"  // Añadir esta línea si no existe
+  telefono_empleador: "us"
 });
 const openModal = () => setShowModal(true);
 const closeModal = () => setShowModal(false);
@@ -187,8 +187,8 @@ const closeModal = () => setShowModal(false);
   
       updatedData[name] = updatedValue;
   
-      // Aplicar formato de teléfono solo a los campos requeridos
-      if (["telefono", "secundario", "whatsapp_num", "telefono_empleador"].includes(name)) {
+      // Aplicar formato de teléfono solo al teléfono del empleador
+      if (["telefono_empleador"].includes(name)) {
         updatedData[name] = formatPhoneNumber(value);
       }
   
@@ -310,28 +310,18 @@ const calcularIngresoAnual = (monto, periodo) => {
  const guardarCliente = async () => {
   setAlert({ type: "", message: "", visible: false });
 
-  // Encuentra el código numérico del país según el ISO
-  const getCountryCode = (iso) => {
-    const country = countryCodes.find((c) => c.iso.toLowerCase() === iso.toLowerCase());
-    if (!country) {
-      console.warn(`❌ País no encontrado para iso: ${iso}`);
-    }
-    return country ? country.code.replace("+", "") : "";
-  };
+  // Convertir telefonos al formato del API
+  const telefonosFormateados = toApiPhones(Array.isArray(formData.telefonos) ? formData.telefonos : []);
 
   // Crear una copia limpia del formData
+  // Siempre forzar estado_cliente a "cliente" cuando se crea desde este formulario
   const formattedData = {
     ...formData,
     primer_contacto_info: String(formData.primer_contacto_info || ""),
-    es_prospecto: !!formData.es_prospecto,
-    estado_cliente: formData.estado_cliente,
-    telefono: formData.telefono,
-    secundario: formData.secundario,
-    whatsapp_num: formData.whatsapp_num,
+    es_prospecto: false, // Siempre false cuando se crea desde este formulario
+    estado_cliente: "cliente", // Siempre "cliente" cuando se crea desde este formulario
+    telefonos: telefonosFormateados, // Array de telefonos en formato API
     telefono_empleador: formData.telefono_empleador,
-    cod_tel_1: selectedCode.telefono,
-    cod_tel_2: selectedCode.secundario,
-    cod_tel_3: selectedCode.whatsapp_num,
   };
 
   let jsonFinal = {
@@ -448,66 +438,10 @@ const calcularIngresoAnual = (monto, periodo) => {
           <>
               <div className="card p-3 mb-4 shadow-sm bg-light border-0">
                 <div className="d-flex justify-content-between align-items-center flex-wrap">
-                
                   <div className="btn-group mt-2 mt-md-0" role="group" aria-label="Tipo de cliente">
-                  <input
-                        type="radio"
-                        className="btn-check"
-                        name="estado_cliente"
-                        id="btnCliente"
-                        autoComplete="off"
-                        checked={formData.estado_cliente === "cliente"}
-                        onChange={() =>
-                          setFormData(prev => ({
-                            ...prev,
-                            estado_cliente: "cliente",
-                            es_prospecto: false,
-                          }))
-                        }
-                      />
-                      <label className="btn btn-outline-primary fw-semibold" htmlFor="btnCliente">
-                        Cliente
-                      </label>
-
-                      <input
-                        type="radio"
-                        className="btn-check"
-                        name="estado_cliente"
-                        id="btnProspecto"
-                        autoComplete="off"
-                        checked={formData.estado_cliente === "prospecto"}
-                        onChange={() =>
-                          setFormData(prev => ({
-                            ...prev,
-                            estado_cliente: "prospecto",
-                            es_prospecto: true,
-                          }))
-                        }
-                      />
-                      <label className="btn btn-outline-warning fw-semibold" htmlFor="btnProspecto">
-                        Prospecto
-                      </label>
-
-                      <input
-                        type="radio"
-                        className="btn-check"
-                        name="estado_cliente"
-                        id="btnDescartado"
-                        autoComplete="off"
-                        checked={formData.estado_cliente === "descartado"}
-                        onChange={() =>
-                          setFormData(prev => ({
-                            ...prev,
-                            estado_cliente: "descartado",
-                            es_prospecto: true,
-                          }))
-                        }
-                      />
-                      <label className="btn btn-outline-danger fw-semibold" htmlFor="btnDescartado">
-                        Descartado
-                      </label>
-
-
+                    <label className="btn btn-outline-primary fw-semibold active" style={{ cursor: "default" }}>
+                      Cliente
+                    </label>
                   </div>
                 </div>
               </div>
@@ -658,62 +592,46 @@ const calcularIngresoAnual = (monto, periodo) => {
             <h4 className="mb-3">Datos de Contacto</h4>
             <hr />
             <div className="row mt-3">
-                <div className="col-md-4">
-                          <label>Teléfono</label>
-                          <div className="input-group">
-                            <span className="input-group-text p-0">
-                              <CountrySelectWithFlags name="telefono" selectedCode={selectedCode.telefono} onChange={handleCountryCodeChange} />
-                            </span>
-                            <input
-                              type="text"
-                              name="telefono"
-                              className="form-control"
-                              value={formData.telefono}
-                              onChange={handleChange}
-                              
-                            />
-                          </div>
-                        </div>
-                  
-             
-              
-              <div className="col-md-4">
-                <label>Tel. Secundario</label>
-                <div className="input-group">
-                            <span className="input-group-text p-0">
-                              <CountrySelectWithFlags name="secundario" selectedCode={selectedCode.secundario} onChange={handleCountryCodeChange} />
-                            </span>
-                <input type="text" name="secundario" className="form-control" value={formData.secundario} onChange={handleChange}  />
+              <div className="col-12">
+                <label className="form-label mb-2">Teléfonos</label>
+                <TelefonosPro
+                  value={Array.isArray(formData.telefonos) ? formData.telefonos : []}
+                  onChange={(telefonosArray) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      telefonos: telefonosArray
+                    }));
+                  }}
+                  readOnly={false}
+                  fallbackIso="us"
+                  addLabel="Agregar teléfono"
+                />
               </div>
-          </div>
-              <div className="col-md-4">
-                <label>Whatsapp</label>
-                <div className="input-group">
-                            <span className="input-group-text p-0">
-                              <CountrySelectWithFlags name="whatsapp_num" selectedCode={selectedCode.whatsapp_num} onChange={handleCountryCodeChange} />
-                            </span>
-                <input type="text" name="whatsapp_num" className="form-control" value={formData.whatsapp_num} onChange={handleChange} />
-              </div>
-              </div>
-              
             </div>
 
-            <div className="row mb-3">
-            <div className="col-md-6">
-            <label>Nota</label>
-                  <div className="form-group">
-                    <textarea
-                      className="form-control"
-                      value={formData.nota}
-                      id="exampleFormControlTextarea1"
-                      rows="3"
-                      name="nota"
-                      onChange={handleChange}
-                    ></textarea>
-                  </div>
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <label>Email</label>
+                <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
               </div>
+            </div>
 
-              </div>  
+            <div className="row mt-3">
+              <div className="col-md-6">
+                <label>Nota</label>
+                <div className="form-group">
+                  <textarea
+                    className="form-control"
+                    value={formData.nota}
+                    id="exampleFormControlTextarea1"
+                    rows="3"
+                    name="nota"
+                    onChange={handleChange}
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
             <h5 className="mt-4">Servicios de Mensajería</h5>
             <hr />
             <div className="row mb-3">
@@ -732,12 +650,8 @@ const calcularIngresoAnual = (monto, periodo) => {
                     <label className="form-check-label">Texto SMS</label>
                   </div>
                 </div>
-            </div>
-        </div>
-            <div className="col-md-6">
-                <label>Email</label>
-                <input type="email" name="email" className="form-control" value={formData.email} onChange={handleChange} />
               </div>
+            </div>
           </>
         );
         case 4:

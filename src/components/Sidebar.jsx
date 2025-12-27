@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
-  FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile,
+  FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
   FaUserShield, FaShieldAlt, FaKey, FaHistory
 } from "react-icons/fa";
@@ -160,6 +160,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <div className="submenu">
               <Link to="/Grupofamiliar/lista" className={`submenu-link ${isActive('/Grupofamiliar/lista') ? 'active' : ''}`}>
                 <FaList /> Lista de Grupos
+              </Link>
+              <Link to="/Grupofamiliar/lista-etiquetas" className={`submenu-link ${isActive('/Grupofamiliar/lista-etiquetas') ? 'active' : ''}`}>
+                <FaTags /> Listado de Grupos y Etiquetas
               </Link>
               <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
                 <FaUserFriends /> Cotizaciones

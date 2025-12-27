@@ -11,6 +11,7 @@ import Login from "./pages/login";
 import MediosPago from "./components/MediosPago";
 import MediosPagoManager from './pages/MediosPagoManager';
 import GruposFamiliaresListado from "./pages/GruposFamiliaresListado";
+import GruposFamiliaresConTags from "./pages/GruposFamiliaresConTags";
 import ReporteGrupoFamiliar from "../src/components/Reports/ReporteGrupoFamiliar";
 import ListaClientes from "./pages/ListaClientes";
 import GrupofamiliarCreate from "./components/GrupoFamiliar/GrupofamiliarCreate";
@@ -76,6 +77,7 @@ const App = () => {
         <Route path="/Mediospago" element={<MediosPago />} />
         <Route path="clientes/mediopago/:clienteId" element={<MediosPagoManager />} />
         <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado/>}/>
+        <Route path="/grupofamiliar/lista-etiquetas" element={<GruposFamiliaresConTags/>}/>
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
         <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />

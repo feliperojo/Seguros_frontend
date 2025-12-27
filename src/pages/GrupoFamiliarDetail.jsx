@@ -242,6 +242,67 @@ const mapFullToForm = (fullRaw) => {
     ingresoFamiliar: g.ingreso_familiar_anual ?? "",
     personasCobertura: g.personas_cobertura ?? "",
     personasTaxes: g.personas_taxes ?? "",
+
+    // Tags (etiquetas): el backend envía como "tags" (array) o puede venir como "etiquetas" (compatibilidad)
+    // Validar que cada tag tenga key, label y color
+    etiquetas: (() => {
+      try {
+        // El backend puede enviar como "tags" o "etiquetas" (compatibilidad)
+        const tagsRaw = g.tags || g.etiquetas;
+        
+        console.log("📥 [mapFullToForm] Tags recibidas del backend (raw):", {
+          tieneTags: !!g.tags,
+          tieneEtiquetas: !!g.etiquetas,
+          tipo: typeof tagsRaw,
+          valor: tagsRaw,
+          esArray: Array.isArray(tagsRaw),
+          esString: typeof tagsRaw === "string"
+        });
+
+        let tagsArray = [];
+        
+        // Si viene como array directamente
+        if (Array.isArray(tagsRaw)) {
+          tagsArray = tagsRaw;
+          console.log("📥 [mapFullToForm] Tags recibidas como array:", tagsArray);
+        } 
+        // Si viene como string JSON (compatibilidad con formato antiguo)
+        else if (typeof tagsRaw === "string" && tagsRaw.trim()) {
+          console.log("📥 [mapFullToForm] Tags recibidas como string JSON, parseando...");
+          const parsed = JSON.parse(tagsRaw);
+          if (Array.isArray(parsed)) {
+            tagsArray = parsed;
+            console.log("📥 [mapFullToForm] Tags parseadas exitosamente:", tagsArray);
+          }
+        }
+        
+        // Validar formato de cada tag: debe tener key, label y color
+        const tagsValidas = tagsArray.filter(tag => {
+          return (
+            tag &&
+            typeof tag === "object" &&
+            tag.key &&
+            tag.label &&
+            tag.color &&
+            typeof tag.key === "string" &&
+            typeof tag.label === "string" &&
+            typeof tag.color === "string" &&
+            /^#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$/.test(tag.color) // Validar formato hex color
+          );
+        });
+        
+        console.log("✅ [mapFullToForm] Tags validadas:", {
+          totalRecibidas: tagsArray.length,
+          totalValidas: tagsValidas.length,
+          tags: tagsValidas
+        });
+        
+        return tagsValidas;
+      } catch (error) {
+        console.error("❌ Error al cargar tags desde el backend:", error);
+        return [];
+      }
+    })(),
   };
 };
 
@@ -417,6 +478,13 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     setFormData((prev) => {
       if (!prev) return prev;
       let v = value;
+      
+      // Manejar etiquetas como array directamente (tipo "json")
+      if (type === "json" && name === "etiquetas") {
+        // value ya viene como array desde GroupTags
+        return { ...prev, [name]: Array.isArray(value) ? value : [] };
+      }
+      
       if (name === "nombre" || name === "apellidos") v = capitalizeWords(value);
       else if ((type === "text" || type === "textarea") && !name.toLowerCase().includes("telefono"))
         v = capitalizeFirst(value);
@@ -688,6 +756,15 @@ const handleCreateMemberRemote = async (memberData) => {
       setSaving(true);
 
       const grupoPayload = stripNulls(mapGrupoFromForm(formData));
+      
+      console.log("💾 [handleSave] Payload del grupo familiar preparado:", {
+        ...grupoPayload,
+        tags: grupoPayload.tags ? 
+          (Array.isArray(grupoPayload.tags) ? 
+            `[Array con ${grupoPayload.tags.length} tags]` : 
+            grupoPayload.tags) : 
+          null
+      });
 
 
            // 1) Crear primero los miembros NUEVOS (sin cliente_id)
@@ -762,11 +839,29 @@ const clientesPayload = existentes
        );
      } catch (_) {}
 
-      await GrupoFamiliarService.fullUpdate(id, {
+      const finalPayload = {
         ...grupoPayload,
         clientes: clientesPayload,
         coberturas: coberturasPayload,
+      };
+
+      console.log("🚀 [handleSave] Payload FINAL que se envía al backend (fullUpdate):", {
+        grupoId: id,
+        grupoPayload: {
+          ...grupoPayload,
+          tags: grupoPayload.tags ? 
+            (Array.isArray(grupoPayload.tags) ? 
+              `[Array con ${grupoPayload.tags.length} tags]` : 
+              grupoPayload.tags) : 
+            null
+        },
+        cantidadClientes: clientesPayload.length,
+        cantidadCoberturas: coberturasPayload.length,
+        payloadCompleto: finalPayload,
+        tagsEnPayload: finalPayload.tags
       });
+
+      await GrupoFamiliarService.fullUpdate(id, finalPayload);
 
       if (alsoAdvance) {
         const from = (estadoActual || "").toUpperCase();

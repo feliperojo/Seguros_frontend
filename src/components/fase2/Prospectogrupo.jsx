@@ -11,6 +11,7 @@ import ContactosGrupoModal from "../Contacto/ContactosGrupoModal";
 import CambioVidaCancelacionModal from "../coberturas/CambioVidaCancelacionModal";
 import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCoberturasCanceladasModal";
 import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
+import GroupTags from "../GroupTags";
 
 
 const Prospectogrupo = ({
@@ -219,6 +220,24 @@ const Prospectogrupo = ({
           </h6>
         </div>
         <div className="p-6">
+          {/* Etiquetas del Grupo Familiar */}
+          <div className="mb-6 pb-6 border-b border-gray-200">
+            <GroupTags
+              value={Array.isArray(formData?.etiquetas) ? formData.etiquetas : []}
+              onChange={(tags) => {
+                onChange?.({
+                  target: {
+                    name: "etiquetas",
+                    value: tags,
+                    type: "json"
+                  }
+                });
+              }}
+              readOnly={readOnly}
+              className="w-full"
+            />
+          </div>
+
           <div className="flex flex-wrap gap-3">
             {/* Contactos relacionados */}
             <button

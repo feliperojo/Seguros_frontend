@@ -346,13 +346,32 @@ const ListaClientes = () => {
 
   /**
    * Formatea una fecha a formato local
+   * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
    * @param {string} dateString - Fecha en formato string
    * @returns {string} Fecha formateada o "No registrado"
    */
   const formatDate = (dateString) => {
     if (!dateString) return "No registrado";
     try {
-      const date = new Date(dateString);
+      // Si la fecha viene en formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss)
+      // parsearla manualmente como fecha local para evitar problemas de zona horaria
+      let date;
+      if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(dateString)) {
+        // Extraer año, mes y día del string ISO
+        const [datePart] = dateString.split('T');
+        const [year, month, day] = datePart.split('-').map(Number);
+        // Crear fecha como fecha local (sin conversión UTC)
+        date = new Date(year, month - 1, day);
+      } else {
+        // Para otros formatos, usar el constructor estándar
+        date = new Date(dateString);
+      }
+      
+      // Validar que la fecha sea válida
+      if (isNaN(date.getTime())) {
+        return dateString;
+      }
+      
       return date.toLocaleDateString("es-ES", {
         year: "numeric",
         month: "2-digit",
