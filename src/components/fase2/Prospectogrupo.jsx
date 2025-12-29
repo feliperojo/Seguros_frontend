@@ -1,6 +1,5 @@
 // src/components/fase2/Prospectogrupo.jsx
 import React, { useState, useEffect } from "react";
-import { Dropdown } from "react-bootstrap";
 import { formatMoneyDisplay } from "../../services/ingresos";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
@@ -153,33 +152,26 @@ const Prospectogrupo = ({
                 <i className="bi bi-pencil-square me-1"></i>
                 <span className="d-none d-lg-inline">Drive</span>
               </button>
-              <Dropdown style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
-                <Dropdown.Toggle 
-                  variant="outline-primary" 
-                  size="sm"
-                  id="dropdown-nueva-gestion"
-                  style={{ fontSize: '0.875rem', fontWeight: '500' }}
-                >
-                  <i className="fas fa-tasks me-1"></i>
-                  <span className="d-none d-lg-inline">Gestión</span>
-                </Dropdown.Toggle>
-                <Dropdown.Menu>
-                  <Dropdown.Item 
-                    onClick={() => setShowGestion(true)}
-                    className="d-flex align-items-center"
-                  >
-                    <i className="fas fa-tasks me-2 text-primary"></i>
-                    Nueva Tarea
-                  </Dropdown.Item>
-                  <Dropdown.Item 
-                    onClick={() => setShowComentarioModal(true)}
-                    className="d-flex align-items-center"
-                  >
-                    <i className="fas fa-comment me-2 text-secondary"></i>
-                    Nuevo Comentario
-                  </Dropdown.Item>
-                </Dropdown.Menu>
-              </Dropdown>
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => setShowGestion(true)}
+                disabled={!resolvedGrupoId}
+                title="Nueva Tarea"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="fas fa-tasks me-1"></i>
+                <span className="d-none d-lg-inline">Nueva Tarea</span>
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowComentarioModal(true)}
+                disabled={!resolvedGrupoId}
+                title="Nuevo Comentario"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="fas fa-comment me-1"></i>
+                <span className="d-none d-lg-inline">Comentario</span>
+              </button>
               <button
                 className="btn btn-sm btn-outline-secondary"
                 onClick={() => setShowGestorDocumentosModal(true)}

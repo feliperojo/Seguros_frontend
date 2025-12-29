@@ -110,9 +110,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     // Cargar usuarios de forma separada para mejor manejo de errores
     const cargarUsuarios = async () => {
       try {
-        const response = await apiRequest("v1/users/list", "GET");
+        const response = await apiRequest("users", "GET");
         
-        // El endpoint retorna: { success: true, message: "...", data: [...] }
+        // El endpoint puede retornar diferentes estructuras
         let usuariosData = [];
         
         if (response?.success && Array.isArray(response.data)) {
@@ -123,6 +123,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         } else if (response?.data && Array.isArray(response.data)) {
           // Fallback: si viene con data pero sin success
           usuariosData = response.data;
+        } else if (response?.data?.data && Array.isArray(response.data.data)) {
+          // Estructura anidada: { data: { data: [...] } }
+          usuariosData = response.data.data;
         }
         
         if (isMounted && show) {

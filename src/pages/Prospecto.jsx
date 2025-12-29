@@ -468,7 +468,21 @@ useEffect(() => {
   return (
     <div className="container-fluid bg-light min-vh-100 py-4">
       <div className="container">
-        <ProspectoBarra currentCode={estadoActual} />
+        <ProspectoBarra 
+          currentCode={estadoActual}
+          grupoId={grupoId}
+          onDescartar={async () => {
+            if (!grupoId) return;
+            try {
+              await GrupoFamiliarService.setEstado(grupoId, 'DESCARTADO', 'Cambio a estado DESCARTADO');
+              setEstadoActual('DESCARTADO');
+              alert('Prospecto marcado como DESCARTADO');
+              navigate(`/grupo_familiar/${grupoId}`);
+            } catch (error) {
+              throw error;
+            }
+          }}
+        />
         
         {/* Modal de selección de producto - SE MUESTRA PRIMERO */}
         <ProductoCotizacionModal
@@ -559,7 +573,18 @@ useEffect(() => {
                 )}
 
                 {/* 3) Guardar/Actualizar */}
-                <div className="text-end">
+                <div className="d-flex justify-content-end gap-2 mt-4">
+                  {grupoId && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(-1)}
+                      className="btn btn-outline-secondary"
+                      disabled={saving}
+                    >
+                      <i className="fas fa-times me-2"></i>
+                      Cancelar
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={handleSubmit}
@@ -571,7 +596,12 @@ useEffect(() => {
                         <span className="spinner-border spinner-border-sm me-2" role="status" />
                         Guardando...
                       </>
-                    ) : grupoId ? 'Actualizar' : 'Guardar'}
+                    ) : (
+                      <>
+                        <i className={`fas fa-${grupoId ? 'save' : 'check'} me-2`}></i>
+                        {grupoId ? 'Actualizar' : 'Guardar'}
+                      </>
+                    )}
                   </button>
                 </div>
               </>

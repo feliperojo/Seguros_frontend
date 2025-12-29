@@ -562,10 +562,10 @@ console.log("Ingreso Familiar:", total);
   // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showActionsDropdown && !event.target.closest('.relative.inline-block')) {
+      if (showActionsDropdown && !event.target.closest('.dropdown')) {
         setShowActionsDropdown(false);
       }
-      if (showSaveDropdown && !event.target.closest('.relative.inline-flex')) {
+      if (showSaveDropdown && !event.target.closest('.btn-group')) {
         setShowSaveDropdown(false);
       }
     };
@@ -975,35 +975,49 @@ const clientesPayload = existentes
           onClose={handleCloseModal}
         />
 
-        <ProspectoBarra currentCode={estadoActual} />
+        <ProspectoBarra 
+          currentCode={estadoActual}
+          grupoId={id}
+          onDescartar={async () => {
+            await advanceState('DESCARTADO');
+          }}
+        />
 
 
 
 
 
-        <div className="flex justify-end mb-3">
+        <div className="d-flex justify-content-end mb-3">
           {readOnly ? (
-            <div className="flex gap-2">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors" onClick={() => setIsEditing(true)}>Editar</button>
+            <div className="d-flex gap-2">
+              <button 
+                type="button"
+                className="btn btn-primary" 
+                onClick={() => setIsEditing(true)}
+              >
+                <i className="fas fa-edit me-2"></i>
+                Editar
+              </button>
 
-              <div className="relative inline-block">
-                <button
-                  type="button"
-                  className="px-4 py-2 border border-gray-600 text-gray-600 rounded hover:bg-gray-600 hover:text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowActionsDropdown(!showActionsDropdown);
-                  }}
-                  disabled={advancing}
-                >
-                  Acciones
-                </button>
-                {showActionsDropdown && (
-                  <ul className="absolute right-0 mt-2 bg-white border rounded-lg shadow-lg z-10 min-w-[200px]">
-                    {nextOf(estadoActual) && (
+              {nextOf(estadoActual) && (
+                <div className="dropdown">
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary dropdown-toggle"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowActionsDropdown(!showActionsDropdown);
+                    }}
+                    disabled={advancing}
+                  >
+                    <i className="fas fa-cog me-2"></i>
+                    Acciones
+                  </button>
+                  {showActionsDropdown && (
+                    <ul className="dropdown-menu show" style={{ position: 'absolute', right: 0, top: '100%', zIndex: 1000 }}>
                       <li>
                         <button
-                          className="block w-full text-left px-4 py-2 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="dropdown-item"
                           disabled={advancing}
                           onClick={async () => {
                             setShowActionsDropdown(false);
@@ -1018,57 +1032,96 @@ const clientesPayload = existentes
                             await advanceState(to);
                           }}
                         >
-                          Pasar a {nextOf(estadoActual)} →
+                          <i className="fas fa-arrow-right me-2"></i>
+                          Pasar a {nextOf(estadoActual)}
                         </button>
                       </li>
-                    )}
-                  </ul>
-                )}
-              </div>
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           ) : (
-            <div className="flex gap-2">
+            <div className="d-flex gap-2">
               <button
-                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                type="button"
+                className="btn btn-outline-secondary"
                 onClick={() => { setIsEditing(false); reload(); }}
                 disabled={saving || advancing}
               >
+                <i className="fas fa-times me-2"></i>
                 Cancelar
               </button>
 
-              <div className="relative inline-flex">
-                <button className="px-4 py-2 bg-green-600 text-white rounded-l hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => handleSave(false)} disabled={saving || advancing}>
-                  {saving ? (<><span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent inline-block mr-2" />Guardando…</>) : "Guardar"}
-                </button>
-                <button
-                  type="button"
-                  className="px-2 py-2 bg-green-600 text-white rounded-r border-l border-green-700 hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowSaveDropdown(!showSaveDropdown);
-                  }}
-                  disabled={saving || advancing || !nextOf(estadoActual)}
-                >
-                  <span className="sr-only">Toggle</span>
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-                {showSaveDropdown && (
-                  <ul className="absolute right-0 mt-2 bg-white border rounded-lg shadow-lg z-10 min-w-[250px] top-full">
-                    {nextOf(estadoActual) && (
+              {nextOf(estadoActual) ? (
+                <div className="btn-group">
+                  <button 
+                    type="button"
+                    className="btn btn-success"
+                    onClick={() => handleSave(false)} 
+                    disabled={saving || advancing}
+                  >
+                    {saving ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status" />
+                        Guardando…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-save me-2"></i>
+                        Guardar
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-success dropdown-toggle dropdown-toggle-split"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSaveDropdown(!showSaveDropdown);
+                    }}
+                    disabled={saving || advancing}
+                  >
+                    <span className="visually-hidden">Toggle Dropdown</span>
+                  </button>
+                  {showSaveDropdown && (
+                    <ul className="dropdown-menu show" style={{ position: 'absolute', right: 0, top: '100%', zIndex: 1000 }}>
                       <li>
-                        <button className="block w-full text-left px-4 py-2 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
-                          setShowSaveDropdown(false);
-                          handleSave(true);
-                        }} disabled={saving || advancing}>
-                          Guardar y pasar a {nextOf(estadoActual)} →
+                        <button 
+                          className="dropdown-item" 
+                          onClick={() => {
+                            setShowSaveDropdown(false);
+                            handleSave(true);
+                          }} 
+                          disabled={saving || advancing}
+                        >
+                          <i className="fas fa-arrow-right me-2"></i>
+                          Guardar y pasar a {nextOf(estadoActual)}
                         </button>
                       </li>
-                    )}
-                  </ul>
-                )}
-              </div>
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <button 
+                  type="button"
+                  className="btn btn-success"
+                  onClick={() => handleSave(false)} 
+                  disabled={saving || advancing}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status" />
+                      Guardando…
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-save me-2"></i>
+                      Guardar
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           )}
              </div>
