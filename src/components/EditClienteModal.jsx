@@ -95,6 +95,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       es_prospecto: false,
       primer_contacto_info: "",
       idioma: "",
+      pais_origen: "",
     },
     // Sección 2: Status Migratorio
     statusMigratorio: {
@@ -363,8 +364,7 @@ const mapClienteDataToForm = (data) => {
       es_prospecto: data.es_prospecto || false,
       primer_contacto_info: data.primer_contacto_info || "",
       idioma: data.idioma || "",
-     
-    
+      pais_origen: data.pais_origen || "",
     },
     statusMigratorio: {
       social: data.social || "",
@@ -822,6 +822,18 @@ useEffect(() => {
       </Form.Select>
     </Form.Group>
   </Col>
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>País de Origen</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.pais_origen}
+              onChange={(e) => handleInputChange("datosPrincipales", "pais_origen", e.target.value)}
+              placeholder="País de origen"
+              style={{ textTransform: "capitalize" }}
+            />
+          </Form.Group>
+        </Col>
       </Row>
       <Row className="mb-3">
       <PrimerContacto

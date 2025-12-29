@@ -34,7 +34,7 @@ const MONEY_FIELDS = new Set(["ingreso_por_periodo", "ingreso_anual", "ingreso_p
 const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
 const CLIENTE_FIELDS = new Set([
-  "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma",
+  "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma", "pais_origen",
   "telefono", "secundario", "whatsapp_num", "email", "nota",
   "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia",
   "social", "status", "auscis", "tarjeta_numero", "fecha_emision", "fecha_expiracion", "categoria",
@@ -194,6 +194,7 @@ const normalizeMember = (m, idx) => {
     fecha_nacimiento: fecha,
     edad,
     idioma: m.idioma || "",
+    pais_origen: m.pais_origen || "",
     ingreso_anual: m.ingreso_anual || "",
     nombreCompleto: nombre,
     nota: m.nota || "",
@@ -207,6 +208,7 @@ const normalizeMember = (m, idx) => {
       fecha_nacimiento: fecha,
       edad,
       idioma: m.idioma || "",
+      pais_origen: m.pais_origen || "",
       telefono: m.telefono || "",
       secundario: m.secundario || "",
       whatsapp_num: m.whatsapp_num || "",
@@ -266,7 +268,7 @@ const recomputeDerived = (m) => {
 const duplicateToRootFromCliente = (m, cliente) => {
   const dupe = {};
   [
-    "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma",
+    "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma", "pais_origen",
     "telefono", "secundario", "whatsapp_num", "email", "nota",
     "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia"
   ].forEach(k => {
@@ -494,6 +496,7 @@ const sortedNormalized = useMemo(
       const newId = (familyMembers?.length ? Math.max(...familyMembers.map(m => m.id || 0)) : 0) + 1;
       const ingreso = payload.ingreso_anual ?? payload.ingresoAnual ?? payload?.cliente?.ingreso_anual ?? 0;
       const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+      const paisOrigen = payload.pais_origen ?? payload?.cliente?.pais_origen ?? "";
 
       const base = {
         fecha_retiro: null,
@@ -501,10 +504,12 @@ const sortedNormalized = useMemo(
         id: newId,
         ingreso_anual: ingreso,
         idioma,
+        pais_origen: paisOrigen,
         cliente: {
           ...(payload.cliente || {}),
           ingreso_anual: ingreso,
-          idioma
+          idioma,
+          pais_origen: paisOrigen
         }
       };
 
@@ -586,6 +591,11 @@ const sortedNormalized = useMemo(
         // Idioma
         if ("idioma" in patch) {
           nextCliente.idioma = patch.idioma ?? "";
+        }
+
+        // País de Origen
+        if ("pais_origen" in patch) {
+          nextCliente.pais_origen = patch.pais_origen ?? "";
         }
 
         // Duplicar a raíz
@@ -738,7 +748,8 @@ const sortedNormalized = useMemo(
               nombre_completo: nombreCompleto,
               genero: c.genero || "",
               fecha_nacimiento: c.fecha_nacimiento || "",
-              idioma: c.idioma || ""
+              idioma: c.idioma || "",
+              pais_origen: c.pais_origen || ""
             },
             _remote_created: true
           },
@@ -949,6 +960,18 @@ const sortedNormalized = useMemo(
                                     onChange={onChange}
                                     disabled={readOnly}
                                     className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  />
+                                </Field>
+
+                                <Field label="País de Origen" className="col-md-3">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    name="pais_origen"
+                                    value={c.pais_origen ?? ""}
+                                    onChange={onChange}
+                                    disabled={readOnly}
+                                    style={{ textTransform: "capitalize" }}
+                                    placeholder="País de origen"
                                   />
                                 </Field>
                               </div>

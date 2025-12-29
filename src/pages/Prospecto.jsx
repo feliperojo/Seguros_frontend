@@ -280,6 +280,7 @@ useEffect(() => {
         cobertura_id: null,
         cliente_id: c.id,
         idioma: c.idioma || "",
+        pais_origen: c.pais_origen || "",
         ingreso_anual: c.ingreso_anual || 0,
         nota: c.nota || "",
         cliente: {
@@ -293,6 +294,7 @@ useEffect(() => {
           edad,
           telefono: c.telefono || "",
           idioma: c.idioma || "",
+          pais_origen: c.pais_origen || "",
           ingreso_anual: c.ingreso_anual || 0,
           nota: c.nota || "",
         },
@@ -396,7 +398,7 @@ useEffect(() => {
 
         // ✅ SOLO campos del acordeón (según ProspectoDatos.jsx - MemberAccordionForm):
         // - primer_nombre, segundo_nombre, apellidos, nombre_completo
-        // - fecha_nacimiento, genero, idioma
+        // - fecha_nacimiento, genero, idioma, pais_origen
         // - ingreso_anual, nota
         const clientePayload = {
           id: Number(miembro.cliente_id),
@@ -407,6 +409,7 @@ useEffect(() => {
           fecha_nacimiento: date10(pick("fecha_nacimiento")),
           genero: pick("genero"),
           idioma: pick("idioma"),
+          pais_origen: capitalizeWords(pick("pais_origen") || ""),
           ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
           nota: pick("nota"),
         };

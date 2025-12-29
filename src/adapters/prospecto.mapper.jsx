@@ -18,6 +18,14 @@ export const toNumberOrZero = (v) => {
   return Number.isFinite(n) ? n : 0;
 };
 
+// Capitaliza la primera letra de cada palabra (para países)
+export const capitalizeWords = (s = "") => {
+  if (!s) return "";
+  return s
+    .toLowerCase()
+    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+};
+
 export const stripNulls = (obj = {}) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null && v !== undefined));
 
@@ -202,6 +210,7 @@ const payload = {
     nombre_completo,
     genero: pick("genero"),
     idioma: pick("idioma"),
+    pais_origen: capitalizeWords(pick("pais_origen") || ""),
     fecha_nacimiento,
     ingreso_anual: Number.isFinite(ingreso_num) ? ingreso_num : 0,
     nota: pick("nota"),

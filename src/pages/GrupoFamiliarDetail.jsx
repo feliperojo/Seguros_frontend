@@ -117,6 +117,7 @@ const mapClienteForSave = (m) => {
       fecha_nacimiento: date10(pick("fecha_nacimiento")),
       genero: pick("genero"),
       idioma: pick("idioma"),
+      pais_origen: capitalizeWords(pick("pais_origen") || ""),
       ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
       nota: pick("nota"),
       dir_correspondencia: pick("dir_correspondencia"),
@@ -146,6 +147,7 @@ const mapClienteForSave = (m) => {
     fecha_nacimiento: date10(pick("fecha_nacimiento")),
     genero: pick("genero"),
     idioma: pick("idioma"),
+    pais_origen: capitalizeWords(pick("pais_origen") || ""),
     ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
     nota: pick("nota"),
     telefono: pick("telefono"),
@@ -338,6 +340,7 @@ const mapFullToMembers = (fullRaw) => {
       fecha_nacimiento: fecha,
       edad,
       idioma: cli.idioma || "",
+      pais_origen: cli.pais_origen || "",
       ingreso_anual: cli.ingreso_anual || "",
       nota: cli.nota || "",
       periodo_ingreso: cli.periodo_ingreso || "",
@@ -385,6 +388,7 @@ const mapFullToMembers = (fullRaw) => {
         fecha_nacimiento: fecha,
         edad,
         idioma: cli.idioma || "",
+        pais_origen: cli.pais_origen || "",
 
         // contacto
         telefono: cli.telefono || "",

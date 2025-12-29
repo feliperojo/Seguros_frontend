@@ -133,6 +133,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
     cobertura_id: null, 
     cliente_id: c.id,
     idioma: c.idioma || "",
+    pais_origen: c.pais_origen || "",
     ingreso_anual: c.ingreso_anual || 0,
     nota: c.nota || "",
     cliente: {
@@ -146,6 +147,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
       edad,
       telefono: c.telefono || "",
       idioma: c.idioma || "",
+      pais_origen: c.pais_origen || "",
       ingreso_anual: c.ingreso_anual || 0,
       nota: c.nota || "",
     },
@@ -357,6 +359,28 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                País de Origen
+              </label>
+              <input
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                value={member.pais_origen ?? member?.cliente?.pais_origen ?? ""}
+                disabled={readOnly}
+                onChange={(e) => {
+                  onChange({
+                    pais_origen: e.target.value,
+                    cliente: {
+                      ...(member.cliente || {}),
+                      pais_origen: e.target.value,
+                    },
+                  });
+                }}
+                style={{ textTransform: "capitalize" }}
+                placeholder="País de origen"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha de Nacimiento
               </label>
               <input
@@ -538,16 +562,19 @@ const ProspectoDatos = ({
       );
     
       const idioma = payload.idioma ?? payload?.cliente?.idioma ?? "";
+      const paisOrigen = payload.pais_origen ?? payload?.cliente?.pais_origen ?? "";
     
       const merged = recomputeDerived({
         fecha_retiro: null,
         ...payload,
         ingreso_anual: normalizedIngreso,
         idioma,
+        pais_origen: paisOrigen,
         cliente: {
           ...(payload.cliente || {}),
           ingreso_anual: normalizedIngreso,
           idioma,
+          pais_origen: paisOrigen,
         },
         id: newId,
       });
@@ -633,6 +660,7 @@ const ProspectoDatos = ({
         fecha_nacimiento: mSrv.fecha_nacimiento || cli.fecha_nacimiento || "",
         edad: mSrv.edad || calcAge(mSrv.fecha_nacimiento || cli.fecha_nacimiento),
         idioma: mSrv.idioma || cli.idioma || "",
+        pais_origen: mSrv.pais_origen || cli.pais_origen || "",
         ingreso_anual: mSrv.ingreso_anual || cli.ingreso_anual || 0,
         nota: mSrv.nota || cli.nota || "",
         tipo: mSrv.tipo || payload.tipo,
@@ -653,6 +681,7 @@ const ProspectoDatos = ({
           edad: calcAge(cli.fecha_nacimiento),
           telefono: cli.telefono || "",
           idioma: cli.idioma || "",
+          pais_origen: cli.pais_origen || "",
           ingreso_anual: cli.ingreso_anual || 0,
           nota: cli.nota || "",
         },
