@@ -80,27 +80,166 @@ const Prospectogrupo = ({
   const puedeRenovar = estadosPermitidosRenovaciones.includes(estadoNormalizado);
 
   return (
-    <>
+    <div style={{ fontFamily: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"` }}>
+      {/* Utilidades - Barra superior */}
+      <div className="card mb-4 shadow-sm">
+        <div className="card-body p-3">
+          <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+            {/* Título y Etiquetas */}
+            <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ minWidth: '200px' }}>
+              <div className="d-flex align-items-center">
+                <i className="fas fa-tools text-primary me-2"></i>
+                <h6 className="mb-0 fw-semibold" style={{ letterSpacing: '0.01em' }}>Utilidades</h6>
+              </div>
+              <div className="vr d-none d-md-block"></div>
+              <div className="flex-grow-1" style={{ minWidth: '250px' }}>
+                <label className="form-label mb-1 small text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Etiquetas</label>
+                <GroupTags
+                  value={Array.isArray(formData?.etiquetas) ? formData.etiquetas : []}
+                  onChange={(tags) => {
+                    onChange?.({
+                      target: {
+                        name: "etiquetas",
+                        value: tags,
+                        type: "json"
+                      }
+                    });
+                  }}
+                  readOnly={readOnly}
+                  className="w-100"
+                />
+              </div>
+            </div>
+
+            {/* Barra de navegación horizontal */}
+            <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowContactosModal(true)}
+                disabled={!resolvedGrupoId}
+                title="Contactos relacionados"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="bi bi-people me-1"></i>
+                <span className="d-none d-lg-inline">Contactos</span>
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowHistorialCambios(true)}
+                disabled={!resolvedGrupoId}
+                title="Historial de cambios"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="bi bi-clock-history me-1"></i>
+                <span className="d-none d-lg-inline">Historial</span>
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowDocumentosModal(true)}
+                disabled={!resolvedGrupoId}
+                title="Requerimientos"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="bi bi-folder2-open me-1"></i>
+                <span className="d-none d-lg-inline">Requerimientos</span>
+              </button>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowDriveModal(true)}
+                disabled={!resolvedGrupoId}
+                title={driveUrl ? "Editar URL Drive" : "Agregar URL Drive"}
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="bi bi-pencil-square me-1"></i>
+                <span className="d-none d-lg-inline">Drive</span>
+              </button>
+              <Dropdown style={{ whiteSpace: 'nowrap', flexShrink: 0 }}>
+                <Dropdown.Toggle 
+                  variant="outline-primary" 
+                  size="sm"
+                  id="dropdown-nueva-gestion"
+                  style={{ fontSize: '0.875rem', fontWeight: '500' }}
+                >
+                  <i className="fas fa-tasks me-1"></i>
+                  <span className="d-none d-lg-inline">Gestión</span>
+                </Dropdown.Toggle>
+                <Dropdown.Menu>
+                  <Dropdown.Item 
+                    onClick={() => setShowGestion(true)}
+                    className="d-flex align-items-center"
+                  >
+                    <i className="fas fa-tasks me-2 text-primary"></i>
+                    Nueva Tarea
+                  </Dropdown.Item>
+                  <Dropdown.Item 
+                    onClick={() => setShowComentarioModal(true)}
+                    className="d-flex align-items-center"
+                  >
+                    <i className="fas fa-comment me-2 text-secondary"></i>
+                    Nuevo Comentario
+                  </Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+              <button
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowGestorDocumentosModal(true)}
+                disabled={!resolvedGrupoId}
+                title="Gestor de documentos"
+                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+              >
+                <i className="fas fa-folder-open me-1"></i>
+                <span className="d-none d-lg-inline">Documentos</span>
+              </button>
+              {puedeRenovar && (
+                <>
+                  <button
+                    className="btn btn-sm btn-outline-warning"
+                    onClick={() => setShowCambioVidaModal(true)}
+                    disabled={!resolvedGrupoId}
+                    title="Renovaciones"
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                  >
+                    <i className="fas fa-exclamation-triangle me-1"></i>
+                    <span className="d-none d-lg-inline">Renovaciones</span>
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => setShowHistorialCanceladasModal(true)}
+                    disabled={!resolvedGrupoId}
+                    title="Historial de renovaciones"
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                  >
+                    <i className="fas fa-history me-1"></i>
+                    <span className="d-none d-lg-inline">Hist. Renov.</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Información del Prospecto (captación) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-          <h5 className="text-gray-800 font-semibold text-lg mb-0 flex items-center gap-2">
-            <i className="fas fa-info-circle text-gray-600"></i>
+      <div className="card mb-4 shadow-sm">
+        <div className="card-header bg-light">
+          <h5 className="mb-0 fw-semibold" style={{ letterSpacing: '0.01em', fontSize: '1.1rem' }}>
+            <i className="fas fa-info-circle text-primary me-2"></i>
             Información del Grupo Familiar
           </h5>
         </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-4">
+              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 Captado por:
               </label>
               <select
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-50 disabled:cursor-not-allowed bg-white shadow-sm"
+                className="form-select"
                 name="captadoPor"
                 value={formData.captadoPor || ""}
                 onChange={onChange}
                 disabled={readOnly}
+                style={{ fontSize: '0.9rem' }}
               >
                 <option value="Google">Google</option>
                 <option value="Facebook">Facebook</option>
@@ -108,30 +247,32 @@ const Prospectogrupo = ({
                 <option value="Otro">Otro</option>
               </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="col-md-4">
+              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 Cuál
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-50 disabled:cursor-not-allowed shadow-sm"
+                className="form-control"
                 name="cual"
                 value={formData.cual || ""}
                 onChange={onChange}
                 disabled={readOnly}
+                style={{ fontSize: '0.9rem' }}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="col-md-4">
+              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 Asesor
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-50 disabled:cursor-not-allowed shadow-sm"
+                className="form-control"
                 name="asesor"
                 value={formData.asesor || ""}
                 onChange={onChange}
                 disabled={readOnly}
+                style={{ fontSize: '0.9rem' }}
               />
             </div>
           </div>
@@ -139,245 +280,78 @@ const Prospectogrupo = ({
       </div>
 
       {/* Bloque económico */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+      <div className="card mb-4 shadow-sm">
+        <div className="card-body">
+          <div className="row g-3">
+            <div className="col-md-6 col-lg-3">
+              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 ZIP Code
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 disabled:bg-gray-50 disabled:cursor-not-allowed shadow-sm"
+                className="form-control"
                 name="zipCode"
                 value={formData.zipCode || ""}
                 onChange={onChange}
                 disabled={readOnly}
+                style={{ fontSize: '0.9rem' }}
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <i className="fas fa-dollar-sign text-green-600"></i>
+            <div className="col-md-6 col-lg-3">
+              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                <i className="fas fa-dollar-sign text-success me-2"></i>
                 Ingreso Familiar
               </label>
               <input
                 type="text"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed font-semibold text-gray-700"
+                className="form-control bg-light"
                 name="ingresoFamiliar"
                 value={formatMoneyDisplay(formData.ingresoFamiliar ?? 0)}
                 onChange={onChange}
                 readOnly
+                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <div className="text-xs text-gray-500 mt-1.5 flex items-center gap-1">
-                <i className="fas fa-info-circle"></i>
+              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
+                <i className="fas fa-info-circle me-1"></i>
                 Sumatoria de los ingresos de cada miembro.
-              </div>
+              </small>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <i className="fas fa-shield-alt text-blue-600"></i>
+            <div className="col-md-6 col-lg-3">
+              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                <i className="fas fa-shield-alt text-primary me-2"></i>
                 Personas en Cobertura
               </label>
               <input
                 type="number"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed font-semibold text-gray-700"
+                className="form-control bg-light"
                 name="personasCobertura"
                 value={formData.personasCobertura ?? 0}
                 readOnly
+                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <div className="text-xs text-gray-500 mt-1.5 flex items-center gap-1">
-                <i className="fas fa-info-circle"></i>
-                Se calcula con miembros en “Sí” y sin retiro.
-              </div>
+              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
+                <i className="fas fa-info-circle me-1"></i>
+                Se calcula con miembros en "Sí" y sin retiro.
+              </small>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <i className="fas fa-users text-purple-600"></i>
+            <div className="col-md-6 col-lg-3">
+              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                <i className="fas fa-users text-info me-2"></i>
                 Personas en Taxes
               </label>
               <input
                 type="number"
-                className="w-full px-4 py-2.5 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed font-semibold text-gray-700"
+                className="form-control bg-light"
                 name="personasTaxes"
                 value={formData.personasTaxes ?? 0}
                 readOnly
+                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <div className="text-xs text-gray-500 mt-1.5 flex items-center gap-1">
-                <i className="fas fa-info-circle"></i>
+              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
+                <i className="fas fa-info-circle me-1"></i>
                 Se calcula con el número de miembros (cards).
-              </div>
+              </small>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Utilidades */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
-          <h6 className="text-gray-800 font-semibold text-base mb-0 flex items-center gap-2">
-            <i className="fas fa-tools text-gray-600"></i>
-            Utilidades
-          </h6>
-        </div>
-        <div className="p-6">
-          {/* Etiquetas del Grupo Familiar */}
-          <div className="mb-6 pb-6 border-b border-gray-200">
-            <GroupTags
-              value={Array.isArray(formData?.etiquetas) ? formData.etiquetas : []}
-              onChange={(tags) => {
-                onChange?.({
-                  target: {
-                    name: "etiquetas",
-                    value: tags,
-                    type: "json"
-                  }
-                });
-              }}
-              readOnly={readOnly}
-              className="w-full"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            {/* Contactos relacionados */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-cyan-300 text-cyan-700 bg-cyan-50 hover:bg-cyan-100 hover:border-cyan-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-cyan-50"
-              onClick={() => setShowContactosModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para ver los contactos relacionados"
-                  : "Ver contactos relacionados a este grupo familiar"
-              }
-            >
-              <i className="bi bi-people"></i>
-              Contactos
-            </button>
-
-            {/* Historial de Cambios */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-gray-50 hover:bg-gray-100 hover:border-gray-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-gray-50"
-              onClick={() => setShowHistorialCambios(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para ver el historial de cambios"
-                  : "Ver historial de modificaciones del grupo"
-              }
-            >
-              <i className="bi bi-clock-history"></i>
-              Historial cambios
-            </button>
-
-            {/* Requerimientos */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-green-300 text-green-700 bg-green-50 hover:bg-green-100 hover:border-green-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-50"
-              onClick={() => setShowDocumentosModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Primero debe existir el Grupo Familiar"
-                  : "Abrir requerimientos"
-              }
-            >
-              <i className="bi bi-folder2-open"></i>
-              Requerimientos
-            </button>
-
-            {/* Agregar/Editar URL de Drive */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-50"
-              onClick={() => setShowDriveModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Primero debe existir el Grupo Familiar"
-                  : "Agregar/editar URL de Drive"
-              }
-            >
-              <i className="bi bi-pencil-square"></i>
-              {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
-            </button>
-
-            {/* Nueva Gestión - Dropdown con opciones */}
-            <Dropdown>
-              <Dropdown.Toggle 
-                variant="outline-primary" 
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 hover:border-blue-400 transition-all duration-200"
-                id="dropdown-nueva-gestion"
-                style={{ 
-                  backgroundColor: 'rgb(239 246 255)', 
-                  borderColor: 'rgb(147 197 253)',
-                  color: 'rgb(29 78 216)'
-                }}
-              >
-                <i className="fas fa-tasks"></i>
-                Nueva Gestión
-              </Dropdown.Toggle>
-              <Dropdown.Menu className="shadow-lg border-gray-200">
-                <Dropdown.Item 
-                  onClick={() => setShowGestion(true)}
-                  className="d-flex align-items-center gap-2 py-2"
-                >
-                  <i className="fas fa-tasks text-blue-600"></i>
-                  <span>Nueva Tarea</span>
-                </Dropdown.Item>
-                <Dropdown.Item 
-                  onClick={() => setShowComentarioModal(true)}
-                  className="d-flex align-items-center gap-2 py-2"
-                >
-                  <i className="fas fa-comment text-gray-600"></i>
-                  <span>Nuevo Comentario</span>
-                </Dropdown.Item>
-              </Dropdown.Menu>
-            </Dropdown>
-
-            {/* Renovaciones / Cancelar coberturas - Solo visible en estados permitidos */}
-            {puedeRenovar && (
-              <button
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-orange-300 text-orange-700 bg-orange-50 hover:bg-orange-100 hover:border-orange-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-50"
-                onClick={() => setShowCambioVidaModal(true)}
-                disabled={!resolvedGrupoId}
-                title={
-                  !resolvedGrupoId
-                    ? "Guarda primero el grupo familiar para cancelar coberturas"
-                    : "Cancelar coberturas por cambio de vida"
-                }
-              >
-                <i className="fas fa-exclamation-triangle"></i>
-                Renovaciones
-              </button>
-            )}
-
-            {/* Historial de coberturas canceladas */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-purple-300 text-purple-700 bg-purple-50 hover:bg-purple-100 hover:border-purple-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-purple-50"
-              onClick={() => setShowHistorialCanceladasModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para ver el historial"
-                  : "Consultar historial de coberturas canceladas"
-              }
-            >
-              <i className="fas fa-history"></i>
-              Historial renovaciones
-            </button>
-
-            {/* Gestor de Documentos */}
-            <button
-              className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-lg border border-indigo-300 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:border-indigo-400 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-50"
-              onClick={() => setShowGestorDocumentosModal(true)}
-              disabled={!resolvedGrupoId}
-              title={
-                !resolvedGrupoId
-                  ? "Guarda primero el grupo familiar para gestionar documentos"
-                  : "Gestionar documentos y carpetas del grupo familiar"
-              }
-            >
-              <i className="fas fa-folder-open"></i>
-              Gestor de documentos
-            </button>
           </div>
         </div>
       </div>
@@ -454,7 +428,7 @@ const Prospectogrupo = ({
 />
 
 
-    </>
+    </div>
   );
 };
 
