@@ -24,6 +24,7 @@ const RolePermissions = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [activeKeys, setActiveKeys] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -46,7 +47,12 @@ const RolePermissions = () => {
           : []
       );
 
-      setPermissions(permissionsResponse.data || {});
+      const permissionsData = permissionsResponse.data || {};
+      setPermissions(permissionsData);
+      
+      // Inicializar todos los módulos como abiertos
+      const allModules = Object.keys(permissionsData);
+      setActiveKeys(allModules);
     } catch (err) {
       setError(err.message || "Error al cargar datos");
       toast.error("Error al cargar datos");
@@ -243,7 +249,17 @@ const RolePermissions = () => {
               No hay permisos disponibles
             </Alert>
           ) : (
-            <Accordion defaultActiveKey={modules[0]} alwaysOpen>
+            <Accordion 
+              activeKey={activeKeys.length > 0 ? activeKeys : modules} 
+              alwaysOpen
+              onSelect={(selectedKeys) => {
+                // Cuando alwaysOpen está activo, selectedKeys puede ser un array o string
+                const newKeys = Array.isArray(selectedKeys) 
+                  ? selectedKeys 
+                  : (selectedKeys ? [selectedKeys] : []);
+                setActiveKeys(newKeys.length > 0 ? newKeys : modules);
+              }}
+            >
               {modules.map((module) => {
                 const modulePermissions = permissions[module];
                 const moduleIds = modulePermissions.map((p) => p.id);
