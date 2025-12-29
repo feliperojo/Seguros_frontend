@@ -7,9 +7,19 @@ import {
   Spinner,
   Alert,
   Badge,
-  Accordion,
+  ProgressBar,
 } from "react-bootstrap";
-import { FaSave, FaCheckSquare, FaSquare, FaArrowLeft } from "react-icons/fa";
+import { 
+  FaSave, 
+  FaCheckSquare, 
+  FaSquare, 
+  FaArrowLeft,
+  FaCheckCircle,
+  FaCircle,
+  FaLock,
+  FaUnlock,
+  FaShieldAlt
+} from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
 import { rolesService, permissionsService } from "../../services/adminApi";
@@ -24,7 +34,6 @@ const RolePermissions = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [activeKeys, setActiveKeys] = useState([]);
 
   useEffect(() => {
     loadData();
@@ -49,10 +58,6 @@ const RolePermissions = () => {
 
       const permissionsData = permissionsResponse.data || {};
       setPermissions(permissionsData);
-      
-      // Inicializar todos los módulos como abiertos
-      const allModules = Object.keys(permissionsData);
-      setActiveKeys(allModules);
     } catch (err) {
       setError(err.message || "Error al cargar datos");
       toast.error("Error al cargar datos");
@@ -179,87 +184,133 @@ const RolePermissions = () => {
     .map((p) => p.id);
   const allSelected = allIds.length > 0 && allIds.every((id) => selectedPermissions.includes(id));
 
+  // Calcular estadísticas por módulo
+  const getModuleStats = (module) => {
+    const modulePermissions = permissions[module];
+    const moduleIds = modulePermissions.map((p) => p.id);
+    const selectedCount = moduleIds.filter((id) => selectedPermissions.includes(id)).length;
+    const totalCount = moduleIds.length;
+    const percentage = totalCount > 0 ? Math.round((selectedCount / totalCount) * 100) : 0;
+    return { selectedCount, totalCount, percentage };
+  };
+
+  const overallPercentage = allIds.length > 0 
+    ? Math.round((selectedPermissions.length / allIds.length) * 100) 
+    : 0;
+
   return (
     <div className="container-fluid py-4">
-      <Card>
-        <Card.Header className="d-flex justify-content-between align-items-center">
-          <div>
-            <Button
-              variant="link"
-              className="p-0 mb-2"
-              onClick={() => navigate("/admin/roles")}
-            >
-              <FaArrowLeft className="me-2" />
-              Volver a Roles
-            </Button>
-            <h4 className="mb-0">
-              Permisos del Rol: <strong>{role?.name}</strong>
-            </h4>
-          </div>
-          <div className="d-flex gap-2">
-            <Button
-              variant="outline-secondary"
-              onClick={handleSelectAll}
-              disabled={saving || !canManagePermissions}
-              title={canManagePermissions ? "" : "No tienes permisos para modificar"}
-            >
-              {allSelected ? (
-                <>
-                  <FaSquare className="me-2" />
-                  Limpiar Todo
-                </>
-              ) : (
-                <>
-                  <FaCheckSquare className="me-2" />
-                  Seleccionar Todo
-                </>
-              )}
-            </Button>
-            {canManagePermissions && (
-              <Button variant="primary" onClick={handleSave} disabled={saving}>
-                {saving ? (
+      <Card className="shadow-sm">
+        <Card.Header className="bg-primary text-white">
+          <div className="d-flex justify-content-between align-items-center">
+            <div>
+              <Button
+                variant="link"
+                className="p-0 mb-2 text-white text-decoration-none"
+                onClick={() => navigate("/admin/roles")}
+              >
+                <FaArrowLeft className="me-2" />
+                Volver a Roles
+              </Button>
+              <h4 className="mb-0 text-white">
+                <FaShieldAlt className="me-2" />
+                Permisos del Rol: <strong>{role?.name}</strong>
+              </h4>
+            </div>
+            <div className="d-flex gap-2">
+              <Button
+                variant="light"
+                onClick={handleSelectAll}
+                disabled={saving || !canManagePermissions}
+                title={canManagePermissions ? "" : "No tienes permisos para modificar"}
+                className="d-flex align-items-center"
+              >
+                {allSelected ? (
                   <>
-                    <Spinner size="sm" className="me-2" />
-                    Guardando...
+                    <FaSquare className="me-2" />
+                    Limpiar Todo
                   </>
                 ) : (
                   <>
-                    <FaSave className="me-2" />
-                    Guardar
+                    <FaCheckSquare className="me-2" />
+                    Seleccionar Todo
                   </>
                 )}
               </Button>
-            )}
+              {canManagePermissions && (
+                <Button variant="light" onClick={handleSave} disabled={saving} className="d-flex align-items-center">
+                  {saving ? (
+                    <>
+                      <Spinner size="sm" className="me-2" />
+                      Guardando...
+                    </>
+                  ) : (
+                    <>
+                      <FaSave className="me-2" />
+                      Guardar Cambios
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </Card.Header>
-        <Card.Body>
+        <Card.Body className="p-4">
           {error && (
-            <Alert variant="danger" dismissible onClose={() => setError(null)}>
-              {error}
+            <Alert variant="danger" dismissible onClose={() => setError(null)} className="mb-4">
+              <strong>Error:</strong> {error}
             </Alert>
           )}
 
-          <Alert variant="info" className="mb-4">
-            <strong>{selectedPermissions.length}</strong> permiso(s) seleccionado(s) de{" "}
-            <strong>{allIds.length}</strong> disponibles
-          </Alert>
+          {/* Panel de estadísticas mejorado */}
+          <Card className="mb-4 border-0 bg-light">
+            <Card.Body>
+              <div className="row align-items-center">
+                <div className="col-md-8">
+                  <div className="d-flex align-items-center mb-2">
+                    <FaShieldAlt className="text-primary me-2" size="1.5em" />
+                    <h5 className="mb-0 me-3">Resumen de Permisos</h5>
+                  </div>
+                  <div className="d-flex align-items-center gap-4 flex-wrap">
+                    <div>
+                      <span className="text-muted">Seleccionados:</span>
+                      <Badge bg="success" className="ms-2 fs-6 px-3 py-2">
+                        {selectedPermissions.length}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted">Disponibles:</span>
+                      <Badge bg="secondary" className="ms-2 fs-6 px-3 py-2">
+                        {allIds.length}
+                      </Badge>
+                    </div>
+                    <div>
+                      <span className="text-muted">Progreso:</span>
+                      <Badge bg="info" className="ms-2 fs-6 px-3 py-2">
+                        {overallPercentage}%
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-md-4 mt-3 mt-md-0">
+                  <ProgressBar 
+                    now={overallPercentage} 
+                    variant={overallPercentage === 100 ? "success" : overallPercentage > 50 ? "info" : "warning"}
+                    className="h-3"
+                    label={`${overallPercentage}%`}
+                  />
+                </div>
+              </div>
+            </Card.Body>
+          </Card>
 
           {modules.length === 0 ? (
             <Alert variant="warning" className="text-center">
+              <FaShieldAlt className="me-2" />
               No hay permisos disponibles
             </Alert>
           ) : (
-            <Accordion 
-              activeKey={activeKeys.length > 0 ? activeKeys : modules} 
-              alwaysOpen
-              onSelect={(selectedKeys) => {
-                // Cuando alwaysOpen está activo, selectedKeys puede ser un array o string
-                const newKeys = Array.isArray(selectedKeys) 
-                  ? selectedKeys 
-                  : (selectedKeys ? [selectedKeys] : []);
-                setActiveKeys(newKeys.length > 0 ? newKeys : modules);
-              }}
-            >
+            <div className="modules-container">
               {modules.map((module) => {
                 const modulePermissions = permissions[module];
                 const moduleIds = modulePermissions.map((p) => p.id);
@@ -269,78 +320,110 @@ const RolePermissions = () => {
                 const moduleSomeSelected = moduleIds.some((id) =>
                   selectedPermissions.includes(id)
                 );
+                const stats = getModuleStats(module);
 
                 return (
-                  <Accordion.Item key={module} eventKey={module}>
-                    <Accordion.Header>
-                      <div className="d-flex justify-content-between align-items-center w-100 me-3">
-                        <span>
-                          <strong>{module}</strong>
-                          <Badge bg="secondary" className="ms-2">
-                            {modulePermissions.length}
-                          </Badge>
-                        </span>
+                  <Card key={module} className="mb-4 shadow-sm border">
+                    <Card.Header className={`${moduleAllSelected ? 'bg-success bg-opacity-10' : moduleSomeSelected ? 'bg-warning bg-opacity-10' : 'bg-light'} border-bottom`}>
+                      <div className="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                        <div className="d-flex align-items-center gap-3 flex-grow-1">
+                          <div className={`p-2 rounded ${moduleAllSelected ? 'bg-success bg-opacity-20' : moduleSomeSelected ? 'bg-warning bg-opacity-20' : 'bg-light'}`}>
+                            {moduleAllSelected ? (
+                              <FaCheckCircle className="text-success" size="1.5em" />
+                            ) : moduleSomeSelected ? (
+                              <FaCircle className="text-warning" size="1.5em" />
+                            ) : (
+                              <FaCircle className="text-muted" size="1.5em" />
+                            )}
+                          </div>
+                          <div className="flex-grow-1">
+                            <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                              <strong className="fs-5">{module}</strong>
+                              <Badge bg={moduleAllSelected ? "success" : moduleSomeSelected ? "warning" : "secondary"} className="px-3 py-2 fs-6">
+                                {stats.selectedCount}/{stats.totalCount}
+                              </Badge>
+                              <Badge bg="info" className="px-3 py-2 fs-6">
+                                {stats.percentage}%
+                              </Badge>
+                            </div>
+                            <ProgressBar 
+                              now={stats.percentage} 
+                              variant={moduleAllSelected ? "success" : moduleSomeSelected ? "warning" : "secondary"}
+                              className="h-3"
+                              style={{ maxWidth: "300px" }}
+                              label={`${stats.percentage}%`}
+                            />
+                          </div>
+                        </div>
                         <Button
-                          variant="link"
+                          variant={moduleAllSelected ? "outline-danger" : "outline-primary"}
                           size="sm"
-                          className="text-decoration-none"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectAllInModule(modulePermissions);
-                          }}
+                          onClick={() => handleSelectAllInModule(modulePermissions)}
                           disabled={!canManagePermissions}
-                          title={canManagePermissions ? "" : "No tienes permisos para modificar"}
+                          title={canManagePermissions ? (moduleAllSelected ? "Limpiar todos los permisos de este módulo" : "Seleccionar todos los permisos de este módulo") : "No tienes permisos para modificar"}
+                          className="d-flex align-items-center"
                         >
                           {moduleAllSelected ? (
                             <>
-                              <FaSquare className="me-1" />
+                              <FaUnlock className="me-2" />
                               Limpiar Módulo
                             </>
                           ) : (
                             <>
-                              <FaCheckSquare className="me-1" />
+                              <FaLock className="me-2" />
                               Seleccionar Módulo
                             </>
                           )}
                         </Button>
                       </div>
-                    </Accordion.Header>
-                    <Accordion.Body>
-                      <div className="row">
-                        {modulePermissions.map((permission) => (
-                          <div key={permission.id} className="col-md-6 mb-2">
-                            <Form.Check
-                              type="checkbox"
-                              id={`perm-${permission.id}`}
-                              label={
-                                <div>
-                                  <strong>{permission.name}</strong>
-                                  {permission.description && (
-                                    <div className="text-muted small">
-                                      {permission.description}
-                                    </div>
-                                  )}
-                                  <Badge bg="secondary" className="ms-2">
-                                    {permission.slug}
-                                  </Badge>
-                                </div>
-                              }
-                              checked={selectedPermissions.includes(
-                                permission.id
-                              )}
-                              onChange={() =>
-                                handleTogglePermission(permission.id)
-                              }
-                              disabled={!canManagePermissions}
-                            />
-                          </div>
-                        ))}
+                    </Card.Header>
+                    <Card.Body className="p-4">
+                      <div className="row g-3">
+                        {modulePermissions.map((permission) => {
+                          const isSelected = selectedPermissions.includes(permission.id);
+                          return (
+                            <div key={permission.id} className="col-md-6 col-lg-4 col-xl-3">
+                              <Card className={`h-100 border shadow-sm transition-all ${isSelected ? 'border-success bg-success bg-opacity-10' : 'border-secondary bg-white'}`}>
+                                <Card.Body className="p-3">
+                                  <Form.Check
+                                    type="checkbox"
+                                    id={`perm-${permission.id}`}
+                                    className="mb-0"
+                                    label={
+                                      <div className="ms-2">
+                                        <div className="d-flex align-items-center gap-2 mb-2">
+                                          {isSelected ? (
+                                            <FaCheckCircle className="text-success" size="1.1em" />
+                                          ) : (
+                                            <FaCircle className="text-muted" size="1.1em" />
+                                          )}
+                                          <strong className="text-dark">{permission.name}</strong>
+                                        </div>
+                                        {permission.description && (
+                                          <div className="text-muted small mb-2" style={{ fontSize: "0.85rem", lineHeight: "1.4" }}>
+                                            {permission.description}
+                                          </div>
+                                        )}
+                                        <Badge bg="secondary" className="text-wrap d-inline-block" style={{ fontSize: "0.75rem", maxWidth: "100%" }}>
+                                          {permission.slug}
+                                        </Badge>
+                                      </div>
+                                    }
+                                    checked={isSelected}
+                                    onChange={() => handleTogglePermission(permission.id)}
+                                    disabled={!canManagePermissions}
+                                  />
+                                </Card.Body>
+                              </Card>
+                            </div>
+                          );
+                        })}
                       </div>
-                    </Accordion.Body>
-                  </Accordion.Item>
+                    </Card.Body>
+                  </Card>
                 );
               })}
-            </Accordion>
+            </div>
           )}
         </Card.Body>
       </Card>

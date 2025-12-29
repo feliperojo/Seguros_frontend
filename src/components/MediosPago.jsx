@@ -164,8 +164,6 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
         updates.tipo_tarjeta_pago = 'credito';
       } else if (value === 'tarjeta_debito') {
         updates.tipo_tarjeta_pago = 'debito';
-        updates.fecha_expiracion = '';
-        updates.cvv = '';
       } else if (value === 'cuenta_bancaria') {
         // Limpiar campos de tarjeta al cambiar a cuenta bancaria
         updates.tipo_tarjeta = '';
@@ -240,21 +238,19 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
         return false;
       }
       
-      // Validar fecha de expiración y CVV solo para tarjetas de crédito
-      if (currentMedioPago.forma_pago === 'tarjeta_credito') {
-        // Validar fecha de expiración
-        const fechaPattern = /^(0[1-9]|1[0-2])\/20\d{2}$/;
-        if (!fechaPattern.test(currentMedioPago.fecha_expiracion)) {
-          setError({ campo: 'fecha_expiracion', mensaje: 'Formato inválido. Use MM/AAAA' });
-          return false;
-        }
-        
-        // Validar CVV
-        if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
-          const longitudCVV = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
-          setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
-          return false;
-        }
+      // Validar fecha de expiración y CVV para tarjetas de crédito y débito
+      // Validar fecha de expiración
+      const fechaPattern = /^(0[1-9]|1[0-2])\/20\d{2}$/;
+      if (!fechaPattern.test(currentMedioPago.fecha_expiracion)) {
+        setError({ campo: 'fecha_expiracion', mensaje: 'Formato inválido. Use MM/AAAA' });
+        return false;
+      }
+      
+      // Validar CVV
+      if (!validateCVV(currentMedioPago.cvv, currentMedioPago.tipo_tarjeta)) {
+        const longitudCVV = currentMedioPago.tipo_tarjeta === 'American Express' ? 4 : 3;
+        setError({ campo: 'cvv', mensaje: `El CVV debe tener ${longitudCVV} dígitos` });
+        return false;
       }
     } else if (currentMedioPago.forma_pago === 'cuenta_bancaria') {
       // Validar titular
@@ -404,43 +400,41 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                 )}
               </div>
             </div>
-            {/* Mostrar fecha de expiración y CVV solo para tarjetas de crédito */}
-            {currentMedioPago.forma_pago === 'tarjeta_credito' && (
-              <div className="form-row">
-                <div className="form-group col-md-6 mb-3">
-                  <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AAAA)</label>
-                  <input
-                    type="text"
-                    className={`form-control ${error.campo === 'fecha_expiracion' ? 'is-invalid' : ''}`}
-                    id="fecha_expiracion"
-                    name="fecha_expiracion"
-                    placeholder="MM/AAAA"
-                    value={currentMedioPago.fecha_expiracion || ''}
-                    onChange={handleChange}
-                    required
-                  />
-                  {error.campo === 'fecha_expiracion' && (
-                    <div className="invalid-feedback">{error.mensaje}</div>
-                  )}
-                </div>
-                <div className="form-group col-md-6 mb-3">
-                  <label htmlFor="cvv">CVV</label>
-                  <input
-                    type="text"
-                    className={`form-control ${error.campo === 'cvv' ? 'is-invalid' : ''}`}
-                    id="cvv"
-                    name="cvv"
-                    value={currentMedioPago.cvv || ''}
-                    onChange={handleChange}
-                    placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? '4 dígitos' : '3 dígitos'}
-                    required
-                  />
-                  {error.campo === 'cvv' && (
-                    <div className="invalid-feedback">{error.mensaje}</div>
-                  )}
-                </div>
+            {/* Mostrar fecha de expiración y CVV para tarjetas de crédito y débito */}
+            <div className="form-row">
+              <div className="form-group col-md-6 mb-3">
+                <label htmlFor="fecha_expiracion">Fecha de Expiración (MM/AAAA)</label>
+                <input
+                  type="text"
+                  className={`form-control ${error.campo === 'fecha_expiracion' ? 'is-invalid' : ''}`}
+                  id="fecha_expiracion"
+                  name="fecha_expiracion"
+                  placeholder="MM/AAAA"
+                  value={currentMedioPago.fecha_expiracion || ''}
+                  onChange={handleChange}
+                  required
+                />
+                {error.campo === 'fecha_expiracion' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
               </div>
-            )}
+              <div className="form-group col-md-6 mb-3">
+                <label htmlFor="cvv">CVV</label>
+                <input
+                  type="text"
+                  className={`form-control ${error.campo === 'cvv' ? 'is-invalid' : ''}`}
+                  id="cvv"
+                  name="cvv"
+                  value={currentMedioPago.cvv || ''}
+                  onChange={handleChange}
+                  placeholder={currentMedioPago.tipo_tarjeta === 'American Express' ? '4 dígitos' : '3 dígitos'}
+                  required
+                />
+                {error.campo === 'cvv' && (
+                  <div className="invalid-feedback">{error.mensaje}</div>
+                )}
+              </div>
+            </div>
             <div className="form-group mb-3">
               <label htmlFor="direccion">Dirección</label>
               <input
