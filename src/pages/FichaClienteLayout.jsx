@@ -69,9 +69,8 @@ const TABS = [
   { id: "historial",   label: "Historial" },
   { id: "ringcentral", label: "RingCentral" },
   { id: "mas",         label: "Más" },
-  { id: "tareas",      label: "Tareas" },
   { id: "calendario",  label: "Calendario" },
-  { id: "comentarios", label: "Comentarios" },
+  { id: "comentarios", label: "Tareas y Notas" },
   { id: "clientes",    label: "Clientes" },   // 👈 este lo enviaremos a LISTA_CLIENTES_PATH
   { id: "directorio",  label: "Directorio" },
 ];

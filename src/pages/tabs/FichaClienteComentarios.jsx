@@ -87,6 +87,12 @@ export default function FichaClienteComentarios() {
         const data = response?.data || response || [];
         const lista = Array.isArray(data) ? data : [];
 
+        // 🔍 DEBUG: Ver respuesta completa del backend
+        console.log("=== RESPUESTA COMPLETA DEL BACKEND ===");
+        console.log("Response completa:", response);
+        console.log("Data extraída:", data);
+        console.log("Lista procesada:", lista);
+
         // Filtrar comentarios y tareas
         // Se identifican usando la función getTipoItem
         const itemsFiltrados = lista.filter((item) => {
@@ -100,11 +106,47 @@ export default function FichaClienteComentarios() {
           return esComentarioOTarea && perteneceAlGrupo;
         });
 
+        // 🔍 DEBUG: Ver items filtrados, especialmente tareas
+        console.log("=== ITEMS FILTRADOS ===");
+        console.log("Total items filtrados:", itemsFiltrados.length);
+        itemsFiltrados.forEach((item, index) => {
+          const tipoItem = getTipoItem(item);
+          if (tipoItem === "tarea") {
+            console.log(`--- TAREA ${index + 1} ---`);
+            console.log("Item completo:", item);
+            console.log("Campos disponibles:", Object.keys(item));
+            console.log("status:", item.status);
+            console.log("estado:", item.estado);
+            console.log("task?.status:", item.task?.status);
+            console.log("task:", item.task);
+            console.log("tipo:", item.tipo);
+            console.log("action_type:", item.action_type);
+          }
+        });
+
         // Ordenar por fecha de creación (más reciente primero)
         const itemsOrdenados = itemsFiltrados.sort((a, b) => {
           const fechaA = new Date(a.created_at || a.createdAt || a.fecha || 0);
           const fechaB = new Date(b.created_at || b.createdAt || b.fecha || 0);
           return fechaB - fechaA; // Descendente (más reciente primero)
+        });
+
+        // 🔍 DEBUG: Ver items ordenados finales
+        console.log("=== ITEMS ORDENADOS FINALES ===");
+        console.log("Total items ordenados:", itemsOrdenados.length);
+        itemsOrdenados.forEach((item, index) => {
+          const tipoItem = getTipoItem(item);
+          if (tipoItem === "tarea") {
+            console.log(`TAREA FINAL ${index + 1}:`, {
+              id: item.id,
+              status: item.status,
+              estado: item.estado,
+              task_status: item.task?.status,
+              tipo: item.tipo,
+              action_type: item.action_type,
+              item_completo: item
+            });
+          }
         });
 
         setComentarios(itemsOrdenados);
@@ -416,7 +458,7 @@ export default function FichaClienteComentarios() {
                 <i className="fas fa-comments text-white text-sm"></i>
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-800 m-0">Comentarios y Tareas</h2>
+                <h2 className="text-xl font-semibold text-gray-800 m-0">Tareas y Notas</h2>
                 <p className="text-sm text-gray-500 m-0 mt-0.5">Historial de comentarios y tareas del grupo familiar</p>
               </div>
             </div>
@@ -498,6 +540,22 @@ export default function FichaClienteComentarios() {
                     const tipoItem = getTipoItem(comentario);
                     const esTarea = tipoItem === "tarea";
                     const esComentario = tipoItem === "comentario";
+                    // Estado de la tarea: usar task.status (dentro del objeto task)
+                    const estadoTarea = comentario.task?.status || comentario.status || null;
+
+                    // 🔍 DEBUG: Ver campos del comentario al renderizar
+                    if (esTarea) {
+                      console.log(`=== RENDERIZANDO TAREA ${index + 1} ===`);
+                      console.log("Comentario completo:", comentario);
+                      console.log("Campos del comentario:", Object.keys(comentario));
+                      console.log("comentario.status:", comentario.status);
+                      console.log("comentario.estado:", comentario.estado);
+                      console.log("comentario.task:", comentario.task);
+                      console.log("comentario.task?.status:", comentario.task?.status);
+                      console.log("estadoTarea (usado):", estadoTarea);
+                      console.log("comentario.tipo:", comentario.tipo);
+                      console.log("comentario.action_type:", comentario.action_type);
+                    }
 
                     return (
                       <div
@@ -514,7 +572,7 @@ export default function FichaClienteComentarios() {
                         {/* Header del comentario */}
                         <div className="flex items-start justify-between mb-4">
                           <div className="flex-1">
-                            {/* Badges: Tipo y Concepto */}
+                            {/* Badges: Tipo, Concepto y Estado (si es tarea) */}
                             <div className="flex items-center gap-2 mb-3 flex-wrap">
                               {/* Etiqueta de tipo (Comentario/Tarea) */}
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
@@ -525,6 +583,28 @@ export default function FichaClienteComentarios() {
                                 <i className={`fas ${esTarea ? "fa-tasks" : "fa-comment"} text-[10px]`}></i>
                                 {esTarea ? "Tarea" : "Comentario"}
                               </span>
+                              {/* Badge de estado (solo para tareas) */}
+                              {esTarea && estadoTarea && (
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                                  estadoTarea === "completed" 
+                                    ? "bg-green-100 text-green-700 border border-green-200"
+                                    : estadoTarea === "pending"
+                                    ? "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                                    : estadoTarea === "in_progress"
+                                    ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                    : "bg-gray-100 text-gray-700 border border-gray-200"
+                                }`}>
+                                  <i className={`fas ${
+                                    estadoTarea === "completed" ? "fa-check-circle" :
+                                    estadoTarea === "pending" ? "fa-clock" :
+                                    estadoTarea === "in_progress" ? "fa-spinner" :
+                                    "fa-info-circle"
+                                  } text-[10px]`}></i>
+                                  {estadoTarea === "completed" ? "Completada" : 
+                                   estadoTarea === "pending" ? "Pendiente" : 
+                                   estadoTarea === "in_progress" ? "En progreso" : estadoTarea}
+                                </span>
+                              )}
                               {/* Badge de concepto */}
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-50 text-gray-700 rounded-full text-xs font-medium border border-gray-200">
                                 <i className="fas fa-tag text-[10px]"></i>
@@ -752,18 +832,20 @@ export default function FichaClienteComentarios() {
                                     <span>{usuario}</span>
                                   </div>
                                 )}
-                                {comentario.status && (
+                                {estadoTarea && (
                                   <div className="flex items-center gap-2">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      comentario.status === "completed" 
+                                      estadoTarea === "completed" 
                                         ? "bg-green-100 text-green-700"
-                                        : comentario.status === "pending"
+                                        : estadoTarea === "pending"
                                         ? "bg-yellow-100 text-yellow-700"
-                                        : "bg-blue-100 text-blue-700"
+                                        : estadoTarea === "in_progress"
+                                        ? "bg-blue-100 text-blue-700"
+                                        : "bg-gray-100 text-gray-700"
                                     }`}>
-                                      {comentario.status === "completed" ? "Completada" : 
-                                       comentario.status === "pending" ? "Pendiente" : 
-                                       comentario.status === "in_progress" ? "En progreso" : comentario.status}
+                                      {estadoTarea === "completed" ? "Completada" : 
+                                       estadoTarea === "pending" ? "Pendiente" : 
+                                       estadoTarea === "in_progress" ? "En progreso" : estadoTarea}
                                     </span>
                                   </div>
                                 )}

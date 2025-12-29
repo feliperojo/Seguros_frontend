@@ -5,6 +5,7 @@ import ObservacionesModal from '../components/ObservacionesModal';
 import ModalAdjuntos from '../components/ModalAdjuntos';
 import '../styles/RequerimientosAdmin.css';
 import { Helmet } from "react-helmet-async";
+import useToast from '../hooks/useToast';
 
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
@@ -22,6 +23,7 @@ const estados = {
 };
 
 export default function RequerimientosAdmin() {
+  const toast = useToast();
   const [requerimientos, setRequerimientos] = useState([]);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({});
@@ -75,8 +77,9 @@ const [reqActivo, setReqActivo] = useState(null);
       await apiRequest(`coberturas/${req.cobertura_id}/documentos/${req.id}`, 'PUT', formData);
       setEditingId(null);
       fetchRequerimientos();
+      toast.showSuccess('Requerimiento actualizado correctamente');
     } catch (err) {
-      alert('Error al actualizar el requerimiento.');
+      toast.showError('Error al actualizar el requerimiento.');
     }
   };
 
@@ -87,8 +90,9 @@ const [reqActivo, setReqActivo] = useState(null);
     try {
       await apiRequest(`documentos/${req.id}`, 'DELETE');
       fetchRequerimientos();
+      toast.showSuccess('Requerimiento eliminado correctamente');
     } catch (err) {
-      alert('Error al eliminar el requerimiento.');
+      toast.showError('Error al eliminar el requerimiento.');
     }
   };
 

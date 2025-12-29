@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Modal, Button } from "react-bootstrap";
 import { SUGGESTED_TAGS, AVAILABLE_COLORS, generateTagKey, validateTag } from "../utils/tagsCatalog";
+import useToast from "../hooks/useToast";
 
 /**
  * Componente reutilizable para gestionar etiquetas tipo "chips" con color (estilo Trello)
@@ -11,6 +12,7 @@ import { SUGGESTED_TAGS, AVAILABLE_COLORS, generateTagKey, validateTag } from ".
  * @param {String} className - Clases CSS adicionales
  */
 const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) => {
+  const toast = useToast();
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showMoreTags, setShowMoreTags] = useState(false);
@@ -132,7 +134,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     
     // Verificar que no exista ya
     if (allAvailableTags.some((t) => t.key === key)) {
-      alert("Ya existe una etiqueta con ese nombre");
+      toast.showError("Ya existe una etiqueta con ese nombre");
       return;
     }
     
@@ -143,7 +145,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     };
     
     if (!validateTag(newTag)) {
-      alert("Error al crear la etiqueta. Verifique los datos.");
+      toast.showError("Error al crear la etiqueta. Verifique los datos.");
       return;
     }
     

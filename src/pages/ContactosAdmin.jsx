@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import apiRequest from "../services/api";
 import { formatPhone334 } from "../utils/formatters";
+import useToast from "../hooks/useToast";
 
 // ⬇️ componentes ya existentes en tu proyecto
 import LanguageSelect from "../components/selects/LanguageSelect";
@@ -105,6 +106,7 @@ const formatearTelefonoCompleto = (cliente) => {
 /* ================ componente principal ================= */
 
 export default function ContactosAdmin() {
+  const toast = useToast();
   // ====== búsqueda/listado ======
   const [q, setQ] = useState("");
   const [loadingList, setLoadingList] = useState(false);
@@ -450,14 +452,14 @@ export default function ContactosAdmin() {
           await loadContact(nuevoContacto.id);
           
           // Limpiar búsqueda y recargar lista si es necesario
-          alert("Contacto creado exitosamente");
+          toast.showSuccess("Contacto creado exitosamente");
         } else {
           throw new Error("No se recibió el ID del contacto creado");
         }
       }
     } catch (e) {
       console.error("Error al guardar:", e);
-      alert(`Error al guardar: ${e.message || "Error desconocido"}`);
+      toast.showError(`Error al guardar: ${e.message || "Error desconocido"}`);
     } finally {
       setSaving(false);
     }

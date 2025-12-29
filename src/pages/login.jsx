@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
-import { toast, ToastContainer } from "react-toastify";
+import useToast from "../hooks/useToast";
 
 import "bootstrap/dist/css/bootstrap.min.css";
-import "react-toastify/dist/ReactToastify.css";
 import "../styles/Login.css"; // Estilos personalizados
 import logo from "../assets/tampa.jpg"; // Ruta del logo
 import { useAuth } from "../context/AuthContext"; // Importa el contexto de autenticación
@@ -12,6 +11,7 @@ import { useAuth } from "../context/AuthContext"; // Importa el contexto de aute
 const Login = () => {
   const navigate = useNavigate(); // Hook para redireccionar
   const { login } = useAuth(); // Hook para login
+  const toast = useToast(); // Hook para mostrar mensajes
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -38,14 +38,14 @@ const Login = () => {
       const result = await login(formData.email, formData.password);
 
       if (result.success) {
-        toast.success("Inicio de sesión exitoso");
+        toast.showSuccess("Inicio de sesión exitoso");
         navigate("/"); // Redirigir al Dashboard
       } else {
         // Mostrar el mensaje del backend directamente
         // No construir mensajes de negocio aquí
         const errorMessage = result.error || "Error al iniciar sesión";
         setError(errorMessage);
-        toast.error(errorMessage);
+        toast.showError(errorMessage);
       }
     } catch (err) {
       // Manejar errores de conexión
@@ -59,7 +59,7 @@ const Login = () => {
       }
       
       setError(errorMessage);
-      toast.error(errorMessage);
+      toast.showError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -147,17 +147,6 @@ const Login = () => {
           </button>
         </form>
       </div>
-      <ToastContainer
-        position="top-right"
-        autoClose={5000}
-        hideProgressBar={false}
-        newestOnTop={false}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-      />
     </div>
   );
 };
