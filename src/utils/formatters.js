@@ -120,3 +120,58 @@ export const normalizeDateForInput = (fecha) => {
   
   return "";
 };
+
+/**
+ * Formatea una fecha para mostrar en la interfaz
+ * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
+ * que pueden causar que se muestre un día menos
+ * 
+ * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
+ * @param {string} locale - Locale para formatear (default: "es-ES")
+ * @returns {string} Fecha formateada o "-" si no es válida
+ */
+export const formatDateForDisplay = (dateString, locale = "es-ES") => {
+  if (!dateString) return "-";
+  
+  try {
+    let date;
+    
+    // Si la fecha viene en formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss)
+    // parsearla manualmente como fecha local para evitar problemas de zona horaria
+    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(dateString)) {
+      // Extraer año, mes y día del string ISO
+      const [datePart] = dateString.split('T');
+      const [year, month, day] = datePart.split('-').map(Number);
+      
+      // Validar que los valores sean válidos
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        // Crear fecha como fecha local (sin conversión UTC)
+        date = new Date(year, month - 1, day);
+      } else {
+        return dateString;
+      }
+    } else if (dateString instanceof Date) {
+      // Si ya es un objeto Date, validar que sea válido
+      if (isNaN(dateString.getTime())) {
+        return "-";
+      }
+      date = dateString;
+    } else {
+      // Para otros formatos, intentar parsear con el constructor estándar
+      date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return dateString;
+      }
+    }
+    
+    // Formatear usando métodos locales para evitar problemas de zona horaria
+    return date.toLocaleDateString(locale, {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+  } catch {
+    // Si falla, devolver el string original o "-"
+    return typeof dateString === 'string' ? dateString : "-";
+  }
+};

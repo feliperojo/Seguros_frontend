@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Form, Button, Table, InputGroup, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../services/api";
-import { formatPhone334 } from "../utils/formatters";
+import { formatPhone334, formatDateForDisplay } from "../utils/formatters";
 
 const ClienteExistente = ({ onClienteSeleccionado }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -138,7 +138,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                     <td>{cliente.nombre_completo || `${cliente.nombre || ""} ${cliente.apellido || ""}`}</td>
                     <td>{cliente.estado_cliente || "-"}</td>
                     <td>{formatTelefonos(cliente)}</td>
-                    <td>{cliente.fecha_nacimiento ? new Date(cliente.fecha_nacimiento).toLocaleDateString() : "-"}</td>
+                    <td>{formatDateForDisplay(cliente.fecha_nacimiento)}</td>
                     <td>
                       <Button variant="success" size="sm" onClick={() => onClienteSeleccionado?.(cliente)}>
                         <i className="bi bi-plus-circle me-1"></i> Agregar
