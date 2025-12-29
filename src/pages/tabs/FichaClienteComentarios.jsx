@@ -236,6 +236,22 @@ export default function FichaClienteComentarios() {
     );
   };
 
+  // Obtener nombre del usuario asignado a la tarea
+  const getUsuarioAsignadoNombre = (item) => {
+    // El usuario asignado está en task.assigned_user.name
+    return (
+      item?.task?.assigned_user?.name ||
+      item?.task?.assign_to_user?.name ||
+      item?.task?.assigned_to_user?.name ||
+      item?.assign_to_user?.name ||
+      item?.assigned_to_user?.name ||
+      item?.task?.assign_to_user_name ||
+      item?.assign_to_user_name ||
+      item?.assigned_to_name ||
+      null
+    );
+  };
+
   // Obtener ID de la tarea desde el item
   const getTareaId = (item) => {
     return item?.task?.id || item?.task_id || item?.id || null;
@@ -534,8 +550,9 @@ export default function FichaClienteComentarios() {
                   {comentarios.map((comentario, index) => {
                     const fecha = comentario.created_at || comentario.createdAt || comentario.fecha;
                     const concepto = getConceptoNombre(comentario);
-                    const usuario = getUsuarioNombre(comentario);
+                    const usuarioCreador = getUsuarioNombre(comentario); // Usuario que creó el comentario/tarea
                     const clienteNombre = getClienteNombre(comentario);
+                    const usuarioAsignado = getUsuarioAsignadoNombre(comentario); // Usuario asignado a la tarea
                     const nota = comentario.note || comentario.nota || comentario.comment || "Sin contenido";
                     const tipoItem = getTipoItem(comentario);
                     const esTarea = tipoItem === "tarea";
@@ -555,6 +572,12 @@ export default function FichaClienteComentarios() {
                       console.log("estadoTarea (usado):", estadoTarea);
                       console.log("comentario.tipo:", comentario.tipo);
                       console.log("comentario.action_type:", comentario.action_type);
+                      console.log("--- USUARIOS ---");
+                      console.log("usuarioCreador:", usuarioCreador);
+                      console.log("usuarioAsignado:", usuarioAsignado);
+                      console.log("comentario.task?.assign_to_user:", comentario.task?.assign_to_user);
+                      console.log("comentario.assign_to_user_id:", comentario.assign_to_user_id);
+                      console.log("Campos de task:", comentario.task ? Object.keys(comentario.task) : "No hay task");
                     }
 
                     return (
@@ -612,18 +635,36 @@ export default function FichaClienteComentarios() {
                               </span>
                             </div>
                             
-                            {/* Información del usuario */}
-                            <div className="flex items-center gap-4 text-sm">
-                              <div className="flex items-center gap-2 text-gray-600">
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                                  <i className="fas fa-user text-gray-500 text-xs"></i>
+                            {/* Información de usuarios y cliente */}
+                            <div className="space-y-2">
+                              {/* Usuario creador */}
+                              <div className="flex items-center gap-2 text-sm text-gray-700">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-200 to-blue-300 flex items-center justify-center">
+                                  <i className="fas fa-user-plus text-blue-600 text-xs"></i>
                                 </div>
-                                <span className="font-medium">{usuario}</span>
+                                <span className="text-gray-500 font-medium">Creado por:</span>
+                                <span className="font-semibold text-gray-800">{usuarioCreador}</span>
                               </div>
+                              
+                              {/* Cliente */}
                               {clienteNombre && clienteNombre !== "Cliente" && (
-                                <div className="flex items-center gap-2 text-gray-500">
-                                  <i className="fas fa-user-circle text-xs"></i>
-                                  <span className="text-xs">{clienteNombre}</span>
+                                <div className="flex items-center gap-2 text-sm text-gray-700">
+                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-200 to-green-300 flex items-center justify-center">
+                                    <i className="fas fa-user-circle text-green-600 text-xs"></i>
+                                  </div>
+                                  <span className="text-gray-500 font-medium">Cliente:</span>
+                                  <span className="font-semibold text-gray-800">{clienteNombre}</span>
+                                </div>
+                              )}
+                              
+                              {/* Usuario asignado (solo para tareas) */}
+                              {esTarea && usuarioAsignado && (
+                                <div className="flex items-center gap-2 text-sm text-gray-700">
+                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-200 to-purple-300 flex items-center justify-center">
+                                    <i className="fas fa-user-check text-purple-600 text-xs"></i>
+                                  </div>
+                                  <span className="text-gray-500 font-medium">Asignado a:</span>
+                                  <span className="font-semibold text-gray-800">{usuarioAsignado}</span>
                                 </div>
                               )}
                             </div>
@@ -825,11 +866,11 @@ export default function FichaClienteComentarios() {
                                     <span>{new Date(comentario.due_date).toLocaleDateString("es-ES")}</span>
                                   </div>
                                 )}
-                                {comentario.assign_to_user_id && (
+                                {esTarea && usuarioAsignado && (
                                   <div className="flex items-center gap-2 text-gray-600">
-                                    <i className="fas fa-user-check text-blue-600"></i>
+                                    <i className="fas fa-user-check text-purple-600"></i>
                                     <span className="font-medium">Asignada a:</span>
-                                    <span>{usuario}</span>
+                                    <span>{usuarioAsignado}</span>
                                   </div>
                                 )}
                                 {estadoTarea && (

@@ -4,6 +4,22 @@ import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
 import BitacoraModal from "../components/Tareas/BitacoraModal";
 
+// Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
+const normalizeDate = (dateString) => {
+  if (!dateString) return "";
+  // Si ya está en formato YYYY-MM-DD, retornarlo tal cual
+  if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  // Si viene como ISO string o Date, extraer solo la parte de fecha
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 
 const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const [coberturas, setCoberturas] = useState([]);
@@ -24,8 +40,8 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
       const coberturasIniciales = coberturasActivas.map(c => ({
         ...c,
-        fecha_cancelacion: c.fecha_cancelacion || "",
-        fecha_retiro: c.fecha_retiro || "",
+        fecha_cancelacion: normalizeDate(c.fecha_cancelacion),
+        fecha_retiro: normalizeDate(c.fecha_retiro),
         nota_cancel: c.nota_cancel || "",
       }));
 
@@ -33,8 +49,8 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
       setFechasOriginales(
         coberturasIniciales.map(c => ({
           id: c.id,
-          fecha_cancelacion: c.fecha_cancelacion,
-          fecha_retiro: c.fecha_retiro
+          fecha_cancelacion: normalizeDate(c.fecha_cancelacion),
+          fecha_retiro: normalizeDate(c.fecha_retiro)
         }))
       );
 
@@ -108,8 +124,8 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
     try {
       for (const cobertura of coberturas) {
         const payload = {
-          fecha_cancelacion: cobertura.fecha_cancelacion || null,
-          fecha_retiro: cobertura.fecha_retiro || null,
+          fecha_cancelacion: cobertura.fecha_cancelacion ? normalizeDate(cobertura.fecha_cancelacion) : null,
+          fecha_retiro: cobertura.fecha_retiro ? normalizeDate(cobertura.fecha_retiro) : null,
           nota_cancel: cobertura.nota_cancel?.trim() || null,
           activo: cobertura.activo ?? false,
           vigente: cobertura.vigente ?? true,
