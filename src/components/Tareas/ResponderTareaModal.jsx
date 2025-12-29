@@ -25,6 +25,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   const [comentariosActualizados, setComentariosActualizados] = useState({});
   const [comentariosHistorialActualizados, setComentariosHistorialActualizados] = useState({});
 
+  // ✅ Estados para adjuntos de comentarios
+  const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
+  const [loadingAdjuntos, setLoadingAdjuntos] = useState({}); // { comentarioId: boolean }
+  const [archivoPreview, setArchivoPreview] = useState(null); // { adjunto, tipo }
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
+
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
   const comentariosDeEstaTarea = historial
@@ -101,6 +108,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         "POST",
         { comment: responseNote }
       );
+
+      // ✅ Si el comentario tiene adjuntos en la respuesta, guardarlos directamente
+      if (data?.comment?.id && data?.comment?.adjuntos) {
+        setAdjuntosComentarios((prev) => ({
+          ...prev,
+          [data.comment.id]: Array.isArray(data.comment.adjuntos) ? data.comment.adjuntos : [],
+        }));
+        console.log(`✅ Adjuntos guardados para comentario ${data.comment.id}:`, data.comment.adjuntos);
+      }
 
       const tareaActualizada = {
         ...tarea,
@@ -335,7 +351,161 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
     return "success";
   };
 
+  // ✅ Funciones helper para adjuntos
+  const esImagenAdjunto = (adj) => {
+    return adj.tipo_mime?.startsWith("image/") || 
+           /\.(jpg|jpeg|png|gif|webp)$/i.test(adj.nombre_original || "");
+  };
+
+  const esPDF = (adj) => {
+    return adj.tipo_mime === "application/pdf" || 
+           /\.pdf$/i.test(adj.nombre_original || "");
+  };
+
+  const esWord = (adj) => {
+    return adj.tipo_mime?.includes("word") || 
+           /\.(doc|docx)$/i.test(adj.nombre_original || "");
+  };
+
+  // ✅ Función para cargar adjuntos de un comentario
+  const cargarAdjuntosComentario = async (comentarioId, comentarioData = null) => {
+    if (!comentarioId || adjuntosComentarios[comentarioId]) return;
+
+    // Evitar cargar si ya se está cargando
+    if (loadingAdjuntos[comentarioId]) return;
+
+    setLoadingAdjuntos((prev) => ({ ...prev, [comentarioId]: true }));
+
+    try {
+      let data = [];
+      
+      // Primero verificar si el comentario ya tiene adjuntos en su estructura
+      if (comentarioData?.adjuntos && Array.isArray(comentarioData.adjuntos)) {
+        data = comentarioData.adjuntos;
+        console.log(`✅ Adjuntos encontrados en estructura del comentario ${comentarioId}:`, data.length);
+      } else {
+        // Si no, intentar cargar desde endpoint específico del comentario
+        try {
+          const response = await apiRequest(`tareas_operativas/comentarios/${comentarioId}/adjuntos`, "GET");
+          data = Array.isArray(response) ? response : response?.data || response?.adjuntos || [];
+          console.log(`✅ Adjuntos cargados desde endpoint para comentario ${comentarioId}:`, data.length);
+        } catch (endpointErr) {
+          // Si no existe el endpoint, dejar vacío
+          console.log(`ℹ️ No se encontraron adjuntos específicos para el comentario ${comentarioId}`);
+          data = [];
+        }
+      }
+
+      setAdjuntosComentarios((prev) => ({
+        ...prev,
+        [comentarioId]: data,
+      }));
+    } catch (err) {
+      console.error(`Error al cargar adjuntos del comentario ${comentarioId}:`, err);
+      setAdjuntosComentarios((prev) => ({
+        ...prev,
+        [comentarioId]: [],
+      }));
+    } finally {
+      setLoadingAdjuntos((prev) => ({ ...prev, [comentarioId]: false }));
+    }
+  };
+
+  // ✅ Función para abrir preview
+  const abrirPreview = (adjunto) => {
+    const esImg = esImagenAdjunto(adjunto);
+    const esPdf = esPDF(adjunto);
+    const esDoc = esWord(adjunto);
+    
+    setArchivoPreview({
+      adjunto,
+      tipo: esImg ? "imagen" : esPdf ? "pdf" : esDoc ? "word" : "otro"
+    });
+    setErrorCargaArchivo(false);
+    setShowPreviewModal(true);
+  };
+
+  // ✅ Componente para mostrar adjuntos de un comentario
+  const MostrarAdjuntosComentario = ({ comentarioId }) => {
+    const adjuntos = adjuntosComentarios[comentarioId] || [];
+    const cargando = loadingAdjuntos[comentarioId];
+
+    if (cargando) {
+      return (
+        <div className="d-flex justify-content-center p-2">
+          <Spinner size="sm" />
+        </div>
+      );
+    }
+
+    if (adjuntos.length === 0) return null;
+
+    return (
+      <div className="d-flex flex-wrap gap-2 mt-2">
+        {adjuntos.map((adjunto) => {
+          const esImg = esImagenAdjunto(adjunto);
+          const esPdf = esPDF(adjunto);
+          const esDoc = esWord(adjunto);
+
+          return (
+            <div
+              key={adjunto.id}
+              className="position-relative border rounded"
+              style={{
+                width: "100px",
+                height: "100px",
+                cursor: "pointer",
+                overflow: "hidden",
+                backgroundColor: "#f8f9fa"
+              }}
+              onClick={() => abrirPreview(adjunto)}
+              title="Haz clic para previsualizar"
+            >
+              {esImg ? (
+                <img
+                  src={adjunto.url}
+                  alt={adjunto.nombre_original || "Imagen"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover"
+                  }}
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                    e.target.parentElement.innerHTML = '<i class="fas fa-image text-muted" style="font-size: 2rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></i>';
+                  }}
+                />
+              ) : esPdf ? (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file-pdf text-danger" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "PDF"}
+                  </small>
+                </div>
+              ) : esDoc ? (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file-word text-primary" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "Word"}
+                  </small>
+                </div>
+              ) : (
+                <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                  <i className="fas fa-file text-secondary" style={{ fontSize: "2rem" }}></i>
+                  <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                    {adjunto.nombre_original || "Archivo"}
+                  </small>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
+    <>
     <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
       <Modal.Header closeButton>
         <Modal.Title>
@@ -345,7 +515,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       <Modal.Body>
         <Row>
           {/* ✅ Columna izquierda: Tarea */}
-          <h6 className="mb-3">Detalles de la Tarea agosto</h6>
+          <h6 className="mb-3">Detalles de la Tarea</h6>
           <Col md={6} style={{ borderRight: "1px solid #e9ecef" }}>
             <div
               className="mb-3 p-3 rounded shadow-sm"
@@ -380,23 +550,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                   variant="outline-primary"
                   size="sm"
                   onClick={() =>
-                    window.open(`/clientes/${tarea.log.cliente.id}/detalle`, "_blank")
+                    window.open(`/clientes/${tarea.log.cliente.id}/ficha`, "_blank")
                   }
                 >
-                  Ver Detalles del Cliente
+                  Ver Ficha del Cliente
                 </Button>
-
-                <Button
-                      variant="outline-secondary"
-                      size="sm"
-                      onClick={() => {
-                        const nombreCliente = encodeURIComponent(tarea.log.cliente.nombre_completo);
-                        window.open(`/Grupofamiliar/lista?search=${nombreCliente}`, "_blank");
-                      }}
-                    >
-                      Ver Grupos Familiares
-                    </Button>
-
               </div>
 
               {/* ✅ Info Primer Contacto SOLO si es prospecto */}
@@ -558,6 +716,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
             <small className="text-muted">
               {new Date(c.fecha).toLocaleString()}
             </small>
+            {/* ✅ Mostrar adjuntos del comentario */}
+            {(() => {
+              if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                // Cargar adjuntos usando los datos del comentario
+                setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+              }
+              return <MostrarAdjuntosComentario comentarioId={c.id} />;
+            })()}
             <div className="mt-1">
               <Button
                 size="sm"
@@ -738,6 +904,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                                   <small className="text-muted">
                                     {c.fecha ? new Date(c.fecha).toLocaleString() : "Fecha inválida"}
                                   </small>
+                                  {/* ✅ Mostrar adjuntos del comentario del historial */}
+                                  {(() => {
+                                    if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                                      // Cargar adjuntos usando los datos del comentario
+                                      setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+                                    }
+                                    return <MostrarAdjuntosComentario comentarioId={c.id} />;
+                                  })()}
                                   <div className="mt-1">
                                     <Button
                                       size="sm"
@@ -786,6 +960,116 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         )}
       </Modal.Footer>
     </Modal>
+
+    {/* ✅ Modal de preview de archivos */}
+    {archivoPreview && (
+      <Modal 
+        show={showPreviewModal} 
+        onHide={() => {
+          setShowPreviewModal(false);
+          setArchivoPreview(null);
+          setErrorCargaArchivo(false);
+        }} 
+        size="lg" 
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {archivoPreview.tipo === "imagen" ? (
+              <i className="fas fa-image me-2"></i>
+            ) : archivoPreview.tipo === "pdf" ? (
+              <i className="fas fa-file-pdf me-2 text-danger"></i>
+            ) : (
+              <i className="fas fa-file-word me-2 text-primary"></i>
+            )}
+            {archivoPreview.adjunto.nombre_original || "Vista previa"}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {archivoPreview.tipo === "imagen" && (
+            <div className="text-center">
+              {errorCargaArchivo ? (
+                <div className="p-5">
+                  <i className="fas fa-exclamation-triangle text-warning" style={{ fontSize: "3rem" }}></i>
+                  <h5 className="mt-3">No se pudo cargar la imagen</h5>
+                  <p className="text-muted">La imagen puede requerir autenticación o no estar disponible.</p>
+                </div>
+              ) : (
+                <img
+                  src={archivoPreview.adjunto.url}
+                  alt={archivoPreview.adjunto.nombre_original || "Imagen"}
+                  className="img-fluid"
+                  style={{ maxHeight: "80vh", maxWidth: "100%", objectFit: "contain" }}
+                  onError={() => {
+                    console.error("Error al cargar imagen");
+                    setErrorCargaArchivo(true);
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {archivoPreview.tipo === "pdf" && (
+            <div style={{ height: "80vh", width: "100%" }}>
+              {errorCargaArchivo ? (
+                <div className="d-flex flex-column align-items-center justify-content-center p-5" style={{ minHeight: "400px" }}>
+                  <i className="fas fa-file-pdf text-danger" style={{ fontSize: "5rem" }}></i>
+                  <h5 className="mt-3 mb-2">No se puede previsualizar el PDF</h5>
+                  <p className="text-muted">El PDF puede requerir autenticación o no estar disponible para previsualización.</p>
+                  <p className="text-muted small">Por favor, descárgalo o ábrelo en una nueva pestaña para verlo.</p>
+                </div>
+              ) : (
+                <iframe
+                  src={`${archivoPreview.adjunto.url}#toolbar=0`}
+                  title={archivoPreview.adjunto.nombre_original || "PDF"}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    border: "none"
+                  }}
+                  onError={() => {
+                    console.error("Error al cargar PDF en iframe");
+                    setErrorCargaArchivo(true);
+                  }}
+                />
+              )}
+            </div>
+          )}
+          {(archivoPreview.tipo === "word" || archivoPreview.tipo === "otro") && (
+            <div className="d-flex flex-column align-items-center justify-content-center p-5" style={{ minHeight: "400px" }}>
+              <i className={`fas ${archivoPreview.tipo === "word" ? "fa-file-word text-primary" : "fa-file text-secondary"}`} style={{ fontSize: "5rem" }}></i>
+              <h5 className="mt-3 mb-2">
+                {archivoPreview.tipo === "word" ? "Documento Word" : "Archivo"}
+              </h5>
+              <p className="text-muted">Este tipo de archivo no se puede previsualizar en el navegador.</p>
+              <Button
+                variant="primary"
+                onClick={() => window.open(archivoPreview.adjunto.url, "_blank")}
+              >
+                <i className="fas fa-download me-2"></i>
+                Descargar archivo
+              </Button>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => {
+            setShowPreviewModal(false);
+            setArchivoPreview(null);
+            setErrorCargaArchivo(false);
+          }}>
+            Cerrar
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={() => window.open(archivoPreview.adjunto.url, "_blank")}
+          >
+            <i className="fas fa-external-link-alt me-2"></i>
+            Abrir en nueva pestaña
+          </Button>
+        </Modal.Footer>
+      </Modal>
+    )}
+    </>
   );
 };
 
