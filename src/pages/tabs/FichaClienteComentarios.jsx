@@ -3,6 +3,7 @@ import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
+import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -15,6 +16,7 @@ export default function FichaClienteComentarios() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [showTareaModal, setShowTareaModal] = useState(false);
   const [comentariosTareas, setComentariosTareas] = useState({}); // { taskId: [comentarios] }
   const [loadingComentariosTareas, setLoadingComentariosTareas] = useState({}); // { taskId: true/false }
   const [tareasExpandidas, setTareasExpandidas] = useState({}); // { taskId: true/false }
@@ -403,52 +405,61 @@ export default function FichaClienteComentarios() {
     });
   }, []);
 
-  const handleComentarioCreado = () => {
-    // Recargar comentarios después de crear uno nuevo
-    if (grupoFamiliarId) {
-      setLoading(true);
-      // Limpiar cache de comentarios de tareas y adjuntos para forzar recarga
-      setComentariosTareas({});
-      setAdjuntos({});
-      setArchivosExpandidos({});
-      apiRequest(
-        `bitacora_operativa?grupo_familiar_id=${grupoFamiliarId}&per_page=100`,
-        "GET"
-      )
-        .then((response) => {
-          const data = response?.data || response || [];
-          const lista = Array.isArray(data) ? data : [];
-          const itemsFiltrados = lista.filter((item) => {
-            const tipoItem = getTipoItem(item);
-            const esComentarioOTarea = tipoItem === "comentario" || tipoItem === "tarea";
-            
-            const itemGrupoId = item.grupo_familiar_id || item.grupo_familiar?.id;
-            const perteneceAlGrupo = !itemGrupoId || Number(itemGrupoId) === Number(grupoFamiliarId);
-            
-            return esComentarioOTarea && perteneceAlGrupo;
-          });
-          const itemsOrdenados = itemsFiltrados.sort((a, b) => {
-            const fechaA = new Date(a.created_at || a.createdAt || a.fecha || 0);
-            const fechaB = new Date(b.created_at || b.createdAt || b.fecha || 0);
-            return fechaB - fechaA;
-          });
-          setComentarios(itemsOrdenados);
+  // Función para recargar comentarios y tareas
+  const recargarComentarios = useCallback(() => {
+    if (!grupoFamiliarId) return;
 
-          // Cargar adjuntos de cada item
-          itemsOrdenados.forEach((item) => {
-            const logId = item.id || item.log?.id;
-            if (logId) {
-              cargarAdjuntos(logId);
-            }
-          });
-        })
-        .catch((err) => {
-          console.error("Error al recargar comentarios:", err);
-        })
-        .finally(() => {
-          setLoading(false);
+    setLoading(true);
+    // Limpiar cache de comentarios de tareas y adjuntos para forzar recarga
+    setComentariosTareas({});
+    setAdjuntos({});
+    setArchivosExpandidos({});
+    
+    apiRequest(
+      `bitacora_operativa?grupo_familiar_id=${grupoFamiliarId}&per_page=100`,
+      "GET"
+    )
+      .then((response) => {
+        const data = response?.data || response || [];
+        const lista = Array.isArray(data) ? data : [];
+        const itemsFiltrados = lista.filter((item) => {
+          const tipoItem = getTipoItem(item);
+          const esComentarioOTarea = tipoItem === "comentario" || tipoItem === "tarea";
+          
+          const itemGrupoId = item.grupo_familiar_id || item.grupo_familiar?.id;
+          const perteneceAlGrupo = !itemGrupoId || Number(itemGrupoId) === Number(grupoFamiliarId);
+          
+          return esComentarioOTarea && perteneceAlGrupo;
         });
-    }
+        const itemsOrdenados = itemsFiltrados.sort((a, b) => {
+          const fechaA = new Date(a.created_at || a.createdAt || a.fecha || 0);
+          const fechaB = new Date(b.created_at || b.createdAt || b.fecha || 0);
+          return fechaB - fechaA;
+        });
+        setComentarios(itemsOrdenados);
+
+        // Cargar adjuntos de cada item
+        itemsOrdenados.forEach((item) => {
+          const logId = item.id || item.log?.id;
+          if (logId) {
+            cargarAdjuntos(logId);
+          }
+        });
+      })
+      .catch((err) => {
+        console.error("Error al recargar comentarios:", err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [grupoFamiliarId, cargarAdjuntos]);
+
+  const handleComentarioCreado = () => {
+    recargarComentarios();
+  };
+
+  const handleTareaCreada = () => {
+    recargarComentarios();
   };
 
   if (!cliente) {
@@ -478,13 +489,22 @@ export default function FichaClienteComentarios() {
                 <p className="text-sm text-gray-500 m-0 mt-0.5">Historial de comentarios y tareas del grupo familiar</p>
               </div>
             </div>
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium text-sm shadow-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
-            >
-              <i className="fas fa-plus text-xs"></i>
-              <span>Nuevo Comentario</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium text-sm shadow-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+              >
+                <i className="fas fa-comment text-xs"></i>
+                <span>Nuevo Comentario</span>
+              </button>
+              <button
+                onClick={() => setShowTareaModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-slate-600 to-slate-700 text-white rounded-lg font-medium text-sm shadow-sm hover:from-slate-700 hover:to-slate-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+              >
+                <i className="fas fa-tasks text-xs"></i>
+                <span>Nueva Tarea</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -537,13 +557,22 @@ export default function FichaClienteComentarios() {
                   <p className="text-gray-500 text-sm mb-6 text-center max-w-sm">
                     Comienza a agregar comentarios o tareas para este grupo familiar y mantén un registro de las interacciones.
                   </p>
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
-                  >
-                    <i className="fas fa-plus text-xs"></i>
-                    <span>Agregar primer comentario</span>
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setShowModal(true)}
+                      className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+                    >
+                      <i className="fas fa-comment text-xs"></i>
+                      <span>Agregar Comentario</span>
+                    </button>
+                    <button
+                      onClick={() => setShowTareaModal(true)}
+                      className="px-5 py-2.5 bg-slate-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-slate-700 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+                    >
+                      <i className="fas fa-tasks text-xs"></i>
+                      <span>Agregar Tarea</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -985,6 +1014,15 @@ export default function FichaClienteComentarios() {
         show={showModal}
         onHide={() => setShowModal(false)}
         onCreated={handleComentarioCreado}
+        grupoFamiliarId={grupoFamiliarId}
+        clienteId={toValidId(clienteId)}
+      />
+
+      {/* Modal para agregar tarea */}
+      <NuevaTareaModal
+        show={showTareaModal}
+        onHide={() => setShowTareaModal(false)}
+        onCreated={handleTareaCreada}
         grupoFamiliarId={grupoFamiliarId}
         clienteId={toValidId(clienteId)}
       />

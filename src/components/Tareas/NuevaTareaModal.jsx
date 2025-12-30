@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
@@ -33,6 +33,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [loadingCliente, setLoadingCliente] = useState(false);
   const [archivos, setArchivos] = useState([]);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  const [grabando, setGrabando] = useState(false);
+  const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
+  const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
+  const grabandoRef = useRef(false);
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
     setFormData((prev) => {
@@ -70,6 +74,95 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       };
     });
   }, [grupoFamiliarId, clienteId]);
+
+  // Sincronizar ref con estado
+  useEffect(() => {
+    grabandoRef.current = grabando;
+  }, [grabando]);
+
+  // Verificar disponibilidad del reconocimiento de voz
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setReconocimientoDisponible(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+
+      recognition.onresult = (event) => {
+        let textoTranscrito = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            textoTranscrito += event.results[i][0].transcript;
+          }
+        }
+        
+        if (textoTranscrito) {
+          setFormData((prev) => ({
+            ...prev,
+            note: prev.note + (prev.note && !prev.note.endsWith(' ') ? ' ' : '') + textoTranscrito + ' ',
+          }));
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Error en reconocimiento de voz:', event.error);
+        if (event.error === 'no-speech') {
+          // No hacer nada, es normal cuando no hay habla
+          return;
+        } else if (event.error === 'audio-capture') {
+          alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          setGrabando(false);
+        } else if (event.error === 'not-allowed') {
+          alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          setGrabando(false);
+        } else if (event.error !== 'aborted') {
+          setGrabando(false);
+        }
+      };
+
+      recognition.onend = () => {
+        // Solo reiniciar si aún debería estar grabando
+        if (grabandoRef.current) {
+          try {
+            setTimeout(() => {
+              if (grabandoRef.current) {
+                recognition.start();
+              }
+            }, 100);
+          } catch (err) {
+            setGrabando(false);
+          }
+        }
+      };
+
+      setReconocimientoVoz(recognition);
+
+      return () => {
+        try {
+          recognition.stop();
+        } catch (err) {
+          // Ignorar errores al detener
+        }
+        setGrabando(false);
+      };
+    } else {
+      setReconocimientoDisponible(false);
+    }
+  }, []);
+
+  // Detener grabación cuando se cierra el modal
+  useEffect(() => {
+    if (!show && reconocimientoVoz && grabando) {
+      try {
+        reconocimientoVoz.stop();
+        setGrabando(false);
+      } catch (err) {
+        // Ignorar errores
+      }
+    }
+  }, [show, reconocimientoVoz, grabando]);
 
   // Cargar datos iniciales y resetear formulario cuando se abre el modal
   useEffect(() => {
@@ -344,6 +437,41 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     e.target.value = "";
   };
 
+  const iniciarDictado = () => {
+    if (!reconocimientoVoz) {
+      alert('El reconocimiento de voz no está disponible en tu navegador.');
+      return;
+    }
+
+    try {
+      reconocimientoVoz.start();
+      setGrabando(true);
+    } catch (err) {
+      console.error('Error al iniciar reconocimiento:', err);
+      alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      setGrabando(false);
+    }
+  };
+
+  const detenerDictado = () => {
+    if (reconocimientoVoz) {
+      try {
+        reconocimientoVoz.stop();
+      } catch (err) {
+        console.error('Error al detener reconocimiento:', err);
+      }
+    }
+    setGrabando(false);
+  };
+
+  const toggleDictado = () => {
+    if (grabando) {
+      detenerDictado();
+    } else {
+      iniciarDictado();
+    }
+  };
+
   const validarCampos = () => {
     const nuevosErrores = {};
     
@@ -550,19 +678,115 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         )}
 
         <Form.Group className="mb-3">
-          <Form.Label>Descripción de la Tarea</Form.Label>
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <Form.Label className="mb-0">Descripción de la Tarea</Form.Label>
+            {reconocimientoDisponible && (
+              <>
+                <style>{`
+                  @keyframes microphone-pulse {
+                    0%, 100% {
+                      transform: scale(1);
+                      opacity: 1;
+                    }
+                    50% {
+                      transform: scale(1.15);
+                      opacity: 0.85;
+                    }
+                  }
+                  .microphone-recording {
+                    animation: microphone-pulse 1s ease-in-out infinite;
+                    display: inline-block;
+                  }
+                  .recording-waves {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 2px;
+                    margin-left: 4px;
+                  }
+                  .recording-waves span {
+                    width: 3px;
+                    height: 12px;
+                    background-color: currentColor;
+                    border-radius: 2px;
+                    animation: wave 1.2s ease-in-out infinite;
+                  }
+                  .recording-waves span:nth-child(1) {
+                    animation-delay: 0s;
+                  }
+                  .recording-waves span:nth-child(2) {
+                    animation-delay: 0.2s;
+                  }
+                  .recording-waves span:nth-child(3) {
+                    animation-delay: 0.4s;
+                  }
+                  @keyframes wave {
+                    0%, 100% {
+                      transform: scaleY(0.5);
+                      opacity: 0.7;
+                    }
+                    50% {
+                      transform: scaleY(1);
+                      opacity: 1;
+                    }
+                  }
+                `}</style>
+                <Button
+                  type="button"
+                  variant={grabando ? "danger" : "outline-primary"}
+                  size="sm"
+                  onClick={toggleDictado}
+                  className="d-flex align-items-center gap-2"
+                >
+                  {grabando ? (
+                    <>
+                      <span className="d-flex align-items-center">
+                        <i className={`fas fa-microphone microphone-recording`}></i>
+                        <span className="recording-waves">
+                          <span></span>
+                          <span></span>
+                          <span></span>
+                        </span>
+                      </span>
+                      <span>Detener dictado</span>
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-microphone"></i>
+                      <span>Dictar</span>
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
+          {grabando && (
+            <div className="alert alert-info d-flex align-items-center gap-2 mb-2 py-2" role="alert">
+              <span className="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+              <small className="mb-0">
+                <strong>Escuchando...</strong> Habla ahora. El texto se agregará automáticamente a la descripción.
+              </small>
+            </div>
+          )}
           <Form.Control
             as="textarea"
             rows={4}
             name="note"
             value={formData.note}
             onChange={handleChange}
-            placeholder="Describa los detalles y objetivos de esta tarea..."
+            placeholder="Describa los detalles y objetivos de esta tarea o use el botón 'Dictar' para transcribir por voz..."
             isInvalid={!!errors.note}
           />
           <Form.Control.Feedback type="invalid">
             {errors.note}
           </Form.Control.Feedback>
+          {!reconocimientoDisponible && (
+            <Form.Text className="text-muted">
+              <small>
+                <i className="fas fa-info-circle me-1"></i>
+                El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
+              </small>
+            </Form.Text>
+          )}
         </Form.Group>
 
         <Form.Group className="mb-3">
