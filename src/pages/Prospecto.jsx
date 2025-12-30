@@ -401,6 +401,7 @@ useEffect(() => {
         // - fecha_nacimiento, genero, idioma, pais_origen
         // - ingreso_anual, nota
         // - direccion, calle, apto, ciudad, estado, codigo_postal, condado, dir_correspondencia
+        // - telefonos, email
         const clientePayload = {
           id: Number(miembro.cliente_id),
           primer_nombre: pick("primer_nombre"),
@@ -421,11 +422,17 @@ useEffect(() => {
           codigo_postal: pick("codigo_postal"),
           condado: pick("condado"),
           dir_correspondencia: pick("dir_correspondencia"),
+          telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
+          email: pick("email"),
         };
 
         // Solo incluir campos que tienen valor (no null/undefined)
+        // Para telefonos, siempre incluirlo aunque sea array vacío
         const payloadFinal = Object.fromEntries(
-          Object.entries(clientePayload).filter(([_, v]) => v !== null && v !== undefined)
+          Object.entries(clientePayload).filter(([k, v]) => {
+            if (k === "telefonos") return true; // Siempre incluir telefonos (puede ser array vacío)
+            return v !== null && v !== undefined;
+          })
         );
 
         // Actualizar el cliente en el servidor

@@ -128,6 +128,8 @@ const mapClienteForSave = (m) => {
       codigo_postal: pick("codigo_postal"),
       condado: pick("condado"),
       dir_correspondencia: pick("dir_correspondencia"),
+      telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
+      email: pick("email"),
       status: pick("status"),
       tipo_ingreso: pick("tipo_ingreso"),
       actividad_economica: pick("actividad_economica"),
@@ -140,9 +142,14 @@ const mapClienteForSave = (m) => {
       ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
     };
     // Solo incluir campos que tienen valor (no null/undefined)
-    return Object.fromEntries(
-      Object.entries(payload).filter(([_, v]) => v !== null && v !== undefined)
+    // Para telefonos, siempre incluirlo aunque sea array vacío
+    const filtered = Object.fromEntries(
+      Object.entries(payload).filter(([k, v]) => {
+        if (k === "telefonos") return true; // Siempre incluir telefonos (puede ser array vacío)
+        return v !== null && v !== undefined;
+      })
     );
+    return filtered;
   }
 
   // Si es un cliente NUEVO, incluir todos los campos necesarios
