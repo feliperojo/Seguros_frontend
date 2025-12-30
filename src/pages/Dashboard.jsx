@@ -301,17 +301,17 @@ const handleOpenViewModal = (cliente) => {
             </Button>
           </Col>
           <Col lg={3} md={6}>
-            <Button as={Link} to="/grupofamiliar/crear" variant="primary" className="quick-action-btn">
+            <Button as={Link} to="/grupofamiliar/prospecto" variant="primary" className="quick-action-btn">
               <FaPlus /> Nuevo Grupo Familiar
             </Button>
           </Col>
           <Col lg={3} md={6}>
-            <Button as={Link} to="/" variant="outline-primary" className="quick-action-btn">
+            <Button disabled variant="outline-secondary" className="quick-action-btn">
               <FaChartLine /> Ver Informes
             </Button>
           </Col>
           <Col lg={3} md={6}>
-            <Button as={Link} to="/Grupofamiliar/lista" variant="outline-primary" className="quick-action-btn">
+            <Button disabled variant="outline-secondary" className="quick-action-btn">
               <FaCalendarAlt /> Ver Cancelaciones
             </Button>
           </Col>

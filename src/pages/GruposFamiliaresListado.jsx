@@ -4,7 +4,7 @@ import {
   Form, InputGroup, Dropdown, Modal
 } from "react-bootstrap";
 import {
-  FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
+  FaSearch, FaEdit, FaEye, FaTrashAlt, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
@@ -346,24 +346,19 @@ useEffect(() => {
               <title>Vantun/List Grupo Familiar</title>
             </Helmet>
       
+      {/* Título y descripción */}
+      <div className="mb-4">
+        <h3 className="mb-2 fw-bold text-dark">Grupos Familiares</h3>
+        <p className="text-muted mb-0" style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
+          Gestión y administración de grupos familiares asegurados en su cartera de seguros de vida.
+        </p>
+      </div>
+
       {/* Barra de resumen de estados */}
       <ResumenGruposEstados 
         onEstadoClick={handleEstadoClickFromResumen}
         estadoSeleccionado={selectedStatus}
       />
-
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h4 className="mb-0">
-          Lista de Grupos Familiares
-        </h4>
-        <Button
-          variant="primary"
-          onClick={() => navigate("/Grupofamiliar/crear")}
-        >
-          <FaUserPlus className="me-2" />
-          Nuevo Grupo Familiar
-        </Button>
-      </div>
 
       <Card className="shadow-sm mb-4">
         <Card.Body>
@@ -427,7 +422,6 @@ useEffect(() => {
                         <th>P. TAXES</th>
                         <th>ASEGURADORA</th>
                         <th>RESPONSABLE</th>
-                        <th>P. CONTACTO</th>
                         <th>ESTADO</th>
                         <th className="text-center">ACCIONES</th>
                       </tr>
@@ -465,8 +459,6 @@ useEffect(() => {
                               {grupo.responsable || "Sin responsable"}
                             </Badge>
                           </td>
-
-                          <td>{grupo.persona_contacto || "-"}</td>
                           <td>
                                   {grupo.id ? (
                                     <Badge
