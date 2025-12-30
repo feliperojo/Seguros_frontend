@@ -4,6 +4,7 @@ import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
 import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
+import { formatDateForDisplay } from "../../utils/formatters";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -192,14 +193,18 @@ export default function FichaClienteComentarios() {
       if (diffDays === 1) return "Ayer";
       if (diffDays < 7) return `Hace ${diffDays} días`;
       
-      // Formato completo para fechas más antiguas
-      return d.toLocaleString("es-ES", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Formato completo para fechas más antiguas en formato mm/dd/yyyy hh:mm AM/PM
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const hoursStr = String(hours).padStart(2, "0");
+      
+      return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
     } catch {
       return fecha;
     }
@@ -885,14 +890,14 @@ export default function FichaClienteComentarios() {
                                   <div className="flex items-center gap-2 text-gray-600">
                                     <i className="fas fa-calendar-check text-green-600"></i>
                                     <span className="font-medium">Programada:</span>
-                                    <span>{new Date(comentario.scheduled_date).toLocaleDateString("es-ES")}</span>
+                                    <span>{formatDateForDisplay(comentario.scheduled_date)}</span>
                                   </div>
                                 )}
                                 {comentario.due_date && (
                                   <div className="flex items-center gap-2 text-gray-600">
                                     <i className="fas fa-calendar-times text-red-600"></i>
                                     <span className="font-medium">Vence:</span>
-                                    <span>{new Date(comentario.due_date).toLocaleDateString("es-ES")}</span>
+                                    <span>{formatDateForDisplay(comentario.due_date)}</span>
                                   </div>
                                 )}
                                 {esTarea && usuarioAsignado && (

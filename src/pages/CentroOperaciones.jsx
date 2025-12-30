@@ -6,6 +6,7 @@ import NuevaTareaModal from "../components/Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import DetalleBitacoraModal from "../components/Tareas/DetalleBitacoraModal";
 import HistorialClienteModal from "../components/Tareas/HistorialClienteModal";
+import { formatDateTimeForDisplay } from "../utils/formatters";
 
 
 const CentroOperaciones = () => {
@@ -513,7 +514,7 @@ const CentroOperaciones = () => {
               <tbody>
                 {(logsData.data || []).map((log) => (
                   <tr key={log.id}>
-                    <td>{new Date(log.created_at).toLocaleString()}</td>
+                    <td>{formatDateTimeForDisplay(log.created_at)}</td>
                     <td>{log.user?.name}</td>
                     <td>
   {log.cliente ? (
@@ -587,7 +588,7 @@ const CentroOperaciones = () => {
                   .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
                   .map((t) => (
                     <tr key={t.id}>
-                      <td>{new Date(t.created_at).toLocaleString()}</td>
+                      <td>{formatDateTimeForDisplay(t.created_at)}</td>
 
                       <td>
   {t.log.cliente ? (

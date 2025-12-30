@@ -17,8 +17,15 @@ const parseLocalYMD = (s) => {
   const [_, y, mo, d] = m;
   return new Date(Number(y), Number(mo) - 1, Number(d));
 };
-const formatDate = (iso) =>
-  iso ? (isNaN(parseLocalYMD(iso)) ? iso : parseLocalYMD(iso).toLocaleDateString()) : "—";
+const formatDate = (iso) => {
+  if (!iso) return "—";
+  const date = parseLocalYMD(iso);
+  if (isNaN(date)) return iso;
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const year = date.getFullYear();
+  return `${month}/${day}/${year}`;
+};
 const calcEdad = (dateStr) => {
   const birth = parseLocalYMD(dateStr);
   if (!birth || isNaN(birth)) return null;

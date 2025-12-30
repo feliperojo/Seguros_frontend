@@ -13,6 +13,7 @@ import {
 } from "react-bootstrap";
 import apiRequest from "../services/api";
 import DetalleModalAuditori from "./DetalleModalAuditori"; // Modal actualizado para mostrar todo el historial
+import { formatDateTimeForDisplay } from "../utils/formatters";
 
 const Auditoria = () => {
   const [modelo, setModelo] = useState("GrupoFamiliar");
@@ -96,7 +97,7 @@ const Auditoria = () => {
             <tbody>
               {historial.map((item) => (
                 <tr key={item.id}>
-                  <td>{new Date(item.created_at).toLocaleString()}</td>
+                  <td>{formatDateTimeForDisplay(item.created_at)}</td>
                   <td>{item.modelo_afectado}</td>
                   <td>{item.modelo_id}</td>
                   <td>

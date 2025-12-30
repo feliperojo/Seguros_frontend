@@ -10,6 +10,7 @@ import {
   Badge,
 } from "react-bootstrap";
 import apiRequest from "../../services/api";
+import { formatDateTimeForDisplay } from "../../utils/formatters";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -707,11 +708,16 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
-    return new Date(fecha).toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    try {
+      const date = new Date(fecha);
+      if (isNaN(date.getTime())) return "N/A";
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${month}/${day}/${year}`;
+    } catch {
+      return "N/A";
+    }
   };
 
   const getBadgeColor = (fecha) => {
@@ -1119,21 +1125,23 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                   <Row className="mb-2">
                     <Col>
                       <Form.Group>
-                        <Form.Label>📅 Programada:</Form.Label>
+                        <Form.Label>📅 Programada: <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
                         <Form.Control
                           type="date"
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
+                          title="Formato: mm/dd/yyyy"
                         />
                       </Form.Group>
                     </Col>
                     <Col>
                       <Form.Group>
-                        <Form.Label>⏳ Vencimiento:</Form.Label>
+                        <Form.Label>⏳ Vencimiento: <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
                         <Form.Control
                           type="date"
                           value={dueDate}
                           onChange={(e) => setDueDate(e.target.value)}
+                          title="Formato: mm/dd/yyyy"
                         />
                       </Form.Group>
                     </Col>
@@ -1376,7 +1384,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           <>
             <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.comment}</div>
             <small className="text-muted">
-              {new Date(c.fecha).toLocaleString()}
+              {formatDateTimeForDisplay(c.fecha)}
             </small>
             {/* ✅ Mostrar adjuntos del comentario */}
             {(() => {
@@ -1674,7 +1682,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                         </p>
 
                     <small className="text-muted">
-                      {new Date(h.fecha).toLocaleString()} | {h.usuario}
+                      {formatDateTimeForDisplay(h.fecha)} | {h.usuario}
                       {h.asignado_a && ` | Asignado a: ${h.asignado_a}`}
                     </small>
 
@@ -1932,7 +1940,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                                   </span>
                                   <br />
                                   <small className="text-muted">
-                                    {c.fecha ? new Date(c.fecha).toLocaleString() : "Fecha inválida"}
+                                    {c.fecha ? formatDateTimeForDisplay(c.fecha) : "Fecha inválida"}
                                   </small>
                                   {/* ✅ Mostrar adjuntos del comentario del historial */}
                                   {(() => {

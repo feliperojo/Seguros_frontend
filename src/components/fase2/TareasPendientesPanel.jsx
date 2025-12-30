@@ -43,11 +43,13 @@ export default function TareasPendientesPanel({
   const logIdsCargandoRef = useRef(new Set());
 
   const formatDate = (v) => {
-    if (!v) return "mm/dd/aaaa";
+    if (!v) return "mm/dd/yyyy";
     const d = v instanceof Date ? v : new Date(v);
-    return Number.isNaN(d.getTime())
-      ? "mm/dd/aaaa"
-      : d.toLocaleDateString("es-CO", { timeZone: "America/Bogota" });
+    if (Number.isNaN(d.getTime())) return "mm/dd/yyyy";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
   };
 
   // Formatear fecha relativa (similar a FichaClienteComentarios)
@@ -69,13 +71,18 @@ export default function TareasPendientesPanel({
       if (diffDays === 1) return "Ayer";
       if (diffDays < 7) return `Hace ${diffDays} días`;
       
-      return d.toLocaleString("es-ES", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+      // Formato mm/dd/yyyy hh:mm AM/PM
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const year = d.getFullYear();
+      let hours = d.getHours();
+      const minutes = String(d.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const hoursStr = String(hours).padStart(2, "0");
+      
+      return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
     } catch {
       return fecha;
     }

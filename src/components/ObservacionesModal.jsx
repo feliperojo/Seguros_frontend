@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, Button, Form } from 'react-bootstrap';
 import apiRequest from '../services/api';
+import { formatDateTimeForDisplay } from '../utils/formatters';
 
 export default function ObservacionesModal({ show, onHide, documentoId }) {
   const [observaciones, setObservaciones] = useState([]);
@@ -51,7 +52,7 @@ export default function ObservacionesModal({ show, onHide, documentoId }) {
               observaciones.map((obs) => (
                 <li key={obs.id} className="list-group-item">
                   <strong>{obs.usuario?.name}</strong>{' '}
-                  <small>{new Date(obs.created_at).toLocaleString()}</small>
+                  <small>{formatDateTimeForDisplay(obs.created_at)}</small>
                   <p>{obs.comentario}</p>
                 </li>
               ))

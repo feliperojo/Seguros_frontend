@@ -9,10 +9,23 @@ const grupoColorMap = {
   G3: "#ffc107"    // Amarillo Bootstrap
 };
 const formatDate = (datetime) => {
-  return new Date(datetime).toLocaleString('es-CO', {
-    dateStyle: 'short',
-    timeStyle: 'short'
-  });
+  if (!datetime) return "-";
+  try {
+    const d = new Date(datetime);
+    if (isNaN(d.getTime())) return "-";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    let hours = d.getHours();
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    const ampm = hours >= 12 ? "PM" : "AM";
+    hours = hours % 12;
+    hours = hours ? hours : 12;
+    const hoursStr = String(hours).padStart(2, "0");
+    return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+  } catch {
+    return "-";
+  }
 };
 
 

@@ -155,13 +155,19 @@ class HistorialVersionService {
       id: version.id,
       accion: this.traducirAccion(version.accion),
       usuario: version.usuario,
-      fecha: new Date(version.created_at).toLocaleString('es-ES', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
+      fecha: (() => {
+        const d = new Date(version.created_at);
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const year = d.getFullYear();
+        let hours = d.getHours();
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const hoursStr = String(hours).padStart(2, "0");
+        return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+      })(),
       cambios: this.compararVersiones(
         version.estado_anterior || {},
         version.estado_nuevo || {}

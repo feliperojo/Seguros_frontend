@@ -789,11 +789,16 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
 
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
-    return new Date(fecha).toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    try {
+      const date = new Date(fecha);
+      if (isNaN(date.getTime())) return "N/A";
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${month}/${day}/${year}`;
+    } catch {
+      return "N/A";
+    }
   };
 
   const getBadgeColor = (fecha) => {
@@ -1044,7 +1049,24 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                           <>
                             <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.comment}</div>
                             <small className="text-muted">
-                              {new Date(c.fecha).toLocaleString()}
+                              {(() => {
+                                try {
+                                  const d = new Date(c.fecha);
+                                  if (isNaN(d.getTime())) return "Fecha inválida";
+                                  const month = String(d.getMonth() + 1).padStart(2, "0");
+                                  const day = String(d.getDate()).padStart(2, "0");
+                                  const year = d.getFullYear();
+                                  let hours = d.getHours();
+                                  const minutes = String(d.getMinutes()).padStart(2, "0");
+                                  const ampm = hours >= 12 ? "PM" : "AM";
+                                  hours = hours % 12;
+                                  hours = hours ? hours : 12;
+                                  const hoursStr = String(hours).padStart(2, "0");
+                                  return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+                                } catch {
+                                  return "Fecha inválida";
+                                }
+                              })()}
                             </small>
                             {/* ✅ Mostrar adjuntos del comentario */}
                             {/* Cargar adjuntos si no se han cargado aún */}

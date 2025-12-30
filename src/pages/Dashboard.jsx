@@ -265,7 +265,12 @@ const handleOpenViewModal = (cliente) => {
                 <td>
                   <Badge bg="primary">{doc.estado}</Badge>
                 </td>
-                <td>{fechaVenc.toLocaleDateString()}</td>
+                <td>{(() => {
+                  const month = String(fechaVenc.getMonth() + 1).padStart(2, "0");
+                  const day = String(fechaVenc.getDate()).padStart(2, "0");
+                  const year = fechaVenc.getFullYear();
+                  return `${month}/${day}/${year}`;
+                })()}</td>
                 <td>
                   {diasRestantes <= 5 ? (
                     <Badge bg="danger">{diasRestantes} día(s)</Badge>
@@ -340,7 +345,13 @@ const handleOpenViewModal = (cliente) => {
                     clientesRecientes.map(cliente => (
                       <tr key={cliente.id}>
                             <td className="fw-medium">{cliente.nombre_completo}</td>
-                            <td>{new Date(cliente.created_at).toLocaleDateString()}</td>
+                            <td>{(() => {
+                              const d = new Date(cliente.created_at);
+                              const month = String(d.getMonth() + 1).padStart(2, "0");
+                              const day = String(d.getDate()).padStart(2, "0");
+                              const year = d.getFullYear();
+                              return `${month}/${day}/${year}`;
+                            })()}</td>
                             <td>{cliente.telefono || cliente.email}</td>
                             <td className="text-end">
                               <Button 
@@ -398,7 +409,13 @@ const handleOpenViewModal = (cliente) => {
                           <tr key={poliza.id}>
                             <td className="fw-medium">{poliza.grupo_familiar?.id || 'Sin grupo'}</td>
                             <td>{poliza.cliente.nombre_completo || 'Sin tipo'}</td>
-                            <td>{poliza.fecha_cancelacion ? new Date(poliza.fecha_cancelacion).toLocaleDateString() : 'Sin fecha'}</td>
+                            <td>{poliza.fecha_cancelacion ? (() => {
+                              const d = new Date(poliza.fecha_cancelacion);
+                              const month = String(d.getMonth() + 1).padStart(2, "0");
+                              const day = String(d.getDate()).padStart(2, "0");
+                              const year = d.getFullYear();
+                              return `${month}/${day}/${year}`;
+                            })() : 'Sin fecha'}</td>
                             <td className="text-end">
                               <Badge bg="danger" pill>Cancelada</Badge>
                             </td>

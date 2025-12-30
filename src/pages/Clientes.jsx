@@ -478,14 +478,15 @@ const calcularIngresoAnual = (monto, periodo) => {
             {/* Fecha de Nacimiento y Edad */}
             <div className="row mt-3">
               <div className="col-md-4">
-                <label>Fecha de Nacimiento</label>
+                <label>Fecha de Nacimiento <small className="text-muted">(mm/dd/yyyy)</small></label>
                 <input type="date" 
                 name="fecha_nacimiento" 
                 className="form-control" 
                 value={normalizeDateForInput(formData.fecha_nacimiento)} 
                 onChange={handleChange}
                 max="2099-12-31"
-                min="1900-01-01" />
+                min="1900-01-01"
+                title="Formato: mm/dd/yyyy" />
               </div>
               <div className="col-md-2">
                 <label>Edad</label>
@@ -572,16 +573,18 @@ const calcularIngresoAnual = (monto, periodo) => {
                 <input type="text" name="categoria" className="form-control" value={formData.categoria} onChange={handleChange} />
               </div>
               <div className="col-md-3">
-                <label>Fecha Emision</label>
+                <label>Fecha Emision <small className="text-muted">(mm/dd/yyyy)</small></label>
                 <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}
                 max="2099-12-31"
-                min="1900-01-01"/>
+                min="1900-01-01"
+                title="Formato: mm/dd/yyyy"/>
               </div>
               <div className="col-md-3">
-                <label>Fecha Expiración</label>
+                <label>Fecha Expiración <small className="text-muted">(mm/dd/yyyy)</small></label>
                 <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange}
                 max="2099-12-31"
-                min="1900-01-01"/>
+                min="1900-01-01"
+                title="Formato: mm/dd/yyyy"/>
               </div>
             </div>
           </>

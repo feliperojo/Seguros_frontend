@@ -900,13 +900,14 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
 
         <div className="row mb-3">
           <Form.Group className="col-md-6">
-            <Form.Label>Fecha Programada</Form.Label>
+            <Form.Label>Fecha Programada <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
             <Form.Control
               type="date"
               name="scheduled_date"
               value={formData.scheduled_date}
               onChange={handleChange}
               isInvalid={!!errors.scheduled_date}
+              title="Formato: mm/dd/yyyy"
             />
             <Form.Control.Feedback type="invalid">
               {errors.scheduled_date}
@@ -914,7 +915,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
           </Form.Group>
 
           <Form.Group className="col-md-6">
-            <Form.Label>Fecha de Vencimiento</Form.Label>
+            <Form.Label>Fecha de Vencimiento <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
             <Form.Control
               type="date"
               name="due_date"
@@ -922,6 +923,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               onChange={handleChange}
               isInvalid={!!errors.due_date}
               min={formData.scheduled_date}
+              title="Formato: mm/dd/yyyy"
             />
             <Form.Control.Feedback type="invalid">
               {errors.due_date}

@@ -122,56 +122,121 @@ export const normalizeDateForInput = (fecha) => {
 };
 
 /**
- * Formatea una fecha para mostrar en la interfaz
+ * Extrae año, mes y día de una fecha en cualquier formato
  * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
- * que pueden causar que se muestre un día menos
  * 
  * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
- * @param {string} locale - Locale para formatear (default: "es-ES")
- * @returns {string} Fecha formateada o "-" si no es válida
+ * @returns {object|null} Objeto con {year, month, day} o null si no es válida
  */
-export const formatDateForDisplay = (dateString, locale = "es-ES") => {
-  if (!dateString) return "-";
+const extractDateParts = (dateString) => {
+  if (!dateString) return null;
   
   try {
-    let date;
+    let year, month, day;
     
     // Si la fecha viene en formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss)
     // parsearla manualmente como fecha local para evitar problemas de zona horaria
     if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(dateString)) {
       // Extraer año, mes y día del string ISO
       const [datePart] = dateString.split('T');
-      const [year, month, day] = datePart.split('-').map(Number);
+      [year, month, day] = datePart.split('-').map(Number);
       
       // Validar que los valores sean válidos
-      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-        // Crear fecha como fecha local (sin conversión UTC)
-        date = new Date(year, month - 1, day);
-      } else {
-        return dateString;
+      if (month < 1 || month > 12 || day < 1 || day > 31) {
+        return null;
       }
     } else if (dateString instanceof Date) {
       // Si ya es un objeto Date, validar que sea válido
       if (isNaN(dateString.getTime())) {
-        return "-";
+        return null;
       }
-      date = dateString;
+      year = dateString.getFullYear();
+      month = dateString.getMonth() + 1;
+      day = dateString.getDate();
     } else {
       // Para otros formatos, intentar parsear con el constructor estándar
-      date = new Date(dateString);
+      const date = new Date(dateString);
       if (isNaN(date.getTime())) {
-        return dateString;
+        return null;
       }
+      year = date.getFullYear();
+      month = date.getMonth() + 1;
+      day = date.getDate();
     }
     
-    // Formatear usando métodos locales para evitar problemas de zona horaria
-    return date.toLocaleDateString(locale, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    });
+    return { year, month, day };
   } catch {
-    // Si falla, devolver el string original o "-"
+    return null;
+  }
+};
+
+/**
+ * Formatea una fecha para mostrar en la interfaz en formato mm/dd/yyyy
+ * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
+ * que pueden causar que se muestre un día menos
+ * 
+ * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
+ * @param {string} locale - Locale para formatear (no usado, siempre retorna mm/dd/yyyy)
+ * @returns {string} Fecha formateada en formato mm/dd/yyyy o "-" si no es válida
+ */
+export const formatDateForDisplay = (dateString, locale = "es-ES") => {
+  const parts = extractDateParts(dateString);
+  if (!parts) return "-";
+  
+  const monthStr = String(parts.month).padStart(2, "0");
+  const dayStr = String(parts.day).padStart(2, "0");
+  return `${monthStr}/${dayStr}/${parts.year}`;
+};
+
+/**
+ * Formatea una fecha con hora para mostrar en formato mm/dd/yyyy hh:mm AM/PM
+ * 
+ * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
+ * @returns {string} Fecha y hora formateada o "-" si no es válida
+ */
+export const formatDateTimeForDisplay = (dateString) => {
+  if (!dateString) return "-";
+  
+  try {
+    const parts = extractDateParts(dateString);
+    if (!parts) {
+      // Intentar parsear como fecha con hora
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return "-";
+      
+      const monthStr = String(date.getMonth() + 1).padStart(2, "0");
+      const dayStr = String(date.getDate()).padStart(2, "0");
+      const year = date.getFullYear();
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12; // 0 debería ser 12
+      const hoursStr = String(hours).padStart(2, "0");
+      
+      return `${monthStr}/${dayStr}/${year} ${hoursStr}:${minutes} ${ampm}`;
+    }
+    
+    // Si solo tenemos fecha, intentar obtener la hora del objeto Date original
+    const date = new Date(dateString);
+    if (!isNaN(date.getTime())) {
+      const monthStr = String(parts.month).padStart(2, "0");
+      const dayStr = String(parts.day).padStart(2, "0");
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "PM" : "AM";
+      hours = hours % 12;
+      hours = hours ? hours : 12;
+      const hoursStr = String(hours).padStart(2, "0");
+      
+      return `${monthStr}/${dayStr}/${parts.year} ${hoursStr}:${minutes} ${ampm}`;
+    }
+    
+    // Solo fecha sin hora
+    const monthStr = String(parts.month).padStart(2, "0");
+    const dayStr = String(parts.day).padStart(2, "0");
+    return `${monthStr}/${dayStr}/${parts.year}`;
+  } catch {
     return typeof dateString === 'string' ? dateString : "-";
   }
 };

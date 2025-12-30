@@ -35,11 +35,13 @@ export default function TareasTerminadasPanel({
 
   // ==== Helpers ====
   const formatDate = (v) => {
-    if (!v) return "mm/dd/aaaa";
+    if (!v) return "mm/dd/yyyy";
     const d = v instanceof Date ? v : new Date(v);
-    return Number.isNaN(d.getTime())
-      ? "mm/dd/aaaa"
-      : d.toLocaleDateString("es-CO", { timeZone: "America/Bogota" });
+    if (Number.isNaN(d.getTime())) return "mm/dd/yyyy";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
   };
 
   const monthLabel = (d) =>
