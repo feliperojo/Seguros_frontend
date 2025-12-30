@@ -33,6 +33,8 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
   const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dropAreaRef = useRef(null);
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
     const ctxId = toInt(grupoFamiliarId ?? formData.grupo_familiar_id);
@@ -220,6 +222,7 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
       if (arch.preview) URL.revokeObjectURL(arch.preview);
     });
     setArchivos([]);
+    setIsDragging(false);
   }, [show, grupoFamiliarId, clienteId]);
 
   // Establecer valores por defecto cuando cambian las props
@@ -294,7 +297,7 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
            /\.(jpg|jpeg|png|gif|webp)$/i.test(file.name);
   };
 
-  const agregarArchivos = (files) => {
+  const agregarArchivos = useCallback((files) => {
     const archivosArray = Array.from(files);
     const archivosValidos = archivosArray.filter(validarArchivo);
     
@@ -314,7 +317,7 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     });
 
     setArchivos((prev) => [...prev, ...nuevosArchivos]);
-  };
+  }, []);
 
   const eliminarArchivo = (id) => {
     setArchivos((prev) => {
@@ -376,6 +379,79 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     }
     e.target.value = "";
   };
+
+  // Handlers para drag and drop
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Solo cambiar el estado si realmente salimos del área de drop
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      agregarArchivos(files);
+    }
+  };
+
+  // Handler para pegar desde el portapapeles (Ctrl+V / Cmd+V)
+  useEffect(() => {
+    if (!show) return;
+
+    const handlePaste = (e) => {
+      // Verificar si el modal está abierto y el foco está en el modal
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file' && item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            // Crear un nombre para el archivo pegado
+            const timestamp = Date.now();
+            const extension = file.type.split('/')[1] || 'png';
+            const blob = new Blob([file], { type: file.type });
+            const namedFile = new File([blob], `imagen-pegada-${timestamp}.${extension}`, {
+              type: file.type,
+              lastModified: Date.now()
+            });
+            imageFiles.push(namedFile);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        agregarArchivos(imageFiles);
+      }
+    };
+
+    // Agregar el listener cuando el modal está abierto
+    document.addEventListener('paste', handlePaste);
+
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, [show, agregarArchivos]);
 
   const iniciarDictado = () => {
     if (!reconocimientoVoz) {
@@ -718,13 +794,21 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
         <Form.Group className="mb-3">
           <Form.Label>Archivos adjuntos (opcional)</Form.Label>
           <div
+            ref={dropAreaRef}
             className="border rounded p-3 text-center"
             style={{
               borderStyle: "dashed",
               cursor: "pointer",
-              backgroundColor: "#f8f9fa"
+              backgroundColor: isDragging ? "#e3f2fd" : "#f8f9fa",
+              borderColor: isDragging ? "#2196f3" : undefined,
+              borderWidth: isDragging ? "2px" : undefined,
+              transition: "all 0.2s ease"
             }}
             onClick={() => document.getElementById("file-input-comentario").click()}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
           >
             <input
               id="file-input-comentario"
@@ -735,9 +819,16 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
               style={{ display: "none" }}
             />
             <div>
-              <p className="mb-1">Haga clic para seleccionar archivos</p>
+              <p className="mb-1">
+                {isDragging ? (
+                  <strong style={{ color: "#2196f3" }}>Suelte los archivos aquí</strong>
+                ) : (
+                  "Haga clic para seleccionar archivos o arrastre y suelte aquí"
+                )}
+              </p>
               <small className="text-muted">
                 Formatos: JPG, PNG, GIF, WEBP, PDF, DOC, DOCX (máx. 10MB cada uno)
+                {!isDragging && <span className="d-block mt-1">También puede usar Ctrl+V (Cmd+V en Mac) para pegar imágenes</span>}
               </small>
             </div>
           </div>
