@@ -8,24 +8,30 @@ const FormDireccion = ({ formData, onChange, editable = true, hideCorrespondenci
     const { name, value, type, checked } = e.target;
     const newValue = type === "checkbox" ? checked : value;
     
+    // Campos que afectan la dirección completa
+    const addressFields = ["calle", "apto", "ciudad", "estado", "codigo_postal"];
+    const isAddressField = addressFields.includes(name);
+    
     // Construir dirección completa para visualización
     let direccionCompleta = "";
     
-    if (name !== "dir_correspondencia" && name !== "copi_dir") {
+    if (isAddressField) {
       direccionCompleta = [
         name === "calle" ? value : formData.calle,
         name === "apto" ? value : formData.apto,
         name === "ciudad" ? value : formData.ciudad,
         name === "estado" ? value : formData.estado,
         name === "codigo_postal" ? value : formData.codigo_postal,
-      ].filter(Boolean).join(" ");
+      ].filter(Boolean).join(" ").trim();
     }
     
-    // Actualizar los datos con el nuevo valor
-    const updatedData = {
-      ...formData,
-      [name]: newValue,
-    };
+    // Notificar el cambio del campo individual
+    onChange(name, newValue, direccionCompleta);
+    
+    // Si es un campo que afecta la dirección completa, también actualizar el campo "direccion"
+    if (isAddressField) {
+      onChange("direccion", direccionCompleta, "");
+    }
     
     // Si el checkbox de copiar está marcado, actualizar dirección de correspondencia
     if (name === "copi_dir" && checked) {
@@ -36,18 +42,10 @@ const FormDireccion = ({ formData, onChange, editable = true, hideCorrespondenci
         formData.ciudad,
         formData.estado,
         formData.codigo_postal,
-      ].filter(Boolean).join(" ");
+      ].filter(Boolean).join(" ").trim();
       
-      updatedData.dir_correspondencia = currentDireccionCompleta;
-      
-      // Notificar el cambio de dirección de correspondencia también
+      // Notificar el cambio de dirección de correspondencia
       onChange("dir_correspondencia", currentDireccionCompleta, "");
-      
-      // Luego notificar el cambio del checkbox
-      onChange(name, newValue, direccionCompleta);
-    } else {
-      // Para cambios normales, simplemente notificar
-      onChange(name, newValue, direccionCompleta);
     }
   };
 

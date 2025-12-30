@@ -218,6 +218,14 @@ const payload = {
     secundario: pick("secundario"),
     whatsapp_num: pick("whatsapp_num"),
     email: pick("email"),
+    direccion: pick("direccion"),
+    calle: pick("calle"),
+    apto: pick("apto"),
+    ciudad: pick("ciudad"),
+    estado: pick("estado"),
+    codigo_postal: pick("codigo_postal"),
+    condado: pick("condado"),
+    dir_correspondencia: pick("dir_correspondencia"),
   };
 
   // 👇 SOLO agregar 'id' si es un cliente REAL de la BD

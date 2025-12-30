@@ -400,6 +400,7 @@ useEffect(() => {
         // - primer_nombre, segundo_nombre, apellidos, nombre_completo
         // - fecha_nacimiento, genero, idioma, pais_origen
         // - ingreso_anual, nota
+        // - direccion, calle, apto, ciudad, estado, codigo_postal, condado, dir_correspondencia
         const clientePayload = {
           id: Number(miembro.cliente_id),
           primer_nombre: pick("primer_nombre"),
@@ -412,6 +413,14 @@ useEffect(() => {
           pais_origen: capitalizeWords(pick("pais_origen") || ""),
           ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
           nota: pick("nota"),
+          direccion: pick("direccion"),
+          calle: pick("calle"),
+          apto: pick("apto"),
+          ciudad: pick("ciudad"),
+          estado: pick("estado"),
+          codigo_postal: pick("codigo_postal"),
+          condado: pick("condado"),
+          dir_correspondencia: pick("dir_correspondencia"),
         };
 
         // Solo incluir campos que tienen valor (no null/undefined)

@@ -99,6 +99,55 @@ const yaEstaEnElGrupo = (clienteId, members) =>
 
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 
+/* =================== UTILIDADES DE FECHA =================== */
+// Convierte YYYY-MM-DD a mm/dd/yyyy (formato visual)
+const formatDateForDisplay = (dateStr) => {
+  if (!dateStr) return "";
+  const normalized = normalizeDateForInput(dateStr);
+  if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return "";
+  const [year, month, day] = normalized.split("-");
+  return `${month}/${day}/${year}`;
+};
+
+// Convierte mm/dd/yyyy (formato visual) a YYYY-MM-DD (formato interno)
+const parseDateFromDisplay = (displayStr) => {
+  if (!displayStr) return "";
+  // Eliminar espacios y caracteres no numéricos excepto /
+  const cleaned = displayStr.trim().replace(/[^\d\/]/g, "");
+  // Intentar parsear mm/dd/yyyy o mm/dd/yy
+  const parts = cleaned.split("/").filter(Boolean);
+  if (parts.length === 3) {
+    let [month, day, year] = parts;
+    // Si el año tiene 2 dígitos, asumir 2000-2099
+    if (year.length === 2) {
+      year = `20${year}`;
+    }
+    // Validar y formatear
+    const monthNum = parseInt(month, 10);
+    const dayNum = parseInt(day, 10);
+    const yearNum = parseInt(year, 10);
+    
+    if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31 && yearNum >= 1900 && yearNum <= 2100) {
+      return `${year}-${String(monthNum).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+    }
+  }
+  // Si no se puede parsear, intentar normalizar como YYYY-MM-DD
+  return normalizeDateForInput(displayStr);
+};
+
+// Formatea el input mientras el usuario escribe (mm/dd/yyyy)
+const formatDateInput = (value) => {
+  // Eliminar todo excepto números
+  const digits = value.replace(/\D/g, "");
+  
+  if (digits.length === 0) return "";
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  // Limitar a 8 dígitos (mm/dd/yyyy)
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+};
+
 /* =================== COMPONENTE ACORDEÓN TAILWIND =================== */
 const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -456,6 +505,8 @@ const TomaDeDatos = ({
   const [editingMember, setEditingMember] = useState(null);
   const [openExistente, setOpenExistente] = useState(false);
   const [openCopy, setOpenCopy] = useState(false);
+  // Estado para mantener valores visuales temporales de fecha de nacimiento (formato mm/dd/yyyy)
+  const [fechaNacimientoDisplay, setFechaNacimientoDisplay] = useState({});
 
   const navigate = useNavigate();
 
@@ -636,6 +687,18 @@ const sortedNormalized = useMemo(
     // Capitalización
     if (NAME_FIELDS.has(name)) v = toTitle(v);
 
+    // Normalizar fecha de nacimiento para asegurar formato YYYY-MM-DD
+    // Si viene en formato visual mm/dd/yyyy, convertirlo
+    if (name === "fecha_nacimiento" && v) {
+      if (v.includes("/")) {
+        // Es formato visual, convertir a interno
+        v = parseDateFromDisplay(v) || "";
+      } else {
+        // Ya está en formato interno o necesita normalización
+        v = normalizeDateForInput(v);
+      }
+    }
+
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
 
@@ -650,6 +713,79 @@ const sortedNormalized = useMemo(
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
     if (ROOT_FIELDS.has(name)) return patchRoot(idx, patch);
     return patchCliente(idx, patch);
+  };
+
+  // Handler especial para fecha de nacimiento con formato visual mm/dd/yyyy
+  // El usuario ve y escribe en formato mm/dd/yyyy, pero guardamos internamente en YYYY-MM-DD
+  const fechaNacimientoChangeFactory = (idx) => (e) => {
+    const { value } = e.target;
+    // Formatear mientras el usuario escribe (mm/dd/yyyy)
+    const formatted = formatDateInput(value);
+    
+    // Guardar el valor visual temporalmente para que el usuario vea lo que está escribiendo
+    setFechaNacimientoDisplay(prev => ({ ...prev, [idx]: formatted }));
+    
+    // Intentar convertir a formato interno si el formato visual es válido
+    const internalFormat = parseDateFromDisplay(formatted);
+    
+    // Solo guardar si podemos convertir a formato interno válido
+    if (internalFormat) {
+      const syntheticEvent = {
+        target: {
+          name: "fecha_nacimiento",
+          value: internalFormat,
+          type: "text"
+        }
+      };
+      onChangeFactory(idx)(syntheticEvent);
+    }
+  };
+
+  // Handler para cuando el usuario termina de escribir (onBlur)
+  // Asegura que siempre guardamos en formato interno YYYY-MM-DD
+  const fechaNacimientoBlurFactory = (idx) => (e) => {
+    const { value } = e.target;
+    // Convertir formato visual mm/dd/yyyy a formato interno YYYY-MM-DD
+    const internalFormat = parseDateFromDisplay(value);
+    
+    // Limpiar el valor visual temporal
+    setFechaNacimientoDisplay(prev => {
+      const next = { ...prev };
+      delete next[idx];
+      return next;
+    });
+    
+    // Si el formato es válido, guardar en formato interno
+    if (internalFormat) {
+      const syntheticEvent = {
+        target: {
+          name: "fecha_nacimiento",
+          value: internalFormat,
+          type: "text"
+        }
+      };
+      onChangeFactory(idx)(syntheticEvent);
+    } else if (value.trim() === "") {
+      // Si está vacío, limpiar
+      const syntheticEvent = {
+        target: {
+          name: "fecha_nacimiento",
+          value: "",
+          type: "text"
+        }
+      };
+      onChangeFactory(idx)(syntheticEvent);
+    }
+  };
+
+  // Obtener el valor visual para mostrar en el input
+  const getFechaNacimientoDisplayValue = (idx, fechaNacimiento) => {
+    // Si hay un valor visual temporal (el usuario está escribiendo), usarlo
+    if (fechaNacimientoDisplay[idx] !== undefined) {
+      return fechaNacimientoDisplay[idx];
+    }
+    // De lo contrario, convertir el formato interno a visual
+    return formatDateForDisplay(fechaNacimiento || "");
   };
 
   const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
@@ -919,12 +1055,15 @@ const sortedNormalized = useMemo(
 
                                 <Field label="Fecha de Nacimiento" className="col-md-4">
                                   <input
-                                    type="date"
+                                    type="text"
                                     className="form-control form-control-sm"
                                     name="fecha_nacimiento"
-                                    value={normalizeDateForInput(c.fecha_nacimiento || "")}
-                                    onChange={onChange}
+                                    value={getFechaNacimientoDisplayValue(idx, c.fecha_nacimiento)}
+                                    onChange={fechaNacimientoChangeFactory(idx)}
+                                    onBlur={fechaNacimientoBlurFactory(idx)}
                                     disabled={readOnly}
+                                    placeholder="mm/dd/yyyy"
+                                    maxLength={10}
                                   />
                                 </Field>
 
