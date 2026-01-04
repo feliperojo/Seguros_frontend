@@ -1622,7 +1622,8 @@ const sortedNormalized = useMemo(
                             name="fecha_cancelacion"
                             value={(m.fecha_cancelacion || "").slice(0, 10)}
                             onChange={onChange}
-                            disabled={readOnly}
+                            disabled={true}
+                            title="Este campo solo puede ser modificado por procesos automáticos de renovación"
                           />
                         </Field>
 
@@ -1633,7 +1634,8 @@ const sortedNormalized = useMemo(
                             name="fecha_retiro"
                             value={(m.fecha_retiro || "").slice(0, 10)}
                             onChange={onChange}
-                            disabled={readOnly}
+                            disabled={true}
+                            title="Este campo solo puede ser modificado por procesos automáticos de renovación"
                           />
                         </Field>
 

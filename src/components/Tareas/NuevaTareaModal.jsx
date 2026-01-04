@@ -1,14 +1,53 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { Modal, Button, Form, Spinner } from "react-bootstrap";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
 
+// Configuración de módulos para ReactQuill
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'font': [] }],
+    [{ 'size': ['small', false, 'large', 'huge'] }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link'],
+    ['clean']
+  ],
+};
+
+const quillFormats = [
+  'header', 'font', 'size',
+  'bold', 'italic', 'underline', 'strike',
+  'color', 'background',
+  'script',
+  'list', 'bullet',
+  'align',
+  'blockquote', 'code-block',
+  'link'
+];
+
 const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", grupoFamiliarId, clienteId }) => {
   const toInt = (v) => (v === undefined || v === null || v === '' ? null : parseInt(v, 10));
 
   const getHoy = () => new Date().toISOString().split("T")[0];
+
+  // Función para limpiar HTML y verificar si está vacío
+  const isNoteEmpty = (html) => {
+    if (!html) return true;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    const text = tempDiv.textContent || tempDiv.innerText || '';
+    return text.trim().length === 0;
+  };
 
   const [formData, setFormData] = useState({
     concept_id: "",
@@ -39,6 +78,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const grabandoRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const dropAreaRef = useRef(null);
+  const quillEditorRef = useRef(null);
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
     setFormData((prev) => {
@@ -101,10 +141,30 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         }
         
         if (textoTranscrito) {
-          setFormData((prev) => ({
-            ...prev,
-            note: prev.note + (prev.note && !prev.note.endsWith(' ') ? ' ' : '') + textoTranscrito + ' ',
-          }));
+          // Insertar texto transcrito en el editor Quill
+          const quill = quillEditorRef.current;
+          if (quill) {
+            const range = quill.getSelection(true);
+            const length = quill.getLength();
+            const insertPosition = range ? range.index : length - 1;
+            const prefix = insertPosition > 1 && !quill.getText(insertPosition - 1, 1).endsWith(' ') ? ' ' : '';
+            quill.insertText(insertPosition, prefix + textoTranscrito + ' ', 'user');
+            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
+          } else {
+            // Fallback: actualizar estado directamente agregando texto como HTML
+            setFormData((prev) => {
+              const currentHtml = prev.note || '';
+              // Extraer texto plano para verificar si necesita espacio
+              const tempDiv = document.createElement('div');
+              tempDiv.innerHTML = currentHtml;
+              const currentText = tempDiv.textContent || tempDiv.innerText || '';
+              const prefix = currentText && !currentText.endsWith(' ') ? ' ' : '';
+              return {
+                ...prev,
+                note: currentHtml + prefix + textoTranscrito + ' ',
+              };
+            });
+          }
         }
       };
 
@@ -555,7 +615,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       nuevosErrores.concept_id = "El concepto es obligatorio";
     }
     
-    if (!formData.note || !formData.note.trim()) {
+    if (isNoteEmpty(formData.note)) {
       nuevosErrores.note = "La nota es obligatoria";
     }
     
@@ -843,20 +903,37 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               </small>
             </div>
           )}
-          <Form.Control
-            as="textarea"
-            rows={4}
-            name="note"
-            value={formData.note}
-            onChange={handleChange}
-            placeholder="Describa los detalles y objetivos de esta tarea o use el botón 'Dictar' para transcribir por voz..."
-            isInvalid={!!errors.note}
-          />
-          <Form.Control.Feedback type="invalid">
-            {errors.note}
-          </Form.Control.Feedback>
+          <div className={errors.note ? "border border-danger rounded" : ""}>
+            <ReactQuill
+              theme="snow"
+              value={formData.note || ""}
+              onChange={(value, delta, source, editor) => {
+                setFormData((prev) => ({ ...prev, note: value }));
+                // Guardar referencia al editor
+                if (editor && !quillEditorRef.current) {
+                  quillEditorRef.current = editor;
+                }
+                // Limpiar error cuando el usuario empiece a escribir
+                if (errors.note && !isNoteEmpty(value)) {
+                  setErrors((prev) => ({ ...prev, note: null }));
+                }
+              }}
+              modules={quillModules}
+              formats={quillFormats}
+              placeholder="Describa los detalles y objetivos de esta tarea. Use la barra de herramientas para formatear el texto o el botón 'Dictar' para transcribir por voz..."
+              style={{
+                backgroundColor: '#fff',
+                minHeight: '150px'
+              }}
+            />
+          </div>
+          {errors.note && (
+            <div className="text-danger mt-1" style={{ fontSize: '0.875rem' }}>
+              {errors.note}
+            </div>
+          )}
           {!reconocimientoDisponible && (
-            <Form.Text className="text-muted">
+            <Form.Text className="text-muted mt-2 d-block">
               <small>
                 <i className="fas fa-info-circle me-1"></i>
                 El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
