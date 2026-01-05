@@ -377,7 +377,7 @@ export default function TareasPendientesPanel({
       estado: rawEstado,
       fechaLimite: t?.fechaLimite ?? t?.due_at ?? t?.scheduled_at ?? null,
       fechaCreacion: t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null,
-      nota: (typeof nota === "string" ? nota.trim() : "") || "",
+      nota: (typeof nota === "string" ? nota : "") || "",
       __raw: t.__raw ?? t,
     };
   };
@@ -472,6 +472,83 @@ export default function TareasPendientesPanel({
   };
 
   return (
+    <>
+      {/* Estilos para renderizar contenido HTML de Quill */}
+      <style>{`
+        .ql-editor {
+          font-size: 16px;
+          line-height: 1.6;
+          padding: 0;
+        }
+        .ql-editor p {
+          margin: 0 0 0.5em 0;
+        }
+        .ql-editor p:last-child {
+          margin-bottom: 0;
+        }
+        .ql-editor strong {
+          font-weight: 600;
+        }
+        .ql-editor em {
+          font-style: italic;
+        }
+        .ql-editor u {
+          text-decoration: underline;
+        }
+        .ql-editor s {
+          text-decoration: line-through;
+        }
+        .ql-editor a {
+          color: #2563eb;
+          text-decoration: underline;
+        }
+        .ql-editor a:hover {
+          color: #1d4ed8;
+        }
+        .ql-editor ul, .ql-editor ol {
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ql-editor blockquote {
+          border-left: 4px solid #e5e7eb;
+          padding-left: 1em;
+          margin: 0.5em 0;
+          color: #6b7280;
+        }
+        .ql-editor code {
+          background-color: #f3f4f6;
+          padding: 0.2em 0.4em;
+          border-radius: 0.25em;
+          font-family: monospace;
+          font-size: 0.9em;
+        }
+        .ql-editor pre {
+          background-color: #f3f4f6;
+          padding: 0.75em;
+          border-radius: 0.25em;
+          overflow-x: auto;
+          margin: 0.5em 0;
+        }
+        .ql-editor .ql-size-small {
+          font-size: 0.75em;
+        }
+        .ql-editor .ql-size-large {
+          font-size: 1.5em;
+        }
+        .ql-editor .ql-size-huge {
+          font-size: 2.5em;
+        }
+        .ql-editor .ql-align-center {
+          text-align: center;
+        }
+        .ql-editor .ql-align-right {
+          text-align: right;
+        }
+        .ql-editor .ql-align-justify {
+          text-align: justify;
+        }
+      `}</style>
+      
     <div className={`card ${className}`}>
       <div className="card-header d-flex justify-content-between align-items-center py-2">
         <strong className="text-primary">Tareas Pendientes</strong>
@@ -535,7 +612,16 @@ export default function TareasPendientesPanel({
 
               {t.nota && (
                 <div className="mt-2 small">
-                  <strong>Nota:</strong> <span className="text-muted">{t.nota}</span>
+                  <strong>Nota:</strong>
+                  <div 
+                    className="text-muted mt-1"
+                    style={{
+                      fontSize: '14px',
+                      lineHeight: '1.5',
+                      wordBreak: 'break-word'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: t.nota || 'Sin contenido' }}
+                  />
                 </div>
               )}
 
@@ -893,9 +979,17 @@ export default function TareasPendientesPanel({
                                     {formatFechaRelativa(comentarioTarea.created_at || comentarioTarea.fecha)}
                                   </span>
                                 </div>
-                                <p className="text-dark small mb-0" style={{ whiteSpace: "pre-wrap" }}>
-                                  {comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || "Sin contenido"}
-                                </p>
+                                <div 
+                                  className="text-dark small mb-0"
+                                  style={{
+                                    fontSize: '14px',
+                                    lineHeight: '1.5',
+                                    wordBreak: 'break-word'
+                                  }}
+                                  dangerouslySetInnerHTML={{ 
+                                    __html: comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || "Sin contenido" 
+                                  }}
+                                />
                               </div>
                             ))}
                           </div>
@@ -1078,5 +1172,6 @@ export default function TareasPendientesPanel({
         </Modal.Footer>
       </Modal>
     </div>
+    </>
   );
 }

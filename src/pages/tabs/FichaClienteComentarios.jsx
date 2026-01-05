@@ -480,6 +480,82 @@ export default function FichaClienteComentarios() {
 
   return (
     <>
+      {/* Estilos para renderizar contenido HTML de Quill */}
+      <style>{`
+        .ql-editor {
+          font-size: 16px;
+          line-height: 1.6;
+          padding: 0;
+        }
+        .ql-editor p {
+          margin: 0 0 0.5em 0;
+        }
+        .ql-editor p:last-child {
+          margin-bottom: 0;
+        }
+        .ql-editor strong {
+          font-weight: 600;
+        }
+        .ql-editor em {
+          font-style: italic;
+        }
+        .ql-editor u {
+          text-decoration: underline;
+        }
+        .ql-editor s {
+          text-decoration: line-through;
+        }
+        .ql-editor a {
+          color: #2563eb;
+          text-decoration: underline;
+        }
+        .ql-editor a:hover {
+          color: #1d4ed8;
+        }
+        .ql-editor ul, .ql-editor ol {
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ql-editor blockquote {
+          border-left: 4px solid #e5e7eb;
+          padding-left: 1em;
+          margin: 0.5em 0;
+          color: #6b7280;
+        }
+        .ql-editor code {
+          background-color: #f3f4f6;
+          padding: 0.2em 0.4em;
+          border-radius: 0.25em;
+          font-family: monospace;
+          font-size: 0.9em;
+        }
+        .ql-editor pre {
+          background-color: #f3f4f6;
+          padding: 0.75em;
+          border-radius: 0.25em;
+          overflow-x: auto;
+          margin: 0.5em 0;
+        }
+        .ql-editor .ql-size-small {
+          font-size: 0.75em;
+        }
+        .ql-editor .ql-size-large {
+          font-size: 1.5em;
+        }
+        .ql-editor .ql-size-huge {
+          font-size: 2.5em;
+        }
+        .ql-editor .ql-align-center {
+          text-align: center;
+        }
+        .ql-editor .ql-align-right {
+          text-align: right;
+        }
+        .ql-editor .ql-align-justify {
+          text-align: justify;
+        }
+      `}</style>
+      
       {/* Header principal con diseño moderno */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
         {/* Header con gradiente sutil */}
@@ -713,11 +789,15 @@ export default function FichaClienteComentarios() {
                         
                         {/* Contenido del comentario/tarea */}
                         <div className="pl-2">
-                          <div className="prose prose-sm max-w-none">
-                            <p className="text-gray-700 leading-relaxed m-0 whitespace-pre-wrap">
-                              {nota}
-                            </p>
-                          </div>
+                          <div 
+                            className="text-gray-700 leading-relaxed"
+                            style={{
+                              fontSize: '16px',
+                              lineHeight: '1.6',
+                              wordBreak: 'break-word'
+                            }}
+                            dangerouslySetInnerHTML={{ __html: nota || 'Sin contenido' }}
+                          />
                         </div>
 
                         {/* Archivos adjuntos - Expandible */}
@@ -986,9 +1066,17 @@ export default function FichaClienteComentarios() {
                                                 {formatFecha(comentarioTarea.created_at || comentarioTarea.fecha)}
                                               </span>
                                             </div>
-                                            <p className="text-gray-700 text-sm mt-2 whitespace-pre-wrap m-0">
-                                              {comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || "Sin contenido"}
-                                            </p>
+                                            <div 
+                                              className="text-gray-700 text-sm mt-2 m-0"
+                                              style={{
+                                                fontSize: '14px',
+                                                lineHeight: '1.5',
+                                                wordBreak: 'break-word'
+                                              }}
+                                              dangerouslySetInnerHTML={{ 
+                                                __html: comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || "Sin contenido" 
+                                              }}
+                                            />
                                           </div>
                                         ))
                                       ) : (

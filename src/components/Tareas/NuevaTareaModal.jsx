@@ -904,6 +904,22 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
             </div>
           )}
           <div className={errors.note ? "border border-danger rounded" : ""}>
+            <style>{`
+              .ql-editor {
+                min-height: 280px;
+                font-size: 16px;
+                line-height: 1.6;
+              }
+              .ql-container {
+                font-size: 16px;
+                font-family: inherit;
+              }
+              .ql-editor.ql-blank::before {
+                font-size: 16px;
+                font-style: normal;
+                color: #6c757d;
+              }
+            `}</style>
             <ReactQuill
               theme="snow"
               value={formData.note || ""}
@@ -923,7 +939,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               placeholder="Describa los detalles y objetivos de esta tarea. Use la barra de herramientas para formatear el texto o el botón 'Dictar' para transcribir por voz..."
               style={{
                 backgroundColor: '#fff',
-                minHeight: '150px'
               }}
             />
           </div>

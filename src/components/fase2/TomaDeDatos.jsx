@@ -507,6 +507,8 @@ const TomaDeDatos = ({
   const [openCopy, setOpenCopy] = useState(false);
   // Estado para mantener valores visuales temporales de fecha de nacimiento (formato mm/dd/yyyy)
   const [fechaNacimientoDisplay, setFechaNacimientoDisplay] = useState({});
+  // Estado para mantener valores visuales temporales de dinero (formato con miles)
+  const [moneyDisplay, setMoneyDisplay] = useState({});
 
   const navigate = useNavigate();
 
@@ -786,6 +788,79 @@ const sortedNormalized = useMemo(
     }
     // De lo contrario, convertir el formato interno a visual
     return formatDateForDisplay(fechaNacimiento || "");
+  };
+
+  // Obtener el valor visual formateado para campos de dinero
+  const getMoneyDisplayValue = (idx, fieldName, value) => {
+    const key = `${idx}-${fieldName}`;
+    // Si hay un valor visual temporal (el usuario está escribiendo), usarlo
+    if (moneyDisplay[key] !== undefined) {
+      return moneyDisplay[key];
+    }
+    // De lo contrario, formatear el valor con separadores de miles
+    if (!value || value === "") return "";
+    return formatMoney2(value);
+  };
+
+  // Handler para onChange de campos de dinero
+  const moneyChangeFactory = (idx, fieldName, isCliente = true) => (e) => {
+    const { value } = e.target;
+    const key = `${idx}-${fieldName}`;
+    
+    // Permitir que el usuario escriba sin formato
+    // Guardar el valor visual temporalmente
+    setMoneyDisplay(prev => ({ ...prev, [key]: value }));
+    
+    // Parsear el valor y guardarlo internamente (sin formato)
+    const parsed = parseMoney(value);
+    const patch = { [fieldName]: parsed === 0 ? "" : String(parsed) };
+    
+    // Si es ingreso_por_periodo, calcular ingreso_anual
+    if (fieldName === "ingreso_por_periodo") {
+      const cur = getC(normalized[idx] || {});
+      const periodo = cur.periodo_ingreso ?? "";
+      const annual = computeAnnual(periodo, parsed);
+      patch.ingreso_anual = annual === 0 ? "" : String(annual);
+    }
+    
+    // Aplicar el cambio
+    if (isCliente) {
+      patchCliente(idx, patch);
+    } else {
+      patchRoot(idx, patch);
+    }
+  };
+
+  // Handler para onBlur de campos de dinero
+  const moneyBlurFactory = (idx, fieldName, isCliente = true) => () => {
+    const key = `${idx}-${fieldName}`;
+    const cur = getC(normalized[idx] || {});
+    const val = cur?.[fieldName];
+    
+    // Limpiar el valor visual temporal
+    setMoneyDisplay(prev => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    
+    // Formatear y guardar
+    const formatted = formatMoney2(val);
+    const patch = { [fieldName]: formatted };
+    
+    // Si es ingreso_por_periodo, calcular ingreso_anual
+    if (fieldName === "ingreso_por_periodo") {
+      const periodo = cur.periodo_ingreso ?? "";
+      const parsed = parseMoney(formatted);
+      patch.ingreso_anual = formatMoney2(computeAnnual(periodo, parsed));
+    }
+    
+    // Aplicar el cambio
+    if (isCliente) {
+      patchCliente(idx, patch);
+    } else {
+      patchRoot(idx, patch);
+    }
   };
 
   const onBlurMoneyFactory = (idx, fieldName, isCliente = true) => () => {
@@ -1348,11 +1423,11 @@ const sortedNormalized = useMemo(
                                     className="form-control form-control-sm"
                                     inputMode="decimal"
                                     name="ingreso_por_periodo"
-                                    value={c.ingreso_por_periodo ?? ""}
-                                    onChange={onChange}
-                                    onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo")}
+                                    value={getMoneyDisplayValue(idx, "ingreso_por_periodo", c.ingreso_por_periodo)}
+                                    onChange={moneyChangeFactory(idx, "ingreso_por_periodo")}
+                                    onBlur={moneyBlurFactory(idx, "ingreso_por_periodo")}
                                     disabled={readOnly}
-                                    placeholder="0.00"
+                                    placeholder="0,00"
                                   />
                                 </Field>
 
@@ -1361,11 +1436,11 @@ const sortedNormalized = useMemo(
                                     className="form-control form-control-sm"
                                     inputMode="decimal"
                                     name="ingreso_anual"
-                                    value={c.ingreso_anual ?? ""}
-                                    onChange={onChange}
-                                    onBlur={onBlurMoneyFactory(idx, "ingreso_anual")}
+                                    value={getMoneyDisplayValue(idx, "ingreso_anual", c.ingreso_anual)}
+                                    onChange={moneyChangeFactory(idx, "ingreso_anual")}
+                                    onBlur={moneyBlurFactory(idx, "ingreso_anual")}
                                     disabled={readOnly}
-                                    placeholder="0.00"
+                                    placeholder="0,00"
                                   />
                                 </Field>
 
