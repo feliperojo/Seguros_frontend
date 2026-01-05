@@ -1241,11 +1241,11 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             {/* Campo para nuevo comentario */}
             {!esCerrada && (
               <div className="mt-3">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <div className="d-flex align-items-center">
-                    <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
-                    <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
-                  </div>
+                <div className="d-flex align-items-center mb-2">
+                  <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
+                  <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
+                </div>
+                <div className="mb-2">
                   {reconocimientoDisponible && (
                     <>
                       <style>{`
@@ -1367,22 +1367,6 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     borderRadius: '0.375rem'
                   }}
                 />
-                {!reconocimientoDisponible && (
-                  <Form.Text className="text-muted mt-2">
-                    <small>
-                      <i className="fas fa-info-circle me-1"></i>
-                      El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
-                    </small>
-                  </Form.Text>
-                )}
-                {!reconocimientoDisponible && (
-                  <Form.Text className="text-muted mt-2">
-                    <small>
-                      <i className="fas fa-info-circle me-1"></i>
-                      El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
-                    </small>
-                  </Form.Text>
-                )}
 
                 {/* ✅ Área de carga de archivos */}
                 <Form.Group className="mt-3">
