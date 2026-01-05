@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Modal,
   Button,
@@ -9,12 +9,51 @@ import {
   Col,
   Badge,
 } from "react-bootstrap";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
 const API_BASE_URL = RAW.replace(/\/+$/, "") || "/api";
 const getAuthToken = () => localStorage.getItem("auth_token");
+
+// Configuración de módulos para ReactQuill
+const quillModules = {
+  toolbar: [
+    [{ 'header': [1, 2, 3, false] }],
+    ['bold', 'italic', 'underline', 'strike'],
+    [{ 'color': [] }, { 'background': [] }],
+    [{ 'font': [] }],
+    [{ 'size': ['small', false, 'large', 'huge'] }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],
+    [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
+    ['link'],
+    ['clean']
+  ],
+};
+
+const quillFormats = [
+  'header', 'font', 'size',
+  'bold', 'italic', 'underline', 'strike',
+  'color', 'background',
+  'script',
+  'list', 'bullet',
+  'align',
+  'blockquote', 'code-block',
+  'link'
+];
+
+// Función para limpiar HTML y verificar si está vacío
+const isNoteEmpty = (html) => {
+  if (!html) return true;
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const text = tempDiv.textContent || tempDiv.innerText || '';
+  return text.trim().length === 0;
+};
 
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [responseNote, setResponseNote] = useState("");
@@ -38,6 +77,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [archivos, setArchivos] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  const quillEditorRef = useRef(null);
   
   // ✅ Estados para adjuntos de comentarios
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
@@ -392,7 +432,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   }, [show, tarea]);
 
   const handleAgregarComentario = async () => {
-    if (!responseNote.trim() && archivos.length === 0) {
+    if (isNoteEmpty(responseNote) && archivos.length === 0) {
       alert("Por favor, escribe un comentario o adjunta al menos un archivo.");
       return;
     }
@@ -549,7 +589,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     setLoading(true);
     try {
       if (
-        (responseNote.trim() !== "" || archivos.length > 0) &&
+        (!isNoteEmpty(responseNote) || archivos.length > 0) &&
         (comentariosDeEstaTarea.length === 0 ||
           comentariosDeEstaTarea[comentariosDeEstaTarea.length - 1]?.comment !== responseNote)
       ) {
@@ -899,6 +939,81 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
 
   return (
     <>
+      {/* Estilos para renderizar contenido HTML de Quill */}
+      <style>{`
+        .ql-editor {
+          font-size: 16px;
+          line-height: 1.6;
+          padding: 0;
+        }
+        .ql-editor p {
+          margin: 0 0 0.5em 0;
+        }
+        .ql-editor p:last-child {
+          margin-bottom: 0;
+        }
+        .ql-editor strong {
+          font-weight: 600;
+        }
+        .ql-editor em {
+          font-style: italic;
+        }
+        .ql-editor u {
+          text-decoration: underline;
+        }
+        .ql-editor s {
+          text-decoration: line-through;
+        }
+        .ql-editor a {
+          color: #2563eb;
+          text-decoration: underline;
+        }
+        .ql-editor a:hover {
+          color: #1d4ed8;
+        }
+        .ql-editor ul, .ql-editor ol {
+          padding-left: 1.5em;
+          margin: 0.5em 0;
+        }
+        .ql-editor blockquote {
+          border-left: 4px solid #e5e7eb;
+          padding-left: 1em;
+          margin: 0.5em 0;
+          color: #6b7280;
+        }
+        .ql-editor code {
+          background-color: #f3f4f6;
+          padding: 0.2em 0.4em;
+          border-radius: 0.25em;
+          font-family: monospace;
+          font-size: 0.9em;
+        }
+        .ql-editor pre {
+          background-color: #f3f4f6;
+          padding: 0.75em;
+          border-radius: 0.25em;
+          overflow-x: auto;
+          margin: 0.5em 0;
+        }
+        .ql-editor .ql-size-small {
+          font-size: 0.75em;
+        }
+        .ql-editor .ql-size-large {
+          font-size: 1.5em;
+        }
+        .ql-editor .ql-size-huge {
+          font-size: 2.5em;
+        }
+        .ql-editor .ql-align-center {
+          text-align: center;
+        }
+        .ql-editor .ql-align-right {
+          text-align: right;
+        }
+        .ql-editor .ql-align-justify {
+          text-align: justify;
+        }
+      `}</style>
     <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
       <Modal.Header closeButton>
         <Modal.Title>
@@ -1047,7 +1162,15 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                           </>
                         ) : (
                           <>
-                            <div style={{ whiteSpace: "pre-wrap", marginTop: 4 }}>{c.comment}</div>
+                            <div 
+                              style={{ 
+                                marginTop: 4,
+                                fontSize: '14px',
+                                lineHeight: '1.5',
+                                wordBreak: 'break-word'
+                              }}
+                              dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
+                            />
                             <small className="text-muted">
                               {(() => {
                                 try {
@@ -1111,13 +1234,39 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                   <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
                   <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
                 </div>
-                <Form.Control
-                  as="textarea"
-                  rows={3}
-                  value={responseNote}
-                  onChange={(e) => setResponseNote(e.target.value)}
-                  placeholder="Escribe tu respuesta aquí..."
-                  style={{ border: "2px solid #667eea" }}
+                <style>{`
+                  .ql-editor {
+                    min-height: 280px;
+                    font-size: 16px;
+                    line-height: 1.6;
+                  }
+                  .ql-container {
+                    font-size: 16px;
+                    font-family: inherit;
+                  }
+                  .ql-editor.ql-blank::before {
+                    font-size: 16px;
+                    font-style: normal;
+                    color: #6c757d;
+                  }
+                `}</style>
+                <ReactQuill
+                  theme="snow"
+                  value={responseNote || ""}
+                  onChange={(value, delta, source, editor) => {
+                    setResponseNote(value);
+                    if (editor && !quillEditorRef.current) {
+                      quillEditorRef.current = editor;
+                    }
+                  }}
+                  modules={quillModules}
+                  formats={quillFormats}
+                  placeholder="Escribe tu respuesta aquí. Use la barra de herramientas para formatear el texto..."
+                  style={{
+                    backgroundColor: '#fff',
+                    border: '2px solid #667eea',
+                    borderRadius: '0.375rem'
+                  }}
                 />
 
                 {/* ✅ Área de carga de archivos */}
