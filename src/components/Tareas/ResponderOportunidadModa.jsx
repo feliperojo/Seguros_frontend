@@ -78,6 +78,17 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
   const quillEditorRef = useRef(null);
+
+  // Estados para reconocimiento de voz
+  const [grabando, setGrabando] = useState(false);
+  const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
+  const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
+  const grabandoRef = useRef(false);
+
+  // Sincronizar ref con estado
+  useEffect(() => {
+    grabandoRef.current = grabando;
+  }, [grabando]);
   
   // ✅ Estados para adjuntos de comentarios
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
@@ -1230,10 +1241,98 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             {/* Campo para nuevo comentario */}
             {!esCerrada && (
               <div className="mt-3">
-                <div className="d-flex align-items-center mb-2">
-                  <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
-                  <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <div className="d-flex align-items-center">
+                    <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
+                    <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
+                  </div>
+                  {reconocimientoDisponible && (
+                    <>
+                      <style>{`
+                        @keyframes microphone-pulse {
+                          0%, 100% {
+                            transform: scale(1);
+                            opacity: 1;
+                          }
+                          50% {
+                            transform: scale(1.15);
+                            opacity: 0.85;
+                          }
+                        }
+                        .microphone-recording {
+                          animation: microphone-pulse 1s ease-in-out infinite;
+                          display: inline-block;
+                        }
+                        .recording-waves {
+                          display: inline-flex;
+                          align-items: center;
+                          gap: 2px;
+                          margin-left: 4px;
+                        }
+                        .recording-waves span {
+                          width: 3px;
+                          height: 12px;
+                          background-color: currentColor;
+                          border-radius: 2px;
+                          animation: wave 1.2s ease-in-out infinite;
+                        }
+                        .recording-waves span:nth-child(1) {
+                          animation-delay: 0s;
+                        }
+                        .recording-waves span:nth-child(2) {
+                          animation-delay: 0.2s;
+                        }
+                        .recording-waves span:nth-child(3) {
+                          animation-delay: 0.4s;
+                        }
+                        @keyframes wave {
+                          0%, 100% {
+                            transform: scaleY(0.5);
+                            opacity: 0.7;
+                          }
+                          50% {
+                            transform: scaleY(1);
+                            opacity: 1;
+                          }
+                        }
+                      `}</style>
+                      <Button
+                        type="button"
+                        variant={grabando ? "danger" : "outline-primary"}
+                        size="sm"
+                        onClick={toggleDictado}
+                        className="d-flex align-items-center gap-2"
+                      >
+                        {grabando ? (
+                          <>
+                            <span className="d-flex align-items-center">
+                              <i className={`fas fa-microphone microphone-recording`}></i>
+                              <span className="recording-waves">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                              </span>
+                            </span>
+                            <span>Detener dictado</span>
+                          </>
+                        ) : (
+                          <>
+                            <i className="fas fa-microphone"></i>
+                            <span>Dictar</span>
+                          </>
+                        )}
+                      </Button>
+                    </>
+                  )}
                 </div>
+                {grabando && (
+                  <div className="alert alert-info d-flex align-items-center gap-2 mb-2 py-2" role="alert">
+                    <span className="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+                    <small className="mb-0">
+                      <strong>Escuchando...</strong> Habla ahora. El texto se agregará automáticamente a tu respuesta.
+                    </small>
+                  </div>
+                )}
                 <style>{`
                   .ql-editor {
                     min-height: 280px;
@@ -1261,13 +1360,29 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                   }}
                   modules={quillModules}
                   formats={quillFormats}
-                  placeholder="Escribe tu respuesta aquí. Use la barra de herramientas para formatear el texto..."
+                  placeholder="Escribe tu respuesta o usa el botón 'Dictar' para transcribir por voz. Use la barra de herramientas para formatear el texto..."
                   style={{
                     backgroundColor: '#fff',
                     border: '2px solid #667eea',
                     borderRadius: '0.375rem'
                   }}
                 />
+                {!reconocimientoDisponible && (
+                  <Form.Text className="text-muted mt-2">
+                    <small>
+                      <i className="fas fa-info-circle me-1"></i>
+                      El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
+                    </small>
+                  </Form.Text>
+                )}
+                {!reconocimientoDisponible && (
+                  <Form.Text className="text-muted mt-2">
+                    <small>
+                      <i className="fas fa-info-circle me-1"></i>
+                      El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
+                    </small>
+                  </Form.Text>
+                )}
 
                 {/* ✅ Área de carga de archivos */}
                 <Form.Group className="mt-3">
