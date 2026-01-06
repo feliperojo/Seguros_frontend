@@ -43,7 +43,7 @@ const DiagnosticoLlamadas = () => {
     if (token) {
       setProbandoEndpoint(true);
       try {
-        const response = await apiRequest('/api/ringcentral/identificar-llamadas-activas', 'GET');
+        const response = await apiRequest('/ringcentral/identificar-llamadas-activas', 'GET');
         resultado.endpointPolling = {
           existe: true,
           respuesta: response,

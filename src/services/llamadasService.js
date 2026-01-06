@@ -231,7 +231,7 @@ class LlamadasService {
    */
   async pollLlamadasActivas() {
     try {
-      const response = await apiRequest('/api/ringcentral/identificar-llamadas-activas', 'GET');
+      const response = await apiRequest('/ringcentral/identificar-llamadas-activas', 'GET');
       
       console.log('🔄 Polling - Respuesta recibida:', response);
       
@@ -278,12 +278,12 @@ class LlamadasService {
       console.warn('⚠️ Error al consultar llamadas activas:', {
         message: error.message,
         status: error.response?.status,
-        url: '/api/ringcentral/identificar-llamadas-activas'
+        url: '/ringcentral/identificar-llamadas-activas'
       });
       
       // Si es 404, el endpoint no existe
       if (error.response?.status === 404) {
-        console.warn('⚠️ El endpoint /api/ringcentral/identificar-llamadas-activas no está implementado en Laravel');
+        console.warn('⚠️ El endpoint /ringcentral/identificar-llamadas-activas no está implementado en Laravel');
       }
     }
   }

@@ -102,7 +102,7 @@ export const obtenerNotasCliente = async (clienteId) => {
  */
 export const crearClienteRapido = async (nombre, telefono, email = null) => {
   try {
-    const response = await apiRequest('/api/cliente/crear-rapido', 'POST', {
+    const response = await apiRequest('/cliente/crear-rapido', 'POST', {
       nombre,
       telefono,
       email
@@ -124,7 +124,7 @@ export const crearClienteRapido = async (nombre, telefono, email = null) => {
  */
 export const agregarNotaCliente = async (clienteId, nota) => {
   try {
-    const response = await apiRequest(`/api/cliente/${clienteId}/agregar-nota`, 'PUT', {
+    const response = await apiRequest(`/cliente/${clienteId}/agregar-nota`, 'PUT', {
       nota
     });
     return {
@@ -143,7 +143,7 @@ export const agregarNotaCliente = async (clienteId, nota) => {
  */
 export const identificarLlamada = async (phoneNumber) => {
   try {
-    const response = await apiRequest('/api/ringcentral/identificar-llamada', 'POST', {
+    const response = await apiRequest('/ringcentral/identificar-llamada', 'POST', {
       phone_number: phoneNumber
     });
     return {
