@@ -1,18 +1,41 @@
 // src/hooks/useCallMonitor.js
 // Hook personalizado para monitorear llamadas activas mediante polling
+// Consulta el backend que recibe webhooks de RingCentral
 
 import { useState, useEffect, useRef } from 'react';
-import axiosInstance from '../services/axios';
+import apiRequest from '../services/api';
+import { buscarCliente } from '../services/apiService';
 
 const POLLING_INTERVAL = parseInt(import.meta.env.VITE_POLLING_INTERVAL || '2000', 10);
 
 const useCallMonitor = () => {
   const [llamadaActiva, setLlamadaActiva] = useState(null);
+  const [clienteData, setClienteData] = useState(null);
   const [cargando, setCargando] = useState(false);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [error, setError] = useState(null);
   const ultimoSessionIdRef = useRef(null);
   const intervalRef = useRef(null);
-  const llamadaTerminadaRef = useRef(false);
+
+  // Función para buscar cliente por teléfono
+  const buscarClientePorTelefono = async (telefono) => {
+    if (!telefono) return null;
+
+    try {
+      setBuscandoCliente(true);
+      const resultado = await buscarCliente(telefono);
+      
+      if (resultado.encontrado && resultado.cliente) {
+        return resultado.cliente;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error al buscar cliente:', err);
+      return null;
+    } finally {
+      setBuscandoCliente(false);
+    }
+  };
 
   // Función para consultar llamada activa
   const consultarLlamadaActiva = async () => {
@@ -20,82 +43,66 @@ const useCallMonitor = () => {
       setCargando(true);
       setError(null);
 
-      const response = await axiosInstance.get('/llamada-activa');
-      const data = response.data;
-
+      const response = await apiRequest('/llamada-activa', 'GET');
+      
       // Si hay una llamada activa
-      if (data.llamada_activa && data.llamada_activa.session_id) {
-        const sessionId = data.llamada_activa.session_id;
+      if (response.llamada_activa && response.llamada_activa.session_id) {
+        const sessionId = response.llamada_activa.session_id;
+        const telefono = response.llamada_activa.numero || 
+                        response.llamada_activa.telefono || 
+                        response.llamada_activa.phone_number;
 
         // Verificar si es una nueva llamada (diferente session_id)
         if (sessionId !== ultimoSessionIdRef.current) {
           // Nueva llamada detectada
-          setLlamadaActiva(data.llamada_activa);
           ultimoSessionIdRef.current = sessionId;
-          llamadaTerminadaRef.current = false;
+          setLlamadaActiva({
+            ...response.llamada_activa,
+            telefono: telefono
+          });
 
-          // Reproducir sonido opcional (comentado por ahora)
-          // try {
-          //   const audio = new Audio('/notification-sound.mp3');
-          //   audio.play().catch(() => {});
-          // } catch (e) {}
+          // Buscar cliente por teléfono
+          if (telefono) {
+            const cliente = await buscarClientePorTelefono(telefono);
+            setClienteData(cliente);
+          } else {
+            setClienteData(null);
+          }
         } else {
           // Misma llamada, actualizar datos
-          setLlamadaActiva(data.llamada_activa);
+          setLlamadaActiva({
+            ...response.llamada_activa,
+            telefono: telefono
+          });
         }
 
         // Verificar si la llamada terminó
-        const estado = data.llamada_activa.estado?.toLowerCase() || '';
-        if ((estado === 'completed' || estado === 'noanswer' || estado === 'disconnected') && !llamadaTerminadaRef.current) {
-          llamadaTerminadaRef.current = true;
-          
-          // Registrar la llamada automáticamente
-          if (data.llamada_activa.duracion) {
-            registrarLlamada(sessionId, data.llamada_activa.duracion).catch(() => {
-              // Silenciar errores al registrar
-            });
-          }
-
+        const estado = response.llamada_activa.estado?.toLowerCase() || '';
+        if (estado === 'completed' || estado === 'noanswer' || estado === 'disconnected') {
           // Cerrar modal después de 3 segundos
           setTimeout(() => {
             setLlamadaActiva(null);
+            setClienteData(null);
             ultimoSessionIdRef.current = null;
-            llamadaTerminadaRef.current = false;
           }, 3000);
         }
       } else {
         // No hay llamada activa
-        setLlamadaActiva(null);
-        // No limpiar ultimoSessionIdRef aquí para permitir detectar nuevas llamadas
+        if (llamadaActiva) {
+          // Limpiar después de un breve delay
+          setTimeout(() => {
+            setLlamadaActiva(null);
+            setClienteData(null);
+          }, 1000);
+        }
       }
     } catch (err) {
       // Solo mostrar error si no es un error de conexión temporal
       if (err.response?.status !== 401) {
         setError(err.response?.data?.message || err.message || 'Error al consultar llamada activa');
       }
-      
-      // Si hay error de conexión, intentar reconexión cada 10 segundos
-      if (!err.response || err.response.status >= 500) {
-        // El intervalo seguirá intentando
-      }
     } finally {
       setCargando(false);
-    }
-  };
-
-  // Función para registrar llamada
-  const registrarLlamada = async (sessionId, duracion) => {
-    try {
-      const fechaHora = new Date().toISOString();
-      
-      await axiosInstance.post('/registrar-llamada', {
-        session_id: sessionId,
-        duracion: duracion,
-        fecha_hora: fechaHora,
-      });
-    } catch (err) {
-      console.error('Error al registrar llamada:', err);
-      // No lanzar error, solo loguear
     }
   };
 
@@ -127,12 +134,15 @@ const useCallMonitor = () => {
   // Función para cerrar modal manualmente
   const cerrarModal = () => {
     setLlamadaActiva(null);
+    setClienteData(null);
     ultimoSessionIdRef.current = null;
   };
 
   return {
     llamadaActiva,
+    clienteData,
     cargando,
+    buscandoCliente,
     error,
     cerrarModal,
   };
