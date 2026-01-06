@@ -5,9 +5,32 @@
  * 2. Polling - Fallback cada 2 segundos
  */
 
-import Echo from 'laravel-echo';
-import Pusher from 'pusher-js';
 import apiRequest from './api';
+
+// Importaciones dinámicas para evitar errores en build si no están instaladas
+let Echo = null;
+let Pusher = null;
+
+// Función para cargar dinámicamente las dependencias de Echo
+const loadEchoDependencies = async () => {
+  if (Echo && Pusher) {
+    return { Echo, Pusher };
+  }
+
+  try {
+    // Intentar cargar las dependencias dinámicamente
+    const echoModule = await import('laravel-echo');
+    const pusherModule = await import('pusher-js');
+    
+    Echo = echoModule.default || echoModule;
+    Pusher = pusherModule.default || pusherModule;
+    
+    return { Echo, Pusher };
+  } catch (error) {
+    console.warn('⚠️ Laravel Echo no está disponible:', error.message);
+    return null;
+  }
+};
 
 // Configuración desde variables de entorno
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -32,7 +55,7 @@ class LlamadasService {
   /**
    * Inicializa Laravel Echo si está configurado
    */
-  initializeEcho() {
+  async initializeEcho() {
     try {
       // Verificar si tenemos las configuraciones necesarias
       if (!PUSHER_APP_KEY && !PUSHER_APP_HOST) {
@@ -40,8 +63,17 @@ class LlamadasService {
         return false;
       }
 
+      // Cargar dependencias dinámicamente
+      const deps = await loadEchoDependencies();
+      if (!deps) {
+        console.warn('⚠️ No se pudieron cargar las dependencias de Laravel Echo. Usando polling.');
+        return false;
+      }
+
+      const { Echo: EchoClass, Pusher: PusherClass } = deps;
+
       // Configurar Pusher
-      window.Pusher = Pusher;
+      window.Pusher = PusherClass;
 
       // Determinar la URL del servidor
       let host = PUSHER_APP_HOST || `ws-${PUSHER_APP_CLUSTER}.pusher.com`;
@@ -76,7 +108,8 @@ class LlamadasService {
         echoConfig.wssPort = wsPort;
       }
 
-      this.echo = new Echo(echoConfig);
+      // Usar EchoClass que ya cargamos
+      this.echo = new EchoClass(echoConfig);
 
       this.useEcho = true;
       console.log('✅ Laravel Echo inicializado');
@@ -92,8 +125,14 @@ class LlamadasService {
    */
   async connect() {
     // Intentar usar Echo primero
-    if (this.initializeEcho()) {
-      await this.connectEcho();
+    const echoInitialized = await this.initializeEcho();
+    if (echoInitialized) {
+      try {
+        await this.connectEcho();
+      } catch (error) {
+        console.warn('⚠️ Error al conectar Echo, usando polling:', error);
+        this.startPolling();
+      }
     } else {
       // Usar polling como fallback
       this.startPolling();
