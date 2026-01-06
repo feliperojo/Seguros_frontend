@@ -47,9 +47,30 @@ const CallModal = ({
   };
 
   const callInfo = getCallInfo();
-  const phoneNumber = currentCall?.phoneNumber || 'N/A';
-  const extensionName = currentCall?.extensionName || currentCall?.raw?.extension_name || 'N/A';
-  const extensionNumber = currentCall?.extensionNumber || currentCall?.raw?.extension_number || 'N/A';
+  
+  // Extraer información de la llamada con múltiples fallbacks
+  const phoneNumber = currentCall?.phoneNumber 
+    || currentCall?.raw?.phone_number 
+    || currentCall?.raw?.telefono 
+    || 'N/A';
+  
+  const extensionName = currentCall?.extensionName 
+    || currentCall?.raw?.extension_name 
+    || currentCall?.raw?.extensionName
+    || 'Desconocida';
+  
+  const extensionNumber = currentCall?.extensionNumber 
+    || currentCall?.raw?.extension_number 
+    || currentCall?.raw?.extensionNumber
+    || 'N/A';
+  
+  const callStatus = currentCall?.status 
+    || currentCall?.raw?.status 
+    || 'Desconocido';
+  
+  const callDirection = currentCall?.direction 
+    || currentCall?.raw?.direction 
+    || 'Inbound';
 
   // Manejar creación de cliente rápido
   const handleCrearCliente = async () => {
@@ -142,28 +163,71 @@ const CallModal = ({
 
       <Modal.Body>
         {/* Información de la llamada */}
-        <Card className="mb-3">
+        <Card className="mb-3 border-primary">
+          <Card.Header className="bg-primary text-white">
+            <h6 className="mb-0">
+              <i className="bi bi-info-circle-fill"></i> Información de la Llamada
+            </h6>
+          </Card.Header>
           <Card.Body>
             <Row>
-              <Col md={4}>
-                <strong>Extensión:</strong>
-                <p className="mb-0">
-                  <Badge bg="info" className="fs-6">
-                    {extensionName} ({extensionNumber})
-                  </Badge>
-                </p>
+              <Col md={6} className="mb-3">
+                <div className="d-flex align-items-center mb-2">
+                  <i className="bi bi-person-badge me-2 text-primary"></i>
+                  <strong>Extensión:</strong>
+                </div>
+                <Badge bg="info" className="fs-6 p-2">
+                  {extensionName} ({extensionNumber})
+                </Badge>
               </Col>
-              <Col md={4}>
-                <strong>Número de teléfono:</strong>
-                <p className="mb-0">
-                  <Badge bg="secondary" className="fs-6">{phoneNumber}</Badge>
-                </p>
+              <Col md={6} className="mb-3">
+                <div className="d-flex align-items-center mb-2">
+                  <i className="bi bi-telephone-fill me-2 text-success"></i>
+                  <strong>Número de teléfono:</strong>
+                </div>
+                <Badge bg={phoneNumber !== 'N/A' ? 'success' : 'secondary'} className="fs-6 p-2">
+                  {phoneNumber}
+                </Badge>
               </Col>
-              <Col md={4}>
-                <strong>Hora de inicio:</strong>
+              <Col md={6} className="mb-3">
+                <div className="d-flex align-items-center mb-2">
+                  <i className="bi bi-arrow-left-right me-2 text-warning"></i>
+                  <strong>Dirección:</strong>
+                </div>
+                <Badge bg={callDirection === 'Inbound' ? 'success' : 'primary'} className="fs-6 p-2">
+                  {callDirection === 'Inbound' ? 'Entrante' : 'Saliente'}
+                </Badge>
+              </Col>
+              <Col md={6} className="mb-3">
+                <div className="d-flex align-items-center mb-2">
+                  <i className="bi bi-clock-fill me-2 text-info"></i>
+                  <strong>Estado:</strong>
+                </div>
+                <Badge bg={
+                  callStatus === 'Ringing' || callStatus === 'ringing' ? 'warning' :
+                  callStatus === 'CallConnected' || callStatus === 'connected' ? 'success' :
+                  callStatus === 'OnHold' || callStatus === 'hold' ? 'info' : 'secondary'
+                } className="fs-6 p-2">
+                  {callStatus === 'Ringing' || callStatus === 'ringing' ? 'Sonando' :
+                   callStatus === 'CallConnected' || callStatus === 'connected' ? 'Conectada' :
+                   callStatus === 'OnHold' || callStatus === 'hold' ? 'En Espera' : callStatus}
+                </Badge>
+              </Col>
+              <Col md={12}>
+                <div className="d-flex align-items-center mb-2">
+                  <i className="bi bi-calendar-event me-2 text-secondary"></i>
+                  <strong>Hora de inicio:</strong>
+                </div>
                 <p className="mb-0">
                   {currentCall?.startTime 
-                    ? new Date(currentCall.startTime).toLocaleString('es-ES')
+                    ? new Date(currentCall.startTime).toLocaleString('es-ES', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                      })
                     : new Date().toLocaleString('es-ES')}
                 </p>
               </Col>

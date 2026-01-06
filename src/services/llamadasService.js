@@ -51,6 +51,7 @@ class LlamadasService {
     this.isConnected = false;
     this.pollingIntervalMs = 3000; // 3 segundos (recomendado)
     this.llamadasAnteriores = []; // Para detectar nuevas llamadas
+    this.hayLlamadasActivas = false; // Para optimizar polling
   }
 
   /**
@@ -203,60 +204,109 @@ class LlamadasService {
 
   /**
    * Inicia el polling como fallback
+   * Optimizado para reducir frecuencia cuando no hay llamadas
    */
   startPolling() {
     if (this.isPolling) {
       return; // Ya está haciendo polling
     }
 
-    console.log('🔄 Iniciando polling cada 3 segundos...');
+    console.log('🔄 Iniciando polling inteligente...');
     this.isPolling = true;
     this.useEcho = false;
 
     // Hacer la primera consulta inmediatamente
     this.pollLlamadasActivas();
 
-    // Configurar intervalo
-    this.pollingInterval = setInterval(() => {
-      this.pollLlamadasActivas();
-    }, this.pollingIntervalMs);
+    // Configurar intervalo adaptativo
+    this.startAdaptivePolling();
 
     this.isConnected = true;
     this.emit('connected', { method: 'polling' });
   }
 
   /**
+   * Inicia polling adaptativo que cambia la frecuencia según haya llamadas
+   * Si hay llamadas activas: cada 3 segundos
+   * Si no hay llamadas: cada 10 segundos (para ahorrar recursos)
+   */
+  startAdaptivePolling() {
+    // Limpiar cualquier polling anterior
+    if (this.pollingInterval) {
+      clearTimeout(this.pollingInterval);
+      this.pollingInterval = null;
+    }
+
+    const poll = () => {
+      if (!this.isPolling) {
+        return; // Detener si ya no estamos en modo polling
+      }
+
+      this.pollLlamadasActivas();
+      
+      // Re-programar con intervalo adaptativo
+      const interval = this.hayLlamadasActivas ? 3000 : 10000;
+      
+      this.pollingInterval = setTimeout(poll, interval);
+    };
+
+    // Iniciar el primer ciclo
+    poll();
+  }
+
+  /**
    * Consulta el endpoint de llamadas activas de RingCentral
    * Este endpoint ya identifica automáticamente los clientes
+   * Optimizado para reducir logs innecesarios
    */
   async pollLlamadasActivas() {
     try {
       const response = await apiRequest('/ringcentral/identificar-llamadas-activas', 'GET');
       
-      console.log('🔄 Polling - Respuesta recibida:', response);
-      
       if (response.success && response.data && Array.isArray(response.data)) {
-        // Detectar nuevas llamadas comparando con las anteriores
+        const hayLlamadas = response.data.length > 0;
         const llamadasAnteriores = this.llamadasAnteriores || [];
+        const habiaLlamadas = llamadasAnteriores.length > 0;
+        
+        // Detectar nuevas llamadas comparando con las anteriores
         const nuevasLlamadas = response.data.filter(nueva => {
           // Una llamada es nueva si no existe en las anteriores
           return !llamadasAnteriores.some(anterior => 
-            anterior.extension_id === nueva.extension_id &&
-            anterior.phone_number === nueva.phone_number &&
-            anterior.timestamp === nueva.timestamp
+            (anterior.extension_id || anterior.extensionId) === (nueva.extension_id || nueva.extensionId) &&
+            (anterior.phone_number || anterior.phoneNumber) === (nueva.phone_number || nueva.phoneNumber) &&
+            (anterior.timestamp || anterior.start_time) === (nueva.timestamp || nueva.start_time)
           );
         });
         
+        // Actualizar estado para polling adaptativo
+        const estadoAnterior = this.hayLlamadasActivas;
+        this.hayLlamadasActivas = hayLlamadas;
+        
+        // Si cambió el estado (de sin llamadas a con llamadas o viceversa), re-programar polling
+        if (estadoAnterior !== hayLlamadas) {
+          console.log(`🔄 Cambio de estado: ${hayLlamadas ? 'Llamadas activas detectadas' : 'No hay llamadas activas'}`);
+          // Re-programar con nuevo intervalo
+          this.startAdaptivePolling();
+        }
+        
+        // Solo loguear si hay llamadas o si cambió el estado
+        if (hayLlamadas || habiaLlamadas !== hayLlamadas) {
+          console.log(`🔄 Polling: ${response.total || response.data.length} llamada(s) activa(s)`);
+        }
+        
         // Procesar todas las llamadas activas
         response.data.forEach(llamada => {
-          console.log('📞 Procesando llamada del polling:', llamada);
           this.handleLlamadaEvent(llamada);
         });
         
         // Si hay nuevas llamadas, emitir evento especial
         if (nuevasLlamadas.length > 0) {
           nuevasLlamadas.forEach(llamada => {
-            console.log('🆕 Nueva llamada detectada:', llamada);
+            console.log('🆕 Nueva llamada detectada:', {
+              extension: llamada.extension_name || llamada.extensionName,
+              telefono: llamada.phone_number || llamada.phoneNumber,
+              cliente: llamada.cliente_encontrado ? (llamada.cliente?.nombre_completo || llamada.cliente?.nombre) : 'No encontrado'
+            });
             this.emit('nueva-llamada', llamada);
           });
         }
@@ -264,26 +314,32 @@ class LlamadasService {
         // Guardar llamadas actuales para la próxima comparación
         this.llamadasAnteriores = response.data;
       } else if (response.success && response.data && response.data.length === 0) {
-        // No hay llamadas activas
-        if (import.meta.env.DEV) {
-          console.log('ℹ️ No hay llamadas activas en este momento');
+        // Actualizar estado para polling adaptativo
+        const estadoAnterior = this.hayLlamadasActivas;
+        this.hayLlamadasActivas = false;
+        
+        // Si había llamadas antes y ahora no, re-programar polling
+        if (estadoAnterior && !this.hayLlamadasActivas) {
+          console.log('ℹ️ No hay llamadas activas - Cambiando a polling lento');
+          this.startAdaptivePolling();
         }
-        // Limpiar llamadas anteriores si no hay ninguna
-        this.llamadasAnteriores = [];
+        
+        // Solo limpiar si había llamadas antes
+        if (this.llamadasAnteriores && this.llamadasAnteriores.length > 0) {
+          this.llamadasAnteriores = [];
+        }
       } else {
         console.warn('⚠️ Respuesta inesperada del endpoint:', response);
       }
     } catch (error) {
-      // Si el endpoint no existe o hay error, loguear
-      console.warn('⚠️ Error al consultar llamadas activas:', {
-        message: error.message,
-        status: error.response?.status,
-        url: '/ringcentral/identificar-llamadas-activas'
-      });
+      // Solo loguear errores importantes
+      if (error.response?.status !== 404) {
+        console.warn('⚠️ Error al consultar llamadas activas:', error.message);
+      }
       
       // Si es 404, el endpoint no existe
       if (error.response?.status === 404) {
-        console.warn('⚠️ El endpoint /ringcentral/identificar-llamadas-activas no está implementado en Laravel');
+        console.warn('⚠️ El endpoint /ringcentral/identificar-llamadas-activas no está implementado');
       }
     }
   }
@@ -293,25 +349,32 @@ class LlamadasService {
    * El formato viene directamente del endpoint de RingCentral
    */
   handleLlamadaEvent(data) {
-    console.log('📞 handleLlamadaEvent - Datos recibidos:', data);
-    
     // Normalizar el formato del evento (el endpoint ya viene con formato correcto)
     const llamadaData = {
-      id: `${data.extension_id}-${data.phone_number}-${data.timestamp}`,
-      extensionId: data.extension_id,
-      extensionName: data.extension_name,
-      extensionNumber: data.extension_number,
+      id: `${data.extension_id || data.extensionId || 'unknown'}-${data.phone_number || data.phoneNumber || 'unknown'}-${data.timestamp || Date.now()}`,
+      extensionId: data.extension_id || data.extensionId || null,
+      extensionName: data.extension_name || data.extensionName || data.extension_name || 'Desconocida',
+      extensionNumber: data.extension_number || data.extensionNumber || data.extension_number || 'N/A',
       direction: data.direction || 'Inbound', // 'Inbound' o 'Outbound'
-      phoneNumber: data.phone_number,
+      phoneNumber: data.phone_number || data.phoneNumber || data.telefono || 'N/A',
       status: data.status || 'Ringing', // 'Ringing', 'CallConnected', 'OnHold'
-      startTime: data.timestamp || new Date().toISOString(),
-      clienteEncontrado: data.cliente_encontrado || false,
-      clienteId: data.cliente?.id || null,
+      startTime: data.timestamp || data.start_time || data.created_at || new Date().toISOString(),
+      clienteEncontrado: data.cliente_encontrado !== undefined ? data.cliente_encontrado : (data.cliente ? true : false),
+      clienteId: data.cliente?.id || data.cliente_id || null,
       cliente: data.cliente || null,
-      raw: data // Guardar datos originales completos
+      raw: data // Guardar datos originales completos para debugging
     };
 
-    console.log('📞 handleLlamadaEvent - Datos normalizados:', llamadaData);
+    // Solo loguear si hay información relevante
+    if (llamadaData.phoneNumber !== 'N/A' || llamadaData.clienteEncontrado) {
+      console.log('📞 Llamada detectada:', {
+        extension: `${llamadaData.extensionName} (${llamadaData.extensionNumber})`,
+        telefono: llamadaData.phoneNumber,
+        direccion: llamadaData.direction,
+        estado: llamadaData.status,
+        cliente: llamadaData.clienteEncontrado ? llamadaData.cliente?.nombre_completo || llamadaData.cliente?.nombre : 'No encontrado'
+      });
+    }
 
     // Emitir evento
     this.emit('llamada', llamadaData);
@@ -361,7 +424,7 @@ class LlamadasService {
   disconnect() {
     // Detener polling
     if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
+      clearTimeout(this.pollingInterval);
       this.pollingInterval = null;
       this.isPolling = false;
     }
