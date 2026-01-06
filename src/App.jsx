@@ -44,6 +44,7 @@ import PermissionsList from "./pages/admin/PermissionsList";
 import AuditLogsList from "./pages/admin/AuditLogsList";
 
 import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
+import CallIdentifierContainer from "./components/CallIdentifier/CallIdentifierContainer";
 
 // Layout protegido que envuelve todas las páginas
 const ProtectedLayout = () => {
@@ -59,7 +60,11 @@ const ProtectedLayout = () => {
 
 const App = () => {
   return (
-    <Routes>
+    <>
+      {/* Identificador de llamadas (siempre activo) */}
+      <CallIdentifierContainer />
+      
+      <Routes>
       {/* Página de Login (pública) */}
       <Route path="/login" element={<Login />} />
       <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />
@@ -159,6 +164,7 @@ const App = () => {
       {/* Redirigir a login si la ruta no existe */}
       <Route path="*" element={<Navigate to="/login" />} />
     </Routes>
+    </>
   );
 };
 
