@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Modal, Button, Badge, Alert, Table, Spinner } from 'react-bootstrap';
-import { FiPhone, FiMail, FiBuilding, FiUser, FiX, FiExternalLink, FiEdit3 } from 'react-icons/fi';
+import { FiPhone, FiMail, FiBriefcase, FiUser, FiX, FiExternalLink, FiEdit3 } from 'react-icons/fi';
 import CreateClientQuickForm from './CreateClientQuickForm';
 import './CallIdentifier.css';
 
@@ -147,7 +147,7 @@ const CallModal = ({ show, llamada, onClose }) => {
               </h3>
               {cliente.empresa && (
                 <p className="text-muted mb-2">
-                  <FiBuilding className="me-2" />
+                  <FiBriefcase className="me-2" />
                   {cliente.empresa}
                 </p>
               )}

@@ -3,7 +3,7 @@
 
 import React, { useState } from 'react';
 import { Form, Button, Spinner, Alert } from 'react-bootstrap';
-import { FiMail, FiUser, FiBuilding } from 'react-icons/fi';
+import { FiMail, FiUser, FiBriefcase } from 'react-icons/fi';
 import axiosInstance from '../../services/axios';
 
 const CreateClientQuickForm = ({ telefono, onClienteCreado, onCancel }) => {
@@ -125,7 +125,7 @@ const CreateClientQuickForm = ({ telefono, onClienteCreado, onCancel }) => {
 
         <Form.Group className="mb-3">
           <Form.Label>
-            <FiBuilding className="me-2" />
+            <FiBriefcase className="me-2" />
             Empresa
           </Form.Label>
           <Form.Control
