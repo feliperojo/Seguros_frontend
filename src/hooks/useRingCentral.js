@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import llamadasService from '../services/llamadasService';
-import { buscarCliente } from '../services/apiService';
+import { buscarCliente, crearClienteRapido, agregarNotaCliente } from '../services/apiService';
 import { CALL_STATES } from '../utils/constants';
 
 export const useRingCentral = () => {
@@ -24,49 +24,66 @@ export const useRingCentral = () => {
 
   /**
    * Maneja eventos de llamadas recibidos desde Laravel
+   * El endpoint ya viene con la información del cliente identificada
    */
   const handleLlamadaEvent = useCallback(async (llamadaData) => {
     try {
       console.log('📞 Evento de llamada recibido:', llamadaData);
 
-      const { direction, phoneNumber, status, startTime, cliente, clienteId } = llamadaData;
+      const { 
+        direction, 
+        phoneNumber, 
+        status, 
+        startTime, 
+        cliente, 
+        clienteId,
+        clienteEncontrado,
+        extensionName,
+        extensionNumber
+      } = llamadaData;
 
       // Actualizar estado de la llamada
       const callInfo = {
         id: llamadaData.id,
         direction: direction === 'Inbound' ? 'Inbound' : 'Outbound',
-        status: status || 'active',
+        status: status || 'Ringing',
         phoneNumber: phoneNumber,
         startTime: startTime || new Date().toISOString(),
         clienteId: clienteId,
+        extensionName: extensionName,
+        extensionNumber: extensionNumber,
         raw: llamadaData.raw
       };
 
       setCurrentCall(callInfo);
 
-      // Determinar el estado de la llamada
-      if (status === 'setup' || status === 'ringing' || status === 'proceeding') {
-        setCallState(direction === 'Inbound' ? CALL_STATES.INCOMING : CALL_STATES.OUTGOING);
-        
-        // Si ya viene con datos del cliente, usarlos
-        if (cliente) {
-          setClienteData(cliente);
-        } else if (phoneNumber) {
-          // Si no, buscar el cliente por teléfono
-          await buscarClientePorTelefono(phoneNumber);
-        }
-      } else if (status === 'connected' || status === 'active' || status === 'hold') {
-        setCallState(CALL_STATES.ACTIVE);
-        
-        // Si ya viene con datos del cliente, usarlos
-        if (cliente) {
-          setClienteData(cliente);
-        } else if (phoneNumber && !clienteData) {
-          await buscarClientePorTelefono(phoneNumber);
-        }
+      // Mapear estados de RingCentral a estados internos
+      let callStateInternal = CALL_STATES.IDLE;
+      if (status === 'Ringing' || status === 'ringing') {
+        callStateInternal = direction === 'Inbound' ? CALL_STATES.INCOMING : CALL_STATES.OUTGOING;
+      } else if (status === 'CallConnected' || status === 'connected' || status === 'active') {
+        callStateInternal = CALL_STATES.ACTIVE;
+      } else if (status === 'OnHold' || status === 'hold') {
+        callStateInternal = CALL_STATES.ACTIVE;
       } else if (status === 'disconnected' || status === 'ended' || status === 'completed') {
-        setCallState(CALL_STATES.ENDED);
-        // Limpiar datos después de un tiempo
+        callStateInternal = CALL_STATES.ENDED;
+      }
+
+      setCallState(callStateInternal);
+
+      // El endpoint ya viene con la información del cliente identificada
+      if (clienteEncontrado && cliente) {
+        setClienteData(cliente);
+      } else {
+        // Cliente no encontrado
+        setClienteData({
+          encontrado: false,
+          telefono: phoneNumber
+        });
+      }
+
+      // Si la llamada terminó, limpiar después de un tiempo
+      if (callStateInternal === CALL_STATES.ENDED) {
         setTimeout(() => {
           setCurrentCall(null);
           setCallState(CALL_STATES.IDLE);
@@ -122,15 +139,28 @@ export const useRingCentral = () => {
   }, []);
 
   /**
+   * Maneja nuevas llamadas detectadas
+   */
+  const handleNuevaLlamada = useCallback((llamadaData) => {
+    console.log('🆕 Nueva llamada detectada:', llamadaData);
+    // Disparar evento personalizado para notificaciones
+    window.dispatchEvent(new CustomEvent('nueva-llamada-ringcentral', { 
+      detail: llamadaData 
+    }));
+  }, []);
+
+  /**
    * Configura los event listeners
    */
   useEffect(() => {
     // Registrar handlers
     eventHandlersRef.current.llamada = handleLlamadaEvent;
     eventHandlersRef.current.connected = handleConnectionEvent;
+    eventHandlersRef.current.nuevaLlamada = handleNuevaLlamada;
 
     llamadasService.on('llamada', eventHandlersRef.current.llamada);
     llamadasService.on('connected', eventHandlersRef.current.connected);
+    llamadasService.on('nueva-llamada', eventHandlersRef.current.nuevaLlamada);
 
     // Actualizar estado de conexión periódicamente
     const connectionInterval = setInterval(() => {
@@ -147,9 +177,12 @@ export const useRingCentral = () => {
       if (eventHandlersRef.current.connected) {
         llamadasService.off('connected', eventHandlersRef.current.connected);
       }
+      if (eventHandlersRef.current.nuevaLlamada) {
+        llamadasService.off('nueva-llamada', eventHandlersRef.current.nuevaLlamada);
+      }
       clearInterval(connectionInterval);
     };
-  }, [handleLlamadaEvent, handleConnectionEvent]);
+  }, [handleLlamadaEvent, handleConnectionEvent, handleNuevaLlamada]);
 
   /**
    * Conecta al servicio de llamadas (Echo o Polling)
@@ -213,6 +246,48 @@ export const useRingCentral = () => {
     setClienteData(null);
   }, []);
 
+  /**
+   * Crea un cliente rápido cuando no se encuentra
+   */
+  const crearClienteRapidoHandler = useCallback(async (nombre, telefono, email = null) => {
+    setIsLoadingCliente(true);
+    setError(null);
+
+    try {
+      const result = await crearClienteRapido(nombre, telefono, email);
+      if (result.success && result.cliente) {
+        setClienteData(result.cliente);
+        return { success: true, cliente: result.cliente };
+      }
+      return { success: false, error: 'No se pudo crear el cliente' };
+    } catch (error) {
+      const errorMessage = error.message || 'Error al crear el cliente';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    } finally {
+      setIsLoadingCliente(false);
+    }
+  }, []);
+
+  /**
+   * Agrega una nota a un cliente
+   */
+  const agregarNotaHandler = useCallback(async (clienteId, nota) => {
+    setError(null);
+
+    try {
+      const result = await agregarNotaCliente(clienteId, nota);
+      if (result.success) {
+        return { success: true };
+      }
+      return { success: false, error: 'No se pudo agregar la nota' };
+    } catch (error) {
+      const errorMessage = error.message || 'Error al agregar la nota';
+      setError(errorMessage);
+      return { success: false, error: errorMessage };
+    }
+  }, []);
+
   return {
     // Estados
     isConnected,
@@ -229,7 +304,9 @@ export const useRingCentral = () => {
     connect,
     disconnect,
     buscarClientePorTelefono,
-    closeCallModal
+    closeCallModal,
+    crearClienteRapido: crearClienteRapidoHandler,
+    agregarNota: agregarNotaHandler
   };
 };
 

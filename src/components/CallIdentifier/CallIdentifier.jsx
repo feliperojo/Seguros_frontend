@@ -9,6 +9,7 @@ import { Button, Badge, OverlayTrigger, Tooltip } from 'react-bootstrap';
 import { useRingCentral } from '../../hooks/useRingCentral';
 import CallModal from './CallModal';
 import CallNotification from './CallNotification';
+import DiagnosticoLlamadas from './DiagnosticoLlamadas';
 import { CALL_STATES } from '../../utils/constants';
 
 const CallIdentifier = () => {
@@ -24,7 +25,9 @@ const CallIdentifier = () => {
     connectionError,
     connect,
     disconnect,
-    closeCallModal
+    closeCallModal,
+    crearClienteRapido,
+    agregarNota
   } = useRingCentral();
 
   const [showCallModal, setShowCallModal] = useState(false);
@@ -47,17 +50,6 @@ const CallIdentifier = () => {
     }
   }, [isConnected, isConnecting, connect]);
 
-  // Manejar creación de nuevo cliente
-  const handleCrearCliente = async (phoneNumber) => {
-    try {
-      // Aquí puedes abrir un modal o redirigir a la página de creación de cliente
-      // Por ahora, redirigimos a la página de clientes con el número prellenado
-      const params = new URLSearchParams({ telefono: phoneNumber, nuevo: 'true' });
-      window.location.href = `/clientes/nuevo?${params.toString()}`;
-    } catch (error) {
-      console.error('Error al crear cliente:', error);
-    }
-  };
 
   // Manejar desconexión
   const handleDisconnect = async () => {
@@ -163,7 +155,8 @@ const CallIdentifier = () => {
         currentCall={currentCall}
         clienteData={clienteData}
         isLoadingCliente={isLoadingCliente}
-        onCrearCliente={handleCrearCliente}
+        onCrearCliente={crearClienteRapido}
+        onAgregarNota={agregarNota}
       />
 
       {/* Notificaciones */}
@@ -174,6 +167,11 @@ const CallIdentifier = () => {
         callState={callState}
         currentCall={currentCall}
       />
+
+      {/* Diagnóstico (solo en desarrollo o si hay error) */}
+      {(import.meta.env.DEV || error || connectionError) && (
+        <DiagnosticoLlamadas />
+      )}
     </>
   );
 };

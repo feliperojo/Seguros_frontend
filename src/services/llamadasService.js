@@ -49,7 +49,8 @@ class LlamadasService {
     this.eventHandlers = new Map();
     this.useEcho = false;
     this.isConnected = false;
-    this.pollingIntervalMs = 2000; // 2 segundos
+    this.pollingIntervalMs = 3000; // 3 segundos (recomendado)
+    this.llamadasAnteriores = []; // Para detectar nuevas llamadas
   }
 
   /**
@@ -208,7 +209,7 @@ class LlamadasService {
       return; // Ya está haciendo polling
     }
 
-    console.log('🔄 Iniciando polling cada 2 segundos...');
+    console.log('🔄 Iniciando polling cada 3 segundos...');
     this.isPolling = true;
     this.useEcho = false;
 
@@ -225,45 +226,92 @@ class LlamadasService {
   }
 
   /**
-   * Consulta el endpoint de llamadas activas
+   * Consulta el endpoint de llamadas activas de RingCentral
+   * Este endpoint ya identifica automáticamente los clientes
    */
   async pollLlamadasActivas() {
     try {
-      const response = await apiRequest('/api/llamadas/activas', 'GET');
+      const response = await apiRequest('/api/ringcentral/identificar-llamadas-activas', 'GET');
       
-      if (response.data && Array.isArray(response.data)) {
-        // Procesar cada llamada activa
+      console.log('🔄 Polling - Respuesta recibida:', response);
+      
+      if (response.success && response.data && Array.isArray(response.data)) {
+        // Detectar nuevas llamadas comparando con las anteriores
+        const llamadasAnteriores = this.llamadasAnteriores || [];
+        const nuevasLlamadas = response.data.filter(nueva => {
+          // Una llamada es nueva si no existe en las anteriores
+          return !llamadasAnteriores.some(anterior => 
+            anterior.extension_id === nueva.extension_id &&
+            anterior.phone_number === nueva.phone_number &&
+            anterior.timestamp === nueva.timestamp
+          );
+        });
+        
+        // Procesar todas las llamadas activas
         response.data.forEach(llamada => {
+          console.log('📞 Procesando llamada del polling:', llamada);
           this.handleLlamadaEvent(llamada);
         });
-      } else if (response.llamada) {
-        // Si retorna una sola llamada
-        this.handleLlamadaEvent(response.llamada);
+        
+        // Si hay nuevas llamadas, emitir evento especial
+        if (nuevasLlamadas.length > 0) {
+          nuevasLlamadas.forEach(llamada => {
+            console.log('🆕 Nueva llamada detectada:', llamada);
+            this.emit('nueva-llamada', llamada);
+          });
+        }
+        
+        // Guardar llamadas actuales para la próxima comparación
+        this.llamadasAnteriores = response.data;
+      } else if (response.success && response.data && response.data.length === 0) {
+        // No hay llamadas activas
+        if (import.meta.env.DEV) {
+          console.log('ℹ️ No hay llamadas activas en este momento');
+        }
+        // Limpiar llamadas anteriores si no hay ninguna
+        this.llamadasAnteriores = [];
+      } else {
+        console.warn('⚠️ Respuesta inesperada del endpoint:', response);
       }
     } catch (error) {
-      // Si el endpoint no existe o hay error, no hacer nada
-      // Solo loguear en desarrollo
-      if (import.meta.env.DEV) {
-        console.warn('⚠️ Error al consultar llamadas activas:', error.message);
+      // Si el endpoint no existe o hay error, loguear
+      console.warn('⚠️ Error al consultar llamadas activas:', {
+        message: error.message,
+        status: error.response?.status,
+        url: '/api/ringcentral/identificar-llamadas-activas'
+      });
+      
+      // Si es 404, el endpoint no existe
+      if (error.response?.status === 404) {
+        console.warn('⚠️ El endpoint /api/ringcentral/identificar-llamadas-activas no está implementado en Laravel');
       }
     }
   }
 
   /**
    * Maneja eventos de llamadas recibidos
+   * El formato viene directamente del endpoint de RingCentral
    */
   handleLlamadaEvent(data) {
-    // Normalizar el formato del evento
+    console.log('📞 handleLlamadaEvent - Datos recibidos:', data);
+    
+    // Normalizar el formato del evento (el endpoint ya viene con formato correcto)
     const llamadaData = {
-      id: data.id || data.llamada_id || Date.now(),
-      direction: data.direction || data.tipo || 'Inbound',
-      phoneNumber: data.telefono || data.phone_number || data.numero || data.from || data.to,
-      status: data.status || data.estado || 'active',
-      startTime: data.start_time || data.created_at || data.fecha || new Date().toISOString(),
-      clienteId: data.cliente_id || null,
+      id: `${data.extension_id}-${data.phone_number}-${data.timestamp}`,
+      extensionId: data.extension_id,
+      extensionName: data.extension_name,
+      extensionNumber: data.extension_number,
+      direction: data.direction || 'Inbound', // 'Inbound' o 'Outbound'
+      phoneNumber: data.phone_number,
+      status: data.status || 'Ringing', // 'Ringing', 'CallConnected', 'OnHold'
+      startTime: data.timestamp || new Date().toISOString(),
+      clienteEncontrado: data.cliente_encontrado || false,
+      clienteId: data.cliente?.id || null,
       cliente: data.cliente || null,
-      raw: data // Guardar datos originales
+      raw: data // Guardar datos originales completos
     };
+
+    console.log('📞 handleLlamadaEvent - Datos normalizados:', llamadaData);
 
     // Emitir evento
     this.emit('llamada', llamadaData);

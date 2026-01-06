@@ -93,3 +93,67 @@ export const obtenerNotasCliente = async (clienteId) => {
   }
 };
 
+/**
+ * Crea un cliente rápido cuando no se encuentra en la base de datos
+ * @param {string} nombre - Nombre del cliente
+ * @param {string} telefono - Número de teléfono
+ * @param {string} email - Email (opcional)
+ * @returns {Promise<Object>} - Cliente creado
+ */
+export const crearClienteRapido = async (nombre, telefono, email = null) => {
+  try {
+    const response = await apiRequest('/api/cliente/crear-rapido', 'POST', {
+      nombre,
+      telefono,
+      email
+    });
+    return {
+      success: true,
+      cliente: response.data || response
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Agrega una nota rápida a un cliente durante o después de la llamada
+ * @param {number} clienteId - ID del cliente
+ * @param {string} nota - Contenido de la nota
+ * @returns {Promise<Object>} - Resultado de la operación
+ */
+export const agregarNotaCliente = async (clienteId, nota) => {
+  try {
+    const response = await apiRequest(`/api/cliente/${clienteId}/agregar-nota`, 'PUT', {
+      nota
+    });
+    return {
+      success: true,
+      data: response.data || response
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Identifica una llamada específica por número de teléfono
+ * @param {string} phoneNumber - Número de teléfono
+ * @returns {Promise<Object>} - Información del cliente si existe
+ */
+export const identificarLlamada = async (phoneNumber) => {
+  try {
+    const response = await apiRequest('/api/ringcentral/identificar-llamada', 'POST', {
+      phone_number: phoneNumber
+    });
+    return {
+      success: true,
+      clienteEncontrado: response.cliente_encontrado || false,
+      cliente: response.data || null,
+      phoneNumber: response.phone_number || phoneNumber
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+

@@ -14,8 +14,15 @@ const CallModal = ({
   currentCall,
   clienteData,
   isLoadingCliente,
-  onCrearCliente
+  onCrearCliente,
+  onAgregarNota
 }) => {
+  const [mostrandoFormularioCrear, setMostrandoFormularioCrear] = React.useState(false);
+  const [mostrandoFormularioNota, setMostrandoFormularioNota] = React.useState(false);
+  const [formularioCrear, setFormularioCrear] = React.useState({ nombre: '', email: '' });
+  const [formularioNota, setFormularioNota] = React.useState({ nota: '' });
+  const [creandoCliente, setCreandoCliente] = React.useState(false);
+  const [agregandoNota, setAgregandoNota] = React.useState(false);
   // Auto-cerrar cuando la llamada termine
   useEffect(() => {
     if (callState === 'ended' && show) {
@@ -41,6 +48,67 @@ const CallModal = ({
 
   const callInfo = getCallInfo();
   const phoneNumber = currentCall?.phoneNumber || 'N/A';
+  const extensionName = currentCall?.extensionName || currentCall?.raw?.extension_name || 'N/A';
+  const extensionNumber = currentCall?.extensionNumber || currentCall?.raw?.extension_number || 'N/A';
+
+  // Manejar creación de cliente rápido
+  const handleCrearCliente = async () => {
+    if (!formularioCrear.nombre.trim()) {
+      alert('Por favor, ingresa el nombre del cliente');
+      return;
+    }
+
+    setCreandoCliente(true);
+    try {
+      const result = await onCrearCliente(
+        formularioCrear.nombre,
+        phoneNumber,
+        formularioCrear.email || null
+      );
+      
+      if (result.success) {
+        setMostrandoFormularioCrear(false);
+        setFormularioCrear({ nombre: '', email: '' });
+        alert('Cliente creado exitosamente');
+      } else {
+        alert(result.error || 'Error al crear el cliente');
+      }
+    } catch (error) {
+      alert('Error al crear el cliente: ' + error.message);
+    } finally {
+      setCreandoCliente(false);
+    }
+  };
+
+  // Manejar agregar nota
+  const handleAgregarNota = async () => {
+    if (!formularioNota.nota.trim()) {
+      alert('Por favor, ingresa la nota');
+      return;
+    }
+
+    if (!clienteData?.id) {
+      alert('No hay cliente asociado');
+      return;
+    }
+
+    setAgregandoNota(true);
+    try {
+      const result = await onAgregarNota(clienteData.id, formularioNota.nota);
+      
+      if (result.success) {
+        setMostrandoFormularioNota(false);
+        setFormularioNota({ nota: '' });
+        alert('Nota agregada exitosamente');
+      } else {
+        alert(result.error || 'Error al agregar la nota');
+      }
+    } catch (error) {
+      alert('Error al agregar la nota: ' + error.message);
+    } finally {
+      setAgregandoNota(false);
+    }
+  };
 
   return (
     <Modal
@@ -77,13 +145,21 @@ const CallModal = ({
         <Card className="mb-3">
           <Card.Body>
             <Row>
-              <Col md={6}>
+              <Col md={4}>
+                <strong>Extensión:</strong>
+                <p className="mb-0">
+                  <Badge bg="info" className="fs-6">
+                    {extensionName} ({extensionNumber})
+                  </Badge>
+                </p>
+              </Col>
+              <Col md={4}>
                 <strong>Número de teléfono:</strong>
                 <p className="mb-0">
                   <Badge bg="secondary" className="fs-6">{phoneNumber}</Badge>
                 </p>
               </Col>
-              <Col md={6}>
+              <Col md={4}>
                 <strong>Hora de inicio:</strong>
                 <p className="mb-0">
                   {currentCall?.startTime 
@@ -112,14 +188,65 @@ const CallModal = ({
                   <p className="text-muted">
                     No se encontró un cliente con el número <strong>{phoneNumber}</strong>
                   </p>
-                  {onCrearCliente && (
+                  
+                  {!mostrandoFormularioCrear ? (
                     <Button
                       variant="primary"
-                      onClick={() => onCrearCliente(phoneNumber)}
+                      onClick={() => setMostrandoFormularioCrear(true)}
                       className="mt-2"
                     >
                       <i className="bi bi-person-plus"></i> Crear nuevo cliente
                     </Button>
+                  ) : (
+                    <div className="mt-3">
+                      <div className="mb-3">
+                        <label className="form-label">Nombre del Cliente *</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={formularioCrear.nombre}
+                          onChange={(e) => setFormularioCrear({ ...formularioCrear, nombre: e.target.value })}
+                          placeholder="Ingresa el nombre"
+                        />
+                      </div>
+                      <div className="mb-3">
+                        <label className="form-label">Email (Opcional)</label>
+                        <input
+                          type="email"
+                          className="form-control"
+                          value={formularioCrear.email}
+                          onChange={(e) => setFormularioCrear({ ...formularioCrear, email: e.target.value })}
+                          placeholder="email@ejemplo.com"
+                        />
+                      </div>
+                      <div className="d-flex gap-2 justify-content-center">
+                        <Button
+                          variant="success"
+                          onClick={handleCrearCliente}
+                          disabled={creandoCliente || !formularioCrear.nombre.trim()}
+                        >
+                          {creandoCliente ? (
+                            <>
+                              <Spinner size="sm" className="me-2" />
+                              Creando...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-check-circle"></i> Crear Cliente
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setMostrandoFormularioCrear(false);
+                            setFormularioCrear({ nombre: '', email: '' });
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
                   )}
                 </div>
               </Card.Body>
@@ -136,7 +263,7 @@ const CallModal = ({
                 <Card.Body>
                   <Row>
                     <Col md={6}>
-                      <h4>{clienteData.nombre || clienteData.name || 'N/A'}</h4>
+                      <h4>{clienteData.nombre_completo || clienteData.nombre || clienteData.name || 'N/A'}</h4>
                       {clienteData.empresa && (
                         <p className="text-muted mb-2">
                           <i className="bi bi-building"></i> {clienteData.empresa}
@@ -150,6 +277,11 @@ const CallModal = ({
                       {clienteData.telefono && (
                         <p className="mb-1">
                           <i className="bi bi-telephone"></i> {clienteData.telefono}
+                        </p>
+                      )}
+                      {clienteData.telefonos && Array.isArray(clienteData.telefonos) && clienteData.telefonos.length > 0 && (
+                        <p className="mb-1">
+                          <i className="bi bi-telephone-fill"></i> {clienteData.telefonos.join(', ')}
                         </p>
                       )}
                     </Col>
@@ -179,6 +311,59 @@ const CallModal = ({
                       )}
                     </Col>
                   </Row>
+                  
+                  {/* Formulario para agregar nota */}
+                  {mostrandoFormularioNota ? (
+                    <div className="mt-3 p-3 bg-light rounded">
+                      <label className="form-label"><strong>Agregar Nota:</strong></label>
+                      <textarea
+                        className="form-control mb-2"
+                        rows="3"
+                        value={formularioNota.nota}
+                        onChange={(e) => setFormularioNota({ nota: e.target.value })}
+                        placeholder="Escribe una nota sobre esta llamada..."
+                      />
+                      <div className="d-flex gap-2">
+                        <Button
+                          variant="success"
+                          size="sm"
+                          onClick={handleAgregarNota}
+                          disabled={agregandoNota || !formularioNota.nota.trim()}
+                        >
+                          {agregandoNota ? (
+                            <>
+                              <Spinner size="sm" className="me-2" />
+                              Guardando...
+                            </>
+                          ) : (
+                            <>
+                              <i className="bi bi-check"></i> Guardar Nota
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setMostrandoFormularioNota(false);
+                            setFormularioNota({ nota: '' });
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3">
+                      <Button
+                        variant="outline-primary"
+                        size="sm"
+                        onClick={() => setMostrandoFormularioNota(true)}
+                      >
+                        <i className="bi bi-sticky"></i> Agregar Nota
+                      </Button>
+                    </div>
+                  )}
                 </Card.Body>
               </Card>
 
