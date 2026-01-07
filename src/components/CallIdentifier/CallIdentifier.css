@@ -154,3 +154,17 @@
   border-top: 2px solid #dee2e6;
 }
 
+/* Animación para spinner en botón de prueba */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+

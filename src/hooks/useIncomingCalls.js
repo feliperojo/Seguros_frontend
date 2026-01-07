@@ -1,0 +1,463 @@
+// src/hooks/useIncomingCalls.js
+// Hook global para escuchar eventos incoming_call desde WebSocket (Laravel Echo)
+// Escucha múltiples canales y evita eventos duplicados entre pestañas
+
+import { useState, useEffect, useRef } from 'react';
+import { buscarCliente } from '../services/apiService';
+
+// Importaciones dinámicas para Laravel Echo
+let Echo = null;
+let Pusher = null;
+
+const loadEchoDependencies = async () => {
+  if (Echo && Pusher) {
+    return { Echo, Pusher };
+  }
+
+  try {
+    const echoModule = await import('laravel-echo');
+    const pusherModule = await import('pusher-js');
+    Echo = echoModule.default || echoModule;
+    Pusher = pusherModule.default || pusherModule;
+    return { Echo, Pusher };
+  } catch (error) {
+    console.warn('⚠️ Laravel Echo no está disponible:', error.message);
+    return null;
+  }
+};
+
+// Configuración desde variables de entorno
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || 'pusher';
+const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || '';
+const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
+const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || '';
+const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || '6001';
+const PUSHER_APP_USE_TLS = import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true';
+
+// BroadcastChannel para evitar eventos duplicados entre pestañas
+const broadcastChannel = typeof BroadcastChannel !== 'undefined' 
+  ? new BroadcastChannel('incoming_calls')
+  : null;
+
+const useIncomingCalls = () => {
+  const [incomingCall, setIncomingCall] = useState(null);
+  const [clienteData, setClienteData] = useState(null);
+  const [buscandoCliente, setBuscandoCliente] = useState(false);
+  const [error, setError] = useState(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectedChannels, setConnectedChannels] = useState([]);
+  const echoRef = useRef(null);
+  const channelsRef = useRef([]);
+  const ultimoCallIdRef = useRef(null);
+  const processedCallIdsRef = useRef(new Set());
+  const reconnectAttemptsRef = useRef(0);
+  const maxReconnectAttempts = 5;
+  const reconnectDelayRef = useRef(1000);
+
+  // Log de diagnóstico
+  const logDiagnostic = (message, data = null) => {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 🔍 ${message}`, data || '');
+  };
+
+  // Inicializar Echo
+  const initializeEcho = async () => {
+    try {
+      logDiagnostic('Inicializando Laravel Echo...');
+
+      if (!PUSHER_APP_KEY && !PUSHER_APP_HOST) {
+        console.warn('⚠️ Laravel Echo no configurado. Variables de entorno faltantes.');
+        return false;
+      }
+
+      const deps = await loadEchoDependencies();
+      if (!deps) {
+        return false;
+      }
+
+      const { Echo: EchoClass, Pusher: PusherClass } = deps;
+      window.Pusher = PusherClass;
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.warn('⚠️ No hay token de autenticación');
+        return false;
+      }
+
+      // Determinar configuración del servidor
+      let wsPort = PUSHER_APP_PORT || '6001';
+      let authEndpoint = `${API_BASE_URL}/broadcasting/auth`;
+
+      const echoConfig = {
+        broadcaster: BROADCAST_DRIVER,
+        key: PUSHER_APP_KEY,
+        cluster: PUSHER_APP_CLUSTER,
+        encrypted: PUSHER_APP_USE_TLS,
+        disableStats: true,
+        enabledTransports: ['ws', 'wss'],
+        authEndpoint: authEndpoint,
+        auth: {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      };
+
+      if (PUSHER_APP_HOST) {
+        echoConfig.wsHost = PUSHER_APP_HOST;
+        echoConfig.wsPort = wsPort;
+        echoConfig.wssPort = wsPort;
+      }
+
+      echoRef.current = new EchoClass(echoConfig);
+
+      // Manejar eventos de conexión
+      echoRef.current.connector.pusher.connection.bind('connected', () => {
+        logDiagnostic('✅ Conectado a Laravel Echo (WebSocket)');
+        setIsConnected(true);
+        reconnectAttemptsRef.current = 0;
+        reconnectDelayRef.current = 1000;
+      });
+
+      echoRef.current.connector.pusher.connection.bind('disconnected', () => {
+        logDiagnostic('⚠️ Desconectado de Laravel Echo');
+        setIsConnected(false);
+        attemptReconnect();
+      });
+
+      echoRef.current.connector.pusher.connection.bind('error', (error) => {
+        logDiagnostic('❌ Error en conexión Echo', error);
+        setIsConnected(false);
+      });
+
+      logDiagnostic('✅ Laravel Echo inicializado correctamente');
+      return true;
+    } catch (error) {
+      logDiagnostic('❌ Error al inicializar Laravel Echo', error);
+      return false;
+    }
+  };
+
+  // Intentar reconexión
+  const attemptReconnect = () => {
+    if (reconnectAttemptsRef.current >= maxReconnectAttempts) {
+      logDiagnostic('❌ Máximo de intentos de reconexión alcanzado');
+      return;
+    }
+
+    reconnectAttemptsRef.current++;
+    const delay = reconnectDelayRef.current;
+    
+    logDiagnostic(`🔄 Intentando reconexión ${reconnectAttemptsRef.current}/${maxReconnectAttempts} en ${delay}ms`);
+
+    setTimeout(() => {
+      reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000); // Backoff exponencial
+      connectToChannels();
+    }, delay);
+  };
+
+  // Buscar cliente por teléfono
+  const buscarClientePorTelefono = async (telefono) => {
+    if (!telefono) return null;
+
+    try {
+      setBuscandoCliente(true);
+      logDiagnostic('Buscando cliente por teléfono', { telefono });
+      const resultado = await buscarCliente(telefono);
+      
+      if (resultado.encontrado && resultado.cliente) {
+        logDiagnostic('✅ Cliente encontrado', { id: resultado.cliente.id, nombre: resultado.cliente.nombre_completo });
+        return resultado.cliente;
+      }
+      logDiagnostic('⚠️ Cliente no encontrado');
+      return null;
+    } catch (err) {
+      logDiagnostic('❌ Error al buscar cliente', err);
+      return null;
+    } finally {
+      setBuscandoCliente(false);
+    }
+  };
+
+  // Verificar si el evento ya fue procesado (evitar duplicados)
+  const isEventProcessed = (callId) => {
+    if (processedCallIdsRef.current.has(callId)) {
+      return true;
+    }
+    processedCallIdsRef.current.add(callId);
+    // Limpiar IDs antiguos después de 5 minutos
+    setTimeout(() => {
+      processedCallIdsRef.current.delete(callId);
+    }, 5 * 60 * 1000);
+    return false;
+  };
+
+  // Manejar evento incoming_call
+  const handleIncomingCall = async (data) => {
+    try {
+      logDiagnostic('📞 Evento incoming_call recibido', data);
+
+      // Evitar múltiples popups simultáneos - verificar si es la misma llamada
+      const callId = data.session_id || data.id || data.call_id || `${data.telefono}-${Date.now()}`;
+      
+      // Verificar si ya fue procesado
+      if (isEventProcessed(callId)) {
+        logDiagnostic('⚠️ Evento duplicado ignorado', { callId });
+        return;
+      }
+
+      // Notificar a otras pestañas que este evento ya fue procesado
+      if (broadcastChannel) {
+        broadcastChannel.postMessage({ type: 'call_processed', callId });
+      }
+
+      ultimoCallIdRef.current = callId;
+
+      // Extraer información de la llamada
+      const telefono = data.telefono || data.numero || data.phone_number || data.phone;
+      const extension = data.extension || data.extension_name || data.extension_number || 'N/A';
+      const extensionNumber = data.extension_number || data.extension || 'N/A';
+      const estado = data.estado || data.status || 'ringing';
+
+      // Crear objeto de llamada entrante
+      const callData = {
+        id: callId,
+        telefono: telefono,
+        extension: extension,
+        extensionNumber: extensionNumber,
+        direccion: data.direccion || data.direction || 'Inbound',
+        estado: estado,
+        timestamp: data.timestamp || new Date().toISOString(),
+        raw: data // Guardar datos originales
+      };
+
+      logDiagnostic('🔄 Abriendo modal de llamada entrante', callData);
+      setIncomingCall(callData);
+      setError(null);
+
+      // Buscar cliente por teléfono
+      if (telefono) {
+        const cliente = await buscarClientePorTelefono(telefono);
+        setClienteData(cliente);
+      } else {
+        setClienteData(null);
+      }
+    } catch (err) {
+      logDiagnostic('❌ Error al manejar llamada entrante', err);
+      setError(err.message || 'Error al procesar la llamada');
+    }
+  };
+
+  // Escuchar mensajes de otras pestañas
+  useEffect(() => {
+    if (!broadcastChannel) return;
+
+    const handleMessage = (event) => {
+      if (event.data.type === 'call_processed') {
+        const callId = event.data.callId;
+        if (!isEventProcessed(callId)) {
+          processedCallIdsRef.current.add(callId);
+        }
+      }
+    };
+
+    broadcastChannel.addEventListener('message', handleMessage);
+    return () => {
+      broadcastChannel.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
+  // Conectar a múltiples canales
+  const connectToChannels = async () => {
+    try {
+      if (!echoRef.current) {
+        const initialized = await initializeEcho();
+        if (!initialized) {
+          logDiagnostic('⚠️ No se pudo inicializar Echo');
+          return;
+        }
+      }
+
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        logDiagnostic('⚠️ No hay token de autenticación');
+        return;
+      }
+
+      // Obtener datos del usuario
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const userId = user.id || user.user_id;
+      const extensionId = user.extension_id || user.ringcentral_extension_id || user.extensionId;
+
+      logDiagnostic('Conectando a canales', { userId, extensionId });
+
+      const channelsToConnect = [];
+
+      // 1. Canal por extensión de RingCentral
+      if (extensionId) {
+        channelsToConnect.push({
+          name: `private-ringcentral.extension.${extensionId}`,
+          type: 'private',
+          priority: 1
+        });
+      }
+
+      // 2. Canal por usuario (múltiples formatos)
+      if (userId) {
+        channelsToConnect.push(
+          { name: `private-App.Models.User.${userId}`, type: 'private', priority: 2 },
+          { name: `private-user.${userId}`, type: 'private', priority: 3 }
+        );
+      }
+
+      // 3. Canal general de llamadas
+      channelsToConnect.push({
+        name: 'private-ringcentral.calls',
+        type: 'private',
+        priority: 4
+      });
+
+      // 4. Canal público como fallback
+      channelsToConnect.push({
+        name: 'llamadas',
+        type: 'public',
+        priority: 5
+      });
+
+      const connectedChannelsList = [];
+
+      // Intentar conectar a cada canal
+      for (const channelConfig of channelsToConnect) {
+        try {
+          let channel;
+          
+          if (channelConfig.type === 'private') {
+            channel = echoRef.current.private(channelConfig.name);
+          } else {
+            channel = echoRef.current.channel(channelConfig.name);
+          }
+
+          // Escuchar evento incoming_call
+          channel.listen('.incoming_call', (data) => {
+            logDiagnostic(`📞 Evento incoming_call recibido en canal: ${channelConfig.name}`, data);
+            handleIncomingCall(data);
+          });
+
+          channelsRef.current.push(channel);
+          connectedChannelsList.push(channelConfig.name);
+          
+          logDiagnostic(`✅ Suscrito al canal: ${channelConfig.name} (${channelConfig.type})`);
+        } catch (error) {
+          logDiagnostic(`⚠️ No se pudo conectar al canal ${channelConfig.name}`, error.message);
+          // Continuar con el siguiente canal
+        }
+      }
+
+      if (connectedChannelsList.length > 0) {
+        setConnectedChannels(connectedChannelsList);
+        logDiagnostic('✅ Conexión completada', { canales: connectedChannelsList });
+      } else {
+        logDiagnostic('❌ No se pudo conectar a ningún canal');
+        setError('No se pudo conectar a ningún canal de WebSocket');
+      }
+    } catch (error) {
+      logDiagnostic('❌ Error al conectar a canales', error);
+      setError('Error al conectar con el servidor de WebSocket');
+    }
+  };
+
+  // Efecto para conectar cuando el usuario está autenticado
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) {
+      return;
+    }
+
+    // Conectar después de un breve delay para asegurar que todo esté listo
+    const timer = setTimeout(() => {
+      connectToChannels();
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // Cleanup al desmontar
+  useEffect(() => {
+    return () => {
+      // Limpiar canales
+      channelsRef.current.forEach(channel => {
+        try {
+          echoRef.current?.leave(channel.name);
+        } catch (error) {
+          console.error('Error al dejar el canal:', error);
+        }
+      });
+      channelsRef.current = [];
+
+      // Desconectar Echo
+      if (echoRef.current) {
+        try {
+          echoRef.current.disconnect();
+          logDiagnostic('✅ Echo desconectado');
+        } catch (error) {
+          console.error('Error al desconectar Echo:', error);
+        }
+        echoRef.current = null;
+      }
+    };
+  }, []);
+
+  // Función para cerrar el modal
+  const cerrarModal = () => {
+    logDiagnostic('🔄 Cerrando modal de llamada');
+    setIncomingCall(null);
+    setClienteData(null);
+    ultimoCallIdRef.current = null;
+  };
+
+  // Función para probar el broadcast (desde consola o botón de prueba)
+  const testBroadcast = async () => {
+    try {
+      logDiagnostic('🧪 Probando broadcast desde endpoint de prueba...');
+      const response = await fetch(`${API_BASE_URL}/ringcentral/test-broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        logDiagnostic('✅ Test broadcast enviado', data);
+        return { success: true, data };
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      logDiagnostic('❌ Error al probar broadcast', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Exponer función de prueba globalmente en desarrollo
+  if (import.meta.env.DEV) {
+    window.testIncomingCallBroadcast = testBroadcast;
+  }
+
+  return {
+    incomingCall,
+    clienteData,
+    buscandoCliente,
+    error,
+    isConnected,
+    connectedChannels,
+    cerrarModal,
+    testBroadcast,
+  };
+};
+
+export default useIncomingCalls;
