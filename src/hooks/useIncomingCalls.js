@@ -418,36 +418,6 @@ const useIncomingCalls = () => {
     ultimoCallIdRef.current = null;
   };
 
-  // Función para probar el broadcast (desde consola o botón de prueba)
-  const testBroadcast = async () => {
-    try {
-      logDiagnostic('🧪 Probando broadcast desde endpoint de prueba...');
-      const response = await fetch(`${API_BASE_URL}/ringcentral/test-broadcast`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        logDiagnostic('✅ Test broadcast enviado', data);
-        return { success: true, data };
-      } else {
-        throw new Error(`HTTP ${response.status}`);
-      }
-    } catch (error) {
-      logDiagnostic('❌ Error al probar broadcast', error);
-      return { success: false, error: error.message };
-    }
-  };
-
-  // Exponer función de prueba globalmente en desarrollo
-  if (import.meta.env.DEV) {
-    window.testIncomingCallBroadcast = testBroadcast;
-  }
-
   return {
     incomingCall,
     clienteData,
@@ -456,7 +426,6 @@ const useIncomingCalls = () => {
     isConnected,
     connectedChannels,
     cerrarModal,
-    testBroadcast,
   };
 };
 

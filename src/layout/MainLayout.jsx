@@ -3,7 +3,6 @@ import Sidebar from "../components/Sidebar";
 import "../styles/MainLayout.css";
 import apiRequest from "../services/api";
 import { Link } from "react-router-dom";
-import CallIdentifier from "../components/CallIdentifier/CallIdentifier";
 
 const MainLayout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -72,8 +71,6 @@ const MainLayout = ({ children }) => {
 
         <div className="dashboard-content">{children}</div>
       </div>
-      {/* Identificador de llamadas RingCentral */}
-      <CallIdentifier />
     </div>
   );
 };
