@@ -28,13 +28,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     if (hasRetiro) {
       // RETIRADO
       color = "#6c757d"; // gris
-    } else if (
-      hasCancel &&
-      (normalizedStatus === "no" ||
-        normalizedStatus === "medicare" ||
-        normalizedStatus === "medicaid")
-    ) {
-      // CANCELADO
+    } else if (hasCancel && !hasRetiro) {
+      // CANCELADO (cuando hay cancelación y NO hay retiro)
       color = "#ffc107"; // amarillo
     } else if (normalizedStatus === "sí") {
       // ACTIVO
@@ -64,7 +59,11 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   let label = "";
 
   if (hasRetiro) {
+    // Prioridad 1: Si tiene fecha de retiro → Retirado
     label = "Retirado";
+  } else if (hasCancel && !hasRetiro) {
+    // Prioridad 2: Si tiene fecha de cancelación y NO tiene retiro → Cancelado
+    label = "Cancelado";
   } else if (normalizedStatus === "sí") {
     label = "Activo";
   } else if (
@@ -72,9 +71,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     normalizedStatus === "medicare" ||
     normalizedStatus === "medicaid"
   ) {
-    if (hasCancel) {
-      label = "Cancelado";
-    } else if (normalizedStatus === "medicare") {
+    if (normalizedStatus === "medicare") {
       label = "Medicare";
     } else if (normalizedStatus === "medicaid") {
       label = "Medicaid";
