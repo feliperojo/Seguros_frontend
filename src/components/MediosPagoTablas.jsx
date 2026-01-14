@@ -2,8 +2,27 @@ import React from 'react';
 import { FaEye, FaEdit, FaTrashAlt } from 'react-icons/fa';
 
 const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = true }) => {
-    const tarjetas = mediosPago.filter(m => m.forma_pago === 'tarjeta');
+    const tarjetas = mediosPago.filter(m => 
+      m.forma_pago === 'tarjeta' || 
+      m.forma_pago === 'tarjeta_credito' || 
+      m.forma_pago === 'tarjeta_debito'
+    );
   const cuentasBancarias = mediosPago.filter(m => m.forma_pago === 'cuenta_bancaria');
+  
+  // Función auxiliar para determinar el tipo de pago (Crédito/Débito)
+  const getTipoPago = (medio) => {
+    if (medio.forma_pago === 'tarjeta_debito' || medio.tipo_tarjeta_pago === 'debito') {
+      return 'Débito';
+    }
+    if (medio.forma_pago === 'tarjeta_credito' || medio.tipo_tarjeta_pago === 'credito') {
+      return 'Crédito';
+    }
+    // Si viene como 'tarjeta' genérico, intentar determinar por tipo_tarjeta_pago
+    if (medio.forma_pago === 'tarjeta') {
+      return medio.tipo_tarjeta_pago === 'debito' ? 'Débito' : 'Crédito';
+    }
+    return 'N/A';
+  };
 
   return (
     <>
@@ -14,6 +33,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
         <table className="table table-bordered">
              <thead>
                 <tr>
+                    <th>Tipo de Pago</th>
                     <th>Tipo</th>
                     <th>Quien paga</th>
                     <th>Titular</th>
@@ -27,6 +47,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
           <tbody>
             {tarjetas.map((medio, index) => (
                     <tr key={medio.id}>
+                        <td>{getTipoPago(medio)}</td>
                         <td>{medio.tipo_tarjeta}</td>
                         <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
