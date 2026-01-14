@@ -127,10 +127,9 @@ const CambioVidaCancelacionModal = ({
       return false;
     }
     // Validar que la fecha de retiro no sea menor a la fecha de cancelación
+    // Comparar strings directamente para evitar problemas de zona horaria
     if (fechaRetiro && fechaCancelacion) {
-      const fechaCancel = new Date(fechaCancelacion);
-      const fechaRet = new Date(fechaRetiro);
-      if (fechaRet < fechaCancel) {
+      if (fechaRetiro < fechaCancelacion) {
         setError("La fecha de retiro no puede ser menor a la fecha de cancelación.");
         return false;
       }
@@ -139,10 +138,21 @@ const CambioVidaCancelacionModal = ({
   };
 
   // Formatear fecha a YYYY-MM-DD
+  // Si ya es un string en formato YYYY-MM-DD, retornarlo directamente
+  // Si es un objeto Date, formatearlo usando métodos locales para evitar desfase de zona horaria
   const formatearFecha = (fecha) => {
     if (!fecha) return null;
-    const d = new Date(fecha);
+    
+    // Si ya es un string en formato YYYY-MM-DD, retornarlo directamente
+    if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return fecha;
+    }
+    
+    // Si es un objeto Date, usar métodos locales para evitar desfase
+    const d = fecha instanceof Date ? fecha : new Date(fecha);
     if (isNaN(d.getTime())) return null;
+    
+    // Usar métodos locales (getFullYear, getMonth, getDate) que respetan la zona horaria local
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
@@ -164,8 +174,9 @@ const CambioVidaCancelacionModal = ({
     try {
       const payload = {
         cobertura_ids: Array.from(coberturasSeleccionadas).map(Number),
-        fecha_cancelacion: formatearFecha(fechaCancelacion),
-        fecha_retiro: fechaRetiro ? formatearFecha(fechaRetiro) : null,
+        // Los inputs date ya devuelven strings en formato YYYY-MM-DD, usar directamente
+        fecha_cancelacion: fechaCancelacion || null,
+        fecha_retiro: fechaRetiro || null,
         motivo_cancelacion: motivoCancelacion || null,
         nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
