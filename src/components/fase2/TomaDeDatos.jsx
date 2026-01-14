@@ -707,6 +707,18 @@ const sortedNormalized = useMemo(
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
 
+    // Limpiar campos de retiro/cancelación cuando estado_cobertura cambia a diferente de "No"
+    if (name === "estado_cobertura" && v !== "No" && v !== "") {
+      // Limpiar fecha_retiro
+      patch.fecha_retiro = "";
+      // Limpiar fecha_cancelacion
+      patch.fecha_cancelacion = "";
+      // Limpiar nota_retiro
+      patch.nota_retiro = "";
+      // Limpiar nota_cancel
+      patch.nota_cancel = "";
+    }
+
     // Cálculo ingreso anual
     if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
       const periodo = name === "periodo_ingreso" ? v : (current.periodo_ingreso ?? "");
@@ -1746,40 +1758,46 @@ const sortedNormalized = useMemo(
                           />
                         </Field>
 
-                        <Field label="Fecha de Cancelación" className="col-md-3">
-                          <input
-                            type="date"
-                            className="form-control form-control-sm"
-                            name="fecha_cancelacion"
-                            value={(m.fecha_cancelacion || "").slice(0, 10)}
-                            onChange={onChange}
-                            disabled={true}
-                            title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                          />
-                        </Field>
+                        {m.fecha_cancelacion && (
+                          <Field label="Fecha de Cancelación" className="col-md-3">
+                            <input
+                              type="date"
+                              className="form-control form-control-sm"
+                              name="fecha_cancelacion"
+                              value={(m.fecha_cancelacion || "").slice(0, 10)}
+                              onChange={onChange}
+                              disabled={true}
+                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                            />
+                          </Field>
+                        )}
 
-                        <Field label="Fecha de Retiro" className="col-md-3">
-                          <input
-                            type="date"
-                            className="form-control form-control-sm"
-                            name="fecha_retiro"
-                            value={(m.fecha_retiro || "").slice(0, 10)}
-                            onChange={onChange}
-                            disabled={true}
-                            title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                          />
-                        </Field>
+                        {m.fecha_retiro && (
+                          <Field label="Fecha de Retiro" className="col-md-3">
+                            <input
+                              type="date"
+                              className="form-control form-control-sm"
+                              name="fecha_retiro"
+                              value={(m.fecha_retiro || "").slice(0, 10)}
+                              onChange={onChange}
+                              disabled={true}
+                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                            />
+                          </Field>
+                        )}
 
-                        <Field label="Nota de Retiro" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="nota_retiro"
-                            value={m.nota_retiro ?? m.nota_cancel ?? ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="Notas…"
-                          />
-                        </Field>
+                        {(m.nota_retiro || m.nota_cancel) && (
+                          <Field label="Nota de Retiro" className="col-md-3">
+                            <input
+                              className="form-control form-control-sm"
+                              name="nota_retiro"
+                              value={m.nota_retiro ?? m.nota_cancel ?? ""}
+                              onChange={onChange}
+                              disabled={true}
+                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                            />
+                          </Field>
+                        )}
                       </div>
 
                       <div className="row g-3">

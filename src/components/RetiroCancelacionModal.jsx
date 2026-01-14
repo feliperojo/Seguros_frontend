@@ -103,9 +103,23 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
     nuevasCoberturas[index][field] = value;
 
+    // Regla automática: si se establece fecha_cancelacion, estado_cobertura debe ser "No"
     if (field === "fecha_cancelacion") {
       nuevasCoberturas[index]["vigente"] = value ? false : true;
-      nuevasCoberturas[index]["estado_cobertura"] = value ? "No" : "Yes";
+      // Si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior)
+      if (value) {
+        nuevasCoberturas[index]["estado_cobertura"] = "No";
+      }
+      // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+    }
+
+    // Regla automática: si se establece fecha_retiro, estado_cobertura debe ser "No"
+    if (field === "fecha_retiro") {
+      // Si hay fecha de retiro, estado_cobertura debe ser "No" (sin importar el valor anterior)
+      if (value) {
+        nuevasCoberturas[index]["estado_cobertura"] = "No";
+      }
+      // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
     }
 
     if (field === "activo" && value === true) {

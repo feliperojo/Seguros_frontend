@@ -816,10 +816,22 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               if (member.id === memberId) {
                 const updatedMember = { ...member, [field]: value };
 
-                // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigente"
+                // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigente" y "estado_cobertura"
                 if (field === "fecha_cancelacion") {
-                  updatedMember.vigente = !value; // Si tiene fecha de cancelación, desactivamos
+                  updatedMember.vigente = value ? false : true; // Si tiene fecha de cancelación, desactivamos
+                  // Regla automática: si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior: Yes, Sí, Medicare, Medicaid, etc.)
+                  if (value) {
+                    updatedMember.estado_cobertura = "No";
+                  }
+                  // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+                }
 
+                // Regla automática: si se establece fecha_retiro, estado_cobertura debe ser "No" (sin importar el valor anterior)
+                if (field === "fecha_retiro") {
+                  if (value) {
+                    updatedMember.estado_cobertura = "No";
+                  }
+                  // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
                 }
 
                 return updatedMember;
@@ -2262,7 +2274,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                             setCurrentEditMember(prev => ({
                               ...prev,
                               fecha_cancelacion: cancelDate,
-                              vigente: cancelDate ? false : true
+                              vigente: cancelDate ? false : true,
+                              // Regla automática: si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior: Yes, Sí, Medicare, Medicaid, etc.)
+                              estado_cobertura: cancelDate ? "No" : prev.estado_cobertura
                             }));
                           }}
                         />
@@ -2275,7 +2289,15 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                     <Form.Control
                         type="date"
                         value={currentEditMember.fecha_retiro || ""}
-                        onChange={(e) => setCurrentEditMember({ ...currentEditMember, fecha_retiro: e.target.value })}
+                        onChange={(e) => {
+                          const retiroDate = e.target.value;
+                          setCurrentEditMember(prev => ({
+                            ...prev,
+                            fecha_retiro: retiroDate,
+                            // Regla automática: si hay fecha de retiro, estado_cobertura debe ser "No"
+                            estado_cobertura: retiroDate ? "No" : prev.estado_cobertura
+                          }));
+                        }}
                         disabled={currentEditMember.activo}
                       />
 

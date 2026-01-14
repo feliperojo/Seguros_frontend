@@ -180,11 +180,13 @@ const CambioVidaCancelacionModal = ({
         motivo_cancelacion: motivoCancelacion || null,
         nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
+        // Regla automática: si se cancela una cobertura, estado_cobertura debe ser "No"
+        estado_cobertura: "No",
       };
 
-      // Eliminar campos null del payload
+      // Eliminar campos null del payload (excepto estado_cobertura que siempre debe ir)
       Object.keys(payload).forEach((key) => {
-        if (payload[key] === null || payload[key] === undefined) {
+        if (key !== 'estado_cobertura' && (payload[key] === null || payload[key] === undefined)) {
           delete payload[key];
         }
       });
