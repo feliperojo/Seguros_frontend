@@ -197,36 +197,74 @@ const HistorialCoberturasCanceladasModal = ({
     }
   };
 
-  // Formatear fecha
+  // Formatear fecha sin alterar el día (evita problemas de zona horaria)
   const formatearFecha = (fecha) => {
     if (!fecha) return "-";
     try {
-      const d = new Date(fecha);
+      // Si ya es un string en formato YYYY-MM-DD, extraer componentes directamente
+      if (typeof fecha === 'string') {
+        // Formato YYYY-MM-DD
+        const matchDateOnly = fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (matchDateOnly) {
+          const [, year, month, day] = matchDateOnly;
+          return `${day}/${month}/${year}`;
+        }
+        
+        // Formato ISO con hora: YYYY-MM-DDTHH:mm:ss o YYYY-MM-DD HH:mm:ss
+        const matchDateTime = fecha.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
+        if (matchDateTime) {
+          const [, year, month, day] = matchDateTime;
+          return `${day}/${month}/${year}`;
+        }
+      }
+      
+      // Si es un objeto Date, usar métodos locales para evitar desfase
+      const d = fecha instanceof Date ? fecha : new Date(fecha);
       if (isNaN(d.getTime())) return fecha;
-      return d.toLocaleDateString("es-ES", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
+      
+      // Usar métodos locales (getFullYear, getMonth, getDate) que respetan la zona horaria local
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${day}/${month}/${year}`;
     } catch {
       return fecha;
     }
   };
 
-  // Formatear fecha y hora completa
+  // Formatear fecha y hora completa sin alterar el día
   const formatearFechaHora = (fecha) => {
     if (!fecha) return "-";
     try {
-      const d = new Date(fecha);
+      // Si es un string ISO, extraer componentes directamente
+      if (typeof fecha === 'string') {
+        // Formato ISO: YYYY-MM-DDTHH:mm:ss o YYYY-MM-DD HH:mm:ss
+        const matchDateTime = fecha.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
+        if (matchDateTime) {
+          const [, year, month, day, hour, minute, second] = matchDateTime;
+          return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+        }
+        
+        // Formato YYYY-MM-DD (solo fecha)
+        const matchDateOnly = fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (matchDateOnly) {
+          const [, year, month, day] = matchDateOnly;
+          return `${day}/${month}/${year} 00:00:00`;
+        }
+      }
+      
+      // Si es un objeto Date, usar métodos locales
+      const d = fecha instanceof Date ? fecha : new Date(fecha);
       if (isNaN(d.getTime())) return fecha;
-      return d.toLocaleString("es-ES", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      });
+      
+      // Usar métodos locales para evitar desfase
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      const hour = String(d.getHours()).padStart(2, "0");
+      const minute = String(d.getMinutes()).padStart(2, "0");
+      const second = String(d.getSeconds()).padStart(2, "0");
+      return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
     } catch {
       return fecha;
     }
