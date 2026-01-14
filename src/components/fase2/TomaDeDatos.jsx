@@ -247,6 +247,9 @@ const normalizeMember = (m, idx) => {
     ingreso_anual: m.ingreso_anual || "",
     nombreCompleto: nombre,
     nota: m.nota || "",
+    whatsapp: !!m.whatsapp,
+    telegram: !!m.telegram,
+    texto_sms: !!m.texto_sms,
     cliente: {
       id: m.cliente_id ?? m.id ?? null,
       primer_nombre: primer,
@@ -1306,6 +1309,59 @@ const sortedNormalized = useMemo(
                                     readOnly={readOnly}
                                   />
                                 </Field>
+
+                                <div className="col-12">
+                                  <label className="form-label small fw-semibold text-muted mb-2">
+                                    Medio de Comunicación Principal
+                                  </label>
+                                  <div className="d-flex flex-wrap gap-3">
+                                    <div className="form-check">
+                                      <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id={`whatsapp-${itemId}`}
+                                        name="whatsapp"
+                                        checked={!!(c.whatsapp ?? m.whatsapp ?? false)}
+                                        onChange={onChange}
+                                        disabled={readOnly}
+                                      />
+                                      <label className="form-check-label" htmlFor={`whatsapp-${itemId}`}>
+                                        <i className="fab fa-whatsapp text-success me-1" />
+                                        WhatsApp
+                                      </label>
+                                    </div>
+                                    <div className="form-check">
+                                      <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id={`telegram-${itemId}`}
+                                        name="telegram"
+                                        checked={!!(c.telegram ?? m.telegram ?? false)}
+                                        onChange={onChange}
+                                        disabled={readOnly}
+                                      />
+                                      <label className="form-check-label" htmlFor={`telegram-${itemId}`}>
+                                        <i className="fab fa-telegram text-info me-1" />
+                                        Telegram
+                                      </label>
+                                    </div>
+                                    <div className="form-check">
+                                      <input
+                                        className="form-check-input"
+                                        type="checkbox"
+                                        id={`texto-sms-${itemId}`}
+                                        name="texto_sms"
+                                        checked={!!(c.texto_sms ?? m.texto_sms ?? false)}
+                                        onChange={onChange}
+                                        disabled={readOnly}
+                                      />
+                                      <label className="form-check-label" htmlFor={`texto-sms-${itemId}`}>
+                                        <i className="fas fa-sms text-primary me-1" />
+                                        SMS
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
 
                                 <Field label="Email" className="col-md-6">
                                   <input

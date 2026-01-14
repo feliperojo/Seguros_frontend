@@ -130,6 +130,9 @@ const mapClienteForSave = (m) => {
       dir_correspondencia: pick("dir_correspondencia"),
       telefonos: toApiPhones(Array.isArray(c.telefonos) ? c.telefonos : []),
       email: pick("email"),
+      whatsapp: !!pick("whatsapp"),
+      telegram: !!pick("telegram"),
+      texto_sms: !!pick("texto_sms"),
       status: pick("status"),
       tipo_ingreso: pick("tipo_ingreso"),
       actividad_economica: pick("actividad_economica"),
@@ -641,6 +644,15 @@ const mapMemberFromAppendResponse = (res) => {
     nota_retiro: cov.nota_retiro || "",
     codigo_poliza: cov.codigo_poliza || "",
     estado_cobertura: cov.estado_cobertura || "Sí",
+    whatsapp: !!cli.whatsapp,
+    telegram: !!cli.telegram,
+    texto_sms: !!cli.texto_sms,
+    cliente: {
+      ...cli,
+      whatsapp: !!cli.whatsapp,
+      telegram: !!cli.telegram,
+      texto_sms: !!cli.texto_sms,
+    },
   };
 };
 
