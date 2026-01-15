@@ -512,6 +512,8 @@ const TomaDeDatos = ({
   const [fechaNacimientoDisplay, setFechaNacimientoDisplay] = useState({});
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
+  // Estado para controlar la visualización de miembros retirados
+  const [showRetirados, setShowRetirados] = useState(false);
 
   const navigate = useNavigate();
 
@@ -521,31 +523,37 @@ const TomaDeDatos = ({
     [familyMembers]
   );
 
-  // Filtrar solo coberturas activas (excluir activo === false) manteniendo índice original
-  const activeNormalizedWithOriginalIdx = useMemo(() => {
-    return normalized
-      .map((m, originalIdx) => ({ m, originalIdx }))
-      .filter(({ m }) => {
-        // Excluir solo cuando activo es explícitamente false
-        // Mostrar si activo es true, undefined, null, o no existe (asumiendo activo por defecto)
-        const activo = m.activo;
-        // Si activo es explícitamente false, no mostrar
-        if (activo === false) return false;
-        // En cualquier otro caso (true, undefined, null), mostrar
-        return true;
-      });
-  }, [normalized]);
-
-  // Mantener miembro + índice original
-const sortedWithIndex = useMemo(() => {
-  return activeNormalizedWithOriginalIdx
-    .map(({ m, originalIdx }, i) => ({ m, idx: originalIdx, displayIdx: i })) // idx = índice original en familyMembers
-    .sort((a, b) => {
-      const pa = isTomador(a.m) ? 0 : 1;
-      const pb = isTomador(b.m) ? 0 : 1;
-      return pa - pb || a.idx - b.idx;
+  // Separar miembros activos e inactivos y mantener índice original
+  const { activeMembers, inactiveMembers } = useMemo(() => {
+    const active = [];
+    const inactive = [];
+    
+    normalized.forEach((m, originalIdx) => {
+      const memberWithIdx = { m, idx: originalIdx };
+      if (m.activo === false) {
+        inactive.push(memberWithIdx);
+      } else {
+        active.push(memberWithIdx);
+      }
     });
-}, [activeNormalizedWithOriginalIdx]);
+    
+    // Función de ordenamiento: tomador primero
+    const sortMembers = (arr) => {
+      return arr.sort((a, b) => {
+        const pa = isTomador(a.m) ? 0 : 1;
+        const pb = isTomador(b.m) ? 0 : 1;
+        return pa - pb || a.idx - b.idx;
+      });
+    };
+    
+    return {
+      activeMembers: sortMembers(active),
+      inactiveMembers: sortMembers(inactive)
+    };
+  }, [normalized]);
+  
+  // Mantener miembro + índice original para compatibilidad (solo activos)
+  const sortedWithIndex = useMemo(() => activeMembers, [activeMembers]);
 
 // Solo los miembros (para cosas que no necesitan el índice)
 const sortedNormalized = useMemo(
@@ -555,8 +563,8 @@ const sortedNormalized = useMemo(
 
 // Array de miembros activos sin índices (para payerOptions y otras utilidades)
 const activeNormalized = useMemo(
-  () => activeNormalizedWithOriginalIdx.map(({ m }) => m),
-  [activeNormalizedWithOriginalIdx]
+  () => normalized.filter(m => m.activo !== false),
+  [normalized]
 );
 
   // Compañías y pagadores
@@ -1011,28 +1019,8 @@ const activeNormalized = useMemo(
   );
 
   /* =================== RENDER =================== */
-  return (
-    <div className="container-fluid p-0">
-      {!readOnly && (
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
-          <div className="btn-group">
-            {canAdd ? (
-              <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
-            ) : (
-              <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
-            )}
-            <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
-              <i className="fas fa-users me-1" /> Miembros existentes
-            </button>
-            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
-              <i className="fas fa-copy me-1" /> Copiar
-            </button>
-          </div>
-        </div>
-      )}
-
-{sortedWithIndex.map(({ m, idx }) => {
+  // Función helper para renderizar una card de miembro
+  const renderMemberCard = ({ m, idx }) => {
   const itemId = `member-${m.id ?? idx}`;
   const leftRightWidth = 180;
   const c = getC(m);
@@ -1046,11 +1034,36 @@ const activeNormalized = useMemo(
           "bg-secondary";
 
         const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
+        
+        // Detectar si la cobertura está inactiva
+        const isInactive = m.activo === false;
+        // Si está inactiva, bloquear todos los campos
+        const isReadOnly = readOnly || isInactive;
+        
+        // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
+        const isMedicareOrMedicaid = m.estado_cobertura === "Medicare" || m.estado_cobertura === "Medicaid";
 
         return (
-          <div className="card shadow-sm mb-3" key={itemId}>
+          <div 
+            className={`card shadow-sm mb-3 ${isInactive ? 'border-warning' : ''}`} 
+            key={itemId}
+            style={isInactive ? { 
+              border: '2px solid #ffc107',
+              position: 'relative'
+            } : {}}
+          >
+            {/* Indicador de alerta para coberturas inactivas */}
+            {isInactive && (
+              <div 
+                className="position-absolute top-0 start-0 bg-warning text-dark px-3 py-2 rounded-bottom-end shadow-sm"
+                style={{ zIndex: 10, borderBottom: '2px solid #ff9800', borderRight: '2px solid #ff9800' }}
+              >
+                <i className="fas fa-exclamation-triangle me-2"></i>
+                <small className="fw-bold">Retirado del Grupo Familiar</small>
+              </div>
+            )}
             {/* Header */}
-            <div className="card-header bg-white border-0 px-4 py-3">
+            <div className={`card-header border-0 px-4 py-3 bg-white`}>
               <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
                   <span className={`badge bg-${getTypeColor(m.tipo)}`}>
@@ -1137,7 +1150,7 @@ const activeNormalized = useMemo(
                                     name="primer_nombre"
                                     value={c.primer_nombre ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     style={{ textTransform: "capitalize" }}
                                   />
                                 </Field>
@@ -1148,7 +1161,7 @@ const activeNormalized = useMemo(
                                     name="segundo_nombre"
                                     value={c.segundo_nombre ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     style={{ textTransform: "capitalize" }}
                                   />
                                 </Field>
@@ -1159,7 +1172,7 @@ const activeNormalized = useMemo(
                                     name="apellidos"
                                     value={c.apellidos ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     style={{ textTransform: "capitalize" }}
                                   />
                                 </Field>
@@ -1172,7 +1185,7 @@ const activeNormalized = useMemo(
                                     value={getFechaNacimientoDisplayValue(idx, c.fecha_nacimiento)}
                                     onChange={fechaNacimientoChangeFactory(idx)}
                                     onBlur={fechaNacimientoBlurFactory(idx)}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="mm/dd/yyyy"
                                     maxLength={10}
                                   />
@@ -1194,7 +1207,7 @@ const activeNormalized = useMemo(
                                     name="genero"
                                     value={c.genero ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
                                     <option value="Masculino">Masculino</option>
@@ -1208,7 +1221,7 @@ const activeNormalized = useMemo(
                                     name="idioma"
                                     value={c.idioma ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   />
                                 </Field>
@@ -1219,7 +1232,7 @@ const activeNormalized = useMemo(
                                     name="pais_origen"
                                     value={c.pais_origen ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     style={{ textTransform: "capitalize" }}
                                     placeholder="País de origen"
                                   />
@@ -1241,7 +1254,7 @@ const activeNormalized = useMemo(
                                     name="social"
                                     value={c.social ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     inputMode="numeric"
                                     maxLength={11}
                                   />
@@ -1253,7 +1266,7 @@ const activeNormalized = useMemo(
                                     name="status"
                                     value={c.status ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
                                     <option value="P. TRABAJO">P. TRABAJO</option>
@@ -1277,7 +1290,7 @@ const activeNormalized = useMemo(
                                     name="auscis"
                                     value={c.auscis ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     inputMode="numeric"
                                     maxLength={12}
                                   />
@@ -1289,7 +1302,7 @@ const activeNormalized = useMemo(
                                     name="tarjeta_numero"
                                     value={c.tarjeta_numero ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
 
@@ -1300,7 +1313,7 @@ const activeNormalized = useMemo(
                                     name="fecha_emision"
                                     value={(c.fecha_emision || "").slice(0,10)}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
 
@@ -1311,7 +1324,7 @@ const activeNormalized = useMemo(
                                     name="fecha_expiracion"
                                     value={(c.fecha_expiracion || "").slice(0,10)}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
 
@@ -1321,7 +1334,7 @@ const activeNormalized = useMemo(
                                     name="categoria"
                                     value={c.categoria ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
                               </div>
@@ -1339,7 +1352,7 @@ const activeNormalized = useMemo(
                                   <TelefonosPro
                                     value={Array.isArray(c.telefonos) ? c.telefonos : []}
                                     onChange={(arr) => patchCliente(idx, { telefonos: arr })}
-                                    readOnly={readOnly}
+                                    readOnly={isReadOnly}
                                   />
                                 </Field>
 
@@ -1356,7 +1369,7 @@ const activeNormalized = useMemo(
                                         name="whatsapp"
                                         checked={!!(c.whatsapp ?? m.whatsapp ?? false)}
                                         onChange={onChange}
-                                        disabled={readOnly}
+                                        disabled={isReadOnly}
                                       />
                                       <label className="form-check-label" htmlFor={`whatsapp-${itemId}`}>
                                         <i className="fab fa-whatsapp text-success me-1" />
@@ -1371,7 +1384,7 @@ const activeNormalized = useMemo(
                                         name="telegram"
                                         checked={!!(c.telegram ?? m.telegram ?? false)}
                                         onChange={onChange}
-                                        disabled={readOnly}
+                                        disabled={isReadOnly}
                                       />
                                       <label className="form-check-label" htmlFor={`telegram-${itemId}`}>
                                         <i className="fab fa-telegram text-info me-1" />
@@ -1386,7 +1399,7 @@ const activeNormalized = useMemo(
                                         name="texto_sms"
                                         checked={!!(c.texto_sms ?? m.texto_sms ?? false)}
                                         onChange={onChange}
-                                        disabled={readOnly}
+                                        disabled={isReadOnly}
                                       />
                                       <label className="form-check-label" htmlFor={`texto-sms-${itemId}`}>
                                         <i className="fas fa-sms text-primary me-1" />
@@ -1403,7 +1416,7 @@ const activeNormalized = useMemo(
                                     name="email"
                                     value={c.email ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="correo@dominio.com"
                                   />
                                 </Field>
@@ -1415,7 +1428,7 @@ const activeNormalized = useMemo(
                                     name="nota"
                                     value={c.nota ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
                               </div>
@@ -1428,7 +1441,7 @@ const activeNormalized = useMemo(
                       title="Dirección"
                     >
                       <div>
-                              <AddressSection c={c} onChange={onChange} readOnly={readOnly} />
+                              <AddressSection c={c} onChange={onChange} readOnly={isReadOnly} />
                       </div>
                     </AccordionItem>
 
@@ -1445,7 +1458,7 @@ const activeNormalized = useMemo(
                                     name="tipo_ingreso"
                                     value={c.tipo_ingreso ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
                                     <option value="W2">W2</option>
@@ -1463,7 +1476,7 @@ const activeNormalized = useMemo(
                                     name="actividad_economica"
                                     value={c.actividad_economica ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="Ej: Comercio, Servicios, etc."
                                   />
                                 </Field>
@@ -1474,7 +1487,7 @@ const activeNormalized = useMemo(
                                     name="empleador"
                                     value={c.empleador ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="Nombre de la empresa"
                                   />
                                 </Field>
@@ -1485,7 +1498,7 @@ const activeNormalized = useMemo(
                                     name="telefono_empleador"
                                     value={c.telefono_empleador ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
 
@@ -1495,7 +1508,7 @@ const activeNormalized = useMemo(
                                     name="periodo_ingreso"
                                     value={c.periodo_ingreso ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
                                     <option value="HOUR">HOUR</option>
@@ -1515,7 +1528,7 @@ const activeNormalized = useMemo(
                                     value={getMoneyDisplayValue(idx, "ingreso_por_periodo", c.ingreso_por_periodo)}
                                     onChange={moneyChangeFactory(idx, "ingreso_por_periodo")}
                                     onBlur={moneyBlurFactory(idx, "ingreso_por_periodo")}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="0,00"
                                   />
                                 </Field>
@@ -1528,7 +1541,7 @@ const activeNormalized = useMemo(
                                     value={getMoneyDisplayValue(idx, "ingreso_anual", c.ingreso_anual)}
                                     onChange={moneyChangeFactory(idx, "ingreso_anual")}
                                     onBlur={moneyBlurFactory(idx, "ingreso_anual")}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="0,00"
                                   />
                                 </Field>
@@ -1544,7 +1557,7 @@ const activeNormalized = useMemo(
                                     name="nota_ingreso_ocasional"
                                     value={c.nota_ingreso_ocasional ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   />
                                 </Field>
 
@@ -1554,7 +1567,7 @@ const activeNormalized = useMemo(
                                     name="periodo_ingreso_ocasional"
                                     value={c.periodo_ingreso_ocasional ?? ""}
                                     onChange={onChange}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
                                     <option value="HOUR">HOUR</option>
@@ -1574,7 +1587,7 @@ const activeNormalized = useMemo(
                                     value={c.ingreso_por_periodo_ocasional ?? ""}
                                     onChange={onChange}
                                     onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo_ocasional")}
-                                    disabled={readOnly}
+                                    disabled={isReadOnly}
                                     placeholder="0.00"
                                   />
                                 </Field>
@@ -1604,247 +1617,356 @@ const activeNormalized = useMemo(
                   icon={<i className="fas fa-shield-alt" />}
                 >
                   <div>
-                      <div className="row g-3">
-                        <Field label="Código Póliza" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            type="text"
-                            name="codigo_poliza"
-                            value={m.codigo_poliza || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="ID Póliza"
-                          />
-                        </Field>
+                      {/* Si es Medicare o Medicaid, mostrar solo Elegibilidad, Cobertura y Grupo */}
+                      {isMedicareOrMedicaid ? (
+                        <>
+                          <div className="row g-3">
+                            <Field label="Cobertura" className="col-md-4">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="estado_cobertura"
+                                value={m.estado_cobertura || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="Sí">Sí</option>
+                                <option value="No">No</option>
+                                <option value="Medicare">Medicare</option>
+                                <option value="Medicaid">Medicaid</option>
+                              </select>
+                            </Field>
 
-                        <Field label="Fecha de Activación" className="col-md-3">
-                          <input
-                            type="date"
-                            className="form-control form-control-sm"
-                            name="fecha_activacion"
-                            value={(m.fecha_activacion || "").slice(0, 10)}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          />
-                        </Field>
+                            <Field label="Elegibilidad" className="col-md-4">
+                              <input
+                                className="form-control form-control-sm"
+                                name="elegibilidad"
+                                value={m.elegibilidad || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="Elegibilidad"
+                              />
+                            </Field>
 
-                        <Field label="Año de Cobertura" className="col-md-3">
-                          <input
-                            type="number"
-                            min="2000"
-                            max="2100"
-                            className="form-control form-control-sm"
-                            name="ano_cobertura"
-                            value={m.ano_cobertura || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="aaaa"
-                          />
-                        </Field>
+                            <Field label="Grupo" className="col-md-4">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="grupo"
+                                value={m.grupo || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="G1">G1</option>
+                                <option value="G2">G2</option>
+                                <option value="G3">G3</option>
+                                <option value="G4">G4</option>
+                              </select>
+                            </Field>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Campos normales cuando NO es Medicare/Medicaid */}
+                          <div className="row g-3">
+                            <Field label="Código Póliza" className="col-md-3">
+                              <input
+                                className="form-control form-control-sm"
+                                type="text"
+                                name="codigo_poliza"
+                                value={m.codigo_poliza || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="ID Póliza"
+                              />
+                            </Field>
 
-                        <Field label="Elegibilidad" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="elegibilidad"
-                            value={m.elegibilidad || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="Elegibilidad"
-                          />
-                        </Field>
-                      </div>
+                            <Field label="Fecha de Activación" className="col-md-3">
+                              <input
+                                type="date"
+                                className="form-control form-control-sm"
+                                name="fecha_activacion"
+                                value={(m.fecha_activacion || "").slice(0, 10)}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              />
+                            </Field>
 
-                      <div className="row g-3">
-                        <Field label="Compañía" className="col-md-3">
-                          <CompanySelect
-                            companies={companies}
-                            value={m.compania_id ?? m.compania?.id ?? ""}
-                            onChange={onChange}
-                            disabled={readOnly || companiesLoading}
-                          />
-                        </Field>
+                            <Field label="Año de Cobertura" className="col-md-3">
+                              <input
+                                type="number"
+                                min="2000"
+                                max="2100"
+                                className="form-control form-control-sm"
+                                name="ano_cobertura"
+                                value={m.ano_cobertura || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="aaaa"
+                              />
+                            </Field>
 
-                        <Field label="Plan" className="col-md-3">
-                          <input
-                            className="form-control form-control-sm"
-                            name="plan"
-                            value={m.plan || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="Nombre del plan"
-                          />
-                        </Field>
+                            <Field label="Elegibilidad" className="col-md-3">
+                              <input
+                                className="form-control form-control-sm"
+                                name="elegibilidad"
+                                value={m.elegibilidad || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="Elegibilidad"
+                              />
+                            </Field>
+                          </div>
 
-                        <Field label="Metal" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                            name="metal"
-                            value={m.metal || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione…</option>
-                            <option value="BRONCE">BRONCE</option>
-                            <option value="SILVER">SILVER</option>
-                            <option value="GOLD">GOLD</option>
-                            <option value="PLATINUM">PLATINUM</option>
-                          </select>
-                        </Field>
+                          <div className="row g-3">
+                            <Field label="Compañía" className="col-md-3">
+                              <CompanySelect
+                                companies={companies}
+                                value={m.compania_id ?? m.compania?.id ?? ""}
+                                onChange={onChange}
+                                disabled={isReadOnly || companiesLoading}
+                              />
+                            </Field>
 
-                        <Field label="Red" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                            name="red"
-                            value={m.red || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione…</option>
-                            <option value="HMO">HMO</option>
-                            <option value="EPO">EPO</option>
-                            <option value="PPO">PPO</option>
-                            <option value="POS">POS</option>
-                          </select>
-                        </Field>
-                      </div>
+                            <Field label="Plan" className="col-md-3">
+                              <input
+                                className="form-control form-control-sm"
+                                name="plan"
+                                value={m.plan || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="Nombre del plan"
+                              />
+                            </Field>
 
-                      <div className="row g-3">
-                        <Field label="Cobertura" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                            name="estado_cobertura"
-                            value={m.estado_cobertura || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione…</option>
-                            <option value="Sí">Sí</option>
-                            <option value="No">No</option>
-                            <option value="Medicare">Medicare</option>
-                            <option value="Medicaid">Medicaid</option>
-                          </select>
-                        </Field>
+                            <Field label="Metal" className="col-md-3">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="metal"
+                                value={m.metal || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="BRONCE">BRONCE</option>
+                                <option value="SILVER">SILVER</option>
+                                <option value="GOLD">GOLD</option>
+                                <option value="PLATINUM">PLATINUM</option>
+                              </select>
+                            </Field>
 
-                        <Field label="Pagador" className="col-md-3">
-                          <PayerSelect
-                            options={payerOptionsWithOther}
-                            value={
-                              m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
-                                ? "OTRO"
-                                : String(m.pagador_id)
-                            }
-                            onChange={onChange}
-                            disabled={readOnly}
-                          />
-                        </Field>
+                            <Field label="Red" className="col-md-3">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="red"
+                                value={m.red || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="HMO">HMO</option>
+                                <option value="EPO">EPO</option>
+                                <option value="PPO">PPO</option>
+                                <option value="POS">POS</option>
+                              </select>
+                            </Field>
+                          </div>
 
-                        <Field label="Tipo de Pago" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                            name="tipo_pago"
-                            value={m.tipo_pago || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione…</option>
-                            <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
-                            <option value="CTE PAGA">CTE PAGA</option>
-                            <option value="MES A MES">MES A MES</option>
-                          </select>
-                        </Field>
+                          <div className="row g-3">
+                            <Field label="Cobertura" className="col-md-3">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="estado_cobertura"
+                                value={m.estado_cobertura || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="Sí">Sí</option>
+                                <option value="No">No</option>
+                                <option value="Medicare">Medicare</option>
+                                <option value="Medicaid">Medicaid</option>
+                              </select>
+                            </Field>
 
-                        <Field label="Dia de Pago" className="col-md-3">
-                          <input
-                            type="number"
-                            className="form-control form-control-sm"
-                            name="dia_pago"
-                            value={m.dia_pago || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          />
-                        </Field>
-                      </div>
+                            <Field label="Pagador" className="col-md-3">
+                              <PayerSelect
+                                options={payerOptionsWithOther}
+                                value={
+                                  m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
+                                    ? "OTRO"
+                                    : String(m.pagador_id)
+                                }
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              />
+                            </Field>
 
-                      <div className="row g-3">
-                        <Field label="Precio ($)" className="col-md-3">
-                          <input
-                            type="number"
-                            step="0.01"
-                            className="form-control form-control-sm"
-                            name="precio"
-                            value={m.precio ?? ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                            placeholder="0.00"
-                          />
-                        </Field>
+                            <Field label="Tipo de Pago" className="col-md-3">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="tipo_pago"
+                                value={m.tipo_pago || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
+                                <option value="CTE PAGA">CTE PAGA</option>
+                                <option value="MES A MES">MES A MES</option>
+                              </select>
+                            </Field>
 
-                        {m.fecha_cancelacion && (
-                          <Field label="Fecha de Cancelación" className="col-md-3">
-                            <input
-                              type="date"
-                              className="form-control form-control-sm"
-                              name="fecha_cancelacion"
-                              value={(m.fecha_cancelacion || "").slice(0, 10)}
-                              onChange={onChange}
-                              disabled={true}
-                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                            />
-                          </Field>
-                        )}
+                            <Field label="Dia de Pago" className="col-md-3">
+                              <input
+                                type="number"
+                                className="form-control form-control-sm"
+                                name="dia_pago"
+                                value={m.dia_pago || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              />
+                            </Field>
+                          </div>
 
-                        {m.fecha_retiro && (
-                          <Field label="Fecha de Retiro" className="col-md-3">
-                            <input
-                              type="date"
-                              className="form-control form-control-sm"
-                              name="fecha_retiro"
-                              value={(m.fecha_retiro || "").slice(0, 10)}
-                              onChange={onChange}
-                              disabled={true}
-                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                            />
-                          </Field>
-                        )}
+                          <div className="row g-3">
+                            <Field label="Precio ($)" className="col-md-3">
+                              <input
+                                type="number"
+                                step="0.01"
+                                className="form-control form-control-sm"
+                                name="precio"
+                                value={m.precio ?? ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="0.00"
+                              />
+                            </Field>
 
-                        {(m.nota_retiro || m.nota_cancel) && (
-                          <Field label="Nota de Retiro" className="col-md-3">
-                            <input
-                              className="form-control form-control-sm"
-                              name="nota_retiro"
-                              value={m.nota_retiro ?? m.nota_cancel ?? ""}
-                              onChange={onChange}
-                              disabled={true}
-                              title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                            />
-                          </Field>
-                        )}
-                      </div>
+                            {m.fecha_cancelacion && (
+                              <Field label="Fecha de Cancelación" className="col-md-3">
+                                <input
+                                  type="date"
+                                  className="form-control form-control-sm"
+                                  name="fecha_cancelacion"
+                                  value={(m.fecha_cancelacion || "").slice(0, 10)}
+                                  onChange={onChange}
+                                  disabled={true}
+                                  title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                                />
+                              </Field>
+                            )}
 
-                      <div className="row g-3">
-                        <Field label="Grupo" className="col-md-3">
-                          <select
-                            className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                            name="grupo"
-                            value={m.grupo || ""}
-                            onChange={onChange}
-                            disabled={readOnly}
-                          >
-                            <option value="">Seleccione…</option>
-                            <option value="G1">G1</option>
-                            <option value="G2">G2</option>
-                            <option value="G3">G3</option>
-                            <option value="G4">G4</option>
-                          </select>
-                        </Field>
-                      </div>
+                            {m.fecha_retiro && (
+                              <Field label="Fecha de Retiro" className="col-md-3">
+                                <input
+                                  type="date"
+                                  className="form-control form-control-sm"
+                                  name="fecha_retiro"
+                                  value={(m.fecha_retiro || "").slice(0, 10)}
+                                  onChange={onChange}
+                                  disabled={true}
+                                  title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                                />
+                              </Field>
+                            )}
+
+                            {(m.nota_retiro || m.nota_cancel) && (
+                              <Field label="Nota de Retiro" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  name="nota_retiro"
+                                  value={m.nota_retiro ?? m.nota_cancel ?? ""}
+                                  onChange={onChange}
+                                  disabled={true}
+                                  title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                                />
+                              </Field>
+                            )}
+                          </div>
+
+                          <div className="row g-3">
+                            <Field label="Grupo" className="col-md-3">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="grupo"
+                                value={m.grupo || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                <option value="G1">G1</option>
+                                <option value="G2">G2</option>
+                                <option value="G3">G3</option>
+                                <option value="G4">G4</option>
+                              </select>
+                            </Field>
+                          </div>
+                        </>
+                      )}
                   </div>
                 </AccordionItem>
               </div>
             </div>
           </div>
         );
-      })}
+  };
+
+  return (
+    <div className="container-fluid p-0">
+      {!readOnly && (
+        <div className="d-flex justify-content-between align-items-center mb-3">
+          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
+          <div className="btn-group">
+            {canAdd ? (
+              <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
+            ) : (
+              <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
+            )}
+            <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
+              <i className="fas fa-users me-1" /> Miembros existentes
+            </button>
+            <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
+              <i className="fas fa-copy me-1" /> Copiar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Miembros Activos */}
+      {activeMembers.map(({ m, idx }) => renderMemberCard({ m, idx }))}
+
+      {/* Sección de Miembros Retirados */}
+      {inactiveMembers.length > 0 && (
+        <div className="mt-4 mb-3">
+          <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="d-flex align-items-center gap-2">
+              <h6 className="mb-0 text-muted">
+                <i className="fas fa-users-slash me-2"></i>
+                Miembros Retirados ({inactiveMembers.length})
+              </h6>
+            </div>
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="show-retirados"
+                checked={showRetirados}
+                onChange={(e) => setShowRetirados(e.target.checked)}
+              />
+              <label className="form-check-label" htmlFor="show-retirados">
+                {showRetirados ? 'Ocultar' : 'Mostrar'} retirados
+              </label>
+            </div>
+          </div>
+          
+          {showRetirados && (
+            <div className="border-top pt-3">
+              {inactiveMembers.map(({ m, idx }) => renderMemberCard({ m, idx }))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modales */}
       <MemberModal

@@ -31,7 +31,8 @@ const CambioVidaCancelacionModal = ({
   const [coberturas, setCoberturas] = useState([]);
   const [coberturasSeleccionadas, setCoberturasSeleccionadas] = useState(new Set());
   // Estado para rastrear si cada cobertura se renueva o no (por ID de cobertura)
-  const [renovacionCoberturas, setRenovacionCoberturas] = useState(new Map()); // Map<coberturaId, {renovar: boolean}>
+  // Map<coberturaId, {renovar: boolean, fecha_retiro: string}>
+  const [renovacionCoberturas, setRenovacionCoberturas] = useState(new Map());
   const [loading, setLoading] = useState(false);
   const [loadingCoberturas, setLoadingCoberturas] = useState(false);
   const [error, setError] = useState("");
@@ -39,7 +40,6 @@ const CambioVidaCancelacionModal = ({
 
   // Formulario
   const [fechaCancelacion, setFechaCancelacion] = useState("");
-  const [fechaRetiro, setFechaRetiro] = useState("");
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [notaCancel, setNotaCancel] = useState("");
 
@@ -66,7 +66,6 @@ const CambioVidaCancelacionModal = ({
     setCoberturasSeleccionadas(new Set());
     setRenovacionCoberturas(new Map());
     setFechaCancelacion("");
-    setFechaRetiro("");
     setMotivoCancelacion("");
     setNotaCancel("");
     setError("");
@@ -119,9 +118,10 @@ const CambioVidaCancelacionModal = ({
         // Inicializar con valor por defecto: no se renueva (activo = false)
         setRenovacionCoberturas((prevRenov) => {
           const nuevoRenov = new Map(prevRenov);
-        nuevoRenov.set(coberturaId, {
-          renovar: false,
-        });
+          nuevoRenov.set(coberturaId, {
+            renovar: false,
+            fecha_retiro: "",
+          });
           return nuevoRenov;
         });
       }
@@ -138,8 +138,29 @@ const CambioVidaCancelacionModal = ({
     
     setRenovacionCoberturas((prev) => {
       const nuevo = new Map(prev);
+      const datosActuales = nuevo.get(coberturaId) || { fecha_retiro: "" };
       nuevo.set(coberturaId, {
         renovar: Boolean(renovar),
+        // Si se marca como que continúa activa, limpiar fecha de retiro
+        fecha_retiro: renovar ? "" : datosActuales.fecha_retiro || "",
+      });
+      return nuevo;
+    });
+  };
+
+  // Manejar cambio en la fecha de retiro individual para una cobertura
+  const handleFechaRetiroChange = (coberturaId, fechaRetiro) => {
+    if (!coberturaId) {
+      console.warn("handleFechaRetiroChange: coberturaId es undefined o null");
+      return;
+    }
+    
+    setRenovacionCoberturas((prev) => {
+      const nuevo = new Map(prev);
+      const datosActuales = nuevo.get(coberturaId) || { renovar: false };
+      nuevo.set(coberturaId, {
+        renovar: datosActuales.renovar,
+        fecha_retiro: fechaRetiro || "",
       });
       return nuevo;
     });
@@ -174,18 +195,39 @@ const CambioVidaCancelacionModal = ({
       return false;
     }
     
-    // Validar que se haya ingresado fecha de retiro
-    if (!fechaRetiro) {
-      setError("La fecha de retiro es requerida.");
+    // Validar que las coberturas que no continúan activas tengan fecha de retiro
+    const coberturasSinFechaRetiro = Array.from(coberturasSeleccionadas).filter((id) => {
+      const datos = renovacionCoberturas.get(id);
+      if (!datos) return true;
+      // Si no continúa activa (renovar = false), debe tener fecha de retiro
+      if (datos.renovar === false && !datos.fecha_retiro) {
+        return true;
+      }
+      return false;
+    });
+    
+    if (coberturasSinFechaRetiro.length > 0) {
+      const nombres = coberturasSinFechaRetiro
+        .map(id => {
+          const cobertura = coberturas.find(c => c.id === id);
+          return cobertura?.cliente?.nombre_completo || `ID ${id}`;
+        })
+        .join(", ");
+      setError(`Las siguientes coberturas requieren fecha de retiro: ${nombres}`);
       return false;
     }
     
-    // Validar que la fecha de retiro no sea menor a la fecha de cancelación
-    if (fechaRetiro && fechaCancelacion) {
-      if (fechaRetiro < fechaCancelacion) {
-        setError("La fecha de retiro no puede ser menor a la fecha de cancelación.");
-        return false;
-      }
+    // Validar que las fechas de retiro no sean menores a la fecha de cancelación
+    const fechasInvalidas = Array.from(coberturasSeleccionadas).filter((id) => {
+      const datos = renovacionCoberturas.get(id);
+      if (!datos || !datos.fecha_retiro || !fechaCancelacion) return false;
+      if (datos.fecha_retiro < fechaCancelacion) return true;
+      return false;
+    });
+    
+    if (fechasInvalidas.length > 0) {
+      setError("La fecha de retiro no puede ser menor a la fecha de cancelación.");
+      return false;
     }
     
     return true;
@@ -230,19 +272,21 @@ const CambioVidaCancelacionModal = ({
       // Para cada cobertura se actualizan:
       // - activo: true si renueva, false si no renueva
       // - fecha_cancelacion: fecha general de cancelación
-      // - fecha_retiro: fecha general de retiro
+      // - fecha_retiro: fecha individual de retiro (solo si no continúa activa)
       const datosRenovacion = Array.from(coberturasSeleccionadas).map((id) => {
         const datos = renovacionCoberturas.get(id);
         const renovar = datos?.renovar ?? false;
+        const fechaRetiroIndividual = datos?.fecha_retiro || null;
         
         return {
           cobertura_id: Number(id),
           renovar: renovar,
-          // Actualizar activo: true si continúa, false si no continúa (igual que se actualizan las fechas)
+          // Actualizar activo: true si continúa, false si no continúa
           activo: renovar ? true : false,
-          // Actualizar fechas de cancelación y retiro para todas las coberturas
+          // Actualizar fecha de cancelación para todas las coberturas
           fecha_cancelacion: fechaCancelacion || null,
-          fecha_retiro: fechaRetiro || null,
+          // Fecha de retiro solo si no continúa activa (renovar = false)
+          fecha_retiro: renovar ? null : fechaRetiroIndividual,
         };
       });
 
@@ -250,7 +294,6 @@ const CambioVidaCancelacionModal = ({
         cobertura_ids: Array.from(coberturasSeleccionadas).map(Number),
         // Los inputs date ya devuelven strings en formato YYYY-MM-DD, usar directamente
         fecha_cancelacion: fechaCancelacion || null,
-        fecha_retiro: fechaRetiro || null, // Mantener para compatibilidad
         motivo_cancelacion: motivoCancelacion || null,
         nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
@@ -400,6 +443,7 @@ const CambioVidaCancelacionModal = ({
                       <th className="fw-semibold">Código Póliza</th>
                       <th className="fw-semibold">Plan / Cobertura</th>
                       <th width="250" className="text-center fw-semibold">Decisión de Renovación</th>
+                      <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
                       <th width="100" className="text-center fw-semibold">Estado Actual</th>
                     </tr>
                   </thead>
@@ -410,6 +454,7 @@ const CambioVidaCancelacionModal = ({
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
                       const datosRenovacion = renovacionCoberturas.get(coberturaId) || {
                         renovar: false,
+                        fecha_retiro: "",
                       };
                       
                       return (
@@ -479,6 +524,21 @@ const CambioVidaCancelacionModal = ({
                             )}
                           </td>
                           <td className="align-middle text-center">
+                            {isSelected && datosRenovacion.renovar === false ? (
+                              <Form.Control
+                                type="date"
+                                size="sm"
+                                value={datosRenovacion.fecha_retiro || ""}
+                                onChange={(e) => handleFechaRetiroChange(coberturaId, e.target.value)}
+                                min={fechaCancelacion || undefined}
+                                className="border-danger"
+                                required
+                              />
+                            ) : (
+                              <span className="text-muted small fst-italic">-</span>
+                            )}
+                          </td>
+                          <td className="align-middle text-center">
                             <Badge 
                               bg={cobertura.activo ? "success" : "secondary"} 
                               className="small"
@@ -519,25 +579,6 @@ const CambioVidaCancelacionModal = ({
                         />
                         <Form.Text className="text-muted small">
                           Fecha efectiva de cancelación de las coberturas seleccionadas
-                        </Form.Text>
-                      </Form.Group>
-                    </div>
-
-                    <div className="col-md-6">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">
-                          Fecha de Retiro <span className="text-danger">*</span>
-                        </Form.Label>
-                        <Form.Control
-                          type="date"
-                          value={fechaRetiro}
-                          onChange={(e) => setFechaRetiro(e.target.value)}
-                          required
-                          min={fechaCancelacion || undefined}
-                          className="border-primary"
-                        />
-                        <Form.Text className="text-muted small">
-                          Fecha de retiro aplicable a las coberturas seleccionadas
                         </Form.Text>
                       </Form.Group>
                     </div>
@@ -667,8 +708,7 @@ const CambioVidaCancelacionModal = ({
                         disabled={
                           loading ||
                           coberturasSeleccionadas.size === 0 ||
-                          !fechaCancelacion ||
-                          !fechaRetiro
+                          !fechaCancelacion
                         }
                         className="px-4"
                       >
