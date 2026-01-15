@@ -281,6 +281,7 @@ const CambioVidaCancelacionModal = ({
       // - vigente: false (porque hay fecha de cancelación y retiro)
       // - fecha_cancelacion: [fecha] (se actualiza)
       // - fecha_retiro: [fecha] (se actualiza)
+      // Preparar datos de renovación por cobertura con todos los campos necesarios
       const datosRenovacion = Array.from(coberturasSeleccionadas).map((id) => {
         const datos = renovacionCoberturas.get(id);
         const renovar = datos?.renovar ?? false;
@@ -295,7 +296,7 @@ const CambioVidaCancelacionModal = ({
             vigente: false, // Se actualiza a false porque hay fecha de cancelación
             estado_cobertura: "No", // Se actualiza a "No" porque hay fecha de cancelación
             fecha_cancelacion: fechaCancelacion || null,
-            fecha_retiro: null, // No se actualiza
+            fecha_retiro: null, // No se actualiza (null explícito)
           };
         }
         
@@ -311,24 +312,33 @@ const CambioVidaCancelacionModal = ({
         };
       });
 
+      // Construir payload principal con campos comunes
       const payload = {
         cobertura_ids: Array.from(coberturasSeleccionadas).map(Number),
-        // Los inputs date ya devuelven strings en formato YYYY-MM-DD, usar directamente
         fecha_cancelacion: fechaCancelacion || null,
         motivo_cancelacion: motivoCancelacion || null,
         nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
-        // Nota: estado_cobertura ahora se maneja por cobertura en datos_renovacion
-        // Nuevos campos para manejar renovación, activo, vigente y estado_cobertura por cobertura
+        // Incluir datos_renovacion con valores específicos por cobertura
         datos_renovacion: datosRenovacion,
       };
 
-      // Eliminar campos null del payload (excepto datos_renovacion que siempre debe ir)
+      // Eliminar campos null/undefined del payload principal (excepto datos_renovacion y cobertura_ids que siempre deben ir)
       Object.keys(payload).forEach((key) => {
-        if (key !== 'datos_renovacion' && (payload[key] === null || payload[key] === undefined)) {
+        if (key !== 'datos_renovacion' && key !== 'cobertura_ids' && (payload[key] === null || payload[key] === undefined || payload[key] === "")) {
           delete payload[key];
         }
       });
+
+      // DEBUG: Verificar payload antes de enviar
+      console.log("📤 PAYLOAD COMPLETO ENVIADO AL BACKEND:", JSON.stringify(payload, null, 2));
+      console.log("📋 RESUMEN datos_renovacion:", datosRenovacion.map(d => ({
+        cobertura_id: d.cobertura_id,
+        activo: d.activo,
+        vigente: d.vigente,
+        estado_cobertura: d.estado_cobertura,
+        fecha_retiro: d.fecha_retiro
+      })));
 
       await apiRequest("coberturas/cancelar", "POST", payload);
 
