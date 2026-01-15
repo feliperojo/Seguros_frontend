@@ -458,12 +458,7 @@ const CambioVidaCancelacionModal = ({
                                   id={`renovar-si-${coberturaId}`}
                                   name={`renovar-${coberturaId}`}
                                   label={
-                                    <div>
-                                      <span className="small fw-semibold text-success">✓ Continuará activa</span>
-                                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                                        El cliente continúa con la póliza y permanece en el grupo familiar
-                                      </div>
-                                    </div>
+                                    <span className="small fw-semibold text-success">✓ Continuará activo en el grupo</span>
                                   }
                                   checked={datosRenovacion.renovar === true}
                                   onChange={() => handleRenovacionChange(coberturaId, true)}
@@ -473,12 +468,7 @@ const CambioVidaCancelacionModal = ({
                                   id={`renovar-no-${coberturaId}`}
                                   name={`renovar-${coberturaId}`}
                                   label={
-                                    <div>
-                                      <span className="small fw-semibold text-danger">✗ No continuará activa</span>
-                                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                                        La cobertura no se renovará más y pasará al historial
-                                      </div>
-                                    </div>
+                                    <span className="small fw-semibold text-danger">✗ No continuará activo en el grupo</span>
                                   }
                                   checked={datosRenovacion.renovar === false}
                                   onChange={() => handleRenovacionChange(coberturaId, false)}
@@ -504,22 +494,6 @@ const CambioVidaCancelacionModal = ({
                 </Table>
               </div>
 
-              {coberturasSeleccionadas.size > 0 && (
-                <div className="mt-3">
-                  <Alert variant="info" className="mb-0 py-2">
-                    <div className="d-flex align-items-start">
-                      <i className="fas fa-info-circle me-2 mt-1"></i>
-                      <div className="small">
-                        <strong>Instrucción:</strong> Para cada cobertura seleccionada, defina:
-                        <ul className="mb-0 mt-2">
-                          <li><strong>Continuará activa:</strong> La cobertura permanece activa y el cliente continúa con la póliza. Puede tener fecha de cancelación y retiro, pero seguirá siendo parte del grupo familiar.</li>
-                          <li><strong>No continuará activa:</strong> La cobertura no se renovará más y pasará al historial. El cliente ya no trabajará con esta cobertura.</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </Alert>
-                </div>
-              )}
             </div>
 
             {/* Paso 2: Información de cancelación */}
@@ -618,13 +592,13 @@ const CambioVidaCancelacionModal = ({
                         <div className="d-flex align-items-start">
                           <i className="fas fa-exclamation-triangle me-2 mt-1 text-warning"></i>
                           <div className="flex-grow-1">
-                            <strong className="text-dark">Coberturas que serán inactivadas definitivamente</strong>
+                            <strong className="text-dark">Miembros que no continuarán activos en el grupo</strong>
                             <div className="text-muted small mt-1 mb-2">
-                              Las siguientes coberturas no se renovarán más y pasarán al historial del grupo familiar. 
-                              Estas coberturas quedarán registradas pero ya no estarán activas para futuras renovaciones.
+                              Los siguientes miembros del grupo familiar no continuarán activos y pasarán al historial. 
+                              Estos miembros quedarán registrados pero ya no estarán activos en el grupo familiar.
                             </div>
                             <div className="small">
-                              <strong>Coberturas afectadas:</strong>
+                              <strong>Miembros afectados:</strong>
                               <ul className="mb-0 mt-1">
                                 {Array.from(coberturasSeleccionadas)
                                   .filter(id => {
