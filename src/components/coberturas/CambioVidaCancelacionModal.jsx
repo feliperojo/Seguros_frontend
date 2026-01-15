@@ -213,7 +213,7 @@ const CambioVidaCancelacionModal = ({
           return cobertura?.cliente?.nombre_completo || `ID ${id}`;
         })
         .join(", ");
-      setError(`Las siguientes coberturas requieren fecha de retiro: ${nombres}`);
+      setError(`Las siguientes coberturas requieren fecha de retiro porque no continuarán activas en el grupo: ${nombres}`);
       return false;
     }
     
@@ -269,24 +269,43 @@ const CambioVidaCancelacionModal = ({
 
     try {
       // Preparar datos de renovación por cobertura
-      // Para cada cobertura se actualizan:
-      // - activo: true si renueva, false si no renueva
-      // - fecha_cancelacion: fecha general de cancelación
-      // - fecha_retiro: fecha individual de retiro (solo si no continúa activa)
+      // 
+      // FLUJO 1: CANCELACIÓN (renovar = true) - El miembro continúa activo
+      // - activo: true (se mantiene activo, no se actualiza a false)
+      // - vigente: false (porque hay fecha de cancelación)
+      // - fecha_cancelacion: [fecha] (se actualiza)
+      // - fecha_retiro: null (no se actualiza)
+      //
+      // FLUJO 2: RETIRO (renovar = false) - El miembro NO continúa activo
+      // - activo: false (se actualiza a false)
+      // - vigente: false (porque hay fecha de cancelación y retiro)
+      // - fecha_cancelacion: [fecha] (se actualiza)
+      // - fecha_retiro: [fecha] (se actualiza)
       const datosRenovacion = Array.from(coberturasSeleccionadas).map((id) => {
         const datos = renovacionCoberturas.get(id);
         const renovar = datos?.renovar ?? false;
         const fechaRetiroIndividual = datos?.fecha_retiro || null;
         
+        // FLUJO 1: Cancelación (continúa activo)
+        if (renovar === true) {
+          return {
+            cobertura_id: Number(id),
+            renovar: true,
+            activo: true, // Se mantiene activo
+            vigente: false, // Se actualiza a false porque hay fecha de cancelación
+            fecha_cancelacion: fechaCancelacion || null,
+            fecha_retiro: null, // No se actualiza
+          };
+        }
+        
+        // FLUJO 2: Retiro (no continúa activo)
         return {
           cobertura_id: Number(id),
-          renovar: renovar,
-          // Actualizar activo: true si continúa, false si no continúa
-          activo: renovar ? true : false,
-          // Actualizar fecha de cancelación para todas las coberturas
+          renovar: false,
+          activo: false, // Se actualiza a false
+          vigente: false, // Se actualiza a false
           fecha_cancelacion: fechaCancelacion || null,
-          // Fecha de retiro solo si no continúa activa (renovar = false)
-          fecha_retiro: renovar ? null : fechaRetiroIndividual,
+          fecha_retiro: fechaRetiroIndividual || null, // Se actualiza con la fecha de retiro
         };
       });
 
