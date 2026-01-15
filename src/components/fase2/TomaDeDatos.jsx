@@ -521,16 +521,31 @@ const TomaDeDatos = ({
     [familyMembers]
   );
 
+  // Filtrar solo coberturas activas (excluir activo === false) manteniendo índice original
+  const activeNormalizedWithOriginalIdx = useMemo(() => {
+    return normalized
+      .map((m, originalIdx) => ({ m, originalIdx }))
+      .filter(({ m }) => {
+        // Excluir solo cuando activo es explícitamente false
+        // Mostrar si activo es true, undefined, null, o no existe (asumiendo activo por defecto)
+        const activo = m.activo;
+        // Si activo es explícitamente false, no mostrar
+        if (activo === false) return false;
+        // En cualquier otro caso (true, undefined, null), mostrar
+        return true;
+      });
+  }, [normalized]);
+
   // Mantener miembro + índice original
 const sortedWithIndex = useMemo(() => {
-  return normalized
-    .map((m, i) => ({ m, idx: i })) // idx = posición en familyMembers/normalized
+  return activeNormalizedWithOriginalIdx
+    .map(({ m, originalIdx }, i) => ({ m, idx: originalIdx, displayIdx: i })) // idx = índice original en familyMembers
     .sort((a, b) => {
       const pa = isTomador(a.m) ? 0 : 1;
       const pb = isTomador(b.m) ? 0 : 1;
       return pa - pb || a.idx - b.idx;
     });
-}, [normalized]);
+}, [activeNormalizedWithOriginalIdx]);
 
 // Solo los miembros (para cosas que no necesitan el índice)
 const sortedNormalized = useMemo(
@@ -538,9 +553,15 @@ const sortedNormalized = useMemo(
   [sortedWithIndex]
 );
 
+// Array de miembros activos sin índices (para payerOptions y otras utilidades)
+const activeNormalized = useMemo(
+  () => activeNormalizedWithOriginalIdx.map(({ m }) => m),
+  [activeNormalizedWithOriginalIdx]
+);
+
   // Compañías y pagadores
   const { companies, loading: companiesLoading } = useCompanies();
-  const payerOptions = useMemo(() => buildPayerOptions(normalized), [normalized]);
+  const payerOptions = useMemo(() => buildPayerOptions(activeNormalized), [activeNormalized]);
   const payerOptionsWithOther = useMemo(
     () => [...(payerOptions || []), { value: "OTRO", label: "Otro (externo)" }],
     [payerOptions]

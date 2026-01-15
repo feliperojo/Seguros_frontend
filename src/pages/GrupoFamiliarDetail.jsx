@@ -392,6 +392,9 @@ const mapFullToMembers = (fullRaw) => {
       fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
       fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
       nota_retiro: cov.nota_retiro ?? cov.nota_cancel ?? "",
+      // Campo para filtrar coberturas inactivas
+      // Si viene del backend, usarlo; si no, asumir true (activo por defecto)
+      activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
 
 
       // -------- también mantenemos el objeto cliente completo --------

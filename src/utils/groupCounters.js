@@ -20,7 +20,13 @@ export const isActiveCoverage = (m = {}) => {
   };
   
   export const countTaxesMembers = (members = []) =>
-    members.filter(isInTaxes).length;
+    members.filter(m => {
+      // Solo contar coberturas activas (activo === true)
+      const isActive = m.activo === true;
+      // También verificar el flag de impuestos si existe
+      const inTaxes = isInTaxes(m);
+      return isActive && inTaxes;
+    }).length;
   
   export const countCoverageMembers = (members = []) =>
     members.filter(isActiveCoverage).length;
