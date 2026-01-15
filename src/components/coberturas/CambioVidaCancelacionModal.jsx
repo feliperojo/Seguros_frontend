@@ -291,8 +291,9 @@ const CambioVidaCancelacionModal = ({
           return {
             cobertura_id: Number(id),
             renovar: true,
-            activo: true, // Se mantiene activo
+            activo: true, // Se mantiene activo (NO se actualiza a false)
             vigente: false, // Se actualiza a false porque hay fecha de cancelación
+            estado_cobertura: "No", // Se actualiza a "No" porque hay fecha de cancelación
             fecha_cancelacion: fechaCancelacion || null,
             fecha_retiro: null, // No se actualiza
           };
@@ -304,6 +305,7 @@ const CambioVidaCancelacionModal = ({
           renovar: false,
           activo: false, // Se actualiza a false
           vigente: false, // Se actualiza a false
+          estado_cobertura: "No", // Se actualiza a "No"
           fecha_cancelacion: fechaCancelacion || null,
           fecha_retiro: fechaRetiroIndividual || null, // Se actualiza con la fecha de retiro
         };
@@ -316,15 +318,14 @@ const CambioVidaCancelacionModal = ({
         motivo_cancelacion: motivoCancelacion || null,
         nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
-        // Regla automática: si se cancela una cobertura, estado_cobertura debe ser "No"
-        estado_cobertura: "No",
-        // Nuevos campos para manejar renovación y activo por cobertura
+        // Nota: estado_cobertura ahora se maneja por cobertura en datos_renovacion
+        // Nuevos campos para manejar renovación, activo, vigente y estado_cobertura por cobertura
         datos_renovacion: datosRenovacion,
       };
 
-      // Eliminar campos null del payload (excepto estado_cobertura y datos_renovacion que siempre deben ir)
+      // Eliminar campos null del payload (excepto datos_renovacion que siempre debe ir)
       Object.keys(payload).forEach((key) => {
-        if (key !== 'estado_cobertura' && key !== 'datos_renovacion' && (payload[key] === null || payload[key] === undefined)) {
+        if (key !== 'datos_renovacion' && (payload[key] === null || payload[key] === undefined)) {
           delete payload[key];
         }
       });
