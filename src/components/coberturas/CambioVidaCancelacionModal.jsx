@@ -115,11 +115,11 @@ const CambioVidaCancelacionModal = ({
         });
       } else {
         nuevo.add(coberturaId);
-        // Inicializar con valor por defecto: no se renueva (activo = false)
+        // Inicializar con valor por defecto: continúa activo (renovar = true)
         setRenovacionCoberturas((prevRenov) => {
           const nuevoRenov = new Map(prevRenov);
           nuevoRenov.set(coberturaId, {
-            renovar: false,
+            renovar: true,
             fecha_retiro: "",
           });
           return nuevoRenov;
@@ -157,7 +157,7 @@ const CambioVidaCancelacionModal = ({
     
     setRenovacionCoberturas((prev) => {
       const nuevo = new Map(prev);
-      const datosActuales = nuevo.get(coberturaId) || { renovar: false };
+      const datosActuales = nuevo.get(coberturaId) || { renovar: true };
       nuevo.set(coberturaId, {
         renovar: datosActuales.renovar,
         fecha_retiro: fechaRetiro || "",
@@ -170,8 +170,23 @@ const CambioVidaCancelacionModal = ({
   const toggleTodas = () => {
     if (coberturasSeleccionadas.size === coberturas.length) {
       setCoberturasSeleccionadas(new Set());
+      setRenovacionCoberturas(new Map());
     } else {
-      setCoberturasSeleccionadas(new Set(coberturas.map((c) => c.id)));
+      const todasLasIds = coberturas.map((c) => c.id).filter(id => id);
+      setCoberturasSeleccionadas(new Set(todasLasIds));
+      // Inicializar todas con valor por defecto: continúa activo (renovar = true)
+      setRenovacionCoberturas((prevRenov) => {
+        const nuevoRenov = new Map(prevRenov);
+        todasLasIds.forEach((id) => {
+          if (!nuevoRenov.has(id)) {
+            nuevoRenov.set(id, {
+              renovar: true,
+              fecha_retiro: "",
+            });
+          }
+        });
+        return nuevoRenov;
+      });
     }
   };
 
@@ -483,7 +498,7 @@ const CambioVidaCancelacionModal = ({
                       const isSelected = coberturasSeleccionadas.has(coberturaId);
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
                       const datosRenovacion = renovacionCoberturas.get(coberturaId) || {
-                        renovar: false,
+                        renovar: true,
                         fecha_retiro: "",
                       };
                       
