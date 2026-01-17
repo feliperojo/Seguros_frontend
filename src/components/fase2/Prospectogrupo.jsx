@@ -9,6 +9,7 @@ import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 import ContactosGrupoModal from "../Contacto/ContactosGrupoModal";
 import CambioVidaCancelacionModal from "../coberturas/CambioVidaCancelacionModal";
 import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCoberturasCanceladasModal";
+import ReactivacionCoberturasModal from "../coberturas/ReactivacionCoberturasModal";
 import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
 import GroupTags from "../GroupTags";
 
@@ -30,6 +31,7 @@ const Prospectogrupo = ({
   const [showContactosModal, setShowContactosModal] = useState(false);
   const [showCambioVidaModal, setShowCambioVidaModal] = useState(false);
   const [showHistorialCanceladasModal, setShowHistorialCanceladasModal] = useState(false);
+  const [showReactivacionModal, setShowReactivacionModal] = useState(false);
   const [showGestorDocumentosModal, setShowGestorDocumentosModal] = useState(false);
 
 
@@ -193,6 +195,16 @@ const Prospectogrupo = ({
                   >
                     <i className="fas fa-exclamation-triangle me-1"></i>
                     <span className="d-none d-lg-inline">Renovaciones</span>
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-success"
+                    onClick={() => setShowReactivacionModal(true)}
+                    disabled={!resolvedGrupoId}
+                    title="Reactivar coberturas retiradas"
+                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                  >
+                    <i className="fas fa-redo me-1"></i>
+                    <span className="d-none d-lg-inline">Reactivar</span>
                   </button>
                   <button
                     className="btn btn-sm btn-outline-secondary"
@@ -411,6 +423,20 @@ const Prospectogrupo = ({
   show={showHistorialCanceladasModal}
   onClose={() => setShowHistorialCanceladasModal(false)}
   grupoFamiliarId={resolvedGrupoId}
+/>
+
+<ReactivacionCoberturasModal
+  show={showReactivacionModal}
+  onClose={() => setShowReactivacionModal(false)}
+  grupoFamiliarId={resolvedGrupoId}
+  onSuccess={() => {
+    // Si hay una función de refresh del padre, usarla; si no, recargar la página
+    if (onRefresh && typeof onRefresh === "function") {
+      onRefresh();
+    } else {
+      window.location.reload();
+    }
+  }}
 />
 
 <GestorDocumentosGrupoFamiliar
