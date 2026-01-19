@@ -55,6 +55,28 @@ const isNoteEmpty = (html) => {
 };
 
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
+  // Función helper para convertir fecha a formato YYYY-MM-DD sin problemas de zona horaria
+  const fechaToInputDate = (fecha) => {
+    if (!fecha) return "";
+    try {
+      // Si es string, extraer solo la parte de fecha (YYYY-MM-DD)
+      if (typeof fecha === "string") {
+        const fechaPart = fecha.split("T")[0];
+        if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          return fechaPart;
+        }
+      }
+      // Si es Date object, usar métodos locales para evitar problemas de zona horaria
+      const date = new Date(fecha);
+      if (isNaN(date.getTime())) return "";
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    } catch {
+      return "";
+    }
+  };
  
   const [responseNote, setResponseNote] = useState(tarea?.response_note || "");
   const [loading, setLoading] = useState(false);
@@ -92,8 +114,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
   const [loadingHistorial, setLoadingHistorial] = useState(false);
 
-  const [scheduledDate, setScheduledDate] = useState(tarea?.scheduled_date || "");
-  const [dueDate, setDueDate] = useState(tarea?.due_date || "");
+  const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
+  const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
 
   // Estados para archivos adjuntos de la respuesta
   const [archivos, setArchivos] = useState([]);
@@ -458,8 +480,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
     // Resetear fechas cuando cambia la tarea
     if (tarea) {
-      setScheduledDate(tarea?.scheduled_date || "");
-      setDueDate(tarea?.due_date || "");
+      setScheduledDate(fechaToInputDate(tarea?.scheduled_date) || "");
+      setDueDate(fechaToInputDate(tarea?.due_date) || "");
     }
 
     // ✅ Limpiar estados de edición al cambiar de tarea
@@ -760,8 +782,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
     try {
+      // Si es string en formato YYYY-MM-DD, extraer directamente
+      if (typeof fecha === "string" && fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
+        const [year, month, day] = fecha.split("T")[0].split("-");
+        return `${month}/${day}/${year}`;
+      }
+      // Si es Date object o string ISO, usar métodos locales
       const date = new Date(fecha);
       if (isNaN(date.getTime())) return "N/A";
+      // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       const year = date.getFullYear();
@@ -1273,7 +1302,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                     </Col>
                   </Row>
                   <p><strong>Asignada por:</strong> {tarea?.log?.user?.name || "N/A"}</p>
-                  <p className="mt-3"><strong>Nota:</strong> {tarea?.log?.note || "Sin nota"}</p>
+                  <div className="mt-3">
+                    <strong>Nota:</strong>
+                    <div 
+                      style={{ 
+                        marginTop: 4,
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        wordBreak: 'break-word'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: tarea?.log?.note || 'Sin nota' }}
+                    />
+                  </div>
 
                 </>
               ) : (
@@ -1836,9 +1876,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                         </Badge>
                       )}
                     </div>
-                    <p className="mb-1" style={{ whiteSpace: "pre-wrap" }}>
-                          {h.nota || "Sin detalles"}
-                        </p>
+                    <div 
+                      className="mb-1"
+                      style={{ 
+                        fontSize: '14px',
+                        lineHeight: '1.5',
+                        wordBreak: 'break-word'
+                      }}
+                      dangerouslySetInnerHTML={{ __html: h.nota || 'Sin detalles' }}
+                    />
 
                     <small className="text-muted">
                       {formatDateTimeForDisplay(h.fecha)} | {h.usuario}
