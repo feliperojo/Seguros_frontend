@@ -20,7 +20,7 @@ import GrupoFamiliarService from "../../services/GrupoFamiliarService";
  * - Permite seleccionar una o varias coberturas mediante checkboxes
  * - Valida que haya al menos una cobertura seleccionada
  * - Envía peticiones PUT a /api/cobertura/{id} para reactivar cada cobertura
- * - Actualiza: activo: true, vigente: true, fecha_retiro: null, fecha_cancelacion: null
+ * - Actualiza: activo: true, vigente: true, fecha_retiro: null, fecha_cancelacion: null, motivo_cancelacion: null, nota_cancel: null
  * - Muestra estados de loading, éxito y error
  */
 const ReactivacionCoberturasModal = ({
@@ -133,6 +133,8 @@ const ReactivacionCoberturasModal = ({
           vigente: true,
           fecha_retiro: null,
           fecha_cancelacion: null,
+          motivo_cancelacion: null,
+          nota_cancel: null,
         };
 
         // DEBUG: Verificar payload antes de enviar
