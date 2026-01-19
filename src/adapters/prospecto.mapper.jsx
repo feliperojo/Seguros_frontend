@@ -248,19 +248,19 @@ const normSiNo = (v) => {
   return v;
 };
 
-export const mapCoberturaFromMember = (m = {}, grupoId) =>
-  stripNulls({
+export const mapCoberturaFromMember = (m = {}, grupoId) => {
+  // Campos protegidos: solo se incluyen si YA tienen valores establecidos (preservar valores de renovación)
+  // NO se pueden establecer/modificar desde actualizaciones normales (solo desde modales especializados)
+  
+  const payload = {
     id: m.cobertura_id ?? null,
     grupo_familiar_id: Number(grupoId),
     cliente_id: m.cliente_id ?? null,
     parentesco: m.parentesco || m.tipo || "Tomador",
     estado_cobertura: normSiNo(m.estado_cobertura || "Si/No"),
     ano_cobertura: (m.ano_cobertura || new Date().getFullYear()).toString(),
-    cobertura_tipo: m.cobertura_tipo || null, // 👈 por si ya lo traes en el miembro
+    cobertura_tipo: m.cobertura_tipo || null,
     fecha_activacion: cleanDate(m.fecha_activacion ?? m?.cobertura?.fecha_activacion ?? null),
-    fecha_cancelacion: cleanDate(m.fecha_cancelacion),
-    fecha_retiro: cleanDate(m.fecha_retiro),
-    activo: m.activo ?? true,
     grupo: m.grupo || null,
     plan: m.plan || "",
     metal: m.metal || null,
@@ -272,4 +272,43 @@ export const mapCoberturaFromMember = (m = {}, grupoId) =>
     compania_id: m.compania_id || null,
     pagador_id: m.pagador_id || null,
     dia_pago: m.dia_pago ?? null,
-  });
+  };
+  
+  // ✅ PRESERVAR campos protegidos solo si YA tienen valores establecidos (de renovación/reactivación)
+  // Esto evita que se reseteen cuando el backend hace UPDATE completo
+  const fechaCancelacion = cleanDate(m.fecha_cancelacion);
+  const fechaRetiro = cleanDate(m.fecha_retiro);
+  const notaCancel = (m.nota_cancel || "").trim();
+  const notaRetiro = (m.nota_retiro || "").trim();
+  const motivoCancelacion = (m.motivo_cancelacion || "").trim();
+  
+  // Solo incluir si tienen valores válidos (no null/vacío)
+  if (fechaCancelacion) payload.fecha_cancelacion = fechaCancelacion;
+  if (fechaRetiro) payload.fecha_retiro = fechaRetiro;
+  if (notaCancel) payload.nota_cancel = notaCancel;
+  if (notaRetiro) payload.nota_retiro = notaRetiro;
+  // motivo_cancelacion: incluir si tiene valor (string no vacío)
+  if (motivoCancelacion) payload.motivo_cancelacion = motivoCancelacion;
+  
+  // activo: solo incluir si está explícitamente definido (booleano)
+  // Incluir tanto true como false para preservar el valor establecido
+  if (m.activo !== undefined && m.activo !== null) {
+    // Normalizar a booleano: acepta true, "true", 1, false, "false", 0
+    const activoValue = typeof m.activo === 'boolean' 
+      ? m.activo 
+      : (m.activo === true || m.activo === "true" || m.activo === 1 || m.activo === "1");
+    payload.activo = activoValue;
+  }
+  
+  // vigente: solo incluir si está explícitamente definido (booleano)
+  // IMPORTANTE: Incluir tanto true como false para preservar el valor establecido por renovación
+  if (m.vigente !== undefined && m.vigente !== null) {
+    // Normalizar a booleano: acepta true, "true", 1, false, "false", 0
+    const vigenteValue = typeof m.vigente === 'boolean' 
+      ? m.vigente 
+      : (m.vigente === true || m.vigente === "true" || m.vigente === 1 || m.vigente === "1");
+    payload.vigente = vigenteValue;
+  }
+  
+  return stripNulls(payload);
+};

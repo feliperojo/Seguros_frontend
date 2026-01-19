@@ -189,7 +189,7 @@ const Prospectogrupo = ({
                   <button
                     className="btn btn-sm btn-outline-warning"
                     onClick={() => setShowCambioVidaModal(true)}
-                    disabled={!resolvedGrupoId}
+                    disabled={!resolvedGrupoId || readOnly}
                     title="Renovaciones"
                     style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
@@ -199,7 +199,7 @@ const Prospectogrupo = ({
                   <button
                     className="btn btn-sm btn-outline-success"
                     onClick={() => setShowReactivacionModal(true)}
-                    disabled={!resolvedGrupoId}
+                    disabled={!resolvedGrupoId || readOnly}
                     title="Reactivar coberturas retiradas"
                     style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >

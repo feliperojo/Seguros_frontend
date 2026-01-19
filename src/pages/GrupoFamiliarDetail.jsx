@@ -392,9 +392,12 @@ const mapFullToMembers = (fullRaw) => {
       fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
       fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
       nota_retiro: cov.nota_retiro ?? cov.nota_cancel ?? "",
+      motivo_cancelacion: cov.motivo_cancelacion ?? "",
       // Campo para filtrar coberturas inactivas
       // Si viene del backend, usarlo; si no, asumir true (activo por defecto)
       activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
+      // Campo vigente: preservar valor del backend
+      vigente: cov.vigente !== undefined && cov.vigente !== null ? cov.vigente : true,
 
 
       // -------- también mantenemos el objeto cliente completo --------
@@ -868,14 +871,16 @@ const clientesPayload = existentes
 // quita los nulls del caso (1)
 
                     // 🔎 DEBUG: verifica que cada cobertura lleve fecha_activacion
+     // Nota: fecha_cancelacion, fecha_retiro, activo, vigente, nota_cancel NO se envían en actualizaciones normales
+     // (solo se actualizan mediante modales de renovación/reactivación)
      try {
        console.table(
          coberturasPayload.map(c => ({
            id: c.id,
            cliente_id: c.cliente_id,
            fecha_activacion: c.fecha_activacion,
-           fecha_cancelacion: c.fecha_cancelacion,
-           fecha_retiro: c.fecha_retiro
+           estado_cobertura: c.estado_cobertura,
+           // Campos protegidos excluidos: fecha_cancelacion, fecha_retiro, activo, vigente, nota_cancel
          }))
        );
      } catch (_) {}

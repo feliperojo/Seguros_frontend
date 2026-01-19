@@ -736,17 +736,10 @@ const activeNormalized = useMemo(
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
 
-    // Limpiar campos de retiro/cancelación cuando estado_cobertura cambia a diferente de "No"
-    if (name === "estado_cobertura" && v !== "No" && v !== "") {
-      // Limpiar fecha_retiro
-      patch.fecha_retiro = "";
-      // Limpiar fecha_cancelacion
-      patch.fecha_cancelacion = "";
-      // Limpiar nota_retiro
-      patch.nota_retiro = "";
-      // Limpiar nota_cancel
-      patch.nota_cancel = "";
-    }
+    // ⚠️ NO limpiar campos protegidos automáticamente cuando cambia estado_cobertura
+    // Estos campos (fecha_cancelacion, fecha_retiro, nota_cancel, nota_retiro, activo, vigente)
+    // solo deben ser modificados mediante modales de renovación/reactivación
+    // La limpieza automática podría causar que se reseteen valores establecidos por esos modales
 
     // Cálculo ingreso anual
     if (name === "ingreso_por_periodo" || name === "periodo_ingreso") {
