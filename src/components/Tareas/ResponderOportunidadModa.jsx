@@ -12,6 +12,8 @@ import {
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
+import { useMentionableQuill } from "../../hooks/useMentionableQuill";
+import { extractMentionedUserIds } from "../../utils/mentions";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
@@ -84,6 +86,24 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
+
+  // ✅ Estados para menciones
+  const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
+  const [mentionedUserIds, setMentionedUserIds] = useState([]); // IDs de usuarios mencionados
+
+  // ✅ Hook para manejo de menciones en Quill
+  const {
+    quillRef: mentionQuillRef,
+    showMentionList,
+    mentionList,
+    selectedMentionIndex,
+    insertMention,
+    handleQuillChange,
+    handleQuillKeyDown,
+    updateSelectedIndex,
+  } = useMentionableQuill(usuarios, (ids) => {
+    setMentionedUserIds(ids);
+  });
 
   // Sincronizar ref con estado
   useEffect(() => {
@@ -347,6 +367,164 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     setShowPreviewModal(true);
   };
 
+  // ✅ Cargar usuarios para menciones
+  useEffect(() => {
+    if (!show) return;
+    
+    let mounted = true;
+    const cargarUsuarios = async () => {
+      try {
+        let response = null;
+        try {
+          response = await apiRequest("users?per_page=1000", "GET");
+        } catch (e) {
+          try {
+            response = await apiRequest("/v1/users?per_page=1000", "GET");
+          } catch (e2) {
+            console.warn("No se pudieron cargar usuarios para menciones");
+            return;
+          }
+        }
+        
+        const data = Array.isArray(response) ? response : response?.data || response || [];
+        const usuariosList = Array.isArray(data) ? data : [];
+        
+        if (mounted) {
+          setUsuarios(usuariosList);
+          console.log(`✅ ${usuariosList.length} usuarios cargados para menciones`);
+        }
+      } catch (err) {
+        console.error("Error al cargar usuarios:", err);
+      }
+    };
+    
+    cargarUsuarios();
+    return () => { mounted = false; };
+  }, [show]);
+
+  // ✅ Verificar disponibilidad del reconocimiento de voz
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setReconocimientoDisponible(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = 'es-ES';
+
+      recognition.onresult = (event) => {
+        let textoTranscrito = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            textoTranscrito += event.results[i][0].transcript;
+          }
+        }
+        
+        if (textoTranscrito) {
+          if (quillEditorRef.current) {
+            const quill = quillEditorRef.current.getEditor();
+            const length = quill.getLength();
+            quill.insertText(length - 1, (quill.getText(length - 2, 1) !== '' ? ' ' : '') + textoTranscrito + ' ');
+            quill.setSelection(length + textoTranscrito.length);
+            setResponseNote(quill.root.innerHTML);
+          } else {
+            setResponseNote((prev) => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + textoTranscrito + ' ');
+          }
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Error en reconocimiento de voz:', event.error);
+        if (event.error === 'no-speech') {
+          return;
+        } else if (event.error === 'audio-capture') {
+          alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          setGrabando(false);
+        } else if (event.error === 'not-allowed') {
+          alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          setGrabando(false);
+        } else if (event.error !== 'aborted') {
+          setGrabando(false);
+        }
+      };
+
+      recognition.onend = () => {
+        if (grabandoRef.current) {
+          try {
+            setTimeout(() => {
+              if (grabandoRef.current) {
+                recognition.start();
+              }
+            }, 100);
+          } catch (err) {
+            setGrabando(false);
+          }
+        }
+      };
+
+      setReconocimientoVoz(recognition);
+
+      return () => {
+        try {
+          recognition.stop();
+        } catch (err) {
+          // Ignorar errores al detener
+        }
+        setGrabando(false);
+      };
+    } else {
+      setReconocimientoDisponible(false);
+    }
+  }, []);
+
+  // ✅ Detener grabación cuando se cierra el modal
+  useEffect(() => {
+    if (!show && reconocimientoVoz && grabando) {
+      try {
+        reconocimientoVoz.stop();
+        setGrabando(false);
+      } catch (err) {
+        // Ignorar errores
+      }
+    }
+  }, [show, reconocimientoVoz, grabando]);
+
+  // ✅ Funciones para el dictado
+  const iniciarDictado = () => {
+    if (!reconocimientoVoz) {
+      alert('El reconocimiento de voz no está disponible en tu navegador.');
+      return;
+    }
+
+    try {
+      reconocimientoVoz.start();
+      setGrabando(true);
+    } catch (err) {
+      console.error('Error al iniciar reconocimiento:', err);
+      alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      setGrabando(false);
+    }
+  };
+
+  const detenerDictado = () => {
+    if (reconocimientoVoz) {
+      try {
+        reconocimientoVoz.stop();
+      } catch (err) {
+        console.error('Error al detener reconocimiento:', err);
+      }
+    }
+    setGrabando(false);
+  };
+
+  const toggleDictado = () => {
+    if (grabando) {
+      detenerDictado();
+    } else {
+      iniciarDictado();
+    }
+  };
+
   useEffect(() => {
     if (show && tarea?.id) {
       // Log para depuración
@@ -456,10 +634,16 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         archivosCount: archivos.length
       });
 
+      // ✅ Extraer IDs de usuarios mencionados del contenido
+      const mentionedIds = extractMentionedUserIds(responseNote, usuarios);
+      
       const data = await apiRequest(
         `tareas_operativas/${tarea.id}/comentarios`,
         "POST",
-        { comment: responseNote || " " }
+        { 
+          comment: responseNote || " ",
+          mentioned_user_ids: mentionedIds.length > 0 ? mentionedIds : undefined
+        }
       );
 
       console.log("✅ Respuesta del comentario:", data);
@@ -953,18 +1137,44 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       {/* Estilos para renderizar contenido HTML de Quill */}
       <style>{`
         .ql-editor {
-          font-size: 16px;
-          line-height: 1.6;
+          font-size: 14px;
+          line-height: 1.5;
           padding: 0;
+          color: #212529;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
         }
         .ql-editor p {
-          margin: 0 0 0.5em 0;
+          margin: 0 0 0.25em 0;
+          white-space: normal;
         }
         .ql-editor p:last-child {
           margin-bottom: 0;
         }
+        .ql-editor p:empty {
+          height: 0;
+          margin: 0;
+          display: none;
+        }
+        .ql-editor p:empty:only-child {
+          display: block;
+          height: 0.25em;
+        }
+        .ql-editor br {
+          display: block;
+          content: "";
+          margin-bottom: 0.25em;
+          line-height: 0.25em;
+        }
+        .ql-editor br:last-child {
+          margin-bottom: 0;
+        }
+        .ql-editor p + br {
+          margin-top: -0.25em;
+        }
         .ql-editor strong {
           font-weight: 600;
+          color: #212529;
         }
         .ql-editor em {
           font-style: italic;
@@ -976,44 +1186,46 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
           text-decoration: line-through;
         }
         .ql-editor a {
-          color: #2563eb;
+          color: #0d6efd;
           text-decoration: underline;
         }
         .ql-editor a:hover {
-          color: #1d4ed8;
+          color: #0a58ca;
         }
         .ql-editor ul, .ql-editor ol {
           padding-left: 1.5em;
           margin: 0.5em 0;
         }
         .ql-editor blockquote {
-          border-left: 4px solid #e5e7eb;
+          border-left: 4px solid #dee2e6;
           padding-left: 1em;
           margin: 0.5em 0;
-          color: #6b7280;
+          color: #6c757d;
         }
         .ql-editor code {
-          background-color: #f3f4f6;
+          background-color: #f8f9fa;
           padding: 0.2em 0.4em;
           border-radius: 0.25em;
-          font-family: monospace;
+          font-family: 'Courier New', monospace;
           font-size: 0.9em;
+          border: 1px solid #dee2e6;
         }
         .ql-editor pre {
-          background-color: #f3f4f6;
+          background-color: #f8f9fa;
           padding: 0.75em;
           border-radius: 0.25em;
           overflow-x: auto;
           margin: 0.5em 0;
+          border: 1px solid #dee2e6;
         }
         .ql-editor .ql-size-small {
           font-size: 0.75em;
         }
         .ql-editor .ql-size-large {
-          font-size: 1.5em;
+          font-size: 1.25em;
         }
         .ql-editor .ql-size-huge {
-          font-size: 2.5em;
+          font-size: 1.5em;
         }
         .ql-editor .ql-align-center {
           text-align: center;
@@ -1026,8 +1238,8 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         }
       `}</style>
     <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
-      <Modal.Header closeButton>
-        <Modal.Title>
+      <Modal.Header closeButton className="border-bottom">
+        <Modal.Title className="text-dark fw-semibold" style={{ fontSize: "1.1rem" }}>
           {esCerrada ? "Detalle de Tarea" : "Responder Tarea"}
         </Modal.Title>
       </Modal.Header>
@@ -1035,84 +1247,122 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         <Row>
           {/* Columna completa: Tarea */}
           <Col md={12}>
-            {/* Banner destacado de la tarea actual */}
+            {/* Banner destacado de la tarea actual - Diseño sobrio y profesional */}
             <div
-              className="mb-3 p-3 rounded shadow"
+              className="mb-4 p-4 rounded"
               style={{ 
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                border: "2px solid #5568d3"
+                background: "#f8f9fa",
+                border: "1px solid #dee2e6",
+                borderLeft: "4px solid #495057"
               }}
             >
-              <div className="d-flex align-items-center mb-2">
-                <span style={{ fontSize: "1.5rem", marginRight: "10px" }}>📌</span>
+              <div className="d-flex align-items-center mb-3">
+                <div className="me-3">
+                  <i className="fas fa-tasks text-muted" style={{ fontSize: "1.25rem" }}></i>
+                </div>
                 <div>
-                  <h5 className="mb-0 text-white">Tarea Actual</h5>
-                  <small className="text-white" style={{ opacity: 0.9 }}>
+                  <h6 className="mb-0 text-dark fw-semibold">Tarea Actual</h6>
+                  <small className="text-muted">
                     Respondiendo esta tarea
                   </small>
                 </div>
               </div>
-              <div className="p-2 rounded" style={{ background: "rgba(255,255,255,0.95)" }}>
-                <h6 className="mb-2" style={{ color: "#667eea", fontWeight: "bold" }}>
+              <div className="ps-4">
+                <h6 className="mb-3 text-dark fw-semibold" style={{ fontSize: "0.95rem" }}>
                   {conceptoTarea}
                 </h6>
-                <div className="small">
-                  <strong>Nota:</strong> {notaTarea}
+                <div className="mb-0">
+                  <strong className="text-muted small d-block mb-2">Nota:</strong>
+                  <div 
+                    className="ql-editor"
+                    style={{ 
+                      fontSize: '14px',
+                      lineHeight: '1.5',
+                      wordBreak: 'break-word',
+                      overflowWrap: 'break-word',
+                      color: '#212529'
+                    }}
+                    dangerouslySetInnerHTML={{ __html: notaTarea || 'Sin nota' }}
+                  />
                 </div>
               </div>
             </div>
 
-            <h6 className="mb-3 text-muted">Detalles de la Tarea</h6>
-            
-            {/* Detalles de la Tarea */}
+            {/* Detalles de la Tarea - Diseño sobrio */}
             <div
-              className="mb-3 p-3 rounded shadow-sm"
+              className="mb-4 p-3 rounded"
               style={{ background: "#fff", border: "1px solid #dee2e6" }}
             >
+              <h6 className="mb-3 text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                Detalles de la Tarea
+              </h6>
               {!esCerrada ? (
                 <>
-                  <Row className="mb-2">
+                  <Row className="mb-3">
                     <Col>
                       <Form.Group>
-                        <Form.Label>📅 Programada:</Form.Label>
+                        <Form.Label className="text-muted small fw-semibold">
+                          <i className="fas fa-calendar-alt me-1"></i>
+                          Programada:
+                        </Form.Label>
                         <Form.Control
                           type="date"
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
+                          className="border-secondary"
                         />
                       </Form.Group>
                     </Col>
                     <Col>
                       <Form.Group>
-                        <Form.Label>⏳ Vencimiento:</Form.Label>
+                        <Form.Label className="text-muted small fw-semibold">
+                          <i className="fas fa-clock me-1"></i>
+                          Vencimiento:
+                        </Form.Label>
                         <Form.Control
                           type="date"
                           value={dueDate}
                           onChange={(e) => setDueDate(e.target.value)}
+                          className="border-secondary"
                         />
                       </Form.Group>
                     </Col>
                   </Row>
-                  <p><strong>Asignada por:</strong> {asignadoPor}</p>
+                  <div className="pt-2 border-top">
+                    <small className="text-muted">Asignada por:</small>
+                    <p className="mb-0 text-dark fw-medium">{asignadoPor}</p>
+                  </div>
                 </>
               ) : (
                 <>
-                  <Badge bg="info" className="me-2">{formatFecha(tarea?.scheduled_date)}</Badge>
-                  <Badge bg={getBadgeColor(tarea?.due_date)}>
-                    {formatFecha(tarea?.due_date)}
-                  </Badge>
-                  <p className="mt-3"><strong>Asignada por:</strong> {asignadoPor}</p>
+                  <div className="mb-3">
+                    <small className="text-muted d-block mb-1">Programada:</small>
+                    <Badge bg="secondary" className="me-2">{formatFecha(tarea?.scheduled_date)}</Badge>
+                  </div>
+                  <div className="mb-3">
+                    <small className="text-muted d-block mb-1">Vencimiento:</small>
+                    <Badge bg={getBadgeColor(tarea?.due_date)}>
+                      {formatFecha(tarea?.due_date)}
+                    </Badge>
+                  </div>
+                  <div className="pt-2 border-top">
+                    <small className="text-muted">Asignada por:</small>
+                    <p className="mb-0 text-dark fw-medium">{asignadoPor}</p>
+                  </div>
                 </>
               )}
             </div>
 
-            <hr />
+            {/* Separador sutil */}
+            <div className="border-top my-4"></div>
             
             {/* Comentarios de esta tarea */}
-            <div className="mb-3">
-              <div className="d-flex align-items-center mb-2">
-                <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>💬</span>
-                <h6 className="mb-0">Comentarios de esta tarea</h6>
+            <div className="mb-4">
+              <div className="d-flex align-items-center mb-3">
+                <i className="fas fa-comments text-muted me-2"></i>
+                <h6 className="mb-0 text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                  Comentarios de esta tarea
+                </h6>
               </div>
               {comentariosDeEstaTarea.length === 0 ? (
                 <p className="text-muted small">No hay comentarios previos.</p>
@@ -1125,13 +1375,15 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     return (
                       <ListGroup.Item 
                         key={c.id} 
-                        className={fueActualizado ? 'border-success' : ''}
-                        style={{ background: "#f8f9fa" }}
+                        className={fueActualizado ? 'border-success border-start border-3' : ''}
+                        style={{ background: "#fff", border: "1px solid #dee2e6" }}
                       >
-                        <strong>{c.user || "Usuario"}:</strong>
-                        {fueActualizado && (
-                          <Badge bg="success" className="ms-2">Actualizado ✓</Badge>
-                        )}
+                        <div className="d-flex align-items-center justify-content-between mb-2">
+                          <strong className="text-dark small">{c.user || "Usuario"}</strong>
+                          {fueActualizado && (
+                            <Badge bg="success" className="small">Actualizado</Badge>
+                          )}
+                        </div>
 
                         {estaEnEdicion ? (
                           <>
@@ -1174,11 +1426,13 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                         ) : (
                           <>
                             <div 
+                              className="ql-editor"
                               style={{ 
-                                marginTop: 4,
                                 fontSize: '14px',
                                 lineHeight: '1.5',
-                                wordBreak: 'break-word'
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
+                                color: '#212529'
                               }}
                               dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
                             />
@@ -1236,14 +1490,17 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               )}
             </div>
 
-            <hr />
+            {/* Separador sutil */}
+            <div className="border-top my-4"></div>
 
             {/* Campo para nuevo comentario */}
             {!esCerrada && (
-              <div className="mt-3">
-                <div className="d-flex align-items-center mb-2">
-                  <span style={{ fontSize: "1.2rem", marginRight: "8px" }}>✍️</span>
-                  <Form.Label className="mb-0 fw-bold">Mi respuesta:</Form.Label>
+              <div className="mt-4 pt-3 border-top">
+                <div className="d-flex align-items-center mb-3">
+                  <i className="fas fa-edit text-muted me-2"></i>
+                  <Form.Label className="mb-0 fw-semibold text-dark" style={{ fontSize: "0.9rem" }}>
+                    Mi respuesta:
+                  </Form.Label>
                 </div>
                 <div className="mb-2">
                   {reconocimientoDisponible && (
@@ -1333,40 +1590,86 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     </small>
                   </div>
                 )}
-                <style>{`
-                  .ql-editor {
-                    min-height: 280px;
-                    font-size: 16px;
-                    line-height: 1.6;
-                  }
-                  .ql-container {
-                    font-size: 16px;
-                    font-family: inherit;
-                  }
-                  .ql-editor.ql-blank::before {
-                    font-size: 16px;
-                    font-style: normal;
-                    color: #6c757d;
-                  }
-                `}</style>
-                <ReactQuill
-                  theme="snow"
-                  value={responseNote || ""}
-                  onChange={(value, delta, source, editor) => {
-                    setResponseNote(value);
-                    if (editor && !quillEditorRef.current) {
-                      quillEditorRef.current = editor;
+                <div className="position-relative">
+                  <style>{`
+                    .ql-editor {
+                      min-height: 280px;
+                      font-size: 16px;
+                      line-height: 1.6;
                     }
-                  }}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  placeholder="Escribe tu respuesta o usa el botón 'Dictar' para transcribir por voz. Use la barra de herramientas para formatear el texto..."
-                  style={{
-                    backgroundColor: '#fff',
-                    border: '2px solid #667eea',
-                    borderRadius: '0.375rem'
-                  }}
-                />
+                    .ql-container {
+                      font-size: 16px;
+                      font-family: inherit;
+                    }
+                    .ql-editor.ql-blank::before {
+                      font-size: 16px;
+                      font-style: normal;
+                      color: #6c757d;
+                    }
+                    .mention-dropdown {
+                      position: absolute;
+                      background: white;
+                      border: 1px solid #ddd;
+                      border-radius: 4px;
+                      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+                      max-height: 200px;
+                      overflow-y: auto;
+                      z-index: 1000;
+                      margin-top: 5px;
+                    }
+                    .mention-item {
+                      padding: 8px 12px;
+                      cursor: pointer;
+                      border-bottom: 1px solid #f0f0f0;
+                    }
+                    .mention-item:hover,
+                    .mention-item.selected {
+                      background-color: #e3f2fd;
+                    }
+                    .mention-item:last-child {
+                      border-bottom: none;
+                    }
+                  `}</style>
+                  <ReactQuill
+                    ref={mentionQuillRef}
+                    theme="snow"
+                    value={responseNote || ""}
+                    onChange={(value, delta, source, editor) => {
+                      setResponseNote(value);
+                      if (editor && !quillEditorRef.current) {
+                        quillEditorRef.current = editor;
+                      }
+                      handleQuillChange(value, delta, source, editor);
+                    }}
+                    onKeyDown={handleQuillKeyDown}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    placeholder="Escribe tu respuesta o usa el botón 'Dictar' para transcribir por voz. Escribe @ para mencionar usuarios. Use la barra de herramientas para formatear el texto..."
+                    style={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #dee2e6',
+                      borderRadius: '0.375rem'
+                    }}
+                  />
+                  {/* ✅ Dropdown de menciones */}
+                  {showMentionList && mentionList.length > 0 && (
+                    <div className="mention-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0 }}>
+                      {mentionList.map((user, index) => (
+                        <div
+                          key={user.id || index}
+                          className={`mention-item ${index === selectedMentionIndex ? 'selected' : ''}`}
+                          onClick={() => insertMention(user)}
+                          onMouseEnter={() => updateSelectedIndex(index)}
+                        >
+                          <strong>{user.name || user.nombre || 'Usuario'}</strong>
+                          {user.email && (
+                            <small className="text-muted d-block">{user.email}</small>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {/* ✅ Área de carga de archivos */}
                 <Form.Group className="mt-3">
@@ -1483,24 +1786,26 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         </Row>
       </Modal.Body>
       
-      <Modal.Footer>
-        <Button variant="secondary" onClick={() => onHide(false)}>
+      <Modal.Footer className="border-top bg-light">
+        <Button variant="outline-secondary" onClick={() => onHide(false)}>
           Cerrar
         </Button>
         {!esCerrada && (
           <>
             <Button 
-              variant="primary" 
+              variant="outline-primary" 
               onClick={handleActualizarFechas}
               disabled={loading}
             >
+              <i className="fas fa-calendar-alt me-1"></i>
               Actualizar Fechas
             </Button>
             <Button 
-              variant="info" 
+              variant="outline-info" 
               onClick={handleAgregarComentario}
               disabled={loading}
             >
+              <i className="fas fa-comment me-1"></i>
               Agregar Comentario
             </Button>
             <Button 
@@ -1508,6 +1813,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               onClick={handleCompletar}
               disabled={loading}
             >
+              <i className="fas fa-check me-1"></i>
               Marcar completada
             </Button>
           </>
