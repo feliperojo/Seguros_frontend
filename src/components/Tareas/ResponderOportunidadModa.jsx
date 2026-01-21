@@ -1238,270 +1238,475 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         }
       `}</style>
     <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
-      <Modal.Header closeButton className="border-bottom">
-        <Modal.Title className="text-dark fw-semibold" style={{ fontSize: "1.1rem" }}>
-          {esCerrada ? "Detalle de Tarea" : "Responder Tarea"}
-        </Modal.Title>
+      <Modal.Header 
+        closeButton 
+        className="border-bottom bg-light"
+        style={{ padding: "1.25rem 1.5rem" }}
+      >
+        <div className="d-flex align-items-center w-100">
+          <div 
+            className="d-flex align-items-center justify-content-center rounded-circle me-3"
+            style={{ 
+              width: "40px", 
+              height: "40px", 
+              background: esCerrada ? "#6c757d" : "#0d6efd",
+              color: "white"
+            }}
+          >
+            <i className={`fas ${esCerrada ? "fa-check-circle" : "fa-tasks"}`}></i>
+          </div>
+          <div className="flex-grow-1">
+            <Modal.Title className="text-dark fw-bold mb-0" style={{ fontSize: "1.15rem" }}>
+              {esCerrada ? "Detalle de Tarea" : "Responder Tarea"}
+            </Modal.Title>
+            <small className="text-muted">
+              {esCerrada ? "Tarea completada" : "Agrega tu respuesta o completa la tarea"}
+            </small>
+          </div>
+        </div>
       </Modal.Header>
-      <Modal.Body>
+      <Modal.Body style={{ padding: "1.5rem", maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
         <Row>
           {/* Columna completa: Tarea */}
           <Col md={12}>
-            {/* Banner destacado de la tarea actual - Diseño sobrio y profesional */}
+            {/* Card de información de la tarea - Diseño moderno */}
             <div
-              className="mb-4 p-4 rounded"
+              className="mb-4 rounded shadow-sm"
               style={{ 
-                background: "#f8f9fa",
-                border: "1px solid #dee2e6",
-                borderLeft: "4px solid #495057"
+                background: "linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)",
+                border: "1px solid #e9ecef",
+                overflow: "hidden"
               }}
             >
-              <div className="d-flex align-items-center mb-3">
-                <div className="me-3">
-                  <i className="fas fa-tasks text-muted" style={{ fontSize: "1.25rem" }}></i>
-                </div>
-                <div>
-                  <h6 className="mb-0 text-dark fw-semibold">Tarea Actual</h6>
-                  <small className="text-muted">
-                    Respondiendo esta tarea
-                  </small>
-                </div>
-              </div>
-              <div className="ps-4">
-                <h6 className="mb-3 text-dark fw-semibold" style={{ fontSize: "0.95rem" }}>
-                  {conceptoTarea}
-                </h6>
-                <div className="mb-0">
-                  <strong className="text-muted small d-block mb-2">Nota:</strong>
+              {/* Header del card */}
+              <div 
+                className="px-4 py-3"
+                style={{ 
+                  background: "#f8f9fa",
+                  borderBottom: "2px solid #e9ecef"
+                }}
+              >
+                <div className="d-flex align-items-center">
                   <div 
-                    className="ql-editor"
+                    className="d-flex align-items-center justify-content-center rounded me-3"
                     style={{ 
-                      fontSize: '14px',
-                      lineHeight: '1.5',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      color: '#212529'
+                      width: "36px", 
+                      height: "36px", 
+                      background: "#0d6efd",
+                      color: "white"
                     }}
-                    dangerouslySetInnerHTML={{ __html: notaTarea || 'Sin nota' }}
-                  />
+                  >
+                    <i className="fas fa-clipboard-list"></i>
+                  </div>
+                  <div>
+                    <h6 className="mb-0 text-dark fw-bold">Información de la Tarea</h6>
+                    <small className="text-muted">Detalles y contexto</small>
+                  </div>
                 </div>
+              </div>
+              
+              {/* Contenido del card */}
+              <div className="px-4 py-3">
+                <div className="mb-3">
+                  <label className="text-muted small fw-semibold text-uppercase mb-1 d-block" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>
+                    Concepto
+                  </label>
+                  <h6 className="mb-0 text-dark fw-semibold" style={{ fontSize: "1rem" }}>
+                    {conceptoTarea}
+                  </h6>
+                </div>
+                
+                {notaTarea && (
+                  <div className="mb-0 pt-3 border-top">
+                    <label className="text-muted small fw-semibold text-uppercase mb-2 d-block" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>
+                      Nota
+                    </label>
+                    <div 
+                      className="ql-editor"
+                      style={{ 
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        color: '#495057',
+                        background: "#fff",
+                        padding: "0.75rem",
+                        borderRadius: "0.375rem",
+                        border: "1px solid #e9ecef"
+                      }}
+                      dangerouslySetInnerHTML={{ __html: notaTarea || 'Sin nota' }}
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Detalles de la Tarea - Diseño sobrio */}
+            {/* Detalles de la Tarea - Diseño moderno */}
             <div
-              className="mb-4 p-3 rounded"
-              style={{ background: "#fff", border: "1px solid #dee2e6" }}
+              className="mb-4 rounded shadow-sm"
+              style={{ 
+                background: "#fff", 
+                border: "1px solid #e9ecef"
+              }}
             >
-              <h6 className="mb-3 text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
-                Detalles de la Tarea
-              </h6>
-              {!esCerrada ? (
-                <>
-                  <Row className="mb-3">
-                    <Col>
-                      <Form.Group>
-                        <Form.Label className="text-muted small fw-semibold">
-                          <i className="fas fa-calendar-alt me-1"></i>
-                          Programada:
-                        </Form.Label>
-                        <Form.Control
-                          type="date"
-                          value={scheduledDate}
-                          onChange={(e) => setScheduledDate(e.target.value)}
-                          className="border-secondary"
-                        />
-                      </Form.Group>
-                    </Col>
-                    <Col>
-                      <Form.Group>
-                        <Form.Label className="text-muted small fw-semibold">
-                          <i className="fas fa-clock me-1"></i>
-                          Vencimiento:
-                        </Form.Label>
-                        <Form.Control
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          className="border-secondary"
-                        />
-                      </Form.Group>
-                    </Col>
-                  </Row>
-                  <div className="pt-2 border-top">
-                    <small className="text-muted">Asignada por:</small>
-                    <p className="mb-0 text-dark fw-medium">{asignadoPor}</p>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-3">
-                    <small className="text-muted d-block mb-1">Programada:</small>
-                    <Badge bg="secondary" className="me-2">{formatFecha(tarea?.scheduled_date)}</Badge>
-                  </div>
-                  <div className="mb-3">
-                    <small className="text-muted d-block mb-1">Vencimiento:</small>
-                    <Badge bg={getBadgeColor(tarea?.due_date)}>
-                      {formatFecha(tarea?.due_date)}
-                    </Badge>
-                  </div>
-                  <div className="pt-2 border-top">
-                    <small className="text-muted">Asignada por:</small>
-                    <p className="mb-0 text-dark fw-medium">{asignadoPor}</p>
-                  </div>
-                </>
-              )}
+              <div 
+                className="px-4 py-3"
+                style={{ 
+                  background: "#f8f9fa",
+                  borderBottom: "1px solid #e9ecef"
+                }}
+              >
+                <h6 className="mb-0 text-dark fw-bold" style={{ fontSize: "0.95rem" }}>
+                  <i className="fas fa-info-circle text-primary me-2"></i>
+                  Detalles y Fechas
+                </h6>
+              </div>
+              <div className="px-4 py-3">
+                {!esCerrada ? (
+                  <>
+                    <Row className="g-3 mb-3">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="text-muted small fw-semibold mb-2 d-block">
+                            <i className="fas fa-calendar-alt text-primary me-2"></i>
+                            Fecha Programada
+                          </Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={scheduledDate}
+                            onChange={(e) => setScheduledDate(e.target.value)}
+                            className="border-secondary"
+                            style={{ borderRadius: "0.5rem" }}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label className="text-muted small fw-semibold mb-2 d-block">
+                            <i className="fas fa-clock text-warning me-2"></i>
+                            Fecha de Vencimiento
+                          </Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={dueDate}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            className="border-secondary"
+                            style={{ borderRadius: "0.5rem" }}
+                          />
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    <div className="pt-3 border-top">
+                      <div className="d-flex align-items-center">
+                        <div 
+                          className="d-flex align-items-center justify-content-center rounded-circle me-3"
+                          style={{ 
+                            width: "32px", 
+                            height: "32px", 
+                            background: "#e7f3ff",
+                            color: "#0d6efd"
+                          }}
+                        >
+                          <i className="fas fa-user"></i>
+                        </div>
+                        <div>
+                          <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>Asignada por</small>
+                          <span className="text-dark fw-semibold">{asignadoPor}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="mb-3">
+                      <label className="text-muted small fw-semibold mb-2 d-block">
+                        <i className="fas fa-calendar-alt text-primary me-2"></i>
+                        Fecha Programada
+                      </label>
+                      <Badge bg="secondary" className="px-3 py-2" style={{ fontSize: "0.875rem" }}>
+                        {formatFecha(tarea?.scheduled_date)}
+                      </Badge>
+                    </div>
+                    <div className="mb-3">
+                      <label className="text-muted small fw-semibold mb-2 d-block">
+                        <i className="fas fa-clock text-warning me-2"></i>
+                        Fecha de Vencimiento
+                      </label>
+                      <Badge bg={getBadgeColor(tarea?.due_date)} className="px-3 py-2" style={{ fontSize: "0.875rem" }}>
+                        {formatFecha(tarea?.due_date)}
+                      </Badge>
+                    </div>
+                    <div className="pt-3 border-top">
+                      <div className="d-flex align-items-center">
+                        <div 
+                          className="d-flex align-items-center justify-content-center rounded-circle me-3"
+                          style={{ 
+                            width: "32px", 
+                            height: "32px", 
+                            background: "#e7f3ff",
+                            color: "#0d6efd"
+                          }}
+                        >
+                          <i className="fas fa-user"></i>
+                        </div>
+                        <div>
+                          <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>Asignada por</small>
+                          <span className="text-dark fw-semibold">{asignadoPor}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Separador sutil */}
-            <div className="border-top my-4"></div>
-            
-            {/* Comentarios de esta tarea */}
+            {/* Comentarios de esta tarea - Diseño moderno */}
             <div className="mb-4">
-              <div className="d-flex align-items-center mb-3">
-                <i className="fas fa-comments text-muted me-2"></i>
-                <h6 className="mb-0 text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
-                  Comentarios de esta tarea
-                </h6>
+              <div 
+                className="d-flex align-items-center justify-content-between mb-3 px-2"
+              >
+                <div className="d-flex align-items-center">
+                  <div 
+                    className="d-flex align-items-center justify-content-center rounded-circle me-3"
+                    style={{ 
+                      width: "36px", 
+                      height: "36px", 
+                      background: "#e7f3ff",
+                      color: "#0d6efd"
+                    }}
+                  >
+                    <i className="fas fa-comments"></i>
+                  </div>
+                  <div>
+                    <h6 className="mb-0 text-dark fw-bold" style={{ fontSize: "0.95rem" }}>
+                      Comentarios
+                    </h6>
+                    <small className="text-muted">
+                      {comentariosDeEstaTarea.length} {comentariosDeEstaTarea.length === 1 ? 'comentario' : 'comentarios'}
+                    </small>
+                  </div>
+                </div>
               </div>
               {comentariosDeEstaTarea.length === 0 ? (
-                <p className="text-muted small">No hay comentarios previos.</p>
+                <div 
+                  className="text-center py-5 rounded"
+                  style={{ 
+                    background: "#f8f9fa",
+                    border: "2px dashed #dee2e6"
+                  }}
+                >
+                  <i className="fas fa-comment-slash text-muted mb-2" style={{ fontSize: "2rem" }}></i>
+                  <p className="text-muted mb-0 small">No hay comentarios previos</p>
+                </div>
               ) : (
-                <ListGroup className="mb-3">
+                <div className="d-flex flex-column gap-3">
                   {comentariosDeEstaTarea.map((c) => {
                     const estaEnEdicion = comentariosEnEdicion.hasOwnProperty(c.id);
                     const fueActualizado = comentariosActualizados[c.id];
 
                     return (
-                      <ListGroup.Item 
-                        key={c.id} 
-                        className={fueActualizado ? 'border-success border-start border-3' : ''}
-                        style={{ background: "#fff", border: "1px solid #dee2e6" }}
+                      <div
+                        key={c.id}
+                        className="rounded shadow-sm"
+                        style={{ 
+                          background: "#fff", 
+                          border: fueActualizado ? "2px solid #198754" : "1px solid #e9ecef",
+                          borderLeft: fueActualizado ? "4px solid #198754" : "4px solid #0d6efd",
+                          overflow: "hidden",
+                          transition: "all 0.2s ease"
+                        }}
                       >
-                        <div className="d-flex align-items-center justify-content-between mb-2">
-                          <strong className="text-dark small">{c.user || "Usuario"}</strong>
-                          {fueActualizado && (
-                            <Badge bg="success" className="small">Actualizado</Badge>
-                          )}
-                        </div>
-
-                        {estaEnEdicion ? (
-                          <>
-                            <Form.Control
-                              as="textarea"
-                              value={comentariosEnEdicion[c.id]}
-                              onChange={(e) =>
-                                setComentariosEnEdicion((prev) => ({
-                                  ...prev,
-                                  [c.id]: e.target.value,
-                                }))
-                              }
-                              rows={2}
-                              className="mb-2 mt-2"
-                            />
-                            <div className="d-flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="success"
-                                onClick={() => handleGuardarComentarioTarea(c.id)}
-                                disabled={!comentariosEnEdicion[c.id]?.trim()}
-                              >
-                                Guardar
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="secondary"
-                                onClick={() => {
-                                  setComentariosEnEdicion((prev) => {
-                                    const nuevo = { ...prev };
-                                    delete nuevo[c.id];
-                                    return nuevo;
-                                  });
+                        <div 
+                          className="px-3 py-2"
+                          style={{ 
+                            background: fueActualizado ? "#d1e7dd" : "#f8f9fa",
+                            borderBottom: "1px solid #e9ecef"
+                          }}
+                        >
+                          <div className="d-flex align-items-center justify-content-between">
+                            <div className="d-flex align-items-center">
+                              <div 
+                                className="d-flex align-items-center justify-content-center rounded-circle me-2"
+                                style={{ 
+                                  width: "28px", 
+                                  height: "28px", 
+                                  background: "#0d6efd",
+                                  color: "white",
+                                  fontSize: "0.75rem"
                                 }}
                               >
-                                Cancelar
-                              </Button>
+                                <i className="fas fa-user"></i>
+                              </div>
+                              <strong className="text-dark" style={{ fontSize: "0.875rem" }}>
+                                {c.user || "Usuario"}
+                              </strong>
                             </div>
-                          </>
-                        ) : (
-                          <>
-                            <div 
-                              className="ql-editor"
-                              style={{ 
-                                fontSize: '14px',
-                                lineHeight: '1.5',
-                                wordBreak: 'break-word',
-                                overflowWrap: 'break-word',
-                                color: '#212529'
-                              }}
-                              dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
-                            />
-                            <small className="text-muted">
-                              {(() => {
-                                try {
-                                  const d = new Date(c.fecha);
-                                  if (isNaN(d.getTime())) return "Fecha inválida";
-                                  const month = String(d.getMonth() + 1).padStart(2, "0");
-                                  const day = String(d.getDate()).padStart(2, "0");
-                                  const year = d.getFullYear();
-                                  let hours = d.getHours();
-                                  const minutes = String(d.getMinutes()).padStart(2, "0");
-                                  const ampm = hours >= 12 ? "PM" : "AM";
-                                  hours = hours % 12;
-                                  hours = hours ? hours : 12;
-                                  const hoursStr = String(hours).padStart(2, "0");
-                                  return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
-                                } catch {
-                                  return "Fecha inválida";
+                            {fueActualizado && (
+                              <Badge bg="success" className="small">
+                                <i className="fas fa-check me-1"></i>
+                                Actualizado
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="px-3 py-3">
+
+                          {estaEnEdicion ? (
+                            <>
+                              <Form.Control
+                                as="textarea"
+                                value={comentariosEnEdicion[c.id]}
+                                onChange={(e) =>
+                                  setComentariosEnEdicion((prev) => ({
+                                    ...prev,
+                                    [c.id]: e.target.value,
+                                  }))
                                 }
-                              })()}
-                            </small>
-                            {/* ✅ Mostrar adjuntos del comentario */}
-                            {/* Cargar adjuntos si no se han cargado aún */}
-                            {(() => {
-                              if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
-                                // Cargar adjuntos usando los datos del comentario
-                                setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
-                              }
-                              return <MostrarAdjuntosComentario comentarioId={c.id} />;
-                            })()}
-                            {!esCerrada && (
-                              <div className="mt-1">
+                                rows={3}
+                                className="mb-3"
+                                style={{ borderRadius: "0.5rem", border: "1px solid #ced4da" }}
+                              />
+                              <div className="d-flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="success"
+                                  onClick={() => handleGuardarComentarioTarea(c.id)}
+                                  disabled={!comentariosEnEdicion[c.id]?.trim()}
+                                  style={{ borderRadius: "0.5rem" }}
+                                >
+                                  <i className="fas fa-check me-1"></i>
+                                  Guardar
+                                </Button>
                                 <Button
                                   size="sm"
                                   variant="outline-secondary"
                                   onClick={() => {
-                                    setComentariosEnEdicion((prev) => ({
-                                      ...prev,
-                                      [c.id]: c.comment,
-                                    }));
+                                    setComentariosEnEdicion((prev) => {
+                                      const nuevo = { ...prev };
+                                      delete nuevo[c.id];
+                                      return nuevo;
+                                    });
                                   }}
+                                  style={{ borderRadius: "0.5rem" }}
                                 >
-                                  ✏️ Editar
+                                  Cancelar
                                 </Button>
                               </div>
-                            )}
-                          </>
-                        )}
-                      </ListGroup.Item>
+                            </>
+                          ) : (
+                            <>
+                              <div 
+                                className="ql-editor mb-3"
+                                style={{ 
+                                  fontSize: '14px',
+                                  lineHeight: '1.6',
+                                  wordBreak: 'break-word',
+                                  overflowWrap: 'break-word',
+                                  color: '#495057',
+                                  minHeight: "20px"
+                                }}
+                                dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
+                              />
+                              <div 
+                                className="d-flex align-items-center justify-content-between pt-2 border-top"
+                                style={{ borderColor: "#e9ecef" }}
+                              >
+                                <small className="text-muted d-flex align-items-center">
+                                  <i className="fas fa-clock me-1"></i>
+                                  {(() => {
+                                    try {
+                                      const d = new Date(c.fecha);
+                                      if (isNaN(d.getTime())) return "Fecha inválida";
+                                      const month = String(d.getMonth() + 1).padStart(2, "0");
+                                      const day = String(d.getDate()).padStart(2, "0");
+                                      const year = d.getFullYear();
+                                      let hours = d.getHours();
+                                      const minutes = String(d.getMinutes()).padStart(2, "0");
+                                      const ampm = hours >= 12 ? "PM" : "AM";
+                                      hours = hours % 12;
+                                      hours = hours ? hours : 12;
+                                      const hoursStr = String(hours).padStart(2, "0");
+                                      return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+                                    } catch {
+                                      return "Fecha inválida";
+                                    }
+                                  })()}
+                                </small>
+                                {!esCerrada && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline-secondary"
+                                    onClick={() => {
+                                      setComentariosEnEdicion((prev) => ({
+                                        ...prev,
+                                        [c.id]: c.comment,
+                                      }));
+                                    }}
+                                    style={{ 
+                                      fontSize: "0.75rem", 
+                                      padding: "0.25rem 0.75rem",
+                                      borderRadius: "0.5rem"
+                                    }}
+                                  >
+                                    <i className="fas fa-edit me-1"></i>
+                                    Editar
+                                  </Button>
+                                )}
+                              </div>
+                              {/* ✅ Mostrar adjuntos del comentario */}
+                              {(() => {
+                                if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                                  setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+                                }
+                                return <MostrarAdjuntosComentario comentarioId={c.id} />;
+                              })()}
+                            </>
+                          )}
+                        </div>
+                      </div>
                     );
                   })}
-                </ListGroup>
+                </div>
               )}
             </div>
 
-            {/* Separador sutil */}
-            <div className="border-top my-4"></div>
-
-            {/* Campo para nuevo comentario */}
+            {/* Campo para nuevo comentario - Diseño moderno */}
             {!esCerrada && (
-              <div className="mt-4 pt-3 border-top">
-                <div className="d-flex align-items-center mb-3">
-                  <i className="fas fa-edit text-muted me-2"></i>
-                  <Form.Label className="mb-0 fw-semibold text-dark" style={{ fontSize: "0.9rem" }}>
-                    Mi respuesta:
-                  </Form.Label>
+              <div 
+                className="rounded shadow-sm"
+                style={{ 
+                  background: "#fff",
+                  border: "1px solid #e9ecef"
+                }}
+              >
+                <div 
+                  className="px-4 py-3"
+                  style={{ 
+                    background: "linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)",
+                    borderBottom: "2px solid #0d6efd"
+                  }}
+                >
+                  <div className="d-flex align-items-center">
+                    <div 
+                      className="d-flex align-items-center justify-content-center rounded-circle me-3"
+                      style={{ 
+                        width: "36px", 
+                        height: "36px", 
+                        background: "#0d6efd",
+                        color: "white"
+                      }}
+                    >
+                      <i className="fas fa-edit"></i>
+                    </div>
+                    <div>
+                      <h6 className="mb-0 text-dark fw-bold" style={{ fontSize: "0.95rem" }}>
+                        Mi Respuesta
+                      </h6>
+                      <small className="text-muted">Escribe tu comentario o completa la tarea</small>
+                    </div>
+                  </div>
                 </div>
+                <div className="px-4 py-3">
                 <div className="mb-2">
                   {reconocimientoDisponible && (
                     <>
@@ -1672,10 +1877,11 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                 </div>
 
                 {/* ✅ Área de carga de archivos */}
-                <Form.Group className="mt-3">
-                  <Form.Label>
-                    <i className="fas fa-paperclip me-2 text-info"></i>
-                    Archivos adjuntos (opcional)
+                <Form.Group className="mt-4">
+                  <Form.Label className="fw-semibold mb-2">
+                    <i className="fas fa-paperclip me-2 text-primary"></i>
+                    Archivos Adjuntos
+                    <small className="text-muted ms-2">(opcional)</small>
                   </Form.Label>
                   <div
                     className={`border rounded p-3 text-center ${
@@ -1780,14 +1986,23 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     </div>
                   )}
                 </Form.Group>
+                </div>
               </div>
             )}
           </Col>
         </Row>
       </Modal.Body>
       
-      <Modal.Footer className="border-top bg-light">
-        <Button variant="outline-secondary" onClick={() => onHide(false)}>
+      <Modal.Footer 
+        className="border-top bg-light"
+        style={{ padding: "1rem 1.5rem" }}
+      >
+        <Button 
+          variant="outline-secondary" 
+          onClick={() => onHide(false)}
+          style={{ borderRadius: "0.5rem", minWidth: "100px" }}
+        >
+          <i className="fas fa-times me-1"></i>
           Cerrar
         </Button>
         {!esCerrada && (
@@ -1796,14 +2011,16 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               variant="outline-primary" 
               onClick={handleActualizarFechas}
               disabled={loading}
+              style={{ borderRadius: "0.5rem", minWidth: "140px" }}
             >
               <i className="fas fa-calendar-alt me-1"></i>
               Actualizar Fechas
             </Button>
             <Button 
-              variant="outline-info" 
+              variant="primary" 
               onClick={handleAgregarComentario}
               disabled={loading}
+              style={{ borderRadius: "0.5rem", minWidth: "160px" }}
             >
               <i className="fas fa-comment me-1"></i>
               Agregar Comentario
@@ -1812,9 +2029,10 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               variant="success" 
               onClick={handleCompletar}
               disabled={loading}
+              style={{ borderRadius: "0.5rem", minWidth: "160px", fontWeight: "600" }}
             >
-              <i className="fas fa-check me-1"></i>
-              Marcar completada
+              <i className="fas fa-check-circle me-1"></i>
+              Completar Tarea
             </Button>
           </>
         )}
