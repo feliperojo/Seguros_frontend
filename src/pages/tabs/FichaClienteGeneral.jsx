@@ -5,6 +5,8 @@ import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
 import PersonaContactoCard from "../../components/fase2/PersonaContactoCard";
 import TareasPendientesPanel from "../../components/fase2/TareasPendientesPanel";
 import TareasTerminadasPanel from "../../components/fase2/TareasTerminadasPanel";
+import GroupTags from "../../components/GroupTags";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
@@ -104,6 +106,58 @@ export default function FichaClienteGeneral() {
 
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
+
+  // ===== Estado para etiquetas del grupo familiar =====
+  const [etiquetasGrupo, setEtiquetasGrupo] = useState([]);
+  const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
+
+  // ===== Cargar etiquetas del grupo familiar cuando cambia el grupoId =====
+  useEffect(() => {
+    const cargarEtiquetasGrupo = async () => {
+      if (!grupoId) {
+        setEtiquetasGrupo([]);
+        return;
+      }
+
+      setLoadingEtiquetas(true);
+      try {
+        const grupoData = await GrupoFamiliarService.getFullById(grupoId);
+        
+        // Normalizar etiquetas: pueden venir como "tags" o "etiquetas"
+        const tagsRaw = grupoData?.tags || grupoData?.etiquetas || [];
+        let tagsArray = [];
+        
+        if (Array.isArray(tagsRaw)) {
+          tagsArray = tagsRaw;
+        } else if (typeof tagsRaw === "string" && tagsRaw.trim().startsWith("[")) {
+          try {
+            tagsArray = JSON.parse(tagsRaw);
+            if (!Array.isArray(tagsArray)) tagsArray = [];
+          } catch {
+            tagsArray = [];
+          }
+        }
+        
+        // Validar formato de cada etiqueta
+        const etiquetasValidas = tagsArray.filter(tag => 
+          tag &&
+          typeof tag === "object" &&
+          tag.key &&
+          tag.label &&
+          tag.color
+        );
+        
+        setEtiquetasGrupo(etiquetasValidas);
+      } catch (error) {
+        console.error("Error al cargar etiquetas del grupo familiar:", error);
+        setEtiquetasGrupo([]);
+      } finally {
+        setLoadingEtiquetas(false);
+      }
+    };
+
+    cargarEtiquetasGrupo();
+  }, [grupoId]);
 
   // ===== helper para formatear número con distribución 3-3-4 =====
   const formatearNumeroTelefono = (numero) => {
@@ -292,6 +346,26 @@ export default function FichaClienteGeneral() {
                   </div>
                 </div>
               </div>
+              
+              {/* Etiquetas del Grupo Familiar */}
+              {grupoId && (
+                <div className="mt-3 pt-2 border-top">
+                  <label className="text-muted small d-block mb-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Etiquetas del Grupo Familiar</label>
+                  {loadingEtiquetas ? (
+                    <div className="text-muted small">
+                      <i className="fas fa-spinner fa-spin me-2"></i>
+                      Cargando etiquetas...
+                    </div>
+                  ) : (
+                    <GroupTags
+                      value={etiquetasGrupo}
+                      onChange={() => {}} // Solo lectura en la ficha del cliente
+                      readOnly={true}
+                      className="mb-0"
+                    />
+                  )}
+                </div>
+              )}
             </div>
 
             <hr className="my-3 border-secondary opacity-25" />
