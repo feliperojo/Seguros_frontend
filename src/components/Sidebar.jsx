@@ -164,6 +164,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/Grupofamiliar/lista-etiquetas" className={`submenu-link ${isActive('/Grupofamiliar/lista-etiquetas') ? 'active' : ''}`}>
                 <FaTags /> Listado de Grupos y Etiquetas
               </Link>
+              <Link to="/Grupofamiliar/reporte-clasificado" className={`submenu-link ${isActive('/Grupofamiliar/reporte-clasificado') ? 'active' : ''}`}>
+                <FaChartBar /> Reporte Clasificado
+              </Link>
               <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
                 <FaUserFriends /> Cotizaciones
               </Link>

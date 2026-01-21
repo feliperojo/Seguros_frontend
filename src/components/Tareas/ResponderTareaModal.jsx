@@ -13,6 +13,8 @@ import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import { formatDateTimeForDisplay } from "../../utils/formatters";
+import { useMentionableQuill } from "../../hooks/useMentionableQuill";
+import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -54,29 +56,30 @@ const isNoteEmpty = (html) => {
   return text.trim().length === 0;
 };
 
-const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
-  // Función helper para convertir fecha a formato YYYY-MM-DD sin problemas de zona horaria
-  const fechaToInputDate = (fecha) => {
-    if (!fecha) return "";
-    try {
-      // Si es string, extraer solo la parte de fecha (YYYY-MM-DD)
-      if (typeof fecha === "string") {
-        const fechaPart = fecha.split("T")[0];
-        if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          return fechaPart;
-        }
+// Función helper para convertir fecha a formato YYYY-MM-DD sin problemas de zona horaria
+const fechaToInputDate = (fecha) => {
+  if (!fecha) return "";
+  try {
+    // Si es string, extraer solo la parte de fecha (YYYY-MM-DD)
+    if (typeof fecha === "string") {
+      const fechaPart = fecha.split("T")[0];
+      if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return fechaPart;
       }
-      // Si es Date object, usar métodos locales para evitar problemas de zona horaria
-      const date = new Date(fecha);
-      if (isNaN(date.getTime())) return "";
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    } catch {
-      return "";
     }
-  };
+    // Si es Date object, usar métodos locales para evitar problemas de zona horaria
+    const date = new Date(fecha);
+    if (isNaN(date.getTime())) return "";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  } catch {
+    return "";
+  }
+};
+
+const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
  
   const [responseNote, setResponseNote] = useState(tarea?.response_note || "");
   const [loading, setLoading] = useState(false);
@@ -103,19 +106,27 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
-  const comentariosDeEstaTarea = historial
-  .filter(h => h.tipo === 'tarea' && h.id === tarea.id)
-  .flatMap(h => h.comentarios || []);
+  // ✅ Usar comentarios directamente de la tarea si están disponibles (nuevo endpoint)
+  // Si no, usar del historial como antes (estructura antigua)
+  const comentariosDeEstaTarea = tarea?.comments && Array.isArray(tarea.comments) 
+    ? tarea.comments 
+    : historial
+        .filter(h => h.tipo === 'tarea' && h.id === tarea?.id)
+        .flatMap(h => h.comentarios || []);
 
   
   const comentariosTareaActual = historial
-  .filter(h => h.tipo === 'tarea' && h.concepto === tarea?.log?.concept?.name)
-  .flatMap(h => h.comentarios || []);
+    .filter(h => h.tipo === 'tarea' && h.concepto === tarea?.log?.concept?.name)
+    .flatMap(h => h.comentarios || []);
 
   const [loadingHistorial, setLoadingHistorial] = useState(false);
 
   const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
   const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
+
+  // ✅ Estados para menciones
+  const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
+  const [mentionedUserIds, setMentionedUserIds] = useState([]); // IDs de usuarios mencionados en el comentario actual
 
   // Estados para archivos adjuntos de la respuesta
   const [archivos, setArchivos] = useState([]);
@@ -127,6 +138,21 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
   const quillEditorRef = useRef(null);
+
+  // ✅ Hook para manejo de menciones en Quill
+  const {
+    quillRef: mentionQuillRef,
+    showMentionList,
+    mentionList,
+    selectedMentionIndex,
+    insertMention,
+    handleQuillChange,
+    handleQuillKeyDown,
+    updateSelectedIndex,
+  } = useMentionableQuill(usuarios, (ids) => {
+    setMentionedUserIds(ids);
+  });
+
 
   // Sincronizar ref con estado
   useEffect(() => {
@@ -398,48 +424,165 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
     e.target.value = "";
   };
 
+  // ✅ Cargar usuarios para menciones (precargar inmediatamente)
   useEffect(() => {
-    if (show && tarea?.id) {
-      // ✅ Cargar comentarios
-      
+    if (!show) {
+      // No limpiar usuarios al cerrar para mantener cache
+      return;
+    }
+    
+    // Si ya tenemos usuarios cargados, no volver a cargar (pero sí verificar que sean válidos)
+    if (usuarios && usuarios.length > 0) {
+      return;
+    }
+    
+    let mounted = true;
+    const cargarUsuarios = async () => {
+      try {
+        // Intentar varios endpoints comunes
+        let response = null;
+        try {
+          response = await apiRequest("users?per_page=1000", "GET");
+        } catch (e) {
+          try {
+            response = await apiRequest("/v1/users?per_page=1000", "GET");
+          } catch (e2) {
+            console.error("Error al cargar usuarios:", e2);
+          }
+        }
+        
+        if (!response) {
+          console.warn('⚠️ No se recibió respuesta al cargar usuarios');
+          if (mounted) {
+            setUsuarios([]);
+          }
+          return;
+        }
+        
+        let usuariosData = [];
+        
+        if (response?.success && Array.isArray(response.data)) {
+          usuariosData = response.data;
+        } else if (Array.isArray(response)) {
+          usuariosData = response;
+        } else if (response?.data && Array.isArray(response.data)) {
+          usuariosData = response.data;
+        } else if (response?.data?.data && Array.isArray(response.data.data)) {
+          usuariosData = response.data.data;
+        } else if (response?.users && Array.isArray(response.users)) {
+          usuariosData = response.users;
+        }
+        
+        // Normalizar estructura de usuarios
+        const usuariosNormalizados = usuariosData.map(u => ({
+          id: u.id,
+          name: u.name || u.nombre || u.username || '',
+          nombre: u.nombre || u.name || u.username || '',
+          email: u.email || '',
+        })).filter(u => u.id && u.name); // Solo usuarios válidos
+        
+        if (mounted) {
+          setUsuarios(usuariosNormalizados);
+        }
+      } catch (err) {
+        console.error("❌ Error al cargar usuarios para menciones:", err);
+        if (mounted) {
+          setUsuarios([]);
+        }
+      }
+    };
+    
+    // Cargar inmediatamente
+    cargarUsuarios();
+    
+    return () => {
+      mounted = false;
+    };
+  }, [show]); // Solo cuando se abre el modal
 
-      // ✅ Cargar historial del cliente
-      if (tarea.log?.cliente?.id) {
-        setLoadingHistorial(true);
-        apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
-          .then((data) => {
-            const historialData = Array.isArray(data.data) ? data.data : [];
-            console.log('📜 Historial original:', historialData);
-            // ✅ Deduplicar historial y sus comentarios, asegurar IDs
-            const historialUnico = historialData.map(h => {
-              if (h.comentarios && h.comentarios.length > 0) {
-                const comentariosUnicos = h.comentarios.filter((comentario, index, arr) => {
-                  if (!comentario.id) {
-                    console.warn("⚠️ Comentario de historial sin ID:", comentario);
-                    return false;
-                  }
-                  return arr.findIndex(c => c.id === comentario.id) === index;
-                });
-                
-                // ✅ Si los comentarios ya tienen adjuntos en su estructura, guardarlos directamente
-                comentariosUnicos.forEach((c) => {
-                  if (c.id && c.adjuntos && Array.isArray(c.adjuntos) && c.adjuntos.length > 0) {
-                    console.log(`✅ Adjuntos encontrados en comentario ${c.id} del historial:`, c.adjuntos.length);
-                    setAdjuntosComentarios((prev) => ({
-                      ...prev,
-                      [c.id]: c.adjuntos,
-                    }));
-                  }
-                });
-                
-                return { ...h, comentarios: comentariosUnicos };
+  // ✅ Usar useRef para rastrear la tarea actual y evitar loops infinitos
+  const tareaIdRef = useRef(null);
+  
+  useEffect(() => {
+    const currentTareaId = tarea?.id;
+    
+    // ✅ Solo ejecutar si realmente cambió la tarea (por ID) o el modal se abrió/cerró
+    if (!show) {
+      // Limpiar cuando se cierra el modal
+      if (tareaIdRef.current !== null) {
+        archivos.forEach((arch) => {
+          if (arch.preview) URL.revokeObjectURL(arch.preview);
+        });
+        setArchivos([]);
+        setComentariosEnEdicion({});
+        setComentariosHistorialEnEdicion({});
+        tareaIdRef.current = null;
+      }
+      return;
+    }
+
+    // ✅ Solo procesar si es una nueva tarea (ID diferente)
+    if (!currentTareaId || tareaIdRef.current === currentTareaId) {
+      return;
+    }
+
+    // ✅ Marcar que estamos procesando esta tarea
+    tareaIdRef.current = currentTareaId;
+
+    // ✅ Resetear fechas cuando cambia la tarea
+    setScheduledDate(fechaToInputDate(tarea?.scheduled_date) || "");
+    setDueDate(fechaToInputDate(tarea?.due_date) || "");
+
+    // ✅ Limpiar estados de edición al cambiar de tarea
+    setComentariosEnEdicion({});
+    setComentariosHistorialEnEdicion({});
+    setComentariosActualizados({});
+    setComentariosHistorialActualizados({});
+    setResponseNote(tarea?.response_note || "");
+
+    // ✅ Cargar historial del cliente (solo si hay cliente válido)
+    if (tarea.log?.cliente?.id) {
+      setLoadingHistorial(true);
+      apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
+        .then((data) => {
+          // ✅ Verificar que seguimos en la misma tarea
+          if (tareaIdRef.current !== currentTareaId) return;
+          
+          const historialData = Array.isArray(data.data) ? data.data : [];
+          // ✅ Deduplicar historial y sus comentarios, asegurar IDs
+          const historialUnico = historialData.map(h => {
+            if (h.comentarios && h.comentarios.length > 0) {
+              const comentariosUnicos = h.comentarios.filter((comentario, index, arr) => {
+                if (!comentario.id) {
+                  console.warn("⚠️ Comentario de historial sin ID:", comentario);
+                  return false;
+                }
+                return arr.findIndex(c => c.id === comentario.id) === index;
+              });
+              
+              // ✅ Acumular adjuntos en un objeto antes de hacer setState una sola vez
+              const adjuntosAcumulados = {};
+              comentariosUnicos.forEach((c) => {
+                if (c.id && c.adjuntos && Array.isArray(c.adjuntos) && c.adjuntos.length > 0) {
+                  adjuntosAcumulados[c.id] = c.adjuntos;
+                }
+              });
+              
+              // ✅ Actualizar estado una sola vez
+              if (Object.keys(adjuntosAcumulados).length > 0) {
+                setAdjuntosComentarios((prev) => ({
+                  ...prev,
+                  ...adjuntosAcumulados,
+                }));
               }
-              return h;
-            });
-            
-            console.log('📜 Historial original:', historialData.length);
-            console.log('📜 Historial procesado:', historialUnico.length);
-            
+              
+              return { ...h, comentarios: comentariosUnicos };
+            }
+            return h;
+          });
+          
+          // ✅ Verificar nuevamente antes de actualizar historial
+          if (tareaIdRef.current === currentTareaId) {
             setHistorial(historialUnico);
             
             // ✅ Cargar adjuntos del log de la tarea principal
@@ -459,6 +602,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
             // ✅ Cargar adjuntos de cada comentario del historial
             historialUnico.forEach((h, index) => {
               setTimeout(() => {
+                // ✅ Verificar nuevamente antes de cargar adjuntos
+                if (tareaIdRef.current !== currentTareaId) return;
+                
                 if (h.comentarios && h.comentarios.length > 0) {
                   h.comentarios.forEach((c) => {
                     if (c.id) {
@@ -469,43 +615,60 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                 }
               }, index * 200); // Espaciar las peticiones 200ms entre cada una para evitar rate limiting
             });
-          })
-          .catch(error => {
-            console.error("❌ Error al cargar historial:", error);
+          }
+        })
+        .catch(error => {
+          console.error("❌ Error al cargar historial:", error);
+          if (tareaIdRef.current === currentTareaId) {
             setHistorial([]);
-          })
-          .finally(() => setLoadingHistorial(false));
-      }
+          }
+        })
+        .finally(() => {
+          if (tareaIdRef.current === currentTareaId) {
+            setLoadingHistorial(false);
+          }
+        });
     }
-
-    // Resetear fechas cuando cambia la tarea
-    if (tarea) {
-      setScheduledDate(fechaToInputDate(tarea?.scheduled_date) || "");
-      setDueDate(fechaToInputDate(tarea?.due_date) || "");
-    }
-
-    // ✅ Limpiar estados de edición al cambiar de tarea
-    setComentariosEnEdicion({});
-    setComentariosHistorialEnEdicion({});
-    
-    // Limpiar archivos cuando se cierra el modal
-    if (!show) {
-      archivos.forEach((arch) => {
-        if (arch.preview) URL.revokeObjectURL(arch.preview);
-      });
-      setArchivos([]);
-    }
-  }, [show, tarea]);
+  }, [show, tarea?.id, tarea?.log?.cliente?.id]); // ✅ Solo dependencias primitivas
 
   const handleAgregarComentario = async () => {
     if (isNoteEmpty(responseNote) && archivos.length === 0) return;
     setLoading(true);
     try {
+      // ✅ Extraer menciones antes de enviar
+      const mentionedIds = extractMentionedUserIds(responseNote || "", usuarios);
+      
+      // 📝 Log de depuración: Menciones detectadas
+      if (import.meta.env.DEV) {
+        console.log("🔔 [NOTIFICACIONES] Creando comentario con menciones:", {
+          tarea_id: tarea.id,
+          comentario_preview: responseNote?.substring(0, 100) || "",
+          mentioned_user_ids: mentionedIds,
+          usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
+          endpoint: `tareas_operativas/${tarea.id}/comentarios`
+        });
+      }
+      
+      const payload = { 
+        comment: responseNote || " ",
+        mentioned_user_ids: mentionedIds // Enviar IDs de usuarios mencionados al backend
+      };
+      
       const data = await apiRequest(
         `tareas_operativas/${tarea.id}/comentarios`,
         "POST",
-        { comment: responseNote || " " }
+        payload
       );
+      
+      // 📝 Log de depuración: Confirmación de envío
+      if (import.meta.env.DEV) {
+        console.log("✅ [NOTIFICACIONES] Comentario creado exitosamente:", {
+          comentario_id: data?.comment?.id,
+          tarea_id: tarea.id,
+          mentioned_user_ids_enviados: mentionedIds,
+          respuesta_backend: data
+        });
+      }
 
       let comentarioId = data?.comment?.id;
 
@@ -515,7 +678,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           ...prev,
           [comentarioId]: Array.isArray(data.comment.adjuntos) ? data.comment.adjuntos : [],
         }));
-        console.log(`✅ Adjuntos guardados para comentario ${comentarioId}:`, data.comment.adjuntos);
       }
 
       // Subir archivos si hay alguno
@@ -542,11 +704,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
       if (onUpdated) onUpdated(tareaActualizada);
 
-      await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
-      .then((data) => {
-        const historialData = Array.isArray(data.data) ? data.data : [];
-        setHistorial(historialData);
-      });
+      if (tarea.log?.cliente?.id) {
+        await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
+          .then((data) => {
+            const historialData = Array.isArray(data.data) ? data.data : [];
+            setHistorial(historialData);
+          });
+      }
     
       setResponseNote("");
       // Limpiar archivos después de subirlos
@@ -572,12 +736,42 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         (comentarios.length === 0 ||
           comentarios[comentarios.length - 1].comment !== responseNote)
       ) {
+        // ✅ Extraer menciones antes de enviar
+        const mentionedIds = extractMentionedUserIds(responseNote || "", usuarios);
+        
+        // 📝 Log de depuración: Menciones detectadas (al completar tarea)
+        if (import.meta.env.DEV) {
+          console.log("🔔 [NOTIFICACIONES] Creando comentario al completar tarea:", {
+            tarea_id: tarea.id,
+            comentario_preview: responseNote?.substring(0, 100) || "",
+            mentioned_user_ids: mentionedIds,
+            usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
+            endpoint: `tareas_operativas/${tarea.id}/comentarios`
+          });
+        }
+        
+        const payload = { 
+          comment: responseNote || " ",
+          mentioned_user_ids: mentionedIds
+        };
+        
         const data = await apiRequest(
           `tareas_operativas/${tarea.id}/comentarios`,
           "POST",
-          { comment: responseNote || " " }
+          payload
         );
+        
         comentarioId = data?.comment?.id;
+        
+        // 📝 Log de depuración: Confirmación de envío (al completar tarea)
+        if (import.meta.env.DEV) {
+          console.log("✅ [NOTIFICACIONES] Comentario creado al completar tarea:", {
+            comentario_id: comentarioId,
+            tarea_id: tarea.id,
+            mentioned_user_ids_enviados: mentionedIds,
+            tarea_status: "completed"
+          });
+        }
         
         // Subir archivos si hay alguno
         if (comentarioId && archivos.length > 0) {
@@ -629,7 +823,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       return;
     }
 
-    console.log("🔄 Actualizando comentario tarea:", { comentarioId, nuevoTexto });
 
     try {
       await apiRequest(
@@ -676,7 +869,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         });
       }, 3000);
 
-      console.log("✅ Comentario actualizado exitosamente");
 
     } catch (error) {
       console.error("❌ Error al actualizar el comentario:", error);
@@ -697,7 +889,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       return;
     }
 
-    console.log("🔄 Actualizando comentario historial:", { comentarioId, nuevoTexto });
 
     try {
       await apiRequest(
@@ -744,7 +935,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         });
       }, 3000);
 
-      console.log("✅ Comentario historial actualizado exitosamente");
 
     } catch (error) {
       console.error("❌ Error al actualizar el comentario del historial:", error);
@@ -841,16 +1031,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       // Primero verificar si el comentario ya tiene adjuntos en su estructura
       if (comentarioData?.adjuntos && Array.isArray(comentarioData.adjuntos)) {
         data = comentarioData.adjuntos;
-        console.log(`✅ Adjuntos encontrados en estructura del comentario ${comentarioId}:`, data.length);
       } else {
         // Si no, intentar cargar desde endpoint específico del comentario
         try {
           const response = await apiRequest(`tareas_operativas/comentarios/${comentarioId}/adjuntos`, "GET");
           data = Array.isArray(response) ? response : response?.data || response?.adjuntos || [];
-          console.log(`✅ Adjuntos cargados desde endpoint para comentario ${comentarioId}:`, data.length);
         } catch (endpointErr) {
           // Si no existe el endpoint, dejar vacío
-          console.log(`ℹ️ No se encontraron adjuntos específicos para el comentario ${comentarioId}`);
           data = [];
         }
       }
@@ -1181,42 +1368,44 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
               {/* ✅ Cabecera con estado y nombre */}
               <div className="d-flex justify-content-between align-items-center mb-2">
                 <div>
-                  {tarea.log.cliente.estado_cliente === "prospecto" && (
+                  {tarea.log?.cliente?.estado_cliente === "prospecto" && (
                     <Badge bg="warning" text="dark" className="me-2">Prospecto</Badge>
                   )}
-                  {tarea.log.cliente.estado_cliente === "cliente" && (
+                  {tarea.log?.cliente?.estado_cliente === "cliente" && (
                     <Badge bg="primary" className="me-2">Cliente</Badge>
                   )}
-                  {tarea.log.cliente.estado_cliente === "descartado" && (
+                  {tarea.log?.cliente?.estado_cliente === "descartado" && (
                     <Badge bg="secondary" className="me-2">Descartado</Badge>
                   )}
                   <span style={{ fontWeight: "bold", fontSize: "1rem" }}>
-                    {tarea.log.cliente.nombre_completo}
+                    {tarea.log?.cliente?.nombre_completo || "Cliente no disponible"}
                   </span>
                 </div>
                 <div>
                   <small className="text-muted">
-                    <i className="fa fa-phone me-1"></i>{tarea.log.cliente.telefono || "N/A"}
+                    <i className="fa fa-phone me-1"></i>{tarea.log?.cliente?.telefono || "N/A"}
                   </small>
                 </div>
               </div>
 
               {/* ✅ Botones de acción */}
-              <div className="d-flex gap-2 mb-2">
-                <Button
-                  variant="outline-primary"
-                  size="sm"
-                  onClick={() =>
-                    window.open(`/clientes/${tarea.log.cliente.id}/ficha`, "_blank")
-                  }
-                >
-                  Ver Ficha del Cliente
-                </Button>
-              </div>
+              {tarea.log?.cliente?.id && (
+                <div className="d-flex gap-2 mb-2">
+                  <Button
+                    variant="outline-primary"
+                    size="sm"
+                    onClick={() =>
+                      window.open(`/clientes/${tarea.log.cliente.id}/ficha`, "_blank")
+                    }
+                  >
+                    Ver Ficha del Cliente
+                  </Button>
+                </div>
+              )}
 
               {/* ✅ Info Primer Contacto SOLO si es prospecto */}
-              {tarea.log.cliente.estado_cliente?.toLowerCase() === "prospecto" &&
-                tarea.log.cliente.primer_contacto_info && (
+              {tarea.log?.cliente?.estado_cliente?.toLowerCase() === "prospecto" &&
+                tarea.log?.cliente?.primer_contacto_info && (
                   <div
                     className="p-2 rounded"
                     style={{
@@ -1232,7 +1421,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                         size="sm"
                         onClick={() =>
                           window.open(
-                            `/grupofamiliar/crear?cliente_id=${tarea.log.cliente.id}`,
+                            `/grupofamiliar/crear?cliente_id=${tarea.log?.cliente?.id}`,
                             "_blank"
                           )
                         }
@@ -1249,7 +1438,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                         gap: "6px",
                       }}
                     >
-                      {tarea.log.cliente.primer_contacto_info
+                      {tarea.log?.cliente?.primer_contacto_info
                         .split("\n")
                         .filter((line) => line.trim() !== "")
                         .map((line, index) => (
@@ -1494,7 +1683,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
             <hr />
             <h6>Comentarios de esta tarea:</h6>
-            {comentariosDeEstaTarea.length === 0 ? (
+            {(!comentariosDeEstaTarea || comentariosDeEstaTarea.length === 0) ? (
   <p>No hay comentarios previos.</p>
 ) : (
   comentariosDeEstaTarea.map((c) => {
@@ -1555,7 +1744,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                 lineHeight: '1.5',
                 wordBreak: 'break-word'
               }}
-              dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
+              dangerouslySetInnerHTML={{ __html: highlightMentions(c.comment || 'Sin contenido') }}
             />
             <small className="text-muted">
               {formatDateTimeForDisplay(c.fecha)}
@@ -1700,22 +1889,124 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                     color: #6c757d;
                   }
                 `}</style>
-                <ReactQuill
-                  theme="snow"
-                  value={responseNote || ""}
-                  onChange={(value, delta, source, editor) => {
-                    setResponseNote(value);
-                    if (editor && !quillEditorRef.current) {
-                      quillEditorRef.current = editor;
-                    }
-                  }}
-                  modules={quillModules}
-                  formats={quillFormats}
-                  placeholder="Escribe tu respuesta o usa el botón 'Dictar' para transcribir por voz. Use la barra de herramientas para formatear el texto..."
-                  style={{
-                    backgroundColor: '#fff',
-                  }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <ReactQuill
+                    ref={mentionQuillRef}
+                    theme="snow"
+                    value={responseNote || ""}
+                    onChange={(value, delta, source, editor) => {
+                      setResponseNote(value);
+                      
+                      // ✅ Manejar menciones ANTES de actualizar otros estados
+                      // Esto asegura que la detección funcione correctamente
+                      handleQuillChange(value, delta, source, editor);
+                      
+                      if (editor) {
+                        // Guardar referencia al editor
+                        try {
+                          if (typeof editor.getEditor === 'function') {
+                            quillEditorRef.current = editor.getEditor();
+                          } else if (editor.getSelection) {
+                            quillEditorRef.current = editor;
+                          }
+                        } catch (e) {
+                          console.error('Error guardando referencia al editor:', e);
+                        }
+                      }
+                    }}
+                    onKeyDown={handleQuillKeyDown}
+                    modules={quillModules}
+                    formats={quillFormats}
+                    placeholder="Escribe tu respuesta o usa el botón 'Dictar' para transcribir por voz. Escribe @ para mencionar usuarios..."
+                    style={{
+                      backgroundColor: '#fff',
+                    }}
+                  />
+                  
+                  {/* ✅ Dropdown de menciones */}
+                  {showMentionList && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: 'white',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        zIndex: 9999, // Aumentado para estar por encima de modales
+                        maxHeight: '250px',
+                        overflowY: 'auto',
+                        marginTop: '4px',
+                      }}
+                      onClick={(e) => e.stopPropagation()} // Prevenir cierre del modal
+                    >
+                      {usuarios.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                          <Spinner size="sm" animation="border" className="me-2" />
+                          Cargando usuarios...
+                        </div>
+                      ) : mentionList.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                          No se encontraron usuarios
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ 
+                            padding: '6px 12px', 
+                            fontSize: '0.75rem', 
+                            color: '#666', 
+                            backgroundColor: '#f8f9fa',
+                            borderBottom: '1px solid #e0e0e0',
+                            fontWeight: 500
+                          }}>
+                            {mentionList.length} {mentionList.length === 1 ? 'usuario' : 'usuarios'} encontrado{mentionList.length > 1 ? 's' : ''}
+                          </div>
+                          {mentionList.map((user, index) => (
+                            <div
+                              key={user.id}
+                              onClick={() => insertMention(user)}
+                              onMouseEnter={() => {
+                                if (updateSelectedIndex) {
+                                  updateSelectedIndex(index);
+                                }
+                              }}
+                              style={{
+                                padding: '10px 12px',
+                                cursor: 'pointer',
+                                backgroundColor: index === selectedMentionIndex ? '#e3f2fd' : 'transparent',
+                                borderBottom: index < mentionList.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                            >
+                              <div style={{ 
+                                fontWeight: 500, 
+                                color: '#1976d2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}>
+                                <i className="fas fa-user-circle" style={{ fontSize: '1.1rem' }}></i>
+                                {user.name || user.nombre || 'Usuario'}
+                              </div>
+                              {user.email && (
+                                <div style={{ 
+                                  fontSize: '0.85rem', 
+                                  color: '#666',
+                                  marginTop: '2px',
+                                  marginLeft: '24px'
+                                }}>
+                                  {user.email}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {!reconocimientoDisponible && (
                   <Form.Text className="text-muted mt-2">
                     <small>
@@ -1834,9 +2125,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           <Col md={6} style={{ overflowY: "auto", maxHeight: "calc(100vh - 250px)" }}>
             <h6 className="mb-3">📜 Historial del Cliente</h6>
             {loadingHistorial ? (
-              <Spinner animation="border" />
+              <div className="d-flex align-items-center gap-2">
+                <Spinner animation="border" size="sm" />
+                <span className="text-muted">Cargando historial...</span>
+              </div>
+            ) : !tarea.log?.cliente?.id ? (
+              <div className="p-3 text-center text-muted">
+                <i className="fas fa-info-circle mb-2" style={{ fontSize: "2rem", opacity: 0.5 }}></i>
+                <p className="mb-0">No se puede cargar el historial del cliente</p>
+                <small>La tarea no tiene información del cliente asociado</small>
+              </div>
             ) : historial.length === 0 ? (
-              <p>No hay historial disponible.</p>
+              <p className="text-muted">No hay historial disponible para este cliente.</p>
             ) : (
               <div
                 style={{
@@ -2080,13 +2380,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                           const estaEnEdicion = comentariosHistorialEnEdicion.hasOwnProperty(c.id);
                           const fueActualizado = comentariosHistorialActualizados[c.id];
 
-                          console.log('🔍 Renderizando comentario historial:', { 
-                            id: c.id, 
-                            comment: c.comment, 
-                            estaEnEdicion,
-                            fueActualizado
-                          });
-
                           return (
                             <div 
                               key={c.id} 
@@ -2149,7 +2442,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                                         lineHeight: '1.5',
                                         wordBreak: 'break-word'
                                       }}
-                                      dangerouslySetInnerHTML={{ __html: c.comment || 'Sin contenido' }}
+                                      dangerouslySetInnerHTML={{ __html: highlightMentions(c.comment || 'Sin contenido') }}
                                     />
                                   </div>
                                   <br />

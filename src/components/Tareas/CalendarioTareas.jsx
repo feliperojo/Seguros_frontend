@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup, Tooltip, OverlayTrigger } from "react-bootstrap";
-import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks } from "react-icons/fa";
+import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt } from "react-icons/fa";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
 import ResumenTareasModal from "../Tareas/ResumenTareasModal";
+import NotificationsDropdown from "../Tareas/NotificationsDropdown";
 import { useHasPermission } from "../../hooks/useHasPermission";
+import { isUserMentioned } from "../../utils/mentions";
 
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
@@ -25,6 +27,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   const [toast, setToast] = useState({ show: false, message: "", variant: "success" });
 
+  // ✅ Estados para notificaciones y modal de respuesta
+  const [pendientes, setPendientes] = useState(0);
+  const [loadingTarea, setLoadingTarea] = useState(false);
+
   const diasSemana = ["L", "M", "X", "J", "V", "S", "D"];
   const diasEnMes = new Date(añoActual, mesActual + 1, 0).getDate();
   const primerDiaSemana = new Date(añoActual, mesActual, 1).getDay();
@@ -37,16 +43,614 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   // Verificar permiso para ver usuarios
   const canViewUsers = useHasPermission("users.view");
 
+  // ✅ Cargar contador de tareas pendientes
+  useEffect(() => {
+    const fetchPendientes = async () => {
+      try {
+        const res = await apiRequest("tareas_operativas/pendientes", "GET");
+        setPendientes(res.pendientes || 0);
+      } catch (error) {
+        console.warn("No se pudieron obtener tareas pendientes en calendario:", error);
+        setPendientes(0);
+      }
+    };
+    fetchPendientes();
+    
+    // Refrescar cada 30 segundos
+    const interval = setInterval(() => {
+      fetchPendientes();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const nombreMes = new Date(añoActual, mesActual).toLocaleString("es-ES", {
     month: "long",
     year: "numeric",
   });
 
+  // ✅ Función para cargar los detalles completos de una tarea
+  const fetchTaskDetail = async (taskId) => {
+    try {
+      console.log("🔍 Obteniendo detalles de la tarea:", taskId);
+      
+      // ✅ NUEVO: Priorizar el endpoint directo /api/tareas_operativas/{id}
+      let taskDetail = null;
+      
+      try {
+        // ✅ Opción 1: Usar el nuevo endpoint directo (primera opción)
+        try {
+          const directResponse = await apiRequest(`tareas_operativas/${taskId}`, "GET");
+          console.log("✅ Respuesta del endpoint directo:", directResponse);
+          
+          // Normalizar estructura de respuesta
+          if (directResponse?.data) {
+            taskDetail = directResponse.data;
+          } else if (directResponse?.task) {
+            taskDetail = directResponse.task;
+          } else if (directResponse?.id || directResponse?.task_id) {
+            taskDetail = directResponse;
+          } else {
+            // Si la respuesta no tiene estructura esperada, usar el objeto completo
+            taskDetail = directResponse || {};
+          }
+          
+          console.log("✅ Tarea obtenida del endpoint directo:", taskDetail?.id || taskDetail?.task_id);
+        } catch (directError) {
+          console.warn("⚠️ Error con endpoint directo, intentando fallbacks:", directError);
+          
+          // ✅ Opción 2: Buscar en las tareas ya cargadas (cache)
+          const tareaEnCache = tareas.find(t => (t.id || t.task_id) === taskId);
+          if (tareaEnCache) {
+            console.log("✅ Tarea encontrada en cache");
+            taskDetail = tareaEnCache;
+          } else {
+            // ✅ Opción 3: Obtener desde el endpoint de lista y buscar por ID
+            const response = await apiRequest(`tareas_operativas?per_page=100`, "GET");
+            
+            let tareasData = [];
+            if (response?.data?.data) {
+              tareasData = Array.isArray(response.data.data) ? response.data.data : [];
+            } else if (response?.data) {
+              tareasData = Array.isArray(response.data) ? response.data : [];
+            } else if (Array.isArray(response)) {
+              tareasData = response;
+            }
+            
+            // Buscar la tarea por ID
+            taskDetail = tareasData.find(t => (t.id || t.task_id) === taskId);
+            
+            if (!taskDetail) {
+              throw new Error(`No se encontró la tarea con ID ${taskId} en ninguna fuente`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("❌ Error al obtener tarea:", error);
+        throw new Error(`No se pudo obtener la tarea ${taskId}: ${error.message}`);
+      }
+      
+      if (!taskDetail) {
+        throw new Error(`No se encontró la tarea con ID ${taskId}`);
+      }
+      
+      console.log("📦 Respuesta del backend (raw):", taskDetail);
+      
+      // Normalizar la estructura de la tarea
+      let normalizedTask = taskDetail?.data || taskDetail || {};
+      
+      // Si la respuesta está vacía o no tiene ID, intentar con otra estructura
+      if (!normalizedTask.id && taskDetail) {
+        if (taskDetail.id) {
+          normalizedTask = taskDetail;
+        } else if (taskDetail.task) {
+          normalizedTask = taskDetail.task;
+        }
+      }
+      
+      // Verificar que tenemos al menos el ID
+      if (!normalizedTask.id && !normalizedTask.task_id) {
+        console.error("❌ La tarea no tiene ID:", normalizedTask);
+        throw new Error("La tarea no tiene ID válido");
+      }
+      
+      // Normalizar fechas
+      const scheduled_date = normalizedTask.scheduled_date || normalizedTask.scheduled_at || normalizedTask.fechaProgramada || null;
+      const due_date = normalizedTask.due_date || normalizedTask.due_at || normalizedTask.fechaLimite || null;
+      
+      normalizedTask.scheduled_date = scheduled_date;
+      normalizedTask.due_date = due_date;
+      
+      // Normalizar estado
+      normalizedTask.status = normalizedTask.status || normalizedTask.estado || 'pending';
+      
+      // ✅ Normalizar cliente si viene directamente en la nueva estructura
+      if (normalizedTask.cliente && normalizedTask.cliente.id) {
+        console.log("✅ Cliente encontrado directamente en la respuesta:", normalizedTask.cliente.id);
+        
+        // Inicializar log si no existe
+        if (!normalizedTask.log) {
+          normalizedTask.log = {};
+        }
+        
+        // Normalizar estructura del cliente para compatibilidad con el modal
+        const clienteData = normalizedTask.cliente;
+        
+        // Extraer teléfono principal del array de telefonos
+        let telefonoPrincipal = "";
+        if (clienteData.telefonos && Array.isArray(clienteData.telefonos) && clienteData.telefonos.length > 0) {
+          const telefonoPrincipalObj = clienteData.telefonos.find(t => t.principal) || clienteData.telefonos[0];
+          if (telefonoPrincipalObj) {
+            // Formatear teléfono: incluir indicativo si existe
+            const indicativo = telefonoPrincipalObj.indicativo ? `+${telefonoPrincipalObj.indicativo} ` : "";
+            telefonoPrincipal = `${indicativo}${telefonoPrincipalObj.numero || ""}`.trim();
+          }
+        }
+        
+        normalizedTask.log.cliente = {
+          id: clienteData.id,
+          nombre_completo: clienteData.nombre_completo || 'Cliente',
+          telefono: telefonoPrincipal || clienteData.telefono || "",
+          estado_cliente: clienteData.estado_cliente || 'cliente',
+          email: clienteData.email || null,
+          // Mantener array de telefonos si es necesario para otras funcionalidades
+          telefonos: clienteData.telefonos || []
+        };
+        
+        console.log("✅ Cliente normalizado:", {
+          id: normalizedTask.log.cliente.id,
+          nombre: normalizedTask.log.cliente.nombre_completo,
+          telefono: normalizedTask.log.cliente.telefono
+        });
+      }
+      
+      // Normalizar comentarios si vienen en la nueva estructura
+      if (normalizedTask.comentarios && Array.isArray(normalizedTask.comentarios)) {
+        // Los comentarios ya vienen en la estructura correcta
+        normalizedTask.comments = normalizedTask.comentarios.map(c => ({
+          id: c.id,
+          comment: c.comment || '',
+          user: c.user || 'Usuario',
+          fecha: c.fecha || c.created_at,
+          adjuntos: c.adjuntos || []
+        }));
+      }
+      
+      // ✅ Normalizar concepto para log si viene en la nueva estructura
+      if (normalizedTask.concepto && !normalizedTask.log?.concept) {
+        if (!normalizedTask.log) {
+          normalizedTask.log = {};
+        }
+        normalizedTask.log.concept = {
+          name: normalizedTask.concepto
+        };
+      }
+      
+      // ✅ Normalizar nota para log si viene en la nueva estructura
+      if (normalizedTask.nota && !normalizedTask.log?.note) {
+        if (!normalizedTask.log) {
+          normalizedTask.log = {};
+        }
+        normalizedTask.log.note = normalizedTask.nota;
+      }
+      
+      // ✅ Normalizar usuario creador para log si viene en la nueva estructura
+      if (normalizedTask.creado_por && !normalizedTask.log?.user) {
+        if (!normalizedTask.log) {
+          normalizedTask.log = {};
+        }
+        normalizedTask.log.user = {
+          name: normalizedTask.creado_por
+        };
+      }
+      
+      // ✅ Si la nueva estructura NO tiene log.cliente, intentar obtenerlo desde múltiples fuentes
+      if (!normalizedTask.log || !normalizedTask.log.cliente || !normalizedTask.log.cliente.id) {
+        console.log("🔍 Buscando log y cliente para la tarea...");
+        
+        // Opción 1: Buscar log_id o bitacora_operativa_id en la respuesta directa
+        if (normalizedTask.log_id || normalizedTask.bitacora_operativa_id) {
+          const logId = normalizedTask.log_id || normalizedTask.bitacora_operativa_id;
+          console.log("📋 Encontrado log_id en tarea:", logId);
+          try {
+            const logDetail = await apiRequest(`bitacora_operativa/${logId}`, "GET");
+            if (logDetail) {
+              const logData = logDetail.data || logDetail;
+              normalizedTask.log = {
+                ...(normalizedTask.log || {}),
+                ...logData,
+                cliente: logData.cliente || normalizedTask.log?.cliente
+              };
+              
+              // Si el log tiene cliente_id pero no cliente, obtenerlo
+              if (normalizedTask.log.cliente_id && !normalizedTask.log.cliente?.id) {
+                try {
+                  const clienteDetail = await apiRequest(`cliente/${normalizedTask.log.cliente_id}`, "GET");
+                  if (clienteDetail) {
+                    normalizedTask.log.cliente = clienteDetail.data || clienteDetail;
+                    console.log("✅ Cliente obtenido desde log_id:", normalizedTask.log.cliente.id);
+                  }
+                } catch (e) {
+                  console.warn("⚠️ No se pudo obtener el cliente del log_id:", e);
+                }
+              }
+            }
+          } catch (e) {
+            console.warn("⚠️ No se pudo obtener el log desde log_id:", e);
+          }
+        }
+        
+        // Opción 2: Si no tiene log_id, buscar en tareas ya cargadas (cache) que puedan tener el log completo
+        if ((!normalizedTask.log || !normalizedTask.log.cliente?.id) && tareas.length > 0) {
+          console.log("🔍 Buscando log en tareas cargadas (cache)...");
+          const tareaEnCache = tareas.find(t => (t.id || t.task_id) === normalizedTask.id);
+          if (tareaEnCache && tareaEnCache.log && tareaEnCache.log.cliente && tareaEnCache.log.cliente.id) {
+            console.log("✅ Log encontrado en cache de tareas");
+            normalizedTask.log = {
+              ...(normalizedTask.log || {}),
+              ...tareaEnCache.log,
+              cliente: tareaEnCache.log.cliente
+            };
+          }
+        }
+        
+        // Opción 3: Si aún no tiene log, buscar en lista completa de tareas
+        if (!normalizedTask.log || !normalizedTask.log.cliente?.id) {
+          try {
+            console.log("🔍 Buscando log en lista completa de tareas...");
+            const allTasksResponse = await apiRequest(`tareas_operativas?per_page=100`, "GET");
+            let allTasks = [];
+            
+            if (allTasksResponse?.data?.data) {
+              allTasks = Array.isArray(allTasksResponse.data.data) ? allTasksResponse.data.data : [];
+            } else if (allTasksResponse?.data) {
+              allTasks = Array.isArray(allTasksResponse.data) ? allTasksResponse.data : [];
+            } else if (Array.isArray(allTasksResponse)) {
+              allTasks = allTasksResponse;
+            }
+            
+            // Buscar la misma tarea en la lista que pueda tener el log completo
+            const tareaEnLista = allTasks.find(t => (t.id || t.task_id) === normalizedTask.id);
+            if (tareaEnLista && tareaEnLista.log && tareaEnLista.log.cliente && tareaEnLista.log.cliente.id) {
+              console.log("✅ Log encontrado en lista completa de tareas");
+              normalizedTask.log = {
+                ...(normalizedTask.log || {}),
+                ...tareaEnLista.log,
+                cliente: tareaEnLista.log.cliente
+              };
+            } else if (tareaEnLista && (tareaEnLista.log_id || tareaEnLista.bitacora_operativa_id)) {
+              // Si la tarea en la lista tiene log_id, usarlo
+              const logId = tareaEnLista.log_id || tareaEnLista.bitacora_operativa_id;
+              try {
+                const logDetail = await apiRequest(`bitacora_operativa/${logId}`, "GET");
+                if (logDetail) {
+                  const logData = logDetail.data || logDetail;
+                  normalizedTask.log = {
+                    ...(normalizedTask.log || {}),
+                    ...logData,
+                    cliente: logData.cliente || normalizedTask.log?.cliente
+                  };
+                  
+                  if (normalizedTask.log.cliente_id && !normalizedTask.log.cliente?.id) {
+                    try {
+                      const clienteDetail = await apiRequest(`cliente/${normalizedTask.log.cliente_id}`, "GET");
+                      if (clienteDetail) {
+                        normalizedTask.log.cliente = clienteDetail.data || clienteDetail;
+                        console.log("✅ Cliente obtenido desde log de lista:", normalizedTask.log.cliente.id);
+                      }
+                    } catch (e) {
+                      console.warn("⚠️ No se pudo obtener el cliente:", e);
+                    }
+                  }
+                }
+              } catch (e) {
+                console.warn("⚠️ No se pudo obtener el log desde lista:", e);
+              }
+            }
+          } catch (e) {
+            console.warn("⚠️ Error al buscar en lista completa:", e);
+          }
+        }
+        
+        // Opción 4: Intentar buscar cliente_id directamente en la tarea
+        if (!normalizedTask.log?.cliente?.id) {
+          const clienteId = normalizedTask.cliente_id || normalizedTask.log?.cliente_id;
+          if (clienteId) {
+            console.log("🔍 Encontrado cliente_id directo en tarea:", clienteId);
+            try {
+              const clienteDetail = await apiRequest(`cliente/${clienteId}`, "GET");
+              if (clienteDetail) {
+                if (!normalizedTask.log) {
+                  normalizedTask.log = {};
+                }
+                normalizedTask.log.cliente = clienteDetail.data || clienteDetail;
+                console.log("✅ Cliente obtenido directamente:", normalizedTask.log.cliente.id);
+              }
+            } catch (e) {
+              console.warn("⚠️ No se pudo obtener el cliente directamente:", e);
+            }
+          }
+        }
+      } else {
+        // Si ya tiene log pero no cliente completo, intentar obtenerlo
+        if (normalizedTask.log.id && (!normalizedTask.log.cliente || !normalizedTask.log.cliente.id)) {
+          try {
+            const logDetail = await apiRequest(`bitacora_operativa/${normalizedTask.log.id}`, "GET");
+            if (logDetail?.cliente) {
+              normalizedTask.log.cliente = logDetail.cliente;
+            } else if (logDetail?.data?.cliente) {
+              normalizedTask.log.cliente = logDetail.data.cliente;
+            }
+          } catch (e) {
+            console.warn("⚠️ No se pudo obtener el cliente del log:", e);
+          }
+        }
+        
+        if (normalizedTask.log.cliente_id && !normalizedTask.log.cliente?.id) {
+          try {
+            const clienteDetail = await apiRequest(`cliente/${normalizedTask.log.cliente_id}`, "GET");
+            if (clienteDetail) {
+              normalizedTask.log.cliente = clienteDetail.data || clienteDetail;
+            }
+          } catch (e) {
+            console.warn("⚠️ No se pudo obtener el cliente:", e);
+          }
+        }
+      }
+      
+      // ✅ Crear estructura mínima solo si realmente no hay cliente (para evitar errores)
+      if (!normalizedTask.log) {
+        normalizedTask.log = {};
+      }
+      
+      // Solo crear cliente ficticio si realmente no se pudo obtener (id === null)
+      if (!normalizedTask.log.cliente || !normalizedTask.log.cliente.id) {
+        console.warn("⚠️ La tarea no tiene cliente asociado después de buscar en todas las fuentes");
+        // No crear cliente ficticio aquí, dejar que el modal maneje la ausencia
+        // El modal ya tiene protecciones con optional chaining
+      }
+      
+      console.log("✅ Tarea normalizada:", {
+        id: normalizedTask.id,
+        tieneLog: !!normalizedTask.log,
+        tieneCliente: !!normalizedTask.log?.cliente,
+        clienteId: normalizedTask.log?.cliente?.id,
+        status: normalizedTask.status
+      });
+      
+      return normalizedTask;
+    } catch (error) {
+      console.error("❌ Error al cargar detalles de la tarea:", error);
+      throw error;
+    }
+  };
+
+  // ✅ Función para abrir el modal de respuesta con una tarea
+  const openTaskResponseModal = async (taskId = null) => {
+    try {
+      setLoadingTarea(true);
+      
+      // Si no se proporciona un taskId, obtener la primera tarea pendiente
+      if (!taskId) {
+        const pendientesRes = await apiRequest("tareas_operativas?per_page=1", "GET");
+        let tareasPendientes = [];
+        
+        if (pendientesRes?.data?.data) {
+          tareasPendientes = Array.isArray(pendientesRes.data.data) ? pendientesRes.data.data : [];
+        } else if (pendientesRes?.data) {
+          tareasPendientes = Array.isArray(pendientesRes.data) ? pendientesRes.data : [];
+        } else if (Array.isArray(pendientesRes)) {
+          tareasPendientes = pendientesRes;
+        }
+        
+        const estadosPendientes = ['pending', 'processing', 'in_progress'];
+        tareasPendientes = tareasPendientes.filter(t => {
+          const estado = t.status || t.estado || t.state;
+          return estadosPendientes.includes(estado?.toLowerCase());
+        });
+        
+        if (tareasPendientes.length === 0) {
+          setToast({ show: true, message: "No hay tareas pendientes para abrir.", variant: "info" });
+          return;
+        }
+        
+        const primeraTarea = tareasPendientes[0];
+        taskId = primeraTarea.id || primeraTarea.task_id || primeraTarea.task?.id;
+        
+        if (!taskId) {
+          console.error("No se pudo obtener el ID de la tarea pendiente");
+          setToast({ show: true, message: "Error: No se pudo identificar la tarea.", variant: "danger" });
+          return;
+        }
+      }
+      
+      // Cargar los detalles completos de la tarea
+      const taskDetail = await fetchTaskDetail(taskId);
+      
+      // Validar que la tarea tenga los campos mínimos necesarios
+      if (!taskDetail || (!taskDetail.id && !taskDetail.task_id)) {
+        console.error("❌ La tarea no tiene ID válido:", taskDetail);
+        setToast({ show: true, message: "Error: La tarea no tiene un ID válido.", variant: "danger" });
+        return;
+      }
+      
+      // Validar que tenga log y cliente (requerido para el modal)
+      if (!taskDetail.log) {
+        console.warn("⚠️ La tarea no tiene log asociado:", taskDetail);
+        if (taskDetail.log_id || taskDetail.bitacora_operativa_id) {
+          const logId = taskDetail.log_id || taskDetail.bitacora_operativa_id;
+          try {
+            const logDetail = await apiRequest(`bitacora_operativa/${logId}`, "GET");
+            taskDetail.log = logDetail.data || logDetail;
+            if (taskDetail.log?.cliente_id && !taskDetail.log.cliente?.id) {
+              try {
+                const clienteDetail = await apiRequest(`cliente/${taskDetail.log.cliente_id}`, "GET");
+                if (clienteDetail) {
+                  taskDetail.log.cliente = clienteDetail;
+                }
+              } catch (e) {
+                console.warn("No se pudo obtener el cliente del log_id:", e);
+              }
+            }
+          } catch (e) {
+            console.warn("No se pudo obtener el log completo:", e);
+          }
+        }
+      }
+      
+      if (!taskDetail.log?.cliente) {
+        console.warn("⚠️ La tarea no tiene cliente asociado en el log:", taskDetail);
+        if (taskDetail.log?.cliente_id) {
+          try {
+            const clienteDetail = await apiRequest(`cliente/${taskDetail.log.cliente_id}`, "GET");
+            if (clienteDetail) {
+              taskDetail.log.cliente = clienteDetail;
+            }
+          } catch (e) {
+            console.warn("No se pudo obtener el cliente directamente:", e);
+          }
+        }
+      }
+      
+      console.log("✅ Tarea validada y lista para el modal:", {
+        id: taskDetail.id || taskDetail.task_id,
+        tieneLog: !!taskDetail.log,
+        tieneCliente: !!taskDetail.log?.cliente,
+        clienteId: taskDetail.log?.cliente?.id,
+        status: taskDetail.status
+      });
+      
+      // ✅ Navegar a la fecha de la tarea en el calendario si tiene fecha programada
+      if (taskDetail.scheduled_date || taskDetail.due_date) {
+        const fechaTarea = taskDetail.scheduled_date || taskDetail.due_date;
+        const fecha = new Date(fechaTarea + 'T00:00:00');
+        
+        if (!isNaN(fecha.getTime())) {
+          const mesTarea = fecha.getMonth();
+          const añoTarea = fecha.getFullYear();
+          
+          // Si la tarea está en otro mes, cambiar el mes/año del calendario
+          if (mesTarea !== mesActual || añoTarea !== añoActual) {
+            setMesActual(mesTarea);
+            setAñoActual(añoTarea);
+            
+            // Esperar un momento para que el calendario se actualice antes de hacer scroll
+            setTimeout(() => {
+              scrollToTaskDate(fecha.getDate());
+            }, 300);
+          } else {
+            // Si está en el mes actual, hacer scroll inmediatamente
+            setTimeout(() => {
+              scrollToTaskDate(fecha.getDate());
+            }, 100);
+          }
+        }
+      }
+      
+      setTareaSeleccionada(taskDetail);
+      setShowResponderModal(true);
+    } catch (error) {
+      console.error("Error al abrir modal de respuesta:", error);
+      setToast({ show: true, message: "Error al abrir la tarea. Intente de nuevo.", variant: "danger" });
+    } finally {
+      setLoadingTarea(false);
+    }
+  };
+
   const abrirResponderTarea = (tarea) => {
     if (!tarea) return;
+    
+    // ✅ Si la tarea tiene fecha programada, navegar a ese mes/año en el calendario
+    if (tarea.scheduled_date || tarea.due_date) {
+      const fechaTarea = tarea.scheduled_date || tarea.due_date;
+      const fecha = new Date(fechaTarea + 'T00:00:00');
+      
+      if (!isNaN(fecha.getTime())) {
+        const mesTarea = fecha.getMonth();
+        const añoTarea = fecha.getFullYear();
+        
+        // Si la tarea está en otro mes, cambiar el mes/año del calendario
+        if (mesTarea !== mesActual || añoTarea !== añoActual) {
+          setMesActual(mesTarea);
+          setAñoActual(añoTarea);
+          
+          // Esperar un momento para que el calendario se actualice antes de hacer scroll
+          setTimeout(() => {
+            scrollToTaskDate(fecha.getDate());
+          }, 100);
+        } else {
+          // Si está en el mes actual, hacer scroll inmediatamente
+          scrollToTaskDate(fecha.getDate());
+        }
+      }
+    }
+    
     setTareaSeleccionada(tarea);
     setShowResponderModal(true);
+  };
+
+  // ✅ Función para hacer scroll a la fecha de una tarea en el calendario
+  const scrollToTaskDate = (dia) => {
+    try {
+      // Buscar el elemento del día usando data attributes para mayor precisión
+      const dayCard = document.querySelector(
+        `.calendar-day-card[data-day="${dia}"][data-month="${mesActual}"][data-year="${añoActual}"]`
+      );
+      
+      if (dayCard) {
+        // Hacer scroll suave al elemento
+        dayCard.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center',
+          inline: 'nearest'
+        });
+        
+        // Resaltar brevemente el día
+        const originalBg = dayCard.style.backgroundColor;
+        const originalBorder = dayCard.style.border;
+        
+        dayCard.style.transition = 'all 0.3s ease';
+        dayCard.style.backgroundColor = '#fff3cd';
+        dayCard.style.border = '3px solid #ffc107';
+        dayCard.style.boxShadow = '0 4px 12px rgba(255, 193, 7, 0.4)';
+        
+        setTimeout(() => {
+          dayCard.style.backgroundColor = originalBg || '';
+          dayCard.style.border = originalBorder || '';
+          dayCard.style.boxShadow = '';
+        }, 2500);
+      } else {
+        // Fallback: buscar por el número del día
+        const dayCards = document.querySelectorAll('.calendar-day-card');
+        dayCards.forEach((card) => {
+          const dayNumber = card.querySelector('strong');
+          if (dayNumber && parseInt(dayNumber.textContent.trim()) === dia) {
+            card.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center',
+              inline: 'nearest'
+            });
+            
+            const originalBg = card.style.backgroundColor;
+            const originalBorder = card.style.border;
+            
+            card.style.transition = 'all 0.3s ease';
+            card.style.backgroundColor = '#fff3cd';
+            card.style.border = '3px solid #ffc107';
+            card.style.boxShadow = '0 4px 12px rgba(255, 193, 7, 0.4)';
+            
+            setTimeout(() => {
+              card.style.backgroundColor = originalBg || '';
+              card.style.border = originalBorder || '';
+              card.style.boxShadow = '';
+            }, 2500);
+            return;
+          }
+        });
+      }
+    } catch (error) {
+      console.warn("No se pudo hacer scroll a la fecha de la tarea:", error);
+    }
   };
 
   const abrirDetalleDia = (lista) => {
@@ -176,18 +780,47 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     fetchUsuarios();
   }, [currentUser, canViewUsers]);
   
+  const [filtroMenciones, setFiltroMenciones] = useState(false); // ✅ Filtro para mostrar tareas con menciones
+
   React.useEffect(() => {
     const fetchTareasPorUsuario = async () => {
       try {
         if (!usuarioSeleccionado) return;
   
-        const response = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
+        // ✅ Si el filtro de menciones está activo, buscar tareas donde el usuario fue mencionado
+        const endpoint = filtroMenciones 
+          ? `tareas_operativas?mentioned_user_id=${usuarioSeleccionado}&per_page=100`
+          : `tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`;
+        
+        const response = await apiRequest(endpoint, "GET");
       
+        let tareasData = [];
         if (response && Array.isArray(response.data)) {
-          setTareas(response.data);
-        } else {
-          setTareas([]);
+          tareasData = response.data;
+        } else if (Array.isArray(response)) {
+          tareasData = response;
         }
+
+        // ✅ Si buscamos por menciones, también verificar en comentarios (por si el backend no lo soporta aún)
+        if (filtroMenciones && tareasData.length === 0) {
+          // Fallback: obtener todas las tareas y filtrar localmente
+          const allResponse = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
+          const allTareas = Array.isArray(allResponse?.data) ? allResponse.data : Array.isArray(allResponse) ? allResponse : [];
+          
+          // Filtrar tareas que tienen comentarios mencionando al usuario
+          // Esto requiere cargar comentarios de cada tarea, por ahora usamos el endpoint si existe
+          tareasData = allTareas.filter(tarea => {
+            // Si la tarea tiene comentarios en su estructura, verificar menciones
+            if (tarea.comments && Array.isArray(tarea.comments)) {
+              return tarea.comments.some(comment => 
+                isUserMentioned(comment.comment || comment.response_note || '', usuarioSeleccionado)
+              );
+            }
+            return false;
+          });
+        }
+        
+        setTareas(tareasData);
         
       } catch (error) {
         console.error("Error al cargar tareas por usuario:", error);
@@ -200,7 +833,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     };
   
     fetchTareasPorUsuario();
-  }, [usuarioSeleccionado]);
+  }, [usuarioSeleccionado, filtroMenciones]);
   
   
 
@@ -309,7 +942,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   }
 
   return (
-    <div className="calendario-tareas-container">
+    <div className="calendario-tareas-container" style={{ position: 'relative' }}>
       <style>{`
         .calendar-day-card {
           user-select: none;
@@ -327,11 +960,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
             min-height: 100px !important;
           }
         }
+        /* Asegurar que el dropdown de notificaciones se vea bien */
+        .calendario-tareas-container .position-relative {
+          position: relative !important;
+        }
       `}</style>
       {/* Header mejorado */}
-      <Card className="mb-4 shadow-sm border-0">
-        <Card.Body className="p-3">
-          <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <Card className="mb-4 shadow-sm border-0" style={{ position: 'relative', overflow: 'visible' }}>
+        <Card.Body className="p-3" style={{ position: 'relative', overflow: 'visible' }}>
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-3" style={{ position: 'relative' }}>
             {/* Sección izquierda: Botones de acción */}
             <div className="d-flex flex-wrap gap-2 align-items-center">
               <Button
@@ -401,7 +1038,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
               </div>
 
               {/* Selector de usuario mejorado */}
-              <div className="d-flex align-items-center gap-2" style={{ width: "100%", maxWidth: "280px" }}>
+              <div className="d-flex align-items-center gap-2" style={{ width: "100%", maxWidth: "350px" }}>
                 <FaUser className="text-muted" />
                 <select
                   className="form-select form-select-sm"
@@ -420,16 +1057,197 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                     <option value="">Cargando usuarios...</option>
                   )}
                 </select>
+                {/* ✅ Toggle para filtrar por menciones */}
+                <Button
+                  variant={filtroMenciones ? "primary" : "outline-secondary"}
+                  size="sm"
+                  onClick={() => setFiltroMenciones(!filtroMenciones)}
+                  title={filtroMenciones ? "Mostrar todas las tareas" : "Mostrar solo tareas donde fui mencionado"}
+                  className="d-flex align-items-center"
+                >
+                  <FaAt />
+                </Button>
               </div>
             </div>
 
-            {/* Sección derecha: Estadísticas rápidas */}
-            <div className="d-flex flex-column align-items-end gap-1">
-              <div className="d-flex align-items-center gap-2">
-                <FaTasks className="text-primary" />
-                <span className="text-muted small">
-                  {tareas.filter(t => t && t.status !== "completed").length} tareas activas
-                </span>
+            {/* Sección derecha: Notificaciones y Estadísticas */}
+            <div className="d-flex align-items-center gap-3">
+              {/* ✅ Dropdown de notificaciones */}
+              <NotificationsDropdown 
+                currentUser={currentUser}
+                pendientes={pendientes}
+                loadingTask={loadingTarea}
+                onNotificationClick={async (notification) => {
+                  try {
+                    // Manejar según el tipo de notificación
+                    if (notification.type === 'mention') {
+                      // Obtener task_id - puede venir como número o string
+                      let taskId = notification.task_id;
+                      
+                      // Convertir a número si es string válido
+                      if (typeof taskId === 'string' && taskId.trim() !== '' && !isNaN(parseInt(taskId, 10))) {
+                        taskId = parseInt(taskId, 10);
+                      }
+                      
+                      // Si el task_id es 0, null, undefined, o string vacío, considerar que no existe
+                      const hasTaskId = taskId !== null && taskId !== undefined && taskId !== '' && taskId !== 0;
+                      
+                      // ✅ Si no hay task_id pero hay comment_id, buscar el task_id usando el mismo método que fetchTaskDetail
+                      if (!hasTaskId && notification.comment_id) {
+                        console.log("🔍 Buscando task_id para comment_id:", notification.comment_id);
+                        
+                        try {
+                          // Usar el mismo endpoint que usa fetchTaskDetail: tareas_operativas?per_page=100
+                          const allTasksResponse = await apiRequest(`tareas_operativas?per_page=100`, "GET");
+                          let allTasks = [];
+                          
+                          // Manejar diferentes estructuras de respuesta (igual que fetchTaskDetail)
+                          if (allTasksResponse?.data?.data) {
+                            allTasks = Array.isArray(allTasksResponse.data.data) ? allTasksResponse.data.data : [];
+                          } else if (allTasksResponse?.data) {
+                            allTasks = Array.isArray(allTasksResponse.data) ? allTasksResponse.data : [];
+                          } else if (Array.isArray(allTasksResponse)) {
+                            allTasks = allTasksResponse;
+                          }
+                          
+                          // Buscar en todas las tareas por el comentario
+                          for (const tarea of allTasks) {
+                            const tareaId = tarea.id || tarea.task_id;
+                            if (!tareaId) continue;
+                            
+                            // Si la tarea tiene comentarios en su estructura, buscar ahí
+                            if (tarea.comments && Array.isArray(tarea.comments)) {
+                              const comentarioEncontrado = tarea.comments.find(c => 
+                                (c.id || c.comment_id) == notification.comment_id ||
+                                parseInt(c.id || c.comment_id) === parseInt(notification.comment_id)
+                              );
+                              if (comentarioEncontrado) {
+                                taskId = tareaId;
+                                console.log("✅ Task ID encontrado en comentarios de tarea:", taskId);
+                                break;
+                              }
+                            }
+                            
+                            // Si no está en la estructura, intentar cargar comentarios de la tarea
+                            try {
+                              const comentariosResponse = await apiRequest(`tareas_operativas/${tareaId}/comentarios`, "GET");
+                              const comentarios = Array.isArray(comentariosResponse) 
+                                ? comentariosResponse 
+                                : (Array.isArray(comentariosResponse?.data) ? comentariosResponse.data : []);
+                              
+                              const comentarioEncontrado = comentarios.find(c => 
+                                (c.id || c.comment_id) == notification.comment_id ||
+                                parseInt(c.id || c.comment_id) === parseInt(notification.comment_id)
+                              );
+                              
+                              if (comentarioEncontrado) {
+                                taskId = tareaId;
+                                console.log("✅ Task ID encontrado después de cargar comentarios:", taskId);
+                                break;
+                              }
+                            } catch (comentariosError) {
+                              // Continuar con la siguiente tarea si falla
+                              continue;
+                            }
+                          }
+                          
+                          if (!taskId) {
+                            console.error("❌ No se pudo encontrar el task_id para el comentario:", notification.comment_id);
+                            setToast({ 
+                              show: true, 
+                              message: "No se pudo encontrar la tarea asociada a este comentario.", 
+                              variant: "warning" 
+                            });
+                            return;
+                          }
+                        } catch (error) {
+                          console.error("❌ Error al buscar tarea del comentario:", error);
+                          setToast({ 
+                            show: true, 
+                            message: "No se pudo obtener la tarea asociada al comentario.", 
+                            variant: "warning" 
+                          });
+                          return;
+                        }
+                      }
+                      
+                      // ✅ Usar openTaskResponseModal (el mismo método que se usa para notificaciones de tareas)
+                      if (taskId && !isNaN(taskId) && taskId > 0) {
+                        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+                        
+                        // Si ya tenemos el objeto task completo en la notificación, usarlo directamente
+                        if (notification.task && notification.task.id) {
+                          console.log("✅ Usando objeto task completo de la notificación");
+                          abrirResponderTarea(notification.task);
+                        } else {
+                          // Usar el mismo método que funciona para notificaciones de tareas
+                          console.log("✅ Abriendo modal con taskId usando openTaskResponseModal:", numericTaskId);
+                          await openTaskResponseModal(numericTaskId);
+                        }
+                      } else {
+                        console.error("❌ No se pudo obtener un task_id válido de la notificación:", {
+                          notification_id: notification.id,
+                          task_id: notification.task_id,
+                          comment_id: notification.comment_id
+                        });
+                        setToast({ 
+                          show: true, 
+                          message: "No se pudo identificar la tarea asociada a esta notificación.", 
+                          variant: "warning" 
+                        });
+                      }
+                    } else if (notification.type === 'task_assigned' && notification.task_id) {
+                      const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
+                      if (notification.task && notification.task.id) {
+                        abrirResponderTarea(notification.task);
+                      } else {
+                        await openTaskResponseModal(numericTaskId);
+                      }
+                    } else if (notification.type === 'task_pending') {
+                      if (notification.task_id) {
+                        const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
+                        if (notification.task && notification.task.id) {
+                          abrirResponderTarea(notification.task);
+                        } else {
+                          await openTaskResponseModal(numericTaskId);
+                        }
+                      } else {
+                        await openTaskResponseModal();
+                      }
+                    } else if (notification.type === 'task' && notification.task_id) {
+                      const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
+                      if (notification.task && notification.task.id) {
+                        abrirResponderTarea(notification.task);
+                      } else {
+                        await openTaskResponseModal(numericTaskId);
+                      }
+                    } else if (notification.type === 'view_all') {
+                      // Navegar a operaciones (opcional)
+                      window.location.href = '/Herramientas/operaciones';
+                    } else {
+                      if (pendientes > 0) {
+                        await openTaskResponseModal();
+                      }
+                    }
+                  } catch (error) {
+                    console.error("❌ Error al procesar notificación:", error);
+                    setToast({ 
+                      show: true, 
+                      message: "Error al abrir la tarea. Por favor, intente de nuevo.", 
+                      variant: "danger" 
+                    });
+                  }
+                }}
+              />
+
+              {/* Estadísticas rápidas */}
+              <div className="d-flex flex-column align-items-end gap-1">
+                <div className="d-flex align-items-center gap-2">
+                  <FaTasks className="text-primary" />
+                  <span className="text-muted small">
+                    {tareas.filter(t => t && t.status !== "completed").length} tareas activas
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -462,6 +1280,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           return (
             <Card
               key={dia}
+              data-day={dia}
+              data-month={mesActual}
+              data-year={añoActual}
               onDrop={(e) => onDrop(e, dia)}
               onDragOver={onDragOver}
               onClick={(e) => {
@@ -687,7 +1508,18 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       {showResponderModal && tareaSeleccionada && (
   <ResponderTareaModal
     show={showResponderModal}
-    onHide={() => setShowResponderModal(false)}
+    onHide={(updated) => {
+      setShowResponderModal(false);
+      setTareaSeleccionada(null);
+      if (updated) {
+        // Actualizar contador de pendientes
+        apiRequest("tareas_operativas/pendientes", "GET")
+          .then((res) => setPendientes(res.pendientes || 0))
+          .catch(() => {});
+        // Actualizar tarea en el estado
+        onUpdated(tareaSeleccionada);
+      }
+    }}
     tarea={tareaSeleccionada}
     onUpdated={(tareaActualizada) => {
       onUpdated(tareaActualizada); // ✅ Actualiza en el estado

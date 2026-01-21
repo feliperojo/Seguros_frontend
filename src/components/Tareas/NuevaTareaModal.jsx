@@ -3,6 +3,8 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
+import { useMentionableQuill } from "../../hooks/useMentionableQuill";
+import { extractMentionedUserIds } from "../../utils/mentions";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -79,6 +81,21 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [isDragging, setIsDragging] = useState(false);
   const dropAreaRef = useRef(null);
   const quillEditorRef = useRef(null);
+  const [mentionedUserIds, setMentionedUserIds] = useState([]);
+
+  // ✅ Hook para manejo de menciones en Quill
+  const {
+    quillRef: mentionQuillRef,
+    showMentionList,
+    mentionList,
+    selectedMentionIndex,
+    insertMention,
+    handleQuillChange,
+    handleQuillKeyDown,
+    updateSelectedIndex,
+  } = useMentionableQuill(usuarios, (ids) => {
+    setMentionedUserIds(ids);
+  });
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
     setFormData((prev) => {
@@ -266,7 +283,24 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     // Cargar usuarios de forma separada para mejor manejo de errores
     const cargarUsuarios = async () => {
       try {
-        const response = await apiRequest("users", "GET");
+        // Intentar varios endpoints comunes
+        let response = null;
+        try {
+          response = await apiRequest("users?per_page=1000", "GET");
+        } catch (e) {
+          try {
+            response = await apiRequest("/v1/users?per_page=1000", "GET");
+          } catch (e2) {
+            console.error("Error al cargar usuarios:", e2);
+          }
+        }
+        
+        if (!response) {
+          if (isMounted && show) {
+            setUsuarios([]);
+          }
+          return;
+        }
         
         // El endpoint puede retornar diferentes estructuras
         let usuariosData = [];
@@ -282,11 +316,21 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         } else if (response?.data?.data && Array.isArray(response.data.data)) {
           // Estructura anidada: { data: { data: [...] } }
           usuariosData = response.data.data;
+        } else if (response?.users && Array.isArray(response.users)) {
+          usuariosData = response.users;
         }
         
+        // Normalizar estructura de usuarios
+        const usuariosNormalizados = usuariosData.map(u => ({
+          id: u.id,
+          name: u.name || u.nombre || u.username || '',
+          nombre: u.nombre || u.name || u.username || '',
+          email: u.email || '',
+        })).filter(u => u.id && u.name); // Solo usuarios válidos
+        
         if (isMounted && show) {
-          setUsuarios(usuariosData);
-          console.log("✅ Usuarios cargados:", usuariosData.length, usuariosData);
+          setUsuarios(usuariosNormalizados);
+          console.log(`✅ ${usuariosNormalizados.length} usuarios cargados para menciones y asignación`);
         }
       } catch (err) {
         console.error("❌ Error al cargar usuarios:", err);
@@ -647,13 +691,45 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     setLoading(true);
     
     try {
+      // ✅ Extraer menciones antes de enviar
+      const mentionedIds = extractMentionedUserIds(formData.note || "", usuarios);
+      
+      // 📝 Log de depuración: Menciones detectadas (nueva tarea)
+      if (import.meta.env.DEV) {
+        console.log("🔔 [NOTIFICACIONES] Creando nueva tarea con menciones:", {
+          nota_preview: formData.note?.substring(0, 100) || "",
+          mentioned_user_ids: mentionedIds,
+          usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
+          cliente_id: formData.cliente_id,
+          assign_to_user_id: formData.assign_to_user_id,
+          scheduled_date: formData.scheduled_date,
+          due_date: formData.due_date,
+          endpoint: "bitacora_operativa/create"
+        });
+      }
+      
       const payload = {
         ...formData,
         action_type: "tarea",
         tipo: "tarea",
+        mentioned_user_ids: mentionedIds, // Enviar IDs de usuarios mencionados
       };
 
       const response = await apiRequest("bitacora_operativa/create", "POST", payload);
+      
+      // 📝 Log de depuración: Confirmación de creación de tarea
+      if (import.meta.env.DEV) {
+        const taskId = response?.id || response?.log?.id || response?.data?.id || response?.bitacora?.id;
+        console.log("✅ [NOTIFICACIONES] Nueva tarea creada exitosamente:", {
+          tarea_id: taskId,
+          mentioned_user_ids_enviados: mentionedIds,
+          respuesta_backend: {
+            id: response?.id,
+            log_id: response?.log?.id,
+            data_id: response?.data?.id
+          }
+        });
+      }
       
       let logId = response?.id || response?.log?.id || response?.data?.id || response?.bitacora?.id;
       
@@ -920,27 +996,120 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                 color: #6c757d;
               }
             `}</style>
-            <ReactQuill
-              theme="snow"
-              value={formData.note || ""}
-              onChange={(value, delta, source, editor) => {
-                setFormData((prev) => ({ ...prev, note: value }));
-                // Guardar referencia al editor
-                if (editor && !quillEditorRef.current) {
-                  quillEditorRef.current = editor;
-                }
-                // Limpiar error cuando el usuario empiece a escribir
-                if (errors.note && !isNoteEmpty(value)) {
-                  setErrors((prev) => ({ ...prev, note: null }));
-                }
-              }}
-              modules={quillModules}
-              formats={quillFormats}
-              placeholder="Describa los detalles y objetivos de esta tarea. Use la barra de herramientas para formatear el texto o el botón 'Dictar' para transcribir por voz..."
-              style={{
-                backgroundColor: '#fff',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <ReactQuill
+                ref={mentionQuillRef}
+                theme="snow"
+                value={formData.note || ""}
+                onChange={(value, delta, source, editor) => {
+                  setFormData((prev) => ({ ...prev, note: value }));
+                  // Guardar referencia al editor
+                  if (editor) {
+                    if (typeof editor.getEditor === 'function') {
+                      quillEditorRef.current = editor.getEditor();
+                    } else {
+                      quillEditorRef.current = editor;
+                    }
+                  }
+                  // Limpiar error cuando el usuario empiece a escribir
+                  if (errors.note && !isNoteEmpty(value)) {
+                    setErrors((prev) => ({ ...prev, note: null }));
+                  }
+                  // ✅ Manejar menciones
+                  handleQuillChange(value, delta, source, editor);
+                }}
+                onKeyDown={handleQuillKeyDown}
+                modules={quillModules}
+                formats={quillFormats}
+                placeholder="Describa los detalles y objetivos de esta tarea. Use la barra de herramientas para formatear el texto, el botón 'Dictar' para transcribir por voz, o escriba @ para mencionar usuarios..."
+                style={{
+                  backgroundColor: '#fff',
+                }}
+              />
+              
+              {/* ✅ Dropdown de menciones */}
+              {showMentionList && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    right: 0,
+                    backgroundColor: 'white',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                    zIndex: 1000,
+                    maxHeight: '250px',
+                    overflowY: 'auto',
+                    marginTop: '4px',
+                  }}
+                >
+                  {usuarios.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                      <Spinner size="sm" animation="border" className="me-2" />
+                      Cargando usuarios...
+                    </div>
+                  ) : mentionList.length === 0 ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                      No se encontraron usuarios
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ 
+                        padding: '6px 12px', 
+                        fontSize: '0.75rem', 
+                        color: '#666', 
+                        backgroundColor: '#f8f9fa',
+                        borderBottom: '1px solid #e0e0e0',
+                        fontWeight: 500
+                      }}>
+                        {mentionList.length} {mentionList.length === 1 ? 'usuario' : 'usuarios'} encontrado{mentionList.length > 1 ? 's' : ''}
+                      </div>
+                      {mentionList.map((user, index) => (
+                        <div
+                          key={user.id}
+                          onClick={() => insertMention(user)}
+                          onMouseEnter={() => {
+                            if (updateSelectedIndex) {
+                              updateSelectedIndex(index);
+                            }
+                          }}
+                          style={{
+                            padding: '10px 12px',
+                            cursor: 'pointer',
+                            backgroundColor: index === selectedMentionIndex ? '#e3f2fd' : 'transparent',
+                            borderBottom: index < mentionList.length - 1 ? '1px solid #f0f0f0' : 'none',
+                            transition: 'background-color 0.15s ease',
+                          }}
+                        >
+                          <div style={{ 
+                            fontWeight: 500, 
+                            color: '#1976d2',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}>
+                            <i className="fas fa-user-circle" style={{ fontSize: '1.1rem' }}></i>
+                            {user.name || user.nombre || 'Usuario'}
+                          </div>
+                          {user.email && (
+                            <div style={{ 
+                              fontSize: '0.85rem', 
+                              color: '#666',
+                              marginTop: '2px',
+                              marginLeft: '24px'
+                            }}>
+                              {user.email}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
           {errors.note && (
             <div className="text-danger mt-1" style={{ fontSize: '0.875rem' }}>

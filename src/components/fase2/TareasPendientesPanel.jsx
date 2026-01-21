@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { FaExternalLinkAlt, FaComments, FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
+import { FaExternalLinkAlt, FaComments, FaPaperclip, FaChevronDown, FaChevronUp, FaAt } from "react-icons/fa";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderOportunidadModal from "../Tareas/ResponderOportunidadModa";
+import { useMentions } from "../../hooks/useMentions";
+import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
@@ -605,6 +607,25 @@ export default function TareasPendientesPanel({
                       {!usuarioCreador && !usuarioAsignado && t.responsable && (
                         <div><strong>Responsable:</strong> {t.responsable}</div>
                       )}
+                      {/* ✅ Badge visual si el usuario fue mencionado */}
+                      {currentUser && isTaskMentioned(t) && (
+                        <div className="mt-2">
+                          <span 
+                            className="badge rounded-pill" 
+                            style={{ 
+                              backgroundColor: '#e3f2fd', 
+                              color: '#1976d2',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              border: '1px solid #1976d2'
+                            }}
+                            title="Fuiste mencionado en esta tarea"
+                          >
+                            <FaAt style={{ fontSize: '0.7rem', marginRight: '4px' }} />
+                            Te mencionaron
+                          </span>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
@@ -620,7 +641,7 @@ export default function TareasPendientesPanel({
                       lineHeight: '1.5',
                       wordBreak: 'break-word'
                     }}
-                    dangerouslySetInnerHTML={{ __html: t.nota || 'Sin contenido' }}
+                    dangerouslySetInnerHTML={{ __html: highlightMentions(t.nota || 'Sin contenido') }}
                   />
                 </div>
               )}
@@ -961,37 +982,62 @@ export default function TareasPendientesPanel({
                           </div>
                         ) : comentariosTarea.length > 0 ? (
                           <div>
-                            {comentariosTarea.map((comentarioTarea) => (
-                              <div
-                                key={comentarioTarea.id}
-                                className="bg-light border-start border-primary border-3 rounded p-3 mb-2"
-                              >
-                                <div className="d-flex align-items-center justify-content-between mb-2">
-                                  <div className="d-flex align-items-center gap-2">
-                                    <div className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: "24px", height: "24px" }}>
-                                      <i className="fas fa-user text-primary" style={{ fontSize: "0.7rem" }}></i>
+                            {comentariosTarea.map((comentarioTarea) => {
+                              // ✅ Verificar si el usuario actual fue mencionado en este comentario
+                              const comentarioText = comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || '';
+                              const usuarioFueMencionado = currentUser && isUserMentioned(comentarioText, currentUser.id);
+                              
+                              return (
+                                <div
+                                  key={comentarioTarea.id}
+                                  className={`bg-light border-start rounded p-3 mb-2 ${usuarioFueMencionado ? 'border-primary border-4 shadow-sm' : 'border-primary border-3'}`}
+                                  style={usuarioFueMencionado ? {
+                                    backgroundColor: '#e3f2fd',
+                                    borderLeft: '4px solid #1976d2'
+                                  } : {}}
+                                >
+                                  <div className="d-flex align-items-center justify-content-between mb-2">
+                                    <div className="d-flex align-items-center gap-2">
+                                      <div className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: "24px", height: "24px" }}>
+                                        <i className="fas fa-user text-primary" style={{ fontSize: "0.7rem" }}></i>
+                                      </div>
+                                      <span className="fw-medium small">
+                                        {comentarioTarea.user?.name || comentarioTarea.user || "Usuario"}
+                                      </span>
+                                      {usuarioFueMencionado && (
+                                        <span 
+                                          className="badge rounded-pill ms-2" 
+                                          style={{ 
+                                            backgroundColor: '#1976d2', 
+                                            color: 'white',
+                                            fontSize: '0.65rem',
+                                            fontWeight: 600
+                                          }}
+                                          title="Te mencionaron aquí"
+                                        >
+                                          <FaAt style={{ fontSize: '0.6rem', marginRight: '2px' }} />
+                                          Mencionado
+                                        </span>
+                                      )}
                                     </div>
-                                    <span className="fw-medium small">
-                                      {comentarioTarea.user?.name || comentarioTarea.user || "Usuario"}
+                                    <span className="text-muted small">
+                                      {formatFechaRelativa(comentarioTarea.created_at || comentarioTarea.fecha)}
                                     </span>
                                   </div>
-                                  <span className="text-muted small">
-                                    {formatFechaRelativa(comentarioTarea.created_at || comentarioTarea.fecha)}
-                                  </span>
+                                  <div 
+                                    className="text-dark small mb-0"
+                                    style={{
+                                      fontSize: '14px',
+                                      lineHeight: '1.5',
+                                      wordBreak: 'break-word'
+                                    }}
+                                    dangerouslySetInnerHTML={{ 
+                                      __html: highlightMentions(comentarioText || "Sin contenido")
+                                    }}
+                                  />
                                 </div>
-                                <div 
-                                  className="text-dark small mb-0"
-                                  style={{
-                                    fontSize: '14px',
-                                    lineHeight: '1.5',
-                                    wordBreak: 'break-word'
-                                  }}
-                                  dangerouslySetInnerHTML={{ 
-                                    __html: comentarioTarea.comment || comentarioTarea.response_note || comentarioTarea.note || "Sin contenido" 
-                                  }}
-                                />
-                              </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-center py-3 text-muted small">
