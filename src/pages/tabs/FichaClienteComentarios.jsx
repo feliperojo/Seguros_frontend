@@ -12,7 +12,7 @@ const toValidId = (v) => {
 };
 
 export default function FichaClienteComentarios() {
-  const { cliente, coberturaPrincipal, id: clienteId } = useFichaCliente();
+  const { cliente, coberturaPrincipal, id: clienteId, selectedGrupoId } = useFichaCliente();
   const [comentarios, setComentarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,16 +28,20 @@ export default function FichaClienteComentarios() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
 
-  // Obtener grupo familiar del contexto
+  // Obtener grupo familiar seleccionado del contexto (compartido con el tab General)
   const grupoFamiliarId = useMemo(() => {
+    // Prioridad: grupo seleccionado del contexto > cobertura principal > cliente
+    if (selectedGrupoId) {
+      return toValidId(selectedGrupoId);
+    }
     if (!cliente) return null;
     return (
-      toValidId(cliente.grupo_familiar_id) ??
       toValidId(coberturaPrincipal?.grupo_familiar_id) ??
       toValidId(coberturaPrincipal?.grupo_familiar?.id) ??
+      toValidId(cliente.grupo_familiar_id) ??
       null
     );
-  }, [cliente, coberturaPrincipal]);
+  }, [cliente, coberturaPrincipal, selectedGrupoId]);
 
   // Determinar si un item es comentario o tarea
   const getTipoItem = (item) => {

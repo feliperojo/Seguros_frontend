@@ -78,13 +78,15 @@ export default function FichaClienteGeneral() {
     return unique;
   }, [cliente, coberturaPrincipal]);
 
-  // ===== grupo seleccionado =====
-  const [selectedGrupoId, setSelectedGrupoId] = useState(toValidId(grupoInicial));
+  // ===== grupo seleccionado (desde el contexto compartido) =====
+  const { selectedGrupoId, setSelectedGrupoId } = useFichaCliente();
 
-  // si cambia el cliente / cobertura principal, reasigna default
+  // si cambia el cliente / cobertura principal, reasigna default usando el setter del contexto
   useEffect(() => {
-    setSelectedGrupoId(toValidId(grupoInicial));
-  }, [grupoInicial]);
+    if (setSelectedGrupoId && grupoInicial !== null) {
+      setSelectedGrupoId(toValidId(grupoInicial));
+    }
+  }, [grupoInicial, setSelectedGrupoId]);
 
   const currentGrupo = useMemo(() => {
     if (!selectedGrupoId) return grupos[0] ?? null;

@@ -140,6 +140,29 @@ export default function FichaClienteLayout() {
     );
   }, [cliente]);
 
+  // ===== Estado compartido para el grupo familiar seleccionado =====
+  const toValidId = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  // Calcular grupo inicial desde cobertura principal o cliente
+  const grupoInicial = useMemo(() => {
+    return (
+      toValidId(coberturaPrincipal?.grupo_familiar_id) ??
+      toValidId(cliente?.grupo_familiar_id) ??
+      null
+    );
+  }, [coberturaPrincipal, cliente]);
+
+  // Estado para el grupo seleccionado (compartido entre tabs)
+  const [selectedGrupoId, setSelectedGrupoId] = useState(toValidId(grupoInicial));
+
+  // Actualizar grupo seleccionado cuando cambia el cliente o cobertura principal
+  useEffect(() => {
+    setSelectedGrupoId(toValidId(grupoInicial));
+  }, [grupoInicial]);
+
   const titulo = cliente?.nombre_completo || "Ficha de Cliente";
 
   const ctxValue = useMemo(
@@ -151,8 +174,10 @@ export default function FichaClienteLayout() {
       refresh: fetchCliente,
       formatDate,
       coberturaPrincipal,
+      selectedGrupoId,
+      setSelectedGrupoId,
     }),
-    [id, cliente, loading, error, fetchCliente, coberturaPrincipal]
+    [id, cliente, loading, error, fetchCliente, coberturaPrincipal, selectedGrupoId]
   );
 
   return (
