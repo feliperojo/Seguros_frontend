@@ -1,6 +1,9 @@
 // src/components/fase2/Prospectogrupo.jsx
 import React, { useState, useEffect } from "react";
 import { formatMoneyDisplay } from "../../services/ingresos";
+import { FaFilePdf } from "react-icons/fa";
+import { generarPDFConfirmacion } from "../../services/generarPDFConfirmacion";
+import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
 import RequerimientosModal from "../RequerimientosModal";
@@ -21,6 +24,7 @@ const Prospectogrupo = ({
   grupoFamiliarId,
   onRefresh, // Función opcional para refrescar datos del grupo familiar
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
+  grupo, // Grupo completo opcional para generar PDF de confirmación
 }) => {
   const [showGestion, setShowGestion] = useState(false);
   const [showComentarioModal, setShowComentarioModal] = useState(false);
@@ -70,6 +74,10 @@ const Prospectogrupo = ({
   // TOMA_DATOS, GRUPO_FAMILIAR (terminado), INSCRIPCION_INI
   const estadosPermitidosRenovaciones = ["TOMA_DATOS", "GRUPO_FAMILIAR", "INSCRIPCION_INI"];
   
+  // Estados permitidos para mostrar el botón de Confirmación de Datos
+  // Desde TOMA_DATOS en adelante (TOMA_DATOS, INSCRIPCION_INI, GRUPO_FAMILIAR)
+  const estadosPermitidosConfirmacion = ["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"];
+  
   // Normalizar estado actual a mayúsculas para comparación
   const estadoNormalizado = estadoActual 
     ? (typeof estadoActual === 'string' 
@@ -79,6 +87,22 @@ const Prospectogrupo = ({
 
   // Verificar si el estado actual permite renovaciones
   const puedeRenovar = estadosPermitidosRenovaciones.includes(estadoNormalizado);
+
+  // Verificar si el estado permite mostrar el botón de Confirmación de Datos (desde TOMA_DATOS en adelante)
+  const puedeMostrarConfirmacion = estadosPermitidosConfirmacion.includes(estadoNormalizado);
+  
+  // Verificar si el grupo tiene coberturas para generar el PDF
+  const puedeGenerarPDF = puedeMostrarConfirmacion && grupo && grupo.coberturas && Array.isArray(grupo.coberturas) && grupo.coberturas.length > 0;
+
+  // Obtener el ID del cliente tomador para generar la carta de autorización
+  const obtenerClienteTomadorId = () => {
+    if (!grupo || !grupo.coberturas || !Array.isArray(grupo.coberturas)) return null;
+    const tomador = grupo.coberturas.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
+    return tomador?.cliente?.id || tomador?.cliente_id || null;
+  };
+
+  const clienteTomadorId = obtenerClienteTomadorId();
+  const puedeGenerarAutorizacion = puedeMostrarConfirmacion && clienteTomadorId !== null;
 
   return (
     <div style={{ fontFamily: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"` }}>
@@ -184,6 +208,30 @@ const Prospectogrupo = ({
                 <i className="fas fa-folder-open me-1"></i>
                 <span className="d-none d-lg-inline">Documentos</span>
               </button>
+              {puedeGenerarPDF && (
+                <button
+                  className="btn btn-sm btn-outline-danger"
+                  onClick={() => generarPDFConfirmacion(grupo)}
+                  disabled={!resolvedGrupoId}
+                  title="Confirmación de Datos"
+                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                >
+                  <FaFilePdf className="me-1" />
+                  <span className="d-none d-lg-inline">Confirmación</span>
+                </button>
+              )}
+              {puedeGenerarAutorizacion && (
+                <button
+                  className="btn btn-sm btn-outline-danger"
+                  onClick={() => generarPDFAutorizacion(clienteTomadorId)}
+                  disabled={!resolvedGrupoId || !clienteTomadorId}
+                  title="Carta de Autorización"
+                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                >
+                  <FaFilePdf className="me-1" />
+                  <span className="d-none d-lg-inline">Autorización</span>
+                </button>
+              )}
               {puedeRenovar && (
                 <>
                   <button

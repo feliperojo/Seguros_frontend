@@ -485,6 +485,7 @@ const GrupoFamiliarDetail = () => {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [advancing, setAdvancing] = useState(false);
+  const [grupoCompleto, setGrupoCompleto] = useState(null); // 👈 Grupo completo para generar PDF
 
 const [grupoVersion, setGrupoVersion] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
@@ -560,8 +561,9 @@ console.log("Ingreso Familiar:", total);
       setFormData(mapFullToForm(full));
       setGrupoVersion(fullData?.updated_at || fullData?.updatedAt || null);
       setFamilyMembers(mapFullToMembers(full));
-
       
+      // 👈 Guardar grupo completo para generar PDF de confirmación
+      setGrupoCompleto(fullData);
 
       // 👈 Nuevo: Extraer producto de las coberturas
       const producto = getProductoFromCoberturas(fullData.coberturas || []);
@@ -1209,6 +1211,7 @@ const clientesPayload = existentes
           grupoFamiliarId={id}
           onRefresh={reload} // Pasar función de reload para refrescar después de cancelar coberturas
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
+          grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
