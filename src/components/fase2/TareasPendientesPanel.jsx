@@ -6,6 +6,7 @@ import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderOportunidadModal from "../Tareas/ResponderOportunidadModa";
 import { useMentions } from "../../hooks/useMentions";
 import { isUserMentioned, highlightMentions } from "../../utils/mentions";
+import { useAuth } from "../../context/AuthContext";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
@@ -43,6 +44,20 @@ export default function TareasPendientesPanel({
   
   // Ref para rastrear qué logIds ya se están cargando o se cargaron
   const logIdsCargandoRef = useRef(new Set());
+
+  // Obtener usuario actual del contexto de autenticación
+  const { user: currentUser } = useAuth();
+
+  // Combinar tareas con sus comentarios cargados para el hook de menciones
+  const tareasConComentarios = useMemo(() => {
+    return autoItems.map(tarea => ({
+      ...tarea,
+      comments: comentariosTareas[tarea.id] || tarea.comments || []
+    }));
+  }, [autoItems, comentariosTareas]);
+
+  // Hook para detectar menciones en tareas
+  const { isTaskMentioned } = useMentions(currentUser, tareasConComentarios, []);
 
   const formatDate = (v) => {
     if (!v) return "mm/dd/yyyy";
