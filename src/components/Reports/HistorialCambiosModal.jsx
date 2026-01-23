@@ -1,9 +1,15 @@
 // src/components/Historial/HistorialCambiosModal.jsx
+// ✅ MODAL DE SOLO LECTURA: Este componente solo muestra el historial de cambios.
+// NO realiza actualizaciones al backend. Todas las actualizaciones se realizan
+// a través del botón "Guardar" del grupo familiar en GrupoFamiliarDetail.jsx
 import React, { useEffect, useState } from "react";
 import apiRequest from "../../services/api";
-import historialVersionService from "../../services/HistorialVersionService";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
-// Nombres bonitos de campos
+// ==================== CONSTANTES ====================
+
+const CAMPOS_IGNORAR = new Set(['updated_at', 'updatedAt']);
+
 const FIELD_LABELS = {
   ingreso_familiar_anual: "Ingreso familiar anual",
   personas_cobertura: "Personas en cobertura",
@@ -21,7 +27,6 @@ const FIELD_LABELS = {
   compania: "Compañía",
 };
 
-// Labels para campos de cliente
 const CLIENTE_FIELD_LABELS = {
   nombre_completo: "Nombre completo",
   primer_nombre: "Primer nombre",
@@ -41,11 +46,18 @@ const CLIENTE_FIELD_LABELS = {
   zip_code: "ZIP Code",
 };
 
+const COB_FIELDS = [
+  "plan", "metal", "red", "grupo", "estado_cobertura", "cobertura_tipo",
+  "codigo_poliza", "precio", "ano_cobertura", "fecha_activacion",
+  "fecha_cancelacion", "fecha_retiro", "elegibilidad",
+];
+
+// ==================== HELPERS ====================
+
 const formatDateTime = (value) => {
   if (!value) return "";
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
 };
 
 const formatValue = (val) => {
@@ -60,27 +72,31 @@ const formatValue = (val) => {
   return String(val);
 };
 
-// Obtiene el label bonito para un campo
+const normalizeValue = (val) => {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val.trim();
+  if (typeof val === "object") {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return String(val);
+    }
+  }
+  return val;
+};
+
 const getFieldLabel = (fieldKey) => {
-  // Primero intenta con FIELD_LABELS
   if (FIELD_LABELS[fieldKey]) return FIELD_LABELS[fieldKey];
-  
-  // Si es un campo de cliente, extrae la parte después de "cliente."
   if (fieldKey.startsWith("cliente.")) {
     const clienteField = fieldKey.replace("cliente.", "");
     return CLIENTE_FIELD_LABELS[clienteField] || clienteField;
   }
-  
-  // Si no encuentra nada, devuelve el campo original
   return fieldKey;
 };
-
-// ---------- Helpers para COBERTURAS ----------
 
 const normalizeCoberturas = (val) => {
   if (!val) return [];
   if (Array.isArray(val)) return val;
-
   if (typeof val === "string") {
     try {
       const parsed = JSON.parse(val);
@@ -89,7 +105,6 @@ const normalizeCoberturas = (val) => {
       return [];
     }
   }
-
   return [];
 };
 
@@ -99,29 +114,20 @@ const buildCobKey = (cob, index) => {
   return `idx-${index}`;
 };
 
-// Campos internos que nos interesan comparar en cada cobertura
-const COB_FIELDS = [
-  "plan",
-  "metal",
-  "red",
-  "grupo",
-  "estado_cobertura",
-  "cobertura_tipo",
-  "codigo_poliza",
-  "precio",
-  "ano_cobertura",
-  "fecha_activacion",
-  "fecha_cancelacion",
-  "fecha_retiro",
-  "elegibilidad",
-];
+const obtenerNombreCliente = (cliente) => {
+  return cliente?.nombre_completo ||
+    [cliente?.primer_nombre, cliente?.segundo_nombre, cliente?.apellidos]
+      .filter(Boolean)
+      .join(" ") || "";
+};
 
-// Detecta cambios entre dos listas de coberturas (campo "coberturas" completo)
+// ==================== LÓGICA DE COBERTURAS ====================
+
 const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
   const prevList = normalizeCoberturas(anteriorVal);
   const newList = normalizeCoberturas(nuevoVal);
-
   const prevMap = new Map();
+  
   prevList.forEach((c, idx) => {
     prevMap.set(buildCobKey(c, idx), c);
   });
@@ -131,27 +137,13 @@ const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
   newList.forEach((cNuevo, idx) => {
     const key = buildCobKey(cNuevo, idx);
     const cPrev = prevMap.get(key) || null;
-
     const clientePrev = cPrev?.cliente || {};
     const clienteNuevo = cNuevo?.cliente || {};
-
-    const nombrePrev =
-      clientePrev.nombre_completo ||
-      [clientePrev.primer_nombre, clientePrev.segundo_nombre, clientePrev.apellidos]
-        .filter(Boolean)
-        .join(" ");
-
-    const nombreNuevo =
-      clienteNuevo.nombre_completo ||
-      [clienteNuevo.primer_nombre, clienteNuevo.segundo_nombre, clienteNuevo.apellidos]
-        .filter(Boolean)
-        .join(" ");
-
+    const nombrePrev = obtenerNombreCliente(clientePrev);
+    const nombreNuevo = obtenerNombreCliente(clienteNuevo);
     const parentesco = cNuevo.parentesco || cPrev?.parentesco || "";
-
     const cambios = {};
 
-    // Cambio en nombre del cliente
     if (JSON.stringify(nombrePrev || "") !== JSON.stringify(nombreNuevo || "")) {
       cambios.nombre = {
         label: "Nombre",
@@ -160,7 +152,6 @@ const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
       };
     }
 
-    // Cambio en compañía (por nombre)
     const compPrevNombre = cPrev?.compania?.nombre || "";
     const compNuevaNombre = cNuevo?.compania?.nombre || "";
     if (JSON.stringify(compPrevNombre) !== JSON.stringify(compNuevaNombre)) {
@@ -171,11 +162,9 @@ const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
       };
     }
 
-    // Otros campos planos de la cobertura
     COB_FIELDS.forEach((field) => {
       const vPrev = cPrev ? cPrev[field] : undefined;
       const vNuevo = cNuevo[field];
-
       if (JSON.stringify(vPrev) !== JSON.stringify(vNuevo)) {
         cambios[field] = {
           label: FIELD_LABELS[field] || field,
@@ -185,7 +174,6 @@ const computeCoberturasDiff = (anteriorVal, nuevoVal) => {
       }
     });
 
-    // Si no hay cambios en esta cobertura, no la mostramos
     if (Object.keys(cambios).length === 0) return;
 
     result.push({
@@ -208,17 +196,19 @@ const renderCoberturasDiffCell = (anteriorVal, nuevoVal) => {
       {diff.map((item) => (
         <div key={item.key} className="mb-3 p-2 border rounded" style={{ backgroundColor: "#f8f9fa" }}>
           <div className="d-flex align-items-center mb-2">
-          {item.parentesco && (
+            {item.parentesco && (
               <span className="badge bg-secondary me-2" style={{ fontSize: "0.75rem" }}>
                 {item.parentesco}
               </span>
-          )}
+            )}
             <strong className="text-dark">{item.nombreNuevo}</strong>
           </div>
           <div className="ms-3">
             {Object.values(item.cambios).map((c) => (
               <div key={c.label} className="mb-1 d-flex align-items-center">
-                <span className="text-muted me-2" style={{ fontSize: "0.85rem", minWidth: "100px" }}>{c.label}:</span>
+                <span className="text-muted me-2" style={{ fontSize: "0.85rem", minWidth: "100px" }}>
+                  {c.label}:
+                </span>
                 <span className="text-muted me-2" style={{ fontSize: "0.85rem" }}>
                   {formatValue(c.anterior)}
                 </span>
@@ -235,7 +225,7 @@ const renderCoberturasDiffCell = (anteriorVal, nuevoVal) => {
   );
 };
 
-// ---------- Componente principal ----------
+// ==================== COMPONENTE PRINCIPAL ====================
 
 export default function HistorialCambiosModal({
   show,
@@ -247,97 +237,76 @@ export default function HistorialCambiosModal({
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  // Modo de vista (solo tiene sentido para GrupoFamiliar)
-  const [viewMode, setViewMode] = useState("grupo"); // "grupo" | "clientes"
-  // Estado para controlar qué clientes están expandidos
+  const [viewMode, setViewMode] = useState("grupo");
   const [expandedClientes, setExpandedClientes] = useState(new Set());
 
   const isGrupo = modelo === "GrupoFamiliar";
 
-  // Función para toggle de expansión de cliente
   const toggleCliente = (clienteKey) => {
-    const newExpanded = new Set(expandedClientes);
-    if (newExpanded.has(clienteKey)) {
-      newExpanded.delete(clienteKey);
-    } else {
-      newExpanded.add(clienteKey);
-    }
-    setExpandedClientes(newExpanded);
+    setExpandedClientes((prev) => {
+      const newExpanded = new Set(prev);
+      if (newExpanded.has(clienteKey)) {
+        newExpanded.delete(clienteKey);
+      } else {
+        newExpanded.add(clienteKey);
+      }
+      return newExpanded;
+    });
   };
 
-
-  // Cargar historial cuando se abre el modal
-  useEffect(() => {
-    if (!show || !modeloId) return;
-
-    const fetchHistorial = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
-        const rows = Array.isArray(res.data) ? res.data : [];
-        
-        // Filtrar registros que solo tienen cambios en updated_at o updatedAt
-        const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-        const historialFiltrado = rows.filter((row) => {
-          const cambios = row.cambios || {};
-          const camposCambios = Object.keys(cambios);
-          
-          // Si no hay cambios, excluir el registro
-          if (camposCambios.length === 0) return false;
-          
-          // Si solo tiene campos ignorados (updated_at, updatedAt), excluir
-          const camposRelevantes = camposCambios.filter(campo => !camposIgnorar.has(campo));
-          return camposRelevantes.length > 0;
-        });
-        
-        // Log detallado para debugging
-        if (historialFiltrado.length > 0 && isGrupo) {
-          console.log("📋 Historial recibido del backend:", {
-            totalRegistros: rows.length,
-            registrosFiltrados: historialFiltrado.length,
-            registrosExcluidos: rows.length - historialFiltrado.length,
-            primerRegistro: {
-              id: historialFiltrado[0].id,
-              accion: historialFiltrado[0].accion,
-              usuario: historialFiltrado[0].usuario,
-              total_cambios: historialFiltrado[0].total_cambios,
-              cambiosKeys: Object.keys(historialFiltrado[0].cambios || {}),
-              cambiosSample: Object.keys(historialFiltrado[0].cambios || {}).slice(0, 10).reduce((acc, key) => {
-                acc[key] = historialFiltrado[0].cambios[key];
-                return acc;
-              }, {}),
-              cobertura_clientes: historialFiltrado[0].cobertura_clientes,
+  // Obtener historial de coberturas relacionadas
+  const obtenerHistorialCoberturas = async (grupoId) => {
+    try {
+      const grupoData = await GrupoFamiliarService.getFullById(grupoId);
+      const coberturas = Array.isArray(grupoData?.coberturas) ? grupoData.coberturas : [];
+      
+      const historialesCoberturas = await Promise.all(
+        coberturas
+          .filter(cob => cob?.id)
+          .map(async (cobertura) => {
+            try {
+              const resCob = await apiRequest(`/historial/Cobertura/${cobertura.id}`, "GET");
+              const historialCob = Array.isArray(resCob.data) ? resCob.data : [];
+              
+              return historialCob.map(record => ({
+                ...record,
+                _esCobertura: true,
+                _coberturaId: cobertura.id,
+                _coberturaInfo: {
+                  codigo_poliza: cobertura.codigo_poliza,
+                  plan: cobertura.plan,
+                  cliente_nombre: obtenerNombreCliente(cobertura.cliente) || "Sin nombre",
+                  parentesco: cobertura.parentesco,
+                }
+              }));
+            } catch (err) {
+              console.warn(`Error obteniendo historial de cobertura ${cobertura.id}:`, err);
+              return [];
             }
-          });
-        }
-        
-        setHistorial(historialFiltrado);
-        setSelected(historialFiltrado.length > 0 ? historialFiltrado[0] : null);
-        // Resetear expansión cuando cambia la selección
-        setExpandedClientes(new Set());
-      } catch (e) {
-        console.error("Error cargando historial:", e);
-        setError("No se pudo cargar el historial de cambios.");
-        setSelected(null);
-      } finally {
-        setLoading(false);
-      }
-    };
+          })
+      );
+      
+      return historialesCoberturas.flat();
+    } catch (err) {
+      console.warn("Error obteniendo historial de coberturas:", err);
+      return [];
+    }
+  };
 
-    fetchHistorial();
-  }, [show, modelo, modeloId]);
+  // Filtrar registros relevantes
+  const filtrarRegistrosRelevantes = (rows) => {
+    return rows.filter((row) => {
+      const cambios = row.cambios || {};
+      const camposCambios = Object.keys(cambios);
+      if (camposCambios.length === 0) return false;
+      const camposRelevantes = camposCambios.filter(campo => !CAMPOS_IGNORAR.has(campo));
+      return camposRelevantes.length > 0;
+    });
+  };
 
-  // Resetear expansión cuando cambia el registro seleccionado
-  useEffect(() => {
-    setExpandedClientes(new Set());
-  }, [selected?.id]);
-
-  // Calcular contadores para auto-selección de vista
-  const calcularContadores = (cambios) => {
-    const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-    const keys = Object.keys(cambios || {}).filter(campo => !camposIgnorar.has(campo));
+  // Contar cambios por categoría
+  const contarCambiosPorCategoria = (cambios) => {
+    const keys = Object.keys(cambios || {}).filter(campo => !CAMPOS_IGNORAR.has(campo));
     let grupo = 0;
     let coberturas = 0;
     let clientes = 0;
@@ -359,16 +328,173 @@ export default function HistorialCambiosModal({
     return { grupo, coberturas, clientes };
   };
 
-  // Auto-seleccionar vista de clientes si solo hay cambios en clientes
+  // Agrupar cambios por cliente
+  const agruparCambiosPorCliente = (cambios, coverageGroups, coberturaClientes) => {
+    const clientesMap = new Map();
+    let clientePrincipalNombre = "";
+    const nombrePrincipalCampo = cambios["cliente.nombre_completo"];
+    
+    if (nombrePrincipalCampo) {
+      clientePrincipalNombre = nombrePrincipalCampo.nuevo || nombrePrincipalCampo.anterior || "";
+    }
+
+    // Procesar campos directos de cliente (cliente.*)
+    Object.keys(cambios)
+      .filter(campo => !CAMPOS_IGNORAR.has(campo) && campo.startsWith("cliente."))
+      .forEach((campo) => {
+        const info = cambios[campo];
+        if (!info) return;
+        
+        const fieldKey = campo.replace("cliente.", "");
+        const anteriorNormalizado = normalizeValue(info.anterior);
+        const nuevoNormalizado = normalizeValue(info.nuevo);
+        const same = JSON.stringify(anteriorNormalizado) === JSON.stringify(nuevoNormalizado);
+        
+        if (same && fieldKey !== "nombre_completo") return;
+
+        let clienteNombre = "";
+        if (fieldKey === "nombre_completo") {
+          clienteNombre = nuevoNormalizado || anteriorNormalizado || "Cliente sin nombre";
+          if (clienteNombre && clienteNombre !== "Cliente sin nombre") {
+            clientePrincipalNombre = clienteNombre;
+          }
+        } else {
+          clienteNombre = clientePrincipalNombre || "Cliente Principal";
+        }
+
+        const clienteKey = `cliente-directo-${clienteNombre}`;
+        if (!clientesMap.has(clienteKey)) {
+          clientesMap.set(clienteKey, {
+            key: clienteKey,
+            nombre: clienteNombre,
+            coberturaId: null,
+            cambios: [],
+          });
+        }
+        
+        if (!same || fieldKey === "nombre_completo") {
+          clientesMap.get(clienteKey).cambios.push({
+            campo,
+            fieldKey,
+            info,
+          });
+        }
+      });
+
+    // Procesar cambios de clientes en coberturas (cobertura_X.cliente.*)
+    Object.keys(coverageGroups).forEach((coberturaId) => {
+      const fieldsForCoverage = coverageGroups[coberturaId];
+      const clienteFields = fieldsForCoverage.filter((f) => f.fieldKey.startsWith("cliente."));
+
+      if (clienteFields.length > 0) {
+        let clienteNombre = "";
+        const nombreField = clienteFields.find((f) => f.fieldKey === "cliente.nombre_completo");
+
+        if (nombreField) {
+          const infoNombre = cambios[nombreField.campo] || {};
+          clienteNombre = infoNombre.nuevo || infoNombre.anterior || 
+            coberturaClientes[coberturaId] || `Cliente Cobertura ${coberturaId}`;
+        } else {
+          const primerNombreField = clienteFields.find((f) => f.fieldKey === "cliente.primer_nombre");
+          const apellidosField = clienteFields.find((f) => f.fieldKey === "cliente.apellidos");
+          
+          if (primerNombreField || apellidosField) {
+            const primerNombre = primerNombreField ? 
+              (cambios[primerNombreField.campo]?.nuevo || cambios[primerNombreField.campo]?.anterior || "") : "";
+            const apellidos = apellidosField ? 
+              (cambios[apellidosField.campo]?.nuevo || cambios[apellidosField.campo]?.anterior || "") : "";
+            clienteNombre = [primerNombre, apellidos].filter(Boolean).join(" ") || 
+              coberturaClientes[coberturaId] || `Cliente Cobertura ${coberturaId}`;
+          } else {
+            clienteNombre = coberturaClientes[coberturaId] || `Cliente Cobertura ${coberturaId}`;
+          }
+        }
+
+        const clienteKey = `cobertura-${coberturaId}-${clienteNombre}`;
+        if (!clientesMap.has(clienteKey)) {
+          clientesMap.set(clienteKey, {
+            key: clienteKey,
+            nombre: clienteNombre,
+            coberturaId,
+            cambios: [],
+          });
+        }
+
+        clienteFields.forEach(({ campo, fieldKey }) => {
+          const info = cambios[campo];
+          if (!info) return;
+          
+          const anteriorNormalizado = normalizeValue(info.anterior);
+          const nuevoNormalizado = normalizeValue(info.nuevo);
+          const same = JSON.stringify(anteriorNormalizado) === JSON.stringify(nuevoNormalizado);
+          
+          if (!same) {
+            clientesMap.get(clienteKey).cambios.push({
+              campo,
+              fieldKey,
+              info,
+            });
+          }
+        });
+      }
+    });
+
+    return Array.from(clientesMap.values()).filter((cliente) => cliente.cambios.length > 0);
+  };
+
+  // Cargar historial
+  useEffect(() => {
+    if (!show || !modeloId) return;
+
+    const fetchHistorial = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // Obtener historial del modelo principal
+        const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
+        let rows = Array.isArray(res.data) ? res.data : [];
+        
+        // Si es GrupoFamiliar, obtener también historial de coberturas
+        if (isGrupo && modeloId) {
+          const registrosCoberturas = await obtenerHistorialCoberturas(modeloId);
+          rows = [...rows, ...registrosCoberturas];
+          
+          // Ordenar por fecha (más reciente primero)
+          rows.sort((a, b) => {
+            const fechaA = new Date(a.created_at || a.fecha || 0).getTime();
+            const fechaB = new Date(b.created_at || b.fecha || 0).getTime();
+            return fechaB - fechaA;
+          });
+        }
+        
+        const historialFiltrado = filtrarRegistrosRelevantes(rows);
+        setHistorial(historialFiltrado);
+        setSelected(historialFiltrado.length > 0 ? historialFiltrado[0] : null);
+        setExpandedClientes(new Set());
+      } catch (e) {
+        console.error("Error cargando historial:", e);
+        setError("No se pudo cargar el historial de cambios.");
+        setSelected(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchHistorial();
+  }, [show, modelo, modeloId, isGrupo]);
+
+  useEffect(() => {
+    setExpandedClientes(new Set());
+  }, [selected?.id]);
+
+  // Auto-seleccionar vista de clientes
   useEffect(() => {
     if (selected && selected.cambios) {
-      const contadores = calcularContadores(selected.cambios);
+      const contadores = contarCambiosPorCategoria(selected.cambios);
       const coberturaClientes = selected.cobertura_clientes || {};
       const coverageGroups = {};
-      const keys = Object.keys(selected.cambios || {}).filter(campo => {
-        const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-        return !camposIgnorar.has(campo);
-      });
+      const keys = Object.keys(selected.cambios || {}).filter(campo => !CAMPOS_IGNORAR.has(campo));
       
       keys.forEach((campo) => {
         const match = campo.match(/^cobertura_(\d+)\.(.+)$/);
@@ -388,206 +514,6 @@ export default function HistorialCambiosModal({
 
   if (!show) return null;
 
-  // Función para contar cambios por categoría
-  const contarCambiosPorCategoria = (cambios) => {
-    const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-    const keys = Object.keys(cambios).filter(campo => !camposIgnorar.has(campo));
-    let grupo = 0;
-    let coberturas = 0;
-    let clientes = 0;
-
-    keys.forEach((campo) => {
-      if (campo === "coberturas") {
-        coberturas++;
-      } else if (campo.startsWith("cliente.")) {
-        clientes++;
-      } else if (campo.match(/^cobertura_\d+\.cliente\./)) {
-        clientes++;
-      } else if (campo.match(/^cobertura_\d+\./)) {
-        coberturas++;
-      } else {
-        grupo++;
-      }
-    });
-
-    return { grupo, coberturas, clientes };
-  };
-
-  // Función para agrupar cambios por cliente
-  const agruparCambiosPorCliente = (cambios, coverageGroups, coberturaClientes) => {
-    const clientesMap = new Map();
-
-    // Primero, obtener el nombre del cliente principal si existe
-    let clientePrincipalNombre = "";
-    const nombrePrincipalCampo = cambios["cliente.nombre_completo"];
-    if (nombrePrincipalCampo) {
-      clientePrincipalNombre = nombrePrincipalCampo.nuevo || nombrePrincipalCampo.anterior || "";
-    }
-
-    // Procesar campos directos de cliente (cliente.*)
-    // Filtrar campos ignorados (updated_at, updatedAt)
-    const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-    Object.keys(cambios)
-      .filter(campo => !camposIgnorar.has(campo))
-      .forEach((campo) => {
-      if (campo.startsWith("cliente.")) {
-        const info = cambios[campo];
-        if (!info) return;
-        
-        const fieldKey = campo.replace("cliente.", "");
-        
-        // Normalizar valores para comparación (manejar null, undefined, strings vacíos, objetos)
-        const normalizeValue = (val) => {
-          if (val === null || val === undefined) return "";
-          if (typeof val === "string") return val.trim();
-          if (typeof val === "object") {
-            // Si es un objeto, convertirlo a string para comparación
-            try {
-              return JSON.stringify(val);
-            } catch {
-              return String(val);
-            }
-          }
-          return val;
-        };
-        
-        const anteriorNormalizado = normalizeValue(info.anterior);
-        const nuevoNormalizado = normalizeValue(info.nuevo);
-        
-        // Verificar si hay cambio real
-        const same = JSON.stringify(anteriorNormalizado) === JSON.stringify(nuevoNormalizado);
-        
-        // Si no hay cambio real y no es nombre_completo, saltar
-        if (same && fieldKey !== "nombre_completo") return;
-
-        // Obtener nombre del cliente del cambio
-        let clienteNombre = "";
-        if (fieldKey === "nombre_completo") {
-          clienteNombre = nuevoNormalizado || anteriorNormalizado || "Cliente sin nombre";
-          // Actualizar el nombre principal si lo encontramos
-          if (clienteNombre && clienteNombre !== "Cliente sin nombre") {
-            clientePrincipalNombre = clienteNombre;
-          }
-        } else {
-          clienteNombre = clientePrincipalNombre || "Cliente Principal";
-        }
-
-        const clienteKey = `cliente-directo-${clienteNombre}`;
-        if (!clientesMap.has(clienteKey)) {
-          clientesMap.set(clienteKey, {
-            key: clienteKey,
-            nombre: clienteNombre,
-            coberturaId: null,
-            cambios: [],
-          });
-        }
-        
-        // Solo agregar si hay cambio real (o si es nombre_completo para tener el nombre)
-        if (!same || fieldKey === "nombre_completo") {
-          clientesMap.get(clienteKey).cambios.push({
-            campo,
-            fieldKey,
-            info, // Mantener el info original para mostrar los valores correctos
-          });
-        }
-      }
-    });
-
-    // Procesar cambios de clientes en coberturas (cobertura_X.cliente.*)
-    Object.keys(coverageGroups).forEach((coberturaId) => {
-      const fieldsForCoverage = coverageGroups[coberturaId];
-      const clienteFields = fieldsForCoverage.filter((f) =>
-        f.fieldKey.startsWith("cliente.")
-      );
-
-      if (clienteFields.length > 0) {
-        // Obtener nombre del cliente
-        let clienteNombre = "";
-        const nombreField = clienteFields.find(
-          (f) => f.fieldKey === "cliente.nombre_completo"
-        );
-
-        if (nombreField) {
-          const infoNombre = cambios[nombreField.campo] || {};
-          clienteNombre =
-            infoNombre.nuevo ||
-            infoNombre.anterior ||
-            coberturaClientes[coberturaId] ||
-            `Cliente Cobertura ${coberturaId}`;
-        } else {
-          // Intentar obtener el nombre de otros campos si está disponible
-          const primerNombreField = clienteFields.find(
-            (f) => f.fieldKey === "cliente.primer_nombre"
-          );
-          const apellidosField = clienteFields.find(
-            (f) => f.fieldKey === "cliente.apellidos"
-          );
-          
-          if (primerNombreField || apellidosField) {
-            const primerNombre = primerNombreField ? (cambios[primerNombreField.campo]?.nuevo || cambios[primerNombreField.campo]?.anterior || "") : "";
-            const apellidos = apellidosField ? (cambios[apellidosField.campo]?.nuevo || cambios[apellidosField.campo]?.anterior || "") : "";
-            clienteNombre = [primerNombre, apellidos].filter(Boolean).join(" ") || coberturaClientes[coberturaId] || `Cliente Cobertura ${coberturaId}`;
-          } else {
-            clienteNombre =
-              coberturaClientes[coberturaId] || `Cliente Cobertura ${coberturaId}`;
-          }
-        }
-
-        const clienteKey = `cobertura-${coberturaId}-${clienteNombre}`;
-        if (!clientesMap.has(clienteKey)) {
-          clientesMap.set(clienteKey, {
-            key: clienteKey,
-            nombre: clienteNombre,
-            coberturaId,
-            cambios: [],
-          });
-        }
-
-        clienteFields.forEach(({ campo, fieldKey }) => {
-          const info = cambios[campo];
-          if (!info) return;
-          
-          // Normalizar valores para comparación (manejar null, undefined, strings vacíos, objetos)
-          const normalizeValue = (val) => {
-            if (val === null || val === undefined) return "";
-            if (typeof val === "string") return val.trim();
-            if (typeof val === "object") {
-              // Si es un objeto, convertirlo a string para comparación
-              try {
-                return JSON.stringify(val);
-              } catch {
-                return String(val);
-              }
-            }
-            return val;
-          };
-          
-          const anteriorNormalizado = normalizeValue(info.anterior);
-          const nuevoNormalizado = normalizeValue(info.nuevo);
-          
-          // Verificar si hay cambio real
-          const same = JSON.stringify(anteriorNormalizado) === JSON.stringify(nuevoNormalizado);
-          
-          // Solo agregar si hay cambio real
-          if (!same) {
-            clientesMap.get(clienteKey).cambios.push({
-              campo,
-              fieldKey,
-              info, // Mantener el info original para mostrar los valores correctos
-            });
-          }
-        });
-      }
-    });
-
-    // Filtrar clientes que no tienen cambios reales
-    const clientesConCambios = Array.from(clientesMap.values()).filter(
-      (cliente) => cliente.cambios.length > 0
-    );
-
-    return clientesConCambios;
-  };
-
   const renderDetalleCambios = () => {
     if (!selected) {
       return (
@@ -598,9 +524,7 @@ export default function HistorialCambiosModal({
     }
 
     const cambios = selected.cambios || {};
-    // Filtrar campos ignorados (updated_at, updatedAt)
-    const camposIgnorar = new Set(['updated_at', 'updatedAt']);
-    const keys = Object.keys(cambios).filter(campo => !camposIgnorar.has(campo));
+    const keys = Object.keys(cambios).filter(campo => !CAMPOS_IGNORAR.has(campo));
 
     if (keys.length === 0) {
       return (
@@ -611,53 +535,94 @@ export default function HistorialCambiosModal({
     }
 
     const contadores = contarCambiosPorCategoria(cambios);
-
-    // Cabecera corporativa sobria
+    const esCobertura = selected._esCobertura || false;
+    const coberturaInfo = selected._coberturaInfo || {};
+    
     const header = (
       <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa" }}>
         <div className="card-body p-3">
           <div className="row g-3 mb-2">
             <div className="col-12 col-md-6">
               <div className="mb-2">
-                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Fecha</small>
+                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Fecha
+                </small>
                 <div className="text-dark fw-semibold">{formatDateTime(selected.created_at)}</div>
               </div>
               <div>
-                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Usuario</small>
+                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Usuario
+                </small>
                 <div className="text-dark fw-semibold">{selected.usuario}</div>
               </div>
             </div>
             <div className="col-12 col-md-6">
               <div className="mb-2">
-                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Acción</small>
+                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Acción
+                </small>
                 <span className="badge bg-dark">{selected.accion}</span>
               </div>
               <div>
-                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Cambios</small>
+                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Total Cambios
+                </small>
                 <div className="text-dark fw-semibold">{selected.total_cambios ?? keys.length}</div>
               </div>
             </div>
           </div>
           
-          {/* Contadores por categoría (solo para GrupoFamiliar) - diseño corporativo */}
+          {esCobertura && coberturaInfo && (
+            <div className="row g-2 mt-3 pt-3 border-top">
+              <div className="col-12">
+                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Información de Cobertura
+                </small>
+                <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
+                  <div className="d-flex flex-wrap gap-2 align-items-center">
+                    <span className="badge bg-info text-dark">Cobertura #{selected._coberturaId}</span>
+                    {coberturaInfo.cliente_nombre && (
+                      <span className="text-dark fw-medium">{coberturaInfo.cliente_nombre}</span>
+                    )}
+                    {coberturaInfo.parentesco && (
+                      <span className="badge bg-secondary">{coberturaInfo.parentesco}</span>
+                    )}
+                    {coberturaInfo.codigo_poliza && (
+                      <span className="text-muted small">Póliza: {coberturaInfo.codigo_poliza}</span>
+                    )}
+                    {coberturaInfo.plan && (
+                      <span className="text-muted small">Plan: {coberturaInfo.plan}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
           {isGrupo && (
             <div className="row g-2 mt-3 pt-3 border-top">
               <div className="col-4 text-center">
                 <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
                   <div className="fw-bold text-dark" style={{ fontSize: "1.25rem" }}>{contadores.grupo}</div>
-                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Grupo</small>
+                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Grupo
+                  </small>
                 </div>
               </div>
               <div className="col-4 text-center">
                 <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
                   <div className="fw-bold text-dark" style={{ fontSize: "1.25rem" }}>{contadores.coberturas}</div>
-                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Coberturas</small>
+                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Coberturas
+                  </small>
                 </div>
               </div>
               <div className="col-4 text-center">
                 <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
                   <div className="fw-bold text-dark" style={{ fontSize: "1.25rem" }}>{contadores.clientes}</div>
-                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Clientes</small>
+                  <small className="text-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Clientes
+                  </small>
                 </div>
               </div>
             </div>
@@ -666,11 +631,7 @@ export default function HistorialCambiosModal({
       </div>
     );
 
-    // ==========================
-    // CASO 1: Modelo NO GrupoFamiliar
-    // ==========================
     if (!isGrupo) {
-      // Historial de Cliente (u otros modelos planos)
       return (
         <>
           <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa" }}>
@@ -678,21 +639,29 @@ export default function HistorialCambiosModal({
               <div className="row g-3">
                 <div className="col-12 col-md-6">
                   <div className="mb-2">
-                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Fecha</small>
+                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Fecha
+                    </small>
                     <div className="text-dark fw-semibold">{formatDateTime(selected.created_at)}</div>
                   </div>
                   <div>
-                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Usuario</small>
+                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Usuario
+                    </small>
                     <div className="text-dark fw-semibold">{selected.usuario}</div>
                   </div>
                 </div>
                 <div className="col-12 col-md-6">
                   <div className="mb-2">
-                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Acción</small>
+                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Acción
+                    </small>
                     <span className="badge bg-dark">{selected.accion}</span>
                   </div>
                   <div>
-                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Total Cambios</small>
+                    <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Total Cambios
+                    </small>
                     <div className="text-dark fw-semibold">{keys.length}</div>
                   </div>
                 </div>
@@ -704,9 +673,15 @@ export default function HistorialCambiosModal({
             <table className="table table-sm table-hover align-middle border">
               <thead style={{ backgroundColor: "#e9ecef" }}>
                 <tr>
-                  <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Campo</th>
-                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Anterior</th>
-                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Nuevo</th>
+                  <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Campo
+                  </th>
+                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Anterior
+                  </th>
+                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    Nuevo
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -736,11 +711,6 @@ export default function HistorialCambiosModal({
       );
     }
     
-    // ==========================
-    // CASO 2: GrupoFamiliar (lógica especial coberturas + toggle)
-    // ==========================
-
-    // Agrupar campos tipo "cobertura_63.plan"
     const coverageGroups = {};
     const normalFields = [];
 
@@ -757,67 +727,16 @@ export default function HistorialCambiosModal({
 
     const coberturaClientes = selected.cobertura_clientes || {};
     const clientesAgrupados = agruparCambiosPorCliente(cambios, coverageGroups, coberturaClientes);
-    
-    // Debug detallado para entender la estructura de datos
-    if (viewMode === "clientes") {
-      // Verificar si hay campos de cliente en los cambios
-      const camposCliente = Object.keys(cambios).filter(campo => 
-        campo.startsWith("cliente.") || campo.match(/^cobertura_\d+\.cliente\./)
-      );
-      
-      console.log("🔍 Debug modo CLIENTES:", {
-        totalCamposEnCambios: Object.keys(cambios).length,
-        camposClienteEncontrados: camposCliente,
-        camposClienteDetallados: camposCliente.map(campo => {
-          const info = cambios[campo];
-          const anteriorNorm = info?.anterior === null || info?.anterior === undefined ? "" : String(info.anterior).trim();
-          const nuevoNorm = info?.nuevo === null || info?.nuevo === undefined ? "" : String(info.nuevo).trim();
-          const tieneCambio = anteriorNorm !== nuevoNorm;
-          return {
-            campo,
-            anterior: info?.anterior,
-            nuevo: info?.nuevo,
-            anteriorNormalizado: anteriorNorm,
-            nuevoNormalizado: nuevoNorm,
-            tieneCambio,
-            infoCompleto: info
-          };
-        }),
-        coverageGroups: Object.keys(coverageGroups).map(id => ({
-          id,
-          campos: coverageGroups[id].map(f => f.fieldKey),
-          camposCliente: coverageGroups[id].filter(f => f.fieldKey.startsWith("cliente.")).map(f => f.fieldKey)
-        })),
-        coberturaClientes,
-        clientesAgrupados: clientesAgrupados.map(c => ({
-          nombre: c.nombre,
-          coberturaId: c.coberturaId,
-          numCambios: c.cambios.length,
-          campos: c.cambios.map(cc => ({
-            campo: cc.campo,
-            fieldKey: cc.fieldKey,
-            anterior: cc.info?.anterior,
-            nuevo: cc.info?.nuevo
-          }))
-        }))
-      });
-    }
 
     return (
       <>
         {header}
 
-        {/* Toggle de vista solo para GrupoFamiliar - diseño corporativo */}
         <div className="mb-3">
           <div className="btn-group w-100" role="group">
             <button
               type="button"
-              className={
-                "btn" +
-                (viewMode === "grupo" 
-                  ? " btn-dark" 
-                  : " btn-outline-dark")
-              }
+              className={`btn ${viewMode === "grupo" ? "btn-dark" : "btn-outline-dark"}`}
               onClick={() => setViewMode("grupo")}
               style={{ fontSize: "0.875rem", fontWeight: "500" }}
             >
@@ -830,12 +749,7 @@ export default function HistorialCambiosModal({
             </button>
             <button
               type="button"
-              className={
-                "btn" +
-                (viewMode === "clientes" 
-                  ? " btn-dark" 
-                  : " btn-outline-dark")
-              }
+              className={`btn ${viewMode === "clientes" ? "btn-dark" : "btn-outline-dark"}`}
               onClick={() => setViewMode("clientes")}
               style={{ fontSize: "0.875rem", fontWeight: "500" }}
             >
@@ -853,17 +767,21 @@ export default function HistorialCambiosModal({
           <table className="table table-sm table-hover align-middle border">
             <thead style={{ backgroundColor: "#e9ecef" }}>
               <tr>
-                <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Campo</th>
-                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Anterior</th>
-                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>Nuevo</th>
+                <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Campo
+                </th>
+                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Anterior
+                </th>
+                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Nuevo
+                </th>
               </tr>
             </thead>
             <tbody>
-              {/* Modo CLIENTES: Mostrar clientes agrupados y expandibles */}
               {viewMode === "clientes" ? (
                 clientesAgrupados.length > 0 ? (
                   <>
-                    {/* Mensaje informativo si hay cambios en clientes */}
                     {clientesAgrupados.length > 0 && (
                       <tr>
                         <td colSpan={3} className="py-2 px-3" style={{ backgroundColor: "#e7f3ff", borderLeft: "4px solid #0066cc" }}>
@@ -974,7 +892,6 @@ export default function HistorialCambiosModal({
                 )
               ) : (
                 <>
-                  {/* Campos "normales" (no por cobertura) - Modo GRUPO */}
                   {normalFields.length === 0 && viewMode === "grupo" && clientesAgrupados.length > 0 ? (
                     <tr>
                       <td colSpan={3} className="text-center py-4">
@@ -990,10 +907,8 @@ export default function HistorialCambiosModal({
                     normalFields.map((campo) => {
                       const info = cambios[campo] || {};
                       const label = getFieldLabel(campo);
-
                       const isClienteField = campo.startsWith("cliente.");
 
-                      // En modo GRUPO ocultamos campos de cliente
                       if (viewMode === "grupo" && isClienteField) return null;
 
                       if (campo === "coberturas") {
@@ -1002,15 +917,14 @@ export default function HistorialCambiosModal({
                           <React.Fragment key={campo}>
                             <tr style={{ backgroundColor: "#f8f9fa" }}>
                               <td colSpan={3} className="py-2">
-                                <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</strong>
+                                <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                  {label}
+                                </strong>
                               </td>
                             </tr>
                             <tr>
                               <td colSpan={3} className="pt-2 pb-3">
-                                {renderCoberturasDiffCell(
-                                  info.anterior,
-                                  info.nuevo
-                                )}
+                                {renderCoberturasDiffCell(info.anterior, info.nuevo)}
                               </td>
                             </tr>
                           </React.Fragment>
@@ -1037,67 +951,49 @@ export default function HistorialCambiosModal({
                 </>
               )}
 
-              {/* Bloques agrupados por cobertura_XY.* - Solo en modo GRUPO */}
               {viewMode === "grupo" &&
                 Object.keys(coverageGroups)
-                .sort((a, b) => Number(a) - Number(b))
-                .map((coberturaId) => {
-                  const fieldsForCoverage = coverageGroups[coberturaId];
+                  .sort((a, b) => Number(a) - Number(b))
+                  .map((coberturaId) => {
+                    const fieldsForCoverage = coverageGroups[coberturaId];
+                    const hasNonClientFields = fieldsForCoverage.some((f) => !f.fieldKey.startsWith("cliente."));
 
-                  const hasNonClientFields = fieldsForCoverage.some(
-                    (f) => !f.fieldKey.startsWith("cliente.")
-                  );
+                    if (!hasNonClientFields) return null;
 
-                    if (!hasNonClientFields) {
-                    return null;
-                  }
+                    let clienteNombre = "";
+                    const clienteField = fieldsForCoverage.find(({ fieldKey }) => fieldKey === "cliente.nombre_completo");
 
-                  let clienteNombre = "";
-                  const clienteField = fieldsForCoverage.find(
-                    ({ fieldKey }) => fieldKey === "cliente.nombre_completo"
-                  );
+                    if (clienteField) {
+                      const infoCliente = cambios[clienteField.campo] || {};
+                      clienteNombre = infoCliente.nuevo || infoCliente.anterior || "";
+                    }
 
-                  if (clienteField) {
-                    const infoCliente =
-                      cambios[clienteField.campo] || {};
-                    clienteNombre =
-                      infoCliente.nuevo || infoCliente.anterior || "";
-                  }
+                    const nombreHeader = coberturaClientes[coberturaId] || clienteNombre || "";
 
-                  const nombreHeader =
-                    (coberturaClientes &&
-                      coberturaClientes[coberturaId]) ||
-                    clienteNombre ||
-                    "";
-
-                  return (
-                    <React.Fragment key={`cov-${coberturaId}`}>
+                    return (
+                      <React.Fragment key={`cov-${coberturaId}`}>
                         <tr style={{ backgroundColor: "#f8f9fa" }}>
                           <td colSpan={3} className="py-2">
                             <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                            Cobertura #{coberturaId}
+                              Cobertura #{coberturaId}
                               {nombreHeader && (
                                 <span className="text-muted ms-2 fw-normal" style={{ textTransform: "none" }}>
                                   – {nombreHeader}
                                 </span>
                               )}
-                          </strong>
-                        </td>
-                      </tr>
+                            </strong>
+                          </td>
+                        </tr>
 
-                      {fieldsForCoverage.map(({ campo, fieldKey }) => {
-                        const isClienteField =
-                          fieldKey.startsWith("cliente.");
+                        {fieldsForCoverage.map(({ campo, fieldKey }) => {
+                          const isClienteField = fieldKey.startsWith("cliente.");
+                          if (isClienteField) return null;
 
-                          if (isClienteField) {
-                          return null;
-                        }
-
-                        const info = cambios[campo] || {};
+                          const info = cambios[campo] || {};
                           const niceLabel = getFieldLabel(fieldKey);
 
-                        return (
-                          <tr key={campo}>
+                          return (
+                            <tr key={campo}>
                               <td className="ps-4 text-dark">{niceLabel}</td>
                               <td>
                                 <span className="text-muted" style={{ fontSize: "0.9rem" }}>
@@ -1109,12 +1005,12 @@ export default function HistorialCambiosModal({
                                   {formatValue(info.nuevo)}
                                 </span>
                               </td>
-                          </tr>
-                        );
-                      })}
-                    </React.Fragment>
-                  );
-                })}
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
             </tbody>
           </table>
         </div>
@@ -1124,7 +1020,6 @@ export default function HistorialCambiosModal({
 
   return (
     <>
-      {/* Modal principal */}
       <div
         className="modal fade show"
         tabIndex="-1"
@@ -1178,7 +1073,6 @@ export default function HistorialCambiosModal({
 
               {!loading && !error && historial.length > 0 && (
                 <div className="row">
-                  {/* Lista de versiones */}
                   <div className="col-12 col-xl-5 mb-3">
                     <table className="table table-sm table-hover align-middle">
                       <thead className="table-light">
@@ -1186,40 +1080,52 @@ export default function HistorialCambiosModal({
                           <th>Fecha</th>
                           <th>Usuario</th>
                           <th>Acción</th>
+                          <th>Origen</th>
                           <th>Cambios</th>
                         </tr>
                       </thead>
                       <tbody>
                         {historial.map((row) => {
-                          // Filtrar campos ignorados (updated_at, updatedAt) para el conteo
-                          const camposIgnorar = new Set(['updated_at', 'updatedAt']);
                           const cambiosFiltrados = Object.keys(row.cambios || {}).filter(
-                            campo => !camposIgnorar.has(campo)
+                            campo => !CAMPOS_IGNORAR.has(campo)
                           );
                           const totalCambios = cambiosFiltrados.length;
-                          const isActive =
-                            selected && selected.id === row.id;
+                          const isActive = selected && selected.id === row.id;
+                          const esCobertura = row._esCobertura || false;
+                          const coberturaInfo = row._coberturaInfo || {};
 
                           return (
                             <tr
-                              key={row.id}
-                              className={
-                                isActive ? "table-primary" : ""
-                              }
+                              key={`${row.id}-${esCobertura ? row._coberturaId : ''}`}
+                              className={isActive ? "table-primary" : ""}
                               style={{ cursor: "pointer" }}
                               onClick={() => setSelected(row)}
                             >
                               <td>{formatDateTime(row.created_at)}</td>
                               <td>{row.usuario}</td>
                               <td>
-                                <span className="badge bg-secondary">
-                                  {row.accion}
-                                </span>
+                                <span className="badge bg-secondary">{row.accion}</span>
                               </td>
                               <td>
-                                {totalCambios > 0
-                                  ? `${totalCambios} cambio(s)`
-                                  : "—"}
+                                {esCobertura ? (
+                                  <div className="small">
+                                    <span className="badge bg-info text-dark" style={{ fontSize: "0.7rem" }}>
+                                      Cobertura
+                                    </span>
+                                    {coberturaInfo.cliente_nombre && (
+                                      <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
+                                        {coberturaInfo.cliente_nombre}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="badge bg-dark" style={{ fontSize: "0.7rem" }}>
+                                    Grupo
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                {totalCambios > 0 ? `${totalCambios} cambio(s)` : "—"}
                               </td>
                             </tr>
                           );
@@ -1229,11 +1135,10 @@ export default function HistorialCambiosModal({
                     <div className="border rounded p-2 mt-2" style={{ backgroundColor: "#f8f9fa" }}>
                       <small className="text-muted" style={{ fontSize: "0.8rem" }}>
                         Haz clic en una fila para ver el detalle de los campos modificados.
-                    </small>
+                      </small>
                     </div>
                   </div>
 
-                  {/* Detalle de la versión seleccionada */}
                   <div className="col-12 col-xl-7">
                     {renderDetalleCambios()}
                   </div>
@@ -1255,7 +1160,6 @@ export default function HistorialCambiosModal({
         </div>
       </div>
 
-      {/* Backdrop */}
       <div
         className="modal-backdrop fade show"
         onClick={onClose}

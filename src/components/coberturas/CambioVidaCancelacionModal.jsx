@@ -27,6 +27,10 @@ const CambioVidaCancelacionModal = ({
   onClose,
   onSuccess,
   grupoFamiliarId,
+  // ✅ NUEVO: Callback para actualizar estado local sin llamar al backend
+  onUpdateLocal = null,
+  // ✅ NUEVO: Si es true, el modal solo actualiza estado local (no llama al backend)
+  soloActualizarLocal = false
 }) => {
   const [coberturas, setCoberturas] = useState([]);
   const [coberturasSeleccionadas, setCoberturasSeleccionadas] = useState(new Set());
@@ -301,32 +305,65 @@ const CambioVidaCancelacionModal = ({
         const datos = renovacionCoberturas.get(id);
         const renovar = datos?.renovar ?? false;
         const fechaRetiroIndividual = datos?.fecha_retiro || null;
+        const cobertura = coberturas.find(c => c.id === id);
         
         // FLUJO 1: Cancelación (continúa activo)
         if (renovar === true) {
           return {
             cobertura_id: Number(id),
+            cliente_id: cobertura?.cliente?.id || cobertura?.cliente_id || null,
             renovar: true,
             activo: true, // Se mantiene activo (NO se actualiza a false)
             vigente: false, // Se actualiza a false porque hay fecha de cancelación
             estado_cobertura: "No", // Se actualiza a "No" porque hay fecha de cancelación
             fecha_cancelacion: fechaCancelacion || null,
             fecha_retiro: null, // No se actualiza (null explícito)
+            motivo_cancelacion: motivoCancelacion || null,
+            nota_cancel: notaCancel || null,
           };
         }
         
         // FLUJO 2: Retiro (no continúa activo)
         return {
           cobertura_id: Number(id),
+          cliente_id: cobertura?.cliente?.id || cobertura?.cliente_id || null,
           renovar: false,
           activo: false, // Se actualiza a false
           vigente: false, // Se actualiza a false
           estado_cobertura: "No", // Se actualiza a "No"
           fecha_cancelacion: fechaCancelacion || null,
           fecha_retiro: fechaRetiroIndividual || null, // Se actualiza con la fecha de retiro
+          motivo_cancelacion: motivoCancelacion || null,
+          nota_cancel: notaCancel || null,
         };
       });
 
+      // ✅ MODO LOCAL: Solo actualizar estado local, NO llamar al backend
+      if (soloActualizarLocal && onUpdateLocal) {
+        console.log("🔄 [CambioVidaCancelacionModal] Modo local: actualizando estado sin llamar al backend", {
+          cantidadCoberturas: datosRenovacion.length,
+          datosRenovacion
+        });
+
+        // Llamar al callback para actualizar el estado local
+        onUpdateLocal(datosRenovacion, {
+          fecha_cancelacion: fechaCancelacion,
+          motivo_cancelacion: motivoCancelacion,
+          nota_cancel: notaCancel,
+        });
+
+        setSuccess(true);
+        
+        // Cerrar el modal después de un breve delay
+        setTimeout(() => {
+          onClose();
+        }, 1000);
+        
+        setLoading(false);
+        return;
+      }
+
+      // ✅ MODO TRADICIONAL: Llamar al backend (comportamiento original)
       // Construir payload principal con campos comunes
       const payload = {
         cobertura_ids: Array.from(coberturasSeleccionadas).map(Number),
@@ -735,7 +772,11 @@ const CambioVidaCancelacionModal = ({
                   <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
                     <div className="text-muted small">
                       <i className="fas fa-shield-alt me-1"></i>
-                      Esta operación será registrada en el historial del grupo familiar
+                      {soloActualizarLocal ? (
+                        "Los cambios se aplicarán localmente. Usa 'Guardar' del grupo familiar para enviarlos al backend."
+                      ) : (
+                        "Esta operación será registrada en el historial del grupo familiar"
+                      )}
                     </div>
                     <div className="d-flex gap-2">
                       <Button 
@@ -764,12 +805,12 @@ const CambioVidaCancelacionModal = ({
                               size="sm"
                               className="me-2"
                             />
-                            Procesando...
+                            {soloActualizarLocal ? "Aplicando..." : "Procesando..."}
                           </>
                         ) : (
                           <>
                             <i className="fas fa-check-double me-2"></i>
-                            Confirmar Operación
+                            {soloActualizarLocal ? "Aplicar Cambios" : "Confirmar Operación"}
                           </>
                         )}
                       </Button>

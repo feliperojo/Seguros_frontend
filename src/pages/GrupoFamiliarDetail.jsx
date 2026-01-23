@@ -5,6 +5,7 @@ import Prospectogrupo from "../components/fase2/Prospectogrupo";
 import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
+import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
@@ -496,6 +497,7 @@ const GrupoFamiliarDetail = () => {
 const [grupoVersion, setGrupoVersion] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
+  const [showRetiroModal, setShowRetiroModal] = useState(false);
 
   const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
   const showToast = (type, title, message) => {
@@ -503,6 +505,107 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     // Autocierre en 3.5s
     setTimeout(() => setToast((t) => ({ ...t, show: false })), 3500);
   };
+
+  // ✅ Callback para actualizar estado local cuando el modal de retiro/cancelación guarda cambios
+  // Este callback actualiza familyMembers sin llamar al backend
+  // Recibe: datosRenovacion (array de objetos con cobertura_id, cliente_id, y campos de retiro/cancelación)
+  //         grupoData (objeto opcional con datos del grupo)
+  const handleRetiroUpdateLocal = useCallback((datosRenovacion, grupoData) => {
+    console.log("🔄 [handleRetiroUpdateLocal] Actualizando estado local con cambios de retiro/cancelación:", {
+      cantidadCoberturas: datosRenovacion.length,
+      datosRenovacion,
+      grupoData
+    });
+
+    // Actualizar familyMembers con los cambios de retiro/cancelación
+    setFamilyMembers((prevMembers) => {
+      if (!Array.isArray(prevMembers)) return prevMembers;
+      
+      return prevMembers.map((member) => {
+        // Buscar si esta cobertura tiene cambios de retiro/cancelación
+        // Buscar por cobertura_id (prioritario) o por cliente_id
+        const datosCobertura = datosRenovacion.find(
+          datos => {
+            // Comparar por cobertura_id si existe
+            if (datos.cobertura_id && member.cobertura_id) {
+              return datos.cobertura_id === member.cobertura_id;
+            }
+            // Si no, comparar por cliente_id
+            if (datos.cliente_id && member.cliente_id) {
+              return datos.cliente_id === member.cliente_id;
+            }
+            return false;
+          }
+        );
+
+        if (datosCobertura) {
+          console.log("✅ [handleRetiroUpdateLocal] Actualizando miembro:", {
+            cobertura_id: member.cobertura_id,
+            cliente_id: member.cliente_id,
+            cambios: {
+              fecha_cancelacion: datosCobertura.fecha_cancelacion,
+              fecha_retiro: datosCobertura.fecha_retiro,
+              activo: datosCobertura.activo,
+              vigente: datosCobertura.vigente,
+              estado_cobertura: datosCobertura.estado_cobertura,
+            }
+          });
+
+          // Formatear fechas a formato YYYY-MM-DD si vienen como string ISO
+          const formatDate = (dateStr) => {
+            if (!dateStr) return null;
+            if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+              return dateStr;
+            }
+            try {
+              const d = new Date(dateStr);
+              if (isNaN(d.getTime())) return null;
+              const year = d.getFullYear();
+              const month = String(d.getMonth() + 1).padStart(2, "0");
+              const day = String(d.getDate()).padStart(2, "0");
+              return `${year}-${month}-${day}`;
+            } catch {
+              return null;
+            }
+          };
+
+          // Actualizar los campos de retiro/cancelación en el miembro
+          const memberActualizado = {
+            ...member,
+            fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
+            fecha_retiro: formatDate(datosCobertura.fecha_retiro),
+            nota_cancel: datosCobertura.nota_cancel || null,
+            nota_retiro: datosCobertura.nota_retiro || null,
+            activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.activo,
+            vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.vigente,
+            estado_cobertura: datosCobertura.estado_cobertura || member.estado_cobertura,
+            motivo_cancelacion: datosCobertura.motivo_cancelacion || null,
+          };
+
+          // También actualizar en el objeto cobertura si existe
+          if (member.cobertura) {
+            memberActualizado.cobertura = {
+              ...member.cobertura,
+              fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
+              fecha_retiro: formatDate(datosCobertura.fecha_retiro),
+              nota_cancel: datosCobertura.nota_cancel || null,
+              nota_retiro: datosCobertura.nota_retiro || null,
+              activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.cobertura.activo,
+              vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.cobertura.vigente,
+              estado_cobertura: datosCobertura.estado_cobertura || member.cobertura.estado_cobertura,
+              motivo_cancelacion: datosCobertura.motivo_cancelacion || null,
+            };
+          }
+
+          return memberActualizado;
+        }
+
+        return member;
+      });
+    });
+
+    showToast("success", "Cambios aplicados", "Los cambios de retiro/cancelación se aplicaron localmente. Usa 'Guardar' del grupo familiar para enviarlos al backend.");
+  }, [showToast]);
 
 
 
@@ -1261,6 +1364,8 @@ const clientesPayload = existentes
           onRefresh={reload} // Pasar función de reload para refrescar después de cancelar coberturas
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
           grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
+          onOpenRetiroModal={() => setShowRetiroModal(true)} // ✅ Callback para abrir modal de retiro (RetiroCancelacionModal)
+          onRetiroUpdateLocal={handleRetiroUpdateLocal} // ✅ Callback para actualizar estado local cuando CambioVidaCancelacionModal guarda cambios
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
@@ -1303,6 +1408,19 @@ const clientesPayload = existentes
 
 
         )}
+
+        {/* ✅ Modal de Retiro/Cancelación - Solo actualiza estado local */}
+        <RetiroCancelacionModal
+          show={showRetiroModal}
+          onHide={() => setShowRetiroModal(false)}
+          grupoFamiliar={grupoCompleto}
+          soloActualizarLocal={true}
+          onUpdateLocal={handleRetiroUpdateLocal}
+          onSave={() => {
+            // Este callback no se usará en modo local, pero lo mantenemos para compatibilidad
+            setShowRetiroModal(false);
+          }}
+        />
         </div>
       </div>
     </div>

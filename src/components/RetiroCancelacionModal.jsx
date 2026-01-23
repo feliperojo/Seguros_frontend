@@ -21,7 +21,16 @@ const normalizeDate = (dateString) => {
   return `${year}-${month}-${day}`;
 };
 
-const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
+const RetiroCancelacionModal = ({ 
+  show, 
+  onHide, 
+  grupoFamiliar, 
+  onSave,
+  // ✅ NUEVO: Callback para actualizar estado local sin llamar al backend
+  onUpdateLocal = null,
+  // ✅ NUEVO: Si es true, el modal solo actualiza estado local (no llama al backend)
+  soloActualizarLocal = false
+}) => {
   const [coberturas, setCoberturas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [personasTaxes, setPersonasTaxes] = useState(grupoFamiliar?.personas_taxes || 0);
@@ -136,6 +145,35 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // ✅ MODO LOCAL: Solo actualizar estado local, NO llamar al backend
+      if (soloActualizarLocal && onUpdateLocal) {
+        // Preparar los datos actualizados para cada cobertura
+        const coberturasActualizadas = coberturas.map(cobertura => ({
+          cobertura_id: cobertura.id,
+          cliente_id: cobertura.cliente?.id || cobertura.cliente_id,
+          fecha_cancelacion: cobertura.fecha_cancelacion ? normalizeDate(cobertura.fecha_cancelacion) : null,
+          fecha_retiro: cobertura.fecha_retiro ? normalizeDate(cobertura.fecha_retiro) : null,
+          nota_cancel: cobertura.nota_cancel?.trim() || null,
+          nota_retiro: cobertura.nota_retiro?.trim() || null,
+          activo: cobertura.activo ?? false,
+          vigente: cobertura.vigente ?? true,
+          estado_cobertura: cobertura.estado_cobertura,
+          motivo_cancelacion: cobertura.motivo_cancelacion?.trim() || null,
+        }));
+
+        // Llamar al callback para actualizar el estado local
+        onUpdateLocal(coberturasActualizadas, {
+          personas_taxes: personasTaxes,
+          personas_cobertura: personasCobertura,
+        });
+
+        // Cerrar el modal
+        onHide();
+        setLoading(false);
+        return;
+      }
+
+      // ✅ MODO TRADICIONAL: Llamar al backend (comportamiento original)
       for (const cobertura of coberturas) {
         const payload = {
           fecha_cancelacion: cobertura.fecha_cancelacion ? normalizeDate(cobertura.fecha_cancelacion) : null,
@@ -307,10 +345,22 @@ const RetiroCancelacionModal = ({ show, onHide, grupoFamiliar, onSave }) => {
 
         <Modal.Footer>
           <Button variant="secondary" onClick={onHide}>Cerrar</Button>
-          <Button variant="primary" onClick={handleSave} disabled={loading || !cambiosDetectados}>
-            {loading ? "Guardando..." : "Guardar Cambios"}
+          <Button 
+            variant="primary" 
+            onClick={handleSave} 
+            disabled={loading || (!soloActualizarLocal && !cambiosDetectados)}
+          >
+            {loading 
+              ? "Guardando..." 
+              : soloActualizarLocal 
+                ? "Aplicar Cambios" 
+                : "Guardar Cambios"}
           </Button>
-
+          {soloActualizarLocal && (
+            <small className="text-muted ms-2" style={{ fontSize: "0.75rem" }}>
+              Los cambios se aplicarán localmente. Usa "Guardar" del grupo familiar para enviarlos al backend.
+            </small>
+          )}
         </Modal.Footer>
 
       </Modal>
