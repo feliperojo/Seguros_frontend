@@ -304,12 +304,20 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     payload.fecha_retiro = fechaRetiro;
   }
   
-  // Incluir notas si tienen valores
-  if (notaCancel) payload.nota_cancel = notaCancel;
-  if (notaRetiro) payload.nota_retiro = notaRetiro;
+  // ✅ IMPORTANTE: Incluir notas y motivo_cancelacion cuando hay fechas de retiro/cancelación
+  // Esto es necesario para que el backend pueda crear el registro retiro_cancelacion
+  // Incluir incluso si están vacíos cuando hay fechas relacionadas
+  if (m.fecha_cancelacion !== undefined || m?.cobertura?.fecha_cancelacion !== undefined || fechaCancelacion) {
+    payload.nota_cancel = notaCancel || null;
+  }
+  if (m.fecha_retiro !== undefined || m?.cobertura?.fecha_retiro !== undefined || fechaRetiro) {
+    payload.nota_retiro = notaRetiro || null;
+  }
   
-  // motivo_cancelacion: incluir si tiene valor (string no vacío)
-  if (motivoCancelacion) payload.motivo_cancelacion = motivoCancelacion;
+  // motivo_cancelacion: incluir cuando hay fecha_cancelacion (necesario para retiro_cancelacion)
+  if (m.fecha_cancelacion !== undefined || m?.cobertura?.fecha_cancelacion !== undefined || fechaCancelacion) {
+    payload.motivo_cancelacion = motivoCancelacion || null;
+  }
   
   // activo: SIEMPRE incluir (valores definidos por CambioVidaCancelacionModal)
   // Si está definido, usar ese valor; si no, usar true por defecto

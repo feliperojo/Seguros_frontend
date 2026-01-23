@@ -1865,17 +1865,31 @@ const activeNormalized = useMemo(
                             )}
 
                             {m.fecha_retiro && (
-                              <Field label="Fecha de Retiro" className="col-md-3">
-                                <input
-                                  type="date"
-                                  className="form-control form-control-sm"
-                                  name="fecha_retiro"
-                                  value={(m.fecha_retiro || "").slice(0, 10)}
-                                  onChange={onChange}
-                                  disabled={true}
-                                  title="Este campo solo puede ser modificado por procesos automáticos de renovación"
-                                />
-                              </Field>
+                              <>
+                                <Field label="Fecha de Retiro" className="col-md-3">
+                                  <input
+                                    type="date"
+                                    className="form-control form-control-sm"
+                                    name="fecha_retiro"
+                                    value={(m.fecha_retiro || "").slice(0, 10)}
+                                    onChange={onChange}
+                                    disabled={true}
+                                    title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                                  />
+                                </Field>
+                                <Field label="Activo" className="col-md-3">
+                                  <select
+                                    className="form-select form-select-sm rounded-lg border-gray-300"
+                                    name="activo"
+                                    value={m.activo === true || m.activo === "true" || m.activo === 1 ? "true" : "false"}
+                                    disabled={true}
+                                    title="Este campo solo puede ser modificado por procesos automáticos de renovación"
+                                  >
+                                    <option value="true">Sí</option>
+                                    <option value="false">No</option>
+                                  </select>
+                                </Field>
+                              </>
                             )}
 
                             {(m.nota_retiro || m.nota_cancel) && (

@@ -980,21 +980,32 @@ const clientesPayload = existentes
      
      // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
      // Estos campos pueden haber sido actualizados por el modal de retiro
-     // y deben enviarse al backend para mantener la sincronización
+     // y deben enviarse al backend para mantener la sincronización y crear el registro retiro_cancelacion
      if (m.fecha_cancelacion !== undefined) {
        cobertura.fecha_cancelacion = cleanDate(m.fecha_cancelacion);
+       // Si hay fecha_cancelacion, asegurar que nota_cancel y motivo_cancelacion se envíen (incluso si son null)
+       if (m.nota_cancel !== undefined) {
+         cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
+       } else if (m.fecha_cancelacion) {
+         // Si hay fecha pero no nota definida, enviar null explícitamente
+         cobertura.nota_cancel = null;
+       }
+       if (m.motivo_cancelacion !== undefined) {
+         cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
+       } else if (m.fecha_cancelacion) {
+         // Si hay fecha pero no motivo definido, enviar null explícitamente
+         cobertura.motivo_cancelacion = null;
+       }
      }
      if (m.fecha_retiro !== undefined) {
        cobertura.fecha_retiro = cleanDate(m.fecha_retiro);
-     }
-     if (m.nota_cancel !== undefined) {
-       cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
-     }
-     if (m.nota_retiro !== undefined) {
-       cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
-     }
-     if (m.motivo_cancelacion !== undefined) {
-       cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
+       // Si hay fecha_retiro, asegurar que nota_retiro se envíe (incluso si es null)
+       if (m.nota_retiro !== undefined) {
+         cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
+       } else if (m.fecha_retiro) {
+         // Si hay fecha pero no nota definida, enviar null explícitamente
+         cobertura.nota_retiro = null;
+       }
      }
      
      // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
@@ -1002,13 +1013,26 @@ const clientesPayload = existentes
      // y deben enviarse al backend para mantener la sincronización
      // No usar stripNulls directamente porque eliminaría estos campos cuando son null
      // En su lugar, crear un objeto limpio preservando estos campos especiales
+     // ✅ Campos protegidos: incluyen campos de retiro/cancelación necesarios para crear registro retiro_cancelacion
      const camposProtegidos = ['fecha_cancelacion', 'fecha_retiro', 'nota_cancel', 'nota_retiro', 'motivo_cancelacion', 'activo', 'vigente'];
      const valoresProtegidos = {};
      
      // Guardar valores de campos protegidos antes de stripNulls
+     // ✅ IMPORTANTE: Incluir campos incluso si son null cuando hay fechas relacionadas
      camposProtegidos.forEach(campo => {
        if (cobertura[campo] !== undefined) {
          valoresProtegidos[campo] = cobertura[campo];
+       } else {
+         // Si hay fecha_cancelacion o fecha_retiro, asegurar que los campos relacionados se incluyan
+         if (campo === 'nota_cancel' && cobertura.fecha_cancelacion) {
+           valoresProtegidos[campo] = null;
+         }
+         if (campo === 'nota_retiro' && cobertura.fecha_retiro) {
+           valoresProtegidos[campo] = null;
+         }
+         if (campo === 'motivo_cancelacion' && cobertura.fecha_cancelacion) {
+           valoresProtegidos[campo] = null;
+         }
        }
      });
      
