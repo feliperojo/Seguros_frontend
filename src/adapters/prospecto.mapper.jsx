@@ -229,6 +229,13 @@ const payload = {
     codigo_postal: pick("codigo_postal"),
     condado: pick("condado"),
     dir_correspondencia: pick("dir_correspondencia"),
+    social: pick("social"),
+    status: pick("status"),
+    auscis: pick("auscis"),
+    tarjeta_numero: pick("tarjeta_numero"),
+    fecha_emision: cleanDate(pick("fecha_emision")),
+    fecha_expiracion: cleanDate(pick("fecha_expiracion")),
+    categoria: pick("categoria"),
   };
 
   // 👇 SOLO agregar 'id' si es un cliente REAL de la BD
@@ -274,19 +281,33 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     dia_pago: m.dia_pago ?? null,
   };
   
-  // ✅ PRESERVAR campos protegidos solo si YA tienen valores establecidos (de renovación/reactivación)
-  // Esto evita que se reseteen cuando el backend hace UPDATE completo
-  const fechaCancelacion = cleanDate(m.fecha_cancelacion);
-  const fechaRetiro = cleanDate(m.fecha_retiro);
-  const notaCancel = (m.nota_cancel || "").trim();
-  const notaRetiro = (m.nota_retiro || "").trim();
-  const motivoCancelacion = (m.motivo_cancelacion || "").trim();
+  // ✅ PRESERVAR campos protegidos (de renovación/reactivación/retiro)
+  // IMPORTANTE: Estos campos pueden venir del miembro directamente o del objeto cobertura
+  // Se incluyen siempre que estén presentes (incluso si son null para permitir limpiarlos)
+  const fechaCancelacion = cleanDate(
+    m.fecha_cancelacion ?? m?.cobertura?.fecha_cancelacion ?? null
+  );
+  const fechaRetiro = cleanDate(
+    m.fecha_retiro ?? m?.cobertura?.fecha_retiro ?? null
+  );
+  const notaCancel = (m.nota_cancel ?? m?.cobertura?.nota_cancel ?? "").trim();
+  const notaRetiro = (m.nota_retiro ?? m?.cobertura?.nota_retiro ?? "").trim();
+  const motivoCancelacion = (m.motivo_cancelacion ?? m?.cobertura?.motivo_cancelacion ?? "").trim();
   
-  // Solo incluir si tienen valores válidos (no null/vacío)
-  if (fechaCancelacion) payload.fecha_cancelacion = fechaCancelacion;
-  if (fechaRetiro) payload.fecha_retiro = fechaRetiro;
+  // Incluir fecha_cancelacion si está presente (incluso si es null para permitir limpiarla)
+  if (m.fecha_cancelacion !== undefined || m?.cobertura?.fecha_cancelacion !== undefined) {
+    payload.fecha_cancelacion = fechaCancelacion;
+  }
+  
+  // Incluir fecha_retiro si está presente (incluso si es null para permitir limpiarla)
+  if (m.fecha_retiro !== undefined || m?.cobertura?.fecha_retiro !== undefined) {
+    payload.fecha_retiro = fechaRetiro;
+  }
+  
+  // Incluir notas si tienen valores
   if (notaCancel) payload.nota_cancel = notaCancel;
   if (notaRetiro) payload.nota_retiro = notaRetiro;
+  
   // motivo_cancelacion: incluir si tiene valor (string no vacío)
   if (motivoCancelacion) payload.motivo_cancelacion = motivoCancelacion;
   

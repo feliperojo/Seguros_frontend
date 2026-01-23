@@ -7,7 +7,7 @@ import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
-import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls } from "../adapters/prospecto.mapper";
+import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
 
@@ -133,7 +133,13 @@ const mapClienteForSave = (m) => {
       whatsapp: !!pick("whatsapp"),
       telegram: !!pick("telegram"),
       texto_sms: !!pick("texto_sms"),
+      social: pick("social"),
       status: pick("status"),
+      auscis: pick("auscis"),
+      tarjeta_numero: pick("tarjeta_numero"),
+      fecha_emision: date10(pick("fecha_emision")),
+      fecha_expiracion: date10(pick("fecha_expiracion")),
+      categoria: pick("categoria"),
       tipo_ingreso: pick("tipo_ingreso"),
       actividad_economica: pick("actividad_economica"),
       empleador: pick("empleador"),
@@ -868,7 +874,50 @@ const clientesPayload = existentes
      if (productoCotizacion?.label) {
        cobertura.cobertura_tipo = productoCotizacion?.label;
      }
-     return stripNulls(cobertura);
+     
+     // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
+     // Estos campos pueden haber sido actualizados por el modal de retiro
+     // y deben enviarse al backend para mantener la sincronización
+     if (m.fecha_cancelacion !== undefined) {
+       cobertura.fecha_cancelacion = cleanDate(m.fecha_cancelacion);
+     }
+     if (m.fecha_retiro !== undefined) {
+       cobertura.fecha_retiro = cleanDate(m.fecha_retiro);
+     }
+     if (m.nota_cancel !== undefined) {
+       cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
+     }
+     if (m.nota_retiro !== undefined) {
+       cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
+     }
+     if (m.motivo_cancelacion !== undefined) {
+       cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
+     }
+     
+     // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
+     // Estos campos pueden haber sido actualizados por el modal de retiro
+     // y deben enviarse al backend para mantener la sincronización
+     // No usar stripNulls directamente porque eliminaría estos campos cuando son null
+     // En su lugar, crear un objeto limpio preservando estos campos especiales
+     const camposProtegidos = ['fecha_cancelacion', 'fecha_retiro', 'nota_cancel', 'nota_retiro', 'motivo_cancelacion', 'activo', 'vigente'];
+     const valoresProtegidos = {};
+     
+     // Guardar valores de campos protegidos antes de stripNulls
+     camposProtegidos.forEach(campo => {
+       if (cobertura[campo] !== undefined) {
+         valoresProtegidos[campo] = cobertura[campo];
+       }
+     });
+     
+     // Limpiar otros campos null/undefined
+     const coberturaLimpia = stripNulls(cobertura);
+     
+     // Restaurar campos protegidos (incluso si son null para permitir limpiarlos en el backend)
+     Object.keys(valoresProtegidos).forEach(campo => {
+       coberturaLimpia[campo] = valoresProtegidos[campo];
+     });
+     
+     return coberturaLimpia;
     });
 // quita los nulls del caso (1)
 
