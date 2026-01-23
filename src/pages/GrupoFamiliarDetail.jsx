@@ -1012,10 +1012,21 @@ const clientesPayload = existentes
        }
      });
      
+     // ✅ Asegurar que activo y vigente SIEMPRE estén presentes (valores definidos por CambioVidaCancelacionModal)
+     // Si no están definidos, usar valores por defecto
+     if (valoresProtegidos.activo === undefined) {
+       valoresProtegidos.activo = true; // Por defecto: activo
+     }
+     if (valoresProtegidos.vigente === undefined) {
+       // Por defecto: false si hay fecha_cancelacion, true si no
+       valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
+     }
+     
      // Limpiar otros campos null/undefined
      const coberturaLimpia = stripNulls(cobertura);
      
      // Restaurar campos protegidos (incluso si son null para permitir limpiarlos en el backend)
+     // activo y vigente SIEMPRE se incluyen
      Object.keys(valoresProtegidos).forEach(campo => {
        coberturaLimpia[campo] = valoresProtegidos[campo];
      });
@@ -1364,8 +1375,6 @@ const clientesPayload = existentes
           onRefresh={reload} // Pasar función de reload para refrescar después de cancelar coberturas
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
           grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
-          onOpenRetiroModal={() => setShowRetiroModal(true)} // ✅ Callback para abrir modal de retiro (RetiroCancelacionModal)
-          onRetiroUpdateLocal={handleRetiroUpdateLocal} // ✅ Callback para actualizar estado local cuando CambioVidaCancelacionModal guarda cambios
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(

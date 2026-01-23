@@ -192,28 +192,28 @@ const renderCoberturasDiffCell = (anteriorVal, nuevoVal) => {
   if (!diff.length) return <span className="text-muted">—</span>;
 
   return (
-    <div className="small">
-      {diff.map((item) => (
-        <div key={item.key} className="mb-3 p-2 border rounded" style={{ backgroundColor: "#f8f9fa" }}>
-          <div className="d-flex align-items-center mb-2">
+    <div className="small" style={{ margin: "0" }}>
+      {diff.map((item, idx) => (
+        <div key={item.key} className="mb-3 p-2 border rounded" style={{ backgroundColor: "#f8f9fa", marginBottom: idx < diff.length - 1 ? "0.75rem" : "0" }}>
+          <div className="d-flex align-items-center mb-2" style={{ marginBottom: "0.5rem" }}>
             {item.parentesco && (
-              <span className="badge bg-secondary me-2" style={{ fontSize: "0.75rem" }}>
+              <span className="badge bg-secondary me-2" style={{ fontSize: "0.75rem", marginRight: "0.5rem" }}>
                 {item.parentesco}
               </span>
             )}
-            <strong className="text-dark">{item.nombreNuevo}</strong>
+            <strong className="text-dark" style={{ wordBreak: "break-word" }}>{item.nombreNuevo}</strong>
           </div>
-          <div className="ms-3">
-            {Object.values(item.cambios).map((c) => (
-              <div key={c.label} className="mb-1 d-flex align-items-center">
-                <span className="text-muted me-2" style={{ fontSize: "0.85rem", minWidth: "100px" }}>
+          <div className="ms-3" style={{ marginLeft: "1rem" }}>
+            {Object.values(item.cambios).map((c, cIdx) => (
+              <div key={c.label} className="mb-1 d-flex align-items-start" style={{ marginBottom: cIdx < Object.values(item.cambios).length - 1 ? "0.5rem" : "0", flexWrap: "wrap" }}>
+                <span className="text-muted me-2" style={{ fontSize: "0.85rem", minWidth: "100px", flexShrink: 0 }}>
                   {c.label}:
                 </span>
-                <span className="text-muted me-2" style={{ fontSize: "0.85rem" }}>
+                <span className="text-muted me-2" style={{ fontSize: "0.85rem", wordBreak: "break-word", flex: "1 1 auto" }}>
                   {formatValue(c.anterior)}
                 </span>
-                <span className="text-muted me-2">→</span>
-                <span className="text-dark fw-semibold" style={{ fontSize: "0.85rem" }}>
+                <span className="text-muted me-2" style={{ flexShrink: 0 }}>→</span>
+                <span className="text-dark fw-semibold" style={{ fontSize: "0.85rem", wordBreak: "break-word", flex: "1 1 auto" }}>
                   {formatValue(c.nuevo)}
                 </span>
               </div>
@@ -539,11 +539,11 @@ export default function HistorialCambiosModal({
     const coberturaInfo = selected._coberturaInfo || {};
     
     const header = (
-      <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa" }}>
+      <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa", marginBottom: "1rem" }}>
         <div className="card-body p-3">
-          <div className="row g-3 mb-2">
+          <div className="row g-3 mb-3">
             <div className="col-12 col-md-6">
-              <div className="mb-2">
+              <div className="mb-3">
                 <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   Fecha
                 </small>
@@ -557,7 +557,7 @@ export default function HistorialCambiosModal({
               </div>
             </div>
             <div className="col-12 col-md-6">
-              <div className="mb-2">
+              <div className="mb-3">
                 <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   Acción
                 </small>
@@ -573,9 +573,9 @@ export default function HistorialCambiosModal({
           </div>
           
           {esCobertura && coberturaInfo && (
-            <div className="row g-2 mt-3 pt-3 border-top">
+            <div className="row g-2 mt-3 pt-3 border-top" style={{ marginTop: "1rem", paddingTop: "1rem" }}>
               <div className="col-12">
-                <small className="text-muted d-block mb-1" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <small className="text-muted d-block mb-2" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                   Información de Cobertura
                 </small>
                 <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
@@ -600,7 +600,7 @@ export default function HistorialCambiosModal({
           )}
           
           {isGrupo && (
-            <div className="row g-2 mt-3 pt-3 border-top">
+            <div className="row g-2 mt-3 pt-3 border-top" style={{ marginTop: "1rem", paddingTop: "1rem" }}>
               <div className="col-4 text-center">
                 <div className="p-2 border rounded" style={{ backgroundColor: "#ffffff" }}>
                   <div className="fw-bold text-dark" style={{ fontSize: "1.25rem" }}>{contadores.grupo}</div>
@@ -673,13 +673,13 @@ export default function HistorialCambiosModal({
             <table className="table table-sm table-hover align-middle border">
               <thead style={{ backgroundColor: "#e9ecef" }}>
                 <tr>
-                  <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                     Campo
                   </th>
-                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                     Anterior
                   </th>
-                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                     Nuevo
                   </th>
                 </tr>
@@ -690,14 +690,14 @@ export default function HistorialCambiosModal({
                   const label = getFieldLabel(campo);
                   return (
                     <tr key={campo}>
-                      <td className="text-dark">{label}</td>
-                      <td>
-                        <span className="text-muted" style={{ fontSize: "0.9rem" }}>
+                      <td className="text-dark" style={{ padding: "0.75rem", verticalAlign: "top" }}>{label}</td>
+                      <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
+                        <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                           {formatValue(info.anterior)}
                         </span>
                       </td>
-                      <td>
-                        <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                      <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
+                        <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                           {formatValue(info.nuevo)}
                         </span>
                       </td>
@@ -738,7 +738,7 @@ export default function HistorialCambiosModal({
               type="button"
               className={`btn ${viewMode === "grupo" ? "btn-dark" : "btn-outline-dark"}`}
               onClick={() => setViewMode("grupo")}
-              style={{ fontSize: "0.875rem", fontWeight: "500" }}
+              style={{ fontSize: "0.875rem", fontWeight: "500", padding: "0.5rem 1rem" }}
             >
               Grupo / Coberturas
               {contadores.grupo + contadores.coberturas > 0 && (
@@ -751,7 +751,7 @@ export default function HistorialCambiosModal({
               type="button"
               className={`btn ${viewMode === "clientes" ? "btn-dark" : "btn-outline-dark"}`}
               onClick={() => setViewMode("clientes")}
-              style={{ fontSize: "0.875rem", fontWeight: "500" }}
+              style={{ fontSize: "0.875rem", fontWeight: "500", padding: "0.5rem 1rem" }}
             >
               Clientes
               {clientesAgrupados.length > 0 && (
@@ -767,13 +767,13 @@ export default function HistorialCambiosModal({
           <table className="table table-sm table-hover align-middle border">
             <thead style={{ backgroundColor: "#e9ecef" }}>
               <tr>
-                <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <th style={{ width: "25%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                   Campo
                 </th>
-                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                   Anterior
                 </th>
-                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                <th style={{ width: "37.5%", fontWeight: "600", fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px", padding: "0.75rem" }}>
                   Nuevo
                 </th>
               </tr>
@@ -784,7 +784,7 @@ export default function HistorialCambiosModal({
                   <>
                     {clientesAgrupados.length > 0 && (
                       <tr>
-                        <td colSpan={3} className="py-2 px-3" style={{ backgroundColor: "#e7f3ff", borderLeft: "4px solid #0066cc" }}>
+                        <td colSpan={3} className="py-3 px-3" style={{ backgroundColor: "#e7f3ff", borderLeft: "4px solid #0066cc", padding: "0.75rem 1rem" }}>
                           <small className="text-dark" style={{ fontSize: "0.8rem" }}>
                             <i className="fas fa-info-circle me-2"></i>
                             <strong>{clientesAgrupados.length}</strong> {clientesAgrupados.length === 1 ? "cliente" : "clientes"} {clientesAgrupados.length === 1 ? "tiene" : "tienen"} cambios. 
@@ -820,7 +820,7 @@ export default function HistorialCambiosModal({
                               }
                             }}
                           >
-                            <td colSpan={3} className="py-3 px-3">
+                            <td colSpan={3} className="py-3 px-3" style={{ padding: "0.75rem 1rem" }}>
                               <div className="d-flex align-items-center justify-content-between">
                                 <div className="d-flex align-items-center">
                                   <span
@@ -832,12 +832,13 @@ export default function HistorialCambiosModal({
                                       display: "inline-block",
                                       color: "#495057",
                                       fontWeight: "600",
+                                      minWidth: "20px",
                                     }}
                                   >
                                     ▶
                                   </span>
                                   <div>
-                                    <strong className="text-dark" style={{ fontSize: "0.95rem", display: "block", fontWeight: "600" }}>
+                                    <strong className="text-dark" style={{ fontSize: "0.95rem", display: "block", fontWeight: "600", marginBottom: "0.25rem" }}>
                                       {clienteData.nombre || "Cliente sin nombre"}
                                     </strong>
                                     {clienteData.coberturaId && (
@@ -848,7 +849,7 @@ export default function HistorialCambiosModal({
                                     )}
                                   </div>
                                 </div>
-                                <span className="badge bg-dark" style={{ fontSize: "0.75rem", fontWeight: "500", padding: "0.4rem 0.6rem" }}>
+                                <span className="badge bg-dark" style={{ fontSize: "0.75rem", fontWeight: "500", padding: "0.4rem 0.6rem", marginLeft: "1rem" }}>
                                   {numCambios} {numCambios === 1 ? "cambio" : "cambios"}
                                 </span>
                               </div>
@@ -860,14 +861,14 @@ export default function HistorialCambiosModal({
                                 const niceLabel = getFieldLabel(fieldKey);
                                 return (
                                   <tr key={campo} style={{ backgroundColor: "#ffffff", borderLeft: "3px solid #2c3e50" }}>
-                                    <td className="ps-5 text-dark fw-medium" style={{ fontSize: "0.9rem" }}>{niceLabel}</td>
-                                    <td>
-                                      <span className="text-muted" style={{ fontSize: "0.9rem" }}>
+                                    <td className="ps-5 text-dark fw-medium" style={{ fontSize: "0.9rem", padding: "0.75rem 1rem", paddingLeft: "3rem", verticalAlign: "top" }}>{niceLabel}</td>
+                                    <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                                      <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                                         {formatValue(info.anterior)}
                                       </span>
                                     </td>
-                                    <td>
-                                      <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                                    <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                                      <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                                         {formatValue(info.nuevo)}
                                       </span>
                                     </td>
@@ -916,14 +917,14 @@ export default function HistorialCambiosModal({
                         return (
                           <React.Fragment key={campo}>
                             <tr style={{ backgroundColor: "#f8f9fa" }}>
-                              <td colSpan={3} className="py-2">
+                              <td colSpan={3} className="py-2" style={{ padding: "0.75rem 1rem" }}>
                                 <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                                   {label}
                                 </strong>
                               </td>
                             </tr>
                             <tr>
-                              <td colSpan={3} className="pt-2 pb-3">
+                              <td colSpan={3} className="pt-2 pb-3" style={{ padding: "0.75rem 1rem", paddingTop: "0.5rem", paddingBottom: "1rem" }}>
                                 {renderCoberturasDiffCell(info.anterior, info.nuevo)}
                               </td>
                             </tr>
@@ -933,14 +934,14 @@ export default function HistorialCambiosModal({
 
                       return (
                         <tr key={campo}>
-                          <td className="text-dark">{label}</td>
-                          <td>
-                            <span className="text-muted" style={{ fontSize: "0.9rem" }}>
+                          <td className="text-dark" style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>{label}</td>
+                          <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                            <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                               {formatValue(info.anterior)}
                             </span>
                           </td>
-                          <td>
-                            <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                          <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                            <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                               {formatValue(info.nuevo)}
                             </span>
                           </td>
@@ -973,7 +974,7 @@ export default function HistorialCambiosModal({
                     return (
                       <React.Fragment key={`cov-${coberturaId}`}>
                         <tr style={{ backgroundColor: "#f8f9fa" }}>
-                          <td colSpan={3} className="py-2">
+                          <td colSpan={3} className="py-2" style={{ padding: "0.75rem 1rem" }}>
                             <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                               Cobertura #{coberturaId}
                               {nombreHeader && (
@@ -994,14 +995,14 @@ export default function HistorialCambiosModal({
 
                           return (
                             <tr key={campo}>
-                              <td className="ps-4 text-dark">{niceLabel}</td>
-                              <td>
-                                <span className="text-muted" style={{ fontSize: "0.9rem" }}>
+                              <td className="ps-4 text-dark" style={{ padding: "0.75rem 1rem", paddingLeft: "2.5rem", verticalAlign: "top" }}>{niceLabel}</td>
+                              <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                                <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                                   {formatValue(info.anterior)}
                                 </span>
                               </td>
-                              <td>
-                                <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem" }}>
+                              <td style={{ padding: "0.75rem 1rem", verticalAlign: "top" }}>
+                                <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
                                   {formatValue(info.nuevo)}
                                 </span>
                               </td>
@@ -1032,11 +1033,12 @@ export default function HistorialCambiosModal({
           style={{
             maxWidth: "1200px",
             width: "95vw",
+            margin: "1.75rem auto",
           }}
         >
-          <div className="modal-content">
-            <div className="modal-header border-bottom" style={{ backgroundColor: "#2c3e50", color: "#ffffff" }}>
-              <h5 className="modal-title" style={{ fontWeight: "600", fontSize: "1.1rem" }}>
+          <div className="modal-content" style={{ border: "none", boxShadow: "0 0.5rem 1rem rgba(0, 0, 0, 0.15)" }}>
+            <div className="modal-header border-bottom" style={{ backgroundColor: "#2c3e50", color: "#ffffff", padding: "1rem 1.5rem" }}>
+              <h5 className="modal-title" style={{ fontWeight: "600", fontSize: "1.1rem", margin: 0 }}>
                 Historial de Cambios
                 {isGrupo && (
                   <span className="badge bg-light text-dark ms-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
@@ -1049,10 +1051,11 @@ export default function HistorialCambiosModal({
                 className="btn-close btn-close-white"
                 aria-label="Close"
                 onClick={onClose}
+                style={{ margin: 0 }}
               />
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body" style={{ padding: "1.5rem" }}>
               {loading && (
                 <div className="d-flex justify-content-center py-4">
                   <div className="spinner-border" role="status">
@@ -1062,7 +1065,7 @@ export default function HistorialCambiosModal({
               )}
 
               {error && !loading && (
-                <div className="alert alert-danger">{error}</div>
+                <div className="alert alert-danger mb-3">{error}</div>
               )}
 
               {!loading && !error && historial.length === 0 && (
@@ -1072,67 +1075,69 @@ export default function HistorialCambiosModal({
               )}
 
               {!loading && !error && historial.length > 0 && (
-                <div className="row">
+                <div className="row g-3">
                   <div className="col-12 col-xl-5 mb-3">
-                    <table className="table table-sm table-hover align-middle">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Fecha</th>
-                          <th>Usuario</th>
-                          <th>Acción</th>
-                          <th>Origen</th>
-                          <th>Cambios</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {historial.map((row) => {
-                          const cambiosFiltrados = Object.keys(row.cambios || {}).filter(
-                            campo => !CAMPOS_IGNORAR.has(campo)
-                          );
-                          const totalCambios = cambiosFiltrados.length;
-                          const isActive = selected && selected.id === row.id;
-                          const esCobertura = row._esCobertura || false;
-                          const coberturaInfo = row._coberturaInfo || {};
+                    <div className="table-responsive" style={{ maxHeight: "70vh", overflowY: "auto" }}>
+                      <table className="table table-sm table-hover align-middle mb-0">
+                        <thead className="table-light sticky-top">
+                          <tr>
+                            <th style={{ padding: "0.75rem 0.5rem" }}>Fecha</th>
+                            <th style={{ padding: "0.75rem 0.5rem" }}>Usuario</th>
+                            <th style={{ padding: "0.75rem 0.5rem" }}>Acción</th>
+                            <th style={{ padding: "0.75rem 0.5rem" }}>Origen</th>
+                            <th style={{ padding: "0.75rem 0.5rem" }}>Cambios</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {historial.map((row) => {
+                            const cambiosFiltrados = Object.keys(row.cambios || {}).filter(
+                              campo => !CAMPOS_IGNORAR.has(campo)
+                            );
+                            const totalCambios = cambiosFiltrados.length;
+                            const isActive = selected && selected.id === row.id;
+                            const esCobertura = row._esCobertura || false;
+                            const coberturaInfo = row._coberturaInfo || {};
 
-                          return (
-                            <tr
-                              key={`${row.id}-${esCobertura ? row._coberturaId : ''}`}
-                              className={isActive ? "table-primary" : ""}
-                              style={{ cursor: "pointer" }}
-                              onClick={() => setSelected(row)}
-                            >
-                              <td>{formatDateTime(row.created_at)}</td>
-                              <td>{row.usuario}</td>
-                              <td>
-                                <span className="badge bg-secondary">{row.accion}</span>
-                              </td>
-                              <td>
-                                {esCobertura ? (
-                                  <div className="small">
-                                    <span className="badge bg-info text-dark" style={{ fontSize: "0.7rem" }}>
-                                      Cobertura
+                            return (
+                              <tr
+                                key={`${row.id}-${esCobertura ? row._coberturaId : ''}`}
+                                className={isActive ? "table-primary" : ""}
+                                style={{ cursor: "pointer" }}
+                                onClick={() => setSelected(row)}
+                              >
+                                <td style={{ padding: "0.75rem 0.5rem" }}>{formatDateTime(row.created_at)}</td>
+                                <td style={{ padding: "0.75rem 0.5rem" }}>{row.usuario}</td>
+                                <td style={{ padding: "0.75rem 0.5rem" }}>
+                                  <span className="badge bg-secondary">{row.accion}</span>
+                                </td>
+                                <td style={{ padding: "0.75rem 0.5rem" }}>
+                                  {esCobertura ? (
+                                    <div className="small">
+                                      <span className="badge bg-info text-dark" style={{ fontSize: "0.7rem" }}>
+                                        Cobertura
+                                      </span>
+                                      {coberturaInfo.cliente_nombre && (
+                                        <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
+                                          {coberturaInfo.cliente_nombre}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="badge bg-dark" style={{ fontSize: "0.7rem" }}>
+                                      Grupo
                                     </span>
-                                    {coberturaInfo.cliente_nombre && (
-                                      <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
-                                        {coberturaInfo.cliente_nombre}
-                                      </div>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <span className="badge bg-dark" style={{ fontSize: "0.7rem" }}>
-                                    Grupo
-                                  </span>
-                                )}
-                              </td>
-                              <td>
-                                {totalCambios > 0 ? `${totalCambios} cambio(s)` : "—"}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    <div className="border rounded p-2 mt-2" style={{ backgroundColor: "#f8f9fa" }}>
+                                  )}
+                                </td>
+                                <td style={{ padding: "0.75rem 0.5rem" }}>
+                                  {totalCambios > 0 ? `${totalCambios} cambio(s)` : "—"}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="border rounded p-2 mt-3" style={{ backgroundColor: "#f8f9fa" }}>
                       <small className="text-muted" style={{ fontSize: "0.8rem" }}>
                         Haz clic en una fila para ver el detalle de los campos modificados.
                       </small>
@@ -1140,18 +1145,20 @@ export default function HistorialCambiosModal({
                   </div>
 
                   <div className="col-12 col-xl-7">
-                    {renderDetalleCambios()}
+                    <div style={{ maxHeight: "70vh", overflowY: "auto", paddingRight: "0.5rem" }}>
+                      {renderDetalleCambios()}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="modal-footer border-top">
+            <div className="modal-footer border-top" style={{ padding: "1rem 1.5rem" }}>
               <button
                 type="button"
                 className="btn btn-dark btn-sm"
                 onClick={onClose}
-                style={{ minWidth: "100px", fontWeight: "500" }}
+                style={{ minWidth: "100px", fontWeight: "500", padding: "0.5rem 1rem" }}
               >
                 Cerrar
               </button>

@@ -25,8 +25,6 @@ const Prospectogrupo = ({
   onRefresh, // Función opcional para refrescar datos del grupo familiar
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
   grupo, // Grupo completo opcional para generar PDF de confirmación
-  onOpenRetiroModal, // ✅ Callback para abrir modal de retiro (RetiroCancelacionModal)
-  onRetiroUpdateLocal, // ✅ Callback para actualizar estado local cuando CambioVidaCancelacionModal guarda cambios
 }) => {
   const [showGestion, setShowGestion] = useState(false);
   const [showComentarioModal, setShowComentarioModal] = useState(false);
@@ -266,18 +264,6 @@ const Prospectogrupo = ({
                     <i className="fas fa-history me-1"></i>
                     <span className="d-none d-lg-inline">Hist. Renov.</span>
                   </button>
-                  {onOpenRetiroModal && (
-                    <button
-                      className="btn btn-sm btn-outline-danger"
-                      onClick={() => onOpenRetiroModal()}
-                      disabled={!resolvedGrupoId || readOnly}
-                      title="Retiros y Cancelaciones"
-                      style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
-                    >
-                      <i className="fas fa-ban me-1"></i>
-                      <span className="d-none d-lg-inline">Retiros</span>
-                    </button>
-                  )}
                 </>
               )}
             </div>
@@ -471,17 +457,12 @@ const Prospectogrupo = ({
   show={showCambioVidaModal}
   onClose={() => setShowCambioVidaModal(false)}
   grupoFamiliarId={resolvedGrupoId}
-  soloActualizarLocal={!!onRetiroUpdateLocal} // ✅ Si hay callback, usar modo local
-  onUpdateLocal={onRetiroUpdateLocal} // ✅ Callback para actualizar estado local
   onSuccess={() => {
     // Si hay una función de refresh del padre, usarla; si no, recargar la página
-    // Solo se ejecuta si NO está en modo local
-    if (!onRetiroUpdateLocal) {
-      if (onRefresh && typeof onRefresh === "function") {
-        onRefresh();
-      } else {
-        window.location.reload();
-      }
+    if (onRefresh && typeof onRefresh === "function") {
+      onRefresh();
+    } else {
+      window.location.reload();
     }
   }}
 />

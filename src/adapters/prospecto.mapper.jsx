@@ -311,24 +311,31 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
   // motivo_cancelacion: incluir si tiene valor (string no vacío)
   if (motivoCancelacion) payload.motivo_cancelacion = motivoCancelacion;
   
-  // activo: solo incluir si está explícitamente definido (booleano)
-  // Incluir tanto true como false para preservar el valor establecido
+  // activo: SIEMPRE incluir (valores definidos por CambioVidaCancelacionModal)
+  // Si está definido, usar ese valor; si no, usar true por defecto
   if (m.activo !== undefined && m.activo !== null) {
     // Normalizar a booleano: acepta true, "true", 1, false, "false", 0
     const activoValue = typeof m.activo === 'boolean' 
       ? m.activo 
       : (m.activo === true || m.activo === "true" || m.activo === 1 || m.activo === "1");
     payload.activo = activoValue;
+  } else {
+    // Valor por defecto: true (activo)
+    payload.activo = true;
   }
   
-  // vigente: solo incluir si está explícitamente definido (booleano)
-  // IMPORTANTE: Incluir tanto true como false para preservar el valor establecido por renovación
+  // vigente: SIEMPRE incluir (valores definidos por CambioVidaCancelacionModal)
+  // Si está definido, usar ese valor; si no, calcular basado en fecha_cancelacion
   if (m.vigente !== undefined && m.vigente !== null) {
     // Normalizar a booleano: acepta true, "true", 1, false, "false", 0
     const vigenteValue = typeof m.vigente === 'boolean' 
       ? m.vigente 
       : (m.vigente === true || m.vigente === "true" || m.vigente === 1 || m.vigente === "1");
     payload.vigente = vigenteValue;
+  } else {
+    // Valor por defecto: false si hay fecha_cancelacion, true si no
+    const tieneFechaCancelacion = m.fecha_cancelacion || m?.cobertura?.fecha_cancelacion;
+    payload.vigente = !tieneFechaCancelacion;
   }
   
   return stripNulls(payload);
