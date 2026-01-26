@@ -8,6 +8,8 @@ import {
   Row,
   Col,
   Badge,
+  Toast,
+  ToastContainer,
 } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -79,9 +81,41 @@ const fechaToInputDate = (fecha) => {
   }
 };
 
-const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
+const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
+  // ✅ Log de depuración para verificar la estructura de la tarea (solo una vez por tarea)
+  const tareaLogRef = useRef(null);
+  useEffect(() => {
+    if (show && tarea && import.meta.env.DEV) {
+      const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+      // Solo loguear si es una tarea diferente
+      if (tareaId && tareaLogRef.current !== tareaId) {
+        tareaLogRef.current = tareaId;
+        console.log("🔍 [DEBUG] Estructura de la tarea recibida:", {
+          id: tarea.id,
+          task_id: tarea.task_id,
+          tarea_id: tarea.tarea_id,
+          tiene_id: !!(tarea.id || tarea.task_id || tarea.tarea_id),
+          // ✅ Información del usuario asignado
+          assigned_user: tarea?.assigned_user,
+          assign_to_user: tarea?.assign_to_user,
+          assigned_to_user: tarea?.assigned_to_user,
+          assignedUser: tarea?.assignedUser,
+          log_user: tarea?.log?.user,
+          log_assigned_user: tarea?.log?.assigned_user,
+          user: tarea?.user,
+          assign_to_user_name: tarea?.assign_to_user_name,
+          assigned_to_name: tarea?.assigned_to_name
+        });
+      }
+    }
+    // Resetear cuando se cierra el modal
+    if (!show) {
+      tareaLogRef.current = null;
+    }
+  }, [show, tarea?.id]);
  
-  const [responseNote, setResponseNote] = useState(tarea?.response_note || "");
+  // ✅ Inicializar siempre vacío - no cargar response_note de la tarea
+  const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [comentarios, setComentarios] = useState([]);
   const [cargandoComentarios, setCargandoComentarios] = useState(false);
@@ -103,6 +137,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   const [archivoPreview, setArchivoPreview] = useState(null); // { adjunto, tipo }
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
+
+  // ✅ Estados para confirmación y toast
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showConfirmCompletarModal, setShowConfirmCompletarModal] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastVariant, setToastVariant] = useState("success");
 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
@@ -425,14 +466,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
   };
 
   // ✅ Cargar usuarios para menciones (precargar inmediatamente)
+  const usuariosCargadosRef = useRef(false);
   useEffect(() => {
     if (!show) {
       // No limpiar usuarios al cerrar para mantener cache
       return;
     }
     
-    // Si ya tenemos usuarios cargados, no volver a cargar (pero sí verificar que sean válidos)
-    if (usuarios && usuarios.length > 0) {
+    // Si ya tenemos usuarios cargados, no volver a cargar
+    if (usuariosCargadosRef.current || (usuarios && usuarios.length > 0)) {
       return;
     }
     
@@ -483,6 +525,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         
         if (mounted) {
           setUsuarios(usuariosNormalizados);
+          usuariosCargadosRef.current = true;
         }
       } catch (err) {
         console.error("❌ Error al cargar usuarios para menciones:", err);
@@ -516,10 +559,16 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         setArchivos([]);
         setComentariosEnEdicion({});
         setComentariosHistorialEnEdicion({});
+        // ✅ Limpiar responseNote al cerrar el modal
+        setResponseNote("");
         tareaIdRef.current = null;
       }
       return;
     }
+    
+    // ✅ Limpiar responseNote siempre que se abre el modal (nuevo o reabierto)
+    // Esto asegura que el campo esté vacío para nuevos comentarios
+    setResponseNote("");
 
     // ✅ Solo procesar si es una nueva tarea (ID diferente)
     if (!currentTareaId || tareaIdRef.current === currentTareaId) {
@@ -538,12 +587,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
     setComentariosHistorialEnEdicion({});
     setComentariosActualizados({});
     setComentariosHistorialActualizados({});
-    setResponseNote(tarea?.response_note || "");
+    // ✅ Siempre inicializar responseNote vacío al abrir el modal
+    setResponseNote("");
 
     // ✅ Cargar historial del cliente (solo si hay cliente válido)
-    if (tarea.log?.cliente?.id) {
+    const clienteId = tarea?.log?.cliente?.id;
+    if (clienteId) {
       setLoadingHistorial(true);
-      apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
+      apiRequest(`cliente/${clienteId}/historial`, "GET")
         .then((data) => {
           // ✅ Verificar que seguimos en la misma tarea
           if (tareaIdRef.current !== currentTareaId) return;
@@ -629,23 +680,45 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           }
         });
     }
-  }, [show, tarea?.id, tarea?.log?.cliente?.id]); // ✅ Solo dependencias primitivas
+  }, [show, tarea?.id]); // ✅ Solo dependencias primitivas - removido tarea?.log?.cliente?.id para evitar loops
 
-  const handleAgregarComentario = async () => {
-    if (isNoteEmpty(responseNote) && archivos.length === 0) return;
+  // ✅ Función para mostrar confirmación antes de agregar comentario
+  const handleAgregarComentario = () => {
+    if (isNoteEmpty(responseNote) && archivos.length === 0) {
+      alert("Por favor, escribe un comentario o adjunta al menos un archivo.");
+      return;
+    }
+    setShowConfirmModal(true);
+  };
+
+  // ✅ Función que realmente envía el comentario después de la confirmación
+  const confirmarYEnviarComentario = async () => {
+    setShowConfirmModal(false);
     setLoading(true);
     try {
+      // ✅ Validar que tenemos un ID de tarea válido
+      const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+      if (!tareaId) {
+        const errorMsg = "No se pudo identificar la tarea. Por favor, cierre el modal y vuelva a intentar.";
+        setToastMessage(`❌ ${errorMsg}`);
+        setToastVariant("danger");
+        setShowToast(true);
+        setLoading(false);
+        console.error("❌ Error: No hay ID de tarea disponible", tarea);
+        return;
+      }
+      
       // ✅ Extraer menciones antes de enviar
       const mentionedIds = extractMentionedUserIds(responseNote || "", usuarios);
       
       // 📝 Log de depuración: Menciones detectadas
       if (import.meta.env.DEV) {
         console.log("🔔 [NOTIFICACIONES] Creando comentario con menciones:", {
-          tarea_id: tarea.id,
+          tarea_id: tareaId,
           comentario_preview: responseNote?.substring(0, 100) || "",
           mentioned_user_ids: mentionedIds,
           usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
-          endpoint: `tareas_operativas/${tarea.id}/comentarios`
+          endpoint: `tareas_operativas/${tareaId}/comentarios`
         });
       }
       
@@ -654,8 +727,38 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         mentioned_user_ids: mentionedIds // Enviar IDs de usuarios mencionados al backend
       };
       
+      // ✅ Log de depuración: URL y payload antes de enviar
+      if (import.meta.env.DEV) {
+        console.log("📤 [API] Enviando comentario:", {
+          endpoint: `tareas_operativas/${tareaId}/comentarios`,
+          method: "POST",
+          tareaId: tareaId,
+          tipo_tareaId: typeof tareaId,
+          payload: payload,
+          url_completa: `${API_BASE_URL}/tareas_operativas/${tareaId}/comentarios`
+        });
+      }
+      
+      // ✅ Validar que tareaId sea un número válido
+      const numericTareaId = typeof tareaId === 'string' ? parseInt(tareaId, 10) : tareaId;
+      if (isNaN(numericTareaId) || numericTareaId <= 0) {
+        throw new Error(`ID de tarea inválido: ${tareaId}`);
+      }
+      
+      // ✅ Log del ID que se está usando
+      if (import.meta.env.DEV) {
+        console.log("🔍 [DEBUG] ID de tarea a usar:", {
+          original: tareaId,
+          tipo_original: typeof tareaId,
+          numeric: numericTareaId,
+          tipo_numeric: typeof numericTareaId,
+          tarea_completa: tarea
+        });
+      }
+      
+      // ✅ Intentar agregar el comentario directamente - el backend validará si la tarea existe
       const data = await apiRequest(
-        `tareas_operativas/${tarea.id}/comentarios`,
+        `tareas_operativas/${numericTareaId}/comentarios`,
         "POST",
         payload
       );
@@ -664,7 +767,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       if (import.meta.env.DEV) {
         console.log("✅ [NOTIFICACIONES] Comentario creado exitosamente:", {
           comentario_id: data?.comment?.id,
-          tarea_id: tarea.id,
+          tarea_id: tareaId,
           mentioned_user_ids_enviados: mentionedIds,
           respuesta_backend: data
         });
@@ -696,19 +799,42 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         }
       }
 
+      // ✅ Actualizar estado de la tarea: si estaba "pending", cambiar a "in_progress"
+      const nuevoStatus = tarea.status === "pending" ? "in_progress" : tarea.status;
+      
       const tareaActualizada = {
         ...tarea,
         response_note: responseNote,
-        status: tarea.status === "pending" ? "in_progress" : tarea.status,
+        status: nuevoStatus,
       };
 
-      if (onUpdated) onUpdated(tareaActualizada);
+      // ✅ Log de depuración del cambio de estado
+      if (import.meta.env.DEV) {
+        console.log("🔄 [ESTADO] Actualizando estado de la tarea:", {
+          id: tareaActualizada.id,
+          estado_anterior: tarea.status,
+          estado_nuevo: nuevoStatus,
+          tarea_actualizada: tareaActualizada
+        });
+      }
 
+      // ✅ Notificar actualización ANTES de cerrar el modal para que el cambio se vea inmediatamente
+      if (onUpdated) {
+        onUpdated(tareaActualizada);
+      }
+
+      // ✅ Cargar historial si es necesario (en paralelo, no bloquea)
       if (tarea.log?.cliente?.id) {
-        await apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
+        apiRequest(`cliente/${tarea.log.cliente.id}/historial`, "GET")
           .then((data) => {
             const historialData = Array.isArray(data.data) ? data.data : [];
             setHistorial(historialData);
+          })
+          .catch(err => {
+            // No bloquear si falla cargar el historial
+            if (import.meta.env.DEV) {
+              console.warn("⚠️ Error al cargar historial después de agregar comentario:", err);
+            }
           });
       }
     
@@ -718,17 +844,83 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         if (arch.preview) URL.revokeObjectURL(arch.preview);
       });
       setArchivos([]);
-      onHide(true);
+      
+      // ✅ Mostrar toast de éxito
+      setToastMessage("✅ Comentario agregado exitosamente a la tarea");
+      setToastVariant("success");
+      setShowToast(true);
+      
+      // ✅ Cerrar el modal después de un breve delay para que se vea el toast
+      // El estado ya se actualizó arriba, así que el cambio de color debería verse inmediatamente
+      setTimeout(() => {
+        onHide(true);
+      }, 1500);
     } catch (error) {
       console.error("❌ Error al agregar el comentario:", error);
+      
+      // ✅ Mensaje de error más descriptivo y específico
+      let errorMessage = "Error desconocido";
+      const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 404) {
+        // ✅ Mensaje más claro para 404
+        errorMessage = `No se pudo agregar el comentario. La tarea con ID ${tareaId} no fue encontrada o no tiene permisos para acceder a ella. Por favor, cierre el modal y vuelva a abrir la tarea desde la lista.`;
+      } else if (error.response?.status === 422) {
+        errorMessage = "Error de validación. Por favor, verifique los datos ingresados.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "No autorizado. Por favor, inicie sesión nuevamente.";
+      } else if (error.response?.status === 403) {
+        errorMessage = "No tiene permisos para agregar comentarios a esta tarea.";
+      } else if (error.response?.status >= 500) {
+        errorMessage = "Error del servidor. Por favor, intente más tarde.";
+      }
+      
+      // ✅ Log adicional en desarrollo para debugging
+      if (import.meta.env.DEV) {
+        console.error("❌ Detalles del error al agregar comentario:", {
+          error: error,
+          error_message: error.message,
+          tareaId: tareaId,
+          tarea_completa: tarea,
+          response_status: error.response?.status,
+          response_data: error.response?.data,
+          response_url: error.response?.url
+        });
+      }
+      
+      // ✅ Mostrar toast de error
+      setToastMessage(`❌ ${errorMessage}`);
+      setToastVariant("danger");
+      setShowToast(true);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCompletar = async () => {
+  // ✅ Función para mostrar confirmación antes de completar tarea
+  const handleCompletar = () => {
+    setShowConfirmCompletarModal(true);
+  };
+
+  // ✅ Función que realmente completa la tarea después de la confirmación
+  const confirmarYCompletarTarea = async () => {
+    setShowConfirmCompletarModal(false);
     setLoading(true);
     try {
+      // ✅ Validar que tenemos un ID de tarea válido
+      const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+      if (!tareaId) {
+        const errorMsg = "No se pudo identificar la tarea. Por favor, cierre el modal y vuelva a intentar.";
+        setToastMessage(`❌ ${errorMsg}`);
+        setToastVariant("danger");
+        setShowToast(true);
+        setLoading(false);
+        console.error("❌ Error: No hay ID de tarea disponible", tarea);
+        return;
+      }
+      
       let comentarioId = null;
       
       if (
@@ -742,11 +934,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         // 📝 Log de depuración: Menciones detectadas (al completar tarea)
         if (import.meta.env.DEV) {
           console.log("🔔 [NOTIFICACIONES] Creando comentario al completar tarea:", {
-            tarea_id: tarea.id,
+            tarea_id: tareaId,
             comentario_preview: responseNote?.substring(0, 100) || "",
             mentioned_user_ids: mentionedIds,
             usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
-            endpoint: `tareas_operativas/${tarea.id}/comentarios`
+            endpoint: `tareas_operativas/${tareaId}/comentarios`
           });
         }
         
@@ -755,8 +947,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           mentioned_user_ids: mentionedIds
         };
         
+        // ✅ Validar que tareaId sea un número válido
+        const numericTareaId = typeof tareaId === 'string' ? parseInt(tareaId, 10) : tareaId;
+        if (isNaN(numericTareaId) || numericTareaId <= 0) {
+          throw new Error(`ID de tarea inválido: ${tareaId}`);
+        }
+        
         const data = await apiRequest(
-          `tareas_operativas/${tarea.id}/comentarios`,
+          `tareas_operativas/${numericTareaId}/comentarios`,
           "POST",
           payload
         );
@@ -767,7 +965,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         if (import.meta.env.DEV) {
           console.log("✅ [NOTIFICACIONES] Comentario creado al completar tarea:", {
             comentario_id: comentarioId,
-            tarea_id: tarea.id,
+            tarea_id: tareaId,
             mentioned_user_ids_enviados: mentionedIds,
             tarea_status: "completed"
           });
@@ -790,7 +988,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         }
       }
 
-      await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT");
+      // ✅ Validar que tareaId sea un número válido (usar el mismo que se usó para el comentario si existe)
+      const numericTareaIdFinal = typeof tareaId === 'string' ? parseInt(tareaId, 10) : tareaId;
+      if (isNaN(numericTareaIdFinal) || numericTareaIdFinal <= 0) {
+        throw new Error(`ID de tarea inválido: ${tareaId}`);
+      }
+      
+      await apiRequest(`tareas_operativas/${numericTareaIdFinal}/completar`, "PUT");
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
@@ -947,9 +1151,23 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
       alert("Las fechas no pueden estar vacías.");
       return;
     }
+    
+    // ✅ Validar que tenemos un ID de tarea válido
+    const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+    if (!tareaId) {
+      alert("No se pudo identificar la tarea. Por favor, cierre el modal y vuelva a intentar.");
+      return;
+    }
+    
     setLoading(true);
     try {
-      await apiRequest(`tareas_operativas/${tarea.id}/reprogramar`, "PUT", {
+      // ✅ Validar que tareaId sea un número válido
+      const numericTareaId = typeof tareaId === 'string' ? parseInt(tareaId, 10) : tareaId;
+      if (isNaN(numericTareaId) || numericTareaId <= 0) {
+        throw new Error(`ID de tarea inválido: ${tareaId}`);
+      }
+      
+      await apiRequest(`tareas_operativas/${numericTareaId}/reprogramar`, "PUT", {
         scheduled_date: scheduledDate,
         due_date: dueDate,
       });
@@ -1350,41 +1568,133 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
           text-align: justify;
         }
       `}</style>
-    <Modal show={show} onHide={() => onHide(false)} size="xl" centered>
+    <Modal 
+      show={show} 
+      onHide={() => onHide(false)} 
+      size="xl" 
+      centered
+      style={{ zIndex: 1050 }}
+      className="responder-tarea-modal"
+    >
+      <style>{`
+        .responder-tarea-modal .modal-dialog {
+          max-width: 95vw;
+          width: 1400px;
+        }
+        .responder-tarea-modal .modal-content {
+          border-radius: 12px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+        .responder-tarea-modal .modal-header {
+          background: transparent;
+          border-bottom: 1px solid #e9ecef;
+          padding: 1rem 1.5rem;
+          border-radius: 12px 12px 0 0;
+        }
+        .responder-tarea-modal .modal-header .btn-close {
+          opacity: 0.6;
+        }
+        .responder-tarea-modal .modal-header .btn-close:hover {
+          opacity: 1;
+        }
+        .responder-tarea-modal .modal-title {
+          font-size: 1.35rem;
+          font-weight: 600;
+          color: #212529;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .responder-tarea-modal .modal-title i {
+          color: #667eea;
+        }
+        .responder-tarea-modal .modal-body {
+          padding: 2rem;
+          background: #f8f9fa;
+        }
+        .responder-tarea-modal .section-title {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #495057;
+          margin-bottom: 1.5rem;
+          padding-bottom: 0.75rem;
+          border-bottom: 2px solid #e9ecef;
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        .responder-tarea-modal .info-card {
+          background: #fff;
+          border: 1px solid #e9ecef;
+          border-radius: 10px;
+          padding: 1.5rem;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          transition: box-shadow 0.2s ease;
+        }
+        .responder-tarea-modal .info-card:hover {
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        .responder-tarea-modal .form-label {
+          font-weight: 600;
+          color: #495057;
+          margin-bottom: 0.5rem;
+          font-size: 0.95rem;
+        }
+        .responder-tarea-modal .text-content {
+          line-height: 1.7;
+          color: #495057;
+          font-size: 0.95rem;
+        }
+      `}</style>
       <Modal.Header closeButton>
-        <Modal.Title>
-          {tarea.status === "completed" ? "Detalle de Tarea" : "Responder Tarea"}
+        <Modal.Title className="d-flex align-items-center gap-2">
+          <i className="fas fa-tasks"></i>
+          <span>{tarea.status === "completed" ? "Detalle de Tarea" : "Responder Tarea"}</span>
+          {tarea?.id && (
+            <Badge bg="secondary" className="ms-2" style={{ fontSize: "0.75rem", fontWeight: "normal" }}>
+              ID: {tarea.id || tarea.task_id || tarea.tarea_id}
+            </Badge>
+          )}
         </Modal.Title>
       </Modal.Header>
-      <Modal.Body>
-        <Row>
-          {/* ✅ Columna izquierda: Tarea */}
-          <h6 className="mb-3">Detalles de la Tarea</h6>
-          <Col md={6} style={{ borderRight: "1px solid #e9ecef" }}>
-            <div
-              className="mb-3 p-3 rounded shadow-sm"
-              style={{ background: "#fff", border: "1px solid #dee2e6" }}
-            >
+        <Modal.Body>
+          <Row className="g-4">
+            {/* ✅ Columna izquierda: Tarea */}
+            <Col md={6} style={{ borderRight: "2px solid #e9ecef", paddingRight: "2rem" }}>
+              <div className="section-title">
+                <i className="fas fa-info-circle text-primary"></i>
+                Detalles de la Tarea
+              </div>
+            <div className="info-card">
               {/* ✅ Cabecera con estado y nombre */}
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                  {tarea.log?.cliente?.estado_cliente === "prospecto" && (
-                    <Badge bg="warning" text="dark" className="me-2">Prospecto</Badge>
-                  )}
-                  {tarea.log?.cliente?.estado_cliente === "cliente" && (
-                    <Badge bg="primary" className="me-2">Cliente</Badge>
-                  )}
-                  {tarea.log?.cliente?.estado_cliente === "descartado" && (
-                    <Badge bg="secondary" className="me-2">Descartado</Badge>
-                  )}
-                  <span style={{ fontWeight: "bold", fontSize: "1rem" }}>
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <div className="flex-grow-1">
+                  <div className="d-flex align-items-center gap-2 mb-2">
+                    {tarea.log?.cliente?.estado_cliente === "prospecto" && (
+                      <Badge bg="warning" text="dark" className="px-3 py-2" style={{ fontSize: "0.85rem" }}>
+                        <i className="fas fa-user-clock me-1"></i>Prospecto
+                      </Badge>
+                    )}
+                    {tarea.log?.cliente?.estado_cliente === "cliente" && (
+                      <Badge bg="primary" className="px-3 py-2" style={{ fontSize: "0.85rem" }}>
+                        <i className="fas fa-user-check me-1"></i>Cliente
+                      </Badge>
+                    )}
+                    {tarea.log?.cliente?.estado_cliente === "descartado" && (
+                      <Badge bg="secondary" className="px-3 py-2" style={{ fontSize: "0.85rem" }}>
+                        <i className="fas fa-user-times me-1"></i>Descartado
+                      </Badge>
+                    )}
+                  </div>
+                  <h5 className="mb-1" style={{ fontWeight: 600, color: "#212529", fontSize: "1.15rem" }}>
                     {tarea.log?.cliente?.nombre_completo || "Cliente no disponible"}
-                  </span>
-                </div>
-                <div>
-                  <small className="text-muted">
-                    <i className="fa fa-phone me-1"></i>{tarea.log?.cliente?.telefono || "N/A"}
-                  </small>
+                  </h5>
+                  {tarea.log?.cliente?.telefono && (
+                    <div className="text-muted" style={{ fontSize: "0.9rem" }}>
+                      <i className="fas fa-phone me-1"></i>{tarea.log?.cliente?.telefono}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1459,45 +1769,75 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                 )}
             </div>
 
-            <div
-              className="mb-3 p-3 rounded shadow-sm"
-              style={{ background: "#fff", border: "1px solid #dee2e6" }}
-            >
-              <p><strong>Concepto:</strong> {tarea?.log?.concept?.name || "N/A"}</p>
+            <div className="info-card">
+              <div className="mb-3">
+                <div className="d-flex align-items-center gap-2 mb-2">
+                  <i className="fas fa-tag text-primary"></i>
+                  <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Concepto:</strong>
+                </div>
+                <p className="text-content mb-0">{tarea?.log?.concept?.name || "N/A"}</p>
+              </div>
               {tarea.status !== "completed" ? (
                 <>
-                  <Row className="mb-2">
+                  <Row className="mb-3 g-3">
                     <Col>
                       <Form.Group>
-                        <Form.Label>📅 Programada: <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
+                        <Form.Label>
+                          <i className="fas fa-calendar-alt text-primary me-1"></i>
+                          Programada: <small className="text-muted">(mm/dd/yyyy)</small>
+                        </Form.Label>
                         <Form.Control
                           type="date"
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
                           title="Formato: mm/dd/yyyy"
+                          style={{ borderRadius: "6px" }}
                         />
                       </Form.Group>
                     </Col>
                     <Col>
                       <Form.Group>
-                        <Form.Label>⏳ Vencimiento: <small className="text-muted">(mm/dd/yyyy)</small></Form.Label>
+                        <Form.Label>
+                          <i className="fas fa-clock text-warning me-1"></i>
+                          Vencimiento: <small className="text-muted">(mm/dd/yyyy)</small>
+                        </Form.Label>
                         <Form.Control
                           type="date"
                           value={dueDate}
                           onChange={(e) => setDueDate(e.target.value)}
                           title="Formato: mm/dd/yyyy"
+                          style={{ borderRadius: "6px" }}
                         />
                       </Form.Group>
                     </Col>
                   </Row>
-                  <p><strong>Asignada por:</strong> {tarea?.log?.user?.name || "N/A"}</p>
+                  <div className="mb-3">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <i className="fas fa-user text-info"></i>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada por:</strong>
+                    </div>
+                    <p className="text-content mb-0">
+                      {tarea?.assigned_user?.name || 
+                       tarea?.assign_to_user?.name || 
+                       tarea?.assigned_to_user?.name ||
+                       tarea?.assignedUser?.name ||
+                       tarea?.log?.user?.name || 
+                       tarea?.log?.assigned_user?.name ||
+                       tarea?.user?.name ||
+                       tarea?.assign_to_user_name ||
+                       tarea?.assigned_to_name ||
+                       "N/A"}
+                    </p>
+                  </div>
                   <div className="mt-3">
-                    <strong>Nota:</strong>
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <i className="fas fa-sticky-note text-success"></i>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Nota:</strong>
+                    </div>
                     <div 
+                      className="text-content"
                       style={{ 
                         marginTop: 4,
-                        fontSize: '14px',
-                        lineHeight: '1.5',
                         wordBreak: 'break-word'
                       }}
                       dangerouslySetInnerHTML={{ __html: tarea?.log?.note || 'Sin nota' }}
@@ -1783,9 +2123,12 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
             
 
             {tarea.status !== "completed" && (
-              <Form.Group className="mt-3">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                  <Form.Label className="mb-0">Mi respuesta:</Form.Label>
+              <Form.Group className="mt-4">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <Form.Label className="mb-0 d-flex align-items-center gap-2">
+                    <i className="fas fa-comment-dots text-primary"></i>
+                    <strong>Mi respuesta:</strong>
+                  </Form.Label>
                   {reconocimientoDisponible && (
                     <>
                       <style>{`
@@ -1890,7 +2233,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                   }
                 `}</style>
                 <div style={{ position: 'relative' }}>
+                  {/* ✅ ReactQuill con key única para forzar remount limpio cuando cambia la tarea */}
                   <ReactQuill
+                    key={`quill-${tarea?.id || 'new'}-${show}`}
                     ref={mentionQuillRef}
                     theme="snow"
                     value={responseNote || ""}
@@ -1910,7 +2255,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
                             quillEditorRef.current = editor;
                           }
                         } catch (e) {
-                          console.error('Error guardando referencia al editor:', e);
+                          // Solo log en desarrollo
+                          if (import.meta.env.DEV) {
+                            console.error('Error guardando referencia al editor:', e);
+                          }
                         }
                       }
                     }}
@@ -2123,7 +2471,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
 
           {/* ✅ Columna derecha: Historial */}
           <Col md={6} style={{ overflowY: "auto", maxHeight: "calc(100vh - 250px)" }}>
-            <h6 className="mb-3">📜 Historial del Cliente</h6>
+            <div className="section-title">
+              <i className="fas fa-history text-info"></i>
+              Historial del Cliente
+            </div>
             {loadingHistorial ? (
               <div className="d-flex align-items-center gap-2">
                 <Spinner animation="border" size="sm" />
@@ -2492,15 +2843,24 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         </Button>
         {tarea.status !== "completed" && (
           <>
-            <Button variant="primary" onClick={handleActualizarFechas}>
-              Actualizar Fechas
-            </Button>
-            <Button variant="info" onClick={handleAgregarComentario}>
-              Agregar Comentario
-            </Button>
-            <Button variant="success" onClick={handleCompletar}>
-              Marcar completada
-            </Button>
+            {/* Si viene de notificación, solo mostrar botón de Agregar Comentario */}
+            {fromNotification ? (
+              <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
+                Agregar Comentario
+              </Button>
+            ) : (
+              <>
+                <Button variant="primary" onClick={handleActualizarFechas} disabled={loading}>
+                  Actualizar Fechas
+                </Button>
+                <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
+                  Agregar Comentario
+                </Button>
+                <Button variant="success" onClick={handleCompletar} disabled={loading}>
+                  Marcar completada
+                </Button>
+              </>
+            )}
           </>
         )}
       </Modal.Footer>
@@ -2629,6 +2989,260 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated }) => {
         </Modal.Footer>
       </Modal>
     )}
+
+    {/* ✅ Modal de confirmación antes de completar tarea */}
+    <Modal 
+      show={showConfirmCompletarModal} 
+      onHide={() => !loading && setShowConfirmCompletarModal(false)} 
+      centered 
+      size="lg"
+    >
+      <Modal.Header closeButton={!loading}>
+        <Modal.Title>
+          <i className="fas fa-check-circle text-success me-2"></i>
+          Confirmar Finalización de Tarea
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="alert alert-warning mb-3">
+          <div className="d-flex align-items-center mb-2">
+            <i className="fas fa-exclamation-triangle me-2"></i>
+            <span><strong>¿Está seguro de que desea marcar esta tarea como completada?</strong></span>
+          </div>
+          <div className="d-flex align-items-center gap-2 mt-2">
+            <i className="fas fa-hashtag text-primary"></i>
+            <span className="small">
+              <strong>ID de la tarea:</strong>{" "}
+              <Badge bg="primary" className="ms-1">
+                {tarea?.id || tarea?.task_id || tarea?.tarea_id || "N/A"}
+              </Badge>
+            </span>
+          </div>
+        </div>
+        <div className="mb-3">
+          <p className="mb-2">
+            <strong>Esta acción:</strong>
+          </p>
+          <ul className="mb-0" style={{ paddingLeft: "1.5rem" }}>
+            <li>Marcará la tarea como <Badge bg="success">Completada</Badge></li>
+            <li>Cambiará el estado de la tarea permanentemente</li>
+            {(!isNoteEmpty(responseNote) || archivos.length > 0) && (
+              <li>Agregará un comentario final antes de completar</li>
+            )}
+          </ul>
+        </div>
+        {(!isNoteEmpty(responseNote) || archivos.length > 0) && (
+          <div className="mb-3">
+            <label className="fw-semibold mb-2 d-block">
+              <i className="fas fa-comment-dots me-2 text-primary"></i>
+              Comentario final a agregar:
+            </label>
+            <div 
+              className="border rounded p-3 bg-light"
+              style={{ 
+                maxHeight: "200px", 
+                overflowY: "auto",
+                fontSize: "14px",
+                lineHeight: "1.6",
+                wordBreak: "break-word"
+              }}
+            >
+              {isNoteEmpty(responseNote) ? (
+                <span className="text-muted fst-italic">
+                  <i className="fas fa-file me-2"></i>
+                  (Solo archivos adjuntos)
+                </span>
+              ) : (
+                <div 
+                  className="ql-editor"
+                  dangerouslySetInnerHTML={{ __html: responseNote || "Sin contenido" }}
+                  style={{ 
+                    padding: 0,
+                    fontSize: "14px",
+                    lineHeight: "1.6"
+                  }}
+                />
+              )}
+            </div>
+            {archivos.length > 0 && (
+              <div className="mt-2">
+                <label className="fw-semibold mb-2 d-block small">
+                  <i className="fas fa-paperclip me-2 text-primary"></i>
+                  Archivos adjuntos ({archivos.length}):
+                </label>
+                <div className="d-flex flex-wrap gap-2">
+                  {archivos.map((archivo) => (
+                    <Badge key={archivo.id} bg="info" className="p-2 d-flex align-items-center">
+                      <i className={`fas ${archivo.tipo === "imagen" ? "fa-image" : archivo.tipo === "pdf" ? "fa-file-pdf text-danger" : "fa-file-word text-primary"} me-1`}></i>
+                      <span style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {archivo.nombre}
+                      </span>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <div className="alert alert-info mb-0">
+          <small>
+            <i className="fas fa-info-circle me-1"></i>
+            <strong>Nota:</strong> Una vez completada, la tarea cambiará su estado y no podrá ser modificada fácilmente.
+          </small>
+        </div>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowConfirmCompletarModal(false)}
+          disabled={loading}
+        >
+          <i className="fas fa-times me-1"></i>
+          Cancelar
+        </Button>
+        <Button 
+          variant="success" 
+          onClick={confirmarYCompletarTarea}
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" />
+              Completando...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-check me-1"></i>
+              Sí, Completar Tarea
+            </>
+          )}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+
+    {/* ✅ Modal de confirmación antes de agregar comentario */}
+    <Modal show={showConfirmModal} onHide={() => !loading && setShowConfirmModal(false)} centered size="lg">
+      <Modal.Header closeButton={!loading}>
+        <Modal.Title>
+          <i className="fas fa-question-circle text-primary me-2"></i>
+          Confirmar Comentario
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        <div className="alert alert-info mb-3">
+          <div className="d-flex align-items-center mb-2">
+            <i className="fas fa-info-circle me-2"></i>
+            <span><strong>¿Desea agregar el comentario a la tarea?</strong></span>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <i className="fas fa-hashtag text-primary"></i>
+            <span className="small">
+              <strong>ID de la tarea:</strong>{" "}
+              <Badge bg="primary" className="ms-1">
+                {tarea?.id || tarea?.task_id || tarea?.tarea_id || "N/A"}
+              </Badge>
+            </span>
+          </div>
+        </div>
+        <div className="mb-3">
+          <label className="fw-semibold mb-2 d-block">
+            <i className="fas fa-comment-dots me-2 text-primary"></i>
+            Mensaje a enviar:
+          </label>
+          <div 
+            className="border rounded p-3 bg-light"
+            style={{ 
+              maxHeight: "250px", 
+              overflowY: "auto",
+              fontSize: "14px",
+              lineHeight: "1.6",
+              wordBreak: "break-word"
+            }}
+          >
+            {isNoteEmpty(responseNote) ? (
+              <span className="text-muted fst-italic">
+                <i className="fas fa-file me-2"></i>
+                (Sin texto - solo archivos adjuntos)
+              </span>
+            ) : (
+              <div 
+                className="ql-editor"
+                dangerouslySetInnerHTML={{ __html: responseNote || "Sin contenido" }}
+                style={{ 
+                  padding: 0,
+                  fontSize: "14px",
+                  lineHeight: "1.6"
+                }}
+              />
+            )}
+          </div>
+        </div>
+        {archivos.length > 0 && (
+          <div className="mb-2">
+            <label className="fw-semibold mb-2 d-block">
+              <i className="fas fa-paperclip me-2 text-primary"></i>
+              Archivos adjuntos ({archivos.length}):
+            </label>
+            <div className="d-flex flex-wrap gap-2">
+              {archivos.map((archivo) => (
+                <Badge key={archivo.id} bg="info" className="p-2 d-flex align-items-center">
+                  <i className={`fas ${archivo.tipo === "imagen" ? "fa-image" : archivo.tipo === "pdf" ? "fa-file-pdf text-danger" : "fa-file-word text-primary"} me-1`}></i>
+                  <span style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {archivo.nombre}
+                  </span>
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal.Body>
+      <Modal.Footer>
+        <Button 
+          variant="secondary" 
+          onClick={() => setShowConfirmModal(false)}
+          disabled={loading}
+        >
+          Cancelar
+        </Button>
+        <Button 
+          variant="primary" 
+          onClick={confirmarYEnviarComentario}
+          disabled={loading}
+        >
+          {loading ? (
+            <>
+              <Spinner size="sm" animation="border" className="me-2" />
+              Enviando...
+            </>
+          ) : (
+            <>
+              <i className="fas fa-check me-2"></i>
+              Sí, Agregar Comentario
+            </>
+          )}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+
+    {/* ✅ Toast de notificación */}
+    <ToastContainer className="p-3" position="top-end" style={{ zIndex: 9999 }}>
+      <Toast 
+        show={showToast} 
+        onClose={() => setShowToast(false)} 
+        delay={4000} 
+        autohide 
+        bg={toastVariant}
+      >
+        <Toast.Header closeButton={true}>
+          <strong className="me-auto">
+            {toastVariant === "success" ? "✅ Éxito" : "❌ Error"}
+          </strong>
+        </Toast.Header>
+        <Toast.Body className={toastVariant === "success" ? "text-white" : "text-white"}>
+          {toastMessage}
+        </Toast.Body>
+      </Toast>
+    </ToastContainer>
     </>
   );
 };

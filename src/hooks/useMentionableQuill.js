@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { extractMentionedUserIds } from '../utils/mentions';
 
 /**
@@ -15,21 +15,25 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
   const [mentionStartPos, setMentionStartPos] = useState(null);
   const mentionSearchRef = useRef('');
   
-  // Debug: log cuando cambian los usuarios
+  // Debug: log cuando cambian los usuarios (solo en desarrollo y una vez)
+  const usuariosLogeadosRef = useRef(false);
   useEffect(() => {
-    if (users && users.length > 0) {
-      console.log(`📋 Hook: ${users.length} usuarios disponibles para menciones`, users.slice(0, 3).map(u => u.name));
-    } else {
-      console.log('⚠️ Hook: No hay usuarios disponibles aún');
+    if (import.meta.env.DEV && !usuariosLogeadosRef.current && users && users.length > 0) {
+      console.log(`📋 Hook: ${users.length} usuarios disponibles para menciones`);
+      usuariosLogeadosRef.current = true;
     }
-  }, [users]);
+  }, [users?.length]); // Solo cuando cambia la cantidad de usuarios
   
-  // Debug: log cuando cambia showMentionList
+  // Debug: log cuando cambia showMentionList (solo cuando se muestra, no cuando se oculta)
+  const showMentionListLogRef = useRef(false);
   useEffect(() => {
-    if (showMentionList) {
+    if (import.meta.env.DEV && showMentionList && !showMentionListLogRef.current) {
       console.log(`🔍 Dropdown de menciones visible con ${mentionList.length} usuarios`);
+      showMentionListLogRef.current = true;
+    } else if (!showMentionList) {
+      showMentionListLogRef.current = false;
     }
-  }, [showMentionList, mentionList.length]);
+  }, [showMentionList]);
 
   // Filtrar usuarios para el autocompletado
   const filterUsers = (searchText) => {
@@ -178,17 +182,15 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
         const textBeforeCursor = quill.getText(0, range.index);
         const lastAtIndex = textBeforeCursor.lastIndexOf('@');
         
-        // Debug logging
-        const debugInfo = {
-          textBeforeCursor: textBeforeCursor.substring(Math.max(0, textBeforeCursor.length - 30)),
-          lastAtIndex,
-          cursorIndex: range.index,
-          distance: lastAtIndex !== -1 ? range.index - lastAtIndex : null,
-          usersAvailable: users?.length || 0,
-          showMentionList: showMentionList
-        };
-        
-        if (lastAtIndex !== -1 || textBeforeCursor.includes('@')) {
+        // Debug logging (solo en desarrollo y cuando realmente hay un @)
+        if (import.meta.env.DEV && lastAtIndex !== -1) {
+          const debugInfo = {
+            textBeforeCursor: textBeforeCursor.substring(Math.max(0, textBeforeCursor.length - 30)),
+            lastAtIndex,
+            cursorIndex: range.index,
+            distance: range.index - lastAtIndex,
+            usersAvailable: users?.length || 0,
+          };
           console.log('🔍 Detección de @:', debugInfo);
         }
 
@@ -212,10 +214,8 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
             if (!searchText || searchText === '') {
               // Mostrar primeros 20 usuarios cuando solo se escribe @
               filtered = users && users.length > 0 ? users.slice(0, 20) : [];
-              console.log(`📋 Sin texto de búsqueda, mostrando primeros ${filtered.length} usuarios`);
             } else {
               filtered = filterUsers(searchText);
-              console.log(`🔎 Búsqueda: "${searchText}", encontrados: ${filtered.length}`);
             }
             
             // Mostrar lista si hay usuarios disponibles
@@ -225,7 +225,6 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
               setShowMentionList(true);
               setSelectedMentionIndex(0);
               mentionSearchRef.current = searchText;
-              console.log(`✅ Mostrando dropdown con ${filtered.length} usuarios`);
               return;
             } else if (users && users.length > 0 && (!searchText || searchText === '')) {
               // Si escribió solo @ y hay usuarios, mostrar lista
@@ -235,25 +234,14 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
               setShowMentionList(true);
               setSelectedMentionIndex(0);
               mentionSearchRef.current = '';
-              console.log(`✅ Mostrando ${defaultList.length} usuarios (mención vacía)`);
               return;
-            } else {
-              console.log('⚠️ No hay usuarios disponibles para mostrar', { 
-                usersCount: users?.length || 0, 
-                searchText,
-                filteredCount: filtered.length 
-              });
             }
           } else {
             // Si tiene caracteres inválidos, ocultar
-            console.log('❌ Caracteres inválidos después de @, ocultando dropdown');
             setShowMentionList(false);
           }
         } else {
           // Si no hay @ cerca, ocultar
-          if (showMentionList) {
-            console.log('❌ No hay @ cerca del cursor, ocultando dropdown');
-          }
           setShowMentionList(false);
           mentionSearchRef.current = '';
         }
@@ -288,7 +276,6 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
                       setMentionList(users.slice(0, 20));
                       setShowMentionList(true);
                       setSelectedMentionIndex(0);
-                      console.log('✅ Activado mención manual al escribir @');
                     }
                   }
                 }
@@ -323,6 +310,7 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
   };
 
   // Función helper para extraer y notificar menciones del contenido actual
+  // Usar useMemo para evitar recrear la función en cada render
   const notifyMentionChange = useCallback((content) => {
     if (onMentionChange && content) {
       try {
@@ -330,26 +318,33 @@ export const useMentionableQuill = (users = [], onMentionChange = null) => {
         const mentionedIds = extractMentionedUserIds(content, users);
         onMentionChange(mentionedIds);
       } catch (error) {
-        console.debug('Error extrayendo menciones:', error);
+        // Solo log en desarrollo
+        if (import.meta.env.DEV) {
+          console.debug('Error extrayendo menciones:', error);
+        }
       }
     }
-  }, [onMentionChange, users]);
+  }, [onMentionChange, users?.length]); // Solo cuando cambia la cantidad de usuarios, no el array completo
 
-  // Llamar al callback cuando cambian las menciones (cuando se inserta una mención)
+  // Llamar al callback cuando cambian las menciones (solo cuando realmente cambia, no en cada render)
+  const lastContentRef = useRef('');
   useEffect(() => {
-    if (quillRef.current) {
+    if (quillRef.current && showMentionList) {
       try {
         const quill = quillRef.current.getEditor();
         if (quill && quill.root) {
           const content = quill.root.innerHTML;
-          notifyMentionChange(content);
+          // Solo notificar si el contenido realmente cambió
+          if (content !== lastContentRef.current) {
+            lastContentRef.current = content;
+            notifyMentionChange(content);
+          }
         }
       } catch (error) {
         // Ignorar errores si el editor aún no está listo
-        console.debug('Editor aún no está listo para extraer menciones');
       }
     }
-  }, [showMentionList, notifyMentionChange]); // Actualizar cuando se muestra/oculta la lista
+  }, [showMentionList]); // Solo cuando se muestra/oculta la lista, removido notifyMentionChange para evitar loops
 
   // Función para actualizar índice seleccionado desde fuera
   const updateSelectedIndex = (index) => {

@@ -30,6 +30,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   // ✅ Estados para notificaciones y modal de respuesta
   const [pendientes, setPendientes] = useState(0);
   const [loadingTarea, setLoadingTarea] = useState(false);
+  const [fromNotification, setFromNotification] = useState(false);
 
   const diasSemana = ["L", "M", "X", "J", "V", "S", "D"];
   const diasEnMes = new Date(añoActual, mesActual + 1, 0).getDate();
@@ -426,7 +427,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   };
 
   // ✅ Función para abrir el modal de respuesta con una tarea
-  const openTaskResponseModal = async (taskId = null) => {
+  const openTaskResponseModal = async (taskId = null, isFromNotification = false) => {
     try {
       setLoadingTarea(true);
       
@@ -548,6 +549,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       }
       
       setTareaSeleccionada(taskDetail);
+      setFromNotification(isFromNotification);
       setShowResponderModal(true);
     } catch (error) {
       console.error("Error al abrir modal de respuesta:", error);
@@ -557,7 +559,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }
   };
 
-  const abrirResponderTarea = (tarea) => {
+  const abrirResponderTarea = (tarea, isFromNotification = false) => {
     if (!tarea) return;
     
     // ✅ Si la tarea tiene fecha programada, navegar a ese mes/año en el calendario
@@ -586,6 +588,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }
     
     setTareaSeleccionada(tarea);
+    setFromNotification(isFromNotification);
     setShowResponderModal(true);
   };
 
@@ -669,11 +672,55 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   };
 
   const onUpdated = (tareaActualizada) => {
-    if (!tareaActualizada || !tareaActualizada.id) return;
+    if (!tareaActualizada || !tareaActualizada.id) {
+      console.warn("⚠️ onUpdated llamado sin tarea válida:", tareaActualizada);
+      return;
+    }
+    
+    // ✅ Log de depuración
+    if (import.meta.env.DEV) {
+      console.log("🔄 [CalendarioTareas] Actualizando tarea:", {
+        id: tareaActualizada.id,
+        estado: tareaActualizada.status,
+        tarea_completa: tareaActualizada
+      });
+    }
+    
     setTareas((prev) => {
       const prevArray = Array.isArray(prev) ? prev : [];
-      return prevArray.map((t) => (t && t.id === tareaActualizada.id ? tareaActualizada : t));
+      const actualizado = prevArray.map((t) => {
+        // ✅ Buscar por múltiples campos de ID para asegurar que se encuentre la tarea
+        const tId = t?.id || t?.task_id || t?.tarea_id;
+        const actualizadaId = tareaActualizada?.id || tareaActualizada?.task_id || tareaActualizada?.tarea_id;
+        
+        if (t && tId && actualizadaId && tId === actualizadaId) {
+          // ✅ Asegurar que el estado se actualice correctamente
+          return {
+            ...t,
+            ...tareaActualizada,
+            status: tareaActualizada.status || t.status
+          };
+        }
+        return t;
+      });
+      
+      // ✅ Log de depuración del resultado
+      if (import.meta.env.DEV) {
+        const encontrada = actualizado.find(t => {
+          const tId = t?.id || t?.task_id || t?.tarea_id;
+          const actualizadaId = tareaActualizada?.id || tareaActualizada?.task_id || tareaActualizada?.tarea_id;
+          return tId === actualizadaId;
+        });
+        console.log("🔄 [CalendarioTareas] Tarea actualizada en el estado:", {
+          encontrada: !!encontrada,
+          estado_final: encontrada?.status,
+          total_tareas: actualizado.length
+        });
+      }
+      
+      return actualizado;
     });
+    
     setToast({ show: true, message: "✅ Tarea actualizada", variant: "info" });
   };
 
@@ -1178,11 +1225,11 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         // Si ya tenemos el objeto task completo en la notificación, usarlo directamente
                         if (notification.task && notification.task.id) {
                           console.log("✅ Usando objeto task completo de la notificación");
-                          abrirResponderTarea(notification.task);
+                          abrirResponderTarea(notification.task, true);
                         } else {
                           // Usar el mismo método que funciona para notificaciones de tareas
                           console.log("✅ Abriendo modal con taskId usando openTaskResponseModal:", numericTaskId);
-                          await openTaskResponseModal(numericTaskId);
+                          await openTaskResponseModal(numericTaskId, true);
                         }
                       } else {
                         console.error("❌ No se pudo obtener un task_id válido de la notificación:", {
@@ -1199,34 +1246,34 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                     } else if (notification.type === 'task_assigned' && notification.task_id) {
                       const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
                       if (notification.task && notification.task.id) {
-                        abrirResponderTarea(notification.task);
+                        abrirResponderTarea(notification.task, true);
                       } else {
-                        await openTaskResponseModal(numericTaskId);
+                        await openTaskResponseModal(numericTaskId, true);
                       }
                     } else if (notification.type === 'task_pending') {
                       if (notification.task_id) {
                         const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
                         if (notification.task && notification.task.id) {
-                          abrirResponderTarea(notification.task);
+                          abrirResponderTarea(notification.task, true);
                         } else {
-                          await openTaskResponseModal(numericTaskId);
+                          await openTaskResponseModal(numericTaskId, true);
                         }
                       } else {
-                        await openTaskResponseModal();
+                        await openTaskResponseModal(null, true);
                       }
                     } else if (notification.type === 'task' && notification.task_id) {
                       const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
                       if (notification.task && notification.task.id) {
-                        abrirResponderTarea(notification.task);
+                        abrirResponderTarea(notification.task, true);
                       } else {
-                        await openTaskResponseModal(numericTaskId);
+                        await openTaskResponseModal(numericTaskId, true);
                       }
                     } else if (notification.type === 'view_all') {
                       // Navegar a operaciones (opcional)
                       window.location.href = '/Herramientas/operaciones';
                     } else {
                       if (pendientes > 0) {
-                        await openTaskResponseModal();
+                        await openTaskResponseModal(null, true);
                       }
                     }
                   } catch (error) {
@@ -1260,7 +1307,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       {/* Días de la semana mejorados */}
       <div className="d-grid mb-3 fw-bold text-center text-muted" style={{ gridTemplateColumns: "repeat(7, 1fr)", gap: "8px" }}>
         {diasSemana.map((d, idx) => (
-          <div key={idx} className="p-2" style={{ fontSize: "0.9rem" }}>
+          <div key={`weekday-${idx}-${d}`} className="p-2" style={{ fontSize: "0.9rem" }}>
             {d}
           </div>
         ))}
@@ -1269,7 +1316,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       {/* Celdas del calendario mejoradas */}
       <div className="d-grid" style={{ gridTemplateColumns: "repeat(7, 1fr)", gap: "10px" }}>
         {celdas.map((dia, index) => {
-          if (dia === null) return <div key={index}></div>;
+          if (dia === null) return <div key={`empty-${index}`}></div>;
 
           const tareasDia = tareasPorDia[dia] || [];
           const todasLasTareas = obtenerTodasTareasDelDia(dia);
@@ -1277,9 +1324,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           const esPasado = new Date(añoActual, mesActual, dia) < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
           const tieneTareas = tareasDia.length > 0;
 
+          // ✅ Key única combinando día, mes y año para evitar duplicados
+          const uniqueKey = `day-${añoActual}-${mesActual}-${dia}-${index}`;
+
           return (
             <Card
-              key={dia}
+              key={uniqueKey}
               data-day={dia}
               data-month={mesActual}
               data-year={añoActual}
@@ -1352,14 +1402,17 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
               <div className="mt-2" style={{ minHeight: "80px" }}>
                 {tareasDia.length > 0 ? (
                   <>
-                    {tareasDia.slice(0, 4).map((t) => {
+                    {tareasDia.slice(0, 4).map((t, tIndex) => {
                       if (!t) return null;
                       const clienteNombre = t.log?.cliente?.nombre_completo || "Sin Cliente";
                       const tooltipText = `${clienteNombre} - ${getStatusLabel(t?.status)}`;
                       
+                      // ✅ Key única combinando ID de tarea, día e índice para evitar duplicados
+                      const taskKey = t.id ? `task-${t.id}-${dia}-${tIndex}` : `task-${dia}-${tIndex}-${Date.now()}`;
+                      
                       return (
                         <OverlayTrigger
-                          key={t.id}
+                          key={taskKey}
                           placement="top"
                           overlay={<Tooltip>{tooltipText}</Tooltip>}
                         >
@@ -1443,11 +1496,13 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         <Modal.Body className="p-0">
           {Array.isArray(tareasDetalle) && tareasDetalle.length > 0 ? (
             <ListGroup variant="flush">
-              {tareasDetalle.map((t) => {
+              {tareasDetalle.map((t, idx) => {
                 if (!t) return null;
+                // ✅ Key única combinando ID e índice para evitar duplicados
+                const detailKey = t.id ? `detail-${t.id}-${idx}` : `detail-${idx}-${Date.now()}`;
                 return (
                   <ListGroup.Item
-                    key={t.id}
+                    key={detailKey}
                     className="d-flex justify-content-between align-items-center p-3 border-bottom"
                     style={{ 
                       transition: "background-color 0.2s ease",
@@ -1511,19 +1566,34 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     onHide={(updated) => {
       setShowResponderModal(false);
       setTareaSeleccionada(null);
+      setFromNotification(false);
       if (updated) {
-        // Actualizar contador de pendientes
+        // ✅ Actualizar contador de pendientes cuando se cierra el modal
         apiRequest("tareas_operativas/pendientes", "GET")
           .then((res) => setPendientes(res.pendientes || 0))
           .catch(() => {});
-        // Actualizar tarea en el estado
-        onUpdated(tareaSeleccionada);
+        // ✅ El onUpdated ya se llamó antes, no necesitamos llamarlo de nuevo aquí
       }
     }}
     tarea={tareaSeleccionada}
+    fromNotification={fromNotification}
     onUpdated={(tareaActualizada) => {
-      onUpdated(tareaActualizada); // ✅ Actualiza en el estado
-      setShowResponderModal(false); // ✅ Cierra modal después
+      // ✅ Actualizar el estado INMEDIATAMENTE cuando se agrega el comentario
+      // Esto asegura que el cambio de color se vea antes de cerrar el modal
+      onUpdated(tareaActualizada);
+      
+      // ✅ Log de depuración
+      if (import.meta.env.DEV) {
+        console.log("🔄 [CalendarioTareas] Tarea actualizada desde modal (onUpdated):", {
+          id: tareaActualizada?.id,
+          estado: tareaActualizada?.status,
+          estado_anterior: tareaSeleccionada?.status,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // ✅ El modal se cierra automáticamente después de un delay en ResponderTareaModal
+      // No cerramos aquí para evitar conflictos con el delay
     }}
   />
 )}
@@ -1554,6 +1624,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   );
 };
 
+// ✅ Función para obtener el color del badge según el estado de la tarea
 const getBadgeColor = (status) => {
   switch (status) {
     case "pending": return "warning";

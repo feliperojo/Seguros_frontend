@@ -92,17 +92,14 @@ export const extractMentionedUserIds = (htmlText, users = []) => {
   // Eliminar duplicados
   const uniqueIds = [...new Set(mentionedIds)];
   
-  // 📝 Log de depuración: Menciones extraídas
-  if (import.meta.env.DEV) {
+  // 📝 Log de depuración: Menciones extraídas (solo si hay menciones encontradas y en desarrollo)
+  if (import.meta.env.DEV && uniqueIds.length > 0) {
     const mentionedUsers = users.filter(u => uniqueIds.includes(u.id)).map(u => ({ id: u.id, name: u.name || u.nombre }));
     console.log("🔍 [MENCIONES] Extraídas del texto:", {
-      texto_preview: htmlText?.substring(0, 150) || "",
-      texto_completo_length: htmlText?.length || 0,
-      menciones_encontradas: mentions.map(m => ({ id: m.id, name: m.name, match: m.fullMatch })),
+      texto_preview: htmlText?.substring(0, 100) || "",
+      menciones_encontradas: mentions.length,
       ids_extraidos: uniqueIds,
-      usuarios_resueltos: mentionedUsers,
-      total_usuarios_disponibles: users.length,
-      tiene_usuarios: users.length > 0
+      usuarios_resueltos: mentionedUsers
     });
   }
   

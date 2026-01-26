@@ -16,6 +16,7 @@ const MainLayout = ({ children }) => {
   const [showResponderModal, setShowResponderModal] = useState(false);
   const [selectedTarea, setSelectedTarea] = useState(null);
   const [loadingTarea, setLoadingTarea] = useState(false);
+  const [fromNotification, setFromNotification] = useState(false);
   
   // ✅ Obtener usuario actual para notificaciones
   const currentUser = React.useMemo(() => {
@@ -166,7 +167,7 @@ const MainLayout = ({ children }) => {
   };
 
   // ✅ Función para abrir el modal de respuesta con una tarea pendiente
-  const openTaskResponseModal = async (taskId = null) => {
+  const openTaskResponseModal = async (taskId = null, isFromNotification = false) => {
     try {
       setLoadingTarea(true);
       
@@ -249,6 +250,7 @@ const MainLayout = ({ children }) => {
       });
       
       setSelectedTarea(taskDetail);
+      setFromNotification(isFromNotification);
       setShowResponderModal(true);
     } catch (error) {
       console.error("Error al abrir modal de respuesta:", error);
@@ -289,7 +291,7 @@ const MainLayout = ({ children }) => {
               
               // Si tenemos task_id, abrir la tarea
               if (taskId) {
-                openTaskResponseModal(taskId);
+                openTaskResponseModal(taskId, true);
               } else {
                 console.warn("No se pudo obtener task_id de la notificación de mención:", notification);
                 // Navegar a operaciones como fallback
@@ -297,25 +299,25 @@ const MainLayout = ({ children }) => {
               }
             } else if (notification.type === 'task_assigned' && notification.task_id) {
               // Abrir modal de respuesta con la tarea asignada
-              openTaskResponseModal(notification.task_id);
+              openTaskResponseModal(notification.task_id, true);
             } else if (notification.type === 'task_pending') {
               // ✅ Abrir modal de respuesta con la tarea específica si tiene task_id
               if (notification.task_id) {
-                openTaskResponseModal(notification.task_id);
+                openTaskResponseModal(notification.task_id, true);
               } else {
                 // Si no tiene task_id, abrir con la primera tarea pendiente
-                openTaskResponseModal();
+                openTaskResponseModal(null, true);
               }
             } else if (notification.type === 'task' && notification.task_id) {
               // Abrir modal de respuesta con la tarea
-              openTaskResponseModal(notification.task_id);
+              openTaskResponseModal(notification.task_id, true);
             } else if (notification.type === 'view_all') {
               // Ver todas las tareas - navegar a operaciones
               navigate('/Herramientas/operaciones');
             } else {
               // Por defecto, intentar abrir primera tarea pendiente
               if (pendientes > 0) {
-                openTaskResponseModal();
+                openTaskResponseModal(null, true);
               } else {
                 navigate('/Herramientas/operaciones');
               }
@@ -334,6 +336,7 @@ const MainLayout = ({ children }) => {
           onHide={(updated) => {
             setShowResponderModal(false);
             setSelectedTarea(null);
+            setFromNotification(false);
             // Actualizar contador de pendientes si se actualizó la tarea
             if (updated) {
               apiRequest("tareas_operativas/pendientes", "GET")
@@ -342,6 +345,7 @@ const MainLayout = ({ children }) => {
             }
           }}
           tarea={selectedTarea}
+          fromNotification={fromNotification}
         />
       )}
     </div>
