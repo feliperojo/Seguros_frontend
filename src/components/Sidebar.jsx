@@ -320,6 +320,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/Herramientas/operaciones" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
                 <FaCogs /> Centro de Operaciones
               </Link>
+              <Link to="/admin/operational-concepts" className={`submenu-link ${isActive('/admin/operational-concepts') ? 'active' : ''}`}>
+                <FaFolder /> Conceptos Operativos
+              </Link>
             </div>
           )}
         </div>
