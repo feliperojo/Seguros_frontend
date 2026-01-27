@@ -84,7 +84,8 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     setEditableRequerimiento({
       ...requerimiento,
       fecha_vencimiento: requerimiento.fecha_vencimiento || "",
-      estado: requerimiento.estado || "Pendiente"
+      estado: requerimiento.estado || "Pendiente",
+      codigo_poliza: requerimiento.codigo_poliza || null
     });
   };
 
@@ -101,9 +102,14 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
   
     setLoading(true);
     try {
+      // Buscar la cobertura para obtener el codigo_poliza si no está en editableRequerimiento
+      const cobertura = coberturas.find(c => c.id === editableRequerimiento.cobertura_id);
+      const codigoPoliza = editableRequerimiento.codigo_poliza || cobertura?.codigo_poliza || null;
+
       const updatedData = {
         fecha_vencimiento: editableRequerimiento.fecha_vencimiento,
         estado: editableRequerimiento.estado,
+        codigo_poliza: codigoPoliza,
       };
   
       // Call the API to update the requerimiento
@@ -134,16 +140,21 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
   
     setLoading(true);
     try {
-      const requestData = {
-        documento_requerido: nuevo.documento_requerido,
-        fecha_solicitud: nuevo.fecha_solicitud,
-        observaciones: nuevo.observaciones,
-        fecha_vencimiento: nuevo.fecha_vencimiento,
-        estado: nuevo.estado,
-      };
-  
       // Guardar requerimiento para cada cobertura seleccionada
       for (const coberturaId of nuevo.cobertura_id) {
+        // Buscar la cobertura para obtener el codigo_poliza
+        const cobertura = coberturas.find(c => c.id === coberturaId);
+        const codigoPoliza = cobertura?.codigo_poliza || null;
+
+        const requestData = {
+          documento_requerido: nuevo.documento_requerido,
+          fecha_solicitud: nuevo.fecha_solicitud,
+          observaciones: nuevo.observaciones,
+          fecha_vencimiento: nuevo.fecha_vencimiento,
+          estado: nuevo.estado,
+          codigo_poliza: codigoPoliza,
+        };
+  
         await apiRequest(`coberturas/${coberturaId}/documentos`, "POST", requestData);
       }
   
@@ -181,10 +192,11 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
 
       // Verificar si los requerimientos están presentes
       if (cobertura.requerimientos && cobertura.requerimientos.length > 0) {
-        // Agregar cobertura_id a cada requerimiento para poder editarlo
+        // Agregar cobertura_id y codigo_poliza a cada requerimiento para poder editarlo
         const requerimientosConCobertura = cobertura.requerimientos.map(req => ({
           ...req,
-          cobertura_id: cobertura.id
+          cobertura_id: cobertura.id,
+          codigo_poliza: cobertura.codigo_poliza || null
         }));
         grouped[clienteId].requerimientos.push(...requerimientosConCobertura);
       }

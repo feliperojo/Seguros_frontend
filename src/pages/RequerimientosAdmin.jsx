@@ -183,6 +183,7 @@ const [reqActivo, setReqActivo] = useState(null);
               <thead>
                 <tr>
                   <th className="col-doc">DOCUMENTO</th>
+                  <th className="col-doc">CÓDIGO PÓLIZA</th>
                   <th className="col-fecha">FECHA VENCIMIENTO</th>
                   <th className="col-fecha">FECHA SOLICITUD</th>
                   <th className="col-estado">ESTADO</th>
@@ -195,6 +196,7 @@ const [reqActivo, setReqActivo] = useState(null);
                 {docs.map((req) => (
                   <tr key={req.id}>
                     <td>{req.documento_requerido}</td>
+                    <td>{req.codigo_poliza || req.cobertura?.codigo_poliza || '-'}</td>
                     <td>
                       {editingId === req.id ? (
                         <input
