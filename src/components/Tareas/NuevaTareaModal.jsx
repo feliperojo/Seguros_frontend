@@ -63,7 +63,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
 
   const [conceptos, setConceptos] = useState([]);
   const [clientes, setClientes] = useState([]);
-  const [grupos, setGrupos] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
@@ -103,8 +102,34 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       const pickId = toInt(grupoElegido?.grupo_familiar_id);
       const cliId = toInt(cli?.cliente_id ?? cli?.id);
       const tieneGrupoContexto = toInt(grupoFamiliarId) !== null;
+      const gruposDelCliente = Array.isArray(cli?.grupos) ? cli.grupos : [];
 
-      if (tieneGrupoContexto && ctxId && pickId && ctxId !== pickId) {
+      // Si no hay grupo elegido y no hay contexto de grupo familiar
+      if (!grupoElegido && !tieneGrupoContexto) {
+        // Si el cliente tiene grupos pero no se seleccionó uno específico
+        if (gruposDelCliente.length > 0) {
+          // Si solo tiene un grupo, seleccionarlo automáticamente
+          if (gruposDelCliente.length === 1) {
+            grupoElegido = gruposDelCliente[0];
+          } else {
+            // Si tiene múltiples grupos, el usuario debe seleccionar uno
+            alert("Este cliente pertenece a múltiples grupos familiares. Por favor seleccione un grupo específico.");
+            return prev;
+          }
+        } else {
+          // El cliente no tiene grupos familiares
+          alert(
+            `El cliente "${cli.nombre_completo || cli.nombre || 'seleccionado'}" no se encuentra vinculado a un grupo familiar.\n\n` +
+            `Debe vincularlo primero a un grupo familiar para poder continuar con la creación de la tarea.`
+          );
+          return prev;
+        }
+      }
+
+      // Recalcular el pickId después de la lógica anterior
+      const grupoFinalId = toInt(grupoElegido?.grupo_familiar_id) || ctxId;
+
+      if (tieneGrupoContexto && ctxId && grupoFinalId && ctxId !== grupoFinalId) {
         alert("El cliente pertenece a otro grupo familiar. Por favor seleccione un miembro del grupo actual.");
         return prev;
       }
@@ -121,7 +146,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       const nombreDisplay = cli.nombre_completo || cli.nombre || "Cliente seleccionado";
       const infoExtra = [];
       if (cliId) infoExtra.push(`ID: ${cliId}`);
-      if (grupoElegido?.grupo_familiar_id) infoExtra.push(`GF #${grupoElegido.grupo_familiar_id}`);
+      if (grupoFinalId) infoExtra.push(`GF #${grupoFinalId}`);
       
       setClienteQuery(nombreDisplay + (infoExtra.length > 0 ? ` (${infoExtra.join(", ")})` : ""));
       setClientes([]);
@@ -129,7 +154,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       return {
         ...prev,
         cliente_id: cliId || "",
-        grupo_familiar_id: pickId || ctxId || "",
+        grupo_familiar_id: grupoFinalId || "",
       };
     });
   }, [grupoFamiliarId, clienteId]);
@@ -340,22 +365,19 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       }
     };
 
-    // Cargar conceptos y grupos
-    Promise.all([
-      apiRequest(`operational_concepts?only_parents=true`, "GET").catch(() => []),
-      apiRequest("grupo_familiar", "GET").catch(() => []),
-    ]).then(([conceptos, grupos]) => {
-      if (isMounted && show) {
-        setConceptosPadres(Array.isArray(conceptos) ? conceptos : []);
-        setGrupos(Array.isArray(grupos) ? grupos : []);
-      }
-    }).catch((err) => {
-      console.error("Error al cargar datos:", err);
-      if (isMounted && show) {
-        setConceptosPadres([]);
-        setGrupos([]);
-      }
-    });
+    // Cargar conceptos
+    apiRequest(`operational_concepts?only_parents=true`, "GET")
+      .then((conceptos) => {
+        if (isMounted && show) {
+          setConceptosPadres(Array.isArray(conceptos) ? conceptos : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Error al cargar conceptos:", err);
+        if (isMounted && show) {
+          setConceptosPadres([]);
+        }
+      });
 
     // Cargar usuarios
     cargarUsuarios();
@@ -667,6 +689,12 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       nuevosErrores.cliente_id = "El cliente es obligatorio";
     }
     
+    // Validar que el cliente tenga un grupo familiar asociado
+    const grupoFamiliarIdFinal = toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId);
+    if (!grupoFamiliarIdFinal) {
+      nuevosErrores.grupo_familiar_id = "El cliente debe estar vinculado a un grupo familiar";
+    }
+    
     if (!formData.assign_to_user_id || formData.assign_to_user_id === "") {
       nuevosErrores.assign_to_user_id = "Debes asignar la tarea a un usuario";
     }
@@ -828,28 +856,6 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               Grupo #{toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)}
             </span>
           </div>
-        )}
-
-        {!formData.grupo_familiar_id && (
-          <Form.Group className="mb-3">
-            <Form.Label>Grupo Familiar</Form.Label>
-            <Form.Select
-              name="grupo_familiar_id"
-              value={formData.grupo_familiar_id}
-              onChange={handleChange}
-              isInvalid={!!errors.grupo_familiar_id}
-            >
-              <option value="">Seleccionar grupo</option>
-              {grupos.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.nombre || `Grupo #${g.id}`}
-                </option>
-              ))}
-            </Form.Select>
-            <Form.Control.Feedback type="invalid">
-              {errors.grupo_familiar_id}
-            </Form.Control.Feedback>
-          </Form.Group>
         )}
 
         <Form.Group className="mb-3">
@@ -1463,11 +1469,20 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                       </div>
                     ) : (
                       <div className="mt-2">
+                        <div className="alert alert-warning mb-2 py-2" role="alert">
+                          <small className="d-flex align-items-center">
+                            <i className="fas fa-exclamation-triangle me-2"></i>
+                            <span>Este cliente no está vinculado a un grupo familiar. Debe vincularlo primero para continuar.</span>
+                          </small>
+                        </div>
                         <button
                           type="button"
-                          className="btn btn-sm btn-primary"
+                          className="btn btn-sm btn-outline-secondary"
                           onClick={() => handleClienteSeleccion(cli, null)}
+                          disabled
+                          title="No se puede seleccionar un cliente sin grupo familiar"
                         >
+                          <i className="fas fa-lock me-1"></i>
                           Seleccionar cliente
                         </button>
                       </div>

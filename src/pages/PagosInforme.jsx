@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Table, Spinner, Alert, Form, Container, Row, Col, Pagination } from "react-bootstrap";
 import apiRequest from "../services/api";
+import { renderClienteLink } from "./ListaClientes";
 
 const MONTHS = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
@@ -65,6 +67,8 @@ const PagosInforme = () => {
           id: pago.id,
           codigo_poliza: pago.cobertura?.codigo_poliza,
           cliente: pago.cliente?.nombre_completo,
+          cliente_id: pago.cliente?.id || pago.cliente_id,
+          grupo_familiar_id: pago.cobertura?.grupo_familiar_id || pago.grupo_familiar_id,
           pagador: pago.cobertura?.pagador?.nombre_completo,
           compania: pago.cobertura?.compania?.nombre,
           pagos: Array(12).fill(null)
@@ -140,6 +144,7 @@ const PagosInforme = () => {
             <Table striped bordered hover responsive className="shadow-sm w-100 text-center align-middle">
               <thead className="table-light">
                 <tr>
+                  <th>ID GF</th>
                   <th>ID Póliza</th>
                   <th>Cliente</th>
                   <th>Pagador</th>
@@ -152,8 +157,29 @@ const PagosInforme = () => {
               <tbody>
                 {currentRows.map((fila) => (
                   <tr key={fila.id}>
+                    <td>
+                      {fila.grupo_familiar_id ? (
+                        <Link
+                          to={`/grupo_familiar/${fila.grupo_familiar_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-decoration-none fw-semibold"
+                          title={`Ver grupo familiar #${fila.grupo_familiar_id}`}
+                        >
+                          {fila.grupo_familiar_id}
+                        </Link>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
                     <td>{fila.codigo_poliza}</td>
-                    <td>{fila.cliente || "-"}</td>
+                    <td>
+                      {renderClienteLink(
+                        fila.cliente_id,
+                        fila.cliente || "-"
+                      )}
+                    </td>
                     <td>{fila.pagador || "-"}</td>
                     <td>{fila.compania || "-"}</td>
                     {fila.pagos.map((pago, idx) => (

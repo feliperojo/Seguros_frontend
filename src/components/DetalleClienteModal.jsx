@@ -221,7 +221,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
         className={`nav-link ${activeTab === "medios" ? "active" : ""}`}
         onClick={() => setActiveTab("medios")}
       >
-        Medios de Pago
+        Medios de Pago..
       </button>
     </li>
 

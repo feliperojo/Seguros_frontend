@@ -4,7 +4,7 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -51,7 +51,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       setExpandedMenu('clientes');
     } else if (location.pathname.includes('/Grupofamiliar')) {
       setExpandedMenu('grupos');
-    } else if (location.pathname.includes('/Informes')) {
+    } else if (location.pathname.toLowerCase().includes('/informes')) {
       setExpandedMenu('informes');
     } else if (location.pathname.includes('/Herramientas')) {
       setExpandedMenu('herramientas');
@@ -219,7 +219,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Informes - Con submenú */}
         <div className="nav-item">
           <div
-            className={`nav-link ${location.pathname.includes('/Informes') ? 'active' : ''}`}
+            className={`nav-link ${location.pathname.toLowerCase().includes('/informes') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('informes', e)}
           >
             <FaFolder />
@@ -237,10 +237,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           {/* Submenú de Informes */}
           {isOpen && expandedMenu === 'informes' && (
             <div className="submenu">
-              <Link to="/Informes/historialCliente" className={`submenu-link ${isActive('/Informes/historialCliente') ? 'active' : ''}`}>
+              <Link to="/informes/historialCliente" className={`submenu-link ${isActive('/informes/historialCliente') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Clientes
               </Link>
-              {/* <Link to="/Informes/polizas" className={`submenu-link ${isActive('/Informes/polizas') ? 'active' : ''}`}>
+              <Link to="/informes/coberturas" className={`submenu-link ${isActive('/informes/coberturas') ? 'active' : ''}`}>
+                <FaFileAlt /> Reporte de Coberturas
+              </Link>
+              {/* <Link to="/informes/polizas" className={`submenu-link ${isActive('/informes/polizas') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Pólizas
               </Link> */}
             </div>

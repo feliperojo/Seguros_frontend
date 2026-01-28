@@ -25,6 +25,7 @@ import PagosInforme from './pages/PagosInforme';
 import InformeCliente from './pages/InformeCliente'
 import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
 import RequerimientosAdmin from "./pages/RequerimientosAdmin";
+import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
 import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
 import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
@@ -99,6 +100,7 @@ const App = () => {
         <Route path="/Pagos/cartera" element={<PagosInforme />} />
 
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
+        <Route path="/informes/coberturas" element={<ReporteCoberturasPage />} />
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
         <Route path="/clientes/contacto" element={<ContactosAdmin />} />

@@ -374,6 +374,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     let mounted = true;
     const cargarUsuarios = async () => {
       try {
+        // Intentar varios endpoints comunes
         let response = null;
         try {
           response = await apiRequest("users?per_page=1000", "GET");
@@ -381,20 +382,52 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
           try {
             response = await apiRequest("/v1/users?per_page=1000", "GET");
           } catch (e2) {
-            console.warn("No se pudieron cargar usuarios para menciones");
-            return;
+            console.error("Error al cargar usuarios:", e2);
           }
         }
         
-        const data = Array.isArray(response) ? response : response?.data || response || [];
-        const usuariosList = Array.isArray(data) ? data : [];
+        if (!response) {
+          if (mounted) {
+            setUsuarios([]);
+          }
+          return;
+        }
+        
+        // El endpoint puede retornar diferentes estructuras
+        let usuariosData = [];
+        
+        if (response?.success && Array.isArray(response.data)) {
+          usuariosData = response.data;
+        } else if (Array.isArray(response)) {
+          // Fallback: si viene como array directo
+          usuariosData = response;
+        } else if (response?.data && Array.isArray(response.data)) {
+          // Fallback: si viene con data pero sin success
+          usuariosData = response.data;
+        } else if (response?.data?.data && Array.isArray(response.data.data)) {
+          // Estructura anidada: { data: { data: [...] } }
+          usuariosData = response.data.data;
+        } else if (response?.users && Array.isArray(response.users)) {
+          usuariosData = response.users;
+        }
+        
+        // Normalizar estructura de usuarios
+        const usuariosNormalizados = usuariosData.map(u => ({
+          id: u.id,
+          name: u.name || u.nombre || u.username || '',
+          nombre: u.nombre || u.name || u.username || '',
+          email: u.email || '',
+        })).filter(u => u.id && u.name); // Solo usuarios válidos
         
         if (mounted) {
-          setUsuarios(usuariosList);
-          console.log(`✅ ${usuariosList.length} usuarios cargados para menciones`);
+          setUsuarios(usuariosNormalizados);
+          console.log(`✅ ${usuariosNormalizados.length} usuarios cargados para menciones y asignación`);
         }
       } catch (err) {
-        console.error("Error al cargar usuarios:", err);
+        console.error("❌ Error al cargar usuarios:", err);
+        if (mounted) {
+          setUsuarios([]);
+        }
       }
     };
     
@@ -637,6 +670,17 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       // ✅ Extraer IDs de usuarios mencionados del contenido
       const mentionedIds = extractMentionedUserIds(responseNote, usuarios);
       
+      // 📝 Log de depuración: Menciones detectadas (agregar comentario)
+      if (import.meta.env.DEV) {
+        console.log("🔔 [NOTIFICACIONES] Agregando comentario con menciones:", {
+          tarea_id: tarea.id,
+          nota_preview: responseNote?.substring(0, 100) || "",
+          mentioned_user_ids: mentionedIds,
+          usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
+          endpoint: `tareas_operativas/${tarea.id}/comentarios`
+        });
+      }
+      
       const data = await apiRequest(
         `tareas_operativas/${tarea.id}/comentarios`,
         "POST",
@@ -647,6 +691,20 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       );
 
       console.log("✅ Respuesta del comentario:", data);
+      
+      // 📝 Log de depuración: Confirmación de creación de comentario
+      if (import.meta.env.DEV) {
+        const comentarioId = data?.comment?.id || data?.id || data?.data?.id;
+        console.log("✅ [NOTIFICACIONES] Comentario creado exitosamente:", {
+          comentario_id: comentarioId,
+          mentioned_user_ids_enviados: mentionedIds,
+          respuesta_backend: {
+            comment_id: data?.comment?.id,
+            id: data?.id,
+            data_id: data?.data?.id
+          }
+        });
+      }
 
       // ✅ Si el comentario tiene adjuntos en la respuesta, guardarlos directamente
       if (data?.comment?.id && data?.comment?.adjuntos) {
@@ -794,13 +852,45 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
           archivosCount: archivos.length
         });
 
+        // ✅ Extraer IDs de usuarios mencionados del contenido
+        const mentionedIds = extractMentionedUserIds(responseNote, usuarios);
+        
+        // 📝 Log de depuración: Menciones detectadas (completar tarea)
+        if (import.meta.env.DEV) {
+          console.log("🔔 [NOTIFICACIONES] Completando tarea con comentario y menciones:", {
+            tarea_id: tarea.id,
+            nota_preview: responseNote?.substring(0, 100) || "",
+            mentioned_user_ids: mentionedIds,
+            usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
+            endpoint: `tareas_operativas/${tarea.id}/comentarios`
+          });
+        }
+
         const data = await apiRequest(
           `tareas_operativas/${tarea.id}/comentarios`,
           "POST",
-          { comment: responseNote || " " }
+          { 
+            comment: responseNote || " ",
+            mentioned_user_ids: mentionedIds.length > 0 ? mentionedIds : undefined
+          }
         );
 
         console.log("✅ Respuesta del comentario:", data);
+        
+        // 📝 Log de depuración: Confirmación de creación de comentario al completar
+        if (import.meta.env.DEV) {
+          const comentarioId = data?.comment?.id || data?.id || data?.data?.id;
+          console.log("✅ [NOTIFICACIONES] Comentario creado al completar tarea:", {
+            comentario_id: comentarioId,
+            tarea_id: tarea.id,
+            mentioned_user_ids_enviados: mentionedIds,
+            respuesta_backend: {
+              comment_id: data?.comment?.id,
+              id: data?.id,
+              data_id: data?.data?.id
+            }
+          });
+        }
 
         // ✅ Obtener el log_id para subir archivos
         let logId = data?.log_id || 
@@ -1795,7 +1885,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     </small>
                   </div>
                 )}
-                <div className="position-relative">
+                <div style={{ position: 'relative' }}>
                   <style>{`
                     .ql-editor {
                       min-height: 280px;
@@ -1810,29 +1900,6 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                       font-size: 16px;
                       font-style: normal;
                       color: #6c757d;
-                    }
-                    .mention-dropdown {
-                      position: absolute;
-                      background: white;
-                      border: 1px solid #ddd;
-                      border-radius: 4px;
-                      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-                      max-height: 200px;
-                      overflow-y: auto;
-                      z-index: 1000;
-                      margin-top: 5px;
-                    }
-                    .mention-item {
-                      padding: 8px 12px;
-                      cursor: pointer;
-                      border-bottom: 1px solid #f0f0f0;
-                    }
-                    .mention-item:hover,
-                    .mention-item.selected {
-                      background-color: #e3f2fd;
-                    }
-                    .mention-item:last-child {
-                      border-bottom: none;
                     }
                   `}</style>
                   <ReactQuill
@@ -1856,22 +1923,87 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                       borderRadius: '0.375rem'
                     }}
                   />
+                  
                   {/* ✅ Dropdown de menciones */}
-                  {showMentionList && mentionList.length > 0 && (
-                    <div className="mention-dropdown" style={{ position: 'absolute', top: '100%', left: 0, right: 0 }}>
-                      {mentionList.map((user, index) => (
-                        <div
-                          key={user.id || index}
-                          className={`mention-item ${index === selectedMentionIndex ? 'selected' : ''}`}
-                          onClick={() => insertMention(user)}
-                          onMouseEnter={() => updateSelectedIndex(index)}
-                        >
-                          <strong>{user.name || user.nombre || 'Usuario'}</strong>
-                          {user.email && (
-                            <small className="text-muted d-block">{user.email}</small>
-                          )}
+                  {showMentionList && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        backgroundColor: 'white',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        zIndex: 1000,
+                        maxHeight: '250px',
+                        overflowY: 'auto',
+                        marginTop: '4px',
+                      }}
+                    >
+                      {usuarios.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                          <Spinner size="sm" animation="border" className="me-2" />
+                          Cargando usuarios...
                         </div>
-                      ))}
+                      ) : mentionList.length === 0 ? (
+                        <div style={{ padding: '12px', textAlign: 'center', color: '#666' }}>
+                          No se encontraron usuarios
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ 
+                            padding: '6px 12px', 
+                            fontSize: '0.75rem', 
+                            color: '#666', 
+                            backgroundColor: '#f8f9fa',
+                            borderBottom: '1px solid #e0e0e0',
+                            fontWeight: 500
+                          }}>
+                            {mentionList.length} {mentionList.length === 1 ? 'usuario' : 'usuarios'} encontrado{mentionList.length > 1 ? 's' : ''}
+                          </div>
+                          {mentionList.map((user, index) => (
+                            <div
+                              key={user.id}
+                              onClick={() => insertMention(user)}
+                              onMouseEnter={() => {
+                                if (updateSelectedIndex) {
+                                  updateSelectedIndex(index);
+                                }
+                              }}
+                              style={{
+                                padding: '10px 12px',
+                                cursor: 'pointer',
+                                backgroundColor: index === selectedMentionIndex ? '#e3f2fd' : 'transparent',
+                                borderBottom: index < mentionList.length - 1 ? '1px solid #f0f0f0' : 'none',
+                                transition: 'background-color 0.15s ease',
+                              }}
+                            >
+                              <div style={{ 
+                                fontWeight: 500, 
+                                color: '#1976d2',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px'
+                              }}>
+                                <i className="fas fa-user-circle" style={{ fontSize: '1.1rem' }}></i>
+                                {user.name || user.nombre || 'Usuario'}
+                              </div>
+                              {user.email && (
+                                <div style={{ 
+                                  fontSize: '0.85rem', 
+                                  color: '#666',
+                                  marginTop: '2px',
+                                  marginLeft: '24px'
+                                }}>
+                                  {user.email}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

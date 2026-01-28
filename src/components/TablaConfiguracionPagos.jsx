@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container } from "react-bootstrap";
 import apiRequest from "../services/api";
+import { renderClienteLink } from "../pages/ListaClientes";
 
 const TablaConfiguracionPagos = () => {
   const [loading, setLoading] = useState(false);
@@ -192,10 +194,28 @@ const TablaConfiguracionPagos = () => {
             <tbody>
               {polizasFiltradas.map((p) => (
                 <tr key={p.id}>
-                  <td>{p.grupo_familiar_id || "-"}</td>
+                  <td>
+                    {p.grupo_familiar_id ? (
+                      <Link
+                        to={`/grupo_familiar/${p.grupo_familiar_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-decoration-none fw-semibold"
+                        title={`Ver grupo familiar #${p.grupo_familiar_id}`}
+                      >
+                        {p.grupo_familiar_id}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td>{p.codigo_poliza}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    {p.cliente?.nombre_completo || "-"}
+                    {renderClienteLink(
+                      p.cliente?.id || p.cliente_id,
+                      p.cliente?.nombre_completo || "-"
+                    )}
                     {p.parentesco === "TOMADOR" && <Badge bg="primary" className="ms-2">Tomador</Badge>}
                   </td>
                   <td>{p.pagador?.nombre_completo || "-"}</td>

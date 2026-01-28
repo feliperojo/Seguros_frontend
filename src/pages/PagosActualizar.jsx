@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Table,
   Spinner,
@@ -15,6 +16,7 @@ import { FaEye } from "react-icons/fa";
 
 import apiRequest from "../services/api";
 import ModalMediosPago from "../components/ModalMediosPago"; // Ajusta la ruta según tu estructura
+import { renderClienteLink } from "./ListaClientes";
 
 
 const PagosActualizar = () => {
@@ -184,9 +186,29 @@ const PagosActualizar = () => {
             <tbody>
               {pagosPaginados.map((p) => (
                 <tr key={p.id}>
-                  <td>{p.grupo_familiar_id || "-"}</td>
+                  <td>
+                    {p.grupo_familiar_id ? (
+                      <Link
+                        to={`/grupo_familiar/${p.grupo_familiar_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-decoration-none fw-semibold"
+                        title={`Ver grupo familiar #${p.grupo_familiar_id}`}
+                      >
+                        {p.grupo_familiar_id}
+                      </Link>
+                    ) : (
+                      "-"
+                    )}
+                  </td>
                   <td>{p.cobertura?.codigo_poliza}</td>
-                  <td>{p.cliente?.nombre_completo || "-"}</td>
+                  <td>
+                    {renderClienteLink(
+                      p.cliente?.id || p.cliente_id,
+                      p.cliente?.nombre_completo || "-"
+                    )}
+                  </td>
                   <td>{p.cobertura?.pagador?.nombre_completo || "-"}</td>
                   <td>{p.fecha_pago || "-"}</td>
                   <td>{p.cobertura?.compania?.nombre || "-"}</td>

@@ -19,15 +19,17 @@ const ModalMediosPago = ({ show, onHide, clienteId }) => {
   }, [show, clienteId]);
 
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered>
+    <Modal show={show} onHide={onHide} size="xl" centered scrollable>
       <Modal.Header closeButton>
         <Modal.Title>Medios de Pago</Modal.Title>
       </Modal.Header>
-      <Modal.Body>
+      <Modal.Body style={{ maxHeight: '70vh', overflowY: 'auto' }}>
         {loading ? (
           <div className="text-center"><Spinner animation="border" /></div>
         ) : (
-          <MediosPagoTablas mediosPago={medios} showActions={false} />
+          <div style={{ overflowX: 'auto' }}>
+            <MediosPagoTablas mediosPago={medios} showActions={false} />
+          </div>
         )}
       </Modal.Body>
       <Modal.Footer>
