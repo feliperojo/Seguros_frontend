@@ -58,6 +58,7 @@ const AuditoriasPage = () => {
   const [creating, setCreating] = useState(false);
   const [closingRunId, setClosingRunId] = useState(null);
   const [error, setError] = useState(null);
+  const [infoMessage, setInfoMessage] = useState(null);
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
@@ -227,6 +228,7 @@ const AuditoriasPage = () => {
     
     setCreating(true);
     setError(null);
+    setInfoMessage(null);
     
     try {
       const payload = {
@@ -251,13 +253,16 @@ const AuditoriasPage = () => {
       const data = await loadRunsData();
       setRuns(Array.isArray(data) ? data : []);
     } catch (err) {
-      const errorMessage = err.response?.data?.message || err.message || "Error al crear la auditoría";
-      setError(errorMessage);
-      
-      // Manejar error 409 (duplicado)
+      // Manejar error 409 (duplicado) como información, no como error
       if (err.response?.status === 409) {
-        toast.showWarning("Ya existe una auditoría para esta fuente y periodo");
+        const tipoNombre = auditTypes.find(t => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
+        const targetTypeLabel = targetType === "coberturas" ? "Coberturas" : "Clientes";
+        const mensaje = `Ya existe una auditoría de tipo "${tipoNombre}" para ${targetTypeLabel} en el periodo ${periodo}. Solo se permite una auditoría por tipo, objeto y periodo. Puedes abrir la auditoría existente desde la lista.`;
+        setInfoMessage(mensaje);
+        toast.showWarning("No se puede crear: ya existe una auditoría con estos parámetros");
       } else {
+        const errorMessage = err.response?.data?.message || err.message || "Error al crear la auditoría";
+        setError(errorMessage);
         toast.showError(errorMessage);
       }
       console.error("Error al crear run:", err);
@@ -406,6 +411,14 @@ const AuditoriasPage = () => {
           </div>
         </Card.Body>
       </Card>
+      
+      {/* Mensaje informativo */}
+      {infoMessage && (
+        <Alert variant="info" className="mb-4" dismissible onClose={() => setInfoMessage(null)}>
+          <Alert.Heading>Atención</Alert.Heading>
+          <p>{infoMessage}</p>
+        </Alert>
+      )}
       
       {/* Mensaje de error */}
       {error && (
