@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 const FIELD_DEFS = [
   { key: "elegibilidad",      label: "Elegibilidad" },
   { key: "compania_id",       label: "Compañía" },
+  { key: "agente",            label: "Agente" },
   { key: "plan",              label: "Plan" },
   { key: "metal",             label: "Metal" },
   { key: "red",               label: "Red" },
