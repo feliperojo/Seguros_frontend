@@ -30,6 +30,8 @@ import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
 import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
 import ContactosAdmin from "./pages/ContactosAdmin";
+import AuditoriasPage from "./pages/AuditoriasPage";
+import AuditoriaRunDetallePage from "./pages/AuditoriaRunDetallePage";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
@@ -104,6 +106,10 @@ const App = () => {
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
         <Route path="/clientes/contacto" element={<ContactosAdmin />} />
+        
+        {/* Rutas de Auditorías */}
+        <Route path="/auditorias" element={<AuditoriasPage />} />
+        <Route path="/auditorias/:runId" element={<AuditoriaRunDetallePage />} />
         
         {/* Rutas del Módulo de Administración - Protegidas por permisos */}
         <Route

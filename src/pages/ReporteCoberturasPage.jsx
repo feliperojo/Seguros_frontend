@@ -55,6 +55,50 @@ const formatDate = (dateString) => {
 };
 
 /**
+ * Formatea un valor monetario
+ */
+const formatCurrency = (value) => {
+  if (!value && value !== 0) return "-";
+  try {
+    return new Intl.NumberFormat("es-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    return value;
+  }
+};
+
+/**
+ * Formatea el status de la cobertura
+ */
+const formatStatus = (status) => {
+  if (!status) return "-";
+  
+  const statusLower = status.toLowerCase();
+  switch (statusLower) {
+    case "active":
+    case "activa":
+    case "activo":
+      return "Activa";
+    case "pending":
+    case "pendiente":
+      return "Pendiente";
+    case "cancelled":
+    case "cancelada":
+    case "cancelado":
+      return "Cancelada";
+    case "inactive":
+    case "inactiva":
+    case "inactivo":
+      return "Inactiva";
+    default:
+      return status;
+  }
+};
+
+/**
  * Columnas ordenables permitidas
  */
 const SORTABLE_COLUMNS = {
@@ -317,10 +361,10 @@ const ReporteCoberturasPage = () => {
   return (
     <div className="container-fluid py-4">
       <Helmet>
-        <title>Vantun/Reporte de Coberturas</title>
+        <title>Reporte de Coberturas</title>
       </Helmet>
       
-      <h2 className="mb-4">Reporte de Coberturas</h2>
+      <h2 className="mb-4">Reporte General</h2>
       
       {/* Filtros */}
       <div className="card mb-4">
@@ -480,6 +524,13 @@ const ReporteCoberturasPage = () => {
                       <th>Compañía</th>
                       <th>Responsable</th>
                       <th>Código Postal</th>
+                      <th>Condado</th>
+                      <th>Estado</th>
+                      <th>Precio</th>
+                      <th>Día Pago</th>
+                      <th>Tipo Pago</th>
+                      <th>Ingreso Familiar Anual</th>
+                      <th>Status</th>
                       <th
                         style={{ cursor: "pointer" }}
                         onClick={() => handleSort("req_pendientes")}
@@ -498,6 +549,13 @@ const ReporteCoberturasPage = () => {
                         <td>{cobertura.compania || "-"}</td>
                         <td>{cobertura.responsable || "-"}</td>
                         <td>{cobertura.zip_code || "-"}</td>
+                        <td>{cobertura.condado || "-"}</td>
+                        <td>{cobertura.estado || "-"}</td>
+                        <td>{formatCurrency(cobertura.precio)}</td>
+                        <td>{cobertura.dia_pago || "-"}</td>
+                        <td>{cobertura.tipo_pago || "-"}</td>
+                        <td>{formatCurrency(cobertura.ingreso_familiar_anual)}</td>
+                        <td>{formatStatus(cobertura.status)}</td>
                         <td>
                           {cobertura.req_total === 0 ? (
                             <span className="text-muted">0/0</span>

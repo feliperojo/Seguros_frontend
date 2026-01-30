@@ -395,6 +395,7 @@ const mapFullToMembers = (fullRaw) => {
       nota_cancel: cov.nota_cancel ?? "",
       grupo: cov.grupo ?? "",
       compania_id: cov.compania_id ?? null,
+      agente: cov.agente ?? "",
       pagador_id:  cov.pagador_id  ?? null,
       fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
       fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
@@ -752,6 +753,7 @@ const mapMemberFromAppendResponse = (res) => {
     fecha_activacion: cov.fecha_activacion || "",
     elegibilidad: cov.elegibilidad || "",
     compania_id: cov.compania_id || "",
+    agente: cov.agente || "",
     pagador_id: cov.pagador_id || "",
     tipo_pago: cov.tipo_pago || "",
     dia_pago: cov.dia_pago || "",
@@ -850,6 +852,7 @@ const handleCreateMemberRemote = async (memberData) => {
       dia_pago: 1,
       tipo_pago: null,
       compania_id: null,
+      agente: "",
       precio: 0,
     },
   };

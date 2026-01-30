@@ -46,7 +46,7 @@ const CLIENTE_FIELDS = new Set([
 const ROOT_FIELDS = new Set([
   "parentesco", "estado_cobertura", "codigo_poliza", "vigencia", "tipo",
   "fecha_activacion", "ano_cobertura", "elegibilidad",
-  "compania_id", "plan", "metal", "red",
+  "compania_id", "agente", "plan", "metal", "red",
   "pagador_id", "tipo_pago", "dia_pago", "precio",
   "fecha_cancelacion", "fecha_retiro", "nota_retiro", "grupo", "nota_cancel"
 ]);
@@ -236,6 +236,8 @@ const normalizeMember = (m, idx) => {
     metal: m.metal ?? null,
     red: m.red ?? null,
     grupo: m.grupo || "",
+    compania_id: m.compania_id ?? null,
+    agente: m.agente || "",
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
@@ -1721,6 +1723,18 @@ const activeNormalized = useMemo(
                               />
                             </Field>
 
+                            <Field label="Agente" className="col-md-3">
+                              <input
+                                className="form-control form-control-sm"
+                                type="text"
+                                name="agente"
+                                value={m.agente || ""}
+                                onChange={onChange}
+                                disabled={isReadOnly}
+                                placeholder="Ingrese el agente"
+                              />
+                            </Field>
+
                             <Field label="Plan" className="col-md-3">
                               <input
                                 className="form-control form-control-sm"
@@ -1747,7 +1761,9 @@ const activeNormalized = useMemo(
                                 <option value="PLATINUM">PLATINUM</option>
                               </select>
                             </Field>
+                          </div>
 
+                          <div className="row g-3">
                             <Field label="Red" className="col-md-3">
                               <select
                                 className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
@@ -1763,9 +1779,7 @@ const activeNormalized = useMemo(
                                 <option value="POS">POS</option>
                               </select>
                             </Field>
-                          </div>
 
-                          <div className="row g-3">
                             <Field label="Cobertura" className="col-md-3">
                               <select
                                 className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
@@ -1809,7 +1823,9 @@ const activeNormalized = useMemo(
                                 <option value="MES A MES">MES A MES</option>
                               </select>
                             </Field>
+                          </div>
 
+                          <div className="row g-3">
                             <Field label="Dia de Pago" className="col-md-3">
                               <input
                                 type="number"
@@ -1820,9 +1836,7 @@ const activeNormalized = useMemo(
                                 disabled={isReadOnly}
                               />
                             </Field>
-                          </div>
 
-                          <div className="row g-3">
                             <Field label="Precio ($)" className="col-md-3">
                               <input
                                 type="number"

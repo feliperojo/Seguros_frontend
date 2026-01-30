@@ -104,6 +104,7 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
             fecha_retiro: member.fecha_retiro || null,
             ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
             compania_id: member.compania_id || null,
+            agente: member.agente || "",
             plan: member.plan || "",
             metal: member.metal || "",
             red: member.red || "",

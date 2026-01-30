@@ -4,7 +4,7 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -51,7 +51,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       setExpandedMenu('clientes');
     } else if (location.pathname.includes('/Grupofamiliar')) {
       setExpandedMenu('grupos');
-    } else if (location.pathname.toLowerCase().includes('/informes')) {
+    } else if (location.pathname.toLowerCase().includes('/informes') || location.pathname.toLowerCase().includes('/auditorias')) {
       setExpandedMenu('informes');
     } else if (location.pathname.includes('/Herramientas')) {
       setExpandedMenu('herramientas');
@@ -219,7 +219,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Informes - Con submenú */}
         <div className="nav-item">
           <div
-            className={`nav-link ${location.pathname.toLowerCase().includes('/informes') ? 'active' : ''}`}
+            className={`nav-link ${location.pathname.toLowerCase().includes('/informes') || location.pathname.toLowerCase().includes('/auditorias') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('informes', e)}
           >
             <FaFolder />
@@ -242,6 +242,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
               <Link to="/informes/coberturas" className={`submenu-link ${isActive('/informes/coberturas') ? 'active' : ''}`}>
                 <FaFileAlt /> Reporte de Coberturas
+              </Link>
+              <Link to="/auditorias" className={`submenu-link ${location.pathname.toLowerCase().includes('/auditorias') ? 'active' : ''}`}>
+                <FaClipboardCheck /> Auditorías Mensuales
               </Link>
               {/* <Link to="/informes/polizas" className={`submenu-link ${isActive('/informes/polizas') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Pólizas

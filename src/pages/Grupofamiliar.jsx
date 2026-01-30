@@ -101,6 +101,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     notas_telefonos: "",
     fecha_cancelacion: "",
     compania_id: "",
+    agente: "",
     cliente_id: "",
     codigo_poliza: "",
     referido: "",
@@ -436,6 +437,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         nombre: cob.cliente?.nombre_completo || "Sin nombre",
         ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
         compania_id: cob.compania?.id || null,
+        agente: cob.agente || "",
         estado_cobertura: cob.estado_cobertura || "No definido",
         fecha_activacion: cob.fecha_activacion || "",
         fecha_cancelacion: cob.fecha_cancelacion || "",
@@ -591,6 +593,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   fecha_cancelacion: "",
                   fecha_retiro: "", // ⚠️ Muy importante: nueva cobertura no retirada
                   compania_id: "",
+                  agente: "",
                   codigo_poliza: "",
                   plan: "",
                   metal: "",
@@ -725,6 +728,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         fecha_activacion: "",
         fecha_cancelacion: "",
         compania_id: "",
+        agente: "",
         plan: "",
         metal: "",
         elegibilidad: "",
@@ -1050,6 +1054,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 fecha_retiro: member.fecha_retiro || "",
                 ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
                 compania_id: member.compania_id || null,
+                agente: member.agente || "",
                 plan: member.plan || "",
                 metal: member.metal || "",
                 red: member.red || "",
@@ -1797,6 +1802,11 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                           }}
                                         ></span>
                                         {member.compania_id ? getCompanyName(member.compania_id) : "Sin compañía"}
+                                        {member.agente && (
+                                          <span className="ms-2 text-muted">
+                                            | Agente: {member.agente}
+                                          </span>
+                                        )}
                                       </small>
 
 
@@ -2080,6 +2090,20 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                         </option>
                       ))}
                     </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Agente</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.agente || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, agente: e.target.value })}
+                      placeholder="Ingrese el agente"
+                    />
                   </Form.Group>
                 </Col>
               </Row>
