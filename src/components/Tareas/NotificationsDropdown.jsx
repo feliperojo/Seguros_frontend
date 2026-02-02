@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { FaBell, FaCircle, FaCheckDouble, FaAt, FaTasks } from 'react-icons/fa';
+import { FaBell, FaCircle, FaCheckDouble, FaAt, FaTasks, FaClipboardCheck } from 'react-icons/fa';
 import { Spinner } from 'react-bootstrap';
 import { useNotifications } from '../../hooks/useNotifications';
 import { Link } from 'react-router-dom';
 import apiRequest from '../../services/api';
+import { listTasks as listAuditoriaTasks } from '../../services/auditoriasTasksService';
 
 /**
  * Componente dropdown mejorado de notificaciones
@@ -25,7 +26,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
     markAllAsRead,
   } = useNotifications(currentUser);
 
-  // ✅ Estado para tareas pendientes
+  // ✅ Estado para tareas pendientes (operativas y de auditoría)
   const [pendingTasks, setPendingTasks] = useState([]);
   const [loadingPendingTasks, setLoadingPendingTasks] = useState(false);
 
@@ -33,13 +34,13 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
   // Si el backend ya incluye tareas pendientes en notificaciones, no duplicar
   const totalUnreadCount = unreadCount > 0 ? unreadCount : (pendientes > 0 ? pendientes : 0);
 
-  // ✅ Cargar lista de tareas pendientes cuando se abre el dropdown
+  // ✅ Cargar lista de tareas pendientes cuando se abre el dropdown (operativas y de auditoría)
   useEffect(() => {
     if (showDropdown && pendientes > 0 && pendingTasks.length === 0 && !loadingPendingTasks) {
       const loadPendingTasks = async () => {
         setLoadingPendingTasks(true);
         try {
-          // Obtener tareas pendientes (limitado a 10 para el dropdown)
+          // ✅ Obtener tareas operativas pendientes
           const response = await apiRequest("tareas_operativas?per_page=10", "GET");
           
           let tareasData = [];
@@ -58,7 +59,38 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
             return estadosPendientes.includes(estado?.toLowerCase());
           });
 
-          setPendingTasks(tareasPendientes);
+          // ✅ Obtener tareas de auditoría pendientes
+          let tareasAuditoriaPendientes = [];
+          try {
+            const auditoriaResponse = await listAuditoriaTasks({ 
+              per_page: 10,
+              status: 'pending,in_progress'
+            });
+            
+            if (auditoriaResponse?.data && Array.isArray(auditoriaResponse.data)) {
+              tareasAuditoriaPendientes = auditoriaResponse.data
+                .filter(t => {
+                  const estado = t.status;
+                  return estadosPendientes.includes(estado?.toLowerCase());
+                })
+                .map(t => ({ ...t, tipo: 'auditoria' }));
+            }
+          } catch (auditError) {
+            console.warn("Error al cargar tareas de auditoría pendientes:", auditError);
+            // Continuar sin tareas de auditoría si hay error
+          }
+
+          // ✅ Combinar ambas listas
+          const todasLasTareas = [...tareasPendientes, ...tareasAuditoriaPendientes];
+          
+          // Ordenar por fecha de creación (más recientes primero)
+          todasLasTareas.sort((a, b) => {
+            const fechaA = new Date(a.created_at || a.scheduled_date || 0);
+            const fechaB = new Date(b.created_at || b.scheduled_date || 0);
+            return fechaB - fechaA;
+          });
+
+          setPendingTasks(todasLasTareas);
         } catch (error) {
           console.error("Error al cargar tareas pendientes:", error);
           setPendingTasks([]);
@@ -441,10 +473,12 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                         ) : allPendingTasks.length > 0 ? (
                           allPendingTasks.slice(0, 10).map((task) => {
                             const taskId = task.id || task.task_id || task.task?.id;
-                            const taskTitle = task.titulo || task.title || task.note || 'Tarea sin título';
+                            const taskTitle = task.titulo || task.title || task.note || task.response_note || 'Tarea sin título';
                             const taskStatus = task.status || task.estado || 'pending';
                             const clienteNombre = task.log?.cliente?.nombre_completo || task.cliente?.nombre_completo || 'Sin cliente';
                             const fechaTarea = task.created_at || task.scheduled_date;
+                            const esAuditoria = task.tipo === 'auditoria' || task.auditoria || task.item || task.run_id;
+                            const taskIdField = esAuditoria ? 'audit_task_id' : 'task_id';
                             
                             return (
                               <div
@@ -453,8 +487,9 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                                   if (onNotificationClick && taskId) {
                                     onNotificationClick({ 
                                       type: 'task_pending', 
-                                      task_id: taskId,
-                                      task: task
+                                      [taskIdField]: taskId,
+                                      task_id: taskId, // Mantener para compatibilidad
+                                      task: { ...task, tipo: esAuditoria ? 'auditoria' : 'operativa' }
                                     });
                                   }
                                   setShowDropdown(false);
@@ -464,10 +499,10 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                                   cursor: 'pointer',
                                   transition: 'background-color 0.15s ease',
                                   backgroundColor: 'white',
-                                  borderLeft: '4px solid #ffc107',
+                                  borderLeft: esAuditoria ? '4px solid #64748b' : '4px solid #ffc107',
                                 }}
                                 onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor = '#fff8e1';
+                                  e.currentTarget.style.backgroundColor = esAuditoria ? '#f1f5f9' : '#fff8e1';
                                 }}
                                 onMouseLeave={(e) => {
                                   e.currentTarget.style.backgroundColor = 'white';
@@ -479,23 +514,41 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                                     style={{
                                       width: '32px',
                                       height: '32px',
-                                      backgroundColor: taskStatus === 'in_progress' ? '#e3f2fd' : '#fff3cd',
-                                      color: taskStatus === 'in_progress' ? '#1976d2' : '#856404',
+                                      backgroundColor: esAuditoria 
+                                        ? (taskStatus === 'in_progress' ? '#cbd5e1' : '#e2e8f0')
+                                        : (taskStatus === 'in_progress' ? '#e3f2fd' : '#fff3cd'),
+                                      color: esAuditoria 
+                                        ? '#475569' 
+                                        : (taskStatus === 'in_progress' ? '#1976d2' : '#856404'),
                                     }}
                                   >
-                                    <FaTasks size={14} />
+                                    {esAuditoria ? <FaClipboardCheck size={14} /> : <FaTasks size={14} />}
                                   </div>
                                   <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                                    <strong
-                                      className="d-block mb-1"
-                                      style={{
-                                        fontSize: '0.85rem',
-                                        color: '#212529',
-                                        fontWeight: 600,
-                                      }}
-                                    >
-                                      📋 {taskTitle}
-                                    </strong>
+                                    <div className="d-flex align-items-center gap-1 mb-1">
+                                      <strong
+                                        className="d-block"
+                                        style={{
+                                          fontSize: '0.85rem',
+                                          color: '#212529',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        {esAuditoria ? '🔍' : '📋'} {taskTitle.length > 50 ? taskTitle.substring(0, 50) + '...' : taskTitle}
+                                      </strong>
+                                      {esAuditoria && (
+                                        <span
+                                          className="badge"
+                                          style={{ 
+                                            fontSize: '0.6rem',
+                                            backgroundColor: '#64748b',
+                                            color: '#fff'
+                                          }}
+                                        >
+                                          Auditoría
+                                        </span>
+                                      )}
+                                    </div>
                                     <div className="d-flex justify-content-between align-items-center mt-1">
                                       <span
                                         className="text-muted"
@@ -507,8 +560,10 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                                         className="badge"
                                         style={{ 
                                           fontSize: '0.65rem',
-                                          backgroundColor: taskStatus === 'pending' ? '#ffc107' : '#17a2b8',
-                                          color: taskStatus === 'pending' ? '#000' : '#fff'
+                                          backgroundColor: esAuditoria
+                                            ? (taskStatus === 'pending' ? '#94a3b8' : '#64748b')
+                                            : (taskStatus === 'pending' ? '#ffc107' : '#17a2b8'),
+                                          color: esAuditoria ? '#fff' : (taskStatus === 'pending' ? '#000' : '#fff')
                                         }}
                                       >
                                         {taskStatus === 'pending' ? 'Pendiente' : taskStatus === 'in_progress' ? 'En progreso' : taskStatus}
@@ -528,7 +583,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                                   <FaCircle
                                     className="flex-shrink-0"
                                     size={8}
-                                    style={{ color: '#ffc107', marginTop: '4px' }}
+                                    style={{ color: esAuditoria ? '#64748b' : '#ffc107', marginTop: '4px' }}
                                   />
                                 </div>
                               </div>

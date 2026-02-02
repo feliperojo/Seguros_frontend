@@ -3,12 +3,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Table, Button, Badge, Alert, Spinner, Form, Modal } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
-import { FaSort, FaSortUp, FaSortDown, FaFileAlt, FaComment } from "react-icons/fa";
+import { FaSort, FaSortUp, FaSortDown, FaFileAlt, FaComment, FaTasks } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
 import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaModal";
 import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
+import NuevaTareaAuditoriaModal from "../components/Tareas/NuevaTareaAuditoriaModal";
+import { getItemTasks } from "../services/auditoriasTasksService";
 
 /**
  * Estados de auditoría permitidos
@@ -171,6 +173,13 @@ const AuditoriaRunDetallePage = () => {
     comment: "",
   });
   const [savingStatus, setSavingStatus] = useState(false);
+  
+  // Estado para tareas de auditoría
+  const [showNuevaTareaModal, setShowNuevaTareaModal] = useState(false);
+  const [selectedItemForTask, setSelectedItemForTask] = useState(null);
+  const [tareasPorItem, setTareasPorItem] = useState({}); // { itemId: [tareas] }
+  const [loadingTareas, setLoadingTareas] = useState({}); // { itemId: boolean }
+  const [itemsConTareasExpandidos, setItemsConTareasExpandidos] = useState({}); // { itemId: boolean }
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
@@ -744,6 +753,29 @@ const AuditoriaRunDetallePage = () => {
                   <tbody>
                     {coberturas.map((cobertura) => {
                       const entityId = cobertura.cobertura_id || cobertura.cliente_id;
+                      // El item_id puede venir como item_id, id, o podemos usar entityId + runId para buscarlo
+                      // Intentar múltiples campos posibles donde puede venir el item_id
+                      const itemId = cobertura.item_id || 
+                                    cobertura.auditoria_item_id || 
+                                    cobertura.audit_item_id ||
+                                    cobertura.id;
+                      
+                      // Debug: solo en desarrollo
+                      if (import.meta.env.DEV && !itemId) {
+                        console.log("⚠️ No se encontró item_id en cobertura:", {
+                          cobertura_id: cobertura.cobertura_id,
+                          cliente_id: cobertura.cliente_id,
+                          id: cobertura.id,
+                          item_id: cobertura.item_id,
+                          keys: Object.keys(cobertura)
+                        });
+                      }
+                      
+                      const tareasDelItem = itemId ? (tareasPorItem[itemId] || []) : [];
+                      const tieneTareas = tareasDelItem.length > 0;
+                      const estaExpandido = itemsConTareasExpandidos[itemId];
+                      const estaCargandoTareas = loadingTareas[itemId];
+                      
                       return (
                         <tr key={entityId}>
                         <td>{cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id || "-"}</td>
@@ -795,7 +827,189 @@ const AuditoriaRunDetallePage = () => {
                             >
                               <FaComment />
                             </Button>
+                            <Button
+                              variant="outline-success"
+                              size="sm"
+                              onClick={async () => {
+                                // Determinar el itemId - puede venir del objeto o necesitamos buscarlo
+                                let currentItemId = cobertura.item_id || 
+                                                   cobertura.auditoria_item_id || 
+                                                   cobertura.audit_item_id ||
+                                                   cobertura.id;
+                                
+                                // Si no tenemos itemId directo, intentar obtenerlo usando entityId
+                                // El backend puede requerir que busquemos el item_id usando entityId + runId
+                                if (!currentItemId && entityId) {
+                                  // Intentar buscar el item_id usando el endpoint del backend
+                                  // Por ahora, abrimos el modal y dejamos que el backend resuelva
+                                  // pasando entityId y runId
+                                  // IMPORTANTE: Intentar obtener el item_id desde cobertura
+                                  const fallbackItemId = cobertura.item_id || 
+                                                        cobertura.auditoria_item_id || 
+                                                        cobertura.audit_item_id ||
+                                                        cobertura.id;
+                                  
+                                  setSelectedItemForTask({ 
+                                    id: fallbackItemId, // Intentar usar cualquier ID disponible
+                                    entityId, 
+                                    runId, 
+                                    cobertura_id: cobertura.cobertura_id,
+                                    cliente_id: cobertura.cliente_id,
+                                    grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
+                                    item_id: fallbackItemId, // También como item_id
+                                    ...cobertura 
+                                  });
+                                  setShowNuevaTareaModal(true);
+                                  return;
+                                }
+                                
+                                if (!currentItemId) {
+                                  toast.showWarning("No se pudo identificar el item de auditoría. Intente nuevamente.");
+                                  console.error("No se pudo obtener itemId:", { cobertura, entityId, runId });
+                                  return;
+                                }
+                                
+                                // Si no hay tareas cargadas, cargarlas primero
+                                if (!tieneTareas && !estaCargandoTareas) {
+                                  setLoadingTareas(prev => ({ ...prev, [currentItemId]: true }));
+                                  try {
+                                    const tareas = await getItemTasks(currentItemId);
+                                    setTareasPorItem(prev => ({ ...prev, [currentItemId]: tareas }));
+                                    if (tareas.length > 0) {
+                                      // Si hay tareas, expandirlas
+                                      setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: true }));
+                                    } else {
+                                      // Si no hay tareas, abrir modal para crear una nueva
+                                      setSelectedItemForTask({ 
+                                        id: currentItemId, 
+                                        entityId, 
+                                        runId, 
+                                        cobertura_id: cobertura.cobertura_id,
+                                        cliente_id: cobertura.cliente_id,
+                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
+                                        ...cobertura 
+                                      });
+                                      setShowNuevaTareaModal(true);
+                                    }
+                                  } catch (err) {
+                                    console.error("Error al cargar tareas:", err);
+                                    // Si falla (por ejemplo, 404), puede ser que el item_id no sea correcto
+                                    // Intentar crear tarea directamente usando entityId
+                                      setSelectedItemForTask({ 
+                                        id: currentItemId, 
+                                        entityId, 
+                                        runId, 
+                                        cobertura_id: cobertura.cobertura_id,
+                                        cliente_id: cobertura.cliente_id,
+                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
+                                        ...cobertura 
+                                      });
+                                    setShowNuevaTareaModal(true);
+                                  } finally {
+                                    setLoadingTareas(prev => ({ ...prev, [currentItemId]: false }));
+                                  }
+                                } else if (tieneTareas) {
+                                  // Si hay tareas, toggle expandir/colapsar
+                                  if (estaExpandido) {
+                                    setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: false }));
+                                  } else {
+                                    setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: true }));
+                                  }
+                                }
+                              }}
+                              title={tieneTareas ? (estaExpandido ? "Ocultar tareas" : "Ver tareas") : "Crear tarea de auditoría"}
+                            >
+                              <FaTasks />
+                              {tieneTareas && (
+                                <Badge bg="info" className="ms-1" style={{ fontSize: "0.65rem" }}>
+                                  {tareasDelItem.length}
+                                </Badge>
+                              )}
+                            </Button>
                           </div>
+                          {/* Mostrar tareas expandidas debajo de la fila */}
+                          {(cobertura.item_id || cobertura.id || entityId) && estaExpandido && tieneTareas && (
+                            <div className="mt-2 p-2 bg-light rounded border">
+                              <div className="d-flex justify-content-between align-items-center mb-2">
+                                <strong className="small">Tareas de Auditoría ({tareasDelItem.length})</strong>
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="p-0 text-decoration-none"
+                                  onClick={() => {
+                                    const currentItemId = cobertura.item_id || 
+                                                         cobertura.auditoria_item_id || 
+                                                         cobertura.audit_item_id ||
+                                                         cobertura.id ||
+                                                         entityId;
+                                    setItemsConTareasExpandidos(prev => ({
+                                      ...prev,
+                                      [currentItemId]: false
+                                    }));
+                                  }}
+                                >
+                                  Ocultar
+                                </Button>
+                              </div>
+                              {estaCargandoTareas ? (
+                                <div className="text-center py-2">
+                                  <Spinner animation="border" size="sm" />
+                                </div>
+                              ) : (
+                                <div className="d-flex flex-column gap-2">
+                                  {tareasDelItem.map((tarea) => (
+                                    <div key={tarea.id} className="d-flex justify-content-between align-items-center p-2 bg-white rounded border">
+                                      <div className="flex-grow-1">
+                                        <div className="d-flex align-items-center gap-2 mb-1">
+                                          <Badge bg={
+                                            tarea.status === "completed" ? "success" :
+                                            tarea.status === "in_progress" ? "warning" : "secondary"
+                                          }>
+                                            {tarea.status === "completed" ? "Completada" :
+                                             tarea.status === "in_progress" ? "En progreso" : "Pendiente"}
+                                          </Badge>
+                                          <small>
+                                            Asignada a: {tarea.assigned_user?.name || "N/A"}
+                                          </small>
+                                        </div>
+                                        {tarea.due_date && (
+                                          <small className="text-muted d-block">
+                                            Vence: {formatDate(tarea.due_date)}
+                                          </small>
+                                        )}
+                                        {tarea.comments_count > 0 && (
+                                          <small className="text-muted d-block">
+                                            {tarea.comments_count} comentario{tarea.comments_count !== 1 ? "s" : ""}
+                                          </small>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                  <Button
+                                    variant="outline-success"
+                                    size="sm"
+                                    className="mt-1"
+                                    onClick={() => {
+                                      const currentItemId = cobertura.item_id || cobertura.id || entityId;
+                                      setSelectedItemForTask({ 
+                                        id: currentItemId, 
+                                        entityId, 
+                                        runId, 
+                                        cobertura_id: cobertura.cobertura_id,
+                                        cliente_id: cobertura.cliente_id,
+                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
+                                        ...cobertura 
+                                      });
+                                      setShowNuevaTareaModal(true);
+                                    }}
+                                  >
+                                    <FaTasks className="me-1" />
+                                    Crear Nueva Tarea
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                       );
@@ -826,6 +1040,43 @@ const AuditoriaRunDetallePage = () => {
           isOpen={showModal}
           onClose={handleCloseModal}
           cobertura={selectedCobertura}
+        />
+      )}
+      
+      {/* Modal de Nueva Tarea de Auditoría */}
+      {selectedItemForTask && (
+        <NuevaTareaAuditoriaModal
+          show={showNuevaTareaModal}
+          onHide={() => {
+            setShowNuevaTareaModal(false);
+            setSelectedItemForTask(null);
+          }}
+          onCreated={async () => {
+            // Recargar tareas del item después de crear
+            // Usar cobertura_id o cliente_id para identificar el item
+            const itemIdentifier = selectedItemForTask?.cobertura_id || 
+                                  selectedItemForTask?.cliente_id ||
+                                  selectedItemForTask?.id;
+            
+            if (itemIdentifier) {
+              try {
+                // Intentar obtener tareas usando el identificador
+                // Nota: Puede que necesitemos ajustar getItemTasks para usar cobertura_id/cliente_id
+                const tareas = await getItemTasks(itemIdentifier);
+                setTareasPorItem(prev => ({ ...prev, [itemIdentifier]: tareas }));
+                // Expandir automáticamente para mostrar la nueva tarea
+                setItemsConTareasExpandidos(prev => ({ ...prev, [itemIdentifier]: true }));
+              } catch (err) {
+                console.error("Error al recargar tareas:", err);
+                // Si falla, recargar la página después de un breve delay
+                setTimeout(() => {
+                  window.location.reload();
+                }, 1000);
+              }
+            }
+          }}
+          runId={runId} // Pasar runId directamente
+          itemInfo={selectedItemForTask}
         />
       )}
       

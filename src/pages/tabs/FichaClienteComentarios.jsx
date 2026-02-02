@@ -566,7 +566,7 @@ export default function FichaClienteComentarios() {
         <div className="bg-gradient-to-r from-slate-50 to-gray-50 px-6 py-5 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
+              <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center shadow-sm">
                 <i className="fas fa-comments text-white text-sm"></i>
               </div>
               <div>
@@ -577,7 +577,7 @@ export default function FichaClienteComentarios() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowModal(true)}
-                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-medium text-sm shadow-sm hover:from-blue-700 hover:to-blue-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+                className="px-4 py-2 bg-slate-700 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-slate-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
               >
                 <i className="fas fa-comment text-xs"></i>
                 <span>Nuevo Comentario</span>
@@ -596,14 +596,14 @@ export default function FichaClienteComentarios() {
         {/* Contenido */}
         <div className="p-6">
           {!grupoFamiliarId ? (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">
-                  <i className="fas fa-exclamation-triangle text-amber-600 text-sm"></i>
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                  <i className="fas fa-exclamation-triangle text-gray-500 text-sm"></i>
                 </div>
                 <div>
-                  <p className="text-amber-800 font-medium m-0">No hay grupo familiar asociado</p>
-                  <p className="text-amber-700 text-sm m-0 mt-1">Este cliente no tiene un grupo familiar asociado.</p>
+                  <p className="text-gray-700 font-medium m-0">No hay grupo familiar asociado</p>
+                  <p className="text-gray-600 text-sm m-0 mt-1">Este cliente no tiene un grupo familiar asociado.</p>
                 </div>
               </div>
             </div>
@@ -625,12 +625,12 @@ export default function FichaClienteComentarios() {
                   <p className="text-gray-500 text-sm font-medium">Cargando comentarios y tareas...</p>
                 </div>
               ) : error ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
-                      <i className="fas fa-exclamation-circle text-red-600 text-sm"></i>
+                    <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                      <i className="fas fa-exclamation-circle text-gray-600 text-sm"></i>
                     </div>
-                    <p className="text-red-800 font-medium m-0">{error}</p>
+                    <p className="text-gray-700 font-medium m-0">{error}</p>
                   </div>
                 </div>
               ) : comentarios.length === 0 ? (
@@ -645,7 +645,7 @@ export default function FichaClienteComentarios() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setShowModal(true)}
-                      className="px-5 py-2.5 bg-blue-600 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-blue-700 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
+                      className="px-5 py-2.5 bg-slate-700 text-white rounded-lg font-medium text-sm shadow-sm hover:bg-slate-800 transition-all duration-200 flex items-center gap-2 hover:shadow-md"
                     >
                       <i className="fas fa-comment text-xs"></i>
                       <span>Agregar Comentario</span>
@@ -702,8 +702,8 @@ export default function FichaClienteComentarios() {
                         {/* Línea vertical decorativa - Color según tipo */}
                         <div className={`absolute left-0 top-0 bottom-0 w-1 rounded-l-xl ${
                           esTarea 
-                            ? "bg-gradient-to-b from-purple-500 to-purple-400" 
-                            : "bg-gradient-to-b from-blue-500 to-blue-400"
+                            ? "bg-slate-600" 
+                            : "bg-slate-500"
                         }`}></div>
                         
                         {/* Header del comentario */}
@@ -714,22 +714,22 @@ export default function FichaClienteComentarios() {
                               {/* Etiqueta de tipo (Comentario/Tarea) */}
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
                                 esTarea
-                                  ? "bg-purple-50 text-purple-700 border-purple-200"
-                                  : "bg-blue-50 text-blue-700 border-blue-200"
+                                  ? "bg-slate-50 text-slate-700 border-slate-200"
+                                  : "bg-slate-50 text-slate-700 border-slate-200"
                               }`}>
                                 <i className={`fas ${esTarea ? "fa-tasks" : "fa-comment"} text-[10px]`}></i>
                                 {esTarea ? "Tarea" : "Comentario"}
                               </span>
                               {/* Badge de estado (solo para tareas) */}
                               {esTarea && estadoTarea && (
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${
                                   estadoTarea === "completed" 
-                                    ? "bg-green-100 text-green-700 border border-green-200"
+                                    ? "bg-gray-100 text-gray-700 border-gray-300"
                                     : estadoTarea === "pending"
-                                    ? "bg-yellow-100 text-yellow-700 border border-yellow-200"
+                                    ? "bg-gray-50 text-gray-600 border-gray-200"
                                     : estadoTarea === "in_progress"
-                                    ? "bg-blue-100 text-blue-700 border border-blue-200"
-                                    : "bg-gray-100 text-gray-700 border border-gray-200"
+                                    ? "bg-slate-50 text-slate-700 border-slate-200"
+                                    : "bg-gray-100 text-gray-700 border-gray-200"
                                 }`}>
                                   <i className={`fas ${
                                     estadoTarea === "completed" ? "fa-check-circle" :
@@ -753,8 +753,8 @@ export default function FichaClienteComentarios() {
                             <div className="space-y-2">
                               {/* Usuario creador */}
                               <div className="flex items-center gap-2 text-sm text-gray-700">
-                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-200 to-blue-300 flex items-center justify-center">
-                                  <i className="fas fa-user-plus text-blue-600 text-xs"></i>
+                                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                                  <i className="fas fa-user-plus text-gray-500 text-xs"></i>
                                 </div>
                                 <span className="text-gray-500 font-medium">Creado por:</span>
                                 <span className="font-semibold text-gray-800">{usuarioCreador}</span>
@@ -763,8 +763,8 @@ export default function FichaClienteComentarios() {
                               {/* Cliente */}
                               {clienteNombre && clienteNombre !== "Cliente" && (
                                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-green-200 to-green-300 flex items-center justify-center">
-                                    <i className="fas fa-user-circle text-green-600 text-xs"></i>
+                                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <i className="fas fa-user-circle text-gray-500 text-xs"></i>
                                   </div>
                                   <span className="text-gray-500 font-medium">Cliente:</span>
                                   <span className="font-semibold text-gray-800">{clienteNombre}</span>
@@ -774,8 +774,8 @@ export default function FichaClienteComentarios() {
                               {/* Usuario asignado (solo para tareas) */}
                               {esTarea && usuarioAsignado && (
                                 <div className="flex items-center gap-2 text-sm text-gray-700">
-                                  <div className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-200 to-purple-300 flex items-center justify-center">
-                                    <i className="fas fa-user-check text-purple-600 text-xs"></i>
+                                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                                    <i className="fas fa-user-check text-gray-500 text-xs"></i>
                                   </div>
                                   <span className="text-gray-500 font-medium">Asignado a:</span>
                                   <span className="font-semibold text-gray-800">{usuarioAsignado}</span>
@@ -848,28 +848,28 @@ export default function FichaClienteComentarios() {
                                 className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-gray-200 mb-3"
                               >
                                 <div className="flex items-center gap-2">
-                                  <i className="fas fa-paperclip text-blue-600"></i>
+                                  <i className="fas fa-paperclip text-gray-500"></i>
                                   <span className="font-semibold text-gray-700">
                                     Archivos adjuntos
                                   </span>
-                                  <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
                                     {adjuntosLog.length} {adjuntosLog.length === 1 ? "archivo" : "archivos"}
                                   </span>
                                   {/* Mostrar resumen de tipos de archivos */}
                                   <div className="flex items-center gap-2 ml-2">
                                     {imagenesCount > 0 && (
                                       <span className="text-xs text-gray-500">
-                                        <i className="fas fa-image text-blue-500"></i> {imagenesCount}
+                                        <i className="fas fa-image text-gray-500"></i> {imagenesCount}
                                       </span>
                                     )}
                                     {pdfsCount > 0 && (
                                       <span className="text-xs text-gray-500">
-                                        <i className="fas fa-file-pdf text-red-500"></i> {pdfsCount}
+                                        <i className="fas fa-file-pdf text-gray-500"></i> {pdfsCount}
                                       </span>
                                     )}
                                     {wordsCount > 0 && (
                                       <span className="text-xs text-gray-500">
-                                        <i className="fas fa-file-word text-blue-500"></i> {wordsCount}
+                                        <i className="fas fa-file-word text-gray-500"></i> {wordsCount}
                                       </span>
                                     )}
                                     {otrosCount > 0 && (
@@ -893,7 +893,7 @@ export default function FichaClienteComentarios() {
                                     return (
                                       <div
                                         key={adjunto.id}
-                                        className="relative group border border-gray-200 rounded-lg overflow-hidden bg-white hover:border-blue-400 transition-all"
+                                        className="relative group border border-gray-200 rounded-lg overflow-hidden bg-white hover:border-slate-400 transition-all"
                                         style={{ width: "150px", height: "150px" }}
                                       >
                                         {/* Contenido del archivo - Click para previsualizar */}
@@ -914,15 +914,15 @@ export default function FichaClienteComentarios() {
                                               </div>
                                             </>
                                           ) : esPdf ? (
-                                            <div className="w-full h-full flex flex-col items-center justify-center bg-red-50">
-                                              <i className="fas fa-file-pdf text-5xl text-red-600 mb-2"></i>
+                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+                                              <i className="fas fa-file-pdf text-5xl text-gray-600 mb-2"></i>
                                               <span className="text-xs text-gray-600 text-center px-2 truncate w-full">
                                                 {adjunto.nombre_original || "Documento PDF"}
                                               </span>
                                             </div>
                                           ) : esDoc ? (
-                                            <div className="w-full h-full flex flex-col items-center justify-center bg-blue-50">
-                                              <i className="fas fa-file-word text-5xl text-blue-600 mb-2"></i>
+                                            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-50">
+                                              <i className="fas fa-file-word text-5xl text-gray-600 mb-2"></i>
                                               <span className="text-xs text-gray-600 text-center px-2 truncate w-full">
                                                 {adjunto.nombre_original || "Documento Word"}
                                               </span>
@@ -950,7 +950,7 @@ export default function FichaClienteComentarios() {
                                               e.stopPropagation();
                                               descargarArchivo(adjunto);
                                             }}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-full p-1.5 shadow-lg"
+                                            className="bg-slate-600 hover:bg-slate-700 text-white rounded-full p-1.5 shadow-lg"
                                             title="Descargar archivo"
                                           >
                                             <i className="fas fa-download text-xs"></i>
@@ -972,21 +972,23 @@ export default function FichaClienteComentarios() {
                               <div className="flex flex-wrap gap-4 text-sm">
                                 {comentario.scheduled_date && (
                                   <div className="flex items-center gap-2 text-gray-600">
-                                    <i className="fas fa-calendar-check text-green-600"></i>
+                                    <i className="fas fa-calendar-check text-gray-400"></i>
                                     <span className="font-medium">Programada:</span>
                                     <span>{formatDateForDisplay(comentario.scheduled_date)}</span>
                                   </div>
                                 )}
                                 {comentario.due_date && (
                                   <div className="flex items-center gap-2 text-gray-600">
-                                    <i className="fas fa-calendar-times text-red-600"></i>
+                                    <i className={`fas fa-calendar-times ${new Date(comentario.due_date) < new Date() && comentario.task?.status !== "completed" ? "text-red-600" : "text-gray-400"}`}></i>
                                     <span className="font-medium">Vence:</span>
-                                    <span>{formatDateForDisplay(comentario.due_date)}</span>
+                                    <span className={new Date(comentario.due_date) < new Date() && comentario.task?.status !== "completed" ? "text-red-600 font-semibold" : ""}>
+                                      {formatDateForDisplay(comentario.due_date)}
+                                    </span>
                                   </div>
                                 )}
                                 {esTarea && usuarioAsignado && (
                                   <div className="flex items-center gap-2 text-gray-600">
-                                    <i className="fas fa-user-check text-purple-600"></i>
+                                    <i className="fas fa-user-check text-gray-400"></i>
                                     <span className="font-medium">Asignada a:</span>
                                     <span>{usuarioAsignado}</span>
                                   </div>
@@ -995,11 +997,11 @@ export default function FichaClienteComentarios() {
                                   <div className="flex items-center gap-2">
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                       estadoTarea === "completed" 
-                                        ? "bg-green-100 text-green-700"
+                                        ? "bg-gray-100 text-gray-700"
                                         : estadoTarea === "pending"
-                                        ? "bg-yellow-100 text-yellow-700"
+                                        ? "bg-gray-50 text-gray-600"
                                         : estadoTarea === "in_progress"
-                                        ? "bg-blue-100 text-blue-700"
+                                        ? "bg-slate-50 text-slate-700"
                                         : "bg-gray-100 text-gray-700"
                                     }`}>
                                       {estadoTarea === "completed" ? "Completada" : 
@@ -1028,12 +1030,12 @@ export default function FichaClienteComentarios() {
                                     className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors duration-200 border border-gray-200"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <i className="fas fa-comments text-purple-600"></i>
+                                      <i className="fas fa-comments text-gray-500"></i>
                                       <span className="font-semibold text-gray-700">
                                         Comentarios de la tarea
                                       </span>
                                       {comentariosTarea.length > 0 && (
-                                        <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
                                           {comentariosTarea.length}
                                         </span>
                                       )}
@@ -1055,12 +1057,12 @@ export default function FichaClienteComentarios() {
                                         comentariosTarea.map((comentarioTarea) => (
                                           <div
                                             key={comentarioTarea.id}
-                                            className="bg-gray-50 border-l-4 border-purple-400 rounded-r-lg p-4 shadow-sm"
+                                            className="bg-gray-50 border-l-4 border-slate-400 rounded-r-lg p-4 shadow-sm"
                                           >
                                             <div className="flex items-start justify-between mb-2">
                                               <div className="flex items-center gap-2">
-                                                <div className="w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center">
-                                                  <i className="fas fa-user text-purple-600 text-xs"></i>
+                                                <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
+                                                  <i className="fas fa-user text-gray-500 text-xs"></i>
                                                 </div>
                                                 <span className="font-medium text-gray-700 text-sm">
                                                   {comentarioTarea.user?.name || comentarioTarea.user || "Usuario"}

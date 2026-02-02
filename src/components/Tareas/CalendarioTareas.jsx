@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup, Tooltip, OverlayTrigger } from "react-bootstrap";
-import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt } from "react-icons/fa";
+import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt, FaClipboardCheck } from "react-icons/fa";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
+import ResponderTareaAuditoriaModal from "../Tareas/ResponderTareaAuditoriaModal";
 import ResumenTareasModal from "../Tareas/ResumenTareasModal";
 import NotificationsDropdown from "../Tareas/NotificationsDropdown";
 import { useHasPermission } from "../../hooks/useHasPermission";
 import { isUserMentioned } from "../../utils/mentions";
+import { listTasks as listAuditoriaTasks, getTask as getAuditoriaTask } from "../../services/auditoriasTasksService";
 
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
@@ -18,7 +20,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [tareas, setTareas] = useState(Array.isArray(tareasIniciales) ? tareasIniciales : []);
   const [showNuevaModal, setShowNuevaModal] = useState(false);
   const [showResponderModal, setShowResponderModal] = useState(false);
+  const [showResponderAuditoriaModal, setShowResponderAuditoriaModal] = useState(false);
   const [tareaSeleccionada, setTareaSeleccionada] = useState(null);
+  const [tareaTipo, setTareaTipo] = useState(null); // 'operativa' | 'auditoria'
   const [showResumen, setShowResumen] = useState(false);
   const [fechaResumen, setFechaResumen] = useState(new Date());
 
@@ -559,8 +563,25 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }
   };
 
-  const abrirResponderTarea = (tarea, isFromNotification = false) => {
+  const abrirResponderTarea = async (tarea, isFromNotification = false) => {
     if (!tarea) return;
+    
+    // ✅ Determinar el tipo de tarea (operativa o auditoría)
+    const tipo = tarea.tipo || (tarea.auditoria || tarea.item || tarea.run_id ? 'auditoria' : 'operativa');
+    
+    // ✅ Si es tarea de auditoría, cargar detalles completos
+    if (tipo === 'auditoria' && tarea.id) {
+      try {
+        setLoadingTarea(true);
+        const tareaCompleta = await getAuditoriaTask(tarea.id);
+        tarea = tareaCompleta?.data || tareaCompleta || tarea;
+      } catch (error) {
+        console.warn("Error al cargar detalles de tarea de auditoría:", error);
+        // Continuar con la tarea que tenemos
+      } finally {
+        setLoadingTarea(false);
+      }
+    }
     
     // ✅ Si la tarea tiene fecha programada, navegar a ese mes/año en el calendario
     if (tarea.scheduled_date || tarea.due_date) {
@@ -588,8 +609,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }
     
     setTareaSeleccionada(tarea);
+    setTareaTipo(tipo);
     setFromNotification(isFromNotification);
-    setShowResponderModal(true);
+    
+    // ✅ Abrir el modal correcto según el tipo
+    if (tipo === 'auditoria') {
+      setShowResponderAuditoriaModal(true);
+    } else {
+      setShowResponderModal(true);
+    }
   };
 
   // ✅ Función para hacer scroll a la fecha de una tarea en el calendario
@@ -728,7 +756,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     if (!Array.isArray(tareas)) return [];
     return tareas.filter((t) => {
       if (!t) return false;
-      const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
+      // Usar scheduled_date primero, luego due_date, luego created_at
+      const fechaStr = t.scheduled_date || t.due_date || t.created_at;
+      if (!fechaStr) return false;
+      
+      const fecha = fechaStr.includes('T') 
+        ? new Date(fechaStr) 
+        : new Date(`${fechaStr}T00:00:00`);
+      
+      if (isNaN(fecha.getTime())) return false;
       return fecha.getDate() === dia && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual;
     });
   };
@@ -834,30 +870,28 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       try {
         if (!usuarioSeleccionado) return;
   
-        // ✅ Si el filtro de menciones está activo, buscar tareas donde el usuario fue mencionado
+        // ✅ Cargar tareas operativas
         const endpoint = filtroMenciones 
           ? `tareas_operativas?mentioned_user_id=${usuarioSeleccionado}&per_page=100`
           : `tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`;
         
         const response = await apiRequest(endpoint, "GET");
       
-        let tareasData = [];
+        let tareasOperativas = [];
         if (response && Array.isArray(response.data)) {
-          tareasData = response.data;
+          tareasOperativas = response.data;
         } else if (Array.isArray(response)) {
-          tareasData = response;
+          tareasOperativas = response;
         }
 
         // ✅ Si buscamos por menciones, también verificar en comentarios (por si el backend no lo soporta aún)
-        if (filtroMenciones && tareasData.length === 0) {
+        if (filtroMenciones && tareasOperativas.length === 0) {
           // Fallback: obtener todas las tareas y filtrar localmente
           const allResponse = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
           const allTareas = Array.isArray(allResponse?.data) ? allResponse.data : Array.isArray(allResponse) ? allResponse : [];
           
           // Filtrar tareas que tienen comentarios mencionando al usuario
-          // Esto requiere cargar comentarios de cada tarea, por ahora usamos el endpoint si existe
-          tareasData = allTareas.filter(tarea => {
-            // Si la tarea tiene comentarios en su estructura, verificar menciones
+          tareasOperativas = allTareas.filter(tarea => {
             if (tarea.comments && Array.isArray(tarea.comments)) {
               return tarea.comments.some(comment => 
                 isUserMentioned(comment.comment || comment.response_note || '', usuarioSeleccionado)
@@ -866,8 +900,35 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
             return false;
           });
         }
+
+        // ✅ Marcar tareas operativas con tipo
+        tareasOperativas = tareasOperativas.map(t => ({ ...t, tipo: 'operativa' }));
+
+        // ✅ Cargar tareas de auditoría
+        let tareasAuditoria = [];
+        try {
+          const auditoriaParams = filtroMenciones
+            ? { mentioned_user_id: usuarioSeleccionado, per_page: 100 }
+            : { assigned_user_id: usuarioSeleccionado, per_page: 100 };
+          
+          const auditoriaResponse = await listAuditoriaTasks(auditoriaParams);
+          
+          if (auditoriaResponse?.data && Array.isArray(auditoriaResponse.data)) {
+            tareasAuditoria = auditoriaResponse.data;
+          } else if (Array.isArray(auditoriaResponse)) {
+            tareasAuditoria = auditoriaResponse;
+          }
+
+          // ✅ Marcar tareas de auditoría con tipo
+          tareasAuditoria = tareasAuditoria.map(t => ({ ...t, tipo: 'auditoria' }));
+        } catch (error) {
+          console.warn("Error al cargar tareas de auditoría:", error);
+          // No mostrar error al usuario, solo continuar con tareas operativas
+        }
         
-        setTareas(tareasData);
+        // ✅ Combinar ambas listas
+        const todasLasTareas = [...tareasOperativas, ...tareasAuditoria];
+        setTareas(todasLasTareas);
         
       } catch (error) {
         console.error("Error al cargar tareas por usuario:", error);
@@ -884,20 +945,54 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   
   
 
-  // Agrupar tareas por día según scheduled_date
+  // Agrupar tareas por día según scheduled_date o due_date
   const tareasPorDia = {};
   if (Array.isArray(tareas)) {
     tareas
       .filter((t) => t && t.status !== "completed")
       .forEach((t) => {
-        const fecha = t.scheduled_date ? new Date(`${t.scheduled_date}T00:00:00`) : new Date(t.created_at);
-        if (fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
+        // Usar scheduled_date primero, luego due_date, luego created_at
+        const fechaStr = t.scheduled_date || t.due_date || t.created_at;
+        if (!fechaStr) return;
+        
+        const fecha = fechaStr.includes('T') 
+          ? new Date(fechaStr) 
+          : new Date(`${fechaStr}T00:00:00`);
+        
+        if (!isNaN(fecha.getTime()) && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
           const dia = fecha.getDate();
           if (!tareasPorDia[dia]) tareasPorDia[dia] = [];
           tareasPorDia[dia].push(t);
         }
       });
   }
+
+  // ✅ Función helper para obtener el nombre del cliente según el tipo de tarea
+  const getClienteNombre = (tarea) => {
+    if (tarea.tipo === 'auditoria') {
+      return tarea.cliente?.nombre_completo || tarea.cliente?.nombre || "Sin Cliente";
+    }
+    return tarea.log?.cliente?.nombre_completo || "Sin Cliente";
+  };
+
+  // ✅ Función helper para obtener el color del badge según tipo y estado
+  const getBadgeColorByType = (tarea) => {
+    const tipo = tarea.tipo || (tarea.auditoria || tarea.item || tarea.run_id ? 'auditoria' : 'operativa');
+    const status = tarea.status;
+    
+    if (tipo === 'auditoria') {
+      // Tareas de auditoría: usar colores más sutiles (slate/gray) para distinguirlas profesionalmente
+      switch (status) {
+        case "pending": return "secondary"; // Gray para pendientes
+        case "in_progress": return "info"; // Azul claro para en progreso
+        case "completed": return "success"; // Verde para completadas
+        default: return "secondary";
+      }
+    } else {
+      // Tareas operativas: mantener colores originales (warning para pending)
+      return getBadgeColor(status);
+    }
+  };
   
 
 
@@ -1126,29 +1221,140 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                 loadingTask={loadingTarea}
                 onNotificationClick={async (notification) => {
                   try {
+                    // ✅ Detectar si es una notificación de auditoría
+                    // El backend usa 'auditoria_task_id' (no 'audit_task_id')
+                    const isAuditoriaNotification = 
+                      notification.auditoria_task_id || 
+                      notification.audit_task_id ||  // Mantener compatibilidad
+                      notification.task_type === 'auditoria' ||
+                      notification.type === 'audit_task' ||
+                      notification.type === 'audit_mention' ||
+                      notification.audit_task ||
+                      notification.data?.auditoria_task_id ||
+                      notification.data?.audit_task_id ||
+                      notification.data?.task_type === 'auditoria' ||
+                      (notification.task && (notification.task.auditoria || notification.task.item || notification.task.run_id));
+                    
+                    // ✅ Función helper para cargar y abrir tarea de auditoría
+                    const abrirTareaAuditoria = async (taskId) => {
+                      try {
+                        setLoadingTarea(true);
+                        const tareaCompleta = await getAuditoriaTask(taskId);
+                        const tarea = tareaCompleta?.data || tareaCompleta;
+                        if (tarea) {
+                          abrirResponderTarea({ ...tarea, tipo: 'auditoria' }, true);
+                        } else {
+                          throw new Error("No se pudo cargar la tarea de auditoría");
+                        }
+                      } catch (error) {
+                        console.error("Error al cargar tarea de auditoría:", error);
+                        setToast({ 
+                          show: true, 
+                          message: "Error al cargar la tarea de auditoría.", 
+                          variant: "danger" 
+                        });
+                      } finally {
+                        setLoadingTarea(false);
+                      }
+                    };
+                    
+                    // ✅ Función helper para buscar tarea de auditoría por comment_id
+                    const buscarTareaAuditoriaPorComentario = async (commentId) => {
+                      try {
+                        const auditoriaTasksResponse = await listAuditoriaTasks({ per_page: 100 });
+                        const auditoriaTasks = auditoriaTasksResponse?.data || [];
+                        
+                        for (const tarea of auditoriaTasks) {
+                          // Cargar comentarios de la tarea
+                          try {
+                            const { getTaskComments } = await import("../../services/auditoriasTasksService");
+                            const comentarios = await getTaskComments(tarea.id);
+                            const comentariosArray = Array.isArray(comentarios) ? comentarios : (comentarios?.data || []);
+                            
+                            const comentarioEncontrado = comentariosArray.find(c => 
+                              (c.id || c.comment_id) == commentId ||
+                              parseInt(c.id || c.comment_id) === parseInt(commentId)
+                            );
+                            
+                            if (comentarioEncontrado) {
+                              return tarea.id;
+                            }
+                          } catch (comentariosError) {
+                            // Continuar con la siguiente tarea si falla
+                            continue;
+                          }
+                        }
+                        return null;
+                      } catch (error) {
+                        console.warn("Error al buscar tarea de auditoría por comentario:", error);
+                        return null;
+                      }
+                    };
+                    
                     // Manejar según el tipo de notificación
-                    if (notification.type === 'mention') {
-                      // Obtener task_id - puede venir como número o string
-                      let taskId = notification.task_id;
+                    if (notification.type === 'mention' || notification.type === 'audit_mention') {
+                      // ✅ Obtener task_id - El backend usa 'auditoria_task_id' para auditorías
+                      let taskId = null;
+                      let commentId = null;
                       
-                      // Convertir a número si es string válido
-                      if (typeof taskId === 'string' && taskId.trim() !== '' && !isNaN(parseInt(taskId, 10))) {
-                        taskId = parseInt(taskId, 10);
+                      // Determinar si es auditoría primero
+                      const esAuditoria = notification.auditoria_task_id || notification.audit_task_id;
+                      
+                      if (esAuditoria) {
+                        // Es notificación de auditoría
+                        taskId = notification.auditoria_task_id || notification.audit_task_id;
+                        commentId = notification.auditoria_comment_id || notification.audit_comment_id;
+                      } else {
+                        // Es notificación de tarea operativa
+                        taskId = notification.task_id;
+                        commentId = notification.comment_id;
                       }
                       
-                      // Si el task_id es 0, null, undefined, o string vacío, considerar que no existe
-                      const hasTaskId = taskId !== null && taskId !== undefined && taskId !== '' && taskId !== 0;
+                      // También buscar en campos alternativos
+                      if (!taskId) {
+                        taskId = notification.data?.task_id || 
+                                notification.data?.auditoria_task_id ||
+                                notification.data?.audit_task_id ||
+                                notification.metadata?.task_id ||
+                                notification.metadata?.auditoria_task_id ||
+                                notification.metadata?.audit_task_id;
+                      }
                       
-                      // ✅ Si no hay task_id pero hay comment_id, buscar el task_id usando el mismo método que fetchTaskDetail
-                      if (!hasTaskId && notification.comment_id) {
-                        console.log("🔍 Buscando task_id para comment_id:", notification.comment_id);
+                      // ✅ Si es notificación de auditoría y tenemos task_id, abrir directamente
+                      if (esAuditoria && taskId) {
+                        await abrirTareaAuditoria(taskId);
+                        return;
+                      }
+                      
+                      // ✅ Si es tarea operativa y tenemos task_id, abrir directamente
+                      if (!esAuditoria && taskId) {
+                        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+                        if (notification.task && notification.task.id) {
+                          abrirResponderTarea(notification.task, true);
+                        } else {
+                          await openTaskResponseModal(numericTaskId, true);
+                        }
+                        return;
+                      }
+                      
+                      // ✅ Si no hay task_id pero hay comment_id, buscar el task_id
+                      if (!taskId && commentId) {
+                        console.log("🔍 Buscando task_id para comment_id:", commentId, "esAuditoria:", esAuditoria);
                         
                         try {
-                          // Usar el mismo endpoint que usa fetchTaskDetail: tareas_operativas?per_page=100
+                          // ✅ Primero intentar buscar en tareas de auditoría si es notificación de auditoría
+                          if (esAuditoria) {
+                            const tareaIdEncontrada = await buscarTareaAuditoriaPorComentario(commentId);
+                            if (tareaIdEncontrada) {
+                              await abrirTareaAuditoria(tareaIdEncontrada);
+                              return;
+                            }
+                          }
+                          
+                          // Si no es auditoría o no se encontró, buscar en tareas operativas
                           const allTasksResponse = await apiRequest(`tareas_operativas?per_page=100`, "GET");
                           let allTasks = [];
                           
-                          // Manejar diferentes estructuras de respuesta (igual que fetchTaskDetail)
                           if (allTasksResponse?.data?.data) {
                             allTasks = Array.isArray(allTasksResponse.data.data) ? allTasksResponse.data.data : [];
                           } else if (allTasksResponse?.data) {
@@ -1218,7 +1424,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         }
                       }
                       
-                      // ✅ Usar openTaskResponseModal (el mismo método que se usa para notificaciones de tareas)
+                      // ✅ Usar openTaskResponseModal para tareas operativas o abrir tarea de auditoría
                       if (taskId && !isNaN(taskId) && taskId > 0) {
                         const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
                         
@@ -1226,34 +1432,118 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         if (notification.task && notification.task.id) {
                           console.log("✅ Usando objeto task completo de la notificación");
                           abrirResponderTarea(notification.task, true);
+                        } else if (isAuditoriaNotification) {
+                          // Si es auditoría, cargar y abrir
+                          await abrirTareaAuditoria(numericTaskId);
                         } else {
-                          // Usar el mismo método que funciona para notificaciones de tareas
+                          // Usar el mismo método que funciona para notificaciones de tareas operativas
                           console.log("✅ Abriendo modal con taskId usando openTaskResponseModal:", numericTaskId);
                           await openTaskResponseModal(numericTaskId, true);
                         }
                       } else {
+                        // ✅ Intentar obtener task_id desde otros campos de la notificación
+                        let taskIdFromData = null;
+                        let esAuditoriaFromData = false;
+                        
+                        // Buscar en data, metadata, related_id, etc.
+                        if (notification.data) {
+                          taskIdFromData = notification.data.task_id || 
+                                           notification.data.auditoria_task_id ||
+                                           notification.data.audit_task_id || 
+                                           notification.data.task?.id ||
+                                           notification.data.audit_task?.id;
+                          esAuditoriaFromData = !!(notification.data.auditoria_task_id || notification.data.audit_task_id);
+                        }
+                        
+                        if (notification.metadata) {
+                          taskIdFromData = taskIdFromData || 
+                                          notification.metadata.task_id || 
+                                          notification.metadata.auditoria_task_id ||
+                                          notification.metadata.audit_task_id;
+                          esAuditoriaFromData = esAuditoriaFromData || !!(notification.metadata.auditoria_task_id || notification.metadata.audit_task_id);
+                        }
+                        
+                        if (notification.related_id) {
+                          taskIdFromData = notification.related_id;
+                        }
+                        
+                        // Si encontramos un task_id en otros campos, intentar usarlo
+                        if (taskIdFromData) {
+                          const numericTaskId = typeof taskIdFromData === 'string' ? parseInt(taskIdFromData, 10) : taskIdFromData;
+                          if (!isNaN(numericTaskId) && numericTaskId > 0) {
+                            if (esAuditoriaFromData || isAuditoriaNotification) {
+                              await abrirTareaAuditoria(numericTaskId);
+                            } else {
+                              await openTaskResponseModal(numericTaskId, true);
+                            }
+                            return;
+                          }
+                        }
+                        
+                        // ✅ Si hay link, intentar extraer task_id del link
+                        if (notification.link) {
+                          try {
+                            const urlParams = new URLSearchParams(notification.link.split('?')[1] || '');
+                            const taskIdFromLink = urlParams.get('task_id');
+                            if (taskIdFromLink) {
+                              const numericTaskId = parseInt(taskIdFromLink, 10);
+                              if (!isNaN(numericTaskId) && numericTaskId > 0) {
+                                // Determinar si es auditoría por el link
+                                const esAuditoriaFromLink = notification.link.includes('/auditorias');
+                                if (esAuditoriaFromLink) {
+                                  await abrirTareaAuditoria(numericTaskId);
+                                } else {
+                                  await openTaskResponseModal(numericTaskId, true);
+                                }
+                                return;
+                              }
+                            }
+                          } catch (linkError) {
+                            console.warn("Error al extraer task_id del link:", linkError);
+                          }
+                        }
+                        
+                        // Si aún no tenemos task_id, mostrar mensaje más informativo
                         console.error("❌ No se pudo obtener un task_id válido de la notificación:", {
                           notification_id: notification.id,
+                          notification_type: notification.type,
                           task_id: notification.task_id,
-                          comment_id: notification.comment_id
+                          auditoria_task_id: notification.auditoria_task_id,
+                          audit_task_id: notification.audit_task_id,
+                          comment_id: notification.comment_id,
+                          auditoria_comment_id: notification.auditoria_comment_id,
+                          data: notification.data,
+                          metadata: notification.metadata,
+                          related_id: notification.related_id
                         });
+                        
                         setToast({ 
                           show: true, 
-                          message: "No se pudo identificar la tarea asociada a esta notificación.", 
+                          message: "Esta notificación no tiene información de tarea asociada. Por favor, contacte al administrador.", 
                           variant: "warning" 
                         });
                       }
-                    } else if (notification.type === 'task_assigned' && notification.task_id) {
-                      const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
-                      if (notification.task && notification.task.id) {
+                    } else if (notification.type === 'task_assigned' && (notification.task_id || notification.auditoria_task_id || notification.audit_task_id)) {
+                      const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                      const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                      const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+                      
+                      if (esAuditoria) {
+                        await abrirTareaAuditoria(numericTaskId);
+                      } else if (notification.task && notification.task.id) {
                         abrirResponderTarea(notification.task, true);
                       } else {
                         await openTaskResponseModal(numericTaskId, true);
                       }
                     } else if (notification.type === 'task_pending') {
-                      if (notification.task_id) {
-                        const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
-                        if (notification.task && notification.task.id) {
+                      const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                      const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                      
+                      if (taskId) {
+                        const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+                        if (esAuditoria) {
+                          await abrirTareaAuditoria(numericTaskId);
+                        } else if (notification.task && notification.task.id) {
                           abrirResponderTarea(notification.task, true);
                         } else {
                           await openTaskResponseModal(numericTaskId, true);
@@ -1261,9 +1551,14 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       } else {
                         await openTaskResponseModal(null, true);
                       }
-                    } else if (notification.type === 'task' && notification.task_id) {
-                      const numericTaskId = typeof notification.task_id === 'string' ? parseInt(notification.task_id, 10) : notification.task_id;
-                      if (notification.task && notification.task.id) {
+                    } else if (notification.type === 'task' && (notification.task_id || notification.auditoria_task_id || notification.audit_task_id)) {
+                      const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                      const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                      const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
+                      
+                      if (esAuditoria) {
+                        await abrirTareaAuditoria(numericTaskId);
+                      } else if (notification.task && notification.task.id) {
                         abrirResponderTarea(notification.task, true);
                       } else {
                         await openTaskResponseModal(numericTaskId, true);
@@ -1404,8 +1699,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                   <>
                     {tareasDia.slice(0, 4).map((t, tIndex) => {
                       if (!t) return null;
-                      const clienteNombre = t.log?.cliente?.nombre_completo || "Sin Cliente";
-                      const tooltipText = `${clienteNombre} - ${getStatusLabel(t?.status)}`;
+                      const tipo = t.tipo || (t.auditoria || t.item || t.run_id ? 'auditoria' : 'operativa');
+                      const clienteNombre = getClienteNombre(t);
+                      const esAuditoria = tipo === 'auditoria';
+                      const tooltipText = `${esAuditoria ? '🔍 ' : ''}${clienteNombre} - ${getStatusLabel(t?.status)}${esAuditoria ? ' (Auditoría)' : ''}`;
                       
                       // ✅ Key única combinando ID de tarea, día e índice para evitar duplicados
                       const taskKey = t.id ? `task-${t.id}-${dia}-${tIndex}` : `task-${dia}-${tIndex}-${Date.now()}`;
@@ -1417,16 +1714,25 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                           overlay={<Tooltip>{tooltipText}</Tooltip>}
                         >
                           <Badge
-                            bg={getBadgeColor(t?.status)}
-                            className="d-block mb-1 text-truncate"
+                            bg={getBadgeColorByType(t)}
+                            className="d-flex align-items-center gap-1 mb-1 text-truncate"
                             style={{ 
                               fontSize: "0.7rem", 
                               cursor: "pointer",
                               maxWidth: "100%",
-                              transition: "all 0.2s ease"
+                              transition: "all 0.2s ease",
+                              borderLeft: esAuditoria ? "3px solid #64748b" : "none",
+                              paddingLeft: esAuditoria ? "4px" : "8px",
+                              backgroundColor: esAuditoria ? (t.status === "pending" ? "#e2e8f0" : t.status === "in_progress" ? "#cbd5e1" : undefined) : undefined
                             }}
-                            draggable={t?.status !== "completed"}
-                            onDragStart={(e) => onDragStart(e, t)}
+                            draggable={t?.status !== "completed" && !esAuditoria}
+                            onDragStart={(e) => {
+                              if (!esAuditoria) {
+                                onDragStart(e, t);
+                              } else {
+                                e.preventDefault();
+                              }
+                            }}
                             onClick={(e) => {
                               e.stopPropagation();
                               abrirResponderTarea(t);
@@ -1434,13 +1740,22 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                             onMouseEnter={(e) => {
                               e.currentTarget.style.transform = "scale(1.05)";
                               e.currentTarget.style.opacity = "0.9";
+                              if (esAuditoria) {
+                                e.currentTarget.style.borderLeft = "3px solid #475569";
+                              }
                             }}
                             onMouseLeave={(e) => {
                               e.currentTarget.style.transform = "scale(1)";
                               e.currentTarget.style.opacity = "1";
+                              if (esAuditoria) {
+                                e.currentTarget.style.borderLeft = "3px solid #64748b";
+                              }
                             }}
                           >
-                            {clienteNombre}
+                            {esAuditoria && <FaClipboardCheck style={{ fontSize: "0.6rem", marginRight: "2px" }} />}
+                            <span className="text-truncate" style={{ flex: 1, minWidth: 0 }}>
+                              {clienteNombre}
+                            </span>
                           </Badge>
                         </OverlayTrigger>
                       );
@@ -1521,16 +1836,24 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                   >
                     <div className="flex-grow-1">
                       <div className="d-flex align-items-center gap-2 mb-1">
-                        <Badge bg={getBadgeColor(t?.status)} className="px-2 py-1">
+                        <Badge bg={getBadgeColorByType(t)} className="px-2 py-1">
                           {getStatusLabel(t?.status)}
                         </Badge>
+                        {(t.tipo === 'auditoria' || t.auditoria || t.item || t.run_id) && (
+                          <Badge bg="secondary" className="px-2 py-1 d-flex align-items-center gap-1" style={{ fontSize: "0.7rem" }}>
+                            <FaClipboardCheck style={{ fontSize: "0.65rem" }} />
+                            Auditoría
+                          </Badge>
+                        )}
                         <span className="fw-bold text-dark">
-                          {t.log?.concept?.name || "Tarea"}
+                          {t.tipo === 'auditoria' 
+                            ? "Tarea de Auditoría" 
+                            : (t.log?.concept?.name || "Tarea")}
                         </span>
                       </div>
                       <div className="text-muted d-flex align-items-center gap-1" style={{ fontSize: "0.9rem" }}>
                         <FaUser className="opacity-50" style={{ fontSize: "0.75rem" }} />
-                        {t.log?.cliente?.nombre_completo || "Sin Cliente"}
+                        {getClienteNombre(t)}
                       </div>
                     </div>
                     <Button
@@ -1594,6 +1917,23 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       
       // ✅ El modal se cierra automáticamente después de un delay en ResponderTareaModal
       // No cerramos aquí para evitar conflictos con el delay
+    }}
+  />
+)}
+
+{showResponderAuditoriaModal && tareaSeleccionada && (
+  <ResponderTareaAuditoriaModal
+    show={showResponderAuditoriaModal}
+    onHide={() => {
+      setShowResponderAuditoriaModal(false);
+      setTareaSeleccionada(null);
+      setTareaTipo(null);
+      setFromNotification(false);
+    }}
+    tarea={tareaSeleccionada}
+    onUpdated={(tareaActualizada) => {
+      // ✅ Actualizar la tarea en el estado del calendario
+      onUpdated(tareaActualizada);
     }}
   />
 )}

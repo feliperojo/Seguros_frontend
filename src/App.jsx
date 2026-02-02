@@ -39,6 +39,7 @@ import FichaClienteHistorial from "./pages/tabs/FichaClienteHistorial";
 import FichaClienteRingCentral from "./pages/tabs/FichaClienteRingCentral";
 import FichaClienteComentarios from "./pages/tabs/FichaClienteComentarios";
 import FichaClienteCalendario from "./pages/tabs/FichaClienteCalendario";
+import FichaClienteAuditorias from "./pages/tabs/FichaClienteAuditorias";
 
 // Módulo de Administración
 import UsersList from "./pages/admin/UsersList";
@@ -170,6 +171,7 @@ const App = () => {
           <Route path="ringcentral" element={<FichaClienteRingCentral />} />
           <Route path="calendario" element={<FichaClienteCalendario />} />
           <Route path="comentarios" element={<FichaClienteComentarios />} />
+          <Route path="auditorias" element={<FichaClienteAuditorias />} />
           <Route path="directorio" element={<ContactosAdmin />} />
           {/* cuando tengas más pestañas, las agregas aquí:
               <Route path="historial" element={<FichaClienteHistorial />} />

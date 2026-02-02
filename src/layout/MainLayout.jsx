@@ -5,6 +5,8 @@ import apiRequest from "../services/api";
 import { Link, useNavigate } from "react-router-dom";
 import NotificationsDropdown from "../components/Tareas/NotificationsDropdown";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
+import ResponderTareaAuditoriaModal from "../components/Tareas/ResponderTareaAuditoriaModal";
+import { getTask as getAuditoriaTask, listTasks as listAuditoriaTasks } from "../services/auditoriasTasksService";
 
 const MainLayout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -14,7 +16,9 @@ const MainLayout = ({ children }) => {
   
   // ✅ Estados para el modal de respuesta de tarea
   const [showResponderModal, setShowResponderModal] = useState(false);
+  const [showResponderAuditoriaModal, setShowResponderAuditoriaModal] = useState(false);
   const [selectedTarea, setSelectedTarea] = useState(null);
+  const [tareaTipo, setTareaTipo] = useState(null); // 'operativa' | 'auditoria'
   const [loadingTarea, setLoadingTarea] = useState(false);
   const [fromNotification, setFromNotification] = useState(false);
   
@@ -275,52 +279,242 @@ const MainLayout = ({ children }) => {
           pendientes={pendientes}
           loadingTask={loadingTarea}
           onNotificationClick={async (notification) => {
-            // Manejar según el tipo de notificación
-            if (notification.type === 'mention') {
-              let taskId = notification.task_id;
+            try {
+              // ✅ Detectar si es una notificación de auditoría
+              // El backend usa 'auditoria_task_id' (no 'audit_task_id')
+              const isAuditoriaNotification = 
+                notification.auditoria_task_id || 
+                notification.audit_task_id ||  // Mantener compatibilidad
+                notification.task_type === 'auditoria' ||
+                notification.type === 'audit_task' ||
+                notification.type === 'audit_mention' ||
+                notification.audit_task ||
+                notification.data?.auditoria_task_id ||
+                notification.data?.audit_task_id ||
+                notification.data?.task_type === 'auditoria' ||
+                (notification.task && (notification.task.auditoria || notification.task.item || notification.task.run_id));
               
-              // ✅ Si no hay task_id pero hay comment_id, obtener la tarea del comentario
-              if (!taskId && notification.comment_id) {
+              // ✅ Función helper para cargar y abrir tarea de auditoría
+              const abrirTareaAuditoria = async (taskId) => {
                 try {
-                  const commentDetail = await apiRequest(`tareas_operativas/comentarios/${notification.comment_id}`, "GET");
-                  taskId = commentDetail?.task_id || commentDetail?.tarea_id || commentDetail?.data?.task_id;
+                  setLoadingTarea(true);
+                  const tareaCompleta = await getAuditoriaTask(taskId);
+                  const tarea = tareaCompleta?.data || tareaCompleta;
+                  if (tarea) {
+                    setSelectedTarea({ ...tarea, tipo: 'auditoria' });
+                    setTareaTipo('auditoria');
+                    setFromNotification(true);
+                    setShowResponderAuditoriaModal(true);
+                  } else {
+                    throw new Error("No se pudo cargar la tarea de auditoría");
+                  }
                 } catch (error) {
-                  console.error("Error al obtener tarea del comentario:", error);
+                  console.error("Error al cargar tarea de auditoría:", error);
+                  navigate('/Herramientas/operaciones');
+                } finally {
+                  setLoadingTarea(false);
+                }
+              };
+              
+              // Manejar según el tipo de notificación
+              if (notification.type === 'mention' || notification.type === 'audit_mention') {
+                // ✅ Obtener task_id - El backend usa 'auditoria_task_id' para auditorías
+                let taskId = null;
+                let commentId = null;
+                
+                // Determinar si es auditoría primero
+                const esAuditoria = notification.auditoria_task_id || notification.audit_task_id;
+                
+                if (esAuditoria) {
+                  // Es notificación de auditoría
+                  taskId = notification.auditoria_task_id || notification.audit_task_id;
+                  commentId = notification.auditoria_comment_id || notification.audit_comment_id;
+                } else {
+                  // Es notificación de tarea operativa
+                  taskId = notification.task_id;
+                  commentId = notification.comment_id;
+                }
+                
+                // También buscar en campos alternativos
+                if (!taskId) {
+                  taskId = notification.data?.task_id || 
+                          notification.data?.auditoria_task_id ||
+                          notification.data?.audit_task_id ||
+                          notification.metadata?.task_id ||
+                          notification.metadata?.auditoria_task_id ||
+                          notification.metadata?.audit_task_id;
+                }
+                
+                // ✅ Si es notificación de auditoría y tenemos task_id, abrir directamente
+                if (esAuditoria && taskId) {
+                  await abrirTareaAuditoria(taskId);
+                  return;
+                }
+                
+                // ✅ Si es tarea operativa y tenemos task_id, abrir directamente
+                if (!esAuditoria && taskId) {
+                  openTaskResponseModal(taskId, true);
+                  return;
+                }
+                
+                // ✅ Si no hay task_id pero hay comment_id, buscar el task_id
+                if (!taskId && commentId) {
+                  console.log("🔍 Buscando task_id para comment_id:", commentId, "esAuditoria:", esAuditoria);
+                  
+                  // Para tareas operativas, buscar en comentarios
+                  if (!esAuditoria) {
+                    try {
+                      const commentDetail = await apiRequest(`tareas_operativas/comentarios/${commentId}`, "GET");
+                      taskId = commentDetail?.task_id || commentDetail?.tarea_id || commentDetail?.data?.task_id;
+                      if (taskId) {
+                        openTaskResponseModal(taskId, true);
+                        return;
+                      }
+                    } catch (error) {
+                      console.error("Error al obtener tarea del comentario:", error);
+                    }
+                  }
+                  // Para tareas de auditoría, buscar en comentarios de auditoría
+                  else {
+                    try {
+                      const { listTasks, getTaskComments } = await import("../services/auditoriasTasksService");
+                      const auditoriaTasksResponse = await listTasks({ per_page: 100 });
+                      const auditoriaTasks = auditoriaTasksResponse?.data || [];
+                      
+                      for (const tarea of auditoriaTasks) {
+                        try {
+                          const comentarios = await getTaskComments(tarea.id);
+                          const comentariosArray = Array.isArray(comentarios) ? comentarios : (comentarios?.data || []);
+                          
+                          const comentarioEncontrado = comentariosArray.find(c => 
+                            (c.id || c.comment_id) == commentId
+                          );
+                          
+                          if (comentarioEncontrado) {
+                            await abrirTareaAuditoria(tarea.id);
+                            return;
+                          }
+                        } catch (comentariosError) {
+                          continue;
+                        }
+                      }
+                    } catch (auditError) {
+                      console.warn("Error al buscar en tareas de auditoría:", auditError);
+                    }
+                  }
+                }
+                
+                // ✅ Si hay link, intentar extraer task_id del link
+                if (!taskId && notification.link) {
+                  try {
+                    const urlParams = new URLSearchParams(notification.link.split('?')[1] || '');
+                    const taskIdFromLink = urlParams.get('task_id');
+                    if (taskIdFromLink) {
+                      const numericTaskId = parseInt(taskIdFromLink, 10);
+                      if (!isNaN(numericTaskId) && numericTaskId > 0) {
+                        // Determinar si es auditoría por el link
+                        const esAuditoriaFromLink = notification.link.includes('/auditorias');
+                        if (esAuditoriaFromLink) {
+                          await abrirTareaAuditoria(numericTaskId);
+                        } else {
+                          openTaskResponseModal(numericTaskId, true);
+                        }
+                        return;
+                      }
+                    }
+                  } catch (linkError) {
+                    console.warn("Error al extraer task_id del link:", linkError);
+                  }
+                }
+                
+                // ✅ Si no hay task_id pero hay comment_id, obtener la tarea del comentario
+                if (!taskId && notification.comment_id) {
+                  try {
+                    // ✅ Primero intentar buscar en tareas de auditoría si es notificación de auditoría
+                    if (isAuditoriaNotification) {
+                      try {
+                        const auditoriaTasksResponse = await listAuditoriaTasks({ per_page: 100 });
+                        const auditoriaTasks = auditoriaTasksResponse?.data || [];
+                        
+                        for (const tarea of auditoriaTasks) {
+                          if (tarea.comments && Array.isArray(tarea.comments)) {
+                            const comentarioEncontrado = tarea.comments.find(c => 
+                              (c.id || c.comment_id) == notification.comment_id
+                            );
+                            if (comentarioEncontrado) {
+                              await abrirTareaAuditoria(tarea.id);
+                              return;
+                            }
+                          }
+                        }
+                      } catch (auditError) {
+                        console.warn("Error al buscar en tareas de auditoría:", auditError);
+                      }
+                    }
+                    
+                    // Si no es auditoría o no se encontró, buscar en tareas operativas
+                    const commentDetail = await apiRequest(`tareas_operativas/comentarios/${notification.comment_id}`, "GET");
+                    taskId = commentDetail?.task_id || commentDetail?.tarea_id || commentDetail?.data?.task_id;
+                  } catch (error) {
+                    console.error("Error al obtener tarea del comentario:", error);
+                  }
+                }
+                
+                // Si tenemos task_id, abrir la tarea
+                if (taskId) {
+                  if (isAuditoriaNotification) {
+                    await abrirTareaAuditoria(taskId);
+                  } else {
+                    openTaskResponseModal(taskId, true);
+                  }
+                } else {
+                  console.warn("No se pudo obtener task_id de la notificación de mención:", notification);
+                  // Navegar a operaciones como fallback
+                  navigate('/Herramientas/operaciones');
+                }
+              } else if (notification.type === 'task_assigned' && (notification.task_id || notification.auditoria_task_id || notification.audit_task_id)) {
+                const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                if (esAuditoria) {
+                  await abrirTareaAuditoria(taskId);
+                } else {
+                  openTaskResponseModal(taskId, true);
+                }
+              } else if (notification.type === 'task_pending') {
+                const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                if (taskId) {
+                  if (esAuditoria) {
+                    await abrirTareaAuditoria(taskId);
+                  } else {
+                    openTaskResponseModal(taskId, true);
+                  }
+                } else {
+                  // Si no tiene task_id, abrir con la primera tarea pendiente
+                  openTaskResponseModal(null, true);
+                }
+              } else if (notification.type === 'task' && (notification.task_id || notification.auditoria_task_id || notification.audit_task_id)) {
+                const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
+                const esAuditoria = !!(notification.auditoria_task_id || notification.audit_task_id);
+                if (esAuditoria) {
+                  await abrirTareaAuditoria(taskId);
+                } else {
+                  openTaskResponseModal(taskId, true);
+                }
+              } else if (notification.type === 'view_all') {
+                // Ver todas las tareas - navegar a operaciones
+                navigate('/Herramientas/operaciones');
+              } else {
+                // Por defecto, intentar abrir primera tarea pendiente
+                if (pendientes > 0) {
+                  openTaskResponseModal(null, true);
+                } else {
+                  navigate('/Herramientas/operaciones');
                 }
               }
-              
-              // Si tenemos task_id, abrir la tarea
-              if (taskId) {
-                openTaskResponseModal(taskId, true);
-              } else {
-                console.warn("No se pudo obtener task_id de la notificación de mención:", notification);
-                // Navegar a operaciones como fallback
-                navigate('/Herramientas/operaciones');
-              }
-            } else if (notification.type === 'task_assigned' && notification.task_id) {
-              // Abrir modal de respuesta con la tarea asignada
-              openTaskResponseModal(notification.task_id, true);
-            } else if (notification.type === 'task_pending') {
-              // ✅ Abrir modal de respuesta con la tarea específica si tiene task_id
-              if (notification.task_id) {
-                openTaskResponseModal(notification.task_id, true);
-              } else {
-                // Si no tiene task_id, abrir con la primera tarea pendiente
-                openTaskResponseModal(null, true);
-              }
-            } else if (notification.type === 'task' && notification.task_id) {
-              // Abrir modal de respuesta con la tarea
-              openTaskResponseModal(notification.task_id, true);
-            } else if (notification.type === 'view_all') {
-              // Ver todas las tareas - navegar a operaciones
+            } catch (error) {
+              console.error("Error al procesar notificación:", error);
               navigate('/Herramientas/operaciones');
-            } else {
-              // Por defecto, intentar abrir primera tarea pendiente
-              if (pendientes > 0) {
-                openTaskResponseModal(null, true);
-              } else {
-                navigate('/Herramientas/operaciones');
-              }
             }
           }}
         />
@@ -329,13 +523,14 @@ const MainLayout = ({ children }) => {
         <div className="dashboard-content">{children}</div>
       </div>
 
-      {/* ✅ Modal de respuesta de tarea */}
-      {selectedTarea && (
+      {/* ✅ Modal de respuesta de tarea operativa */}
+      {selectedTarea && tareaTipo !== 'auditoria' && (
         <ResponderTareaModal
           show={showResponderModal}
           onHide={(updated) => {
             setShowResponderModal(false);
             setSelectedTarea(null);
+            setTareaTipo(null);
             setFromNotification(false);
             // Actualizar contador de pendientes si se actualizó la tarea
             if (updated) {
@@ -346,6 +541,24 @@ const MainLayout = ({ children }) => {
           }}
           tarea={selectedTarea}
           fromNotification={fromNotification}
+        />
+      )}
+
+      {/* ✅ Modal de respuesta de tarea de auditoría */}
+      {selectedTarea && tareaTipo === 'auditoria' && (
+        <ResponderTareaAuditoriaModal
+          show={showResponderAuditoriaModal}
+          onHide={() => {
+            setShowResponderAuditoriaModal(false);
+            setSelectedTarea(null);
+            setTareaTipo(null);
+            setFromNotification(false);
+          }}
+          tarea={selectedTarea}
+          onUpdated={(tareaActualizada) => {
+            // Actualizar la tarea en el estado
+            setSelectedTarea(tareaActualizada);
+          }}
         />
       )}
     </div>
