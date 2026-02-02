@@ -7,6 +7,8 @@ import TareasPendientesPanel from "../../components/fase2/TareasPendientesPanel"
 import TareasTerminadasPanel from "../../components/fase2/TareasTerminadasPanel";
 import GroupTags from "../../components/GroupTags";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { FaBirthdayCake } from "react-icons/fa";
+import { Badge } from "react-bootstrap";
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
@@ -174,6 +176,33 @@ export default function FichaClienteGeneral() {
     return numero;
   };
 
+  // ===== verificar si es cumpleaños hoy =====
+  const esCumpleanosHoy = useMemo(() => {
+    const fechaNacimiento = cliente?.fecha_nacimiento;
+    if (!fechaNacimiento) return false;
+    try {
+      const hoy = new Date();
+      // Usar UTC para evitar problemas de zona horaria
+      let nacimiento;
+      if (typeof fechaNacimiento === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fechaNacimiento)) {
+        const [year, month, day] = fechaNacimiento.split('T')[0].split('-');
+        nacimiento = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+      } else {
+        const date = new Date(fechaNacimiento);
+        nacimiento = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      }
+      
+      const hoyUTC = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate()));
+      
+      return (
+        hoyUTC.getUTCMonth() === nacimiento.getUTCMonth() &&
+        hoyUTC.getUTCDate() === nacimiento.getUTCDate()
+      );
+    } catch {
+      return false;
+    }
+  }, [cliente?.fecha_nacimiento]);
+
   // ===== formatear teléfonos del cliente =====
   const telefonosFormateados = useMemo(() => {
     // Normalizar telefonos: puede venir como array, string JSON, o null
@@ -213,14 +242,35 @@ export default function FichaClienteGeneral() {
   const USE_DEMO = false;
 
   return (
-    <div className="row g-4">
+    <>
+      {/* Estilos para animación de cumpleaños */}
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.7;
+            }
+          }
+        `}
+      </style>
+      <div className="row g-4">
       {/* Columna izquierda */}
       <div className="col-lg-7">
         <div className="card border">
           <div className="card-body">
             {/* Header con título y selector de grupo */}
-            <div className="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom">
-              <h6 className="mb-0 fw-semibold text-dark">RESUMEN DEL CLIENTE</h6>
+            <div className={`d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom ${esCumpleanosHoy ? 'bg-warning bg-opacity-10 rounded px-3 py-2' : ''}`}>
+              <h6 className="mb-0 fw-semibold text-dark d-flex align-items-center gap-2">
+                RESUMEN DEL CLIENTE
+                {esCumpleanosHoy && (
+                  <Badge bg="warning" className="d-flex align-items-center gap-1">
+                    <FaBirthdayCake /> ¡Cumpleaños de Hoy!
+                  </Badge>
+                )}
+              </h6>
               <div style={{ minWidth: "180px" }}>
                 {grupos.length > 1 ? (
                   <select
@@ -255,7 +305,10 @@ export default function FichaClienteGeneral() {
                   </div>
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Fecha de Nacimiento</label>
-                    <div className="text-dark small">{formatDate(cliente?.fecha_nacimiento) ?? "—"}</div>
+                    <div className={`text-dark small d-flex align-items-center gap-2 ${esCumpleanosHoy ? 'fw-bold text-warning' : ''}`} style={esCumpleanosHoy ? { animation: 'pulse 2s infinite' } : {}}>
+                      {formatDate(cliente?.fecha_nacimiento) ?? "—"}
+                      {esCumpleanosHoy && <FaBirthdayCake className="text-warning" />}
+                    </div>
                   </div>
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Edad</label>
@@ -429,5 +482,6 @@ export default function FichaClienteGeneral() {
         />
       </div>
     </div>
+    </>
   );
 }

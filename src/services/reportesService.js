@@ -102,5 +102,98 @@ export const getReporteCoberturas = async (params = {}, signal = null) => {
   }
 };
 
+/**
+ * Construye los query params para el endpoint de reporte de cumpleaños
+ * @param {Object} params - Parámetros de filtro y paginación
+ * @returns {string} Query string
+ */
+const buildCumpleanosQueryParams = (params) => {
+  const queryParams = new URLSearchParams();
+  
+  if (params.page) queryParams.append("page", params.page);
+  if (params.per_page) queryParams.append("per_page", params.per_page);
+  if (params.fecha_desde) queryParams.append("fecha_desde", params.fecha_desde);
+  if (params.fecha_hasta) queryParams.append("fecha_hasta", params.fecha_hasta);
+  if (params.mes) queryParams.append("mes", params.mes);
+  if (params.dia) queryParams.append("dia", params.dia);
+  if (params.solo_hoy === true) {
+    queryParams.append("solo_hoy", "true");
+  }
+  if (params.search) queryParams.append("search", params.search);
+  // Solo enviar sort_by y sort_dir si sort_by tiene valor
+  if (params.sort_by) {
+    queryParams.append("sort_by", params.sort_by);
+    if (params.sort_dir) {
+      queryParams.append("sort_dir", params.sort_dir);
+    }
+  }
+  
+  return queryParams.toString();
+};
+
+/**
+ * Obtiene el reporte de cumpleaños con filtros y paginación
+ * @param {Object} params - Parámetros de filtro y paginación
+ * @param {AbortSignal} signal - Signal para cancelar la petición
+ * @returns {Promise<Object>} Respuesta con data, meta y filters
+ */
+export const getReporteCumpleanos = async (params = {}, signal = null) => {
+  const queryString = buildCumpleanosQueryParams(params);
+  const endpoint = `reportes/cumpleanos${queryString ? `?${queryString}` : ""}`;
+  
+  // Si hay signal, usar fetch directamente para poder cancelar
+  if (signal) {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+    
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+    
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers,
+        signal,
+      });
+      
+      let data = {};
+      try {
+        const text = await response.text();
+        data = text ? JSON.parse(text) : {};
+      } catch (parseError) {
+        data = { message: "Error al procesar la respuesta del servidor" };
+      }
+      
+      if (!response.ok) {
+        const error = new Error(data?.message || "Error en la petición");
+        error.response = {
+          status: response.status,
+          data: data,
+        };
+        throw error;
+      }
+      
+      return data;
+    } catch (error) {
+      if (error.name === "AbortError") {
+        throw new Error("Petición cancelada");
+      }
+      throw error;
+    }
+  }
+  
+  // Si no hay signal, usar apiRequest normal
+  try {
+    const response = await apiRequest(endpoint, "GET");
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export default getReporteCoberturas;
 

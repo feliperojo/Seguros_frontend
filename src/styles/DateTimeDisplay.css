@@ -1,0 +1,45 @@
+.datetime-display {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 8px 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  min-width: 200px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.datetime-time {
+  font-size: 20px;
+  font-weight: 600;
+  color: #003366;
+  line-height: 1.2;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  white-space: nowrap;
+}
+
+.datetime-date {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 4px;
+  text-transform: capitalize;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media screen and (max-width: 768px) {
+  .datetime-display {
+    min-width: 150px;
+    padding: 6px 12px;
+  }
+
+  .datetime-time {
+    font-size: 16px;
+  }
+
+  .datetime-date {
+    font-size: 10px;
+  }
+}
+

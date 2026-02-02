@@ -211,20 +211,51 @@ const ListaClientes = () => {
 
     // Filtro por término de búsqueda (nombre, email, teléfono, social)
     if (searchTerm) {
-      const q = searchTerm.toLowerCase();
+      // Normalizar el término de búsqueda: eliminar espacios múltiples y convertir a minúsculas
+      const normalizeSearch = (text) => {
+        if (!text) return "";
+        return text
+          .toLowerCase()
+          .trim()
+          .replace(/\s+/g, " "); // Reemplazar múltiples espacios con uno solo
+      };
+      
+      const q = normalizeSearch(searchTerm);
+      
       result = result.filter(cliente => {
-        // Buscar en nombre completo
-        if (cliente.nombre_completo && cliente.nombre_completo.toLowerCase().includes(q)) return true;
+        // Buscar en nombre completo (normalizado)
+        if (cliente.nombre_completo) {
+          const nombreNormalizado = normalizeSearch(cliente.nombre_completo);
+          if (nombreNormalizado.includes(q)) return true;
+        }
+        
+        // Buscar también en nombre y apellidos por separado (más flexible)
+        const primerNombre = normalizeSearch(cliente.primer_nombre || "");
+        const segundoNombre = normalizeSearch(cliente.segundo_nombre || "");
+        const apellidos = normalizeSearch(cliente.apellidos || "");
+        
+        // Construir variaciones del nombre sin segundo nombre
+        const nombreSinSegundo = `${primerNombre} ${apellidos}`.trim();
+        if (nombreSinSegundo.includes(q)) return true;
+        
+        // Construir nombre completo con segundo nombre
+        const nombreCompleto = `${primerNombre} ${segundoNombre} ${apellidos}`.trim().replace(/\s+/g, " ");
+        if (nombreCompleto.includes(q)) return true;
+        
         // Buscar en email
-        if (cliente.email && cliente.email.toLowerCase().includes(q)) return true;
+        if (cliente.email && normalizeSearch(cliente.email).includes(q)) return true;
+        
         // Buscar en teléfonos (array y campo legacy)
         const telefonos = Array.isArray(cliente.telefonos) ? cliente.telefonos : [];
-        const tieneTelefonoEnArray = telefonos.some(t => 
-          String(t.numero || t.telefono || t.numero_e164 || t.numeroE164 || "").includes(searchTerm)
-        );
-        if (tieneTelefonoEnArray || (cliente.telefono && String(cliente.telefono).includes(searchTerm))) return true;
+        const tieneTelefonoEnArray = telefonos.some(t => {
+          const num = String(t.numero || t.telefono || t.numero_e164 || t.numeroE164 || "");
+          return normalizeSearch(num).includes(q);
+        });
+        if (tieneTelefonoEnArray || (cliente.telefono && normalizeSearch(String(cliente.telefono)).includes(q))) return true;
+        
         // Buscar en social
-        if (cliente.social && String(cliente.social).includes(searchTerm)) return true;
+        if (cliente.social && normalizeSearch(String(cliente.social)).includes(q)) return true;
+        
         return false;
       });
     }

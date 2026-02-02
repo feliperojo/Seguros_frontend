@@ -7,6 +7,7 @@ import NotificationsDropdown from "../components/Tareas/NotificationsDropdown";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import ResponderTareaAuditoriaModal from "../components/Tareas/ResponderTareaAuditoriaModal";
 import { getTask as getAuditoriaTask, listTasks as listAuditoriaTasks } from "../services/auditoriasTasksService";
+import DateTimeDisplay from "../components/DateTimeDisplay";
 
 const MainLayout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -271,7 +272,10 @@ const MainLayout = ({ children }) => {
         <Sidebar isOpen={isOpen} toggleSidebar={toggleSidebar} />
       </div>
       <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
-      <div className="topbar d-flex justify-content-end align-items-center gap-3 p-2">
+      <div className="topbar d-flex justify-content-between align-items-center gap-3 p-2">
+        {/* Fecha y Hora */}
+        <DateTimeDisplay />
+        
         {/* ✅ Dropdown mejorado de notificaciones (reemplaza la campana simple) */}
         {/* Muestra tanto notificaciones de menciones como tareas pendientes */}
         <NotificationsDropdown 

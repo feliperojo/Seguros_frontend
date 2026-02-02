@@ -4,13 +4,14 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
 import SincronizarContactos from "../components/SincronizarContactos";
 import { useAuth } from "../context/AuthContext";
 import { useHasPermission } from "../hooks/useHasPermission";
+import DateTimeDisplay from "./DateTimeDisplay";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
@@ -94,6 +95,13 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         <div className="welcome-container">
           <p>Bienvenido</p>
           <span>{users}</span>
+        </div>
+      )}
+
+      {/* Fecha y Hora */}
+      {isOpen && (
+        <div className="sidebar-datetime-container">
+          <DateTimeDisplay />
         </div>
       )}
 
@@ -242,6 +250,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
               <Link to="/informes/coberturas" className={`submenu-link ${isActive('/informes/coberturas') ? 'active' : ''}`}>
                 <FaFileAlt /> Reporte de Coberturas
+              </Link>
+              <Link to="/informes/cumpleanos" className={`submenu-link ${isActive('/informes/cumpleanos') ? 'active' : ''}`}>
+                <FaBirthdayCake /> Cumpleaños de Clientes
               </Link>
               <Link to="/auditorias" className={`submenu-link ${location.pathname.toLowerCase().includes('/auditorias') ? 'active' : ''}`}>
                 <FaClipboardCheck /> Auditorías Mensuales

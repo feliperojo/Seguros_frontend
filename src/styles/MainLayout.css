@@ -161,6 +161,21 @@
   pointer-events: none;
 }
 
+/* Topbar */
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e6e6e6;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
 /* Contenido principal */
 .main-content {
   transition: margin-left 0.3s ease-in-out;
