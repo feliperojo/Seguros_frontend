@@ -4,6 +4,7 @@ import { formatMoneyDisplay } from "../../services/ingresos";
 import { FaFilePdf } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../../services/generarPDFConfirmacion";
 import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
+import PDFSignatureModal from "../PDFSignatureModal";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
 import RequerimientosModal from "../RequerimientosModal";
@@ -37,6 +38,10 @@ const Prospectogrupo = ({
   const [showHistorialCanceladasModal, setShowHistorialCanceladasModal] = useState(false);
   const [showReactivacionModal, setShowReactivacionModal] = useState(false);
   const [showGestorDocumentosModal, setShowGestorDocumentosModal] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [pdfData, setPdfData] = useState(null);
+  const [showPDFAutorizacionModal, setShowPDFAutorizacionModal] = useState(false);
+  const [pdfAutorizacionData, setPdfAutorizacionData] = useState(null);
 
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
@@ -211,7 +216,18 @@ const Prospectogrupo = ({
               {puedeGenerarPDF && (
                 <button
                   className="btn btn-sm btn-outline-danger"
-                  onClick={() => generarPDFConfirmacion(grupo)}
+                  onClick={async () => {
+                    try {
+                      const result = await generarPDFConfirmacion(grupo, false);
+                      if (result) {
+                        setPdfData(result);
+                        setShowPDFModal(true);
+                      }
+                    } catch (error) {
+                      console.error("Error al generar PDF:", error);
+                      await generarPDFConfirmacion(grupo, true);
+                    }
+                  }}
                   disabled={!resolvedGrupoId}
                   title="Confirmación de Datos"
                   style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
@@ -223,7 +239,18 @@ const Prospectogrupo = ({
               {puedeGenerarAutorizacion && (
                 <button
                   className="btn btn-sm btn-outline-danger"
-                  onClick={() => generarPDFAutorizacion(clienteTomadorId)}
+                  onClick={async () => {
+                    try {
+                      const result = await generarPDFAutorizacion(clienteTomadorId, false);
+                      if (result) {
+                        setPdfAutorizacionData(result);
+                        setShowPDFAutorizacionModal(true);
+                      }
+                    } catch (error) {
+                      console.error("Error al generar PDF:", error);
+                      await generarPDFAutorizacion(clienteTomadorId, true);
+                    }
+                  }}
                   disabled={!resolvedGrupoId || !clienteTomadorId}
                   title="Carta de Autorización"
                   style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
@@ -493,6 +520,45 @@ const Prospectogrupo = ({
   grupoFamiliarId={resolvedGrupoId}
 />
 
+{/* Modal para PDF de Confirmación */}
+{pdfData && grupo && (() => {
+  const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
+  return (
+    <PDFSignatureModal
+      show={showPDFModal}
+      onHide={() => {
+        setShowPDFModal(false);
+        setPdfData(null);
+      }}
+      pdfBlob={pdfData.blob}
+      filename={pdfData.filename}
+      defaultSignerName={tomador?.cliente?.nombre_completo || ""}
+      defaultSignerEmail={tomador?.cliente?.email || ""}
+      clienteId={tomador?.cliente?.id || tomador?.cliente_id || null}
+      grupoFamiliarId={resolvedGrupoId || null}
+    />
+  );
+})()}
+
+{/* Modal para PDF de Autorización */}
+{pdfAutorizacionData && grupo && (() => {
+  const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
+  return (
+    <PDFSignatureModal
+      show={showPDFAutorizacionModal}
+      onHide={() => {
+        setShowPDFAutorizacionModal(false);
+        setPdfAutorizacionData(null);
+      }}
+      pdfBlob={pdfAutorizacionData.blob}
+      filename={pdfAutorizacionData.filename}
+      defaultSignerName={tomador?.cliente?.nombre_completo || ""}
+      defaultSignerEmail={tomador?.cliente?.email || ""}
+      clienteId={clienteTomadorId || tomador?.cliente?.id || tomador?.cliente_id || null}
+      grupoFamiliarId={resolvedGrupoId || null}
+    />
+  );
+})()}
 
     </div>
   );

@@ -18,6 +18,7 @@ import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCobertur
 import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
+import PDFSignatureModal from "../components/PDFSignatureModal";
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
@@ -25,6 +26,9 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [activeTab, setActiveTab] = useState("nuevo");
   const [driveUrl, setDriveUrl] = useState(initialData?.drive_url || "");
   const [showDriveModal, setShowDriveModal] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [pdfData, setPdfData] = useState(null);
+  const [selectedClienteId, setSelectedClienteId] = useState(null);
 
 
   const navigate = useNavigate();
@@ -1683,7 +1687,19 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         <Dropdown.Divider />
 
                                         {member.parentesco === "TOMADOR" && (
-                                            <Dropdown.Item onClick={() => generarPDFAutorizacion(member.cliente_id)}>
+                                            <Dropdown.Item onClick={async () => {
+                                              try {
+                                                const result = await generarPDFAutorizacion(member.cliente_id, false);
+                                                if (result) {
+                                                  setPdfData(result);
+                                                  setSelectedClienteId(member.cliente_id);
+                                                  setShowPDFModal(true);
+                                                }
+                                              } catch (error) {
+                                                console.error("Error al generar PDF:", error);
+                                                await generarPDFAutorizacion(member.cliente_id, true);
+                                              }
+                                            }}>
                                               <i className="bi bi-file-earmark-pdf me-2 text-danger"></i> Descargar Autorización
                                             </Dropdown.Item>
                                           )}
@@ -2410,6 +2426,22 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 initialUrl={driveUrl}
                 onSave={(newUrl) => setDriveUrl(newUrl)}
               />
+
+              {/* Modal para PDF de Autorización */}
+              {pdfData && selectedClienteId && (
+                <PDFSignatureModal
+                  show={showPDFModal}
+                  onHide={() => {
+                    setShowPDFModal(false);
+                    setPdfData(null);
+                    setSelectedClienteId(null);
+                  }}
+                  pdfBlob={pdfData.blob}
+                  filename={pdfData.filename}
+                  clienteId={selectedClienteId}
+                  grupoFamiliarId={id || null}
+                />
+              )}
 
 
     </div>

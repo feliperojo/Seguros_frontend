@@ -1,12 +1,15 @@
 import jsPDF from "jspdf";
-import apiRequest from "./api"; 
+import apiRequest from "./api";
+import { jsPDFToBlob, downloadBlob } from "../utils/pdfHelpers";
 
 /**
  * Genera un documento PDF para la carta de autorización.
  * Obtiene datos completos del cliente usando su ID.
  * @param {number|string} clienteId - ID del cliente
+ * @param {boolean} download - Si es true, descarga el PDF. Si es false, retorna el blob.
+ * @returns {Promise<Blob|void>} - Retorna el blob si download es false
  */
-export const generarPDFAutorizacion = async (clienteId) => {
+export const generarPDFAutorizacion = async (clienteId, download = true) => {
   try {
     // 1️⃣ Llamar API para obtener datos completos
     const clienteData = await apiRequest(`cliente/show/${clienteId}`, "GET");
@@ -87,8 +90,16 @@ export const generarPDFAutorizacion = async (clienteId) => {
     }
   });
 
-  doc.save(`Autorizacion_${nombre}.pdf`);
+  if (download) {
+    // Comportamiento original: descargar directamente
+    doc.save(`Autorizacion_${nombre}.pdf`);
+  } else {
+    // Retornar blob para usar en modal
+    const blob = await jsPDFToBlob(doc);
+    return { blob, filename: `Autorizacion_${nombre}.pdf` };
+  }
 } catch (error) {
   console.error("❌ Error al generar PDF:", error);
+  throw error;
 }
 };

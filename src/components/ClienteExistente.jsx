@@ -14,32 +14,117 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
   const itemsPerPage = 10;
 
   const buscarClientes = async () => {
-    const termino = searchTerm.trim();
-    if (termino.length < 3) {
-      setError("Ingrese al menos 3 caracteres para buscar");
+    // Normalizar el término de búsqueda: eliminar espacios múltiples y espacios al inicio/final
+    // Esto permite buscar "Juan Pérez" aunque en la BD esté "Juan  Pérez" (con doble espacio)
+    const termino = searchTerm.trim().replace(/\s+/g, ' ').trim();
+    
+    if (termino.length < 2) {
+      setError("Ingrese al menos 2 caracteres para buscar");
       setSearchResults([]);
       return;
     }
+    
     try {
       setLoading(true);
       setError(null);
-      const response = await apiRequest(
+      
+      // Estrategia de búsqueda: intentar primero con el término completo
+      // Si no hay resultados y hay múltiples palabras, intentar variaciones
+      let response = await apiRequest(
         `cliente/buscar?nombre=${encodeURIComponent(termino)}&incluir_prospectos=false`,
         "GET"
       );
-      const clientes = Array.isArray(response) ? response : [];
+      
+      let clientes = Array.isArray(response) ? response : [];
+      
+      // Si no hay resultados y el término tiene múltiples palabras, intentar estrategias alternativas
+      if (clientes.length === 0 && termino.includes(' ')) {
+        const palabras = termino.split(' ').filter(p => p.length > 0);
+        const terminoLower = termino.toLowerCase();
+        const palabrasBusqueda = terminoLower.split(' ').filter(p => p.length > 0);
+        
+        // Función auxiliar para normalizar el nombre completo de un cliente
+        const normalizarNombreCompleto = (cliente) => {
+          let nombreCompleto = "";
+          if (cliente.nombre_completo) {
+            nombreCompleto = cliente.nombre_completo;
+          } else if (cliente.primer_nombre || cliente.apellidos) {
+            nombreCompleto = `${cliente.primer_nombre || ""} ${cliente.segundo_nombre || ""} ${cliente.apellidos || ""}`.trim();
+          } else if (cliente.nombre || cliente.apellido) {
+            nombreCompleto = `${cliente.nombre || ""} ${cliente.apellido || ""}`.trim();
+          }
+          return nombreCompleto
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+        
+        // Función auxiliar para filtrar clientes que coincidan con todas las palabras
+        const filtrarPorPalabras = (clientesArray) => {
+          return clientesArray.filter(cliente => {
+            const nombreNormalizado = normalizarNombreCompleto(cliente);
+            return palabrasBusqueda.every(palabra => nombreNormalizado.includes(palabra));
+          });
+        };
+        
+        // Estrategia 1: Buscar solo con la primera palabra (nombre)
+        if (palabras.length > 0 && palabras[0].length >= 2) {
+          try {
+            const res1 = await apiRequest(
+              `cliente/buscar?nombre=${encodeURIComponent(palabras[0])}&incluir_prospectos=false`,
+              "GET"
+            );
+            const clientes1 = Array.isArray(res1) ? res1 : [];
+            if (clientes1.length > 0) {
+              const filtrados = filtrarPorPalabras(clientes1);
+              if (filtrados.length > 0) {
+                clientes = filtrados;
+              } else {
+                // Si no hay coincidencias exactas, usar todos los resultados de la primera palabra
+                clientes = clientes1;
+              }
+            }
+          } catch (e) {
+            console.warn("Error en búsqueda alternativa (primera palabra):", e);
+          }
+        }
+        
+        // Estrategia 2: Si aún no hay resultados, buscar con la última palabra (apellido)
+        if (clientes.length === 0 && palabras.length > 1 && palabras[palabras.length - 1].length >= 2) {
+          try {
+            const ultimaPalabra = palabras[palabras.length - 1];
+            const res2 = await apiRequest(
+              `cliente/buscar?nombre=${encodeURIComponent(ultimaPalabra)}&incluir_prospectos=false`,
+              "GET"
+            );
+            const clientes2 = Array.isArray(res2) ? res2 : [];
+            if (clientes2.length > 0) {
+              const filtrados = filtrarPorPalabras(clientes2);
+              if (filtrados.length > 0) {
+                clientes = filtrados;
+              } else {
+                // Si no hay coincidencias exactas, usar todos los resultados de la última palabra
+                clientes = clientes2;
+              }
+            }
+          } catch (e) {
+            console.warn("Error en búsqueda alternativa (última palabra):", e);
+          }
+        }
+      }
+      
       if (clientes.length > 0) {
         setSearchResults(clientes);
         setTotalPages(Math.ceil(clientes.length / itemsPerPage));
         setPage(1);
       } else {
         setSearchResults([]);
-        setError(`No se encontraron resultados para "${termino}"`);
+        setError(`No se encontraron resultados para "${termino}".`);
       }
     } catch (err) {
-      console.error("Error:", err);
+      console.error("Error al buscar clientes:", err);
       setSearchResults([]);
-      setError("Error al buscar clientes.");
+      setError("Error al buscar clientes. Por favor, intente nuevamente.");
     } finally {
       setLoading(false);
     }
@@ -52,8 +137,13 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      if (searchTerm.trim().length >= 3) buscarClientes();
-      else setSearchResults([]);
+      const terminoNormalizado = searchTerm.trim().replace(/\s+/g, ' ').trim();
+      if (terminoNormalizado.length >= 2) {
+        buscarClientes();
+      } else {
+        setSearchResults([]);
+        setError(null);
+      }
     }, 400);
     return () => clearTimeout(t);
   }, [searchTerm]);
@@ -96,12 +186,13 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
           <InputGroup>
             <Form.Control
               type="text"
-              placeholder="Nombre"
+              placeholder="Nombre completo o apellido (ej: Juan Pérez)"
               value={searchTerm}
               onChange={handleSearchChange}
+              autoFocus
             />
           </InputGroup>
-          <Form.Text className="text-muted">Ingrese al menos 3 caracteres para buscar</Form.Text>
+          <Form.Text className="text-muted">Ingrese al menos 2 caracteres. Puede buscar por nombre, apellido o nombre completo.</Form.Text>
         </Form.Group>
       </Form>
 

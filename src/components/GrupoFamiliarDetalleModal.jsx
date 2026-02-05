@@ -3,6 +3,7 @@ import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
 import { FaFileExport, FaFilePdf, FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../services/generarPDFConfirmacion";
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
+import PDFSignatureModal from "./PDFSignatureModal";
 
 const grupoColorMap = {
   G1: "#0d6efd",   // Azul
@@ -15,6 +16,8 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const [filasExpandidas, setFilasExpandidas] = useState(new Set());
   const [showModal, setShowModal] = useState(false);
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [pdfData, setPdfData] = useState(null);
   const [driveUrl, setDriveUrl] = useState("");
   const isTomador = (parentesco) => {
     return parentesco && parentesco.toUpperCase() === "TOMADOR";
@@ -465,7 +468,19 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
               <Button
                 variant="outline-danger"
                 className="me-2" 
-                onClick={() => generarPDFConfirmacion(grupo)}
+                onClick={async () => {
+                  try {
+                    const result = await generarPDFConfirmacion(grupo, false);
+                    if (result) {
+                      setPdfData(result);
+                      setShowPDFModal(true);
+                    }
+                  } catch (error) {
+                    console.error("Error al generar PDF:", error);
+                    // Fallback: descargar directamente
+                    await generarPDFConfirmacion(grupo, true);
+                  }
+                }}
               >
                 <FaFilePdf className="me-2" />
                 Confirmación de Datos
@@ -476,13 +491,33 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
       </Modal.Body>
       {/* Renderiza el modal solo si grupo existe */}
 {grupo && (
-  <DriveUrlModal
-    show={showModal}
-    onHide={() => setShowModal(false)}
-    grupoId={grupo.id}
-    initialUrl={driveUrl}
-    onSave={(newUrl) => setDriveUrl(newUrl)}
-  />
+  <>
+    <DriveUrlModal
+      show={showModal}
+      onHide={() => setShowModal(false)}
+      grupoId={grupo.id}
+      initialUrl={driveUrl}
+      onSave={(newUrl) => setDriveUrl(newUrl)}
+    />
+    {pdfData && (() => {
+      const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
+      return (
+        <PDFSignatureModal
+          show={showPDFModal}
+          onHide={() => {
+            setShowPDFModal(false);
+            setPdfData(null);
+          }}
+          pdfBlob={pdfData.blob}
+          filename={pdfData.filename}
+          defaultSignerName={tomador?.cliente?.nombre_completo || ""}
+          defaultSignerEmail={tomador?.cliente?.email || ""}
+          clienteId={tomador?.cliente?.id || tomador?.cliente_id || null}
+          grupoFamiliarId={grupo.id || null}
+        />
+      );
+    })()}
+  </>
 )}
 
 

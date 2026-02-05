@@ -33,6 +33,7 @@ import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
 import ContactosAdmin from "./pages/ContactosAdmin";
 import AuditoriasPage from "./pages/AuditoriasPage";
 import AuditoriaRunDetallePage from "./pages/AuditoriaRunDetallePage";
+import SignaturePortalPage from "./pages/SignaturePortalPage";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
@@ -74,6 +75,7 @@ const App = () => {
       <Routes>
       {/* Página de Login (pública) */}
       <Route path="/login" element={<Login />} />
+      <Route path="/firma/:token" element={<SignaturePortalPage />} />
       <Route path="/grupo-familiar/:id/reporte" element={<ReporteGrupoFamiliar />} />
       <Route path="/grupo-familiar/:id/historial" element={<GrupoFamiliarHistorial />} />
       {/* Rutas protegidas dentro del MainLayout */}

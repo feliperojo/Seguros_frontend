@@ -1,6 +1,13 @@
 import jsPDF from "jspdf";
+import { jsPDFToBlob } from "../utils/pdfHelpers";
 
-export const generarPDFConfirmacion = (grupo) => {
+/**
+ * Genera un documento PDF de confirmación de datos.
+ * @param {Object} grupo - Datos del grupo familiar
+ * @param {boolean} download - Si es true, descarga el PDF. Si es false, retorna el blob.
+ * @returns {Promise<{blob: Blob, filename: string}>|void} - Retorna el blob si download es false
+ */
+export const generarPDFConfirmacion = async (grupo, download = true) => {
     console.log("grupo", grupo);
   const doc = new jsPDF({ unit: "pt", format: "letter" });
   const margin = 40;
@@ -125,5 +132,12 @@ grupo.coberturas.forEach(c => {
   y += 20;
   doc.text(nombreTomador, margin, y);
 
-  doc.save(`Confirmacion_${nombreTomador}.pdf`);
+  if (download) {
+    // Comportamiento original: descargar directamente
+    doc.save(`Confirmacion_${nombreTomador}.pdf`);
+  } else {
+    // Retornar blob para usar en modal
+    const blob = await jsPDFToBlob(doc);
+    return { blob, filename: `Confirmacion_${nombreTomador}.pdf` };
+  }
 };
