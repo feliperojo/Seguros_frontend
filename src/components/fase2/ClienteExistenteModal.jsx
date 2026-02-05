@@ -17,12 +17,15 @@ export default function ClienteExistenteModal({
   onCreateCoberturaDeClienteExistente,   // (payload, cliente) => Promise
 }) {
   const [saving, setSaving] = useState(false);
-  const [tipo, setTipo] = useState("Tomador");
+  const [tipo, setTipo] = useState("");
 
   if (!open) return null;
 
   const handlePick = async (cliente) => {
     if (!cliente?.id) return;
+    if (!tipo || tipo.trim() === "") {
+      return; // No permitir seleccionar cliente sin tipo
+    }
 
     const payload = {
       grupo_familiar_id: grupoFamiliarId,
@@ -70,21 +73,32 @@ export default function ClienteExistenteModal({
           <div className="modal-body">
             <div className="row g-2 align-items-center mb-3">
               <div className="col-auto">
-                <label className="form-label mb-0">Tipo</label>
+                <label className="form-label mb-0">Tipo <span className="text-danger">*</span></label>
               </div>
               <div className="col-auto">
                 <select
                   className="form-select form-select-sm"
                   value={tipo}
                   onChange={(e)=>setTipo(e.target.value)}
+                  required
                 >
+                  <option value="">Seleccione un tipo</option>
                   {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
-              <div className="col-auto">
-                <span className={`badge bg-${TYPE_COLOR[tipo]||"secondary"}`}>{tipo}</span>
-              </div>
+              {tipo && (
+                <div className="col-auto">
+                  <span className={`badge bg-${TYPE_COLOR[tipo]||"secondary"}`}>{tipo}</span>
+                </div>
+              )}
             </div>
+
+            {!tipo && (
+              <div className="alert alert-info mb-3">
+                <i className="bi bi-info-circle me-2"></i>
+                Por favor, seleccione un tipo de cliente antes de buscar y agregar.
+              </div>
+            )}
 
             {/* Buscador/listado de clientes existentes */}
             <ClienteExistente onClienteSeleccionado={handlePick} />
