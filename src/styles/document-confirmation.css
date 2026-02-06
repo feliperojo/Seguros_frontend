@@ -1,0 +1,34 @@
+/* Logo en el modal de documento generado (mismo que sidebar) */
+.document-modal-logo {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+/* Confirmación de envío de documento: link de firma y estado */
+.document-confirmation {
+  padding: 0.5rem 0;
+  border-radius: 8px;
+}
+
+.document-confirmation .confirmation-header h5 {
+  color: var(--bs-body-color, #212529);
+}
+
+.document-confirmation .link-container .form-control {
+  background-color: var(--bs-body-bg, #fff);
+}
+
+.document-confirmation .link-container .form-control:focus {
+  box-shadow: none;
+  border-color: var(--bs-primary);
+}
+
+.document-confirmation .actions .btn {
+  transition: opacity 0.2s ease;
+}
+
+.document-confirmation .actions .btn:hover {
+  opacity: 0.9;
+}

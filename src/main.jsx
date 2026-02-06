@@ -9,6 +9,8 @@ import "./index.css";
 import 'bootstrap/dist/css/bootstrap.min.css';
 import "./styles/bootstrap-primary-override.css";
 import "./styles/toast.css";
+import "./styles/docuseal-override.css";
+import "./styles/document-confirmation.css";
 import "./tailwind.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

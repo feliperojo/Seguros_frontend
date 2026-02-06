@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
-import PDFSignatureModal from "../PDFSignatureModal";
+import DocumentoGeneradoModal from "../DocumentoGeneradoModal";
 
 const CartaAutorizacion = ({ cliente }) => {
   const [showModal, setShowModal] = useState(false);
@@ -36,7 +36,7 @@ const CartaAutorizacion = ({ cliente }) => {
       </div>
 
       {pdfData && (
-        <PDFSignatureModal
+        <DocumentoGeneradoModal
           show={showModal}
           onHide={() => {
             setShowModal(false);
@@ -44,9 +44,14 @@ const CartaAutorizacion = ({ cliente }) => {
           }}
           pdfBlob={pdfData.blob}
           filename={pdfData.filename}
-          defaultSignerName={cliente.nombre_completo || ""}
-          defaultSignerEmail={cliente.email || ""}
-          clienteId={cliente.id || cliente}
+          documentType="AUTORIZACION"
+          defaultSigner={{
+            email: cliente.email || "",
+            name: cliente.nombre_completo || "",
+          }}
+          metadata={{
+            cliente_id: cliente.id || cliente,
+          }}
         />
       )}
     </>

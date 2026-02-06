@@ -254,6 +254,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/informes/cumpleanos" className={`submenu-link ${isActive('/informes/cumpleanos') ? 'active' : ''}`}>
                 <FaBirthdayCake /> Cumpleaños de Clientes
               </Link>
+              <Link to="/informes/documentos" className={`submenu-link ${isActive('/informes/documentos') ? 'active' : ''}`}>
+                <FaFileAlt /> Documentos Enviados
+              </Link>
               <Link to="/auditorias" className={`submenu-link ${location.pathname.toLowerCase().includes('/auditorias') ? 'active' : ''}`}>
                 <FaClipboardCheck /> Auditorías Mensuales
               </Link>

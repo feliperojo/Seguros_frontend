@@ -27,6 +27,7 @@ import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial"
 import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
 import ReporteCumpleanosPage from "./pages/ReporteCumpleanosPage";
+import DocumentsReport from "./pages/DocumentsReport";
 import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
 import GrupoFamiliarDetail from "./pages/GrupoFamiliarDetail";
@@ -108,6 +109,7 @@ const App = () => {
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
         <Route path="/informes/coberturas" element={<ReporteCoberturasPage />} />
         <Route path="/informes/cumpleanos" element={<ReporteCumpleanosPage />} />
+        <Route path="/informes/documentos" element={<DocumentsReport />} />
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
         <Route path="/clientes/contacto" element={<ContactosAdmin />} />

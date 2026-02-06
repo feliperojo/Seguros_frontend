@@ -4,7 +4,7 @@ import { formatMoneyDisplay } from "../../services/ingresos";
 import { FaFilePdf } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../../services/generarPDFConfirmacion";
 import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
-import PDFSignatureModal from "../PDFSignatureModal";
+import DocumentoGeneradoModal from "../DocumentoGeneradoModal";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
 import RequerimientosModal from "../RequerimientosModal";
@@ -524,7 +524,7 @@ const Prospectogrupo = ({
 {pdfData && grupo && (() => {
   const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
   return (
-    <PDFSignatureModal
+    <DocumentoGeneradoModal
       show={showPDFModal}
       onHide={() => {
         setShowPDFModal(false);
@@ -532,10 +532,15 @@ const Prospectogrupo = ({
       }}
       pdfBlob={pdfData.blob}
       filename={pdfData.filename}
-      defaultSignerName={tomador?.cliente?.nombre_completo || ""}
-      defaultSignerEmail={tomador?.cliente?.email || ""}
-      clienteId={tomador?.cliente?.id || tomador?.cliente_id || null}
-      grupoFamiliarId={resolvedGrupoId || null}
+      documentType="CONFIRMACION"
+      defaultSigner={{
+        email: tomador?.cliente?.email || "",
+        name: tomador?.cliente?.nombre_completo || "",
+      }}
+      metadata={{
+        cliente_id: tomador?.cliente?.id || tomador?.cliente_id || null,
+        grupo_familiar_id: resolvedGrupoId || null,
+      }}
     />
   );
 })()}
@@ -544,7 +549,7 @@ const Prospectogrupo = ({
 {pdfAutorizacionData && grupo && (() => {
   const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
   return (
-    <PDFSignatureModal
+    <DocumentoGeneradoModal
       show={showPDFAutorizacionModal}
       onHide={() => {
         setShowPDFAutorizacionModal(false);
@@ -552,10 +557,15 @@ const Prospectogrupo = ({
       }}
       pdfBlob={pdfAutorizacionData.blob}
       filename={pdfAutorizacionData.filename}
-      defaultSignerName={tomador?.cliente?.nombre_completo || ""}
-      defaultSignerEmail={tomador?.cliente?.email || ""}
-      clienteId={clienteTomadorId || tomador?.cliente?.id || tomador?.cliente_id || null}
-      grupoFamiliarId={resolvedGrupoId || null}
+      documentType="AUTORIZACION"
+      defaultSigner={{
+        email: tomador?.cliente?.email || "",
+        name: tomador?.cliente?.nombre_completo || "",
+      }}
+      metadata={{
+        cliente_id: clienteTomadorId || tomador?.cliente?.id || tomador?.cliente_id || null,
+        grupo_familiar_id: resolvedGrupoId || null,
+      }}
     />
   );
 })()}

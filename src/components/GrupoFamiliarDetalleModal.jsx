@@ -3,7 +3,7 @@ import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
 import { FaFileExport, FaFilePdf, FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../services/generarPDFConfirmacion";
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
-import PDFSignatureModal from "./PDFSignatureModal";
+import DocumentoGeneradoModal from "./DocumentoGeneradoModal";
 
 const grupoColorMap = {
   G1: "#0d6efd",   // Azul
@@ -502,7 +502,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
     {pdfData && (() => {
       const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
       return (
-        <PDFSignatureModal
+        <DocumentoGeneradoModal
           show={showPDFModal}
           onHide={() => {
             setShowPDFModal(false);
@@ -510,10 +510,15 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
           }}
           pdfBlob={pdfData.blob}
           filename={pdfData.filename}
-          defaultSignerName={tomador?.cliente?.nombre_completo || ""}
-          defaultSignerEmail={tomador?.cliente?.email || ""}
-          clienteId={tomador?.cliente?.id || tomador?.cliente_id || null}
-          grupoFamiliarId={grupo.id || null}
+          documentType="CONFIRMACION"
+          defaultSigner={{
+            email: tomador?.cliente?.email || "",
+            name: tomador?.cliente?.nombre_completo || "",
+          }}
+          metadata={{
+            cliente_id: tomador?.cliente?.id || tomador?.cliente_id || null,
+            grupo_familiar_id: grupo.id || null,
+          }}
         />
       );
     })()}

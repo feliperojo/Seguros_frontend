@@ -18,7 +18,7 @@ import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCobertur
 import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
-import PDFSignatureModal from "../components/PDFSignatureModal";
+import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
@@ -29,6 +29,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [pdfData, setPdfData] = useState(null);
   const [selectedClienteId, setSelectedClienteId] = useState(null);
+  const [selectedClienteData, setSelectedClienteData] = useState(null);
 
 
   const navigate = useNavigate();
@@ -1689,10 +1690,19 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         {member.parentesco === "TOMADOR" && (
                                             <Dropdown.Item onClick={async () => {
                                               try {
+                                                // Obtener datos del cliente para el modal
+                                                let clienteData = null;
+                                                try {
+                                                  clienteData = await apiRequest(`cliente/show/${member.cliente_id}`, "GET");
+                                                } catch (err) {
+                                                  console.warn("No se pudieron obtener datos del cliente:", err);
+                                                }
+
                                                 const result = await generarPDFAutorizacion(member.cliente_id, false);
                                                 if (result) {
                                                   setPdfData(result);
                                                   setSelectedClienteId(member.cliente_id);
+                                                  setSelectedClienteData(clienteData);
                                                   setShowPDFModal(true);
                                                 }
                                               } catch (error) {
@@ -2429,17 +2439,25 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
               {/* Modal para PDF de Autorización */}
               {pdfData && selectedClienteId && (
-                <PDFSignatureModal
+                <DocumentoGeneradoModal
                   show={showPDFModal}
                   onHide={() => {
                     setShowPDFModal(false);
                     setPdfData(null);
                     setSelectedClienteId(null);
+                    setSelectedClienteData(null);
                   }}
                   pdfBlob={pdfData.blob}
                   filename={pdfData.filename}
-                  clienteId={selectedClienteId}
-                  grupoFamiliarId={id || null}
+                  documentType="AUTORIZACION"
+                  defaultSigner={{
+                    email: selectedClienteData?.email || "",
+                    name: selectedClienteData?.nombre_completo || "",
+                  }}
+                  metadata={{
+                    cliente_id: selectedClienteId,
+                    grupo_familiar_id: id || null,
+                  }}
                 />
               )}
 

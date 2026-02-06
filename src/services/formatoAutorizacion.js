@@ -65,7 +65,7 @@ export const generarPDFAutorizacion = async (clienteId, download = true) => {
     `\nConfirmo NO tengo otro seguro médico (MEDICAID, CHIP, MEDICARE) así como también que no tengo cobertura médica por un empleador.`,
     `\nEsta autorización entrará en vigor a partir de la fecha ${fecha} y durará indefinidamente, salvo que se revoque por escrito de mi parte.`,
     `\nCordialmente:`,
-    `\nFirma: _______________________________`,
+    `\nFirma: _____________________________`,
     `Nombre Completo: ${nombre}\nEmail: ${email}\nDirección: ${direccion}`
   ];
 
@@ -92,11 +92,11 @@ export const generarPDFAutorizacion = async (clienteId, download = true) => {
 
   if (download) {
     // Comportamiento original: descargar directamente
-    doc.save(`Autorizacion_${nombre}.pdf`);
+    doc.save(`Autorizacion_manejo_informacion_${nombre}.pdf`);
   } else {
     // Retornar blob para usar en modal
     const blob = await jsPDFToBlob(doc);
-    return { blob, filename: `Autorizacion_${nombre}.pdf` };
+    return { blob, filename: `Autorizacion_manejo_informacion_${nombre}.pdf` };
   }
 } catch (error) {
   console.error("❌ Error al generar PDF:", error);
