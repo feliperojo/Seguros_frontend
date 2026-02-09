@@ -1022,7 +1022,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
 
     const nuevoTexto = comentariosEnEdicion[comentarioId];
-    if (!nuevoTexto?.trim()) {
+    if (isNoteEmpty(nuevoTexto)) {
       console.warn("⚠️ Texto de comentario vacío");
       return;
     }
@@ -1088,7 +1088,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
 
     const nuevoTexto = comentariosHistorialEnEdicion[comentarioId];
-    if (!nuevoTexto?.trim()) {
+    if (isNoteEmpty(nuevoTexto)) {
       console.warn("⚠️ Texto de comentario vacío");
       return;
     }
@@ -2039,24 +2039,26 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
         {estaEnEdicion ? (
           <>
-            <Form.Control
-              as="textarea"
-              value={comentariosEnEdicion[c.id]}
-              onChange={(e) =>
-                setComentariosEnEdicion((prev) => ({
-                  ...prev,
-                  [c.id]: e.target.value,
-                }))
-              }
-              rows={2}
-              className="mb-2 mt-2"
-            />
+            <div className="mb-2 mt-2 edit-comment-quill">
+              <ReactQuill
+                theme="snow"
+                value={comentariosEnEdicion[c.id] || ''}
+                onChange={(content) =>
+                  setComentariosEnEdicion((prev) => ({
+                    ...prev,
+                    [c.id]: content,
+                  }))
+                }
+                modules={quillModules}
+                formats={quillFormats}
+              />
+            </div>
             <div className="d-flex gap-2">
               <Button
                 size="sm"
                 variant="success"
                 onClick={() => handleGuardarComentarioTarea(c.id)}
-                disabled={!comentariosEnEdicion[c.id]?.trim()}
+                disabled={isNoteEmpty(comentariosEnEdicion[c.id])}
               >
                 Guardar
               </Button>
@@ -2746,24 +2748,26 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                               
                               {estaEnEdicion ? (
                                 <>
-                                  <Form.Control
-                                    as="textarea"
-                                    rows={2}
-                                    value={comentariosHistorialEnEdicion[c.id]}
-                                    onChange={(e) =>
-                                      setComentariosHistorialEnEdicion((prev) => ({
-                                        ...prev,
-                                        [c.id]: e.target.value,
-                                      }))
-                                    }
-                                    className="mb-2"
-                                  />
+                                  <div className="mb-2 edit-comment-quill">
+                                    <ReactQuill
+                                      theme="snow"
+                                      value={comentariosHistorialEnEdicion[c.id] || ''}
+                                      onChange={(content) =>
+                                        setComentariosHistorialEnEdicion((prev) => ({
+                                          ...prev,
+                                          [c.id]: content,
+                                        }))
+                                      }
+                                      modules={quillModules}
+                                      formats={quillFormats}
+                                    />
+                                  </div>
                                   <div className="d-flex gap-2">
                                     <Button
                                       size="sm"
                                       variant="success"
                                       onClick={() => handleGuardarComentarioHistorial(c.id)}
-                                      disabled={!comentariosHistorialEnEdicion[c.id]?.trim()}
+                                      disabled={isNoteEmpty(comentariosHistorialEnEdicion[c.id])}
                                     >
                                       Guardar
                                     </Button>
