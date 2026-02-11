@@ -9,7 +9,6 @@ import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes'
 import idiomas  from '../services/idiomas.js';
 import FormDireccion from "../components/FormDireccion";
-import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import { Helmet } from "react-helmet-async";
 import { normalizeDateForInput } from "../utils/formatters";
@@ -80,9 +79,6 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
   const [clienteCreado, setClienteCreado] = useState(false);
   const [tiposIngreso, setTiposIngreso] = useState([]);
   const [showModal, setShowModal] = useState(isModal); // Inicializar con isModal
-  const [showBitacora, setShowBitacora] = useState(false);
-  const [bitacoraData, setBitacoraData] = useState(null);
-  const [logId, setLogId] = useState(null);
 
   
   // Código de país para teléfono del empleador (se mantiene para el paso 5)
@@ -288,7 +284,11 @@ const calcularIngresoAnual = (monto, periodo) => {
   };
   
   useEffect(() => {
-  }, [showModal, isModal]);
+    // Si el cliente ya fue creado, forzar siempre el paso 6 (Medios de Pago)
+    if (clienteCreado && currentStep !== 6) {
+      setCurrentStep(6);
+    }
+  }, [clienteCreado, currentStep]);
   
   
 
@@ -340,20 +340,6 @@ const calcularIngresoAnual = (monto, periodo) => {
         setClienteId(newId);
         setClienteCreado(true);
 
-        // 👉 Actualiza el log temporal con el cliente_id si logId está definido
-        if (logId) {
-          try {
-            console.log(`⏳ Actualizando la bitácora con el cliente_id: ${newId}`);
-            await apiRequest(`bitacora_operativa/${logId}/update`, "PUT", {
-              cliente_id: newId,
-              
-            });
-            console.log(`✅ Bitácora actualizada con cliente_id: ${newId}`);
-          } catch (err) {
-            console.warn("⚠️ No se pudo actualizar la bitácora con el cliente_id", err);
-          }
-        }
-
         if (onClienteCreado) {
           onClienteCreado(response.clientes[0]);
         }
@@ -364,12 +350,7 @@ const calcularIngresoAnual = (monto, periodo) => {
         message: "Cliente creado exitosamente. Puede continuar configurando los medios de pago.",
         visible: true,
       });
-
       setCurrentStep(6);
-
-      if (currentStep === 6 && showModal) {
-        setShowModal(true);
-      }
 
     } else {
       setAlert({
@@ -982,34 +963,7 @@ const calcularIngresoAnual = (monto, periodo) => {
   <button
     type="button"
     className="btn btn-success"
-    onClick={async () => {
-      try {
-        const tempLog = await apiRequest("bitacora_operativa/log_temp", "POST", {
-          action_type: "create",
-          entity_type: "cliente",
-          note: "(registro temporal)", // ✅ evitar que note sea null
-          
-        });
-        setLogId(tempLog.id);
-
-        if (tempLog && tempLog.id) {
-          setLogId(tempLog.id);
-          setBitacoraData({
-            accion: "create",
-            note: "note",
-            entity_type: "cliente",
-            logId: tempLog.id,
-            cliente_id: clienteId
-          });
-          setShowBitacora(true);
-        } else {
-          setAlert({ type: "danger", message: "No se pudo iniciar bitácora.", visible: true });
-        }
-      } catch (err) {
-        console.error("Error iniciando bitácora temporal:", err);
-        setAlert({ type: "danger", message: "Error al preparar la bitácora.", visible: true });
-      }
-    }}
+    onClick={guardarCliente}
   >
     Guardar Cliente y Continuar
   </button>
@@ -1024,21 +978,6 @@ const calcularIngresoAnual = (monto, periodo) => {
 )}
 
         </div>
-        {showBitacora && logId && (
-  <BitacoraModal
-    show={showBitacora}
-    onHide={(wasSaved) => {
-      setShowBitacora(false);
-      if (wasSaved) {
-        guardarCliente();
-      } else {
-        apiRequest(`bitacora_operativa/delete-ultima`, "DELETE");
-      }
-    }}
-    data={bitacoraData}
-    logId={logId}
-  />
-)}
 
     </div>
   );

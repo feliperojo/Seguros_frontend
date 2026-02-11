@@ -28,6 +28,16 @@ export default function FichaClienteComentarios() {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
 
+  // ✅ Estados para filtros
+  const [filtroConceptoPadre, setFiltroConceptoPadre] = useState("");
+  const [filtroSubconcepto, setFiltroSubconcepto] = useState("");
+  const [filtroPalabraClave, setFiltroPalabraClave] = useState("");
+  const [filtroTipoTarea, setFiltroTipoTarea] = useState(true); // true = mostrar tareas
+  const [filtroTipoComentario, setFiltroTipoComentario] = useState(true); // true = mostrar comentarios
+  const [conceptosPadres, setConceptosPadres] = useState([]);
+  const [subconceptos, setSubconceptos] = useState([]);
+  const [loadingConceptos, setLoadingConceptos] = useState(false);
+
   // Obtener grupo familiar seleccionado del contexto (compartido con el tab General)
   const grupoFamiliarId = useMemo(() => {
     // Prioridad: grupo seleccionado del contexto > cobertura principal > cliente
@@ -71,6 +81,43 @@ export default function FichaClienteComentarios() {
     if (esComentario) return "comentario";
     return "comentario"; // Por defecto
   };
+
+  // ✅ Cargar conceptos padres y subconceptos para filtros
+  useEffect(() => {
+    const cargarConceptos = async () => {
+      setLoadingConceptos(true);
+      try {
+        const response = await apiRequest("operational_concepts?only_parents=true", "GET");
+        setConceptosPadres(Array.isArray(response) ? response : response?.data || []);
+      } catch (err) {
+        console.error("Error al cargar conceptos:", err);
+        setConceptosPadres([]);
+      } finally {
+        setLoadingConceptos(false);
+      }
+    };
+    cargarConceptos();
+  }, []);
+
+  // ✅ Cargar subconceptos cuando se selecciona un concepto padre
+  useEffect(() => {
+    const cargarSubconceptos = async () => {
+      if (!filtroConceptoPadre) {
+        setSubconceptos([]);
+        setFiltroSubconcepto("");
+        return;
+      }
+      try {
+        const response = await apiRequest(`operational_concepts/${filtroConceptoPadre}/subconcepts`, "GET");
+        setSubconceptos(Array.isArray(response) ? response : response?.data || []);
+        setFiltroSubconcepto(""); // Reset subconcepto al cambiar concepto padre
+      } catch (err) {
+        console.error("Error al cargar subconceptos:", err);
+        setSubconceptos([]);
+      }
+    };
+    cargarSubconceptos();
+  }, [filtroConceptoPadre]);
 
   // Cargar comentarios del grupo familiar
   useEffect(() => {
@@ -266,6 +313,11 @@ export default function FichaClienteComentarios() {
   // Obtener ID de la tarea desde el item
   const getTareaId = (item) => {
     return item?.task?.id || item?.task_id || item?.id || null;
+  };
+
+  // Obtener ID del log/bitácora desde el item
+  const getLogId = (item) => {
+    return item?.id || item?.log?.id || item?.log_id || null;
   };
 
   // Funciones helper para determinar tipo de archivo
@@ -471,6 +523,65 @@ export default function FichaClienteComentarios() {
     recargarComentarios();
   };
 
+  // ✅ Función para filtrar comentarios según los filtros aplicados
+  const comentariosFiltrados = useMemo(() => {
+    return comentarios.filter((comentario) => {
+      const concepto = getConceptoNombre(comentario);
+      const nota = comentario.note || comentario.nota || comentario.comment || "";
+      const tipoItem = getTipoItem(comentario);
+      const esTarea = tipoItem === "tarea";
+      const esComentario = tipoItem === "comentario";
+
+      // Filtro por tipo (tarea/comentario)
+      if (esTarea && !filtroTipoTarea) return false;
+      if (esComentario && !filtroTipoComentario) return false;
+
+      // Filtro por concepto padre
+      if (filtroConceptoPadre) {
+        const conceptoComentario = comentario?.concept?.name || comentario?.concepto?.name || comentario?.concept_name || comentario?.concepto || "";
+        // Si hay subconceptos cargados, verificar si el concepto del comentario es uno de ellos
+        if (subconceptos.length > 0) {
+          const subconceptosNombres = subconceptos.map(s => s.name);
+          const perteneceAlConceptoPadre = subconceptosNombres.includes(conceptoComentario);
+          if (!perteneceAlConceptoPadre) return false;
+        }
+        // Si no hay subconceptos cargados aún, esperar a que se carguen (no filtrar por ahora)
+        // Esto evita que se oculten resultados mientras se cargan los subconceptos
+      }
+
+      // Filtro por subconcepto
+      if (filtroSubconcepto) {
+        const subconceptoNombre = subconceptos.find(s => s.id === Number(filtroSubconcepto))?.name;
+        if (subconceptoNombre) {
+          const conceptoComentario = comentario?.concept?.name || comentario?.concepto?.name || comentario?.concept_name || comentario?.concepto || "";
+          if (conceptoComentario !== subconceptoNombre) return false;
+        }
+      }
+
+      // Filtro por palabra clave en el contenido de la nota
+      if (filtroPalabraClave) {
+        const palabraClaveLower = filtroPalabraClave.toLowerCase();
+        const notaLower = nota.toLowerCase();
+        // Extraer texto plano del HTML si es necesario
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = nota;
+        const textoPlano = tempDiv.textContent || tempDiv.innerText || "";
+        const textoPlanoLower = textoPlano.toLowerCase();
+        
+        // Buscar en el concepto también
+        const conceptoLower = concepto.toLowerCase();
+        
+        if (!notaLower.includes(palabraClaveLower) && 
+            !textoPlanoLower.includes(palabraClaveLower) && 
+            !conceptoLower.includes(palabraClaveLower)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [comentarios, filtroConceptoPadre, filtroSubconcepto, filtroPalabraClave, filtroTipoTarea, filtroTipoComentario, conceptosPadres, subconceptos]);
+
   if (!cliente) {
     return (
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-blue-800">
@@ -619,6 +730,139 @@ export default function FichaClienteComentarios() {
                 </div>
               </div>
 
+              {/* ✅ Sección de Filtros */}
+              <div className="mb-6 bg-white border border-gray-200 rounded-xl p-5 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center">
+                    <i className="fas fa-filter text-slate-600 text-sm"></i>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-800 m-0">Filtros</h3>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Filtro por Concepto Padre */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <i className="fas fa-tag text-xs mr-1"></i>
+                      Concepto
+                    </label>
+                    <select
+                      value={filtroConceptoPadre}
+                      onChange={(e) => setFiltroConceptoPadre(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                    >
+                      <option value="">Todos los conceptos</option>
+                      {loadingConceptos ? (
+                        <option disabled>Cargando...</option>
+                      ) : (
+                        conceptosPadres.map((concepto) => (
+                          <option key={concepto.id} value={concepto.id}>
+                            {concepto.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
+                  {/* Filtro por Subconcepto */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <i className="fas fa-tags text-xs mr-1"></i>
+                      Subconcepto
+                    </label>
+                    <select
+                      value={filtroSubconcepto}
+                      onChange={(e) => setFiltroSubconcepto(e.target.value)}
+                      disabled={!filtroConceptoPadre}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Todos los subconceptos</option>
+                      {subconceptos.map((subconcepto) => (
+                        <option key={subconcepto.id} value={subconcepto.id}>
+                          {subconcepto.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Filtro por Palabra Clave */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <i className="fas fa-search text-xs mr-1"></i>
+                      Buscar palabra clave
+                    </label>
+                    <input
+                      type="text"
+                      value={filtroPalabraClave}
+                      onChange={(e) => setFiltroPalabraClave(e.target.value)}
+                      placeholder="Buscar en notas..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  {/* Filtro por Tipo (Tarea/Comentario) */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <i className="fas fa-list text-xs mr-1"></i>
+                      Tipo
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={filtroTipoTarea}
+                          onChange={(e) => setFiltroTipoTarea(e.target.checked)}
+                          className="w-4 h-4 text-slate-600 border-gray-300 rounded focus:ring-slate-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <i className="fas fa-tasks text-xs mr-1"></i>
+                          Tareas
+                        </span>
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={filtroTipoComentario}
+                          onChange={(e) => setFiltroTipoComentario(e.target.checked)}
+                          className="w-4 h-4 text-slate-600 border-gray-300 rounded focus:ring-slate-500"
+                        />
+                        <span className="text-sm text-gray-700">
+                          <i className="fas fa-comment text-xs mr-1"></i>
+                          Comentarios
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Botón para limpiar filtros */}
+                {(filtroConceptoPadre || filtroSubconcepto || filtroPalabraClave || !filtroTipoTarea || !filtroTipoComentario) && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      onClick={() => {
+                        setFiltroConceptoPadre("");
+                        setFiltroSubconcepto("");
+                        setFiltroPalabraClave("");
+                        setFiltroTipoTarea(true);
+                        setFiltroTipoComentario(true);
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors duration-200 flex items-center gap-2"
+                    >
+                      <i className="fas fa-times text-xs"></i>
+                      Limpiar filtros
+                    </button>
+                  </div>
+                )}
+
+                {/* Contador de resultados */}
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <p className="text-sm text-gray-600 m-0">
+                    Mostrando <span className="font-semibold text-gray-800">{comentariosFiltrados.length}</span> de{" "}
+                    <span className="font-semibold text-gray-800">{comentarios.length}</span> resultados
+                  </p>
+                </div>
+              </div>
+
               {loading ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <Spinner animation="border" variant="primary" className="mb-4" />
@@ -633,7 +877,7 @@ export default function FichaClienteComentarios() {
                     <p className="text-gray-700 font-medium m-0">{error}</p>
                   </div>
                 </div>
-              ) : comentarios.length === 0 ? (
+              ) : comentariosFiltrados.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-16">
                   <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mb-4">
                     <i className="fas fa-comments text-gray-400 text-2xl"></i>
@@ -661,7 +905,7 @@ export default function FichaClienteComentarios() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {comentarios.map((comentario, index) => {
+                  {comentariosFiltrados.map((comentario, index) => {
                     const fecha = comentario.created_at || comentario.createdAt || comentario.fecha;
                     const concepto = getConceptoNombre(comentario);
                     const usuarioCreador = getUsuarioNombre(comentario); // Usuario que creó el comentario/tarea
@@ -673,6 +917,8 @@ export default function FichaClienteComentarios() {
                     const esComentario = tipoItem === "comentario";
                     // Estado de la tarea: usar task.status (dentro del objeto task)
                     const estadoTarea = comentario.task?.status || comentario.status || null;
+                    const logId = getLogId(comentario);
+                    const tareaId = getTareaId(comentario);
 
                     // 🔍 DEBUG: Ver campos del comentario al renderizar
                     if (esTarea) {
@@ -747,6 +993,19 @@ export default function FichaClienteComentarios() {
                                 <i className="fas fa-tag text-[10px]"></i>
                                 {concepto}
                               </span>
+                              {/* IDs: Log/Bitácora y Tarea (si aplica) */}
+                              {logId && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-mono border border-gray-200" title="ID Bitácora">
+                                  <i className="fas fa-hashtag text-[10px]"></i>
+                                  Log #{logId}
+                                </span>
+                              )}
+                              {esTarea && tareaId && (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs font-mono border border-slate-200" title="ID Tarea">
+                                  <i className="fas fa-tasks text-[10px]"></i>
+                                  Tarea #{tareaId}
+                                </span>
+                              )}
                             </div>
                             
                             {/* Información de usuarios y cliente */}
@@ -1060,13 +1319,19 @@ export default function FichaClienteComentarios() {
                                             className="bg-gray-50 border-l-4 border-slate-400 rounded-r-lg p-4 shadow-sm"
                                           >
                                             <div className="flex items-start justify-between mb-2">
-                                              <div className="flex items-center gap-2">
+                                              <div className="flex items-center gap-2 flex-wrap">
                                                 <div className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center">
                                                   <i className="fas fa-user text-gray-500 text-xs"></i>
                                                 </div>
                                                 <span className="font-medium text-gray-700 text-sm">
                                                   {comentarioTarea.user?.name || comentarioTarea.user || "Usuario"}
                                                 </span>
+                                                {comentarioTarea.id && (
+                                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-xs font-mono" title="ID Comentario">
+                                                    <i className="fas fa-hashtag text-[10px]"></i>
+                                                    #{comentarioTarea.id}
+                                                  </span>
+                                                )}
                                               </div>
                                               <span className="text-xs text-gray-500">
                                                 {formatFecha(comentarioTarea.created_at || comentarioTarea.fecha)}

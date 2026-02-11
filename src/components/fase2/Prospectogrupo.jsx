@@ -4,6 +4,7 @@ import { formatMoneyDisplay } from "../../services/ingresos";
 import { FaFilePdf } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../../services/generarPDFConfirmacion";
 import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
+import Swal from "sweetalert2";
 import DocumentoGeneradoModal from "../DocumentoGeneradoModal";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import NuevoComentarioModal from "../Tareas/NuevoComentarioModal";
@@ -42,6 +43,7 @@ const Prospectogrupo = ({
   const [pdfData, setPdfData] = useState(null);
   const [showPDFAutorizacionModal, setShowPDFAutorizacionModal] = useState(false);
   const [pdfAutorizacionData, setPdfAutorizacionData] = useState(null);
+  const [autorizacionLanguage, setAutorizacionLanguage] = useState("es");
 
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
@@ -108,6 +110,25 @@ const Prospectogrupo = ({
 
   const clienteTomadorId = obtenerClienteTomadorId();
   const puedeGenerarAutorizacion = puedeMostrarConfirmacion && clienteTomadorId !== null;
+
+  const seleccionarIdiomaAutorizacion = async () => {
+    const { value: language } = await Swal.fire({
+      title: "Idioma del documento",
+      text: "¿En qué idioma deseas enviar la autorización?",
+      icon: "question",
+      input: "select",
+      inputOptions: {
+        es: "Español",
+        en: "Inglés",
+      },
+      inputPlaceholder: "Selecciona un idioma",
+      showCancelButton: true,
+      confirmButtonText: "Aceptar",
+      cancelButtonText: "Cancelar",
+    });
+
+    return language || null;
+  };
 
   return (
     <div style={{ fontFamily: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"` }}>
@@ -241,14 +262,22 @@ const Prospectogrupo = ({
                   className="btn btn-sm btn-outline-danger"
                   onClick={async () => {
                     try {
-                      const result = await generarPDFAutorizacion(clienteTomadorId, false);
+                    const language = await seleccionarIdiomaAutorizacion();
+                    if (!language) return;
+                    setAutorizacionLanguage(language);
+
+                    const result = await generarPDFAutorizacion(
+                      clienteTomadorId,
+                      false,
+                      language
+                    );
                       if (result) {
                         setPdfAutorizacionData(result);
                         setShowPDFAutorizacionModal(true);
                       }
                     } catch (error) {
                       console.error("Error al generar PDF:", error);
-                      await generarPDFAutorizacion(clienteTomadorId, true);
+                    await generarPDFAutorizacion(clienteTomadorId, true, autorizacionLanguage);
                     }
                   }}
                   disabled={!resolvedGrupoId || !clienteTomadorId}
@@ -558,6 +587,7 @@ const Prospectogrupo = ({
       pdfBlob={pdfAutorizacionData.blob}
       filename={pdfAutorizacionData.filename}
       documentType="AUTORIZACION"
+      documentLanguage={autorizacionLanguage}
       defaultSigner={{
         email: tomador?.cliente?.email || "",
         name: tomador?.cliente?.nombre_completo || "",

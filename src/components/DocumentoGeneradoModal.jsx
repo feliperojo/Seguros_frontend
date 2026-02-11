@@ -29,6 +29,7 @@ const DocumentoGeneradoModal = ({
   documentType = "AUTORIZACION",
   defaultSigner = { email: "", name: "" },
   metadata = {},
+  documentLanguage = "es", // "es" o "en" para ajustar textos del correo
 }) => {
   const toast = useToast();
   const [step, setStep] = useState("options"); // 'options', 'signature-form', 'confirmation', 'signing'
@@ -102,35 +103,68 @@ const DocumentoGeneradoModal = ({
   // Inicializar asunto y cuerpo del email con texto profesional (sin logo, texto plano para el back)
   React.useEffect(() => {
     if (show && step === "signature-form" && !emailInitializedRef.current) {
-      const signerName = signers[0]?.name?.trim() || defaultSigner?.name?.trim() || "Estimado cliente";
+      const isEnglish = documentLanguage === "en";
+      const signerName =
+        signers[0]?.name?.trim() ||
+        defaultSigner?.name?.trim() ||
+        (isEnglish ? "Client" : "cliente");
+
       const docTypeName = documentType === "CONFIRMACION"
-        ? "Confirmación de Datos"
-        : "Autorización de Manejo de Información";
+        ? isEnglish
+          ? "Data Confirmation"
+          : "Confirmación de Datos"
+        : isEnglish
+          ? "Authorization to Manage Information"
+          : "Autorización de Manejo de Información";
 
       const subject = documentType === "CONFIRMACION"
-        ? "Solicitud de firma - Confirmación de Datos"
-        : "Solicitud de firma - Autorización Manejo de Información";
+        ? (isEnglish
+          ? "Signature Request – Data Confirmation"
+          : "Solicitud de firma – Confirmación de Datos")
+        : (isEnglish
+          ? "Signature Request – Authorization to Manage Information"
+          : "Solicitud de firma – Autorización de Manejo de Información");
+
       setEmailSubject(subject);
 
-      const professionalBody = `Estimado/a ${signerName},
+      const professionalBody = isEnglish
+        ? `Dear ${signerName},
 
-Le solicitamos amablemente su firma en el documento "${docTypeName}" que hemos preparado para usted.
+We hope you are doing well.
 
-Este documento es importante para continuar con el proceso y requiere su firma electrónica.
+We kindly request your electronic signature on the document titled "${docTypeName}", which has been prepared for you.
 
-Por favor, revise el documento y proceda con la firma siguiendo las instrucciones que encontrará en el enlace que le hemos enviado.
+This document is required to continue with the process and authorizes us to securely manage your information in accordance with applicable regulations.
 
-Si tiene alguna pregunta o necesita asistencia, no dude en contactarnos.
+Please review the document and complete the electronic signature by following the instructions provided through the Docuseal link.
 
-Gracias por su atención.
+If you have any questions or need assistance, please do not hesitate to contact us. We will be happy to help.
 
-Saludos cordiales,
+Thank you for your time and cooperation.
+
+Sincerely,
+Tampa Seguros Team`
+        : `Estimado/a ${signerName},
+
+Esperamos que se encuentre muy bien.
+
+Por medio de este mensaje, le solicitamos amablemente su firma electrónica en el documento titulado "${docTypeName}", el cual hemos preparado para usted.
+
+Este documento es necesario para poder continuar con el proceso y nos autoriza a gestionar su información de manera segura y conforme a la normativa vigente.
+
+Por favor, revise el documento y proceda con la firma siguiendo las instrucciones que encontrará en el enlace de Docuseal.
+
+Si tiene alguna pregunta o requiere asistencia durante el proceso, no dude en contactarnos. Con gusto lo apoyaremos.
+
+Gracias por su tiempo y colaboración.
+
+Cordialmente,
 Equipo de Tampa Seguros`;
 
       setEmailBody(professionalBody);
       emailInitializedRef.current = true;
     }
-  }, [show, step, signers, defaultSigner?.name, documentType]);
+  }, [show, step, signers, defaultSigner?.name, documentType, documentLanguage]);
 
   // Descargar PDF directamente
   const handleDownload = () => {
@@ -189,6 +223,7 @@ Equipo de Tampa Seguros`;
         metadata,
         emailSubject: emailSubject.trim() || undefined,
         emailBody: emailBody.trim() || undefined,
+        language: documentLanguage || "es", // Enviar idioma al backend para coordenadas
       });
 
       // Normalizar respuesta: nuevo formato { signingLink, submissionId, recipientEmail, emailSent, status } o legacy { embed_src, submission_id }
@@ -464,7 +499,7 @@ Tampa Seguros`;
                   <Form.Label>Mensaje del email (opcional)</Form.Label>
                   <Form.Control
                     as="textarea"
-                    rows={3}
+                    rows={8}
                     value={emailBody}
                     onChange={(e) => setEmailBody(e.target.value)}
                     disabled={loading}

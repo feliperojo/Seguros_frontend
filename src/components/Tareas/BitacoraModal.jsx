@@ -2,6 +2,14 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../../services/api";
 
+// Asegura que el valor sea siempre un array (la API puede devolver { data: [...] } o el array directo)
+const toArray = (v) => {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === "object" && Array.isArray(v.data)) return v.data;
+  if (v && typeof v === "object" && Array.isArray(v.results)) return v.results;
+  return [];
+};
+
 const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [nota, setNota] = useState("");
   const [concepto, setConcepto] = useState("");
@@ -12,7 +20,7 @@ const BitacoraModal = ({ show, onHide, onSaved, onSuccess, data, logId }) => {
   const [guardando, setGuardando] = useState(false);
   const [bitacoraGuardada, setBitacoraGuardada] = useState(false);
   const [conceptosPadres, setConceptosPadres] = useState([]);
-const [subconceptos, setSubconceptos] = useState([]);
+  const [subconceptos, setSubconceptos] = useState([]);
 const [conceptoPadreId, setConceptoPadreId] = useState("");
 const [defaultSet, setDefaultSet] = useState(false);
 const [fechaProgramacion, setFechaProgramacion] = useState(() => {
@@ -25,8 +33,8 @@ const [fechaVencimiento, setFechaVencimiento] = useState(() => {
 });
 
 
-  const userIdFromSession = 1; 
-console.log("data",data);
+  const userIdFromSession = 1;
+
   useEffect(() => {
     if (show) {
       fetchConceptos();
@@ -48,9 +56,10 @@ console.log("data",data);
         setConceptoPadreId(conceptoPadre.id);
         
         apiRequest(`operational_concepts/${conceptoPadre.id}/subconcepts`, "GET")
-          .then((hijos) => {
-            setSubconceptos(hijos || []);
-            setConceptos(hijos || []);
+          .then((hijosRes) => {
+            const hijos = toArray(hijosRes);
+            setSubconceptos(hijos);
+            setConceptos(hijos);
             const subconcepto = hijos.find(item => item.name === "Creación Nuevo Cliente");
             if (subconcepto) {
               setConcepto(subconcepto.id);
@@ -66,22 +75,24 @@ console.log("data",data);
   const fetchConceptos = async () => {
     try {
       const response = await apiRequest("operational_concepts?only_parents=true", "GET");
-      setConceptosPadres(response || []);
+      const listPadres = toArray(response);
+      setConceptosPadres(listPadres);
   
       // ✅ Si viene de Clientes y es create, asignamos valores por defecto
       if (
         data?.entity_type === "cliente" &&
         data?.accion === "create" &&
-        response?.length > 0
+        listPadres.length > 0
       ) {
-        const conceptoPadre = response.find(item => item.name === "Clientes Nuevos");
+        const conceptoPadre = listPadres.find(item => item.name === "Clientes Nuevos");
         if (conceptoPadre) {
           setConceptoPadreId(conceptoPadre.id);
   
           // Cargar subconceptos
-          const hijos = await apiRequest(`operational_concepts/${conceptoPadre.id}/subconcepts`, "GET");
-          setSubconceptos(hijos || []);
-          setConceptos(hijos || []);
+          const hijosRes = await apiRequest(`operational_concepts/${conceptoPadre.id}/subconcepts`, "GET");
+          const hijos = toArray(hijosRes);
+          setSubconceptos(hijos);
+          setConceptos(hijos);
   
           const subconcepto = hijos.find(item => item.name === "Creación Nuevo Cliente");
           if (subconcepto) {
@@ -107,7 +118,7 @@ console.log("data",data);
   const fetchUsuarios = async () => {
     try {
       const response = await apiRequest("users", "GET");
-      setUsuarios(response || []);
+      setUsuarios(toArray(response));
     } catch (err) {
       console.error("Error cargando usuarios:", err);
       setError("Error al cargar usuarios.");
@@ -120,9 +131,10 @@ console.log("data",data);
     setConcepto(""); // limpia subconcepto seleccionado
   
     if (selectedId) {
-      const hijos = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
-      setSubconceptos(hijos || []);
-      setConceptos(hijos || []);
+      const hijosRes = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
+      const hijos = toArray(hijosRes);
+      setSubconceptos(hijos);
+      setConceptos(hijos);
     } else {
       setSubconceptos([]);
       setConceptos([]);
@@ -216,7 +228,7 @@ console.log("data",data);
   <Form.Label>Concepto Principal</Form.Label>
   <Form.Select value={conceptoPadreId} onChange={handlePadreChange}>
     <option value="">Seleccione un concepto principal</option>
-    {conceptosPadres.map((item) => (
+    {(Array.isArray(conceptosPadres) ? conceptosPadres : []).map((item) => (
       <option key={item.id} value={item.id}>{item.name}</option>
     ))}
   </Form.Select>
@@ -230,7 +242,7 @@ console.log("data",data);
       onChange={(e) => setConcepto(e.target.value)}
     >
       <option value="">Seleccione un subconcepto</option>
-      {conceptos.map((item) => (
+      {(Array.isArray(conceptos) ? conceptos : []).map((item) => (
         <option key={item.id} value={item.id}>{item.name}</option>
       ))}
     </Form.Select>
@@ -256,7 +268,7 @@ console.log("data",data);
             onChange={(e) => setAsignadoA(e.target.value)}
           >
             <option value="">Seleccione un usuario</option>
-            {usuarios.map((usuario) => (
+            {(Array.isArray(usuarios) ? usuarios : []).map((usuario) => (
               <option key={usuario.id} value={usuario.id}>
                 {usuario.name}
               </option>

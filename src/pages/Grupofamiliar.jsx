@@ -12,7 +12,6 @@ import CountrySelectWithFlags from '../components/CountrySelect';
 import countryCodes from '../services/countryCodes';
 import Swal from 'sweetalert2';
 import GrupoFamiliarService from '../services/GrupoFamiliarService';
-import BitacoraModal from "../components/Tareas/BitacoraModal"; // Ajusta ruta si es necesario
 import EditClienteModal from "../components/EditClienteModal";
 import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
 import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
@@ -30,6 +29,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   const [pdfData, setPdfData] = useState(null);
   const [selectedClienteId, setSelectedClienteId] = useState(null);
   const [selectedClienteData, setSelectedClienteData] = useState(null);
+  const [selectedClienteLanguage, setSelectedClienteLanguage] = useState("es");
 
 
   const navigate = useNavigate();
@@ -150,12 +150,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
   const [totalMiembros, setTotalMiembros] = useState(0);
   const [totalYes, setTotalYes] = useState(0);
-  const [showBitacoraModal, setShowBitacoraModal] = useState(false);
-  const [bitacoraData, setBitacoraData] = useState(null);
-  const [pendingSubmission, setPendingSubmission] = useState(false);
-  const [shouldNavigateAfterSubmit, setShouldNavigateAfterSubmit] = useState(false);
-
-
   const [coverageGroups, setCoverageGroups] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -1093,40 +1087,38 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         if (grupoFamiliarId) {
           await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
 
-          const clienteTomadorId = obtenerClienteTomador();
-
-          setBitacoraData({
-            accion: "create",
-            entity_type: "grupo_familiar",
-            grupo_familiar_id: grupoFamiliarId,
-            cliente_id: clienteTomadorId || null,
-            historial_id: grupoFamiliarResponse.data?.historial_id || null
-
+          // Mostrar confirmación y navegar a la lista
+          Swal.fire({
+            title: "¡Actualización Exitosa!",
+            text: "El grupo familiar ha sido actualizado.",
+            icon: "success",
+            confirmButtonText: "Aceptar",
+            timer: 4000
+          }).then(() => {
+            navigate('/grupofamiliar/lista');
           });
 
-          setShowBitacoraModal(true);
-         
-          return; // Muy importante para evitar navegación automática
-          
+          return;
         }
 
       }
 
-    
-
 
       if (mode === "edit") {
         const historialId = grupoFamiliarResponse?.data?.historial_id || null;
-        setBitacoraData({
-          accion: "update",
-          entity_type: "grupo_familiar",
-          grupo_familiar_id: id,
-          cliente_id: obtenerClienteTomador() || null,
-          historial_id: historialId
 
+        // Mostrar confirmación y navegar a la lista
+        Swal.fire({
+          title: "¡Actualización Exitosa!",
+          text: "El grupo familiar ha sido actualizado.",
+          icon: "success",
+          confirmButtonText: "Aceptar",
+          timer: 4000
+        }).then(() => {
+          navigate('/grupofamiliar/lista');
         });
-        setShowBitacoraModal(true);
-        return; // ⬅️ Evita la navegación automática
+
+        return;
       }
 
 
@@ -1690,6 +1682,24 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         {member.parentesco === "TOMADOR" && (
                                             <Dropdown.Item onClick={async () => {
                                               try {
+                                                const { value: language } = await Swal.fire({
+                                                  title: "Idioma del documento",
+                                                  text: "¿En qué idioma deseas enviar la autorización?",
+                                                  icon: "question",
+                                                  input: "select",
+                                                  inputOptions: {
+                                                    es: "Español",
+                                                    en: "Inglés",
+                                                  },
+                                                  inputPlaceholder: "Selecciona un idioma",
+                                                  showCancelButton: true,
+                                                  confirmButtonText: "Aceptar",
+                                                  cancelButtonText: "Cancelar",
+                                                });
+
+                                                if (!language) return;
+
+                                                setSelectedClienteLanguage(language);
                                                 // Obtener datos del cliente para el modal
                                                 let clienteData = null;
                                                 try {
@@ -1698,7 +1708,11 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                                   console.warn("No se pudieron obtener datos del cliente:", err);
                                                 }
 
-                                                const result = await generarPDFAutorizacion(member.cliente_id, false);
+                                                const result = await generarPDFAutorizacion(
+                                                  member.cliente_id,
+                                                  false,
+                                                  language
+                                                );
                                                 if (result) {
                                                   setPdfData(result);
                                                   setSelectedClienteId(member.cliente_id);
@@ -1707,7 +1721,11 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                                 }
                                               } catch (error) {
                                                 console.error("Error al generar PDF:", error);
-                                                await generarPDFAutorizacion(member.cliente_id, true);
+                                                await generarPDFAutorizacion(
+                                                  member.cliente_id,
+                                                  true,
+                                                  selectedClienteLanguage
+                                                );
                                               }
                                             }}>
                                               <i className="bi bi-file-earmark-pdf me-2 text-danger"></i> Descargar Autorización
@@ -1978,31 +1996,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         )
         
         }
-
-
-        {showBitacoraModal && (
-          <BitacoraModal
-            show={showBitacoraModal}
-            onHide={() => setShowBitacoraModal(false)}
-            data={bitacoraData}
-            onSaved={() => {
-              setShowBitacoraModal(false);
-
-              Swal.fire({
-                title: "¡Actualización Exitosa!",
-                text: "El grupo familiar ha sido actualizado.",
-                icon: "success",
-                confirmButtonText: "Aceptar",
-                timer: 4000
-              }).then(() => {
-                navigate('/grupofamiliar/lista');
-              });
-            }}
-          />
-        )}
-
-
-
       </div>
 
       {/* Modal for adding client (nuevo o existente) */}
@@ -2450,6 +2443,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   pdfBlob={pdfData.blob}
                   filename={pdfData.filename}
                   documentType="AUTORIZACION"
+                  documentLanguage={selectedClienteLanguage}
                   defaultSigner={{
                     email: selectedClienteData?.email || "",
                     name: selectedClienteData?.nombre_completo || "",

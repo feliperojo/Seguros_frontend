@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Row, Col, Badge } from "react-bootstrap";
 import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
-import BitacoraModal from "../components/Tareas/BitacoraModal";
 
 // Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
 const normalizeDate = (dateString) => {
@@ -37,9 +36,6 @@ const RetiroCancelacionModal = ({
   const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
   const [fechasOriginales, setFechasOriginales] = useState([]);
   const [cambiosDetectados, setCambiosDetectados] = useState(false);
-  const [showBitacora, setShowBitacora] = useState(false);
-  const [bitacoraPayload, setBitacoraPayload] = useState(null);
-
 
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
@@ -194,18 +190,11 @@ const RetiroCancelacionModal = ({
       };
       await apiRequest(`grupo_familiar/${grupoFamiliar.id}`, "PUT", grupoPayload);
 
-      const tomador = coberturas.find(c => c.parentesco === "TOMADOR");
-      const clienteIdTomador = tomador?.cliente?.id || null;
-      
-      setBitacoraPayload({
-        accion: "retiro_o_cancelacion",
-        entity_type: "grupo_familiar",
-        grupo_familiar_id: grupoFamiliar.id,
-        cliente_id: clienteIdTomador
-      });
-      
-
-      setShowBitacora(true); // 👈 Mostrar modal
+      // Notificar al padre que se guardó correctamente y cerrar el modal
+      if (onSave) {
+        onSave(grupoFamiliar);
+      }
+      onHide();
     } catch (error) {
       console.error("❌ Error al guardar:", error);
       alert("Error al guardar los retiros");
@@ -364,19 +353,6 @@ const RetiroCancelacionModal = ({
         </Modal.Footer>
 
       </Modal>
-
-      {showBitacora && (
-        <BitacoraModal
-          show={showBitacora}
-          onHide={() => setShowBitacora(false)}
-          data={bitacoraPayload}
-          onSaved={() => {
-            setShowBitacora(false);
-            onSave(grupoFamiliar);
-            onHide();
-          }}
-        />
-      )}
     </>
   );
 

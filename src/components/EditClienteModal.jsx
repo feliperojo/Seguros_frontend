@@ -9,7 +9,6 @@ import CountrySelectWithFlags from "../components/CountrySelect";
 import { NumericFormat } from 'react-number-format';
 import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
 import MediosPagoTablas from './MediosPagoTablas';
-import BitacoraModal from "../components/Tareas/BitacoraModal";
 import PrimerContacto from "../components/PrimerContacto";
 import CartaAutorizacion from "./Reports/CartaAutorizacion";
 import idiomas  from '../services/idiomas.js';
@@ -177,9 +176,6 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
   const [loadingMediosPago, setLoadingMediosPago] = useState(false);
   const [errorMediosPago, setErrorMediosPago] = useState(null);
   const [isIngresoModificado, setIsIngresoModificado] = useState(false);
-  const [showBitacoraModal, setShowBitacoraModal] = useState(false);
-  const [dataToLog, setDataToLog] = useState(null);
-  
   const formatPhoneNumber = (value) => {
     if (!value) return "";
     const cleaned = value.replace(/\D/g, "");
@@ -252,12 +248,6 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     return phones;
   };
   
-  const handleBitacoraSuccess = () => {
-    setShowBitacoraModal(false);
-    onHide(); // <-- Cierra el modal principal
-  };
-
-
   const recalcularIngresoAnualTotal = (datosEmpleo) => {
     const montoPrincipal = datosEmpleo.ingreso_por_periodo;
     const periodoPrincipal = datosEmpleo.periodo_ingreso;
@@ -600,15 +590,10 @@ useEffect(() => {
   
     return flatData;
   };  // Enviar los datos actualizados
+
   const handleSubmit = () => {
-    setDataToLog({
-      cliente_id: clienteId,
-      grupo_familiar_id: clienteData?.grupo_familiar_id || null,
-      accion: "update",
-      entidad: "cliente",
-      entity_type: "cliente"
-    });
-    setShowBitacoraModal(true);
+    // Guardar cambios del cliente directamente, sin pasar por bitácora
+    actualizarCliente();
   };
   
   const actualizarCliente = async () => {
@@ -1565,24 +1550,6 @@ const renderDireccionTab = () => (
           </>
         )}
       </Modal.Body>
-      {showBitacoraModal && (
-      <BitacoraModal
-      show={showBitacoraModal}
-      data={dataToLog}
-      logId={dataToLog?.logId} // si lo usas
-      onHide={async (wasSaved) => {
-        setShowBitacoraModal(false);
-        if (wasSaved) {
-          await actualizarCliente(); // 🟢 actualizar cliente
-          onHide(); // 🟢 cerrar modal de edición
-        }
-      }}
-    />
-    
-
-
-)}
-
     </Modal>
   );
 };

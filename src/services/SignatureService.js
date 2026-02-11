@@ -16,6 +16,7 @@ import { apiRequestFormData, apiRequest } from "./api";
  * @param {number|string} [params.metadata.grupo_familiar_id] - ID del grupo familiar
  * @param {string} [params.emailSubject] - Asunto del email (opcional)
  * @param {string} [params.emailBody] - Cuerpo del email (opcional)
+ * @param {string} [params.language] - Idioma del documento: "es" o "en" (opcional, para coordenadas de firma)
  * @returns {Promise<{submission_id: string, embed_src: string, success: boolean, message?: string}>}
  */
 export const createSubmission = async ({ 
@@ -25,7 +26,8 @@ export const createSubmission = async ({
   signers, 
   metadata = {},
   emailSubject,
-  emailBody
+  emailBody,
+  language = "es" // Idioma por defecto: español
 }) => {
   // Validar que haya al menos un firmante
   if (!signers || signers.length === 0) {
@@ -82,6 +84,11 @@ export const createSubmission = async ({
 
   // Agregar document_type
   formData.append("document_type", documentType.toUpperCase());
+
+  // Agregar language para que el backend maneje coordenadas por formato + idioma
+  if (language && (language === "es" || language === "en")) {
+    formData.append("language", language);
+  }
 
   // Agregar firmantes como JSON stringificado
   formData.append("signers", JSON.stringify(preparedSigners));
