@@ -1099,15 +1099,43 @@ export default function HistorialCambiosModal({
                     if (!hasNonClientFields) return null;
 
                     let clienteNombre = "";
+                    
+                    // 1. Intentar obtener el nombre desde los cambios de la cobertura
                     const clienteField = fieldsForCoverage.find(({ fieldKey }) => fieldKey === "cliente.nombre_completo");
-
                     if (clienteField) {
                       const infoCliente = cambios[clienteField.campo] || {};
                       clienteNombre = infoCliente.nuevo || infoCliente.anterior || "";
                     }
-
-                    // Priorizar el nombre obtenido de los cambios, usar coberturaClientes solo si existe y no hay nombre en cambios
-                    const nombreHeader = clienteNombre || (coberturaClientes && coberturaClientes[coberturaId] ? coberturaClientes[coberturaId] : "");
+                    
+                    // 2. Si no se encontró, buscar en otros campos de cliente de la cobertura
+                    if (!clienteNombre) {
+                      const primerNombreField = fieldsForCoverage.find(({ fieldKey }) => fieldKey === "cliente.primer_nombre");
+                      const apellidosField = fieldsForCoverage.find(({ fieldKey }) => fieldKey === "cliente.apellidos");
+                      if (primerNombreField || apellidosField) {
+                        const primerNombre = primerNombreField ? 
+                          (cambios[primerNombreField.campo]?.nuevo || cambios[primerNombreField.campo]?.anterior || "") : "";
+                        const apellidos = apellidosField ? 
+                          (cambios[apellidosField.campo]?.nuevo || cambios[apellidosField.campo]?.anterior || "") : "";
+                        clienteNombre = [primerNombre, apellidos].filter(Boolean).join(" ");
+                      }
+                    }
+                    
+                    // 3. Si aún no se encontró, buscar en clientes_afectados del registro
+                    if (!clienteNombre && Array.isArray(selected.clientes_afectados) && selected.clientes_afectados.length > 0) {
+                      // Si solo hay un cliente afectado, usarlo directamente
+                      if (selected.clientes_afectados.length === 1) {
+                        clienteNombre = selected.clientes_afectados[0];
+                      } else {
+                        // Si hay múltiples clientes, intentar encontrar el que corresponde a esta cobertura
+                        // Por ahora, mostrar el primero si hay múltiples
+                        clienteNombre = selected.clientes_afectados[0];
+                      }
+                    }
+                    
+                    // 4. Como último recurso, usar coberturaClientes si existe
+                    if (!clienteNombre && coberturaClientes && coberturaClientes[coberturaId]) {
+                      clienteNombre = coberturaClientes[coberturaId];
+                    }
 
                     return (
                       <React.Fragment key={`cov-${coberturaId}`}>
@@ -1115,9 +1143,9 @@ export default function HistorialCambiosModal({
                           <td colSpan={3} className="py-2" style={{ padding: "0.75rem 1rem" }}>
                             <strong className="text-dark" style={{ fontSize: "0.875rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                               Cobertura #{coberturaId}
-                              {nombreHeader && (
+                              {clienteNombre && (
                                 <span className="text-muted ms-2 fw-normal" style={{ textTransform: "none" }}>
-                                  – {nombreHeader}
+                                  – {clienteNombre}
                                 </span>
                               )}
                             </strong>
