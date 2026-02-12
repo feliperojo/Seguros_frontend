@@ -477,8 +477,6 @@ export default function FichaClienteGeneral() {
           grupoId={grupoId}
           perPage={20}
           emptyMessage="No se tienen tareas terminadas."
-          onOpen={(t) => console.log("abrir", t)}
-          onEdit={(t) => console.log("editar", t)}
         />
       </div>
     </div>

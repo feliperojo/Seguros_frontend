@@ -4,7 +4,7 @@ import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
 import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
-import { formatDateForDisplay } from "../../utils/formatters";
+import { formatDateForDisplay, formatDateTimeForDisplay } from "../../utils/formatters";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -1229,6 +1229,13 @@ export default function FichaClienteComentarios() {
                           <>
                             <div className="mt-4 pt-4 border-t border-gray-200">
                               <div className="flex flex-wrap gap-4 text-sm">
+                                {estadoTarea === "completed" && (comentario.task?.completed_at || comentario.completed_at) && (
+                                  <div className="flex items-center gap-2 text-gray-600">
+                                    <i className="fas fa-check-circle text-gray-400"></i>
+                                    <span className="font-medium">Completada el:</span>
+                                    <span>{formatDateTimeForDisplay(comentario.task?.completed_at || comentario.completed_at)}</span>
+                                  </div>
+                                )}
                                 {comentario.scheduled_date && (
                                   <div className="flex items-center gap-2 text-gray-600">
                                     <i className="fas fa-calendar-check text-gray-400"></i>
@@ -1245,30 +1252,8 @@ export default function FichaClienteComentarios() {
                                     </span>
                                   </div>
                                 )}
-                                {esTarea && usuarioAsignado && (
-                                  <div className="flex items-center gap-2 text-gray-600">
-                                    <i className="fas fa-user-check text-gray-400"></i>
-                                    <span className="font-medium">Asignada a:</span>
-                                    <span>{usuarioAsignado}</span>
-                                  </div>
-                                )}
-                                {estadoTarea && (
-                                  <div className="flex items-center gap-2">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      estadoTarea === "completed" 
-                                        ? "bg-gray-100 text-gray-700"
-                                        : estadoTarea === "pending"
-                                        ? "bg-gray-50 text-gray-600"
-                                        : estadoTarea === "in_progress"
-                                        ? "bg-slate-50 text-slate-700"
-                                        : "bg-gray-100 text-gray-700"
-                                    }`}>
-                                      {estadoTarea === "completed" ? "Completada" : 
-                                       estadoTarea === "pending" ? "Pendiente" : 
-                                       estadoTarea === "in_progress" ? "En progreso" : estadoTarea}
-                                    </span>
-                                  </div>
-                                )}
+
+                         
                               </div>
                             </div>
 

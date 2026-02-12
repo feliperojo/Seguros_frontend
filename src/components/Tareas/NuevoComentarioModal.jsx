@@ -47,9 +47,10 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
 
   const tieneGrupoContexto = toInt(grupoFamiliarId) !== null;
 
-  // Conceptos fijos para comentarios
-  const CONCEPTO_PADRE_ID = 42;
-  const CONCEPTO_HIJO_ID = 43;
+  const [conceptosPadres, setConceptosPadres] = useState([]);
+  const [conceptoPadreId, setConceptoPadreId] = useState("");
+  const [subconceptos, setSubconceptos] = useState([]);
+  const [loadingConceptos, setLoadingConceptos] = useState(false);
 
   const [clientes, setClientes] = useState([]);
   const [grupos, setGrupos] = useState([]);
@@ -224,7 +225,7 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
   useEffect(() => {
     if (!show) return;
 
-    // Solo cargar grupos familiares, los conceptos son fijos
+    // Cargar grupos familiares
     apiRequest("grupo_familiar", "GET")
       .then((grupos) => {
         setClientes([]);
@@ -233,6 +234,18 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
       .catch((err) => {
         console.error("Error al cargar datos:", err);
       });
+
+    // Cargar conceptos padres
+    setLoadingConceptos(true);
+    apiRequest("operational_concepts?only_parents=true", "GET")
+      .then((conceptos) => {
+        setConceptosPadres(Array.isArray(conceptos) ? conceptos : conceptos?.data || []);
+      })
+      .catch((err) => {
+        console.error("Error al cargar conceptos:", err);
+        setConceptosPadres([]);
+      })
+      .finally(() => setLoadingConceptos(false));
 
     // Cargar información del cliente de la ficha si hay clienteId
     if (clienteId) {
@@ -265,14 +278,16 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
       setClienteQuery("");
     }
 
-    // Reset formData con conceptos fijos
+    // Reset formData
     const clienteIdValido = clienteId ? String(clienteId) : "";
     setFormData({
-      concept_id: String(CONCEPTO_HIJO_ID), // Siempre usar el concepto hijo fijo (43)
+      concept_id: "",
       note: "",
       cliente_id: clienteIdValido,
       grupo_familiar_id: grupoFamiliarId ? String(grupoFamiliarId) : "",
     });
+    setConceptoPadreId("");
+    setSubconceptos([]);
     setErrors({});
     
     // Limpiar archivos
@@ -283,16 +298,12 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     setIsDragging(false);
   }, [show, grupoFamiliarId, clienteId]);
 
-  // Establecer valores por defecto cuando cambian las props
+  // Establecer valores por defecto cuando cambian las props (grupo y cliente)
   useEffect(() => {
     if (!show) return;
     
     setFormData((prev) => {
       const updates = {};
-      // Siempre asegurar que concept_id sea el fijo
-      if (String(prev.concept_id) !== String(CONCEPTO_HIJO_ID)) {
-        updates.concept_id = String(CONCEPTO_HIJO_ID);
-      }
       if (grupoFamiliarId && !prev.grupo_familiar_id) {
         updates.grupo_familiar_id = String(grupoFamiliarId);
       }
@@ -303,12 +314,26 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     });
   }, [show, grupoFamiliarId, clienteId]);
 
+  const handlePadreChange = async (e) => {
+    const selectedId = e.target.value;
+    setConceptoPadreId(selectedId);
+    setFormData((prev) => ({ ...prev, concept_id: "" }));
+
+    if (selectedId) {
+      try {
+        const hijos = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
+        setSubconceptos(Array.isArray(hijos) ? hijos : hijos?.data || []);
+      } catch (err) {
+        console.error("Error al cargar subconceptos:", err);
+        setSubconceptos([]);
+      }
+    } else {
+      setSubconceptos([]);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    // Prevenir cambios al concept_id ya que es fijo
-    if (name === "concept_id") {
-      return;
-    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -539,11 +564,8 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
   const validarCampos = () => {
     const nuevosErrores = {};
     
-    // concept_id siempre debe ser el fijo, no necesita validación
-    // pero verificamos que esté presente
-    if (String(formData.concept_id) !== String(CONCEPTO_HIJO_ID)) {
-      // Si por alguna razón no es el correcto, lo corregimos
-      setFormData((prev) => ({ ...prev, concept_id: String(CONCEPTO_HIJO_ID) }));
+    if (!formData.concept_id || formData.concept_id === "") {
+      nuevosErrores.concept_id = "Debe seleccionar un concepto/subconcepto";
     }
     
     if (isNoteEmpty(formData.note)) {
@@ -568,7 +590,7 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     try {
       const payload = {
         ...formData,
-        concept_id: String(CONCEPTO_HIJO_ID), // Asegurar que siempre sea el concepto fijo (43)
+        concept_id: String(formData.concept_id),
         action_type: "comentario",
         tipo: "comentario",
       };
@@ -629,12 +651,15 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
         }
       }
 
+      const conceptoSeleccionado = subconceptos.find((c) => String(c.id) === String(formData.concept_id))
+        || conceptosPadres.find((c) => String(c.id) === String(formData.concept_id));
+
       const nuevoComentario = {
         id: response?.log?.id || Date.now(),
         tipo: "comentario",
         status: "comment",
         log: {
-          concept: { name: "Comentario" },
+          concept: { name: conceptoSeleccionado?.name || "Comentario" },
           note: formData.note,
           cliente: {
             nombre_completo: nombreCliente,
@@ -688,6 +713,74 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
             </Form.Select>
             <Form.Control.Feedback type="invalid">
               {errors.grupo_familiar_id}
+            </Form.Control.Feedback>
+          </Form.Group>
+        )}
+
+        <Form.Group className="mb-3">
+          <Form.Label>Concepto</Form.Label>
+          <Form.Select
+            value={conceptoPadreId}
+            onChange={handlePadreChange}
+            disabled={loadingConceptos}
+            isInvalid={!!errors.concept_id && !conceptoPadreId}
+          >
+            <option value="">Seleccionar concepto</option>
+            {conceptosPadres.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Form.Select>
+          {loadingConceptos && (
+            <Form.Text className="text-muted">
+              <Spinner animation="border" size="sm" className="me-1" />
+              Cargando conceptos...
+            </Form.Text>
+          )}
+        </Form.Group>
+
+        {subconceptos.length > 0 && (
+          <Form.Group className="mb-3">
+            <Form.Label>Subconcepto</Form.Label>
+            <Form.Select
+              name="concept_id"
+              value={formData.concept_id}
+              onChange={handleChange}
+              isInvalid={!!errors.concept_id}
+            >
+              <option value="">Seleccionar subconcepto</option>
+              {subconceptos.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </Form.Select>
+            <Form.Control.Feedback type="invalid">
+              {errors.concept_id}
+            </Form.Control.Feedback>
+          </Form.Group>
+        )}
+
+        {conceptoPadreId && subconceptos.length === 0 && !loadingConceptos && (
+          <Form.Group className="mb-3">
+            <Form.Label>Subconcepto</Form.Label>
+            <Form.Select
+              name="concept_id"
+              value={formData.concept_id}
+              onChange={handleChange}
+              isInvalid={!!errors.concept_id}
+            >
+              <option value="">Seleccionar...</option>
+              <option value={conceptoPadreId}>
+                {conceptosPadres.find((c) => String(c.id) === String(conceptoPadreId))?.name || "Usar concepto principal"}
+              </option>
+            </Form.Select>
+            <Form.Text className="text-muted">
+              Este concepto no tiene subconceptos. Puede usar el concepto principal.
+            </Form.Text>
+            <Form.Control.Feedback type="invalid">
+              {errors.concept_id}
             </Form.Control.Feedback>
           </Form.Group>
         )}

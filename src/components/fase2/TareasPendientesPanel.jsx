@@ -7,6 +7,7 @@ import ResponderOportunidadModal from "../Tareas/ResponderOportunidadModa";
 import { useMentions } from "../../hooks/useMentions";
 import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
+import { formatDateForDisplay } from "../../utils/formatters";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
@@ -59,14 +60,10 @@ export default function TareasPendientesPanel({
   // Hook para detectar menciones en tareas
   const { isTaskMentioned } = useMentions(currentUser, tareasConComentarios, []);
 
+  // Usa formatDateForDisplay para evitar desfase de 1 día por zona horaria (ISO → UTC midnight)
   const formatDate = (v) => {
-    if (!v) return "mm/dd/yyyy";
-    const d = v instanceof Date ? v : new Date(v);
-    if (Number.isNaN(d.getTime())) return "mm/dd/yyyy";
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${month}/${day}/${year}`;
+    if (!v) return "—";
+    return formatDateForDisplay(v);
   };
 
   // Formatear fecha relativa (similar a FichaClienteComentarios)

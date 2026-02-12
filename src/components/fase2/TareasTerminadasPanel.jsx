@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { FaExternalLinkAlt, FaEdit, FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
+import { FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
+import { formatDateForDisplay } from "../../utils/formatters";
 
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
@@ -13,8 +14,6 @@ export default function TareasTerminadasPanel({
   clienteId,
   grupoId,
   perPage = 20,
-  onOpen = () => {},
-  onEdit = () => {},
   emptyMessage = "No se tienen tareas terminadas.",
 }) {
   const [items, setItems] = useState([]);       // datos normalizados
@@ -33,26 +32,33 @@ export default function TareasTerminadasPanel({
   // Ref para rastrear qué logIds ya se están cargando o se cargaron
   const logIdsCargandoRef = useRef(new Set());
 
-  // ==== Helpers ====
+  // ==== Helpers (usan formatDateForDisplay para evitar desfase de 1 día por zona horaria) ====
   const formatDate = (v) => {
-    if (!v) return "mm/dd/yyyy";
-    const d = v instanceof Date ? v : new Date(v);
-    if (Number.isNaN(d.getTime())) return "mm/dd/yyyy";
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${month}/${day}/${year}`;
+    if (!v) return "—";
+    return formatDateForDisplay(v);
   };
 
-  const monthLabel = (d) =>
-    new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "America/Bogota" }).format(d);
+  // Extrae año, mes, día del string ISO sin conversión de zona horaria (evita día anterior)
+  const parseDateParts = (dateString) => {
+    if (!dateString) return null;
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}(T|$)/.test(dateString)) {
+      const [datePart] = dateString.split("T");
+      const [year, month, day] = datePart.split("-").map(Number);
+      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) return { year, month, day };
+    }
+    const d = dateString instanceof Date ? dateString : new Date(dateString);
+    if (Number.isNaN(d.getTime())) return null;
+    return { year: d.getFullYear(), month: d.getMonth() + 1, day: d.getDate() };
+  };
 
   const dayLabel = (v) => {
-    const d = v instanceof Date ? v : new Date(v);
-    if (Number.isNaN(d.getTime())) return "—";
-    const mes = monthLabel(d);
+    const parts = parseDateParts(v);
+    if (!parts) return "—";
+    // Crea fecha local para formatear mes correctamente
+    const d = new Date(parts.year, parts.month - 1, parts.day);
+    const mes = new Intl.DateTimeFormat("es-CO", { month: "long" }).format(d);
     const cap = mes.charAt(0).toUpperCase() + mes.slice(1);
-    return `${cap} ${d.getDate()}`;
+    return `${cap} ${parts.day}`;
   };
 
   // Detectar tipo de archivo
@@ -857,14 +863,6 @@ export default function TareasTerminadasPanel({
                     );
                   })()}
 
-                  <div className="mt-3 d-flex gap-2">
-                    <button className="btn btn-sm btn-primary" onClick={() => onOpen(t)}>
-                      Abrir <FaExternalLinkAlt className="ms-1" />
-                    </button>
-                    <button className="btn btn-sm btn-outline-primary" onClick={() => onEdit(t)}>
-                      Editar <FaEdit className="ms-1" />
-                    </button>
-                  </div>
                 </div>
               </div>
             ))}
