@@ -9,12 +9,22 @@ import {
   Spinner,
   Pagination,
   Alert,
+  Modal,
 } from "react-bootstrap";
-import { FaSearch, FaFilter } from "react-icons/fa";
+import { FaSearch, FaFilter, FaPlus } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { permissionsService } from "../../services/adminApi";
+import { useHasPermission } from "../../hooks/useHasPermission";
+
+const INITIAL_FORM = {
+  name: "",
+  slug: "",
+  module: "",
+  description: "",
+};
 
 const PermissionsList = () => {
+  const canCreate = useHasPermission("permissions.create");
   const [permissions, setPermissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -24,6 +34,10 @@ const PermissionsList = () => {
   const [perPage] = useState(20);
   const [total, setTotal] = useState(0);
   const [modules, setModules] = useState([]);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createForm, setCreateForm] = useState(INITIAL_FORM);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState(null);
 
   useEffect(() => {
     loadPermissions();
@@ -64,13 +78,69 @@ const PermissionsList = () => {
     loadPermissions();
   };
 
+  const openCreateModal = () => {
+    setCreateForm(INITIAL_FORM);
+    setCreateError(null);
+    setShowCreateModal(true);
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setCreateForm(INITIAL_FORM);
+    setCreateError(null);
+  };
+
+  const handleCreateChange = (field, value) => {
+    setCreateForm((prev) => ({ ...prev, [field]: value }));
+    setCreateError(null);
+  };
+
+  const handleCreateSubmit = async (e) => {
+    e.preventDefault();
+    const name = (createForm.name || "").trim();
+    if (!name) {
+      setCreateError("El nombre es obligatorio (formato: modulo.accion, ej: clientes.read).");
+      return;
+    }
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const body = {
+        name,
+        ...(createForm.slug?.trim() && { slug: createForm.slug.trim() }),
+        ...(createForm.module?.trim() && { module: createForm.module.trim() }),
+        ...(createForm.description?.trim() && { description: createForm.description.trim() }),
+      };
+      await permissionsService.create(body);
+      toast.success("Permiso creado correctamente");
+      closeCreateModal();
+      loadPermissions();
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Error al crear el permiso";
+      setCreateError(msg);
+      toast.error(msg);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const totalPages = Math.ceil(total / perPage);
 
   return (
     <div className="container-fluid py-4">
       <Card>
-        <Card.Header>
+        <Card.Header className="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <h4 className="mb-0">Administración de Permisos</h4>
+          {canCreate && (
+            <Button
+              variant="primary"
+              onClick={openCreateModal}
+              title="Crear permiso nuevo"
+            >
+              <FaPlus className="me-2" />
+              Crear permiso
+            </Button>
+          )}
         </Card.Header>
         <Card.Body>
           <Form onSubmit={handleSearch} className="mb-4">
@@ -207,6 +277,77 @@ const PermissionsList = () => {
           )}
         </Card.Body>
       </Card>
+
+      <Modal show={showCreateModal} onHide={closeCreateModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Crear permiso nuevo</Modal.Title>
+        </Modal.Header>
+        <Form onSubmit={handleCreateSubmit}>
+          <Modal.Body>
+            {createError && (
+              <Alert variant="danger" dismissible onClose={() => setCreateError(null)}>
+                {createError}
+              </Alert>
+            )}
+            <Form.Group className="mb-3">
+              <Form.Label>Nombre <span className="text-danger">*</span></Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="modulo.accion (ej: clientes.read, polizas.create)"
+                value={createForm.name}
+                onChange={(e) => handleCreateChange("name", e.target.value)}
+                required
+              />
+              <Form.Text className="text-muted">
+                Formato único: modulo.accion
+              </Form.Text>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Slug (opcional)</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="Si se deja vacío se usará el nombre"
+                value={createForm.slug}
+                onChange={(e) => handleCreateChange("slug", e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Módulo (opcional)</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="ej: clientes, polizas"
+                value={createForm.module}
+                onChange={(e) => handleCreateChange("module", e.target.value)}
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Descripción (opcional)</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                placeholder="Descripción visible en la UI"
+                value={createForm.description}
+                onChange={(e) => handleCreateChange("description", e.target.value)}
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeCreateModal} disabled={creating}>
+              Cancelar
+            </Button>
+            <Button variant="primary" type="submit" disabled={creating}>
+              {creating ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Creando...
+                </>
+              ) : (
+                "Crear permiso"
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </div>
   );
 };

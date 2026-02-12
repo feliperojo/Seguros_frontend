@@ -1292,7 +1292,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                     };
                     
                     // Manejar según el tipo de notificación
-                    if (notification.type === 'mention' || notification.type === 'audit_mention') {
+                    const mentionLikeTypes = ['mention', 'audit_mention', 'reply_on_mentioned_task', 'mention_reply'];
+                    
+                    if (mentionLikeTypes.includes(notification.type)) {
                       // ✅ Obtener task_id - El backend usa 'auditoria_task_id' para auditorías
                       let taskId = null;
                       let commentId = null;

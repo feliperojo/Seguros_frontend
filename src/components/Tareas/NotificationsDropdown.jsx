@@ -16,6 +16,7 @@ import { listTasks as listAuditoriaTasks } from '../../services/auditoriasTasksS
  */
 const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = false, onNotificationClick }) => {
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showReadSection, setShowReadSection] = useState(false);
   const dropdownRef = useRef(null);
   const {
     notifications,
@@ -32,7 +33,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
 
   // ✅ Total de notificaciones: menciones + tareas pendientes (si no están en notificaciones)
   // Si el backend ya incluye tareas pendientes en notificaciones, no duplicar
-  const totalUnreadCount = unreadCount > 0 ? unreadCount : (pendientes > 0 ? pendientes : 0);
+  const totalUnreadCount = typeof unreadCount === 'number' ? unreadCount : 0;
 
   // ✅ Cargar lista de tareas pendientes cuando se abre el dropdown (operativas y de auditoría)
   useEffect(() => {
@@ -119,6 +120,13 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
     }
   }, [showDropdown]);
 
+  // Reiniciar acordeón de vistas al cerrar
+  useEffect(() => {
+    if (!showDropdown) {
+      setShowReadSection(false);
+    }
+  }, [showDropdown]);
+
   // Formatear fecha relativa
   const formatFechaRelativa = (fecha) => {
     if (!fecha) return 'Hace un momento';
@@ -148,10 +156,22 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
     }
   };
 
+  const mentionLikeTypes = ['mention', 'audit_mention', 'reply_on_mentioned_task', 'mention_reply'];
+  const isMentionType = (notification) => mentionLikeTypes.includes(notification.type);
+  const isNotificationUnread = (notification) => {
+    if (typeof notification.read === 'boolean') {
+      return notification.read === false;
+    }
+    return !notification.read_at;
+  };
+
+  const mentionNotifications = notifications.filter(isMentionType);
+  const unreadMentionNotifications = mentionNotifications.filter((notification) => isNotificationUnread(notification));
+  const readMentionNotifications = mentionNotifications.filter((notification) => !isNotificationUnread(notification));
+
   // Manejar clic en notificación
   const handleNotificationClick = (notification) => {
-    // Marcar como leída
-    if (!notification.read_at) {
+    if (notification?.id && isNotificationUnread(notification)) {
       markAsRead(notification.id);
     }
 
@@ -169,6 +189,118 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
     if (unreadCount > 0) {
       await markAllAsRead();
     }
+  };
+
+  const renderMentionRow = (notification) => {
+    const isUnread = isNotificationUnread(notification);
+    const hasComment = !!notification.comment_id;
+    const hasTask = !!notification.task_id;
+
+    return (
+      <div
+        key={notification.id}
+        onClick={() => handleNotificationClick(notification)}
+        className="p-3 border-bottom cursor-pointer"
+        style={{
+          cursor: 'pointer',
+          transition: 'background-color 0.15s ease',
+          backgroundColor: isUnread ? '#f0f7ff' : '#ffffff',
+          borderLeft: isUnread ? '4px solid #1976d2' : '4px solid transparent',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = isUnread ? '#e3f2fd' : '#f8f9fa';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = isUnread ? '#f0f7ff' : '#ffffff';
+        }}
+      >
+        <div className="d-flex align-items-start gap-2">
+          <div
+            className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+            style={{
+              width: '32px',
+              height: '32px',
+              backgroundColor: '#e3f2fd',
+              color: '#1976d2',
+            }}
+          >
+            <FaAt size={14} />
+          </div>
+
+          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+            <div className="d-flex justify-content-between align-items-start mb-1">
+              <div className="flex-grow-1">
+                <div className="d-flex align-items-center gap-1 mb-1">
+                  <strong
+                    style={{
+                      fontSize: '0.85rem',
+                      color: isUnread ? '#212529' : '#6c757d',
+                      fontWeight: isUnread ? 600 : 500,
+                    }}
+                  >
+                    {notification.title || 'Fuiste mencionado'}
+                  </strong>
+                  {isUnread && (
+                    <FaCircle
+                      size={6}
+                      style={{ color: '#1976d2' }}
+                    />
+                  )}
+                </div>
+
+                {notification.message && (
+                  <p
+                    className="mb-1"
+                    style={{
+                      fontSize: '0.75rem',
+                      color: '#495057',
+                      lineHeight: '1.4',
+                    }}
+                  >
+                    {notification.message}
+                  </p>
+                )}
+
+                <div className="d-flex gap-1 flex-wrap mt-1">
+                  {hasTask && (
+                    <span
+                      className="badge"
+                      style={{
+                        fontSize: '0.65rem',
+                        backgroundColor: '#6c757d',
+                        color: '#fff'
+                      }}
+                    >
+                      📋 Tarea #{notification.task_id}
+                    </span>
+                  )}
+                  {hasComment && (
+                    <span
+                      className="badge"
+                      style={{
+                        fontSize: '0.65rem',
+                        backgroundColor: '#17a2b8',
+                        color: '#fff'
+                      }}
+                    >
+                      💬 Comentario #{notification.comment_id}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="mt-2">
+              <span
+                className="text-muted"
+                style={{ fontSize: '0.7rem' }}
+              >
+                {formatFechaRelativa(notification.created_at)}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -279,7 +411,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
             ) : (
               <>
                 {/* ✅ SECCIÓN 1: Menciones (Notificaciones del backend) */}
-                {notifications.length > 0 && notifications.some(n => n.type === 'mention') && (
+                {mentionNotifications.length > 0 && (
                   <>
                     <div 
                       className="px-3 py-2 border-bottom"
@@ -291,128 +423,40 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                       <div className="d-flex align-items-center gap-2">
                         <FaAt size={14} style={{ color: '#1976d2' }} />
                         <strong style={{ fontSize: '0.85rem', color: '#1976d2' }}>
-                          Menciones ({notifications.filter(n => n.type === 'mention').length})
+                          Menciones nuevas ({unreadMentionNotifications.length})
                         </strong>
                       </div>
                     </div>
                     
-                    {notifications
-                      .filter(notification => notification.type === 'mention')
-                      .map((notification) => {
-                        const isUnread = !notification.read_at;
-                        const hasComment = !!notification.comment_id;
-                        const hasTask = !!notification.task_id;
+                    {unreadMentionNotifications.length > 0 ? (
+                      unreadMentionNotifications.map(renderMentionRow)
+                    ) : (
+                      <div className="p-3 text-center text-muted border-bottom">
+                        <small>No tienes notificaciones nuevas.</small>
+                      </div>
+                    )}
 
-                        return (
-                          <div
-                            key={notification.id}
-                            onClick={() => handleNotificationClick(notification)}
-                            className="p-3 border-bottom cursor-pointer"
-                            style={{
-                              cursor: 'pointer',
-                              transition: 'background-color 0.15s ease',
-                              backgroundColor: isUnread ? '#f0f7ff' : 'white',
-                              borderLeft: isUnread ? '4px solid #1976d2' : '4px solid transparent',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#e3f2fd';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = isUnread ? '#f0f7ff' : 'white';
-                            }}
-                          >
-                            <div className="d-flex align-items-start gap-2">
-                              {/* Icono de mención */}
-                              <div
-                                className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
-                                style={{
-                                  width: '32px',
-                                  height: '32px',
-                                  backgroundColor: '#e3f2fd',
-                                  color: '#1976d2',
-                                }}
-                              >
-                                <FaAt size={14} />
-                              </div>
+                    {readMentionNotifications.length > 0 && (
+                      <div className="border-top">
+                        <button
+                          type="button"
+                          className="w-100 d-flex justify-content-between align-items-center px-3 py-2 bg-white border-0"
+                          style={{ fontSize: '0.8rem', color: '#495057' }}
+                          onClick={() => setShowReadSection((prev) => !prev)}
+                        >
+                          <span>
+                            Vistas ({readMentionNotifications.length})
+                          </span>
+                          <i className={`bi ${showReadSection ? 'bi-chevron-up' : 'bi-chevron-down'}`} />
+                        </button>
 
-                              {/* Contenido de la notificación */}
-                              <div className="flex-grow-1" style={{ minWidth: 0 }}>
-                                <div className="d-flex justify-content-between align-items-start mb-1">
-                                  <div className="flex-grow-1">
-                                    <div className="d-flex align-items-center gap-1 mb-1">
-                                      <strong
-                                        style={{
-                                          fontSize: '0.85rem',
-                                          color: isUnread ? '#212529' : '#6c757d',
-                                          fontWeight: isUnread ? 600 : 500,
-                                        }}
-                                      >
-                                        {notification.title || 'Fuiste mencionado'}
-                                      </strong>
-                                      {isUnread && (
-                                        <FaCircle
-                                          size={6}
-                                          style={{ color: '#1976d2' }}
-                                        />
-                                      )}
-                                    </div>
-                                    
-                                    {/* Mensaje con información del contexto */}
-                                    {notification.message && (
-                                      <p
-                                        className="mb-1"
-                                        style={{
-                                          fontSize: '0.75rem',
-                                          color: '#495057',
-                                          lineHeight: '1.4',
-                                        }}
-                                      >
-                                        {notification.message}
-                                      </p>
-                                    )}
-                                    
-                                    {/* Badges de contexto */}
-                                    <div className="d-flex gap-1 flex-wrap mt-1">
-                                      {hasTask && (
-                                        <span
-                                          className="badge"
-                                          style={{ 
-                                            fontSize: '0.65rem',
-                                            backgroundColor: '#6c757d',
-                                            color: '#fff'
-                                          }}
-                                        >
-                                          📋 Tarea #{notification.task_id}
-                                        </span>
-                                      )}
-                                      {hasComment && (
-                                        <span
-                                          className="badge"
-                                          style={{ 
-                                            fontSize: '0.65rem',
-                                            backgroundColor: '#17a2b8',
-                                            color: '#fff'
-                                          }}
-                                        >
-                                          💬 Comentario #{notification.comment_id}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="mt-2">
-                                  <span
-                                    className="text-muted"
-                                    style={{ fontSize: '0.7rem' }}
-                                  >
-                                    {formatFechaRelativa(notification.created_at)}
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
+                        {showReadSection && (
+                          <div style={{ backgroundColor: '#f8f9fa' }}>
+                            {readMentionNotifications.map(renderMentionRow)}
                           </div>
-                        );
-                      })}
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
 
@@ -420,7 +464,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                 {(() => {
                   // Combinar tareas pendientes del frontend con notificaciones de tareas del backend
                   const taskNotifications = notifications.filter(n => 
-                    n.type !== 'mention' && (n.type === 'task_assigned' || n.type === 'task_pending' || n.type === 'task')
+                    !isMentionType(n) && (n.type === 'task_assigned' || n.type === 'task_pending' || n.type === 'task')
                   );
                   const allPendingTasks = [...pendingTasks];
                   
@@ -444,7 +488,7 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
                     return (
                       <>
                         {/* Separador visual si hay menciones arriba */}
-                        {notifications.some(n => n.type === 'mention') && (
+                        {mentionNotifications.length > 0 && (
                           <div className="border-top" style={{ borderColor: '#dee2e6' }} />
                         )}
                         

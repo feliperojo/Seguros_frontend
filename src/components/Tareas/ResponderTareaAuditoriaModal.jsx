@@ -20,12 +20,14 @@ import {
   getTask,
   getTaskComments, 
   addComment, 
+  updateComment,
   completeTask, 
   rescheduleTask, 
   assignTask,
   updateTask 
 } from "../../services/auditoriasTasksService";
 import useToast from "../../hooks/useToast";
+import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -67,6 +69,14 @@ const isNoteEmpty = (html) => {
   return text.trim().length === 0;
 };
 
+// Convierte HTML a texto plano (para mostrar en el textarea de edición sin etiquetas)
+const htmlToPlainText = (html) => {
+  if (!html || typeof html !== 'string') return '';
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  return (tempDiv.textContent || tempDiv.innerText || '').trim();
+};
+
 // Función helper para convertir fecha a formato YYYY-MM-DD
 const fechaToInputDate = (fecha) => {
   if (!fecha) return "";
@@ -90,6 +100,7 @@ const fechaToInputDate = (fecha) => {
 
 const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   const toast = useToast();
+  const { hasPermission, hasRole } = useAuth();
   
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -114,6 +125,13 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   
   const [scheduledDate, setScheduledDate] = useState("");
   const [dueDate, setDueDate] = useState("");
+  // Fecha límite: solo editable por admin o con contraseña de administrador
+  const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
+  const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
+  const [adminPasswordForDueDate, setAdminPasswordForDueDate] = useState("");
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const canEditDueDateWithoutPassword = hasPermission("users.view") || hasRole("admin") || false;
+  const isDueDateLocked = tarea?.id && !canEditDueDateWithoutPassword && !dueDateUnlocked;
   const [selectedUserId, setSelectedUserId] = useState("");
   const [usuarios, setUsuarios] = useState([]);
   const [mentionedUserIds, setMentionedUserIds] = useState([]);
@@ -154,6 +172,10 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       setScheduledDate(fechaToInputDate(tarea.scheduled_date) || "");
       setDueDate(fechaToInputDate(tarea.due_date) || "");
       setSelectedUserId(tarea.assigned_user_id || "");
+      setDueDateUnlocked(false);
+      setShowDueDatePasswordModal(false);
+      setAdminPasswordForDueDate("");
+      setAdminPasswordInput("");
       cargarComentarios();
     } else {
       setResponseNote("");
@@ -649,6 +671,20 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
     }
   };
   
+  // Confirmar contraseña de administrador para desbloquear fecha límite
+  const handleVerificarPasswordDueDate = () => {
+    const pwd = (adminPasswordInput || "").trim();
+    if (!pwd) {
+      toast.showWarning("Ingrese la contraseña del administrador");
+      return;
+    }
+    setAdminPasswordForDueDate(pwd);
+    setDueDateUnlocked(true);
+    setAdminPasswordInput("");
+    setShowDueDatePasswordModal(false);
+    toast.showSuccess("Fecha límite desbloqueada. Puede modificarla y guardar.");
+  };
+
   // Función para actualizar fechas
   const handleActualizarFechas = async () => {
     if (!scheduledDate || !dueDate) {
@@ -656,19 +692,31 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       return;
     }
     
+    const taskId = tarea?.id;
+    if (!taskId) {
+      toast.showError("No se pudo identificar la tarea");
+      return;
+    }
+
+    const dueDateOriginal = fechaToInputDate(tarea.due_date) || "";
+    const dueDateCambiada = dueDate !== dueDateOriginal;
+    const requierePassword = dueDateCambiada && !canEditDueDateWithoutPassword;
+    if (requierePassword && !adminPasswordForDueDate) {
+      toast.showWarning("Para cambiar la fecha límite debe desbloquearla con la contraseña del administrador.");
+      setShowDueDatePasswordModal(true);
+      return;
+    }
+
     setLoading(true);
     try {
-      const taskId = tarea?.id;
-      if (!taskId) {
-        toast.showError("No se pudo identificar la tarea");
-        setLoading(false);
-        return;
-      }
-      
-      await rescheduleTask(taskId, {
+      const payload = {
         scheduled_date: scheduledDate,
         due_date: dueDate,
-      });
+      };
+      if (dueDateCambiada && adminPasswordForDueDate) {
+        payload.admin_password = adminPasswordForDueDate;
+      }
+      await rescheduleTask(taskId, payload);
       
       const tareaActualizada = {
         ...tarea,
@@ -680,10 +728,19 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
         onUpdated(tareaActualizada);
       }
       
+      setDueDateUnlocked(false);
+      setAdminPasswordForDueDate("");
       toast.showSuccess("Fechas actualizadas exitosamente");
     } catch (error) {
       console.error("Error al actualizar fechas:", error);
-      toast.showError(error.response?.data?.message || error.message || "Error al actualizar fechas");
+      const msg = error.response?.data?.message || error.message || "Error al actualizar fechas";
+      if (error.response?.status === 403 || (msg && (msg.toLowerCase().includes("contraseña") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("autoriz")))) {
+        setAdminPasswordForDueDate("");
+        setDueDateUnlocked(false);
+        toast.showError("Contraseña de administrador incorrecta o sin permisos.");
+      } else {
+        toast.showError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -737,11 +794,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
     }
     
     try {
-      // Nota: El backend puede requerir un endpoint específico para editar comentarios
-      // Por ahora, intentamos con updateTask o un endpoint de comentarios
-      await apiRequest(`auditorias/tasks/${tarea.id}/comments/${comentarioId}`, "PUT", {
-        comment: nuevoTexto
-      });
+      await updateComment(tarea.id, comentarioId, { comment: nuevoTexto });
       
       setComentarios((prev) =>
         prev.map((c) =>
@@ -1112,13 +1165,33 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                           <Form.Label>
                             <i className="fas fa-clock text-warning me-1"></i>
                             Fecha Límite:
+                            {isDueDateLocked && (
+                              <small className="text-muted ms-2">(solo administrador o con autorización)</small>
+                            )}
                           </Form.Label>
-                          <Form.Control
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            style={{ borderRadius: "6px" }}
-                          />
+                          <div className="d-flex gap-2 align-items-start">
+                            <Form.Control
+                              type="date"
+                              value={dueDate}
+                              onChange={(e) => setDueDate(e.target.value)}
+                              disabled={isDueDateLocked}
+                              readOnly={isDueDateLocked}
+                              style={{ borderRadius: "6px", flex: 1 }}
+                              title={isDueDateLocked ? "Desbloquee con la contraseña de administrador para editar" : ""}
+                            />
+                            {tarea?.id && !canEditDueDateWithoutPassword && (
+                              <Button
+                                type="button"
+                                variant={dueDateUnlocked ? "outline-success" : "outline-warning"}
+                                size="sm"
+                                onClick={() => (dueDateUnlocked ? (setDueDateUnlocked(false), setAdminPasswordForDueDate("")) : setShowDueDatePasswordModal(true))}
+                                style={{ whiteSpace: "nowrap" }}
+                                title={dueDateUnlocked ? "Bloquear de nuevo" : "Desbloquear para editar (requiere contraseña de administrador)"}
+                              >
+                                {dueDateUnlocked ? "Bloquear" : "Desbloquear"}
+                              </Button>
+                            )}
+                          </div>
                         </Form.Group>
                       </Col>
                     </Row>
@@ -1283,7 +1356,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                                 onClick={() => {
                                   setComentariosEnEdicion((prev) => ({
                                     ...prev,
-                                    [c.id]: c.comment,
+                                    [c.id]: htmlToPlainText(c.comment) || c.comment || '',
                                   }));
                                 }}
                               >
@@ -1624,6 +1697,48 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
         </Modal.Footer>
       </Modal>
       
+      {/* Modal: contraseña de administrador para desbloquear fecha límite */}
+      <Modal
+        show={showDueDatePasswordModal}
+        onHide={() => {
+          setShowDueDatePasswordModal(false);
+          setAdminPasswordInput("");
+        }}
+        centered
+        size="sm"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="fas fa-lock text-warning me-2"></i>
+            Autorización requerida
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small mb-3">
+            Para modificar la fecha límite después de creada la tarea debe ingresar la contraseña del usuario administrador.
+          </p>
+          <Form.Group>
+            <Form.Label>Contraseña del administrador</Form.Label>
+            <Form.Control
+              type="password"
+              value={adminPasswordInput}
+              onChange={(e) => setAdminPasswordInput(e.target.value)}
+              placeholder="Ingrese la contraseña"
+              onKeyDown={(e) => e.key === "Enter" && handleVerificarPasswordDueDate()}
+              autoComplete="off"
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowDueDatePasswordModal(false)}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleVerificarPasswordDueDate}>
+            Verificar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       {/* Modal de preview de archivos */}
       {archivoPreview && (
         <Modal 

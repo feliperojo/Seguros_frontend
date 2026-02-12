@@ -191,7 +191,7 @@ export const completeTask = async (taskId, responseNote = null) => {
 /**
  * Reprograma una tarea (actualiza fechas)
  * @param {number|string} taskId - ID de la tarea
- * @param {Object} payload - { scheduled_date?, due_date? }
+ * @param {Object} payload - { scheduled_date?, due_date?, admin_password? } admin_password requerido en backend para cambiar fecha límite si el usuario no es admin
  * @returns {Promise<Object>} Tarea actualizada
  */
 export const rescheduleTask = async (taskId, payload) => {
@@ -327,6 +327,28 @@ export const getTaskComments = async (taskId) => {
   }
 };
 
+/**
+ * Actualiza un comentario de una tarea de auditoría.
+ * PUT api/auditorias/tasks/{id}/comments/{comment_id}
+ * Solo puede editar el usuario que creó el comentario (mismo criterio que para comentar).
+ * @param {number|string} taskId - ID de la tarea
+ * @param {number|string} commentId - ID del comentario
+ * @param {Object} payload - { comment?: string (máx. 1000), archivos?: [], eliminar_adjuntos?: [] }
+ * @returns {Promise<Object>} { success, message, data: { id, user, comment, created_at, adjuntos } }
+ */
+export const updateComment = async (taskId, commentId, payload) => {
+  if (!taskId || !commentId) {
+    throw new Error("taskId y commentId son requeridos");
+  }
+  const endpoint = `auditorias/tasks/${taskId}/comments/${commentId}`;
+  try {
+    const response = await apiRequest(endpoint, "PUT", payload);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
 export default {
   listTasks,
   getTask,
@@ -340,5 +362,6 @@ export default {
   getPendingTasksCount,
   addComment,
   getTaskComments,
+  updateComment,
 };
 
