@@ -23,6 +23,7 @@ import PagosGenerar from './pages/PagosGenerar';
 import PagosActualizar from './pages/PagosActualizar';
 import PagosInforme from './pages/PagosInforme';
 import InformeCliente from './pages/InformeCliente'
+import InformeTareasUsuario from './pages/InformeTareasUsuario'
 import GrupoFamiliarHistorial from "./components/Reports/GrupoFamiliarHistorial";
 import RequerimientosAdmin from "./pages/RequerimientosAdmin";
 import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
@@ -107,6 +108,7 @@ const App = () => {
         <Route path="/Pagos/cartera" element={<PagosInforme />} />
 
         <Route path="/informes/historialCliente" element={<InformeCliente />} />
+        <Route path="/informes/tareas-usuario" element={<InformeTareasUsuario />} />
         <Route path="/informes/coberturas" element={<ReporteCoberturasPage />} />
         <Route path="/informes/cumpleanos" element={<ReporteCumpleanosPage />} />
         <Route path="/informes/documentos" element={<DocumentsReport />} />

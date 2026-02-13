@@ -4,7 +4,7 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -247,6 +247,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
             <div className="submenu">
               <Link to="/informes/historialCliente" className={`submenu-link ${isActive('/informes/historialCliente') ? 'active' : ''}`}>
                 <FaChartBar /> Informes de Clientes
+              </Link>
+              <Link to="/informes/tareas-usuario" className={`submenu-link ${isActive('/informes/tareas-usuario') ? 'active' : ''}`}>
+                <FaTasks /> Tareas por Usuario
               </Link>
               <Link to="/informes/coberturas" className={`submenu-link ${isActive('/informes/coberturas') ? 'active' : ''}`}>
                 <FaFileAlt /> Reporte de Coberturas
