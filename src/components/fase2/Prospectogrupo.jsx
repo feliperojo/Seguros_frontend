@@ -41,6 +41,7 @@ const Prospectogrupo = ({
   const [showGestorDocumentosModal, setShowGestorDocumentosModal] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [pdfData, setPdfData] = useState(null);
+  const [confirmacionLanguage, setConfirmacionLanguage] = useState("es");
   const [showPDFAutorizacionModal, setShowPDFAutorizacionModal] = useState(false);
   const [pdfAutorizacionData, setPdfAutorizacionData] = useState(null);
   const [autorizacionLanguage, setAutorizacionLanguage] = useState("es");
@@ -115,6 +116,25 @@ const Prospectogrupo = ({
     const { value: language } = await Swal.fire({
       title: "Idioma del documento",
       text: "¿En qué idioma deseas enviar la autorización?",
+      icon: "question",
+      input: "select",
+      inputOptions: {
+        es: "Español",
+        en: "Inglés",
+      },
+      inputPlaceholder: "Selecciona un idioma",
+      showCancelButton: true,
+      confirmButtonText: "Aceptar",
+      cancelButtonText: "Cancelar",
+    });
+
+    return language || null;
+  };
+
+  const seleccionarIdiomaConfirmacion = async () => {
+    const { value: language } = await Swal.fire({
+      title: "Idioma del documento",
+      text: "¿En qué idioma deseas generar la confirmación de datos?",
       icon: "question",
       input: "select",
       inputOptions: {
@@ -239,14 +259,18 @@ const Prospectogrupo = ({
                   className="btn btn-sm btn-outline-danger"
                   onClick={async () => {
                     try {
-                      const result = await generarPDFConfirmacion(grupo, false);
+                      const language = await seleccionarIdiomaConfirmacion();
+                      if (!language) return;
+                      setConfirmacionLanguage(language);
+
+                      const result = await generarPDFConfirmacion(grupo, false, language);
                       if (result) {
                         setPdfData(result);
                         setShowPDFModal(true);
                       }
                     } catch (error) {
                       console.error("Error al generar PDF:", error);
-                      await generarPDFConfirmacion(grupo, true);
+                      await generarPDFConfirmacion(grupo, true, language || "es");
                     }
                   }}
                   disabled={!resolvedGrupoId}
@@ -549,7 +573,7 @@ const Prospectogrupo = ({
   grupoFamiliarId={resolvedGrupoId}
 />
 
-{/* Modal para PDF de Confirmación */}
+{/* Modal para PDF de Confirmación - mismo flujo que Autorización: enviar al back y ruta de firma */}
 {pdfData && grupo && (() => {
   const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
   return (
@@ -562,6 +586,7 @@ const Prospectogrupo = ({
       pdfBlob={pdfData.blob}
       filename={pdfData.filename}
       documentType="CONFIRMACION"
+      documentLanguage={confirmacionLanguage}
       defaultSigner={{
         email: tomador?.cliente?.email || "",
         name: tomador?.cliente?.nombre_completo || "",

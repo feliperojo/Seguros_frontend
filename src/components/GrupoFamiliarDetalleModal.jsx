@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { Modal, Button, Table, Form, Badge } from "react-bootstrap";
 import { FaFileExport, FaFilePdf, FaChevronDown, FaChevronRight } from "react-icons/fa";
+import Swal from "sweetalert2";
 import { generarPDFConfirmacion } from "../services/generarPDFConfirmacion";
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "./DocumentoGeneradoModal";
@@ -18,6 +19,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
   const [showModal, setShowModal] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [pdfData, setPdfData] = useState(null);
+  const [confirmacionLanguage, setConfirmacionLanguage] = useState("es");
   const [driveUrl, setDriveUrl] = useState("");
   const isTomador = (parentesco) => {
     return parentesco && parentesco.toUpperCase() === "TOMADOR";
@@ -469,16 +471,31 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                 variant="outline-danger"
                 className="me-2" 
                 onClick={async () => {
+                  let language = "es";
                   try {
-                    const result = await generarPDFConfirmacion(grupo, false);
+                    const { value: lang } = await Swal.fire({
+                      title: "Idioma del documento",
+                      text: "¿En qué idioma deseas generar la confirmación de datos?",
+                      icon: "question",
+                      input: "select",
+                      inputOptions: { es: "Español", en: "Inglés" },
+                      inputPlaceholder: "Selecciona un idioma",
+                      showCancelButton: true,
+                      confirmButtonText: "Aceptar",
+                      cancelButtonText: "Cancelar",
+                    });
+                    if (!lang) return;
+                    language = lang;
+
+                    setConfirmacionLanguage(language);
+                    const result = await generarPDFConfirmacion(grupo, false, language);
                     if (result) {
                       setPdfData(result);
                       setShowPDFModal(true);
                     }
                   } catch (error) {
                     console.error("Error al generar PDF:", error);
-                    // Fallback: descargar directamente
-                    await generarPDFConfirmacion(grupo, true);
+                    await generarPDFConfirmacion(grupo, true, language);
                   }
                 }}
               >
@@ -499,6 +516,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
       initialUrl={driveUrl}
       onSave={(newUrl) => setDriveUrl(newUrl)}
     />
+    {/* Confirmación: mismo flujo que Autorización - enviar al back y ruta de firma signatures/submissions */}
     {pdfData && (() => {
       const tomador = grupo.coberturas?.find(c => c.parentesco?.toUpperCase() === "TOMADOR");
       return (
@@ -511,6 +529,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
           pdfBlob={pdfData.blob}
           filename={pdfData.filename}
           documentType="CONFIRMACION"
+          documentLanguage={confirmacionLanguage}
           defaultSigner={{
             email: tomador?.cliente?.email || "",
             name: tomador?.cliente?.nombre_completo || "",

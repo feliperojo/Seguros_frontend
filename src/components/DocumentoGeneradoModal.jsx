@@ -127,24 +127,42 @@ const DocumentoGeneradoModal = ({
 
       setEmailSubject(subject);
 
-      const professionalBody = isEnglish
-        ? `Dear ${signerName},
+      // Texto específico para Confirmación de Datos (diferente al de Autorización)
+      const confirmacionBodyEs = `Estimado/a ${signerName},
+
+Esperamos que se encuentre muy bien.
+
+Por medio de este mensaje, le solicitamos amablemente su firma electrónica en el documento titulado "Confirmación de Datos", el cual hemos preparado para usted.
+
+Este documento tiene como objetivo validar que la información registrada sea correcta, esté actualizada y refleje fielmente sus datos actuales, lo cual nos permite continuar con el proceso de manera adecuada.
+
+Por favor, revise el documento y proceda con la firma siguiendo las instrucciones que encontrará en el enlace de DocuSeal.
+
+Si tiene alguna pregunta o requiere realizar alguna corrección antes de firmar, no dude en contactarnos. Con gusto lo asistiremos.
+
+Gracias por su tiempo y colaboración.
+
+Cordialmente,
+Equipo de Tampa Seguros`;
+
+      const confirmacionBodyEn = `Dear ${signerName},
 
 We hope you are doing well.
 
-We kindly request your electronic signature on the document titled "${docTypeName}", which has been prepared for you.
+We kindly request your electronic signature on the document titled "Data Confirmation", which has been prepared for you.
 
-This document is required to continue with the process and authorizes us to securely manage your information in accordance with applicable regulations.
+This document is intended to confirm that the information on file is accurate, up to date, and correctly reflects your current details, allowing us to proceed with the process properly.
 
-Please review the document and complete the electronic signature by following the instructions provided through the Docuseal link.
+Please review the document and complete the electronic signature by following the instructions provided through the DocuSeal link.
 
-If you have any questions or need assistance, please do not hesitate to contact us. We will be happy to help.
+If you have any questions or need to request corrections before signing, please do not hesitate to contact us. We will be happy to assist you.
 
 Thank you for your time and cooperation.
 
 Sincerely,
-Tampa Seguros Team`
-        : `Estimado/a ${signerName},
+Tampa Seguros Team`;
+
+      const autorizacionBodyEs = `Estimado/a ${signerName},
 
 Esperamos que se encuentre muy bien.
 
@@ -152,7 +170,7 @@ Por medio de este mensaje, le solicitamos amablemente su firma electrónica en e
 
 Este documento es necesario para poder continuar con el proceso y nos autoriza a gestionar su información de manera segura y conforme a la normativa vigente.
 
-Por favor, revise el documento y proceda con la firma siguiendo las instrucciones que encontrará en el enlace de Docuseal.
+Por favor, revise el documento y proceda con la firma siguiendo las instrucciones que encontrará en el enlace de DocuSeal.
 
 Si tiene alguna pregunta o requiere asistencia durante el proceso, no dude en contactarnos. Con gusto lo apoyaremos.
 
@@ -160,6 +178,27 @@ Gracias por su tiempo y colaboración.
 
 Cordialmente,
 Equipo de Tampa Seguros`;
+
+      const autorizacionBodyEn = `Dear ${signerName},
+
+We hope you are doing well.
+
+We kindly request your electronic signature on the document titled "${docTypeName}", which has been prepared for you.
+
+This document is required to continue with the process and authorizes us to securely manage your information in accordance with applicable regulations.
+
+Please review the document and complete the electronic signature by following the instructions provided through the DocuSeal link.
+
+If you have any questions or need assistance, please do not hesitate to contact us. We will be happy to help.
+
+Thank you for your time and cooperation.
+
+Sincerely,
+Tampa Seguros Team`;
+
+      const professionalBody = documentType === "CONFIRMACION"
+        ? (isEnglish ? confirmacionBodyEn : confirmacionBodyEs)
+        : (isEnglish ? autorizacionBodyEn : autorizacionBodyEs);
 
       setEmailBody(professionalBody);
       emailInitializedRef.current = true;
