@@ -948,8 +948,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   // Agrupar tareas por día según scheduled_date o due_date
   const tareasPorDia = {};
   if (Array.isArray(tareas)) {
+    // Incluir todas las tareas (incluyendo completadas) para mostrar los badges por estado
     tareas
-      .filter((t) => t && t.status !== "completed")
+      .filter((t) => t) // Solo filtrar tareas nulas/undefined
       .forEach((t) => {
         // Usar scheduled_date primero, luego due_date, luego created_at
         const fechaStr = t.scheduled_date || t.due_date || t.created_at;
@@ -1620,6 +1621,24 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           const esHoy = dia === hoy.getDate() && mesActual === hoy.getMonth() && añoActual === hoy.getFullYear();
           const esPasado = new Date(añoActual, mesActual, dia) < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
           const tieneTareas = tareasDia.length > 0;
+          
+          // Calcular contadores por estado para este día
+          const contadoresPorEstado = {
+            pending: 0,
+            in_progress: 0,
+            completed: 0
+          };
+          
+          tareasDia.forEach((t) => {
+            const estado = (t.status || t.estado || 'pending').toLowerCase();
+            if (estado === 'pending' || estado === 'pendiente') {
+              contadoresPorEstado.pending++;
+            } else if (estado === 'in_progress' || estado === 'en_progreso' || estado === 'processing') {
+              contadoresPorEstado.in_progress++;
+            } else if (estado === 'completed' || estado === 'completada' || estado === 'completado') {
+              contadoresPorEstado.completed++;
+            }
+          });
 
           // ✅ Key única combinando día, mes y año para evitar duplicados
           const uniqueKey = `day-${añoActual}-${mesActual}-${dia}-${index}`;
@@ -1684,22 +1703,77 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                 >
                   {dia}
                 </strong>
+                {/* Badges circulares por estado */}
                 {tieneTareas && (
-                  <Badge 
-                    bg="primary" 
-                    pill 
-                    style={{ fontSize: "0.65rem", minWidth: "20px" }}
-                  >
-                    {tareasDia.length}
-                  </Badge>
+                  <div className="d-flex gap-1 align-items-center flex-wrap justify-content-end" style={{ maxWidth: "60%" }}>
+                    {contadoresPorEstado.pending > 0 && (
+                      <Badge 
+                        bg="warning" 
+                        pill 
+                        style={{ 
+                          fontSize: "0.65rem", 
+                          minWidth: "18px", 
+                          height: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 4px"
+                        }}
+                        title={`${contadoresPorEstado.pending} pendiente${contadoresPorEstado.pending !== 1 ? 's' : ''}`}
+                      >
+                        {contadoresPorEstado.pending}
+                      </Badge>
+                    )}
+                    {contadoresPorEstado.in_progress > 0 && (
+                      <Badge 
+                        bg="info" 
+                        pill 
+                        style={{ 
+                          fontSize: "0.65rem", 
+                          minWidth: "18px", 
+                          height: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 4px"
+                        }}
+                        title={`${contadoresPorEstado.in_progress} en progreso`}
+                      >
+                        {contadoresPorEstado.in_progress}
+                      </Badge>
+                    )}
+                    {contadoresPorEstado.completed > 0 && (
+                      <Badge 
+                        bg="success" 
+                        pill 
+                        style={{ 
+                          fontSize: "0.65rem", 
+                          minWidth: "18px", 
+                          height: "18px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          padding: "0 4px"
+                        }}
+                        title={`${contadoresPorEstado.completed} completada${contadoresPorEstado.completed !== 1 ? 's' : ''}`}
+                      >
+                        {contadoresPorEstado.completed}
+                      </Badge>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* Lista de tareas */}
+              {/* Lista de tareas - Solo mostrar tareas no completadas en la lista */}
               <div className="mt-2" style={{ minHeight: "80px" }}>
-                {tareasDia.length > 0 ? (
-                  <>
-                    {tareasDia.slice(0, 4).map((t, tIndex) => {
+                {(() => {
+                  const tareasNoCompletadas = tareasDia.filter(t => {
+                    const estado = (t.status || t.estado || 'pending').toLowerCase();
+                    return estado !== 'completed' && estado !== 'completada' && estado !== 'completado';
+                  });
+                  return tareasNoCompletadas.length > 0 ? (
+                    <>
+                      {tareasNoCompletadas.slice(0, 4).map((t, tIndex) => {
                       if (!t) return null;
                       const tipo = t.tipo || (t.auditoria || t.item || t.run_id ? 'auditoria' : 'operativa');
                       const clienteNombre = getClienteNombre(t);
@@ -1762,7 +1836,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         </OverlayTrigger>
                       );
                     })}
-                    {tareasDia.length > 4 && (
+                    {tareasNoCompletadas.length > 4 && (
                       <small
                         className="text-primary fw-bold d-block mt-1"
                         style={{ 
@@ -1775,15 +1849,16 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                           abrirDetalleDia(tareasDia);
                         }}
                       >
-                        +{tareasDia.length - 4} más
+                        +{tareasNoCompletadas.length - 4} más
                       </small>
                     )}
-                  </>
-                ) : (
-                  <div className="text-muted" style={{ fontSize: "0.75rem", paddingTop: "20px" }}>
-                    <FaCalendarCheck className="opacity-50" />
-                  </div>
-                )}
+                    </>
+                  ) : (
+                    <div className="text-muted" style={{ fontSize: "0.75rem", paddingTop: "20px" }}>
+                      <FaCalendarCheck className="opacity-50" />
+                    </div>
+                  );
+                })()}
               </div>
             </Card>
           );
