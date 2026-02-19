@@ -26,14 +26,14 @@ const loadEchoDependencies = async () => {
   }
 };
 
-// Configuración desde variables de entorno
+// Configuración desde variables de entorno (Pusher o Reverb)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || 'pusher';
-const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || '';
+const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher');
+const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || import.meta.env.VITE_REVERB_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
-const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || '';
-const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || '6001';
-const PUSHER_APP_USE_TLS = import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true';
+const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_REVERB_HOST || '';
+const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.VITE_REVERB_PORT || '6001';
+const PUSHER_APP_USE_TLS = (import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true') || ((import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https');
 
 // BroadcastChannel para evitar eventos duplicados entre pestañas
 const broadcastChannel = typeof BroadcastChannel !== 'undefined' 
@@ -89,11 +89,13 @@ const useIncomingCalls = () => {
       let wsPort = PUSHER_APP_PORT || '6001';
       let authEndpoint = `${API_BASE_URL}/broadcasting/auth`;
 
+      // authEndpoint: backend debe exponer POST /broadcasting/auth (o /api/broadcasting/auth) aceptando Bearer token
       const echoConfig = {
         broadcaster: BROADCAST_DRIVER,
         key: PUSHER_APP_KEY,
         cluster: PUSHER_APP_CLUSTER,
         encrypted: PUSHER_APP_USE_TLS,
+        forceTLS: PUSHER_APP_USE_TLS,
         disableStats: true,
         enabledTransports: ['ws', 'wss'],
         authEndpoint: authEndpoint,
@@ -193,51 +195,53 @@ const useIncomingCalls = () => {
     return false;
   };
 
-  // Manejar evento incoming_call
+  // Manejar evento incoming_call (payload backend: call_id, phone_number, extension_id, extension_number, cliente, direction, status, timestamp)
   const handleIncomingCall = async (data) => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
-      // Evitar múltiples popups simultáneos - verificar si es la misma llamada
-      const callId = data.session_id || data.id || data.call_id || `${data.telefono}-${Date.now()}`;
-      
-      // Verificar si ya fue procesado
+      // call_id es el ID de sesión de la llamada (payload estándar del backend)
+      const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
+
       if (isEventProcessed(callId)) {
         logDiagnostic('⚠️ Evento duplicado ignorado', { callId });
         return;
       }
 
-      // Notificar a otras pestañas que este evento ya fue procesado
       if (broadcastChannel) {
         broadcastChannel.postMessage({ type: 'call_processed', callId });
       }
 
       ultimoCallIdRef.current = callId;
 
-      // Extraer información de la llamada
-      const telefono = data.telefono || data.numero || data.phone_number || data.phone;
-      const extension = data.extension || data.extension_name || data.extension_number || 'N/A';
+      // Payload backend: phone_number, extension_id, extension_number, cliente, direction, status (Ringing | CallConnected), timestamp
+      const telefono = data.phone_number || data.telefono || data.numero || data.phone;
+      const extensionId = data.extension_id ?? null;
       const extensionNumber = data.extension_number || data.extension || 'N/A';
-      const estado = data.estado || data.status || 'ringing';
+      const extension = extensionId != null ? String(extensionId) : (data.extension || data.extension_name || 'N/A');
+      const estado = data.status || data.estado || 'Ringing';
 
-      // Crear objeto de llamada entrante
       const callData = {
         id: callId,
+        call_id: data.call_id,
         telefono: telefono,
         extension: extension,
+        extension_id: extensionId,
         extensionNumber: extensionNumber,
-        direccion: data.direccion || data.direction || 'Inbound',
+        direccion: data.direction || data.direccion || 'Inbound',
         estado: estado,
         timestamp: data.timestamp || new Date().toISOString(),
-        raw: data // Guardar datos originales
+        raw: data
       };
 
-      logDiagnostic('🔄 Abriendo modal de llamada entrante', callData);
+      logDiagnostic('🔄 Abriendo popup de llamada entrante', callData);
       setIncomingCall(callData);
       setError(null);
 
-      // Buscar cliente por teléfono
-      if (telefono) {
+      // Si el backend envía cliente identificado, usarlo; si no, buscar por teléfono
+      if (data.cliente && typeof data.cliente === 'object') {
+        setClienteData(data.cliente);
+      } else if (telefono) {
         const cliente = await buscarClientePorTelefono(telefono);
         setClienteData(cliente);
       } else {
@@ -294,10 +298,12 @@ const useIncomingCalls = () => {
 
       const channelsToConnect = [];
 
+      // Nombres sin prefijo "private-": Echo.private() añade el prefijo al suscribir
       // 1. Canal por extensión de RingCentral
       if (extensionId) {
         channelsToConnect.push({
-          name: `private-ringcentral.extension.${extensionId}`,
+          name: `ringcentral.extension.${extensionId}`,
+          displayName: `private-ringcentral.extension.${extensionId}`,
           type: 'private',
           priority: 1
         });
@@ -306,14 +312,15 @@ const useIncomingCalls = () => {
       // 2. Canal por usuario (múltiples formatos)
       if (userId) {
         channelsToConnect.push(
-          { name: `private-App.Models.User.${userId}`, type: 'private', priority: 2 },
-          { name: `private-user.${userId}`, type: 'private', priority: 3 }
+          { name: `App.Models.User.${userId}`, displayName: `private-App.Models.User.${userId}`, type: 'private', priority: 2 },
+          { name: `user.${userId}`, displayName: `private-user.${userId}`, type: 'private', priority: 3 }
         );
       }
 
       // 3. Canal general de llamadas
       channelsToConnect.push({
-        name: 'private-ringcentral.calls',
+        name: 'ringcentral.calls',
+        displayName: 'private-ringcentral.calls',
         type: 'private',
         priority: 4
       });
@@ -329,28 +336,25 @@ const useIncomingCalls = () => {
 
       // Intentar conectar a cada canal
       for (const channelConfig of channelsToConnect) {
+        const displayName = channelConfig.displayName ?? channelConfig.name;
         try {
           let channel;
-          
           if (channelConfig.type === 'private') {
             channel = echoRef.current.private(channelConfig.name);
           } else {
             channel = echoRef.current.channel(channelConfig.name);
           }
 
-          // Escuchar evento incoming_call
           channel.listen('.incoming_call', (data) => {
-            logDiagnostic(`📞 Evento incoming_call recibido en canal: ${channelConfig.name}`, data);
+            logDiagnostic(`📞 Evento incoming_call recibido en canal: ${displayName}`, data);
             handleIncomingCall(data);
           });
 
           channelsRef.current.push(channel);
-          connectedChannelsList.push(channelConfig.name);
-          
-          logDiagnostic(`✅ Suscrito al canal: ${channelConfig.name} (${channelConfig.type})`);
+          connectedChannelsList.push(displayName);
+          logDiagnostic(`✅ Suscrito al canal: ${displayName} (${channelConfig.type})`);
         } catch (error) {
-          logDiagnostic(`⚠️ No se pudo conectar al canal ${channelConfig.name}`, error.message);
-          // Continuar con el siguiente canal
+          logDiagnostic(`⚠️ No se pudo conectar al canal ${displayName}`, error.message);
         }
       }
 

@@ -1,12 +1,15 @@
 // src/components/CallIdentifier/IncomingCallModal.jsx
 // Modal que se abre automáticamente cuando llega un evento incoming_call
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Badge, Spinner, Alert, Form } from 'react-bootstrap';
 import { FiPhone, FiUser, FiMail, FiBriefcase, FiX, FiExternalLink } from 'react-icons/fi';
 import DetalleClienteModal from '../DetalleClienteModal';
 import apiRequest from '../../services/api';
 import useToast from '../../hooks/useToast';
+
+// Segundos tras los cuales se cierra el popup si no hay interacción (0 = no auto-cierre)
+const AUTO_CLOSE_SECONDS = 45;
 
 const IncomingCallModal = ({ 
   show, 
@@ -26,22 +29,37 @@ const IncomingCallModal = ({
   const toast = useToast();
 
   // Log cuando se abre el modal
-  React.useEffect(() => {
+  useEffect(() => {
     if (show && incomingCall) {
-      console.log('🔄 Modal de llamada entrante abierto', {
-        telefono: incomingCall.telefono,
-        extension: incomingCall.extension,
-        tieneCliente: !!clienteData
-      });
+      if (import.meta.env?.DEV) {
+        console.log('🔄 Modal de llamada entrante abierto', {
+          telefono: incomingCall.telefono,
+          extension: incomingCall.extension,
+          tieneCliente: !!clienteData
+        });
+      }
     }
   }, [show, incomingCall, clienteData]);
+
+  // Auto-cierre tras AUTO_CLOSE_SECONDS si no hay interacción
+  useEffect(() => {
+    if (!show || !incomingCall || AUTO_CLOSE_SECONDS <= 0) return;
+    const timer = setTimeout(() => {
+      onClose();
+    }, AUTO_CLOSE_SECONDS * 1000);
+    return () => clearTimeout(timer);
+  }, [show, incomingCall?.id, onClose]);
 
   if (!show || !incomingCall) return null;
 
   const telefono = incomingCall.telefono || 'N/A';
   const extension = incomingCall.extension || 'N/A';
   const extensionNumber = incomingCall.extensionNumber || 'N/A';
-  const estado = incomingCall.estado || 'ringing';
+  // Backend envía status: "Ringing" | "CallConnected"; normalizar para mostrar
+  const estadoRaw = (incomingCall.estado || incomingCall.raw?.status || 'ringing').toString();
+  const estado = estadoRaw.toLowerCase();
+  const estadoLabel = estado === 'ringing' || estadoRaw === 'Ringing' ? 'Sonando' :
+    estado === 'callconnected' || estado === 'connected' || estadoRaw === 'CallConnected' ? 'Conectada' : estadoRaw;
 
   // Validar email
   const validateEmail = (email) => {
@@ -150,13 +168,11 @@ const IncomingCallModal = ({
           <FiPhone size={24} />
           <span>Llamada Entrante</span>
           <Badge bg={
-            estado === 'ringing' || estado === 'sonando' ? 'warning' :
-            estado === 'connected' || estado === 'conectada' ? 'success' :
+            estado === 'ringing' || estadoRaw === 'Ringing' ? 'warning' :
+            estado === 'callconnected' || estado === 'connected' || estadoRaw === 'CallConnected' ? 'success' :
             'info'
           } className="ms-2">
-            {estado === 'ringing' || estado === 'sonando' ? 'Sonando' :
-             estado === 'connected' || estado === 'conectada' ? 'Conectada' :
-             estado}
+            {estadoLabel}
           </Badge>
         </Modal.Title>
       </Modal.Header>
@@ -330,9 +346,9 @@ const IncomingCallModal = ({
           Cerrar
         </Button>
         {clienteData && (
-          <Button variant="primary" onClick={handleVerFicha}>
+          <Button variant="primary" onClick={handleVerFicha} title="Abrir ficha del cliente en el ERP">
             <FiExternalLink className="me-2" />
-            Ver Ficha del Cliente
+            Ver en ERP
           </Button>
         )}
       </Modal.Footer>
