@@ -99,14 +99,14 @@ Sin estas variables (sobre todo key y host), el popup de llamada entrante **no s
 
 ## Pusher Cloud (producción actual)
 
-Si usas **Pusher Cloud** (no Reverb self-host), en `.env.production` debe estar:
+Si usas **Pusher Cloud** (no Reverb self-host), en `.env.production` **o en las variables de entorno del host** (Vercel, Netlify, etc.) debe estar:
 
-- `VITE_BROADCAST_DRIVER=pusher`
+- **`VITE_BROADCAST_DRIVER=pusher`** (obligatorio: si no está definido y existe `VITE_REVERB_APP_KEY` en el build, el código usará Reverb y intentará conectar a un host tipo api.vantun.com)
 - `VITE_PUSHER_APP_KEY=<tu-key>` (ej. la de tu app en Pusher)
 - `VITE_PUSHER_APP_CLUSTER=us2` (o el cluster de tu app)
-- **No** definir host ni puertos: `VITE_PUSHER_HOST=`, `VITE_PUSHER_APP_HOST=`, `VITE_REVERB_HOST=` (vacíos o sin definir).
+- **No** definir host para WebSocket: `VITE_PUSHER_HOST`, `VITE_PUSHER_APP_HOST`, `VITE_REVERB_HOST` vacíos o sin definir.
 
-Así el WebSocket conecta a los servidores de Pusher, no a `wss://api.vantun.com/app/...`.
+Así el WebSocket conecta a `wss://ws-us2.pusher.com/app/...` y no a `wss://api.vantun.com/app/...`.
 
 ---
 

@@ -29,7 +29,11 @@ const loadEchoDependencies = async () => {
 // Configuración desde variables de entorno (Pusher Cloud / Reverb / self-host)
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '') || API_BASE_URL.replace(/\/api\/?$/, '') || API_BASE_URL;
-const BROADCAST_DRIVER = (import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher')).toLowerCase();
+// Prioridad: VITE_BROADCAST_DRIVER explícito (para Pusher Cloud en prod). Si no está definido, fallback reverb/pusher.
+const rawDriver = import.meta.env.VITE_BROADCAST_DRIVER;
+const BROADCAST_DRIVER = (typeof rawDriver === 'string' && rawDriver.trim() !== '')
+  ? rawDriver.trim().toLowerCase()
+  : (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher');
 const isPusherCloud = BROADCAST_DRIVER === 'pusher';
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || import.meta.env.VITE_REVERB_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
@@ -112,7 +116,7 @@ const useIncomingCalls = () => {
         }
       };
 
-      // Pusher Cloud: no setear wsHost/wsPort/wssPort (usa endpoints por defecto por cluster)
+      // Pusher Cloud (wss://ws-{cluster}.pusher.com): no setear host ni puertos
       if (!isPusherCloud && PUSHER_APP_HOST) {
         echoConfig.wsHost = PUSHER_APP_HOST;
         echoConfig.wsPort = wsPort;

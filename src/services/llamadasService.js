@@ -34,7 +34,10 @@ const loadEchoDependencies = async () => {
 
 // Configuración desde variables de entorno
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const BROADCAST_DRIVER = (import.meta.env.VITE_BROADCAST_DRIVER || 'pusher').toLowerCase();
+const rawDriver = import.meta.env.VITE_BROADCAST_DRIVER;
+const BROADCAST_DRIVER = (typeof rawDriver === 'string' && rawDriver.trim() !== '')
+  ? rawDriver.trim().toLowerCase()
+  : 'pusher';
 const isPusherCloud = BROADCAST_DRIVER === 'pusher';
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
