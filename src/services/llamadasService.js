@@ -34,10 +34,11 @@ const loadEchoDependencies = async () => {
 
 // Configuración desde variables de entorno
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
-const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || 'pusher';
+const BROADCAST_DRIVER = (import.meta.env.VITE_BROADCAST_DRIVER || 'pusher').toLowerCase();
+const isPusherCloud = BROADCAST_DRIVER === 'pusher';
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
-const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || '';
+const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_PUSHER_HOST || import.meta.env.VITE_REVERB_HOST || '';
 const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || '6001';
 const PUSHER_APP_USE_TLS = import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true';
 
@@ -59,9 +60,12 @@ class LlamadasService {
    */
   async initializeEcho() {
     try {
-      // Verificar si tenemos las configuraciones necesarias
-      if (!PUSHER_APP_KEY && !PUSHER_APP_HOST) {
-        console.warn('⚠️ Laravel Echo no configurado. Usando polling como fallback.');
+      if (!PUSHER_APP_KEY) {
+        console.warn('⚠️ Laravel Echo no configurado (falta VITE_PUSHER_APP_KEY). Usando polling como fallback.');
+        return false;
+      }
+      if (!isPusherCloud && !PUSHER_APP_HOST) {
+        console.warn('⚠️ Laravel Echo (Reverb/self-host): falta host. Usando polling como fallback.');
         return false;
       }
 
@@ -77,17 +81,9 @@ class LlamadasService {
       // Configurar Pusher
       window.Pusher = PusherClass;
 
-      // Determinar la URL del servidor
-      let host = PUSHER_APP_HOST || `ws-${PUSHER_APP_CLUSTER}.pusher.com`;
       let wsPort = PUSHER_APP_PORT || '6001';
-      let wsProtocol = PUSHER_APP_USE_TLS ? 'wss' : 'ws';
-      let httpProtocol = PUSHER_APP_USE_TLS ? 'https' : 'http';
-
-      // Si es un servidor personalizado (Laravel WebSockets o Soketi)
       let authEndpoint = `${API_BASE_URL}/broadcasting/auth`;
-      let wsHost = PUSHER_APP_HOST ? `${wsProtocol}://${PUSHER_APP_HOST}:${wsPort}` : undefined;
 
-      // Configurar Echo
       const echoConfig = {
         broadcaster: BROADCAST_DRIVER,
         key: PUSHER_APP_KEY,
@@ -103,8 +99,8 @@ class LlamadasService {
         }
       };
 
-      // Si hay un host personalizado, agregarlo
-      if (PUSHER_APP_HOST) {
+      // Pusher Cloud: no setear wsHost/wsPort/wssPort. Reverb/self-host: sí
+      if (!isPusherCloud && PUSHER_APP_HOST) {
         echoConfig.wsHost = PUSHER_APP_HOST;
         echoConfig.wsPort = wsPort;
         echoConfig.wssPort = wsPort;

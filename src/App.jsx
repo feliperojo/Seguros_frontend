@@ -52,6 +52,7 @@ import RolePermissions from "./pages/admin/RolePermissions";
 import PermissionsList from "./pages/admin/PermissionsList";
 import AuditLogsList from "./pages/admin/AuditLogsList";
 import OperationalConceptsAdmin from "./pages/admin/OperationalConceptsAdmin";
+import Configurador from "./pages/admin/Configurador";
 
 import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
 import CallIdentifierContainer from "./components/CallIdentifier/CallIdentifierContainer";
@@ -164,6 +165,14 @@ const App = () => {
           path="/admin/operational-concepts"
           element={
             <OperationalConceptsAdmin />
+          }
+        />
+        <Route
+          path="/admin/configurador"
+          element={
+            <PermissionRoute permission="users.view">
+              <Configurador />
+            </PermissionRoute>
           }
         />
       

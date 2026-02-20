@@ -26,10 +26,11 @@ const loadEchoDependencies = async () => {
   }
 };
 
-// Configuración desde variables de entorno (Pusher/Reverb)
+// Configuración desde variables de entorno (Pusher Cloud / Reverb / self-host)
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '') || API_BASE_URL.replace(/\/api\/?$/, '') || API_BASE_URL;
-const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher');
+const BROADCAST_DRIVER = (import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher')).toLowerCase();
+const isPusherCloud = BROADCAST_DRIVER === 'pusher';
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || import.meta.env.VITE_REVERB_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
 const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_PUSHER_HOST || import.meta.env.VITE_REVERB_HOST || '';
@@ -68,8 +69,12 @@ const useIncomingCalls = () => {
     try {
       logDiagnostic('Inicializando Laravel Echo...');
 
-      if (!PUSHER_APP_KEY || !PUSHER_APP_HOST) {
-        console.warn('⚠️ Laravel Echo: faltan VITE_PUSHER_APP_KEY (o VITE_REVERB_APP_KEY) y VITE_PUSHER_HOST (o VITE_REVERB_HOST).');
+      if (!PUSHER_APP_KEY) {
+        console.warn('⚠️ Laravel Echo: falta VITE_PUSHER_APP_KEY (o VITE_REVERB_APP_KEY).');
+        return false;
+      }
+      if (!isPusherCloud && !PUSHER_APP_HOST) {
+        console.warn('⚠️ Laravel Echo: con Reverb/self-host faltan VITE_PUSHER_HOST o VITE_REVERB_HOST.');
         return false;
       }
 
@@ -107,7 +112,8 @@ const useIncomingCalls = () => {
         }
       };
 
-      if (PUSHER_APP_HOST) {
+      // Pusher Cloud: no setear wsHost/wsPort/wssPort (usa endpoints por defecto por cluster)
+      if (!isPusherCloud && PUSHER_APP_HOST) {
         echoConfig.wsHost = PUSHER_APP_HOST;
         echoConfig.wsPort = wsPort;
         echoConfig.wssPort = wsPort;

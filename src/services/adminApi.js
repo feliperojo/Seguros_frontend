@@ -40,6 +40,17 @@ export const usersService = {
   resetPassword: async (id, passwordData = {}) => {
     return apiRequest(`/v1/users/${id}/password`, "PUT", passwordData);
   },
+
+  /**
+   * Actualiza las extensiones RingCentral asociadas al usuario.
+   * PUT /api/users/{id}/ringcentral-extensions
+   * Body: { extension_ids: string[] }
+   */
+  updateRingCentralExtensions: async (id, extensionIds) => {
+    return apiRequest(`/users/${id}/ringcentral-extensions`, "PUT", {
+      extension_ids: Array.isArray(extensionIds) ? extensionIds : [],
+    });
+  },
 };
 
 export const rolesService = {

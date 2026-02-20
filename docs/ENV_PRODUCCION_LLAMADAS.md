@@ -97,6 +97,31 @@ Sin estas variables (sobre todo key y host), el popup de llamada entrante **no s
 
 ---
 
+## Pusher Cloud (producción actual)
+
+Si usas **Pusher Cloud** (no Reverb self-host), en `.env.production` debe estar:
+
+- `VITE_BROADCAST_DRIVER=pusher`
+- `VITE_PUSHER_APP_KEY=<tu-key>` (ej. la de tu app en Pusher)
+- `VITE_PUSHER_APP_CLUSTER=us2` (o el cluster de tu app)
+- **No** definir host ni puertos: `VITE_PUSHER_HOST=`, `VITE_PUSHER_APP_HOST=`, `VITE_REVERB_HOST=` (vacíos o sin definir).
+
+Así el WebSocket conecta a los servidores de Pusher, no a `wss://api.vantun.com/app/...`.
+
+---
+
+## Verificación post-build
+
+Tras `npm run build`, comprobar que la URL de WebSocket no quede fijada a tu API:
+
+```bash
+grep -R "api.vantun.com" -n dist/
+```
+
+No debe aparecer ninguna ruta tipo `wss://api.vantun.com/app/...` en el bundle. Sí puede aparecer `api.vantun.com` en la URL de la API REST (`VITE_API_BASE_URL`); lo importante es que el WebSocket use Pusher (ej. `ws-us2.pusher.com` o similar).
+
+---
+
 ## Opcional
 
 - **`VITE_BROADCASTING_AUTH_URL`**: solo si el backend expone la autorización de canales en una URL distinta a `{VITE_BACKEND_URL}/broadcasting/auth`. En ese caso pon la URL completa, ej. `https://api.vantun.com/broadcasting/auth`.
