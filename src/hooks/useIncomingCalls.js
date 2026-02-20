@@ -26,14 +26,15 @@ const loadEchoDependencies = async () => {
   }
 };
 
-// Configuración desde variables de entorno (Pusher o Reverb)
+// Configuración desde variables de entorno (Pusher/Reverb). Documentación: VITE_PUSHER_APP_KEY, VITE_PUSHER_HOST, VITE_PUSHER_PORT, VITE_PUSHER_SCHEME
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher');
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || import.meta.env.VITE_REVERB_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
-const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_REVERB_HOST || '';
-const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.VITE_REVERB_PORT || '6001';
-const PUSHER_APP_USE_TLS = (import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true') || ((import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https');
+const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_PUSHER_HOST || import.meta.env.VITE_REVERB_HOST || '';
+const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.VITE_PUSHER_PORT || import.meta.env.VITE_REVERB_PORT || '6001';
+const PUSHER_APP_USE_TLS = (import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true') ||
+  ((import.meta.env.VITE_PUSHER_SCHEME || import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https');
 
 // BroadcastChannel para evitar eventos duplicados entre pestañas
 const broadcastChannel = typeof BroadcastChannel !== 'undefined' 
