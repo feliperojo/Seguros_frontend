@@ -60,6 +60,8 @@ import CallIdentifierContainer from "./components/CallIdentifier/CallIdentifierC
 const ProtectedLayout = () => {
   return (
     <ProtectedRoute>
+      {/* Popup de llamada entrante: solo cuando hay usuario autenticado (token) para que Echo conecte bien */}
+      <CallIdentifierContainer />
       <MainLayout>
         <Outlet />
       </MainLayout>
@@ -71,9 +73,6 @@ const ProtectedLayout = () => {
 const App = () => {
   return (
     <>
-      {/* Identificador de llamadas (siempre activo) */}
-      <CallIdentifierContainer />
-      
       <Routes>
       {/* Página de Login (pública) */}
       <Route path="/login" element={<Login />} />

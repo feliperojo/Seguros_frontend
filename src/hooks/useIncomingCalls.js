@@ -26,13 +26,14 @@ const loadEchoDependencies = async () => {
   }
 };
 
-// Configuración desde variables de entorno (Pusher/Reverb). Documentación: VITE_PUSHER_APP_KEY, VITE_PUSHER_HOST, VITE_PUSHER_PORT, VITE_PUSHER_SCHEME
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+// Configuración desde variables de entorno (Pusher/Reverb)
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '') || API_BASE_URL.replace(/\/api\/?$/, '') || API_BASE_URL;
 const BROADCAST_DRIVER = import.meta.env.VITE_BROADCAST_DRIVER || (import.meta.env.VITE_REVERB_APP_KEY ? 'reverb' : 'pusher');
 const PUSHER_APP_KEY = import.meta.env.VITE_PUSHER_APP_KEY || import.meta.env.VITE_REVERB_APP_KEY || '';
 const PUSHER_APP_CLUSTER = import.meta.env.VITE_PUSHER_APP_CLUSTER || 'us2';
 const PUSHER_APP_HOST = import.meta.env.VITE_PUSHER_APP_HOST || import.meta.env.VITE_PUSHER_HOST || import.meta.env.VITE_REVERB_HOST || '';
-const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.VITE_PUSHER_PORT || import.meta.env.VITE_REVERB_PORT || '6001';
+const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.VITE_PUSHER_PORT || import.meta.env.VITE_REVERB_PORT || '8080';
 const PUSHER_APP_USE_TLS = (import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true') ||
   ((import.meta.env.VITE_PUSHER_SCHEME || import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https');
 
@@ -67,8 +68,8 @@ const useIncomingCalls = () => {
     try {
       logDiagnostic('Inicializando Laravel Echo...');
 
-      if (!PUSHER_APP_KEY && !PUSHER_APP_HOST) {
-        console.warn('⚠️ Laravel Echo no configurado. Variables de entorno faltantes.');
+      if (!PUSHER_APP_KEY || !PUSHER_APP_HOST) {
+        console.warn('⚠️ Laravel Echo: faltan VITE_PUSHER_APP_KEY (o VITE_REVERB_APP_KEY) y VITE_PUSHER_HOST (o VITE_REVERB_HOST).');
         return false;
       }
 
@@ -86,11 +87,10 @@ const useIncomingCalls = () => {
         return false;
       }
 
-      // Determinar configuración del servidor
-      let wsPort = PUSHER_APP_PORT || '6001';
-      let authEndpoint = `${API_BASE_URL}/broadcasting/auth`;
-
-      // authEndpoint: backend debe exponer POST /broadcasting/auth (o /api/broadcasting/auth) aceptando Bearer token
+      let wsPort = PUSHER_APP_PORT || '8080';
+      // Laravel suele exponer POST /broadcasting/auth en la raíz del backend (no bajo /api). Prioridad: variable explícita > BACKEND_URL > API_BASE_URL
+      const authBase = import.meta.env.VITE_BROADCASTING_AUTH_URL || (BACKEND_URL ? `${BACKEND_URL}/broadcasting/auth` : `${API_BASE_URL}/broadcasting/auth`);
+      const authEndpoint = authBase.startsWith('http') ? authBase : `${window.location.origin}${authBase.startsWith('/') ? '' : '/'}${authBase}`;
       const echoConfig = {
         broadcaster: BROADCAST_DRIVER,
         key: PUSHER_APP_KEY,
@@ -392,10 +392,11 @@ const useIncomingCalls = () => {
   // Cleanup al desmontar
   useEffect(() => {
     return () => {
-      // Limpiar canales
+      // Limpiar canales (nombre completo ej. private-ringcentral.extension.123)
       channelsRef.current.forEach(channel => {
         try {
-          echoRef.current?.leave(channel.name);
+          const name = channel?.name ?? channel;
+          if (name && echoRef.current) echoRef.current.leave(name);
         } catch (error) {
           console.error('Error al dejar el canal:', error);
         }
