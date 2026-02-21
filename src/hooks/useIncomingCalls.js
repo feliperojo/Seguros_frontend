@@ -110,14 +110,15 @@ const useIncomingCalls = () => {
     console.log(`[${timestamp}] 🔍 ${message}`, data || '');
   };
 
-  // Precargar extensiones del usuario al montar y guardarlas en localStorage para comparar al entrar las llamadas
+  // Precargar extensiones del usuario al montar y guardarlas siempre en la clave dedicada de localStorage
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
     let ids = getStoredExtensionIds();
     if (ids.length > 0) {
       userExtensionIdsRef.current = ids;
-      logDiagnostic('Extensiones del usuario precargadas desde localStorage', { count: ids.length, ids });
+      setStoredExtensionIds(ids); // Escribir en clave dedicada por si vinieron solo de user (para que queden cargadas)
+      logDiagnostic('Extensiones del usuario precargadas y guardadas en localStorage', { count: ids.length, ids });
       return;
     }
     const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -128,7 +129,7 @@ const useIncomingCalls = () => {
       userExtensionIdsRef.current = fromApi;
       if (fromApi.length > 0) {
         setStoredExtensionIds(fromApi);
-        logDiagnostic('Extensiones del usuario precargadas desde API y guardadas en localStorage', { count: fromApi.length, ids: fromApi });
+        logDiagnostic('Extensiones del usuario cargadas desde API y guardadas en localStorage', { count: fromApi.length, ids: fromApi });
       }
     }).catch(() => {});
   }, []);
@@ -405,7 +406,7 @@ const useIncomingCalls = () => {
         return;
       }
 
-      // Extensiones asignadas: primero localStorage (ya guardadas para comparar al entrar llamadas), luego API
+      // Extensiones asignadas: primero localStorage (clave dedicada o user), luego API; siempre persistir en la clave
       const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userId = user.id || user.user_id;
       let extensionIds = getStoredExtensionIds();
@@ -415,6 +416,8 @@ const useIncomingCalls = () => {
           extensionIds = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
           if (extensionIds.length > 0) setStoredExtensionIds(extensionIds);
         } catch (_) {}
+      } else if (extensionIds.length > 0) {
+        setStoredExtensionIds(extensionIds); // Asegurar que la clave dedicada quede escrita
       }
       userExtensionIdsRef.current = extensionIds;
       const extensionId = extensionIds.length > 0 ? extensionIds[0] : undefined;
