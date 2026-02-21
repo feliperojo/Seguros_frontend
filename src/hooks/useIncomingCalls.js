@@ -209,39 +209,55 @@ const useIncomingCalls = () => {
   };
 
   // Manejar evento incoming_call (payload backend: call_id, phone_number, extension_id, extension_number, cliente, direction, status, timestamp)
-  // channelDisplayName: si el evento llega por el canal de nuestra extensión (private-ringcentral.extension.X), se considera "para este usuario" aunque la ref aún no esté cargada
+  // Criterio único para mostrar el modal: extension_id del evento debe estar en las extensiones asignadas al usuario (ringcentral_extension_ids)
   const handleIncomingCall = async (data, channelDisplayName = '') => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
-      const eventExtensionId = data.extension_id != null ? String(data.extension_id) : null;
+      // extension_id del evento es el identificador de la extensión que recibe la llamada (siempre usarlo para decidir)
+      const eventExtensionId = data.extension_id != null && data.extension_id !== '' ? String(data.extension_id).trim() : null;
+
       let myExtensionIds = userExtensionIdsRef.current || [];
       if (myExtensionIds.length === 0) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const ids = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : [];
-        myExtensionIds = ids.map((id) => String(id));
+        myExtensionIds = ids.map((id) => String(id).trim()).filter(Boolean);
         userExtensionIdsRef.current = myExtensionIds;
       }
-
-      // Si el evento llegó por el canal específico de una extensión (private-ringcentral.extension.63015562023),
-      // el backend ya lo envió solo a esa extensión → es para este usuario; no filtrar por payload ni por ref.
-      const match = /private-ringcentral\.extension\.(\d+)/.exec(channelDisplayName || '');
-      const isFromMyExtensionChannel = match && myExtensionIds.includes(match[1]);
-      const isFromAnyExtensionChannel = /private-ringcentral\.extension\.\d+/.test(channelDisplayName || '');
-
-      if (isFromMyExtensionChannel || (isFromAnyExtensionChannel && myExtensionIds.length === 0)) {
-        // Llegó por nuestro canal de extensión: mostrar modal (evita race cuando la ref se llena después)
-      } else {
-        // Evento por canal general (ringcentral.calls, etc.): filtrar por extension_id del payload
-        if (myExtensionIds.length > 0 && eventExtensionId && !myExtensionIds.includes(eventExtensionId)) {
-          logDiagnostic('⏭️ Llamada para otra extensión, no mostrar modal', { eventExtensionId, myExtensionIds });
-          return;
-        }
-        if (myExtensionIds.length === 0) {
-          logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal');
-          return;
+      // Si seguimos sin extensiones y tenemos userId, obtener usuario del backend para tener ringcentral_extension_ids
+      if (myExtensionIds.length === 0) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const userId = user.id || user.user_id;
+        if (userId) {
+          try {
+            const fullUser = await usersService.get(userId);
+            const ids = Array.isArray(fullUser?.ringcentral_extension_ids) ? fullUser.ringcentral_extension_ids : [];
+            myExtensionIds = ids.map((id) => String(id).trim()).filter(Boolean);
+            userExtensionIdsRef.current = myExtensionIds;
+            if (myExtensionIds.length > 0) {
+              try {
+                localStorage.setItem('user', JSON.stringify({ ...user, ringcentral_extension_ids: myExtensionIds }));
+              } catch (_) {}
+            }
+          } catch (_) {}
         }
       }
+
+      // Mostrar modal solo si el evento tiene extension_id y coincide con una extensión asignada al usuario
+      if (!eventExtensionId) {
+        logDiagnostic('⏭️ Evento sin extension_id, no mostrar modal', data);
+        return;
+      }
+      if (myExtensionIds.length === 0) {
+        logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal', { eventExtensionId });
+        return;
+      }
+      if (!myExtensionIds.includes(eventExtensionId)) {
+        logDiagnostic('⏭️ extension_id del evento no está asignado al usuario, no mostrar modal', { eventExtensionId, myExtensionIds });
+        return;
+      }
+
+      logDiagnostic('✅ extension_id coincide con extensiones del usuario → mostrar modal', { eventExtensionId, myExtensionIds });
 
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
       const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
