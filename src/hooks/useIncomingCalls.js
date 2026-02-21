@@ -48,6 +48,46 @@ const broadcastChannel = typeof BroadcastChannel !== 'undefined'
   ? new BroadcastChannel('incoming_calls')
   : null;
 
+// Clave en localStorage para los IDs de extensiones asignadas al usuario (fácil de leer al llegar las llamadas)
+const STORAGE_KEY_EXTENSION_IDS = 'ringcentral_extension_ids';
+
+/** Normaliza a array de strings (IDs de extensión) para comparar siempre igual */
+function normalizeExtensionIds(ids) {
+  if (!ids) return [];
+  const arr = Array.isArray(ids) ? ids : [ids];
+  return arr.map((id) => String(id).trim()).filter(Boolean);
+}
+
+/** Lee las extensiones asignadas al usuario desde localStorage (clave dedicada o user) */
+function getStoredExtensionIds() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_EXTENSION_IDS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const ids = normalizeExtensionIds(parsed);
+      if (ids.length > 0) return ids;
+    }
+  } catch (_) {}
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    const ids = normalizeExtensionIds(user.ringcentral_extension_ids);
+    if (ids.length > 0) return ids;
+  } catch (_) {}
+  return [];
+}
+
+/** Guarda las extensiones asignadas en localStorage (clave dedicada y en user) para tenerlas listas al comparar */
+function setStoredExtensionIds(ids) {
+  const normalized = normalizeExtensionIds(ids);
+  try {
+    localStorage.setItem(STORAGE_KEY_EXTENSION_IDS, JSON.stringify(normalized));
+  } catch (_) {}
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    localStorage.setItem('user', JSON.stringify({ ...user, ringcentral_extension_ids: normalized }));
+  } catch (_) {}
+}
+
 const useIncomingCalls = () => {
   const [incomingCall, setIncomingCall] = useState(null);
   const [clienteData, setClienteData] = useState(null);
@@ -70,28 +110,25 @@ const useIncomingCalls = () => {
     console.log(`[${timestamp}] 🔍 ${message}`, data || '');
   };
 
-  // Precargar extensiones del usuario al montar (para que al primer evento ya tengamos la lista y no falle el filtro)
+  // Precargar extensiones del usuario al montar y guardarlas en localStorage para comparar al entrar las llamadas
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
-    const user = JSON.parse(localStorage.getItem('user') || '{}');
-    let ids = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids.map((id) => String(id).trim()).filter(Boolean) : [];
+    let ids = getStoredExtensionIds();
     if (ids.length > 0) {
       userExtensionIdsRef.current = ids;
-      logDiagnostic('Extensiones del usuario precargadas desde localStorage', { count: ids.length });
+      logDiagnostic('Extensiones del usuario precargadas desde localStorage', { count: ids.length, ids });
       return;
     }
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || user.user_id;
     if (!userId) return;
     usersService.get(userId).then((fullUser) => {
-      const fromApi = Array.isArray(fullUser?.ringcentral_extension_ids) ? fullUser.ringcentral_extension_ids : [];
-      ids = fromApi.map((id) => String(id).trim()).filter(Boolean);
-      userExtensionIdsRef.current = ids;
-      if (ids.length > 0) {
-        try {
-          localStorage.setItem('user', JSON.stringify({ ...user, ringcentral_extension_ids: ids }));
-        } catch (_) {}
-        logDiagnostic('Extensiones del usuario precargadas desde API', { count: ids.length });
+      const fromApi = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
+      userExtensionIdsRef.current = fromApi;
+      if (fromApi.length > 0) {
+        setStoredExtensionIds(fromApi);
+        logDiagnostic('Extensiones del usuario precargadas desde API y guardadas en localStorage', { count: fromApi.length, ids: fromApi });
       }
     }).catch(() => {});
   }, []);
@@ -235,41 +272,35 @@ const useIncomingCalls = () => {
   };
 
   // Manejar evento incoming_call (payload backend: call_id, phone_number, extension_id, extension_number, cliente, direction, status, timestamp)
-  // Criterio único para mostrar el modal: extension_id del evento debe estar en las extensiones asignadas al usuario (ringcentral_extension_ids)
+  // Criterio único: el backend envía extension_id (extensión donde suena la llamada). Solo mostramos el modal si ese extension_id está en las extensiones asignadas al usuario (guardadas en localStorage).
   const handleIncomingCall = async (data, channelDisplayName = '') => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
-      // extension_id del evento es el identificador de la extensión que recibe la llamada (siempre usarlo para decidir)
+      // extension_id: siempre lo envía el backend para la extensión que recibe/suena la llamada (incl. rechazadas/ignoradas en otras)
       const eventExtensionId = data.extension_id != null && data.extension_id !== '' ? String(data.extension_id).trim() : null;
 
-      let myExtensionIds = userExtensionIdsRef.current || [];
+      // Leer extensiones asignadas al usuario desde localStorage (rápido y disponible cuando entra la llamada)
+      let myExtensionIds = getStoredExtensionIds();
       if (myExtensionIds.length === 0) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const ids = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : [];
-        myExtensionIds = ids.map((id) => String(id).trim()).filter(Boolean);
-        userExtensionIdsRef.current = myExtensionIds;
+        myExtensionIds = userExtensionIdsRef.current || [];
       }
-      // Si seguimos sin extensiones y tenemos userId, obtener usuario del backend para tener ringcentral_extension_ids
       if (myExtensionIds.length === 0) {
         const user = JSON.parse(localStorage.getItem('user') || '{}');
         const userId = user.id || user.user_id;
         if (userId) {
           try {
             const fullUser = await usersService.get(userId);
-            const ids = Array.isArray(fullUser?.ringcentral_extension_ids) ? fullUser.ringcentral_extension_ids : [];
-            myExtensionIds = ids.map((id) => String(id).trim()).filter(Boolean);
+            myExtensionIds = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
             userExtensionIdsRef.current = myExtensionIds;
-            if (myExtensionIds.length > 0) {
-              try {
-                localStorage.setItem('user', JSON.stringify({ ...user, ringcentral_extension_ids: myExtensionIds }));
-              } catch (_) {}
-            }
+            if (myExtensionIds.length > 0) setStoredExtensionIds(myExtensionIds);
           } catch (_) {}
         }
+      } else {
+        userExtensionIdsRef.current = myExtensionIds;
       }
 
-      // Mostrar modal solo si el evento tiene extension_id y coincide con una extensión asignada al usuario
+      // Mostrar modal solo si extension_id del evento está en las extensiones asignadas al usuario
       if (!eventExtensionId) {
         logDiagnostic('⏭️ Evento sin extension_id, no mostrar modal', data);
         return;
@@ -279,11 +310,11 @@ const useIncomingCalls = () => {
         return;
       }
       if (!myExtensionIds.includes(eventExtensionId)) {
-        logDiagnostic('⏭️ extension_id del evento no está asignado al usuario, no mostrar modal', { eventExtensionId, myExtensionIds });
+        logDiagnostic('⏭️ Llamada en otra extensión (rechazada/ignorada/otro usuario), no mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
         return;
       }
 
-      logDiagnostic('✅ extension_id coincide con extensiones del usuario → mostrar modal', { eventExtensionId, myExtensionIds });
+      logDiagnostic('✅ extension_id del evento coincide con extensiones del usuario → mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
 
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
       const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
@@ -374,28 +405,19 @@ const useIncomingCalls = () => {
         return;
       }
 
-      // Obtener datos del usuario (el backend guarda extensiones en ringcentral_extension_ids[])
-      let user = JSON.parse(localStorage.getItem('user') || '{}');
+      // Extensiones asignadas: primero localStorage (ya guardadas para comparar al entrar llamadas), luego API
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
       const userId = user.id || user.user_id;
-      let extensionIds = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : [];
-      // Si no hay extensiones en localStorage (p. ej. /me no las devuelve), obtener usuario completo del backend
-      if (extensionIds.length === 0 && userId && !user.extension_id && !user.ringcentral_extension_id && !user.extensionId) {
+      let extensionIds = getStoredExtensionIds();
+      if (extensionIds.length === 0 && userId) {
         try {
           const fullUser = await usersService.get(userId);
-          if (Array.isArray(fullUser?.ringcentral_extension_ids) && fullUser.ringcentral_extension_ids.length > 0) {
-            extensionIds = fullUser.ringcentral_extension_ids;
-            user = { ...user, ringcentral_extension_ids: extensionIds };
-            try {
-              localStorage.setItem('user', JSON.stringify(user));
-            } catch (_) {}
-          }
-        } catch (_) {
-          // ignorar; seguimos con extensionIds vacío
-        }
+          extensionIds = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
+          if (extensionIds.length > 0) setStoredExtensionIds(extensionIds);
+        } catch (_) {}
       }
-      const extensionId = user.extension_id || user.ringcentral_extension_id || user.extensionId
-        || (extensionIds.length > 0 ? extensionIds[0] : undefined);
-      userExtensionIdsRef.current = extensionIds.map((id) => String(id));
+      userExtensionIdsRef.current = extensionIds;
+      const extensionId = extensionIds.length > 0 ? extensionIds[0] : undefined;
 
       logDiagnostic('Conectando a canales', { userId, extensionId, extensionIds });
 
