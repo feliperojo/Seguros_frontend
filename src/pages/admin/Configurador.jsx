@@ -214,6 +214,32 @@ const Configurador = () => {
 
           {selectedUser && !loadingUserDetail && (
             <>
+              {/* Resumen: extensiones asignadas al usuario (solo lectura) */}
+              {selectedExtensionIds.length > 0 && extensions.length > 0 && (
+                <div className="mb-3 p-2 rounded bg-light border">
+                  <span className="small fw-semibold text-muted">Extensiones asignadas a {selectedUser.name || selectedUser.email || "este usuario"}: </span>
+                  <span className="small">
+                    {selectedExtensionIds
+                      .map((extId) => {
+                        const ext = extensions.find(
+                          (e) => String(e.id ?? e.extensionId ?? e.extension_id ?? "") === String(extId)
+                        );
+                        const num = ext
+                          ? ext.extensionNumber ?? ext.extension_number ?? ext.number ?? extId
+                          : extId;
+                        const name = ext ? ext.name ?? ext.displayName ?? "" : "";
+                        return name ? `${name} (${num})` : String(num);
+                      })
+                      .join(", ")}
+                  </span>
+                </div>
+              )}
+              {selectedExtensionIds.length === 0 && (
+                <div className="mb-3 p-2 rounded bg-light border">
+                  <span className="small text-muted">Ninguna extensión asignada. Selecciona extensiones abajo y guarda.</span>
+                </div>
+              )}
+
               <Form.Group className="mb-3">
                 <Form.Label className="d-flex align-items-center gap-2">
                   <FaPhone />
@@ -230,7 +256,17 @@ const Configurador = () => {
                   </Alert>
                 ) : (
                   <ListGroup style={{ maxHeight: 280, overflowY: "auto" }}>
-                    {extensions.map((ext) => {
+                    {[...extensions]
+                      .sort((a, b) => {
+                        const idA = String(a.id ?? a.extensionId ?? a.extension_id ?? "");
+                        const idB = String(b.id ?? b.extensionId ?? b.extension_id ?? "");
+                        const aAssigned = selectedExtensionIds.includes(idA);
+                        const bAssigned = selectedExtensionIds.includes(idB);
+                        if (aAssigned && !bAssigned) return -1;
+                        if (!aAssigned && bAssigned) return 1;
+                        return 0;
+                      })
+                      .map((ext) => {
                       const id = String(ext.id ?? ext.extensionId ?? ext.extension_id ?? "");
                       const label =
                         ext.extensionNumber ?? ext.extension_number ?? ext.number ?? id;

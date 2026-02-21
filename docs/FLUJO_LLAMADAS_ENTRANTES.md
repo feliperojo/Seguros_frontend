@@ -34,6 +34,7 @@ Resumen del flujo y checklist para que el evento del backend llegue al frontend 
 ## Checklist backend (para que el evento llegue)
 
 - [ ] **POST /broadcasting/auth** acepta **Bearer token** (Sanctum). Si la ruta está bajo middleware `web`, puede ser necesario exponer una ruta bajo `api` que acepte Bearer y delegue a la lógica de autorización de canales.
+- [ ] **CORS**: el backend debe permitir peticiones desde el origen del frontend (ej. `https://vantun.com`) a `POST /broadcasting/auth`. Si no, el navegador bloquea la respuesta aunque el servidor devuelva 200. Ver sección **CORS para /broadcasting/auth** más abajo.
 - [ ] **Reverb (o Pusher)** en marcha y accesible desde el navegador (mismo host/puerto que en el frontend o CORS/WS permitidos).
 - [ ] Emisión del evento **`incoming_call`** en el canal correcto:
   - Por extensión: `private-ringcentral.extension.{extensionId}`
@@ -48,4 +49,6 @@ Resumen del flujo y checklist para que el evento del backend llegue al frontend 
 1. **Producción**: usar `VITE_BACKEND_URL=https://api.vantun.com` (o el dominio real). Reverb en el mismo dominio con WSS (puerto 443 o el que use el backend).
 2. **Diagnóstico**: en consola del navegador aparecen logs con prefijo `[timestamp] 🔍` cuando Echo se conecta, se suscribe a canales o recibe `incoming_call`. Revisar si hay "Conectado a Laravel Echo" y "Suscrito al canal...".
 3. **Si el popup no aparece**: comprobar que las variables de Reverb/Pusher estén definidas (key + host), que el usuario tenga `extension_id` o `id` en el objeto `user` de localStorage (para suscribirse al canal correcto) y que el backend esté emitiendo en ese canal con el nombre de evento `.incoming_call`.
-4. **No tocar**: `useIncomingCalls` ya normaliza el payload del backend (`call_id`, `phone_number`, `cliente`), evita duplicados entre pestañas y reconecta ante desconexiones. El modal ya muestra número, estado y cliente; solo hace falta que Echo reciba el evento.
+4. **CORS para /broadcasting/auth**: Si en consola aparece *"Origin https://vantun.com is not allowed by Access-Control-Allow-Origin"* o *"XMLHttpRequest cannot load https://api.vantun.com/broadcasting/auth due to access control checks"*, el backend (api.vantun.com) debe incluir en la respuesta de `POST /broadcasting/auth` (y en preflight OPTIONS si aplica) los headers CORS que permitan el origen del frontend. Ver `docs/CORS_BROADCASTING_AUTH.md` para instrucciones para el equipo backend.
+
+5. **No tocar**: `useIncomingCalls` ya normaliza el payload del backend (`call_id`, `phone_number`, `cliente`), evita duplicados entre pestañas y reconecta ante desconexiones. El modal ya muestra número, estado y cliente; solo hace falta que Echo reciba el evento.

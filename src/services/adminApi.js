@@ -14,7 +14,10 @@ export const usersService = {
   },
 
   get: async (id) => {
-    return apiRequest(`/v1/users/${id}`, "GET");
+    const response = await apiRequest(`/v1/users/${id}`, "GET");
+    // Backend puede devolver { success, message, data: { id, name, roles, ringcentral_extension_ids, ... } }
+    if (response?.data != null && typeof response.data === "object") return response.data;
+    return response;
   },
 
   create: async (data) => {

@@ -4,7 +4,7 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -12,11 +12,77 @@ import SincronizarContactos from "../components/SincronizarContactos";
 import { useAuth } from "../context/AuthContext";
 import { useHasPermission } from "../hooks/useHasPermission";
 import DateTimeDisplay from "./DateTimeDisplay";
+import { usersService } from "../services/adminApi";
+import { getExtensions } from "../services/ringCentralIntegrationApi";
 
 
 const Sidebar = ({ isOpen, toggleSidebar }) => {
-  const users = JSON.parse(localStorage.getItem("user"))?.name || "Usuario";
+  const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const { user } = useAuth();
+  const userName = user?.name || storedUser?.name || "Usuario";
+
+  // Extensiones RingCentral: del usuario en contexto/localStorage o carga única si no vienen en /me
+  const [sidebarExtensionIds, setSidebarExtensionIds] = useState(null);
+  useEffect(() => {
+    if (!user?.id) {
+      setSidebarExtensionIds(null);
+      return;
+    }
+    if (user.ringcentral_extension_ids !== undefined && user.ringcentral_extension_ids !== null) {
+      setSidebarExtensionIds(Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : []);
+      return;
+    }
+    let cancelled = false;
+    usersService.get(user.id).then((data) => {
+      if (!cancelled && data?.ringcentral_extension_ids != null) {
+        setSidebarExtensionIds(Array.isArray(data.ringcentral_extension_ids) ? data.ringcentral_extension_ids : []);
+      } else if (!cancelled) {
+        setSidebarExtensionIds([]);
+      }
+    }).catch(() => {
+      if (!cancelled) setSidebarExtensionIds([]);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id, user?.ringcentral_extension_ids]);
+
+  const extensionIds = sidebarExtensionIds !== null
+    ? sidebarExtensionIds
+    : (Array.isArray(user?.ringcentral_extension_ids) ? user.ringcentral_extension_ids : (storedUser?.ringcentral_extension_ids && Array.isArray(storedUser.ringcentral_extension_ids) ? storedUser.ringcentral_extension_ids : []));
+  const hasExtension = extensionIds.length > 0;
+
+  // Lista de extensiones RingCentral para mostrar número (105, etc.) junto al id
+  const [extensionsList, setExtensionsList] = useState([]);
+  useEffect(() => {
+    if (!hasExtension) {
+      setExtensionsList([]);
+      return;
+    }
+    let cancelled = false;
+    getExtensions({ type: "User", per_page: 250 })
+      .then((res) => {
+        if (cancelled) return;
+        const list = Array.isArray(res) ? res : res?.data ?? res?.extensions ?? [];
+        setExtensionsList(Array.isArray(list) ? list : []);
+      })
+      .catch(() => { if (!cancelled) setExtensionsList([]); });
+    return () => { cancelled = true; };
+  }, [hasExtension, extensionIds.join(",")]);
+
+  const formatExtensionDisplay = (extId) => {
+    const ext = extensionsList.find(
+      (e) => String(e.id ?? e.extensionId ?? e.extension_id ?? "") === String(extId)
+    );
+    const number = ext?.extensionNumber ?? ext?.extension_number ?? ext?.number;
+    if (number != null && number !== "") {
+      return `Ext. ${number} (${extId})`;
+    }
+    return `Ext. ${extId}`;
+  };
+  const extensionLabel = hasExtension
+    ? (extensionIds.length === 1
+        ? formatExtensionDisplay(extensionIds[0])
+        : extensionIds.map((id) => formatExtensionDisplay(id)).join(", "))
+    : "Usuario sin extensión en RingCentral";
 
   const location = useLocation();
 
@@ -94,7 +160,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       {isOpen && (
         <div className="welcome-container">
           <p>Bienvenido</p>
-          <span>{users}</span>
+          <span className="welcome-user-name">{userName}</span>
+          <p className="welcome-extension">
+            <FaPhone className="welcome-extension-icon" />
+            {extensionLabel}
+          </p>
         </div>
       )}
 

@@ -49,10 +49,26 @@
   color: #6c757d;
 }
 
-.welcome-container span {
+.welcome-container span.welcome-user-name {
   font-size: 16px;
   font-weight: 600;
   color: #ff9800;
+  display: block;
+}
+
+.welcome-container .welcome-extension {
+  font-size: 12px;
+  color: #6c757d;
+  margin: 4px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.welcome-container .welcome-extension-icon {
+  font-size: 10px;
+  opacity: 0.9;
 }
 
 /* Contenedor de fecha y hora en sidebar */

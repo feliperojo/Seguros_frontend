@@ -45,9 +45,9 @@ const UserRolesModal = ({ show, onHide, user }) => {
 
   const loadUserRoles = async () => {
     try {
-      const response = await usersService.get(user.id);
+      const userData = await usersService.get(user.id);
       setSelectedRoles(
-        response.roles ? response.roles.map((r) => r.id) : []
+        userData?.roles ? userData.roles.map((r) => r.id) : []
       );
     } catch (err) {
       setError("Error al cargar roles del usuario");
