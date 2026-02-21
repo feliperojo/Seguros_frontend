@@ -209,7 +209,8 @@ const useIncomingCalls = () => {
   };
 
   // Manejar evento incoming_call (payload backend: call_id, phone_number, extension_id, extension_number, cliente, direction, status, timestamp)
-  const handleIncomingCall = async (data) => {
+  // channelDisplayName: si el evento llega por el canal de nuestra extensión (private-ringcentral.extension.X), se considera "para este usuario" aunque la ref aún no esté cargada
+  const handleIncomingCall = async (data, channelDisplayName = '') => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
@@ -221,15 +222,25 @@ const useIncomingCalls = () => {
         myExtensionIds = ids.map((id) => String(id));
         userExtensionIdsRef.current = myExtensionIds;
       }
-      // Mostrar el modal solo si la llamada es para una extensión asignada al usuario actual
-      if (myExtensionIds.length > 0 && eventExtensionId && !myExtensionIds.includes(eventExtensionId)) {
-        logDiagnostic('⏭️ Llamada para otra extensión, no mostrar modal', { eventExtensionId, myExtensionIds });
-        return;
-      }
-      // Si el usuario no tiene extensiones asignadas, no mostrar modal
-      if (myExtensionIds.length === 0) {
-        logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal');
-        return;
+
+      // Si el evento llegó por el canal específico de una extensión (private-ringcentral.extension.63015562023),
+      // el backend ya lo envió solo a esa extensión → es para este usuario; no filtrar por payload ni por ref.
+      const match = /private-ringcentral\.extension\.(\d+)/.exec(channelDisplayName || '');
+      const isFromMyExtensionChannel = match && myExtensionIds.includes(match[1]);
+      const isFromAnyExtensionChannel = /private-ringcentral\.extension\.\d+/.test(channelDisplayName || '');
+
+      if (isFromMyExtensionChannel || (isFromAnyExtensionChannel && myExtensionIds.length === 0)) {
+        // Llegó por nuestro canal de extensión: mostrar modal (evita race cuando la ref se llena después)
+      } else {
+        // Evento por canal general (ringcentral.calls, etc.): filtrar por extension_id del payload
+        if (myExtensionIds.length > 0 && eventExtensionId && !myExtensionIds.includes(eventExtensionId)) {
+          logDiagnostic('⏭️ Llamada para otra extensión, no mostrar modal', { eventExtensionId, myExtensionIds });
+          return;
+        }
+        if (myExtensionIds.length === 0) {
+          logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal');
+          return;
+        }
       }
 
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
@@ -399,7 +410,7 @@ const useIncomingCalls = () => {
 
           channel.listen('.incoming_call', (data) => {
             logDiagnostic(`📞 Evento incoming_call recibido en canal: ${displayName}`, data);
-            handleIncomingCall(data);
+            handleIncomingCall(data, displayName);
           });
 
           channelsRef.current.push(channel);
