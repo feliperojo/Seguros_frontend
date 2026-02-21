@@ -70,6 +70,32 @@ const useIncomingCalls = () => {
     console.log(`[${timestamp}] 🔍 ${message}`, data || '');
   };
 
+  // Precargar extensiones del usuario al montar (para que al primer evento ya tengamos la lista y no falle el filtro)
+  useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (!token) return;
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    let ids = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids.map((id) => String(id).trim()).filter(Boolean) : [];
+    if (ids.length > 0) {
+      userExtensionIdsRef.current = ids;
+      logDiagnostic('Extensiones del usuario precargadas desde localStorage', { count: ids.length });
+      return;
+    }
+    const userId = user.id || user.user_id;
+    if (!userId) return;
+    usersService.get(userId).then((fullUser) => {
+      const fromApi = Array.isArray(fullUser?.ringcentral_extension_ids) ? fullUser.ringcentral_extension_ids : [];
+      ids = fromApi.map((id) => String(id).trim()).filter(Boolean);
+      userExtensionIdsRef.current = ids;
+      if (ids.length > 0) {
+        try {
+          localStorage.setItem('user', JSON.stringify({ ...user, ringcentral_extension_ids: ids }));
+        } catch (_) {}
+        logDiagnostic('Extensiones del usuario precargadas desde API', { count: ids.length });
+      }
+    }).catch(() => {});
+  }, []);
+
   // Inicializar Echo
   const initializeEcho = async () => {
     try {
@@ -450,17 +476,16 @@ const useIncomingCalls = () => {
     }
   };
 
-  // Efecto para conectar cuando el usuario está autenticado
+  // Efecto para conectar cuando el usuario está autenticado (delay corto para no perder la primera llamada)
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) {
       return;
     }
 
-    // Conectar después de un breve delay para asegurar que todo esté listo
     const timer = setTimeout(() => {
       connectToChannels();
-    }, 1000);
+    }, 300);
 
     return () => {
       clearTimeout(timer);
