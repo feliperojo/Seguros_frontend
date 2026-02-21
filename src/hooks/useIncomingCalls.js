@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { buscarCliente } from '../services/apiService';
+import { usersService } from '../services/adminApi';
 
 // Importaciones dinámicas para Laravel Echo
 let Echo = null;
@@ -300,25 +301,44 @@ const useIncomingCalls = () => {
         return;
       }
 
-      // Obtener datos del usuario
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      // Obtener datos del usuario (el backend guarda extensiones en ringcentral_extension_ids[])
+      let user = JSON.parse(localStorage.getItem('user') || '{}');
       const userId = user.id || user.user_id;
-      const extensionId = user.extension_id || user.ringcentral_extension_id || user.extensionId;
+      let extensionIds = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : [];
+      // Si no hay extensiones en localStorage (p. ej. /me no las devuelve), obtener usuario completo del backend
+      if (extensionIds.length === 0 && userId && !user.extension_id && !user.ringcentral_extension_id && !user.extensionId) {
+        try {
+          const fullUser = await usersService.get(userId);
+          if (Array.isArray(fullUser?.ringcentral_extension_ids) && fullUser.ringcentral_extension_ids.length > 0) {
+            extensionIds = fullUser.ringcentral_extension_ids;
+            user = { ...user, ringcentral_extension_ids: extensionIds };
+            try {
+              localStorage.setItem('user', JSON.stringify(user));
+            } catch (_) {}
+          }
+        } catch (_) {
+          // ignorar; seguimos con extensionIds vacío
+        }
+      }
+      const extensionId = user.extension_id || user.ringcentral_extension_id || user.extensionId
+        || (extensionIds.length > 0 ? extensionIds[0] : undefined);
 
-      logDiagnostic('Conectando a canales', { userId, extensionId });
+      logDiagnostic('Conectando a canales', { userId, extensionId, extensionIds });
 
       const channelsToConnect = [];
 
       // Nombres sin prefijo "private-": Echo.private() añade el prefijo al suscribir
-      // 1. Canal por extensión de RingCentral
-      if (extensionId) {
+      // 1. Canales por extensión(es) de RingCentral (una o varias)
+      const idsToSubscribe = extensionIds.length > 0 ? extensionIds : (extensionId ? [extensionId] : []);
+      idsToSubscribe.forEach((extId) => {
+        const id = String(extId);
         channelsToConnect.push({
-          name: `ringcentral.extension.${extensionId}`,
-          displayName: `private-ringcentral.extension.${extensionId}`,
+          name: `ringcentral.extension.${id}`,
+          displayName: `private-ringcentral.extension.${id}`,
           type: 'private',
           priority: 1
         });
-      }
+      });
 
       // 2. Canal por usuario (múltiples formatos)
       if (userId) {
