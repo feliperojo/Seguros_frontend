@@ -8,8 +8,8 @@ import DetalleClienteModal from '../DetalleClienteModal';
 import apiRequest from '../../services/api';
 import useToast from '../../hooks/useToast';
 
-// Segundos tras los cuales se cierra el popup si no hay interacción (0 = no auto-cierre)
-const AUTO_CLOSE_SECONDS = 45;
+// Segundos tras los cuales se cierra el popup si no hay interacción (0 = no auto-cierre; el usuario cierra manualmente)
+const AUTO_CLOSE_SECONDS = 0;
 
 const IncomingCallModal = ({ 
   show, 
@@ -41,14 +41,8 @@ const IncomingCallModal = ({
     }
   }, [show, incomingCall, clienteData]);
 
-  // Auto-cierre tras AUTO_CLOSE_SECONDS si no hay interacción
-  useEffect(() => {
-    if (!show || !incomingCall || AUTO_CLOSE_SECONDS <= 0) return;
-    const timer = setTimeout(() => {
-      onClose();
-    }, AUTO_CLOSE_SECONDS * 1000);
-    return () => clearTimeout(timer);
-  }, [show, incomingCall?.id, onClose]);
+  // Auto-cierre desactivado: el modal solo se cierra cuando el usuario pulsa "Cerrar" para poder analizar número y llamante
+  // (Si en el futuro se desea auto-cierre, usar AUTO_CLOSE_SECONDS > 0 y el useEffect correspondiente)
 
   if (!show || !incomingCall) return null;
 

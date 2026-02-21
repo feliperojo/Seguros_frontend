@@ -59,6 +59,7 @@ const useIncomingCalls = () => {
   const channelsRef = useRef([]);
   const ultimoCallIdRef = useRef(null);
   const processedCallIdsRef = useRef(new Set());
+  const userExtensionIdsRef = useRef([]); // Extensiones asignadas al usuario (para filtrar qué llamadas mostrar)
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelayRef = useRef(1000);
@@ -212,6 +213,25 @@ const useIncomingCalls = () => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
+      const eventExtensionId = data.extension_id != null ? String(data.extension_id) : null;
+      let myExtensionIds = userExtensionIdsRef.current || [];
+      if (myExtensionIds.length === 0) {
+        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const ids = Array.isArray(user.ringcentral_extension_ids) ? user.ringcentral_extension_ids : [];
+        myExtensionIds = ids.map((id) => String(id));
+        userExtensionIdsRef.current = myExtensionIds;
+      }
+      // Mostrar el modal solo si la llamada es para una extensión asignada al usuario actual
+      if (myExtensionIds.length > 0 && eventExtensionId && !myExtensionIds.includes(eventExtensionId)) {
+        logDiagnostic('⏭️ Llamada para otra extensión, no mostrar modal', { eventExtensionId, myExtensionIds });
+        return;
+      }
+      // Si el usuario no tiene extensiones asignadas, no mostrar modal
+      if (myExtensionIds.length === 0) {
+        logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal');
+        return;
+      }
+
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
       const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
 
@@ -322,6 +342,7 @@ const useIncomingCalls = () => {
       }
       const extensionId = user.extension_id || user.ringcentral_extension_id || user.extensionId
         || (extensionIds.length > 0 ? extensionIds[0] : undefined);
+      userExtensionIdsRef.current = extensionIds.map((id) => String(id));
 
       logDiagnostic('Conectando a canales', { userId, extensionId, extensionIds });
 
