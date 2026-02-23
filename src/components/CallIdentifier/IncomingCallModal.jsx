@@ -2,9 +2,9 @@
 // Modal que se abre automáticamente cuando llega un evento incoming_call
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Modal, Button, Badge, Spinner, Alert, Form } from 'react-bootstrap';
-import { FiPhone, FiUser, FiMail, FiBriefcase, FiX, FiExternalLink } from 'react-icons/fi';
-import DetalleClienteModal from '../DetalleClienteModal';
+import { FiPhone, FiUser, FiMail, FiBriefcase, FiX, FiExternalLink, FiCheckCircle } from 'react-icons/fi';
 import apiRequest from '../../services/api';
 import useToast from '../../hooks/useToast';
 
@@ -19,7 +19,6 @@ const IncomingCallModal = ({
   onClose
 }) => {
   const [mostrarFormularioCrear, setMostrarFormularioCrear] = useState(false);
-  const [mostrarDetalleCliente, setMostrarDetalleCliente] = useState(false);
   const [creandoCliente, setCreandoCliente] = useState(false);
   const [formData, setFormData] = useState({
     nombre: '',
@@ -27,6 +26,7 @@ const IncomingCallModal = ({
     email: '',
   });
   const toast = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (show && incomingCall && import.meta.env?.DEV) {
@@ -91,7 +91,8 @@ const IncomingCallModal = ({
 
   const handleVerFicha = () => {
     if (clienteData?.id) {
-      setMostrarDetalleCliente(true);
+      onClose();
+      navigate(`/clientes/${clienteData.id}/ficha`);
     }
   };
 
@@ -104,20 +105,6 @@ const IncomingCallModal = ({
           <p className="text-muted small">{telefono}</p>
         </Modal.Body>
       </Modal>
-    );
-  }
-
-  if (mostrarDetalleCliente && clienteData?.id) {
-    return (
-      <DetalleClienteModal
-        show={true}
-        onHide={() => {
-          setMostrarDetalleCliente(false);
-          onClose();
-        }}
-        clienteData={clienteData}
-        grupoFamiliarId={clienteData.grupo_familiar_id || null}
-      />
     );
   }
 
@@ -170,19 +157,16 @@ const IncomingCallModal = ({
         {clienteData ? (
           <div className="mb-4">
             <Alert variant="success">
-              <Alert.Heading className="d-flex align-items-center">
-                <FiUser className="me-2" />
-                Cliente Encontrado
+              <Alert.Heading className="d-flex align-items-center gap-2 mb-2">
+                <FiCheckCircle size={24} className="text-success flex-shrink-0" />
+                <span>Cliente encontrado</span>
               </Alert.Heading>
-              <div className="mt-3">
-                <p className="mb-1">
-                  <strong>ID cliente:</strong>{' '}
-                  <span className="text-primary">{clienteData.id}</span>
-                </p>
-                <p className="mb-0 text-muted small">
-                  {clienteData.nombre_completo || clienteData.nombre || clienteData.name || '—'}
-                </p>
-              </div>
+              <h4 className="mb-1 text-dark">
+                {clienteData.nombre_completo || clienteData.nombre || clienteData.name || 'Sin nombre'}
+              </h4>
+              <p className="mb-0 text-muted small">
+                ID: {clienteData.id}
+              </p>
             </Alert>
           </div>
         ) : (
