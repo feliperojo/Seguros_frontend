@@ -1,45 +1,22 @@
 // src/components/CallIdentifier/IncomingCallModal.jsx
 // Modal que se abre automáticamente cuando llega un evento incoming_call
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Modal, Button, Badge, Spinner, Alert, Form } from 'react-bootstrap';
 import { FiPhone, FiUser, FiMail, FiBriefcase, FiX, FiExternalLink } from 'react-icons/fi';
 import DetalleClienteModal from '../DetalleClienteModal';
-import TelefonosPro from '../fase2/TelefonosPro';
 import apiRequest from '../../services/api';
 import useToast from '../../hooks/useToast';
-
-/** Parsea el número entrante (ej. +17866142302) a { iso, indicativo, numero } para TelefonosPro */
-function parseTelefonoIncoming(telefonoStr, fallbackIso = 'us') {
-  const digits = String(telefonoStr || '').replace(/\D/g, '');
-  if (!digits.length) return { iso: fallbackIso, indicativo: '1', numero: '', principal: true };
-  let indicativo = '';
-  let numero = digits;
-  if (digits.startsWith('1') && digits.length >= 11) {
-    indicativo = '1';
-    numero = digits.slice(1);
-  } else if (digits.length >= 12) {
-    indicativo = digits.slice(0, 3);
-    numero = digits.slice(3);
-  } else if (digits.length >= 11) {
-    indicativo = digits.slice(0, 2);
-    numero = digits.slice(2);
-  } else if (digits.length > 10) {
-    indicativo = digits.slice(0, digits.length - 10);
-    numero = digits.slice(-10);
-  }
-  return { iso: fallbackIso, indicativo: indicativo || '1', numero, principal: true };
-}
 
 // Segundos tras los cuales se cierra el popup si no hay interacción (0 = no auto-cierre; el usuario cierra manualmente)
 const AUTO_CLOSE_SECONDS = 0;
 
-const IncomingCallModal = ({ 
-  show, 
-  incomingCall, 
-  clienteData, 
-  buscandoCliente, 
-  onClose 
+const IncomingCallModal = ({
+  show,
+  incomingCall,
+  clienteData,
+  buscandoCliente,
+  onClose
 }) => {
   const [mostrarFormularioCrear, setMostrarFormularioCrear] = useState(false);
   const [mostrarDetalleCliente, setMostrarDetalleCliente] = useState(false);
@@ -49,103 +26,56 @@ const IncomingCallModal = ({
     empresa: '',
     email: '',
   });
-  const [telefonos, setTelefonos] = useState([]);
-  const [clienteParaDetalle, setClienteParaDetalle] = useState(null);
   const toast = useToast();
 
-  // Inicializar teléfonos con el número de la llamada cuando se abre el formulario de crear
-  const telefonoInicialParaCrear = useMemo(() => {
-    const t = incomingCall?.telefono || '';
-    if (!t) return [];
-    const parsed = parseTelefonoIncoming(t, 'us');
-    return [{ id: `ph-${Date.now()}`, ...parsed, tipo: 'Móvil' }];
-  }, [incomingCall?.telefono]);
-
-
-  // Log cuando se abre el modal
   useEffect(() => {
-    if (show && incomingCall) {
-      if (import.meta.env?.DEV) {
-        console.log('🔄 Modal de llamada entrante abierto', {
-          telefono: incomingCall.telefono,
-          extension: incomingCall.extension,
-          tieneCliente: !!clienteData
-        });
-      }
+    if (show && incomingCall && import.meta.env?.DEV) {
+      console.log('🔄 Modal de llamada entrante abierto', {
+        telefono: incomingCall.telefono,
+        extension: incomingCall.extension,
+        tieneCliente: !!clienteData,
+      });
     }
   }, [show, incomingCall, clienteData]);
-
-  // Auto-cierre desactivado: el modal solo se cierra cuando el usuario pulsa "Cerrar" para poder analizar número y llamante
-  // (Si en el futuro se desea auto-cierre, usar AUTO_CLOSE_SECONDS > 0 y el useEffect correspondiente)
 
   if (!show || !incomingCall) return null;
 
   const telefono = incomingCall.telefono || 'N/A';
   const extension = incomingCall.extension || 'N/A';
   const extensionNumber = incomingCall.extensionNumber || 'N/A';
-  // Backend envía status: "Ringing" | "CallConnected"; normalizar para mostrar
   const estadoRaw = (incomingCall.estado || incomingCall.raw?.status || 'ringing').toString();
   const estado = estadoRaw.toLowerCase();
   const estadoLabel = estado === 'ringing' || estadoRaw === 'Ringing' ? 'Sonando' :
     estado === 'callconnected' || estado === 'connected' || estadoRaw === 'CallConnected' ? 'Conectada' : estadoRaw;
 
-  // Validar email
   const validateEmail = (email) => {
     if (!email) return true;
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(email);
   };
 
-  // Construir teléfono para enviar al backend (indicativo + número del principal o primero)
-  const telefonoParaEnvio = useMemo(() => {
-    if (telefonos.length === 0) return telefono;
-    const principal = telefonos.find((t) => t.principal) || telefonos[0];
-    const ind = String(principal?.indicativo || '').replace(/\D/g, '');
-    const num = String(principal?.numero || '').replace(/\D/g, '');
-    if (!num) return telefono;
-    return ind ? `+${ind}${num}` : num;
-  }, [telefonos, telefono]);
-
-  // Manejar creación de cliente
   const handleCrearCliente = async (e) => {
     e.preventDefault();
-
     if (!formData.nombre.trim()) {
       toast.showError('El nombre es requerido');
       return;
     }
-
     if (formData.email && !validateEmail(formData.email)) {
       toast.showError('Formato de email inválido');
       return;
     }
-
-    if (!telefonoParaEnvio || telefonoParaEnvio === 'N/A') {
-      toast.showError('Agregue al menos un número de teléfono');
-      return;
-    }
-
     setCreandoCliente(true);
-
     try {
-      const payload = {
+      const response = await apiRequest('/cliente/crear-rapido', 'POST', {
         nombre: formData.nombre.trim(),
         empresa: formData.empresa.trim() || null,
         email: formData.email.trim() || null,
-        telefono: telefonoParaEnvio,
-      };
-      const response = await apiRequest('/cliente/crear-rapido', 'POST', payload);
-
+        telefono: telefono,
+      });
       if (response && (response.success || response.cliente || response.data)) {
-        const nuevoCliente = response.cliente || response.data || response;
         toast.showSuccess('Cliente creado exitosamente');
-
         setMostrarFormularioCrear(false);
         setFormData({ nombre: '', empresa: '', email: '' });
-        setTelefonos([]);
-
-        setClienteParaDetalle(nuevoCliente);
-        setMostrarDetalleCliente(true);
       } else {
         toast.showError(response?.message || 'Error al crear el cliente');
       }
@@ -159,14 +89,12 @@ const IncomingCallModal = ({
     }
   };
 
-  // Manejar ver ficha del cliente
   const handleVerFicha = () => {
     if (clienteData?.id) {
       setMostrarDetalleCliente(true);
     }
   };
 
-  // Si está buscando cliente, mostrar spinner
   if (buscandoCliente) {
     return (
       <Modal show={show} onHide={onClose} centered size="sm">
@@ -179,24 +107,20 @@ const IncomingCallModal = ({
     );
   }
 
-  // Si hay cliente y se debe mostrar detalle (encontrado o recién creado), mostrar DetalleClienteModal
-  const clienteParaFicha = clienteData || clienteParaDetalle;
-  if (mostrarDetalleCliente && clienteParaFicha) {
+  if (mostrarDetalleCliente && clienteData?.id) {
     return (
       <DetalleClienteModal
         show={true}
         onHide={() => {
           setMostrarDetalleCliente(false);
-          setClienteParaDetalle(null);
           onClose();
         }}
-        clienteData={clienteParaFicha}
-        grupoFamiliarId={clienteParaFicha.grupo_familiar_id || null}
+        clienteData={clienteData}
+        grupoFamiliarId={clienteData.grupo_familiar_id || null}
       />
     );
   }
 
-  // Modal principal
   return (
     <Modal
       show={show}
@@ -221,7 +145,6 @@ const IncomingCallModal = ({
       </Modal.Header>
 
       <Modal.Body>
-        {/* Información de la llamada */}
         <div className="mb-4">
           <h5 className="mb-3">Información de la Llamada</h5>
           <div className="row">
@@ -244,7 +167,6 @@ const IncomingCallModal = ({
           </div>
         </div>
 
-        {/* Información del cliente */}
         {clienteData ? (
           <div className="mb-4">
             <Alert variant="success">
@@ -253,24 +175,13 @@ const IncomingCallModal = ({
                 Cliente Encontrado
               </Alert.Heading>
               <div className="mt-3">
-                <h4>{clienteData.nombre_completo || clienteData.nombre || clienteData.name || 'N/A'}</h4>
-                {clienteData.empresa && (
-                  <p className="mb-2">
-                    <FiBriefcase className="me-2" />
-                    {clienteData.empresa}
-                  </p>
-                )}
-                {clienteData.email && (
-                  <p className="mb-2">
-                    <FiMail className="me-2" />
-                    {clienteData.email}
-                  </p>
-                )}
-                {clienteData.vip && (
-                  <Badge bg="warning" className="mt-2">
-                    Cliente VIP
-                  </Badge>
-                )}
+                <p className="mb-1">
+                  <strong>ID cliente:</strong>{' '}
+                  <span className="text-primary">{clienteData.id}</span>
+                </p>
+                <p className="mb-0 text-muted small">
+                  {clienteData.nombre_completo || clienteData.nombre || clienteData.name || '—'}
+                </p>
               </div>
             </Alert>
           </div>
@@ -279,15 +190,11 @@ const IncomingCallModal = ({
             <Alert variant="info">
               <Alert.Heading>Cliente no encontrado</Alert.Heading>
               <p>No se encontró un cliente con el número <strong>{telefono}</strong></p>
-              
               {!mostrarFormularioCrear ? (
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => {
-                    setTelefonos(telefonoInicialParaCrear.length ? telefonoInicialParaCrear : [{ id: `ph-${Date.now()}`, iso: 'us', indicativo: '1', numero: '', tipo: 'Móvil', principal: true }]);
-                    setMostrarFormularioCrear(true);
-                  }}
+                  onClick={() => setMostrarFormularioCrear(true)}
                   className="mt-2"
                 >
                   Crear Cliente Rápido
@@ -295,9 +202,7 @@ const IncomingCallModal = ({
               ) : (
                 <Form onSubmit={handleCrearCliente} className="mt-3">
                   <Form.Group className="mb-3">
-                    <Form.Label>
-                      Nombre <span className="text-danger">*</span>
-                    </Form.Label>
+                    <Form.Label>Nombre <span className="text-danger">*</span></Form.Label>
                     <Form.Control
                       type="text"
                       value={formData.nombre}
@@ -307,12 +212,8 @@ const IncomingCallModal = ({
                       disabled={creandoCliente}
                     />
                   </Form.Group>
-
                   <Form.Group className="mb-3">
-                    <Form.Label>
-                      <FiBriefcase className="me-2" />
-                      Empresa
-                    </Form.Label>
+                    <Form.Label><FiBriefcase className="me-2" /> Empresa</Form.Label>
                     <Form.Control
                       type="text"
                       value={formData.empresa}
@@ -321,12 +222,8 @@ const IncomingCallModal = ({
                       disabled={creandoCliente}
                     />
                   </Form.Group>
-
                   <Form.Group className="mb-3">
-                    <Form.Label>
-                      <FiMail className="me-2" />
-                      Email
-                    </Form.Label>
+                    <Form.Label><FiMail className="me-2" /> Email</Form.Label>
                     <Form.Control
                       type="email"
                       value={formData.email}
@@ -336,33 +233,19 @@ const IncomingCallModal = ({
                       isInvalid={formData.email && !validateEmail(formData.email)}
                     />
                     {formData.email && !validateEmail(formData.email) && (
-                      <Form.Control.Feedback type="invalid">
-                        Formato de email inválido
-                      </Form.Control.Feedback>
+                      <Form.Control.Feedback type="invalid">Formato de email inválido</Form.Control.Feedback>
                     )}
                   </Form.Group>
-
                   <Form.Group className="mb-3">
-                    <Form.Label className="d-block mb-2">
-                      <FiPhone className="me-2" />
-                      Teléfonos
-                    </Form.Label>
-                    <TelefonosPro
-                      value={telefonos}
-                      onChange={setTelefonos}
-                      readOnly={creandoCliente}
-                      fallbackIso="us"
-                      addLabel="Agregar teléfono"
-                    />
+                    <Form.Label>Teléfono</Form.Label>
+                    <Form.Control type="text" value={telefono} readOnly disabled className="bg-light" />
                   </Form.Group>
-
                   <div className="d-flex gap-2">
                     <Button
                       variant="secondary"
                       onClick={() => {
                         setMostrarFormularioCrear(false);
                         setFormData({ nombre: '', empresa: '', email: '' });
-                        setTelefonos([]);
                       }}
                       disabled={creandoCliente}
                     >
@@ -371,13 +254,10 @@ const IncomingCallModal = ({
                     <Button
                       variant="primary"
                       type="submit"
-                      disabled={creandoCliente || !formData.nombre.trim() || !telefonoParaEnvio || telefonoParaEnvio === 'N/A'}
+                      disabled={creandoCliente || !formData.nombre.trim()}
                     >
                       {creandoCliente ? (
-                        <>
-                          <Spinner size="sm" className="me-2" animation="border" />
-                          Creando...
-                        </>
+                        <><Spinner size="sm" className="me-2" animation="border" /> Creando...</>
                       ) : (
                         'Crear Cliente'
                       )}
@@ -407,4 +287,3 @@ const IncomingCallModal = ({
 };
 
 export default IncomingCallModal;
-
