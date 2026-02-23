@@ -1,12 +1,35 @@
 // src/components/CallIdentifier/IncomingCallModal.jsx
 // Modal que se abre automáticamente cuando llega un evento incoming_call
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Modal, Button, Badge, Spinner, Alert, Form } from 'react-bootstrap';
 import { FiPhone, FiUser, FiMail, FiBriefcase, FiX, FiExternalLink } from 'react-icons/fi';
 import DetalleClienteModal from '../DetalleClienteModal';
+import TelefonosPro from '../fase2/TelefonosPro';
 import apiRequest from '../../services/api';
 import useToast from '../../hooks/useToast';
+
+/** Parsea el número entrante (ej. +17866142302) a { iso, indicativo, numero } para TelefonosPro */
+function parseTelefonoIncoming(telefonoStr, fallbackIso = 'us') {
+  const digits = String(telefonoStr || '').replace(/\D/g, '');
+  if (!digits.length) return { iso: fallbackIso, indicativo: '1', numero: '', principal: true };
+  let indicativo = '';
+  let numero = digits;
+  if (digits.startsWith('1') && digits.length >= 11) {
+    indicativo = '1';
+    numero = digits.slice(1);
+  } else if (digits.length >= 12) {
+    indicativo = digits.slice(0, 3);
+    numero = digits.slice(3);
+  } else if (digits.length >= 11) {
+    indicativo = digits.slice(0, 2);
+    numero = digits.slice(2);
+  } else if (digits.length > 10) {
+    indicativo = digits.slice(0, digits.length - 10);
+    numero = digits.slice(-10);
+  }
+  return { iso: fallbackIso, indicativo: indicativo || '1', numero, principal: true };
+}
 
 // Segundos tras los cuales se cierra el popup si no hay interacción (0 = no auto-cierre; el usuario cierra manualmente)
 const AUTO_CLOSE_SECONDS = 0;
@@ -26,7 +49,18 @@ const IncomingCallModal = ({
     empresa: '',
     email: '',
   });
+  const [telefonos, setTelefonos] = useState([]);
+  const [clienteParaDetalle, setClienteParaDetalle] = useState(null);
   const toast = useToast();
+
+  // Inicializar teléfonos con el número de la llamada cuando se abre el formulario de crear
+  const telefonoInicialParaCrear = useMemo(() => {
+    const t = incomingCall?.telefono || '';
+    if (!t) return [];
+    const parsed = parseTelefonoIncoming(t, 'us');
+    return [{ id: `ph-${Date.now()}`, ...parsed, tipo: 'Móvil' }];
+  }, [incomingCall?.telefono]);
+
 
   // Log cuando se abre el modal
   useEffect(() => {
@@ -62,6 +96,16 @@ const IncomingCallModal = ({
     return re.test(email);
   };
 
+  // Construir teléfono para enviar al backend (indicativo + número del principal o primero)
+  const telefonoParaEnvio = useMemo(() => {
+    if (telefonos.length === 0) return telefono;
+    const principal = telefonos.find((t) => t.principal) || telefonos[0];
+    const ind = String(principal?.indicativo || '').replace(/\D/g, '');
+    const num = String(principal?.numero || '').replace(/\D/g, '');
+    if (!num) return telefono;
+    return ind ? `+${ind}${num}` : num;
+  }, [telefonos, telefono]);
+
   // Manejar creación de cliente
   const handleCrearCliente = async (e) => {
     e.preventDefault();
@@ -76,36 +120,39 @@ const IncomingCallModal = ({
       return;
     }
 
+    if (!telefonoParaEnvio || telefonoParaEnvio === 'N/A') {
+      toast.showError('Agregue al menos un número de teléfono');
+      return;
+    }
+
     setCreandoCliente(true);
 
     try {
-      const response = await apiRequest('/cliente/crear-rapido', 'POST', {
+      const payload = {
         nombre: formData.nombre.trim(),
         empresa: formData.empresa.trim() || null,
         email: formData.email.trim() || null,
-        telefono: telefono,
-      });
+        telefono: telefonoParaEnvio,
+      };
+      const response = await apiRequest('/cliente/crear-rapido', 'POST', payload);
 
       if (response && (response.success || response.cliente || response.data)) {
         const nuevoCliente = response.cliente || response.data || response;
         toast.showSuccess('Cliente creado exitosamente');
-        
-        // Cerrar formulario y mostrar detalle del cliente
+
         setMostrarFormularioCrear(false);
         setFormData({ nombre: '', empresa: '', email: '' });
-        
-        // Abrir modal de detalle del cliente
+        setTelefonos([]);
+
+        setClienteParaDetalle(nuevoCliente);
         setMostrarDetalleCliente(true);
-        
-        // Pasar el nuevo cliente al componente padre si es necesario
-        // onClienteCreado?.(nuevoCliente);
       } else {
         toast.showError(response?.message || 'Error al crear el cliente');
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 
-                          err.response?.data?.error || 
-                          'Error al crear el cliente';
+      const errorMessage = err.response?.data?.message ||
+        err.response?.data?.error ||
+        'Error al crear el cliente';
       toast.showError(errorMessage);
     } finally {
       setCreandoCliente(false);
@@ -132,17 +179,19 @@ const IncomingCallModal = ({
     );
   }
 
-  // Si hay cliente y se debe mostrar detalle, mostrar DetalleClienteModal
-  if (mostrarDetalleCliente && clienteData) {
+  // Si hay cliente y se debe mostrar detalle (encontrado o recién creado), mostrar DetalleClienteModal
+  const clienteParaFicha = clienteData || clienteParaDetalle;
+  if (mostrarDetalleCliente && clienteParaFicha) {
     return (
       <DetalleClienteModal
         show={true}
         onHide={() => {
           setMostrarDetalleCliente(false);
+          setClienteParaDetalle(null);
           onClose();
         }}
-        clienteData={clienteData}
-        grupoFamiliarId={clienteData.grupo_familiar_id || null}
+        clienteData={clienteParaFicha}
+        grupoFamiliarId={clienteParaFicha.grupo_familiar_id || null}
       />
     );
   }
@@ -235,7 +284,10 @@ const IncomingCallModal = ({
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => setMostrarFormularioCrear(true)}
+                  onClick={() => {
+                    setTelefonos(telefonoInicialParaCrear.length ? telefonoInicialParaCrear : [{ id: `ph-${Date.now()}`, iso: 'us', indicativo: '1', numero: '', tipo: 'Móvil', principal: true }]);
+                    setMostrarFormularioCrear(true);
+                  }}
                   className="mt-2"
                 >
                   Crear Cliente Rápido
@@ -291,13 +343,16 @@ const IncomingCallModal = ({
                   </Form.Group>
 
                   <Form.Group className="mb-3">
-                    <Form.Label>Teléfono</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={telefono}
-                      readOnly
-                      disabled
-                      className="bg-light"
+                    <Form.Label className="d-block mb-2">
+                      <FiPhone className="me-2" />
+                      Teléfonos
+                    </Form.Label>
+                    <TelefonosPro
+                      value={telefonos}
+                      onChange={setTelefonos}
+                      readOnly={creandoCliente}
+                      fallbackIso="us"
+                      addLabel="Agregar teléfono"
                     />
                   </Form.Group>
 
@@ -307,6 +362,7 @@ const IncomingCallModal = ({
                       onClick={() => {
                         setMostrarFormularioCrear(false);
                         setFormData({ nombre: '', empresa: '', email: '' });
+                        setTelefonos([]);
                       }}
                       disabled={creandoCliente}
                     >
@@ -315,7 +371,7 @@ const IncomingCallModal = ({
                     <Button
                       variant="primary"
                       type="submit"
-                      disabled={creandoCliente || !formData.nombre.trim()}
+                      disabled={creandoCliente || !formData.nombre.trim() || !telefonoParaEnvio || telefonoParaEnvio === 'N/A'}
                     >
                       {creandoCliente ? (
                         <>
@@ -339,10 +395,10 @@ const IncomingCallModal = ({
           <FiX className="me-2" />
           Cerrar
         </Button>
-        {clienteData && (
-          <Button variant="primary" onClick={handleVerFicha} title="Abrir ficha del cliente en el ERP">
+        {clienteData?.id && (
+          <Button variant="primary" onClick={handleVerFicha} title="Abrir ficha del cliente">
             <FiExternalLink className="me-2" />
-            Ver en ERP
+            Ver ficha del cliente
           </Button>
         )}
       </Modal.Footer>
