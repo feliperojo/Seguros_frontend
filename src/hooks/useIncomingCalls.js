@@ -88,6 +88,13 @@ function setStoredExtensionIds(ids) {
   } catch (_) {}
 }
 
+/** Compara extension_id del evento con la lista asignada al usuario (siempre como string para evitar número vs string) */
+function extensionIdBelongsToUser(assignedIds, eventExtensionId) {
+  if (!eventExtensionId || !Array.isArray(assignedIds) || assignedIds.length === 0) return false;
+  const eventStr = String(eventExtensionId).trim();
+  return assignedIds.some((id) => String(id).trim() === eventStr);
+}
+
 const useIncomingCalls = () => {
   const [incomingCall, setIncomingCall] = useState(null);
   const [clienteData, setClienteData] = useState(null);
@@ -259,16 +266,15 @@ const useIncomingCalls = () => {
     }
   };
 
-  // Verificar si el evento ya fue procesado (evitar duplicados)
-  const isEventProcessed = (callId) => {
-    if (processedCallIdsRef.current.has(callId)) {
+  // Verificar si el evento ya fue procesado (evitar duplicados).
+  // Usamos callId|extensionId porque la misma llamada (mismo call_id) puede sonar en distintas extensiones al reenviarse.
+  const isEventProcessed = (callId, extensionId) => {
+    const key = extensionId ? `${callId}|${String(extensionId)}` : callId;
+    if (processedCallIdsRef.current.has(key)) {
       return true;
     }
-    processedCallIdsRef.current.add(callId);
-    // Limpiar IDs antiguos después de 5 minutos
-    setTimeout(() => {
-      processedCallIdsRef.current.delete(callId);
-    }, 5 * 60 * 1000);
+    processedCallIdsRef.current.add(key);
+    setTimeout(() => processedCallIdsRef.current.delete(key), 5 * 60 * 1000);
     return false;
   };
 
@@ -278,58 +284,69 @@ const useIncomingCalls = () => {
     try {
       logDiagnostic('📞 Evento incoming_call recibido', data);
 
+      const isSimulatedFromConsole = import.meta.env.DEV && data && data.__simulate === true;
+
       // extension_id: siempre lo envía el backend para la extensión que recibe/suena la llamada (incl. rechazadas/ignoradas en otras)
       const eventExtensionId = data.extension_id != null && data.extension_id !== '' ? String(data.extension_id).trim() : null;
 
-      // Leer extensiones asignadas al usuario desde localStorage (rápido y disponible cuando entra la llamada)
-      let myExtensionIds = getStoredExtensionIds();
-      if (myExtensionIds.length === 0) {
-        myExtensionIds = userExtensionIdsRef.current || [];
-      }
-      if (myExtensionIds.length === 0) {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
-        const userId = user.id || user.user_id;
-        if (userId) {
-          try {
-            const fullUser = await usersService.get(userId);
-            myExtensionIds = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
-            userExtensionIdsRef.current = myExtensionIds;
-            if (myExtensionIds.length > 0) setStoredExtensionIds(myExtensionIds);
-          } catch (_) {}
+      if (!isSimulatedFromConsole) {
+        // Leer extensiones asignadas al usuario desde localStorage (rápido y disponible cuando entra la llamada)
+        let myExtensionIds = getStoredExtensionIds();
+        if (myExtensionIds.length === 0) {
+          myExtensionIds = userExtensionIdsRef.current || [];
         }
+        if (myExtensionIds.length === 0) {
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          const userId = user.id || user.user_id;
+          if (userId) {
+            try {
+              const fullUser = await usersService.get(userId);
+              myExtensionIds = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
+              userExtensionIdsRef.current = myExtensionIds;
+              if (myExtensionIds.length > 0) setStoredExtensionIds(myExtensionIds);
+            } catch (_) {}
+          }
+        } else {
+          userExtensionIdsRef.current = myExtensionIds;
+        }
+
+        // Mostrar modal solo si extension_id del evento está en las extensiones asignadas al usuario
+        if (!eventExtensionId) {
+          logDiagnostic('⏭️ Evento sin extension_id, no mostrar modal', data);
+          return;
+        }
+        if (myExtensionIds.length === 0) {
+          logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal', { eventExtensionId });
+          return;
+        }
+        if (!extensionIdBelongsToUser(myExtensionIds, eventExtensionId)) {
+          logDiagnostic('⏭️ Llamada en otra extensión (rechazada/ignorada/otro usuario), no mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
+          return;
+        }
+        logDiagnostic('✅ extension_id del evento coincide con extensiones del usuario → mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
       } else {
-        userExtensionIdsRef.current = myExtensionIds;
+        if (!eventExtensionId) {
+          logDiagnostic('⏭️ Simulación sin extension_id, no mostrar modal', data);
+          return;
+        }
+        logDiagnostic('✅ Simulación desde consola (DEV) → mostrar modal', { eventExtensionId });
       }
-
-      // Mostrar modal solo si extension_id del evento está en las extensiones asignadas al usuario
-      if (!eventExtensionId) {
-        logDiagnostic('⏭️ Evento sin extension_id, no mostrar modal', data);
-        return;
-      }
-      if (myExtensionIds.length === 0) {
-        logDiagnostic('⏭️ Usuario sin extensiones asignadas, no mostrar modal', { eventExtensionId });
-        return;
-      }
-      if (!myExtensionIds.includes(eventExtensionId)) {
-        logDiagnostic('⏭️ Llamada en otra extensión (rechazada/ignorada/otro usuario), no mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
-        return;
-      }
-
-      logDiagnostic('✅ extension_id del evento coincide con extensiones del usuario → mostrar modal', { eventExtensionId, asignadas: myExtensionIds });
 
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
       const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
 
-      if (isEventProcessed(callId)) {
-        logDiagnostic('⚠️ Evento duplicado ignorado', { callId });
+      if (isEventProcessed(callId, eventExtensionId)) {
+        logDiagnostic('⚠️ Evento duplicado ignorado', { callId, extension_id: eventExtensionId });
         return;
       }
 
       if (broadcastChannel) {
-        broadcastChannel.postMessage({ type: 'call_processed', callId });
+        broadcastChannel.postMessage({ type: 'call_processed', callId, extensionId: eventExtensionId });
       }
 
       ultimoCallIdRef.current = callId;
+
+      const { __simulate: _sim, ...payloadSinSimulate } = data;
 
       // Payload backend: phone_number, extension_id, extension_number, cliente, direction, status (Ringing | CallConnected), timestamp
       const telefono = data.phone_number || data.telefono || data.numero || data.phone;
@@ -348,7 +365,7 @@ const useIncomingCalls = () => {
         direccion: data.direction || data.direccion || 'Inbound',
         estado: estado,
         timestamp: data.timestamp || new Date().toISOString(),
-        raw: data
+        raw: payloadSinSimulate
       };
 
       logDiagnostic('🔄 Abriendo popup de llamada entrante', callData);
@@ -370,6 +387,20 @@ const useIncomingCalls = () => {
     }
   };
 
+  const handleIncomingCallRef = useRef(handleIncomingCall);
+  handleIncomingCallRef.current = handleIncomingCall;
+
+  // En desarrollo: simular llamada entrante desde la consola sin RingCentral ni backend
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    const handler = (e) => {
+      const payload = e.detail || {};
+      handleIncomingCallRef.current(payload);
+    };
+    window.addEventListener('incoming_call_simulate', handler);
+    return () => window.removeEventListener('incoming_call_simulate', handler);
+  }, []);
+
   // Escuchar mensajes de otras pestañas
   useEffect(() => {
     if (!broadcastChannel) return;
@@ -377,8 +408,11 @@ const useIncomingCalls = () => {
     const handleMessage = (event) => {
       if (event.data.type === 'call_processed') {
         const callId = event.data.callId;
-        if (!isEventProcessed(callId)) {
-          processedCallIdsRef.current.add(callId);
+        const extId = event.data.extensionId;
+        const key = extId ? `${callId}|${String(extId)}` : callId;
+        if (!processedCallIdsRef.current.has(key)) {
+          processedCallIdsRef.current.add(key);
+          setTimeout(() => processedCallIdsRef.current.delete(key), 5 * 60 * 1000);
         }
       }
     };
