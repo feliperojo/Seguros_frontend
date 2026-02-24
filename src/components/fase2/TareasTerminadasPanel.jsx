@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
-import { formatDateForDisplay } from "../../utils/formatters";
+import { formatDateForDisplay, formatDurationBetweenDates } from "../../utils/formatters";
 
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
@@ -257,11 +257,12 @@ export default function TareasTerminadasPanel({
     return [];
   };
 
-  // Normaliza y DERIVA fechaTermino si no viene explícita
+  // Normaliza y DERIVA fechaTermino y fechaInicio (para duración)
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
     const nota = t?.nota ?? t?.note ?? t?.descripcion ?? t?.description ?? t?.detalle ?? "";
 
+    const fechaCreacion = t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null;
     const fechaTermino =
       t?.fechaTermino ??
       t?.finished_at ??
@@ -270,19 +271,23 @@ export default function TareasTerminadasPanel({
       t?.fecha_cierre ??
       t?.fecha_termino ??
       t?.fecha_fin ??
-      t?.fecha ??           // fallback a "fecha" (creación) si no hay otra
+      t?.fecha ??
       t?.fechaLimite ??
       t?.due_at ??
       t?.scheduled_at ??
       null;
+    // Para duración: usar fecha_inicio o scheduled_date si existen, si no fecha de creación
+    const fechaInicio =
+      t?.fecha_inicio ?? t?.scheduled_date ?? t?.scheduled_at ?? fechaCreacion;
 
     return {
       id: t?.id,
       titulo: t?.titulo || t?.concepto || (typeof nota === "string" ? nota : "") || "Tarea",
       responsable: t?.responsable ?? t?.asignado_a ?? t?.assignedUser?.name ?? t?.assigned_user?.name ?? "—",
       estado: rawEstado,
-      fechaCreacion: t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null,
+      fechaCreacion,
       fechaTermino,
+      fechaInicio, // usada para calcular duración (días, h, min)
       nota: (typeof nota === "string" ? nota : "") || "",
       __raw: t,
     };
@@ -537,6 +542,9 @@ export default function TareasTerminadasPanel({
                     <div className="small text-muted text-end">
                       <div><strong>Creada:</strong> {formatDate(t.fechaCreacion)}</div>
                       <div><strong>Terminada:</strong> {formatDate(t.fechaTermino)}</div>
+                      {t.fechaInicio && t.fechaTermino && (
+                        <div><strong>Duración:</strong> {formatDurationBetweenDates(t.fechaInicio, t.fechaTermino)}</div>
+                      )}
                     </div>
                   </div>
 

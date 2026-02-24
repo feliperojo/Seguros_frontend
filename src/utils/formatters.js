@@ -240,3 +240,53 @@ export const formatDateTimeForDisplay = (dateString) => {
     return typeof dateString === 'string' ? dateString : "-";
   }
 };
+
+/**
+ * Calcula la duración entre dos fechas y la formatea en días, horas y minutos.
+ * Pensado para tareas terminadas: desde fecha inicio (creación/programada) hasta fecha fin.
+ *
+ * @param {string|Date|null|undefined} fechaInicio - Fecha de inicio
+ * @param {string|Date|null|undefined} fechaFin - Fecha de fin
+ * @returns {string} Ej: "2 días 3 h 45 min", "5 h 30 min", "45 min" o "—" si faltan fechas o son inválidas
+ */
+export const formatDurationBetweenDates = (fechaInicio, fechaFin) => {
+  if (!fechaInicio || !fechaFin) return "—";
+  const start = typeof fechaInicio === "string" || typeof fechaInicio === "number" ? new Date(fechaInicio) : fechaInicio;
+  const end = typeof fechaFin === "string" || typeof fechaFin === "number" ? new Date(fechaFin) : fechaFin;
+  if (!(start instanceof Date) || !(end instanceof Date) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return "—";
+  }
+  let ms = end.getTime() - start.getTime();
+  if (ms < 0) return "—";
+  const totalMinutes = Math.floor(ms / (1000 * 60));
+  const minutes = totalMinutes % 60;
+  const totalHours = Math.floor(totalMinutes / 60);
+  const hours = totalHours % 24;
+  const days = Math.floor(totalHours / 24);
+  const parts = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? "día" : "días"}`);
+  if (hours > 0) parts.push(`${hours} h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes} min`);
+  return parts.join(" ");
+};
+
+/**
+ * Formatea una duración dada en minutos a texto "X días Y h Z min".
+ * Útil para totales agregados en reportes.
+ *
+ * @param {number} totalMinutes - Duración total en minutos (>= 0)
+ * @returns {string} Ej: "2 días 3 h 45 min", "5 h 30 min", "45 min"
+ */
+export const formatDurationFromMinutes = (totalMinutes) => {
+  if (totalMinutes == null || Number.isNaN(totalMinutes) || totalMinutes < 0) return "—";
+  const m = Math.floor(Number(totalMinutes));
+  const minutes = m % 60;
+  const totalHours = Math.floor(m / 60);
+  const hours = totalHours % 24;
+  const days = Math.floor(totalHours / 24);
+  const parts = [];
+  if (days > 0) parts.push(`${days} ${days === 1 ? "día" : "días"}`);
+  if (hours > 0) parts.push(`${hours} h`);
+  if (minutes > 0 || parts.length === 0) parts.push(`${minutes} min`);
+  return parts.join(" ");
+};
