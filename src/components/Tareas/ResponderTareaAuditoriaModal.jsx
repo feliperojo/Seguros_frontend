@@ -13,7 +13,7 @@ import {
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
-import { formatDateTimeForDisplay } from "../../utils/formatters";
+import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { 
@@ -139,7 +139,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   // Estados para archivos adjuntos
   const [archivos, setArchivos] = useState([]);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
-  
+
   // Estados para reconocimiento de voz
   const [grabando, setGrabando] = useState(false);
   const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
@@ -624,8 +624,15 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
         await addComment(taskId, formData);
       }
       
-      // Completar la tarea
-      await completeTask(taskId, responseNote || null);
+      // Tiempo dedicado: desde inicio de la tarea hasta ahora (liquidación calculada por el front)
+      const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+      const { dias, horas, minutos } = durationFromStartToEnd(fechaInicio || new Date(), new Date());
+      await completeTask(taskId, {
+        response_note: responseNote || undefined,
+        dias,
+        horas,
+        minutos,
+      });
       
       // ✅ IMPORTANTE: Recargar la tarea completa desde el backend
       try {
@@ -1233,6 +1240,12 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                         {formatFecha(tarea.due_date)}
                       </Badge>
                     </div>
+                    {formatTaskTimeDhm(tarea) !== "—" && (
+                      <div className="mt-2">
+                        <span className="text-muted small">Tiempo dedicado: </span>
+                        <strong>{formatTaskTimeDhm(tarea)}</strong>
+                      </div>
+                    )}
                   </>
                 )}
                 
@@ -1892,6 +1905,23 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
               </div>
             </div>
           )}
+          {(() => {
+            const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+            const tiempo = durationFromStartToEnd(fechaInicio || new Date());
+            const textoFecha = fechaInicio ? new Date(fechaInicio).toLocaleString("es", { dateStyle: "short", timeStyle: "short" }) : "inicio";
+            return (
+              <div className="mb-0 p-3 bg-light rounded">
+                <div className="d-flex align-items-center gap-2 mb-1">
+                  <i className="fas fa-clock text-secondary"></i>
+                  <strong className="small">Tiempo que se registrará (liquidación)</strong>
+                </div>
+                <p className="mb-0 small text-muted">
+                  <span className="text-dark fw-semibold">{formatDhmString(tiempo)}</span>
+                  {" "}(desde {textoFecha} hasta el momento de confirmar).
+                </p>
+              </div>
+            );
+          })()}
         </Modal.Body>
         <Modal.Footer>
           <Button 

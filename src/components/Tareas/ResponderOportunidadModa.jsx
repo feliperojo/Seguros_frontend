@@ -14,6 +14,7 @@ import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds } from "../../utils/mentions";
+import { durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
@@ -943,7 +944,10 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         }
       }
 
-      await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT");
+      // Tiempo dedicado: desde inicio de la tarea hasta ahora (liquidación calculada por el front)
+      const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+      const { dias, horas, minutos } = durationFromStartToEnd(fechaInicio || new Date(), new Date());
+      await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT", { dias, horas, minutos });
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
@@ -2123,6 +2127,23 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             )}
           </Col>
         </Row>
+        {!esCerrada && (() => {
+          const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+          const tiempo = durationFromStartToEnd(fechaInicio || new Date());
+          const textoFecha = fechaInicio ? new Date(fechaInicio).toLocaleString("es", { dateStyle: "short", timeStyle: "short" }) : "inicio";
+          return (
+            <Row className="mt-3 pt-3 border-top">
+              <Col>
+                <div className="small text-muted">
+                  <i className="fas fa-clock me-1"></i>
+                  <strong>Tiempo en esta tarea:</strong>{" "}
+                  <span className="text-dark">{formatDhmString(tiempo)}</span>
+                  {" "}(desde {textoFecha} hasta ahora). Al completar se registrará este tiempo.
+                </div>
+              </Col>
+            </Row>
+          );
+        })()}
       </Modal.Body>
       
       <Modal.Footer 

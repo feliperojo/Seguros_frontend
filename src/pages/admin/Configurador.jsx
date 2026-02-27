@@ -13,6 +13,8 @@ import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
 import { usersService } from "../../services/adminApi";
 import { getExtensions } from "../../services/ringCentralIntegrationApi";
+import systemConfigService from "../../services/SystemConfigService";
+import SystemConfigSection, { configFromApiResponse } from "../../components/SystemConfigSection";
 
 /**
  * Normaliza la lista de usuarios desde la respuesta del backend (varias estructuras posibles).
@@ -49,6 +51,8 @@ const Configurador = () => {
   const [loadingUserDetail, setLoadingUserDetail] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const [systemConfig, setSystemConfig] = useState(configFromApiResponse([]));
+  const [loadingConfig, setLoadingConfig] = useState(true);
 
   const canEdit = useHasPermission("users.edit");
   const canView = useHasPermission("users.view");
@@ -93,6 +97,23 @@ const Configurador = () => {
   useEffect(() => {
     loadExtensions();
   }, [loadExtensions]);
+
+  const loadSystemConfig = useCallback(async () => {
+    try {
+      setLoadingConfig(true);
+      const items = await systemConfigService.getAll();
+      setSystemConfig(configFromApiResponse(items));
+    } catch (err) {
+      toast.error(err?.message || "Error al cargar configuración del sistema");
+      setSystemConfig(configFromApiResponse([]));
+    } finally {
+      setLoadingConfig(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSystemConfig();
+  }, [loadSystemConfig]);
 
   // Cuando se selecciona un usuario, cargar su detalle (incluye ringcentral_extension_ids)
   useEffect(() => {
@@ -320,6 +341,14 @@ const Configurador = () => {
           )}
         </Card.Body>
       </Card>
+
+      <SystemConfigSection
+        config={systemConfig}
+        setConfig={setSystemConfig}
+        users={users}
+        loadingUsers={loadingUsers}
+        loadingConfig={loadingConfig}
+      />
     </div>
   );
 };

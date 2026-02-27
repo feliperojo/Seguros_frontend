@@ -166,18 +166,25 @@ export const assignTask = async (taskId, userId) => {
 /**
  * Completa una tarea de auditoría
  * @param {number|string} taskId - ID de la tarea
- * @param {string} responseNote - Nota de respuesta opcional
+ * @param {string|Object} responseNoteOrOptions - Nota de respuesta (string) u opciones { response_note?, dias?, horas?, minutos? }
  * @returns {Promise<Object>} Tarea completada
  */
-export const completeTask = async (taskId, responseNote = null) => {
+export const completeTask = async (taskId, responseNoteOrOptions = null) => {
   if (!taskId) {
     throw new Error("taskId es requerido");
   }
   
   const endpoint = `auditorias/tasks/${taskId}/complete`;
   const payload = {};
-  if (responseNote) {
-    payload.response_note = responseNote;
+  if (responseNoteOrOptions != null) {
+    if (typeof responseNoteOrOptions === "string") {
+      if (responseNoteOrOptions) payload.response_note = responseNoteOrOptions;
+    } else {
+      if (responseNoteOrOptions.response_note) payload.response_note = responseNoteOrOptions.response_note;
+      if (responseNoteOrOptions.dias != null) payload.dias = Number(responseNoteOrOptions.dias) || 0;
+      if (responseNoteOrOptions.horas != null) payload.horas = Number(responseNoteOrOptions.horas) || 0;
+      if (responseNoteOrOptions.minutos != null) payload.minutos = Number(responseNoteOrOptions.minutos) || 0;
+    }
   }
   
   try {

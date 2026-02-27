@@ -1040,22 +1040,28 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     const tarea = tareas.find((t) => t && t.id === parseInt(tareaId));
     if (!tarea) return;
 
-    let newDueDate = tarea.due_date || nuevaFecha;
-    if (tarea.due_date && new Date(nuevaFecha) > new Date(tarea.due_date)) {
-      newDueDate = nuevaFecha;
+    // No permitir que la fecha de programación quede por encima de la de vencimiento
+    const dueDateStr = tarea.due_date ? new Date(tarea.due_date).toISOString().split("T")[0] : null;
+    if (dueDateStr && nuevaFecha > dueDateStr) {
+      setToast({
+        show: true,
+        message: "La fecha de programación no puede ser mayor que la fecha de vencimiento.",
+        variant: "danger",
+      });
+      return;
     }
 
+    // Solo actualizar scheduled_date; la fecha de vencimiento no se mueve
+    const dueDateToSend = tarea.due_date || null;
+
     try {
-      await apiRequest(`tareas_operativas/${tareaId}/reprogramar`, "PUT", {
-        scheduled_date: nuevaFecha,
-        due_date: newDueDate,
-      });
+      const payload = { scheduled_date: nuevaFecha };
+      if (dueDateToSend) payload.due_date = dueDateToSend;
+      await apiRequest(`tareas_operativas/${tareaId}/reprogramar`, "PUT", payload);
 
       setTareas((prev) =>
         prev.map((t) =>
-          t.id === tarea.id
-            ? { ...t, scheduled_date: nuevaFecha, due_date: newDueDate }
-            : t
+          t.id === tarea.id ? { ...t, scheduled_date: nuevaFecha } : t
         )
       );
 

@@ -290,3 +290,66 @@ export const formatDurationFromMinutes = (totalMinutes) => {
   if (minutes > 0 || parts.length === 0) parts.push(`${minutes} min`);
   return parts.join(" ");
 };
+
+/**
+ * Formatea el tiempo dedicado de una tarea desde campos días/horas/minutos o tiempo_total_minutos.
+ * Para detalle de tarea: usar tiempo_dias, tiempo_horas, tiempo_minutos (backend); fallback a tiempo_total_minutos.
+ * @param {Object} tarea - Objeto con tiempo_dias?, tiempo_horas?, tiempo_minutos? o tiempo_total_minutos?
+ * @returns {string} Ej: "0d 2h 45m", "1d 0h 30m", "—" si no hay datos
+ */
+export const formatTaskTimeDhm = (tarea) => {
+  if (!tarea) return "—";
+  const dias = Number(tarea.tiempo_dias);
+  const horas = Number(tarea.tiempo_horas);
+  const min = Number(tarea.tiempo_minutos);
+  if (Number.isInteger(dias) && Number.isInteger(horas) && Number.isInteger(min) &&
+      (dias > 0 || horas > 0 || min > 0)) {
+    const parts = [];
+    if (dias > 0) parts.push(`${dias}d`);
+    if (horas > 0) parts.push(`${horas}h`);
+    if (min > 0 || parts.length === 0) parts.push(`${min}m`);
+    return parts.join(" ");
+  }
+  const totalMin = tarea.tiempo_total_minutos != null ? Number(tarea.tiempo_total_minutos) : NaN;
+  if (!Number.isNaN(totalMin) && totalMin >= 0) {
+    return formatDurationFromMinutes(totalMin);
+  }
+  return "—";
+};
+
+/**
+ * Calcula la duración desde una fecha de inicio hasta ahora (o hasta una fecha fin).
+ * Usado para "liquidación" de tiempo: desde inicio de la tarea hasta el momento de completar.
+ * @param {string|Date} startDate - Fecha de inicio (ej. tarea.created_at, tarea.scheduled_date)
+ * @param {string|Date} [endDate] - Fecha fin (por defecto: ahora)
+ * @returns {{ dias: number, horas: number, minutos: number }}
+ */
+export const durationFromStartToEnd = (startDate, endDate = new Date()) => {
+  const start = new Date(startDate).getTime();
+  const end = new Date(endDate).getTime();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
+    return { dias: 0, horas: 0, minutos: 0 };
+  }
+  const totalMs = end - start;
+  const totalMin = Math.floor(totalMs / (1000 * 60));
+  const minutos = totalMin % 60;
+  const totalHoras = Math.floor(totalMin / 60);
+  const horas = totalHoras % 24;
+  const dias = Math.floor(totalHoras / 24);
+  return { dias, horas, minutos };
+};
+
+/**
+ * Formatea dias/horas/minutos a "Xd Xh Xm" (solo lectura / liquidación).
+ */
+export const formatDhmString = ({ dias = 0, horas = 0, minutos = 0 }) => {
+  const d = Number(dias) || 0;
+  const h = Number(horas) || 0;
+  const m = Number(minutos) || 0;
+  if (d === 0 && h === 0 && m === 0) return "0m";
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+  return parts.join(" ");
+};

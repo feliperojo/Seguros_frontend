@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Spinner, Card, Row, Col, Badge } from "react-bootstrap";
 import apiRequest from "../../services/api";
+import { formatTaskTimeDhm } from "../../utils/formatters";
 
 const DetalleBitacoraModal = ({ show, onHide, log }) => {
   const [historial, setHistorial] = useState([]);
@@ -110,6 +111,7 @@ const DetalleBitacoraModal = ({ show, onHide, log }) => {
               ? new Date(log.task.completed_at).toLocaleString()
               : null
           )}
+          {log.task && formatTaskTimeDhm(log.task) !== "—" && infoItem("Tiempo dedicado", formatTaskTimeDhm(log.task))}
         </Card>
 
         <h5 className="mb-3 text-dark">Historial de Comentarios</h5>

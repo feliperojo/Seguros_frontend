@@ -58,8 +58,11 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
     // Mensajes específicos según el código de estado
     if (response.status === 401) {
       errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
-      // Limpiar token inválido
-      localStorage.removeItem("auth_token");
+      // No borrar el token si el 401 es por contraseña incorrecta del super admin (el usuario sigue autenticado)
+      const isVerifySuperAdminPassword = url.includes("verify-super-admin-password");
+      if (!isVerifySuperAdminPassword) {
+        localStorage.removeItem("auth_token");
+      }
     } else if (response.status === 403) {
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
     } else if (response.status === 404) {
@@ -133,7 +136,10 @@ const apiRequestFormData = async (endpoint, method = "POST", formData = null) =>
     // Mensajes específicos según el código de estado
     if (response.status === 401) {
       errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
-      localStorage.removeItem("auth_token");
+      const isVerifySuperAdminPassword = url.includes("verify-super-admin-password");
+      if (!isVerifySuperAdminPassword) {
+        localStorage.removeItem("auth_token");
+      }
     } else if (response.status === 403) {
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
     } else if (response.status === 404) {

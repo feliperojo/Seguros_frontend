@@ -12,13 +12,24 @@ import {
   Tab,
   Tabs,
 } from "react-bootstrap";
-import { FaChartBar, FaUsers, FaTasks, FaClock, FaChevronDown, FaChevronRight } from "react-icons/fa";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
+import { FaChartBar, FaUsers, FaTasks, FaClock, FaChevronDown, FaChevronRight, FaChartPie, FaStopwatch } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { formatDurationFromMinutes } from "../utils/formatters";
+import VerTareaModal from "../components/Tareas/VerTareaModal";
 
-const COMPLETED_STATES = new Set([
-  "done", "completed", "complete", "finished", "resolved", "closed", "completada", "terminada",
-]);
+const COLORS = ["#0d6efd", "#198754", "#fd7e14", "#6f42c1", "#20c997", "#e83e8c", "#ffc107", "#6c757d"];
 
 const toArray = (data) => {
   if (Array.isArray(data)) return data;
@@ -26,6 +37,77 @@ const toArray = (data) => {
   if (data?.data?.data && Array.isArray(data.data.data)) return data.data.data;
   return [];
 };
+
+/** Quita etiquetas HTML y devuelve solo texto plano */
+const limpiarHtml = (html) => {
+  if (!html) return "";
+  try {
+    const tmp = document.createElement("DIV");
+    tmp.innerHTML = String(html);
+    return (tmp.textContent || tmp.innerText || "").trim();
+  } catch {
+    return String(html).replace(/<[^>]*>/g, "").trim();
+  }
+};
+
+/** Tabla de detalle reutilizable (por concepto, por subconcepto, rendimiento por usuario) */
+function TablaDetalleTareas({ detalle = [], tipo, onVerTarea }) {
+  const lista = Array.isArray(detalle) ? detalle : [];
+  return (
+    <Table size="sm" bordered className="mt-2 mb-0">
+      <thead>
+        <tr>
+          <th>ID tarea</th>
+          {tipo === "rendimiento" ? <th>Cliente</th> : <th>Usuario asignado</th>}
+          <th>Comentario inicial</th>
+          <th className="text-end">Tiempo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {lista.map((d, idx) => (
+          <tr key={idx}>
+            <td>
+              {d.tareaId ? (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="p-0 text-primary text-decoration-none"
+                  onClick={() => onVerTarea(d.tareaId)}
+                >
+                  {d.tareaId}
+                </Button>
+              ) : (
+                "—"
+              )}
+            </td>
+            <td>
+              {tipo === "rendimiento" ? (
+                d.clienteId ? (
+                  <a
+                    href={`/clientes/${d.clienteId}/ficha`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary text-decoration-none"
+                  >
+                    {d.clienteNombre || d.clienteId}
+                  </a>
+                ) : (
+                  d.clienteNombre || "—"
+                )
+              ) : (
+                d.userName || "—"
+              )}
+            </td>
+            <td style={{ maxWidth: 400 }} className="text-break">
+              {limpiarHtml(d.comentarioInicial) || "—"}
+            </td>
+            <td className="text-end">{formatDurationFromMinutes(d.minutos ?? 0)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
 
 export default function InformeTiempoPorConcepto() {
   const [fechaInicio, setFechaInicio] = useState("");
@@ -49,10 +131,12 @@ export default function InformeTiempoPorConcepto() {
   const [porSubconcepto, setPorSubconcepto] = useState([]);
   const [porUsuario, setPorUsuario] = useState([]);
   const [resumen, setResumen] = useState({ totalTareas: 0, totalMinutos: 0 });
-  const [usuarioExpandido, setUsuarioExpandido] = useState(null); // userId para fila expandida
+  const [usuarioExpandido, setUsuarioExpandido] = useState(null);
+  const [conceptoExpandido, setConceptoExpandido] = useState(null);
+  const [subconceptoExpandido, setSubconceptoExpandido] = useState(null);
 
-  // Mapa concept_id -> { parentName, subconceptName } para agregar
-  const [conceptMap, setConceptMap] = useState({});
+  const [taskIdModal, setTaskIdModal] = useState(null);
+  const [showModalTarea, setShowModalTarea] = useState(false);
 
   // Cargar conceptos padres al montar
   useEffect(() => {
@@ -122,24 +206,6 @@ export default function InformeTiempoPorConcepto() {
     return () => { cancelled = true; };
   }, []);
 
-  // Construir mapa concepto_id -> { parentName, subconceptName } cargando todos los subconceptos
-  const buildConceptMap = useCallback(async () => {
-    const map = {};
-    const padres = toArray(await apiRequest("operational_concepts?only_parents=true", "GET"));
-    for (const padre of padres || []) {
-      const hijos = toArray(await apiRequest(`operational_concepts/${padre.id}/subconcepts`, "GET"));
-      const parentName = padre.name || "Sin concepto padre";
-      for (const h of hijos || []) {
-        map[String(h.id)] = { parentName, subconceptName: h.name || "Sin nombre" };
-      }
-      // El propio padre puede ser usado como "concepto" en alguna tarea
-      if (padre.id) {
-        map[String(padre.id)] = map[String(padre.id)] || { parentName, subconceptName: parentName };
-      }
-    }
-    return map;
-  }, []);
-
   const ejecutarReporte = useCallback(async () => {
     setError("");
     setLoadingReporte(true);
@@ -149,123 +215,81 @@ export default function InformeTiempoPorConcepto() {
     setPorUsuario([]);
     setResumen({ totalTareas: 0, totalMinutos: 0 });
     setUsuarioExpandido(null);
+    setConceptoExpandido(null);
+    setSubconceptoExpandido(null);
 
     try {
-      const map = await buildConceptMap();
-      setConceptMap(map);
-
       const params = new URLSearchParams();
-      params.append("per_page", "1000");
-      params.append("page", "1");
-      params.append("include", "log,log.cliente,concept,assignedUser");
+      params.append("estado", "completed"); // Solo tareas terminadas (el backend puede aceptar "completed" o "terminado")
       if (fechaInicio) params.append("fecha_inicio", fechaInicio);
       if (fechaFin) params.append("fecha_fin", fechaFin);
-      if (usuarioId) params.append("assigned_user_id", usuarioId);
-      // Backend puede filtrar por estado; si no, se filtran solo completadas en front
-      params.append("estado", "completed");
+      if (conceptoPadreId) params.append("concepto_padre_id", conceptoPadreId);
+      if (subconceptoId) params.append("subconcepto_id", subconceptoId);
+      if (usuarioId) params.append("usuario_id", usuarioId);
 
-      const response = await apiRequest(`tareas_operativas?${params.toString()}`, "GET");
-      let list = [];
-      if (response?.data) {
-        list = Array.isArray(response.data) ? response.data : response.data?.data || [];
-      } else if (Array.isArray(response)) {
-        list = response;
-      }
+      const data = await apiRequest(`reportes/tiempo-tareas?${params.toString()}`, "GET");
 
-      // Si el backend no filtra por estado, filtrar aquí
-      list = list.filter((t) => {
-        const st = String(t?.estado ?? t?.status ?? "").toLowerCase();
-        return COMPLETED_STATES.has(st);
+      const resumenData = data?.resumen ?? {};
+      setResumen({
+        totalTareas: resumenData.total_tareas ?? 0,
+        totalMinutos: resumenData.total_minutos ?? 0,
       });
 
-      // Filtros en front: concepto padre y subconcepto
-      if (conceptoPadreId) {
-        list = list.filter((t) => {
-          const cid = t?.log?.concept_id ?? t?.concept_id ?? t?.log?.concept?.id ?? t?.concept?.id;
-          const info = map[String(cid)];
-          if (!info) return false;
-          const parentIdFromMap = conceptosPadres.find((p) => p.name === info.parentName)?.id;
-          return String(parentIdFromMap) === String(conceptoPadreId);
-        });
-      }
-      if (subconceptoId) {
-        list = list.filter((t) => {
-          const cid = t?.log?.concept_id ?? t?.concept_id ?? t?.log?.concept?.id ?? t?.concept?.id;
-          return String(cid) === String(subconceptoId);
-        });
-      }
-
-      const byConcept = {};
-      const bySubconcept = {};
-      const byUser = {};
-
-      for (const t of list) {
-        const start = t?.created_at ?? t?.scheduled_date ?? t?.fecha_inicio ?? t?.fecha;
-        const end = t?.completed_at ?? t?.finished_at ?? t?.fecha_fin ?? t?.fecha_cierre ?? t?.closed_at;
-        if (!start || !end) continue;
-        const startMs = new Date(start).getTime();
-        const endMs = new Date(end).getTime();
-        if (endMs <= startMs) continue;
-        const minutes = Math.floor((endMs - startMs) / (1000 * 60));
-
-        const cid = t?.log?.concept_id ?? t?.concept_id ?? t?.log?.concept?.id ?? t?.concept?.id;
-        const conceptInfo = map[String(cid)] || {
-          parentName: t?.log?.concept?.name ?? t?.concept?.name ?? "Sin concepto",
-          subconceptName: t?.log?.concept?.name ?? t?.concept?.name ?? "Sin concepto",
-        };
-        const parentName = conceptInfo.parentName;
-        const subconceptName = conceptInfo.subconceptName;
-
-        const userId = t?.assigned_user_id ?? t?.assignedUser?.id ?? t?.assign_to_user?.id ?? t?.assigned_to_user?.id;
-        const userName = t?.assignedUser?.name ?? t?.assign_to_user?.name ?? t?.assigned_to_user?.name ?? "Sin asignar";
-        const userKey = userId ?? "sin-asignar";
-
-        if (!byConcept[parentName]) byConcept[parentName] = { minutos: 0, tareas: 0 };
-        byConcept[parentName].minutos += minutes;
-        byConcept[parentName].tareas += 1;
-
-        if (!bySubconcept[subconceptName]) bySubconcept[subconceptName] = { minutos: 0, tareas: 0 };
-        bySubconcept[subconceptName].minutos += minutes;
-        bySubconcept[subconceptName].tareas += 1;
-
-        if (!byUser[userKey]) byUser[userKey] = { userName, minutos: 0, tareas: 0, byConcept: {} };
-        byUser[userKey].minutos += minutes;
-        byUser[userKey].tareas += 1;
-        if (!byUser[userKey].byConcept[parentName]) byUser[userKey].byConcept[parentName] = { minutos: 0, tareas: 0 };
-        byUser[userKey].byConcept[parentName].minutos += minutes;
-        byUser[userKey].byConcept[parentName].tareas += 1;
-      }
-
-      const totalTareas = list.filter((t) => {
-        const start = t?.created_at ?? t?.scheduled_date ?? t?.fecha_inicio ?? t?.fecha;
-        const end = t?.completed_at ?? t?.finished_at ?? t?.fecha_fin ?? t?.fecha_cierre;
-        return start && end && new Date(end).getTime() > new Date(start).getTime();
-      }).length;
-      const totalMinutos = Object.values(bySubconcept).reduce((acc, v) => acc + v.minutos, 0);
+      const mapConcepto = (arr) =>
+        (arr || []).map((c) => ({
+          nombre: c.nombre ?? "Sin nombre",
+          tareas: c.tareas ?? 0,
+          minutos: c.minutos ?? 0,
+          detalle: (c.detalle || []).map((d) => ({
+            tareaId: d.tarea_id ?? d.id_tarea ?? d.id ?? "",
+            userName: d.usuario_nombre ?? "—",
+            clienteId: d.cliente_id ?? d.cliente?.id ?? "",
+            clienteNombre: d.cliente_nombre ?? d.cliente?.nombre_completo ?? d.cliente?.nombre ?? "",
+            comentarioInicial: d.comentario_inicial ?? "",
+            minutos: d.minutos ?? 0,
+          })),
+        }));
 
       setPorConcepto(
-        Object.entries(byConcept)
-          .map(([nombre, v]) => ({ nombre, ...v }))
-          .sort((a, b) => b.minutos - a.minutos)
+        mapConcepto(data?.por_concepto).sort((a, b) => (b.minutos || 0) - (a.minutos || 0))
       );
       setPorSubconcepto(
-        Object.entries(bySubconcept)
-          .map(([nombre, v]) => ({ nombre, ...v }))
-          .sort((a, b) => b.minutos - a.minutos)
+        mapConcepto(data?.por_subconcepto).sort((a, b) => (b.minutos || 0) - (a.minutos || 0))
       );
+
+      const porUsuarioRaw = data?.por_usuario ?? [];
       setPorUsuario(
-        Object.entries(byUser)
-          .map(([key, v]) => ({ userId: key, ...v }))
-          .sort((a, b) => b.minutos - a.minutos)
+        porUsuarioRaw
+          .map((u, i) => ({
+            userId: u.usuario_id ?? u.id ?? `u-${i}`,
+            userName: u.usuario_nombre ?? u.nombre ?? "Sin asignar",
+            tareas: u.tareas ?? 0,
+            minutos: u.minutos ?? 0,
+            detalle: (u.detalle || []).map((d) => ({
+              tareaId: d.tarea_id ?? d.id_tarea ?? d.id ?? "",
+              clienteId: d.cliente_id ?? d.cliente?.id ?? "",
+              clienteNombre: d.cliente_nombre ?? d.cliente?.nombre_completo ?? d.cliente?.nombre ?? d.nombre_cliente ?? "",
+              comentarioInicial: d.comentario_inicial ?? "",
+              minutos: d.minutos ?? 0,
+            })),
+            byConcept: {},
+          }))
+          .sort((a, b) => (b.minutos || 0) - (a.minutos || 0))
       );
-      setResumen({ totalTareas, totalMinutos });
     } catch (err) {
-      console.error(err);
-      setError("Error al generar el reporte. Ver consola o intente de nuevo.");
+      console.error("[InformeTiempoPorConcepto]", err);
+      const msg = err?.response?.data?.message ?? err?.message ?? "Error inesperado";
+      setError(`Error al generar el reporte: ${msg}. Revisa la consola (F12) para más detalle.`);
     } finally {
       setLoadingReporte(false);
     }
-  }, [fechaInicio, fechaFin, conceptoPadreId, subconceptoId, usuarioId, conceptosPadres, buildConceptMap]);
+  }, [fechaInicio, fechaFin, conceptoPadreId, subconceptoId, usuarioId]);
+
+  const abrirModalTarea = useCallback((taskId) => {
+    if (!taskId) return;
+    setTaskIdModal(taskId);
+    setShowModalTarea(true);
+  }, []);
 
   return (
     <Container className="py-4">
@@ -277,6 +301,7 @@ export default function InformeTiempoPorConcepto() {
       <Card className="mb-4">
         <Card.Header>
           <h5 className="mb-0">Filtros</h5>
+          <small className="text-muted fw-normal">Este reporte solo incluye tareas en estado terminado (completadas), no pendientes ni en progreso.</small>
         </Card.Header>
         <Card.Body>
           {error && <Alert variant="danger" onClose={() => setError("")} dismissible>{error}</Alert>}
@@ -362,18 +387,172 @@ export default function InformeTiempoPorConcepto() {
 
       {ejecutado && !loadingReporte && (
         <>
-          <Card className="mb-4">
-            <Card.Body className="py-3">
-              <Row>
-                <Col md={6}>
-                  <strong>Total tareas (con duración):</strong> {resumen.totalTareas}
-                </Col>
-                <Col md={6}>
-                  <strong>Tiempo total:</strong> {formatDurationFromMinutes(resumen.totalMinutos)}
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
+          {/* KPIs y métricas para análisis */}
+          {(() => {
+            const totalMin = resumen.totalMinutos || 0;
+            const totalTareas = resumen.totalTareas || 0;
+            const promedioMin = totalTareas > 0 ? Math.round(totalMin / totalTareas) : 0;
+            const topConcepto = porConcepto[0];
+            const topUsuario = porUsuario[0];
+            const datosGraficoConcepto = porConcepto.slice(0, 10).map((r) => ({ name: r.nombre?.length > 25 ? r.nombre.slice(0, 22) + "…" : r.nombre, minutos: r.minutos || 0, tiempo: formatDurationFromMinutes(r.minutos || 0) }));
+            const datosGraficoUsuario = porUsuario.slice(0, 10).map((r) => ({ name: r.userName || "Sin asignar", minutos: r.minutos || 0, tiempo: formatDurationFromMinutes(r.minutos || 0) }));
+            const datosTorta = porConcepto.slice(0, 8).map((r) => ({ name: r.nombre?.length > 20 ? r.nombre.slice(0, 17) + "…" : r.nombre, value: r.minutos || 0 }));
+            return (
+              <>
+                <Row className="mb-4 g-3">
+                  <Col xs={12} md={6} lg>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex align-items-center gap-3">
+                        <div className="rounded-3 bg-primary bg-opacity-10 p-3">
+                          <FaTasks className="text-primary" size={24} />
+                        </div>
+                        <div>
+                          <div className="text-muted small">Total tareas</div>
+                          <div className="fs-4 fw-bold">{totalTareas}</div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col xs={12} md={6} lg>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex align-items-center gap-3">
+                        <div className="rounded-3 bg-success bg-opacity-10 p-3">
+                          <FaClock className="text-success" size={24} />
+                        </div>
+                        <div>
+                          <div className="text-muted small">Tiempo total</div>
+                          <div className="fs-4 fw-bold">{formatDurationFromMinutes(totalMin)}</div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col xs={12} md={6} lg>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex align-items-center gap-3">
+                        <div className="rounded-3 bg-info bg-opacity-10 p-3">
+                          <FaStopwatch className="text-info" size={24} />
+                        </div>
+                        <div>
+                          <div className="text-muted small">Promedio por tarea</div>
+                          <div className="fs-4 fw-bold">{formatDurationFromMinutes(promedioMin)}</div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col xs={12} md={6} lg>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex align-items-center gap-3">
+                        <div className="rounded-3 bg-warning bg-opacity-10 p-3">
+                          <FaChartBar className="text-warning" size={24} />
+                        </div>
+                        <div>
+                          <div className="text-muted small">Concepto con más tiempo</div>
+                          <div className="fw-semibold text-truncate" title={topConcepto?.nombre}>{topConcepto ? (topConcepto.nombre?.length > 28 ? topConcepto.nombre.slice(0, 25) + "…" : topConcepto.nombre) : "—"}</div>
+                          <div className="small text-muted">{topConcepto ? formatDurationFromMinutes(topConcepto.minutos) : ""}</div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col xs={12} md={6} lg>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Body className="d-flex align-items-center gap-3">
+                        <div className="rounded-3 bg-secondary bg-opacity-10 p-3">
+                          <FaUsers className="text-secondary" size={24} />
+                        </div>
+                        <div>
+                          <div className="text-muted small">Usuario con más tiempo</div>
+                          <div className="fw-semibold text-truncate">{topUsuario?.userName ?? "—"}</div>
+                          <div className="small text-muted">{topUsuario ? formatDurationFromMinutes(topUsuario.minutos) : ""}</div>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+
+                {/* Gráficos para análisis visual */}
+                <Row className="mb-4 g-4">
+                  <Col lg={6}>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Header className="bg-white border-bottom">
+                        <FaChartBar className="me-2 text-primary" />
+                        Tiempo por concepto (top 10)
+                      </Card.Header>
+                      <Card.Body>
+                        {datosGraficoConcepto.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={320}>
+                            <BarChart data={datosGraficoConcepto} layout="vertical" margin={{ left: 8, right: 20, top: 8, bottom: 8 }}>
+                              <XAxis type="number" tickFormatter={(v) => (v >= 60 ? `${Math.round(v / 60)}h` : `${v}m`)} />
+                              <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+                              <Tooltip formatter={(v) => [formatDurationFromMinutes(v), "Minutos"]} labelFormatter={(l) => l} />
+                              <Bar dataKey="minutos" fill="#0d6efd" radius={[0, 4, 4, 0]} name="Tiempo" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-center py-5 text-muted small">Sin datos para graficar</div>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  <Col lg={6}>
+                    <Card className="border-0 shadow-sm h-100">
+                      <Card.Header className="bg-white border-bottom">
+                        <FaChartPie className="me-2 text-primary" />
+                        Distribución del tiempo por concepto
+                      </Card.Header>
+                      <Card.Body>
+                        {datosTorta.length > 0 && totalMin > 0 ? (
+                          <ResponsiveContainer width="100%" height={320}>
+                            <PieChart>
+                              <Pie
+                                data={datosTorta}
+                                dataKey="value"
+                                nameKey="name"
+                                cx="50%"
+                                cy="50%"
+                                outerRadius={100}
+                                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                              >
+                                {datosTorta.map((_, i) => (
+                                  <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(v, n, p) => [formatDurationFromMinutes(v), `${(p.payload?.value / totalMin * 100).toFixed(1)}% del total`]} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-center py-5 text-muted small">Sin datos para graficar</div>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+                <Row className="mb-4">
+                  <Col xs={12}>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Header className="bg-white border-bottom">
+                        <FaUsers className="me-2 text-primary" />
+                        Tiempo por usuario (top 10) — comparativa de rendimiento
+                      </Card.Header>
+                      <Card.Body>
+                        {datosGraficoUsuario.length > 0 ? (
+                          <ResponsiveContainer width="100%" height={320}>
+                            <BarChart data={datosGraficoUsuario} margin={{ top: 8, right: 20, left: 8, bottom: 60 }}>
+                              <XAxis dataKey="name" angle={-35} textAnchor="end" height={70} tick={{ fontSize: 12 }} />
+                              <YAxis tickFormatter={(v) => (v >= 60 ? `${Math.round(v / 60)}h` : `${v}m`)} />
+                              <Tooltip formatter={(v) => [formatDurationFromMinutes(v), "Tiempo"]} />
+                              <Bar dataKey="minutos" fill="#198754" radius={[4, 4, 0, 0]} name="Tiempo" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="text-center py-5 text-muted small">Sin datos para graficar</div>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              </>
+            );
+          })()}
 
           <Tabs defaultActiveKey="por-concepto" className="mb-3">
             <Tab eventKey="por-concepto" title={<><FaTasks className="me-1" /> Por concepto</>}>
@@ -382,22 +561,60 @@ export default function InformeTiempoPorConcepto() {
                   <Table responsive bordered hover size="sm">
                     <thead>
                       <tr>
+                        <th style={{ width: 40 }}></th>
                         <th>Concepto (padre)</th>
+                        <th>Usuarios asignados</th>
                         <th className="text-end">Tareas</th>
                         <th className="text-end">Tiempo total</th>
+                        <th className="text-end">% del total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {porConcepto.length === 0 ? (
-                        <tr><td colSpan={3} className="text-muted text-center">Sin datos</td></tr>
+                        <tr><td colSpan={6} className="text-muted text-center">Sin datos</td></tr>
                       ) : (
-                        porConcepto.map((row) => (
-                          <tr key={row.nombre}>
-                            <td>{row.nombre}</td>
-                            <td className="text-end">{row.tareas}</td>
-                            <td className="text-end">{formatDurationFromMinutes(row.minutos)}</td>
-                          </tr>
-                        ))
+                        porConcepto.map((row) => {
+                          const expandido = conceptoExpandido === row.nombre;
+                          const detalle = row.detalle || [];
+                          const usuariosUnicos = [...new Set(detalle.map((d) => d.userName))].filter(Boolean);
+                          const tieneDetalle = detalle.length > 0;
+                          const totalMin = resumen.totalMinutos || 0;
+                          const pct = totalMin > 0 ? ((row.minutos || 0) / totalMin * 100).toFixed(1) : "0";
+                          return (
+                            <React.Fragment key={row.nombre}>
+                              <tr>
+                                <td className="align-middle">
+                                  {tieneDetalle ? (
+                                    <Button
+                                      variant="link"
+                                      size="sm"
+                                      className="p-0 text-dark"
+                                      onClick={() => setConceptoExpandido(expandido ? null : row.nombre)}
+                                      aria-expanded={expandido}
+                                    >
+                                      {expandido ? <FaChevronDown /> : <FaChevronRight />}
+                                    </Button>
+                                  ) : null}
+                                </td>
+                                <td>{row.nombre}</td>
+                                <td>{usuariosUnicos.length ? usuariosUnicos.join(", ") : "—"}</td>
+                                <td className="text-end">{row.tareas}</td>
+                                <td className="text-end">{formatDurationFromMinutes(row.minutos)}</td>
+                                <td className="text-end">{pct}%</td>
+                              </tr>
+                              {expandido && tieneDetalle && (
+                                <tr>
+                                  <td colSpan={6} className="bg-light p-3">
+                                    <div className="small">
+                                      <strong>Detalle por tarea (usuario y comentario inicial)</strong>
+                                      <TablaDetalleTareas detalle={detalle} tipo="concepto" onVerTarea={abrirModalTarea} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </Table>
@@ -410,22 +627,60 @@ export default function InformeTiempoPorConcepto() {
                   <Table responsive bordered hover size="sm">
                     <thead>
                       <tr>
+                        <th style={{ width: 40 }}></th>
                         <th>Subconcepto</th>
+                        <th>Usuarios asignados</th>
                         <th className="text-end">Tareas</th>
                         <th className="text-end">Tiempo total</th>
+                        <th className="text-end">% del total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {porSubconcepto.length === 0 ? (
-                        <tr><td colSpan={3} className="text-muted text-center">Sin datos</td></tr>
+                        <tr><td colSpan={6} className="text-muted text-center">Sin datos</td></tr>
                       ) : (
-                        porSubconcepto.map((row) => (
-                          <tr key={row.nombre}>
-                            <td>{row.nombre}</td>
-                            <td className="text-end">{row.tareas}</td>
-                            <td className="text-end">{formatDurationFromMinutes(row.minutos)}</td>
-                          </tr>
-                        ))
+                        porSubconcepto.map((row) => {
+                          const expandido = subconceptoExpandido === row.nombre;
+                          const detalle = row.detalle || [];
+                          const usuariosUnicos = [...new Set(detalle.map((d) => d.userName))].filter(Boolean);
+                          const tieneDetalle = detalle.length > 0;
+                          const totalMinSub = resumen.totalMinutos || 0;
+                          const pctSub = totalMinSub > 0 ? ((row.minutos || 0) / totalMinSub * 100).toFixed(1) : "0";
+                          return (
+                            <React.Fragment key={row.nombre}>
+                              <tr>
+                                <td className="align-middle">
+                                  {tieneDetalle ? (
+                                    <Button
+                                      variant="link"
+                                      size="sm"
+                                      className="p-0 text-dark"
+                                      onClick={() => setSubconceptoExpandido(expandido ? null : row.nombre)}
+                                      aria-expanded={expandido}
+                                    >
+                                      {expandido ? <FaChevronDown /> : <FaChevronRight />}
+                                    </Button>
+                                  ) : null}
+                                </td>
+                                <td>{row.nombre}</td>
+                                <td>{usuariosUnicos.length ? usuariosUnicos.join(", ") : "—"}</td>
+                                <td className="text-end">{row.tareas}</td>
+                                <td className="text-end">{formatDurationFromMinutes(row.minutos)}</td>
+                                <td className="text-end">{pctSub}%</td>
+                              </tr>
+                              {expandido && tieneDetalle && (
+                                <tr>
+                                  <td colSpan={6} className="bg-light p-3">
+                                    <div className="small">
+                                      <strong>Detalle por tarea (usuario y comentario inicial)</strong>
+                                      <TablaDetalleTareas detalle={detalle} tipo="concepto" onVerTarea={abrirModalTarea} />
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </Table>
@@ -442,20 +697,24 @@ export default function InformeTiempoPorConcepto() {
                         <th>Usuario</th>
                         <th className="text-end">Tareas</th>
                         <th className="text-end">Tiempo total</th>
+                        <th className="text-end">% del total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {porUsuario.length === 0 ? (
-                        <tr><td colSpan={4} className="text-muted text-center">Sin datos</td></tr>
+                        <tr><td colSpan={5} className="text-muted text-center">Sin datos</td></tr>
                       ) : (
                         porUsuario.map((row) => {
                           const expandido = usuarioExpandido === row.userId;
-                          const tieneDesglose = row.byConcept && Object.keys(row.byConcept).length > 0;
+                          const detalle = row.detalle || [];
+                          const tieneDetalle = detalle.length > 0;
+                          const totalMinUsu = resumen.totalMinutos || 0;
+                          const pctUsu = totalMinUsu > 0 ? ((row.minutos || 0) / totalMinUsu * 100).toFixed(1) : "0";
                           return (
                             <React.Fragment key={row.userId}>
                               <tr>
                                 <td className="align-middle">
-                                  {tieneDesglose ? (
+                                  {tieneDetalle ? (
                                     <Button
                                       variant="link"
                                       size="sm"
@@ -470,32 +729,14 @@ export default function InformeTiempoPorConcepto() {
                                 <td>{row.userName}</td>
                                 <td className="text-end">{row.tareas}</td>
                                 <td className="text-end">{formatDurationFromMinutes(row.minutos)}</td>
+                                <td className="text-end">{pctUsu}%</td>
                               </tr>
-                              {expandido && tieneDesglose && (
+                              {expandido && tieneDetalle && (
                                 <tr>
-                                  <td colSpan={4} className="bg-light p-3">
+                                  <td colSpan={5} className="bg-light p-3">
                                     <div className="small">
-                                      <strong>Desglose por concepto</strong>
-                                      <Table size="sm" bordered className="mt-2 mb-0">
-                                        <thead>
-                                          <tr>
-                                            <th>Concepto</th>
-                                            <th className="text-end">Tareas</th>
-                                            <th className="text-end">Tiempo</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {Object.entries(row.byConcept)
-                                            .sort((a, b) => b[1].minutos - a[1].minutos)
-                                            .map(([nombre, v]) => (
-                                              <tr key={nombre}>
-                                                <td>{nombre}</td>
-                                                <td className="text-end">{v.tareas}</td>
-                                                <td className="text-end">{formatDurationFromMinutes(v.minutos)}</td>
-                                              </tr>
-                                            ))}
-                                        </tbody>
-                                      </Table>
+                                      <strong>Detalle por tarea (cliente y comentario inicial)</strong>
+                                      <TablaDetalleTareas detalle={detalle} tipo="rendimiento" onVerTarea={abrirModalTarea} />
                                     </div>
                                   </td>
                                 </tr>
@@ -512,6 +753,15 @@ export default function InformeTiempoPorConcepto() {
           </Tabs>
         </>
       )}
+
+      <VerTareaModal
+        show={showModalTarea}
+        onHide={() => {
+          setShowModalTarea(false);
+          setTaskIdModal(null);
+        }}
+        taskId={taskIdModal}
+      />
     </Container>
   );
 }

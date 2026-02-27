@@ -8,15 +8,18 @@ import {
   Row,
   Col,
   Badge,
+  Alert,
   Toast,
   ToastContainer,
 } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
-import { formatDateTimeForDisplay } from "../../utils/formatters";
+import systemConfigService from "../../services/SystemConfigService";
+import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
+import { useAuth } from "../../context/AuthContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -82,6 +85,7 @@ const fechaToInputDate = (fecha) => {
 };
 
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
+  const { hasPermission, hasRole } = useAuth();
   // ✅ Log de depuración para verificar la estructura de la tarea (solo una vez por tarea)
   const tareaLogRef = useRef(null);
   useEffect(() => {
@@ -164,6 +168,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
   const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
+  // Fecha de vencimiento: bloqueada para todos; editable solo tras ingresar la clave del super admin
+  const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
+  const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
+  const [adminPasswordForDueDate, setAdminPasswordForDueDate] = useState("");
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [verifyingDueDatePassword, setVerifyingDueDatePassword] = useState(false);
+  const [dueDatePasswordError, setDueDatePasswordError] = useState("");
+  const isDueDateLocked = tarea?.id && !dueDateUnlocked;
+  const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
 
   // ✅ Estados para menciones
   const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
@@ -581,6 +594,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     // ✅ Resetear fechas cuando cambia la tarea
     setScheduledDate(fechaToInputDate(tarea?.scheduled_date) || "");
     setDueDate(fechaToInputDate(tarea?.due_date) || "");
+    setDueDateUnlocked(false);
+    setShowDueDatePasswordModal(false);
+    setAdminPasswordForDueDate("");
+    setAdminPasswordInput("");
 
     // ✅ Limpiar estados de edición al cambiar de tarea
     setComentariosEnEdicion({});
@@ -994,7 +1011,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         throw new Error(`ID de tarea inválido: ${tareaId}`);
       }
       
-      await apiRequest(`tareas_operativas/${numericTareaIdFinal}/completar`, "PUT");
+      // Tiempo dedicado: desde inicio de la tarea hasta ahora (liquidación calculada por el front)
+      const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+      const { dias, horas, minutos } = durationFromStartToEnd(fechaInicio || new Date(), new Date());
+      await apiRequest(`tareas_operativas/${numericTareaIdFinal}/completar`, "PUT", { dias, horas, minutos });
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
@@ -1146,16 +1166,65 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
   };
   
+  // Verificar contraseña del super admin con el backend antes de desbloquear
+  const handleVerificarPasswordDueDate = async () => {
+    const pwd = (adminPasswordInput || "").trim();
+    setDueDatePasswordError("");
+    if (!pwd) {
+      setToastVariant("warning");
+      setToastMessage("Ingrese la contraseña del super administrador");
+      setShowToast(true);
+      return;
+    }
+    setVerifyingDueDatePassword(true);
+    try {
+      await systemConfigService.verifySuperAdminPassword(pwd);
+      setAdminPasswordForDueDate(pwd);
+      setDueDateUnlocked(true);
+      setAdminPasswordInput("");
+      setDueDatePasswordError("");
+      setShowDueDatePasswordModal(false);
+      setToastVariant("success");
+      setToastMessage("Fecha de vencimiento desbloqueada. Puede modificarla y guardar.");
+      setShowToast(true);
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Contraseña incorrecta.";
+      setDueDatePasswordError(msg);
+      setToastVariant("danger");
+      setToastMessage("La contraseña del super administrador no es correcta.");
+      setShowToast(true);
+    } finally {
+      setVerifyingDueDatePassword(false);
+    }
+  };
+
   const handleActualizarFechas = async () => {
     if (!scheduledDate || !dueDate) {
       alert("Las fechas no pueden estar vacías.");
       return;
     }
-    
+    if (scheduledDate > dueDate) {
+      setToastVariant("danger");
+      setToastMessage("La fecha de inicio no puede ser mayor que la fecha de vencimiento.");
+      setShowToast(true);
+      return;
+    }
+
     // ✅ Validar que tenemos un ID de tarea válido
     const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
     if (!tareaId) {
       alert("No se pudo identificar la tarea. Por favor, cierre el modal y vuelva a intentar.");
+      return;
+    }
+
+    const dueDateOriginal = fechaToInputDate(tarea?.due_date) || "";
+    const dueDateCambiada = dueDate !== dueDateOriginal;
+    const requierePassword = dueDateCambiada;
+    if (requierePassword && !adminPasswordForDueDate) {
+      setToastVariant("warning");
+      setToastMessage("Para cambiar la fecha de vencimiento debe ingresar la clave del super administrador.");
+      setShowToast(true);
+      setShowDueDatePasswordModal(true);
       return;
     }
     
@@ -1167,10 +1236,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         throw new Error(`ID de tarea inválido: ${tareaId}`);
       }
       
-      await apiRequest(`tareas_operativas/${numericTareaId}/reprogramar`, "PUT", {
+      const payload = {
         scheduled_date: scheduledDate,
         due_date: dueDate,
-      });
+      };
+      if (dueDateCambiada) {
+        payload.admin_password = adminPasswordForDueDate;
+      }
+      await apiRequest(`tareas_operativas/${numericTareaId}/reprogramar`, "PUT", payload);
 
       const tareaActualizada = {
         ...tarea,
@@ -1179,9 +1252,24 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       };
 
       if (onUpdated) onUpdated(tareaActualizada);
+      setDueDateUnlocked(false);
+      setAdminPasswordForDueDate("");
+      setToastVariant("success");
+      setToastMessage("Fechas actualizadas exitosamente");
+      setShowToast(true);
     } catch (error) {
       console.error(error);
-      alert("❌ Error al actualizar fechas");
+      const msg = error.response?.data?.message || error.message || "Error al actualizar fechas";
+      if (error.response?.status === 403 || (msg && (msg.toLowerCase().includes("contraseña") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("autoriz")))) {
+        setAdminPasswordForDueDate("");
+        setDueDateUnlocked(false);
+        setToastVariant("danger");
+        setToastMessage("Clave del super administrador incorrecta o sin permisos.");
+      } else {
+        setToastVariant("danger");
+        setToastMessage(msg);
+      }
+      setShowToast(true);
     } finally {
       setLoading(false);
     }
@@ -1790,7 +1878,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                           type="date"
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
-                          title="Formato: mm/dd/yyyy"
+                          max={dueDate || undefined}
+                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mm/dd/yyyy"}
                           style={{ borderRadius: "6px" }}
                         />
                       </Form.Group>
@@ -1800,17 +1889,42 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         <Form.Label>
                           <i className="fas fa-clock text-warning me-1"></i>
                           Vencimiento: <small className="text-muted">(mm/dd/yyyy)</small>
+                          {isDueDateLocked && (
+                            <small className="text-muted ms-2">(requiere clave del super admin)</small>
+                          )}
                         </Form.Label>
-                        <Form.Control
-                          type="date"
-                          value={dueDate}
-                          onChange={(e) => setDueDate(e.target.value)}
-                          title="Formato: mm/dd/yyyy"
-                          style={{ borderRadius: "6px" }}
-                        />
+                        <div className="d-flex gap-2 align-items-start">
+                          <Form.Control
+                            type="date"
+                            value={dueDate}
+                            onChange={(e) => setDueDate(e.target.value)}
+                            min={scheduledDate || undefined}
+                            disabled={isDueDateLocked}
+                            readOnly={isDueDateLocked}
+                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mm/dd/yyyy")}
+                            style={{ borderRadius: "6px", flex: 1 }}
+                          />
+                          {isDueDateLocked && (
+                            <Button
+                              type="button"
+                              variant={dueDateUnlocked ? "outline-success" : "outline-warning"}
+                              size="sm"
+                              onClick={() => (dueDateUnlocked ? (setDueDateUnlocked(false), setAdminPasswordForDueDate("")) : setShowDueDatePasswordModal(true))}
+                              style={{ whiteSpace: "nowrap" }}
+                              title={dueDateUnlocked ? "Bloquear de nuevo" : "Desbloquear para editar (requiere clave del super admin)"}
+                            >
+                              {dueDateUnlocked ? "Bloquear" : "Desbloquear"}
+                            </Button>
+                          )}
+                        </div>
                       </Form.Group>
                     </Col>
                   </Row>
+                  {fechasInvalidas && (
+                    <Alert variant="danger" className="mb-3 py-2 small">
+                      La fecha de inicio no puede ser mayor que la fecha de vencimiento.
+                    </Alert>
+                  )}
                   <div className="mb-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-user text-info"></i>
@@ -1851,6 +1965,12 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                   <Badge bg={getBadgeColor(tarea?.due_date)}>
                     {formatFecha(tarea?.due_date)}
                   </Badge>
+                  {formatTaskTimeDhm(tarea) !== "—" && (
+                    <div className="mt-2">
+                      <span className="text-muted small">Tiempo dedicado: </span>
+                      <strong>{formatTaskTimeDhm(tarea)}</strong>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -2854,7 +2974,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
               </Button>
             ) : (
               <>
-                <Button variant="primary" onClick={handleActualizarFechas} disabled={loading}>
+                <Button variant="primary" onClick={handleActualizarFechas} disabled={loading || fechasInvalidas}>
                   Actualizar Fechas
                 </Button>
                 <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
@@ -3088,6 +3208,23 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
             )}
           </div>
         )}
+        {(() => {
+          const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
+          const tiempo = durationFromStartToEnd(fechaInicio || new Date());
+          const textoFecha = fechaInicio ? new Date(fechaInicio).toLocaleString("es", { dateStyle: "short", timeStyle: "short" }) : "inicio";
+          return (
+            <div className="mb-3 p-3 bg-light rounded">
+              <div className="d-flex align-items-center gap-2 mb-1">
+                <i className="fas fa-clock text-secondary"></i>
+                <strong className="small">Tiempo que se registrará (liquidación)</strong>
+              </div>
+              <p className="mb-0 small text-muted">
+                <span className="text-dark fw-semibold">{formatDhmString(tiempo)}</span>
+                {" "}(desde {textoFecha} hasta el momento de confirmar).
+              </p>
+            </div>
+          );
+        })()}
         <div className="alert alert-info mb-0">
           <small>
             <i className="fas fa-info-circle me-1"></i>
@@ -3230,7 +3367,54 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
     {/* ✅ Toast de notificación */}
     <ToastContainer className="p-3" position="top-end" style={{ zIndex: 9999 }}>
-      <Toast 
+      {/* Modal clave del super admin para desbloquear fecha de vencimiento */}
+      <Modal
+        show={showDueDatePasswordModal}
+        onHide={() => {
+          setShowDueDatePasswordModal(false);
+          setAdminPasswordInput("");
+          setDueDatePasswordError("");
+        }}
+        centered
+        size="sm"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="fas fa-lock text-warning me-2"></i>
+            Clave del super administrador
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="text-muted small mb-3">
+            Para modificar la fecha de vencimiento debe ingresar la contraseña del super administrador configurado en el sistema.
+          </p>
+          <Form.Group>
+            <Form.Label>Contraseña del super administrador</Form.Label>
+            <Form.Control
+              type="password"
+              value={adminPasswordInput}
+              onChange={(e) => { setAdminPasswordInput(e.target.value); setDueDatePasswordError(""); }}
+              placeholder="Ingrese la contraseña"
+              onKeyDown={(e) => e.key === "Enter" && handleVerificarPasswordDueDate()}
+              autoComplete="off"
+              isInvalid={!!dueDatePasswordError}
+            />
+            {dueDatePasswordError && (
+              <Form.Control.Feedback type="invalid">{dueDatePasswordError}</Form.Control.Feedback>
+            )}
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => { setShowDueDatePasswordModal(false); setDueDatePasswordError(""); }} disabled={verifyingDueDatePassword}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleVerificarPasswordDueDate} disabled={verifyingDueDatePassword}>
+            {verifyingDueDatePassword ? "Verificando..." : "Verificar"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Toast
         show={showToast} 
         onClose={() => setShowToast(false)} 
         delay={4000} 
@@ -3239,7 +3423,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       >
         <Toast.Header closeButton={true}>
           <strong className="me-auto">
-            {toastVariant === "success" ? "✅ Éxito" : "❌ Error"}
+            {toastVariant === "success" ? "✅ Éxito" : toastVariant === "warning" ? "⚠️ Aviso" : "❌ Error"}
           </strong>
         </Toast.Header>
         <Toast.Body className={toastVariant === "success" ? "text-white" : "text-white"}>

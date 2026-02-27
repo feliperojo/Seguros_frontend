@@ -13,6 +13,7 @@ import EditClienteModal from "../components/EditClienteModal"; // Importamos el 
 // Importar el componente modal de visualización
 import DetalleClienteModal from "../components/DetalleClienteModal";
 import CalendarioTareas from "../components/Tareas/CalendarioTareas";
+import VerTareaModal from "../components/Tareas/VerTareaModal";
 import { Helmet } from "react-helmet-async";
 
 
@@ -26,6 +27,10 @@ const Dashboard = () => {
   const [documentosProximosVencer, setDocumentosProximosVencer] = useState([]);
   const [tareas, setTareas] = useState([]);
   const [loadingTareas, setLoadingTareas] = useState(true);
+  const [tareasVencidas, setTareasVencidas] = useState([]);
+  const [loadingTareasVencidas, setLoadingTareasVencidas] = useState(false);
+  const [showVerTareaModal, setShowVerTareaModal] = useState(false);
+  const [tareaIdVer, setTareaIdVer] = useState(null);
   
   const [polizasProximasVencer, setPolizasProximasVencer] = useState([]);
   const [estadisticas, setEstadisticas] = useState({
@@ -65,7 +70,8 @@ const Dashboard = () => {
     mostrarDocumentosSolicitados: true,
     mostrarCalendario: true,
     mostrarClientesRecientes: true,
-    mostrarPolizasCanceladas: true
+    mostrarPolizasCanceladas: true,
+    mostrarTareasVencidas: true
   });
   const [cargandoPreferencias, setCargandoPreferencias] = useState(true);
 
@@ -187,6 +193,87 @@ const Dashboard = () => {
     }
   }, [mesPagosSeleccionado, preferenciasVisualizacion?.mostrarPagosPendientes]);
 
+  // Función para cargar tareas vencidas del usuario actual
+  const cargarTareasVencidas = useCallback(async () => {
+    if (
+      !preferenciasVisualizacion ||
+      !preferenciasVisualizacion.mostrarTareasVencidas ||
+      !currentUser?.id
+    ) {
+      setTareasVencidas([]);
+      return;
+    }
+
+    setLoadingTareasVencidas(true);
+    try {
+      const params = new URLSearchParams();
+      params.append("assigned_user_id", currentUser.id);
+      params.append("per_page", "200");
+
+      const res = await apiRequest(`tareas_operativas?${params.toString()}`, "GET");
+
+      let tareasData = [];
+      if (res?.data) {
+        tareasData = Array.isArray(res.data) ? res.data : (res.data.data || []);
+      } else if (Array.isArray(res)) {
+        tareasData = res;
+      }
+
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+
+      const parseFecha = (valor) => {
+        if (!valor) return null;
+        if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
+        const str = String(valor);
+        const base = str.includes("T") ? str : `${str}T00:00:00`;
+        const d = new Date(base);
+        return isNaN(d.getTime()) ? null : d;
+      };
+
+      const calcularDiasAtraso = (fechaVenc) => {
+        const fecha = parseFecha(fechaVenc);
+        if (!fecha) return null;
+        const diffMs = hoy.getTime() - fecha.getTime();
+        if (diffMs <= 0) return null;
+        return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      };
+
+      const pendientesVencidas = tareasData
+        .map((t) => {
+          const status = (t.status || t.estado || "").toLowerCase();
+          if (["completed", "completada", "completado", "cancelled", "cancelada"].includes(status)) {
+            return null;
+          }
+
+          const fechaVenc =
+            t.due_date ||
+            t.fecha_vencimiento ||
+            t.fechaLimite ||
+            t.fecha_limite ||
+            t.deadline;
+
+          const diasAtraso = calcularDiasAtraso(fechaVenc);
+          if (diasAtraso == null || diasAtraso <= 0) return null;
+
+          return {
+            ...t,
+            _dias_atraso: diasAtraso,
+            _fecha_vencimiento_original: fechaVenc,
+          };
+        })
+        .filter(Boolean)
+        .sort((a, b) => b._dias_atraso - a._dias_atraso);
+
+      setTareasVencidas(pendientesVencidas);
+    } catch (error) {
+      console.error("Error al cargar tareas vencidas:", error);
+      setTareasVencidas([]);
+    } finally {
+      setLoadingTareasVencidas(false);
+    }
+  }, [preferenciasVisualizacion?.mostrarTareasVencidas, currentUser?.id]);
+
   // Función para cambiar preferencia de visualización
   const togglePreferencia = (key) => {
     setPreferenciasVisualizacion(prev => ({
@@ -217,7 +304,8 @@ const Dashboard = () => {
           mostrarDocumentosSolicitados: res.dashboard_preferences.mostrarDocumentosSolicitados ?? true,
           mostrarCalendario: res.dashboard_preferences.mostrarCalendario ?? true,
           mostrarClientesRecientes: res.dashboard_preferences.mostrarClientesRecientes ?? true,
-          mostrarPolizasCanceladas: res.dashboard_preferences.mostrarPolizasCanceladas ?? true
+          mostrarPolizasCanceladas: res.dashboard_preferences.mostrarPolizasCanceladas ?? true,
+          mostrarTareasVencidas: res.dashboard_preferences.mostrarTareasVencidas ?? true
         });
       } else {
         // Si no hay preferencias en el backend, intentar cargar desde localStorage
@@ -232,7 +320,8 @@ const Dashboard = () => {
             mostrarDocumentosSolicitados: parsed.mostrarDocumentosSolicitados ?? true,
             mostrarCalendario: parsed.mostrarCalendario ?? true,
             mostrarClientesRecientes: parsed.mostrarClientesRecientes ?? true,
-            mostrarPolizasCanceladas: parsed.mostrarPolizasCanceladas ?? true
+            mostrarPolizasCanceladas: parsed.mostrarPolizasCanceladas ?? true,
+            mostrarTareasVencidas: parsed.mostrarTareasVencidas ?? true
           });
         }
       }
@@ -242,7 +331,16 @@ const Dashboard = () => {
       const storageKey = `dashboard_preferencias_${userId}`;
       const saved = localStorage.getItem(storageKey);
       if (saved) {
-        setPreferenciasVisualizacion(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        setPreferenciasVisualizacion({
+          mostrarCumpleanos: parsed.mostrarCumpleanos ?? true,
+          mostrarPagosPendientes: parsed.mostrarPagosPendientes ?? true,
+          mostrarDocumentosSolicitados: parsed.mostrarDocumentosSolicitados ?? true,
+          mostrarCalendario: parsed.mostrarCalendario ?? true,
+          mostrarClientesRecientes: parsed.mostrarClientesRecientes ?? true,
+          mostrarPolizasCanceladas: parsed.mostrarPolizasCanceladas ?? true,
+          mostrarTareasVencidas: parsed.mostrarTareasVencidas ?? true
+        });
       }
     } finally {
       setCargandoPreferencias(false);
@@ -278,6 +376,15 @@ const Dashboard = () => {
       setPagosPendientes([]);
     }
   }, [mesPagosSeleccionado, preferenciasVisualizacion?.mostrarPagosPendientes, cargarPagosPendientes, cargandoPreferencias]);
+
+  // Cargar tareas vencidas cuando cambie la preferencia o el usuario
+  useEffect(() => {
+    if (!cargandoPreferencias && preferenciasVisualizacion && preferenciasVisualizacion.mostrarTareasVencidas) {
+      cargarTareasVencidas();
+    } else if (!cargandoPreferencias) {
+      setTareasVencidas([]);
+    }
+  }, [preferenciasVisualizacion?.mostrarTareasVencidas, cargarTareasVencidas, cargandoPreferencias]);
 
   // Guardar preferencias cuando cambien (tanto en backend como localStorage)
   useEffect(() => {
@@ -517,7 +624,7 @@ const handleOpenViewModal = (cliente) => {
 
 
       {/* Nuevos KPIs de Alertas */}
-      {(preferenciasVisualizacion.mostrarCumpleanos || preferenciasVisualizacion.mostrarPagosPendientes) && (
+      {(preferenciasVisualizacion.mostrarCumpleanos || preferenciasVisualizacion.mostrarPagosPendientes || preferenciasVisualizacion.mostrarTareasVencidas) && (
         <div className="section-container mt-4">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <h5 className="section-title mb-0">Alertas y Recordatorios</h5>
@@ -723,6 +830,137 @@ const handleOpenViewModal = (cliente) => {
                     ) : (
                       <div className="text-center py-3 text-muted small">
                         No hay pagos pendientes para este mes
+                      </div>
+                    )}
+                  </Card.Body>
+                </Card>
+              </Col>
+            )}
+
+            {/* KPI Tareas Vencidas */}
+            {preferenciasVisualizacion.mostrarTareasVencidas && (
+              <Col xl={12} md={12}>
+                <Card className="dashboard-card alert-card h-100">
+                  <Card.Body>
+                    <div className="d-flex justify-content-between align-items-start mb-3">
+                      <div className="d-flex align-items-center gap-2">
+                        <div className="stats-icon" style={{ background: "rgba(220, 53, 69, 0.1)", color: "#dc3545" }}>
+                          <FaExclamationTriangle />
+                        </div>
+                        <div>
+                          <h6 className="stats-title mb-0">Tareas vencidas (mis tareas)</h6>
+                          <h3 className="stats-value" style={{ color: "#dc3545" }}>
+                            {loadingTareasVencidas ? "..." : tareasVencidas.length}
+                          </h3>
+                        </div>
+                      </div>
+                    </div>
+                    {loadingTareasVencidas ? (
+                      <div className="text-center py-3">
+                        <div className="spinner-border spinner-border-sm text-danger" role="status">
+                          <span className="visualmente-oculto">Cargando...</span>
+                        </div>
+                      </div>
+                    ) : tareasVencidas.length > 0 ? (
+                      <div className="table-responsive" style={{ maxHeight: "220px", overflowY: "auto" }}>
+                        <Table hover size="sm" className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Concepto principal</th>
+                              <th>Subconcepto</th>
+                              <th>Cliente</th>
+                              <th>Fecha de inicio</th>
+                              <th>Fecha de vencimiento</th>
+                              <th>Días de atraso</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tareasVencidas.slice(0, 15).map((tarea) => {
+                              const toStr = (v) => {
+                                if (v == null) return "";
+                                if (typeof v === "string") return v;
+                                if (typeof v === "object") {
+                                  const n = v.name ?? v.nombre;
+                                  return n != null ? String(n) : "";
+                                }
+                                return "";
+                              };
+
+                              const conceptObj = tarea?.log?.concept ?? tarea?.concept ?? {};
+                              const conceptoPadre =
+                                toStr(conceptObj?.parent) ||
+                                conceptObj?.parent_name ||
+                                toStr(tarea?.log?.concept_parent) ||
+                                toStr(tarea?.concept_parent) ||
+                                tarea?.concepto_padre ||
+                                tarea?.log?.concepto_padre ||
+                                tarea?.parent_concept_name ||
+                                "";
+                              const conceptoHijo =
+                                toStr(tarea?.concepto) ||
+                                toStr(tarea?.log?.concepto) ||
+                                toStr(conceptObj) ||
+                                tarea?.log?.concept_name ||
+                                tarea?.concept_name ||
+                                tarea?.concept_hijo ||
+                                tarea?.subconcept_name ||
+                                "";
+                              const clienteNombre =
+                                tarea?.log?.cliente?.nombre_completo ??
+                                tarea?.log?.cliente?.nombre ??
+                                tarea?.cliente_nombre ??
+                                tarea?.cliente?.nombre_completo ??
+                                tarea?.cliente?.nombre ??
+                                "N/A";
+
+                              const formatFecha = (valor) => {
+                                if (!valor) return "—";
+                                const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
+                                return isNaN(d.getTime()) ? "—" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                              };
+                              const fechaInicio = tarea.scheduled_date ?? tarea.scheduled_at ?? tarea.fecha_programada ?? tarea.fecha_inicio ?? tarea.created_at;
+                              const fechaVenc = tarea._fecha_vencimiento_original ?? tarea.due_date ?? tarea.fecha_vencimiento ?? tarea.fechaLimite;
+                              const tareaId = tarea.id || tarea.task_id;
+
+                              return (
+                                <tr key={tareaId}>
+                                  <td className="fw-medium">
+                                    <Button
+                                      variant="link"
+                                      className="p-0 text-primary text-decoration-none fw-medium"
+                                      onClick={() => {
+                                        setTareaIdVer(tareaId);
+                                        setShowVerTareaModal(true);
+                                      }}
+                                    >
+                                      {tareaId}
+                                    </Button>
+                                  </td>
+                                  <td>{conceptoPadre || "N/A"}</td>
+                                  <td>{conceptoHijo || "N/A"}</td>
+                                  <td>{clienteNombre}</td>
+                                  <td className="text-nowrap">{formatFecha(fechaInicio)}</td>
+                                  <td className="text-nowrap">{formatFecha(fechaVenc)}</td>
+                                  <td>
+                                    <Badge bg="danger">
+                                      {tarea._dias_atraso} día{tarea._dias_atraso === 1 ? "" : "s"}
+                                    </Badge>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </Table>
+                        {tareasVencidas.length > 15 && (
+                          <div className="text-center mt-2">
+                            <small className="text-muted">+{tareasVencidas.length - 15} más</small>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-3 text-muted small">
+                        No tienes tareas vencidas
                       </div>
                     )}
                   </Card.Body>
@@ -1068,6 +1306,18 @@ const handleOpenViewModal = (cliente) => {
                       checked={preferenciasVisualizacion.mostrarDocumentosSolicitados}
                       onChange={() => togglePreferencia('mostrarDocumentosSolicitados')}
                     />
+                    <Form.Check
+                      type="switch"
+                      id="toggle-tareas-vencidas-config"
+                      label={
+                        <span>
+                          <FaExclamationTriangle className="me-2" />
+                          Tareas vencidas (mis tareas)
+                        </span>
+                      }
+                      checked={preferenciasVisualizacion.mostrarTareasVencidas}
+                      onChange={() => togglePreferencia('mostrarTareasVencidas')}
+                    />
                   </div>
                 </Col>
                 <Col md={6}>
@@ -1131,6 +1381,16 @@ const handleOpenViewModal = (cliente) => {
         show={showViewModal}
         onHide={() => setShowViewModal(false)}
         clienteData={clienteToView}
+      />
+
+      {/* Modal detalle de tarea (tareas vencidas) */}
+      <VerTareaModal
+        show={showVerTareaModal}
+        onHide={() => {
+          setShowVerTareaModal(false);
+          setTareaIdVer(null);
+        }}
+        taskId={tareaIdVer}
       />
     </div>
   );
