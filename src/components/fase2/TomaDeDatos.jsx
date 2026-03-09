@@ -1969,7 +1969,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("policy_number") && (
-                              <Field label="Número de ID" className="col-md-3">
+                              <Field label="Codigo de ID" className="col-md-3">
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"
