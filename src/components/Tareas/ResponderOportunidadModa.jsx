@@ -1141,6 +1141,10 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   };
 
   const esCerrada = tarea?.status === "completed";
+  const esVencida =
+    tarea?.due_date &&
+    new Date(tarea.due_date) < new Date() &&
+    tarea?.status !== "completed";
 
   // Extraer datos de manera más robusta
   const conceptoTarea = tarea?.log?.titulo || tarea?.log?.concept?.name || tarea?.concepto || tarea?.titulo || "Sin concepto";
@@ -2181,7 +2185,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             <Button 
               variant="success" 
               onClick={handleCompletar}
-              disabled={loading}
+              disabled={loading || esVencida}
               style={{ borderRadius: "0.5rem", minWidth: "160px", fontWeight: "600" }}
             >
               <i className="fas fa-check-circle me-1"></i>

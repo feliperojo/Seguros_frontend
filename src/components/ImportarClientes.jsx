@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from "react";
 import Papa from "papaparse";
+import apiRequest from "../services/api";
+import ClienteService from "../services/ClienteService";
+import { mapClienteFromMember } from "../adapters/prospecto.mapper";
 
 const ImportarClientes = () => {
   const [clientes, setClientes] = useState([]);
@@ -17,18 +20,7 @@ const ImportarClientes = () => {
   // 🔹 Función para obtener los clientes existentes
   const obtenerClientesExistentes = async () => {
     try {
-      const token = "3yw3OnKzFKEcTrEu1JYPCrAqMLgxM9Hcqpx5l6aEd26d405f";
-      const response = await fetch("http://127.0.0.1:8000/api/cliente/", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Error al obtener clientes: ${response.status}`);
-      }
-      
-      const data = await response.json();
+      const data = await apiRequest("/cliente", "GET");
       console.log("✅ Clientes existentes obtenidos:", data);
       
       // Extraemos solo los códigos sociales para facilitar la búsqueda
@@ -60,6 +52,62 @@ const ImportarClientes = () => {
     }
 
     return valor;
+  };
+
+  // 🔹 Validador sencillo de email (para limpiar datos del CSV antes de enviarlos)
+  const esEmailValido = (email) => {
+    if (!email) return false;
+    const trimmed = String(email).trim();
+    // Regex simple y suficiente para descartar valores claramente inválidos
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(trimmed);
+  };
+
+  // 🔹 Genera y dispara la descarga de un CSV con el resumen de importación
+  const descargarReporteImportacion = (resumen) => {
+    if (!resumen) return;
+
+    const { clientesNuevos = [], clientesDuplicados = [] } = resumen;
+
+    const filas = [];
+
+    clientesNuevos.forEach((c) => {
+      filas.push({
+        estado: "CREADO",
+        linea: c.index,
+        nombre_completo: c.nombre,
+        social: c.social,
+      });
+    });
+
+    clientesDuplicados.forEach((c) => {
+      filas.push({
+        estado: "DUPLICADO",
+        linea: c.index,
+        nombre_completo: c.nombre,
+        social: c.social,
+      });
+    });
+
+    if (filas.length === 0) return;
+
+    try {
+      const csv = Papa.unparse(filas);
+      const blob = new Blob([csv], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const fecha = new Date().toISOString().slice(0, 10);
+      link.download = `reporte_importacion_clientes_${fecha}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("❌ Error al generar/descargar el reporte de importación:", e);
+    }
   };
 
   // 🔹 Función para convertir fechas a formato YYYY-MM-DD
@@ -276,34 +324,68 @@ const ImportarClientes = () => {
     }
 
     setProcesando(true);
-    const token = "3yw3OnKzFKEcTrEu1JYPCrAqMLgxM9Hcqpx5l6aEd26d405f";
 
-    console.log("🚀 Enviando clientes a la API:", clientesNuevos);
+    // Normalizar la carga útil usando el mismo mapeo que el flujo de Prospectos
+    // para cumplir exactamente con las validaciones del backend.
+    const clientesPayload = clientesNuevos.map((c, idx) => {
+      const payload = mapClienteFromMember(c);
+
+      // Para migraciones CSV queremos que emails claramente inválidos
+      // no rompan la validación del backend: los limpiamos a null aquí.
+      if (payload.email && !esEmailValido(payload.email)) {
+        console.warn(
+          `⚠️ Email inválido en cliente #${idx + 1} (${payload.nombre_completo}):`,
+          payload.email
+        );
+        payload.email = null;
+      }
+
+      console.log("🧾 Cliente listo para API", idx + 1, payload);
+      return payload;
+    });
+
+    console.log("🚀 Enviando clientes a la API:", clientesPayload);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/cliente/create", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ clientes: clientesNuevos }),
-      });
-
-      const data = await response.json();
+      const data = await ClienteService.createMany(clientesPayload);
       console.log("✅ Respuesta de la API:", data);
-      alert(data.message || `Se importaron ${data.cantidad} clientes correctamente. Se omitieron ${clientes.length - clientesNuevos.length} clientes duplicados.`);
+      alert(
+        data.message ||
+          `Se importaron ${data.cantidad ?? clientesNuevos.length} clientes correctamente. Se omitieron ${
+            clientes.length - clientesNuevos.length
+          } clientes duplicados.`
+      );
+
+      // Descargar reporte resumido (creados vs duplicados)
+      descargarReporteImportacion(resumenImportacion);
 
       // Actualizar la lista de clientes existentes después de la importación
       obtenerClientesExistentes();
-      
+
       setClientes([]);
       setArchivo(null);
       setErrores([]);
       setResumenImportacion(null);
     } catch (error) {
       console.error("❌ Error al importar clientes:", error);
-      alert("Error al importar los clientes: " + (error.message || "Error de conexión"));
+      if (error?.response) {
+        console.error("❌ Detalle error de validación al importar clientes:", {
+          status: error.response.status,
+          url: error.response.url,
+          data: error.response.data,
+          errors: error.response.errors,
+          code: error.response.code,
+        });
+      }
+      const apiMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Error de conexión";
+      alert(
+        error?.response?.status === 401
+          ? "No autenticado. Por favor, inicia sesión nuevamente e intenta de nuevo la importación."
+          : `Error al importar los clientes: ${apiMessage}`
+      );
     } finally {
       setProcesando(false);
     }

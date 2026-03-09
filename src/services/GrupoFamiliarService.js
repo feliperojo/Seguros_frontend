@@ -98,6 +98,7 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
         if (member && member.id) {
           const coberturaData = {
             codigo_poliza: member.codigo_poliza || "",
+            policy_number: member.policy_number || "",
             parentesco: member.parentesco || "",
             fecha_activacion: member.fecha_activacion || null,
             fecha_cancelacion: member.fecha_cancelacion || null,

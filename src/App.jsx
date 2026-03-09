@@ -19,6 +19,7 @@ import GrupofamiliarCreate from "./components/GrupoFamiliar/GrupofamiliarCreate"
 import GrupofamiliarEdit from "./components/GrupoFamiliar/GrupofamiliarEdit";
 import Auditoria from "./components/Auditoria";
 import CentroOperaciones from "./pages/CentroOperaciones";
+import ConciliacionComisionesPage from "./pages/ConciliacionComisionesPage";
 import PagosGenerar from './pages/PagosGenerar';
 import PagosActualizar from './pages/PagosActualizar';
 import PagosInforme from './pages/PagosInforme';
@@ -90,6 +91,7 @@ const App = () => {
         <Route path="/Herramientas" element={<ImportarClientesPage />} />
         <Route path="/Herramientas/auditoria" element={<Auditoria />} />
         <Route path="/herramientas/operaciones" element={<CentroOperaciones />} />
+        <Route path="/Herramientas/conciliacion-comisiones" element={<ConciliacionComisionesPage />} />
         
 
         <Route path="/Mediospago" element={<MediosPago />} />

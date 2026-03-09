@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { FaMapMarkerAlt } from "react-icons/fa";
 
 // Services
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import systemConfigService from "../../services/SystemConfigService";
 import { computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../../services/ingresos";
 
 // Components
@@ -34,21 +35,77 @@ const MONEY_FIELDS = new Set(["ingreso_por_periodo", "ingreso_anual", "ingreso_p
 const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
 const CLIENTE_FIELDS = new Set([
-  "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma", "pais_origen",
-  "telefono", "secundario", "whatsapp_num", "email", "nota",
-  "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia",
-  "social", "status", "auscis", "tarjeta_numero", "fecha_emision", "fecha_expiracion", "categoria",
-  "tipo_ingreso", "actividad_economica", "empleador", "telefono_empleador", "periodo_ingreso",
-  "ingreso_por_periodo", "ingreso_anual", "nota_ingreso_ocasional", "periodo_ingreso_ocasional",
-  "ingreso_por_periodo_ocasional", "whatsapp", "telegram", "texto_sms"
+  "primer_nombre",
+  "segundo_nombre",
+  "apellidos",
+  "fecha_nacimiento",
+  "edad",
+  "genero",
+  "idioma",
+  "pais_origen",
+  // Campos antropométricos
+  "peso",
+  "altura",
+  "pulgadas",
+  "telefono",
+  "secundario",
+  "whatsapp_num",
+  "email",
+  "nota",
+  "direccion",
+  "calle",
+  "apto",
+  "ciudad",
+  "estado",
+  "codigo_postal",
+  "condado",
+  "dir_correspondencia",
+  "social",
+  "status",
+  "auscis",
+  "tarjeta_numero",
+  "fecha_emision",
+  "fecha_expiracion",
+  "categoria",
+  "tipo_ingreso",
+  "actividad_economica",
+  "empleador",
+  "telefono_empleador",
+  "periodo_ingreso",
+  "ingreso_por_periodo",
+  "ingreso_anual",
+  "nota_ingreso_ocasional",
+  "periodo_ingreso_ocasional",
+  "ingreso_por_periodo_ocasional",
+  "whatsapp",
+  "telegram",
+  "texto_sms"
 ]);
 
 const ROOT_FIELDS = new Set([
-  "parentesco", "estado_cobertura", "codigo_poliza", "vigencia", "tipo",
-  "fecha_activacion", "ano_cobertura", "elegibilidad",
-  "compania_id", "agente", "plan", "metal", "red",
-  "pagador_id", "tipo_pago", "dia_pago", "precio",
-  "fecha_cancelacion", "fecha_retiro", "nota_retiro", "grupo", "nota_cancel"
+  "parentesco",
+  "estado_cobertura",
+  "codigo_poliza",
+  "policy_number",
+  "vigencia",
+  "tipo",
+  "fecha_activacion",
+  "ano_cobertura",
+  "elegibilidad",
+  "compania_id",
+  "agente",
+  "plan",
+  "metal",
+  "red",
+  "pagador_id",
+  "tipo_pago",
+  "dia_pago",
+  "precio",
+  "fecha_cancelacion",
+  "fecha_retiro",
+  "nota_retiro",
+  "grupo",
+  "nota_cancel",
 ]);
 
 const DUPLICATE_TO_ROOT = Array.from(CLIENTE_FIELDS);
@@ -228,6 +285,7 @@ const normalizeMember = (m, idx) => {
     tipo: m.tipo || m.parentesco || "Tomador",
     estado_cobertura: m.estado_cobertura || "Sí",
     codigo_poliza: m.codigo_poliza || "",
+    policy_number: m.policy_number || "",
     fecha_activacion: m.fecha_activacion || "",
     vigencia: m.vigencia || "",
     cobertura_tipo: m.cobertura_tipo || "Plan de salud",
@@ -246,6 +304,9 @@ const normalizeMember = (m, idx) => {
     edad,
     idioma: m.idioma || "",
     pais_origen: m.pais_origen || "",
+    peso: m.peso || m?.cliente?.peso || "",
+    altura: m.altura || m?.cliente?.altura || "",
+    pulgadas: m.pulgadas || m?.cliente?.pulgadas || "",
     ingreso_anual: m.ingreso_anual || "",
     nombreCompleto: nombre,
     nota: m.nota || "",
@@ -263,6 +324,9 @@ const normalizeMember = (m, idx) => {
       edad,
       idioma: m.idioma || "",
       pais_origen: m.pais_origen || "",
+      peso: m.peso || m?.cliente?.peso || "",
+      altura: m.altura || m?.cliente?.altura || "",
+      pulgadas: m.pulgadas || m?.cliente?.pulgadas || "",
       telefono: m.telefono || "",
       secundario: m.secundario || "",
       whatsapp_num: m.whatsapp_num || "",
@@ -322,9 +386,31 @@ const recomputeDerived = (m) => {
 const duplicateToRootFromCliente = (m, cliente) => {
   const dupe = {};
   [
-    "primer_nombre", "segundo_nombre", "apellidos", "fecha_nacimiento", "edad", "genero", "idioma", "pais_origen",
-    "telefono", "secundario", "whatsapp_num", "email", "nota",
-    "direccion", "calle", "apto", "ciudad", "estado", "codigo_postal", "condado", "dir_correspondencia"
+    "primer_nombre",
+    "segundo_nombre",
+    "apellidos",
+    "fecha_nacimiento",
+    "edad",
+    "genero",
+    "idioma",
+    "pais_origen",
+    // Campos antropométricos
+    "peso",
+    "altura",
+    "pulgadas",
+    "telefono",
+    "secundario",
+    "whatsapp_num",
+    "email",
+    "nota",
+    "direccion",
+    "calle",
+    "apto",
+    "ciudad",
+    "estado",
+    "codigo_postal",
+    "condado",
+    "dir_correspondencia"
   ].forEach(k => {
     if (k in cliente) dupe[k] = cliente[k];
   });
@@ -516,8 +602,66 @@ const TomaDeDatos = ({
   const [moneyDisplay, setMoneyDisplay] = useState({});
   // Estado para controlar la visualización de miembros retirados
   const [showRetirados, setShowRetirados] = useState(false);
+  // Config visual de campos de cobertura por tipo de producto (system_config.coverage_fields_by_tipo)
+  const [coverageFieldConfig, setCoverageFieldConfig] = useState(null);
+  // Config visual de campos extra del cliente (peso/altura) por tipo de producto (system_config.client_fields_by_tipo)
+  const [clientFieldConfig, setClientFieldConfig] = useState(null);
+  const [loadingCoverageFieldConfig, setLoadingCoverageFieldConfig] =
+    useState(false);
 
   const navigate = useNavigate();
+
+  // Cargar configuración de campos de cobertura y datos de cliente (solo visual) desde system_config
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadConfig = async () => {
+      try {
+        setLoadingCoverageFieldConfig(true);
+        const [coverageValue, clientValue] = await Promise.all([
+          systemConfigService
+            .get("coverage_fields_by_tipo")
+            .catch(() => null),
+          systemConfigService
+            .get("client_fields_by_tipo")
+            .catch(() => null),
+        ]);
+
+        if (!cancelled) {
+          // El API puede devolver { value: { "Tipo": { enabledFields: [...] } } } o directamente el objeto por tipo
+          if (coverageValue && typeof coverageValue === "object") {
+            const coverageByTipo = coverageValue.value !== undefined ? coverageValue.value : coverageValue;
+            setCoverageFieldConfig(typeof coverageByTipo === "object" && coverageByTipo !== null ? coverageByTipo : coverageValue);
+          }
+          if (clientValue && typeof clientValue === "object") {
+            const clientByTipo = clientValue.value !== undefined ? clientValue.value : clientValue;
+            setClientFieldConfig(typeof clientByTipo === "object" && clientByTipo !== null ? clientByTipo : clientValue);
+          }
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error(
+            "Error cargando configuración de campos de cobertura/datos cliente",
+            err
+          );
+        }
+        if (!cancelled) {
+          setCoverageFieldConfig(null);
+          setClientFieldConfig(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingCoverageFieldConfig(false);
+        }
+      }
+    };
+
+    loadConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Normalización y ordenamiento
   const normalized = useMemo(
@@ -1016,27 +1160,64 @@ const activeNormalized = useMemo(
   /* =================== RENDER =================== */
   // Función helper para renderizar una card de miembro
   const renderMemberCard = ({ m, idx }) => {
-  const itemId = `member-${m.id ?? idx}`;
-  const leftRightWidth = 180;
-  const c = getC(m);
-  const onChange = onChangeFactory(idx); // ✅ idx = índice original en familyMembers
-  const grupoValor = (m.grupo ?? "").toUpperCase();
-        const badgeClass =
-          grupoValor === "G1" ? "bg-primary" :
-          grupoValor === "G2" ? "bg-success" :
-          grupoValor === "G3" ? "bg-warning text-dark" :
-          grupoValor === "G4" ? "bg-danger" :
-          "bg-secondary";
+    const itemId = `member-${m.id ?? idx}`;
+    const leftRightWidth = 180;
+    const c = getC(m);
+    const onChange = onChangeFactory(idx); // ✅ idx = índice original en familyMembers
+    const grupoValor = (m.grupo ?? "").toUpperCase();
+    const badgeClass =
+      grupoValor === "G1"
+        ? "bg-primary"
+        : grupoValor === "G2"
+        ? "bg-success"
+        : grupoValor === "G3"
+        ? "bg-warning text-dark"
+        : grupoValor === "G4"
+        ? "bg-danger"
+        : "bg-secondary";
 
-        const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
-        
-        // Detectar si la cobertura está inactiva
-        const isInactive = m.activo === false;
-        // Si está inactiva, bloquear todos los campos
-        const isReadOnly = readOnly || isInactive;
-        
-        // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
-        const isMedicareOrMedicaid = m.estado_cobertura === "Medicare" || m.estado_cobertura === "Medicaid";
+    const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
+    
+    // Detectar si la cobertura está inactiva
+    const isInactive = m.activo === false;
+    // Si está inactiva, bloquear todos los campos
+    const isReadOnly = readOnly || isInactive;
+    
+    // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
+    const isMedicareOrMedicaid =
+      m.estado_cobertura === "Medicare" || m.estado_cobertura === "Medicaid";
+
+    // Tipo de producto (cobertura_tipo) para controlar visibilidad de campos
+    const coberturaTipo =
+      m.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
+
+    // Config visual de campos de cobertura por tipo (system_config.coverage_fields_by_tipo).
+    // enabledFields = lista de campos a OCULTAR para ese tipo (los que están en la lista no se muestran).
+    const cfgCoberturaPorTipo =
+      coverageFieldConfig && coverageFieldConfig[coberturaTipo];
+    const hiddenCoverageFields =
+      cfgCoberturaPorTipo && Array.isArray(cfgCoberturaPorTipo.enabledFields)
+        ? cfgCoberturaPorTipo.enabledFields
+        : null; // null → sin config: mostrar todos los campos de cobertura
+
+    const shouldShowCoverageField = (fieldKey) => {
+      if (!hiddenCoverageFields) return true;
+      return !hiddenCoverageFields.includes(fieldKey);
+    };
+
+    // Config visual de campos del cliente por tipo (system_config.client_fields_by_tipo).
+    // enabledFields = lista de campos a OCULTAR para ese tipo (los que están en la lista no se muestran).
+    const cfgClientePorTipo =
+      clientFieldConfig && clientFieldConfig[coberturaTipo];
+    const hiddenClientFields =
+      cfgClientePorTipo && Array.isArray(cfgClientePorTipo.enabledFields)
+        ? cfgClientePorTipo.enabledFields
+        : null; // null → sin config: mostrar todos los campos de cliente
+
+    const shouldShowClientField = (fieldKey) => {
+      if (!hiddenClientFields) return true;
+      return !hiddenClientFields.includes(fieldKey);
+    };
 
         return (
           <div 
@@ -1232,6 +1413,51 @@ const activeNormalized = useMemo(
                                     placeholder="País de origen"
                                   />
                                 </Field>
+                                
+                                {shouldShowClientField("peso") && (
+                                  <Field label="Peso (lb)" className="col-md-2">
+                                    <input
+                                      type="number"
+                                      className="form-control form-control-sm"
+                                      name="peso"
+                                      value={c.peso ?? ""}
+                                      onChange={onChange}
+                                      disabled={isReadOnly}
+                                      min="0"
+                                      step="0.1"
+                                    />
+                                  </Field>
+                                )}
+
+                                {shouldShowClientField("altura") && (
+                                  <Field label="Altura (pies)" className="col-md-2">
+                                    <input
+                                      type="number"
+                                      className="form-control form-control-sm"
+                                      name="altura"
+                                      value={c.altura ?? ""}
+                                      onChange={onChange}
+                                      disabled={isReadOnly}
+                                      min="0"
+                                      step="0.01"
+                                    />
+                                  </Field>
+                                )}
+
+                                {shouldShowClientField("pulgadas") && (
+                                  <Field label="Altura (pulgadas)" className="col-md-2">
+                                    <input
+                                      type="number"
+                                      className="form-control form-control-sm"
+                                      name="pulgadas"
+                                      value={c.pulgadas ?? ""}
+                                      onChange={onChange}
+                                      disabled={isReadOnly}
+                                      min="0"
+                                      step="0.1"
+                                    />
+                                  </Field>
+                                )}
                               </div>
                       </div>
                     </AccordionItem>
@@ -1664,191 +1890,246 @@ const activeNormalized = useMemo(
                         <>
                           {/* Campos normales cuando NO es Medicare/Medicaid */}
                           <div className="row g-3">
-                            <Field label="Código Póliza" className="col-md-3">
-                              <input
-                                className="form-control form-control-sm"
-                                type="text"
-                                name="codigo_poliza"
-                                value={m.codigo_poliza || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="ID Póliza"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("codigo_poliza") && (
+                              <Field label="Código Póliza" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  type="text"
+                                  name="codigo_poliza"
+                                  value={m.codigo_poliza || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="ID póliza interno"
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Fecha de Activación" className="col-md-3">
-                              <input
-                                type="date"
-                                className="form-control form-control-sm"
-                                name="fecha_activacion"
-                                value={(m.fecha_activacion || "").slice(0, 10)}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              />
-                            </Field>
+                            {shouldShowCoverageField("fecha_activacion") && (
+                              <Field
+                                label="Fecha de Activación"
+                                className="col-md-3"
+                              >
+                                <input
+                                  type="date"
+                                  className="form-control form-control-sm"
+                                  name="fecha_activacion"
+                                  value={(m.fecha_activacion || "").slice(
+                                    0,
+                                    10
+                                  )}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Año de Cobertura" className="col-md-3">
-                              <input
-                                type="number"
-                                min="2000"
-                                max="2100"
-                                className="form-control form-control-sm"
-                                name="ano_cobertura"
-                                value={m.ano_cobertura || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="aaaa"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("ano_cobertura") && (
+                              <Field
+                                label="Año de Cobertura"
+                                className="col-md-3"
+                              >
+                                <input
+                                  type="number"
+                                  min="2000"
+                                  max="2100"
+                                  className="form-control form-control-sm"
+                                  name="ano_cobertura"
+                                  value={m.ano_cobertura || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="aaaa"
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Elegibilidad" className="col-md-3">
-                              <input
-                                className="form-control form-control-sm"
-                                name="elegibilidad"
-                                value={m.elegibilidad || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="Elegibilidad"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("elegibilidad") && (
+                              <Field label="Elegibilidad" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  name="elegibilidad"
+                                  value={m.elegibilidad || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Elegibilidad"
+                                />
+                              </Field>
+                            )}
                           </div>
 
                           <div className="row g-3">
-                            <Field label="Compañía" className="col-md-3">
-                              <CompanySelect
-                                companies={companies}
-                                value={m.compania_id ?? m.compania?.id ?? ""}
-                                onChange={onChange}
-                                disabled={isReadOnly || companiesLoading}
-                              />
-                            </Field>
+                            {shouldShowCoverageField("compania_id") && (
+                              <Field label="Compañía" className="col-md-3">
+                                <CompanySelect
+                                  companies={companies}
+                                  value={m.compania_id ?? m.compania?.id ?? ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly || companiesLoading}
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Agente" className="col-md-3">
-                              <input
-                                className="form-control form-control-sm"
-                                type="text"
-                                name="agente"
-                                value={m.agente || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="Ingrese el agente"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("policy_number") && (
+                              <Field label="Número de póliza" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  type="text"
+                                  name="policy_number"
+                                  value={m.policy_number || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Número de póliza"
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Plan" className="col-md-3">
-                              <input
-                                className="form-control form-control-sm"
-                                name="plan"
-                                value={m.plan || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="Nombre del plan"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("agente") && (
+                              <Field label="Agente" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  type="text"
+                                  name="agente"
+                                  value={m.agente || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Ingrese el agente"
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Metal" className="col-md-3">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="metal"
-                                value={m.metal || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                <option value="BRONCE">BRONCE</option>
-                                <option value="SILVER">SILVER</option>
-                                <option value="GOLD">GOLD</option>
-                                <option value="PLATINUM">PLATINUM</option>
-                              </select>
-                            </Field>
+                            {shouldShowCoverageField("plan") && (
+                              <Field label="Plan" className="col-md-3">
+                                <input
+                                  className="form-control form-control-sm"
+                                  name="plan"
+                                  value={m.plan || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Nombre del plan"
+                                />
+                              </Field>
+                            )}
+
+                            {shouldShowCoverageField("metal") && (
+                              <Field label="Metal" className="col-md-3">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  name="metal"
+                                  value={m.metal || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="BRONCE">BRONCE</option>
+                                  <option value="SILVER">SILVER</option>
+                                  <option value="GOLD">GOLD</option>
+                                  <option value="PLATINUM">PLATINUM</option>
+                                </select>
+                              </Field>
+                            )}
                           </div>
 
                           <div className="row g-3">
-                            <Field label="Red" className="col-md-3">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="red"
-                                value={m.red || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                <option value="HMO">HMO</option>
-                                <option value="EPO">EPO</option>
-                                <option value="PPO">PPO</option>
-                                <option value="POS">POS</option>
-                              </select>
-                            </Field>
+                            {shouldShowCoverageField("red") && (
+                              <Field label="Red" className="col-md-3">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  name="red"
+                                  value={m.red || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="HMO">HMO</option>
+                                  <option value="EPO">EPO</option>
+                                  <option value="PPO">PPO</option>
+                                  <option value="POS">POS</option>
+                                </select>
+                              </Field>
+                            )}
 
-                            <Field label="Cobertura" className="col-md-3">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="estado_cobertura"
-                                value={m.estado_cobertura || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                <option value="Sí">Sí</option>
-                                <option value="No">No</option>
-                                <option value="Medicare">Medicare</option>
-                                <option value="Medicaid">Medicaid</option>
-                              </select>
-                            </Field>
+                            {shouldShowCoverageField("estado_cobertura") && (
+                              <Field label="Cobertura" className="col-md-3">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duración-200 shadow-sm"
+                                  name="estado_cobertura"
+                                  value={m.estado_cobertura || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="Sí">Sí</option>
+                                  <option value="No">No</option>
+                                  <option value="Medicare">Medicare</option>
+                                  <option value="Medicaid">Medicaid</option>
+                                </select>
+                              </Field>
+                            )}
 
-                            <Field label="Pagador" className="col-md-3">
-                              <PayerSelect
-                                options={payerOptionsWithOther}
-                                value={
-                                  m.pagador_id === undefined || m.pagador_id === null || m.pagador_id === ""
-                                    ? "OTRO"
-                                    : String(m.pagador_id)
-                                }
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              />
-                            </Field>
+                            {shouldShowCoverageField("pagador_id") && (
+                              <Field label="Pagador" className="col-md-3">
+                                <PayerSelect
+                                  options={payerOptionsWithOther}
+                                  value={
+                                    m.pagador_id === undefined ||
+                                    m.pagador_id === null ||
+                                    m.pagador_id === ""
+                                      ? "OTRO"
+                                      : String(m.pagador_id)
+                                  }
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Tipo de Pago" className="col-md-3">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="tipo_pago"
-                                value={m.tipo_pago || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
-                                <option value="CTE PAGA">CTE PAGA</option>
-                                <option value="MES A MES">MES A MES</option>
-                              </select>
-                            </Field>
+                            {shouldShowCoverageField("tipo_pago") && (
+                              <Field label="Tipo de Pago" className="col-md-3">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  name="tipo_pago"
+                                  value={m.tipo_pago || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="DEBITO AUTOMATICO">
+                                    DEBITO AUTOMATICO
+                                  </option>
+                                  <option value="CTE PAGA">CTE PAGA</option>
+                                  <option value="MES A MES">MES A MES</option>
+                                </select>
+                              </Field>
+                            )}
                           </div>
 
                           <div className="row g-3">
-                            <Field label="Dia de Pago" className="col-md-3">
-                              <input
-                                type="number"
-                                className="form-control form-control-sm"
-                                name="dia_pago"
-                                value={m.dia_pago || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              />
-                            </Field>
+                            {shouldShowCoverageField("dia_pago") && (
+                              <Field label="Dia de Pago" className="col-md-3">
+                                <input
+                                  type="number"
+                                  className="form-control form-control-sm"
+                                  name="dia_pago"
+                                  value={m.dia_pago || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                />
+                              </Field>
+                            )}
 
-                            <Field label="Precio ($)" className="col-md-3">
-                              <input
-                                type="number"
-                                step="0.01"
-                                className="form-control form-control-sm"
-                                name="precio"
-                                value={m.precio ?? ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                                placeholder="0.00"
-                              />
-                            </Field>
+                            {shouldShowCoverageField("precio") && (
+                              <Field label="Precio ($)" className="col-md-3">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  className="form-control form-control-sm"
+                                  name="precio"
+                                  value={m.precio ?? ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="0.00"
+                                />
+                              </Field>
+                            )}
 
                             {m.fecha_cancelacion && (
                               <>
@@ -1921,21 +2202,23 @@ const activeNormalized = useMemo(
                           </div>
 
                           <div className="row g-3">
-                            <Field label="Grupo" className="col-md-3">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="grupo"
-                                value={m.grupo || ""}
-                                onChange={onChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                <option value="G1">G1</option>
-                                <option value="G2">G2</option>
-                                <option value="G3">G3</option>
-                                <option value="G4">G4</option>
-                              </select>
-                            </Field>
+                            {shouldShowCoverageField("grupo") && (
+                              <Field label="Grupo" className="col-md-3">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  name="grupo"
+                                  value={m.grupo || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="G1">G1</option>
+                                  <option value="G2">G2</option>
+                                  <option value="G3">G3</option>
+                                  <option value="G4">G4</option>
+                                </select>
+                              </Field>
+                            )}
                           </div>
                         </>
                       )}

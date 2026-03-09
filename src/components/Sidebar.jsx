@@ -416,8 +416,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/Herramientas/auditoria" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
                 <FaCogs /> Auditoria
               </Link>
-              <Link to="/Herramientas/operaciones" className={`submenu-link ${isActive('/Herramientas/auditoria') ? 'active' : ''}`}>
+              <Link to="/Herramientas/operaciones" className={`submenu-link ${isActive('/Herramientas/operaciones') ? 'active' : ''}`}>
                 <FaCogs /> Centro de Operaciones
+              </Link>
+              <Link to="/Herramientas/conciliacion-comisiones" className={`submenu-link ${isActive('/Herramientas/conciliacion-comisiones') ? 'active' : ''}`}>
+                <FaFileInvoiceDollar /> Conciliación de comisiones
               </Link>
               <Link to="/admin/operational-concepts" className={`submenu-link ${isActive('/admin/operational-concepts') ? 'active' : ''}`}>
                 <FaFolder /> Conceptos Operativos

@@ -119,6 +119,10 @@ const mapClienteForSave = (m) => {
       genero: pick("genero"),
       idioma: pick("idioma"),
       pais_origen: capitalizeWords(pick("pais_origen") || ""),
+      // Campos antropométricos
+      peso: pick("peso"),
+      altura: pick("altura"),
+      pulgadas: pick("pulgadas"),
       ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
       nota: pick("nota"),
       direccion: pick("direccion"),
@@ -172,6 +176,10 @@ const mapClienteForSave = (m) => {
     genero: pick("genero"),
     idioma: pick("idioma"),
     pais_origen: capitalizeWords(pick("pais_origen") || ""),
+    // Campos antropométricos
+    peso: pick("peso"),
+    altura: pick("altura"),
+    pulgadas: pick("pulgadas"),
     ingreso_anual: moneyToDecimal(pick("ingreso_anual")),
     nota: pick("nota"),
     telefono: pick("telefono"),
@@ -365,6 +373,10 @@ const mapFullToMembers = (fullRaw) => {
       edad,
       idioma: cli.idioma || "",
       pais_origen: cli.pais_origen || "",
+      // Campos antropométricos
+      peso: cli.peso || "",
+      altura: cli.altura || "",
+      pulgadas: cli.pulgadas || "",
       ingreso_anual: cli.ingreso_anual || "",
       nota: cli.nota || "",
       periodo_ingreso: cli.periodo_ingreso || "",
@@ -387,7 +399,8 @@ const mapFullToMembers = (fullRaw) => {
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
-      codigo_poliza: cov.codigo_poliza ?? cov.id_poliza ?? "", 
+      codigo_poliza: cov.codigo_poliza ?? cov.id_poliza ?? "",
+      policy_number: cov.policy_number ?? "",
       elegibilidad: cov.elegibilidad ?? "",
       precio: cov.precio ?? "",
       tipo_pago: cov.tipo_pago ?? null,
@@ -420,6 +433,10 @@ const mapFullToMembers = (fullRaw) => {
         edad,
         idioma: cli.idioma || "",
         pais_origen: cli.pais_origen || "",
+        // Campos antropométricos
+        peso: cli.peso || "",
+        altura: cli.altura || "",
+        pulgadas: cli.pulgadas || "",
 
         // contacto
         telefono: cli.telefono || "",
@@ -743,6 +760,10 @@ const mapMemberFromAppendResponse = (res) => {
     nombreCompleto,
     fecha_nacimiento: cli.fecha_nacimiento || "",
     edad: calcAge(cli.fecha_nacimiento),
+    // Campos antropométricos
+    peso: cli.peso || "",
+    altura: cli.altura || "",
+    pulgadas: cli.pulgadas || "",
     ingreso_anual: cli.ingreso_anual || 0,
     parentesco: cov.parentesco || "Tomador",
     tipo: cov.parentesco || "Tomador",

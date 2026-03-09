@@ -109,6 +109,7 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
     agente: "",
     cliente_id: "",
     codigo_poliza: "",
+    policy_number: "",
     referido: "",
     captado_por: "",
     parentesco: "",
@@ -449,14 +450,14 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         precio: parseFloat(cob.precio) || 0,
         pagador_id: cob.pagador_id || "",
         codigo_poliza: cob.codigo_poliza || "",
+        policy_number: cob.policy_number || "",
         parentesco: cob.parentesco || "",
         vigente: cob.fecha_cancelacion ? false : true,
         activo: cob.activo ?? true,
         dia_pago: cob.dia_pago || 1,
         tipo_pago: cob.tipo_pago || "",
         grupo: cob.grupo || "G1",
-        nota_cancel:cob.nota_cancel || "",
-
+        nota_cancel: cob.nota_cancel || "",
       };
 
       grupos[tipo].members.push(member);
@@ -593,6 +594,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   fecha_retiro: "", // ⚠️ Muy importante: nueva cobertura no retirada
                   compania_id: "",
                   agente: "",
+                  policy_number: "",
                   codigo_poliza: "",
                   plan: "",
                   metal: "",
@@ -721,7 +723,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
     if (coverageGroups.length > 0) {
       // Hacer copia profunda de los objetos de los miembros (evita referencias compartidas)
-      const newMembers = coverageGroups[0].members.map(member => ({
+      newMembers = coverageGroups[0].members.map(member => ({
         ...JSON.parse(JSON.stringify(member)), // copia profunda segura
         parentesco: "",
         fecha_activacion: "",
@@ -733,12 +735,12 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         elegibilidad: "",
         estado_cobertura: "",
         codigo_poliza: "",
+        policy_number: "",
         precio: "",
         red: "",
         ano_cobertura: "",
         pagador_id: ""
       }));
-
     }
 
     const newGroup = {
@@ -1047,6 +1049,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               .map(member => ({
                 id: member.cobertura_id || null,
                 codigo_poliza: member.codigo_poliza || "",
+                policy_number: member.policy_number || "",
                 parentesco: member.parentesco || "",
                 fecha_activacion: member.fecha_activacion || "",
                 fecha_cancelacion: member.fecha_cancelacion || "",
@@ -1757,6 +1760,20 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                       </Col>
                                       <Col md={6}>
                                       <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">Número de póliza</Form.Label>
+                                        <Form.Control
+                                          size="sm"
+                                          type="text"
+                                          value={member.policy_number || ""}
+                                          onChange={(e) => updateMemberData(group.id, member.id, "policy_number", e.target.value)}
+                                          placeholder="Número de póliza"
+                                        />
+                                      </Form.Group>
+                                      </Col>
+                                      </Row>
+                                      <Row className="mb-2">
+                                      <Col md={6}>
+                                      <Form.Group className="mb-2">
                                         <Form.Label className="small text-muted mb-1">Elegibilidad</Form.Label>
                                         <Form.Control
                                           size="sm"
@@ -2070,7 +2087,18 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   />
                 </Form.Group>
               </Col>
-
+              <Col md={6}>
+                <Form.Group className="fw-semibold">
+                  <Form.Label>Número de póliza</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={currentEditMember.policy_number || ""}
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, policy_number: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
                 <Col md={6}>
                   <Form.Group className="fw-semibold">
                     <Form.Label>Fecha Activación</Form.Label>

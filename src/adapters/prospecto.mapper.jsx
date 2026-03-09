@@ -1,5 +1,6 @@
 
 import { parseMoney } from "../services/ingresos"; // 👈 importa el normalizador
+import { splitFullName } from "../utils/names";
 
 export const buildPersonaContacto = (nombre = "", apellidos = "") =>
   [nombre?.trim(), apellidos?.trim()].filter(Boolean).join(" ");
@@ -184,10 +185,30 @@ export const mapClienteFromMember = (m = {}) => {
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
 
   // nombres
-  const primer_nombre  = (pick("primer_nombre") || "").toString().trim();
-  const segundo_nombre = toNullIfEmpty((pick("segundo_nombre") || "").toString().trim());
-  const apellidos      = (pick("apellidos") || "").toString().trim();
-  const nombre_completo = [primer_nombre, segundo_nombre, apellidos].filter(Boolean).join(" ");
+  let primer_nombre  = (pick("primer_nombre") || "").toString().trim();
+  let segundo_nombre = toNullIfEmpty((pick("segundo_nombre") || "").toString().trim());
+  let apellidos      = (pick("apellidos") || "").toString().trim();
+
+  // 🔹 Fallback seguro: si no hay partes de nombre pero sí viene nombre_completo,
+  // úsalo para derivar nombres/apellidos (útil para importaciones CSV).
+  if (!primer_nombre && !segundo_nombre && !apellidos) {
+    const fullFromSource = (
+      m.nombre_completo ??
+      c.nombre_completo ??
+      ""
+    ).toString();
+
+    if (fullFromSource.trim()) {
+      const { nombres, apellidos: ap } = splitFullName(fullFromSource);
+      primer_nombre = nombres || primer_nombre;
+      apellidos = ap || apellidos;
+    }
+  }
+
+  const nombre_completo =
+    (pick("nombre_completo") ||
+      [primer_nombre, segundo_nombre, apellidos].filter(Boolean).join(" ")
+    ).toString().trim();
 
   // fecha: acepta snake_case o camelCase
   const fecha_nacimiento =
@@ -267,12 +288,15 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     estado_cobertura: normSiNo(m.estado_cobertura || "Si/No"),
     ano_cobertura: (m.ano_cobertura || new Date().getFullYear()).toString(),
     cobertura_tipo: m.cobertura_tipo || null,
-    fecha_activacion: cleanDate(m.fecha_activacion ?? m?.cobertura?.fecha_activacion ?? null),
+    fecha_activacion: cleanDate(
+      m.fecha_activacion ?? m?.cobertura?.fecha_activacion ?? null
+    ),
     grupo: m.grupo || null,
     plan: m.plan || "",
     metal: m.metal || null,
     red: m.red || null,
     codigo_poliza: m.codigo_poliza || "",
+    policy_number: m.policy_number || "",
     elegibilidad: m.elegibilidad || "",
     precio: m.precio ?? null,
     tipo_pago: m.tipo_pago || null,

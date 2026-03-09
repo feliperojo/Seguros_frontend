@@ -146,6 +146,10 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
   const quillEditorRef = useRef(null);
+  const esTareaVencida =
+    tarea?.due_date &&
+    new Date(tarea.due_date) < new Date() &&
+    tarea?.status !== "completed";
   
   // Hook para manejo de menciones en Quill
   const {
@@ -1702,7 +1706,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
               <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
                 Agregar Comentario
               </Button>
-              <Button variant="success" onClick={handleCompletar} disabled={loading}>
+              <Button variant="success" onClick={handleCompletar} disabled={loading || esTareaVencida}>
                 Marcar completada
               </Button>
             </>
@@ -1934,7 +1938,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
           <Button 
             variant="success" 
             onClick={confirmarYCompletarTarea}
-            disabled={loading}
+            disabled={loading || esTareaVencida}
           >
             {loading ? (
               <>

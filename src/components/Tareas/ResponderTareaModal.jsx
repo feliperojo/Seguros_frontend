@@ -177,6 +177,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const [dueDatePasswordError, setDueDatePasswordError] = useState("");
   const isDueDateLocked = tarea?.id && !dueDateUnlocked;
   const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
+  const esTareaVencida =
+    tarea?.due_date &&
+    new Date(tarea.due_date) < new Date() &&
+    tarea?.status !== "completed";
 
   // ✅ Estados para menciones
   const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
@@ -2980,7 +2984,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                 <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
                   Agregar Comentario
                 </Button>
-                <Button variant="success" onClick={handleCompletar} disabled={loading}>
+                <Button variant="success" onClick={handleCompletar} disabled={loading || esTareaVencida}>
                   Marcar completada
                 </Button>
               </>
@@ -3244,7 +3248,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         <Button 
           variant="success" 
           onClick={confirmarYCompletarTarea}
-          disabled={loading}
+          disabled={loading || esTareaVencida}
         >
           {loading ? (
             <>
