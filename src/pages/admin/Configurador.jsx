@@ -29,7 +29,7 @@ const COVERAGE_PRODUCT_TYPES = [
 // Campos de la sección "Datos Cobertura" que se pueden mostrar/ocultar por tipo de producto
 const COVERAGE_FIELD_DEFINITIONS = [
   { key: "codigo_poliza", label: "Código Póliza" },
-  { key: "policy_number", label: "Número de póliza" },
+  { key: "policy_number", label: "Número de ID" },
   { key: "fecha_activacion", label: "Fecha de Activación" },
   { key: "ano_cobertura", label: "Año de Cobertura" },
   { key: "elegibilidad", label: "Elegibilidad" },
