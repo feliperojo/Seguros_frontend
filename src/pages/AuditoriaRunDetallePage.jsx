@@ -571,7 +571,7 @@ const AuditoriaRunDetallePage = () => {
               <Form.Label>Búsqueda</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Cliente o código póliza..."
+                placeholder="Cliente o Numero ID..."
                 value={tempFilters.search}
                 onChange={(e) => handleTempFilterChange("search", e.target.value)}
               />
@@ -717,7 +717,7 @@ const AuditoriaRunDetallePage = () => {
                         style={{ cursor: "pointer" }}
                         onClick={() => handleSort("codigo_poliza")}
                       >
-                        Código Póliza {renderSortIcon("codigo_poliza")}
+                        Numero ID {renderSortIcon("codigo_poliza")}
                       </th>
                       <th
                         style={{ cursor: "pointer" }}
@@ -1090,7 +1090,7 @@ const AuditoriaRunDetallePage = () => {
             <>
               <p className="mb-3">
                 <strong>Cliente:</strong> {editingItem.cliente || "-"} <br />
-                <strong>Código Póliza:</strong> {editingItem.codigo_poliza || "-"}
+                <strong>Numero ID:</strong> {editingItem.codigo_poliza || "-"}
               </p>
               
               <Form.Group className="mb-3">

@@ -183,7 +183,7 @@ const [reqActivo, setReqActivo] = useState(null);
               <thead>
                 <tr>
                   <th className="col-doc">DOCUMENTO</th>
-                  <th className="col-doc">CÓDIGO PÓLIZA</th>
+                  <th className="col-doc">Numero ID</th>
                   <th className="col-fecha">FECHA VENCIMIENTO</th>
                   <th className="col-fecha">FECHA SOLICITUD</th>
                   <th className="col-estado">ESTADO</th>

@@ -86,7 +86,7 @@ const formatDate = (value) => {
 
 const TABLE_COLUMNS = [
   { key: "policy_number", label: "Nº Póliza" },
-  { key: "codigo_poliza", label: "Código póliza" },
+  { key: "codigo_poliza", label: "Numero ID" },
   { key: "grupo_familiar_id", label: "Grupo familiar" },
   { key: "company_name", label: "Compañía" },
   { key: "tomador_nombre", label: "Tomador" },

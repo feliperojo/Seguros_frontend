@@ -461,7 +461,7 @@ const HistorialCoberturasCanceladasModal = ({
             <Card.Body>
               <div className="row g-2">
                 <div className="col-12">
-                  <small className="text-muted">Código Póliza:</small>
+                  <small className="text-muted">Numero ID:</small>
                   <div className="fw-semibold">{item?.codigo_poliza || "-"}</div>
                 </div>
                 <div className="col-12">
@@ -830,7 +830,7 @@ const HistorialCoberturasCanceladasModal = ({
               <thead className="table-light sticky-top">
                 <tr>
                   <th width="40"></th>
-                  <th>Código Póliza</th>
+                  <th>Numero ID</th>
                   <th>Cliente</th>
                   <th>Parentesco</th>
                   <th>Plan</th>

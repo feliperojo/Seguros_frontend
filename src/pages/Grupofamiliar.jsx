@@ -1766,7 +1766,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                           type="text"
                                           value={member.policy_number || ""}
                                           onChange={(e) => updateMemberData(group.id, member.id, "policy_number", e.target.value)}
-                                          placeholder="Número ID"
+                                          placeholder="Número de Póliza"
                                         />
                                       </Form.Group>
                                       </Col>

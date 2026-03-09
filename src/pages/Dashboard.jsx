@@ -1032,7 +1032,7 @@ const handleOpenViewModal = (cliente) => {
       <thead>
         <tr>
           <th>Cliente</th>
-          <th>Codigo poliza</th>
+          <th>Codigo de ID</th>
           <th>Parentesco</th>
           <th>Documento</th>
           <th>Estado</th>

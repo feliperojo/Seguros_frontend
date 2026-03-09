@@ -351,7 +351,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                       <thead className="table-light">
                         <tr>
                           <th width="40"></th>
-                          <th>Código Póliza</th>
+                          <th>Numero ID</th>
                           <th>Cliente</th>
                           <th>Parentesco</th>
                           <th>Elegibilidad</th>

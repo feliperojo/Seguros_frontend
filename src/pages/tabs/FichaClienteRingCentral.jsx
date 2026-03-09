@@ -660,7 +660,7 @@ useEffect(() => {
                     <span className="text-gray-900">{anoCobertura}</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-600 min-w-[120px]">Código póliza:</span>
+                    <span className="font-semibold text-gray-600 min-w-[120px]">Numero ID:</span>
                     <span className="text-gray-900 font-mono text-xs">{codigoPoliza}</span>
                   </div>
                 </div>

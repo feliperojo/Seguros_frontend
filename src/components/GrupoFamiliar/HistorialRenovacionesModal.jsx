@@ -441,7 +441,7 @@ const HistorialRenovacionesModal = ({ show, onHide, grupoFamiliarId }) => {
                                           {formatMoney(c.precio)}
                                         </p>
                                         <p>
-                                          <strong>Código póliza:</strong>{" "}
+                                          <strong>Numero ID:</strong>{" "}
                                           {c.codigo_poliza ?? "—"}
                                         </p>
                                         <p>

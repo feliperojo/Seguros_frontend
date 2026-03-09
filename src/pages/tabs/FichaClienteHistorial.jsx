@@ -79,7 +79,7 @@ export default function FichaClienteHistorial() {
               <div>GF {grupoData?.id ?? "—"}</div>
               <div><strong>ID Grupo Familiar:</strong> {grupoData?.id ?? "—"}</div>
               <div><strong>Año cobertura:</strong> {grupoData?.anoCobertura}</div>
-              <div><strong>Código póliza:</strong> {grupoData?.codigoPoliza}</div>
+              <div><strong>Numero ID:</strong> {grupoData?.codigoPoliza}</div>
             </div>
             <div className="col-md-6">
               <div><strong>Asesor / Responsable:</strong> {grupoData?.responsable}</div>

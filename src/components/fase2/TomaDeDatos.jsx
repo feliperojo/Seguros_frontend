@@ -1891,7 +1891,7 @@ const activeNormalized = useMemo(
                           {/* Campos normales cuando NO es Medicare/Medicaid */}
                           <div className="row g-3">
                             {shouldShowCoverageField("codigo_poliza") && (
-                              <Field label="Código Póliza" className="col-md-3">
+                              <Field label="Numero ID" className="col-md-3">
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"
@@ -1969,7 +1969,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("policy_number") && (
-                              <Field label="Número de póliza" className="col-md-3">
+                              <Field label="Número de ID" className="col-md-3">
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"

@@ -248,7 +248,7 @@ const ReactivacionCoberturasModal = ({
                         />
                       </th>
                       <th className="fw-semibold">Cliente / Parentesco</th>
-                      <th className="fw-semibold">Código Póliza</th>
+                      <th className="fw-semibold">Numero ID</th>
                       <th className="fw-semibold">Plan / Cobertura</th>
                       <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
                       <th width="150" className="text-center fw-semibold">Fecha Cancelación</th>

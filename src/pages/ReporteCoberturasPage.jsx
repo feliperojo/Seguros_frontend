@@ -128,7 +128,7 @@ const keyToLabel = (key) => {
  */
 const FALLBACK_REPORT_COLUMNS = [
   { key: "fecha_activacion", label: "Fecha Activación" },
-  { key: "codigo_poliza", label: "Código Póliza" },
+  { key: "codigo_poliza", label: "Numero ID" },
   { key: "cliente", label: "Cliente" },
   { key: "compania", label: "Compañía" },
   { key: "responsable", label: "Responsable" },
@@ -626,7 +626,7 @@ const ReporteCoberturasPage = () => {
               <Form.Label>Búsqueda</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Cliente o código póliza..."
+                placeholder="Cliente o Numero ID..."
                 value={tempFilters.search}
                 onChange={(e) => handleTempFilterChange("search", e.target.value)}
               />
