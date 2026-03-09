@@ -78,22 +78,21 @@ const Dashboard = () => {
   // Función para parsear fecha de nacimiento correctamente
   const parsearFechaNacimiento = useCallback((fechaStr) => {
     if (!fechaStr) return null;
-    
+
     try {
-      // Si viene en formato YYYY-MM-DD, parsear manualmente para evitar problemas de zona horaria
-      if (typeof fechaStr === 'string' && fechaStr.includes('-')) {
-        const partes = fechaStr.split('-');
-        if (partes.length === 3) {
-          const año = parseInt(partes[0], 10);
-          const mes = parseInt(partes[1], 10) - 1; // Mes es 0-indexado
-          const dia = parseInt(partes[2], 10);
-          
-          if (!isNaN(año) && !isNaN(mes) && !isNaN(dia)) {
-            return new Date(año, mes, dia, 12, 0, 0); // Mediodía para evitar problemas de zona horaria
-          }
+      // Si viene en formato YYYY-MM-DD o YYYY-MM-DDTHH:MM:SS, parsear manualmente
+      if (typeof fechaStr === "string" && /^\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
+        const [year, month, day] = fechaStr.split("T")[0].split("-");
+        const año = parseInt(year, 10);
+        const mes = parseInt(month, 10) - 1; // Mes es 0-indexado
+        const dia = parseInt(day, 10);
+
+        if (!isNaN(año) && !isNaN(mes) && !isNaN(dia)) {
+          // Mediodía local para evitar problemas de zona horaria
+          return new Date(año, mes, dia, 12, 0, 0);
         }
       }
-      
+
       // Fallback: intentar parsear directamente
       const fecha = new Date(fechaStr);
       if (!isNaN(fecha.getTime())) {
@@ -102,64 +101,96 @@ const Dashboard = () => {
     } catch (error) {
       console.warn("Error al parsear fecha:", fechaStr, error);
     }
-    
+
     return null;
   }, []);
 
-  // Función para cargar cumpleaños del día de hoy
-  const cargarCumpleanos = useCallback(async () => {
-    if (!preferenciasVisualizacion || !preferenciasVisualizacion.mostrarCumpleanos) {
-      setCumpleanosMes([]);
-      return;
-    }
-    
-    setLoadingCumpleanos(true);
-    try {
+  // Función que verifica si una fecha de nacimiento corresponde a hoy (ignorando el año)
+  const esCumpleanosHoy = useCallback(
+    (fechaNacimiento) => {
+      if (!fechaNacimiento) return false;
+
+      const fechaNac = parsearFechaNacimiento(fechaNacimiento);
+      if (!fechaNac) return false;
+
+      // Normalizar a fecha UTC para evitar desfasajes por zona horaria
+      const nacimientoUTC = new Date(
+        Date.UTC(
+          fechaNac.getFullYear(),
+          fechaNac.getMonth(),
+          fechaNac.getDate()
+        )
+      );
+
       const hoy = new Date();
-      const diaHoy = hoy.getDate();
-      const mesHoy = hoy.getMonth() + 1;
-      const año = hoy.getFullYear();
-      
-      let clientes = [];
-      
-      // Intentar endpoint específico para cumpleaños del mes (compatible con backend existente)
-      try {
-        const res = await apiRequest(`cliente/cumpleanos?mes=${mesHoy}&año=${año}`, "GET");
-        clientes = Array.isArray(res) ? res : (res?.data || []);
-      } catch (error) {
-        // Si falla el endpoint de cumpleaños, obtener todos los clientes y filtrar manualmente
-        console.warn("Endpoint de cumpleaños no disponible, filtrando manualmente:", error);
-        try {
-          const res = await apiRequest("cliente?per_page=1000", "GET");
-          clientes = Array.isArray(res) ? res : (res?.data || []);
-        } catch (err) {
-          console.error("Error al obtener clientes:", err);
-          setCumpleanosMes([]);
-          return;
-        }
+      const hoyUTC = new Date(
+        Date.UTC(
+          hoy.getUTCFullYear(),
+          hoy.getUTCMonth(),
+          hoy.getUTCDate()
+        )
+      );
+
+      return (
+        nacimientoUTC.getUTCMonth() === hoyUTC.getUTCMonth() &&
+        nacimientoUTC.getUTCDate() === hoyUTC.getUTCDate()
+      );
+    },
+    [parsearFechaNacimiento]
+  );
+
+  // Función para cargar cumpleaños del día de hoy
+  const cargarCumpleanos = useCallback(
+    async () => {
+      if (!preferenciasVisualizacion || !preferenciasVisualizacion.mostrarCumpleanos) {
+        setCumpleanosMes([]);
+        return;
       }
-      
-      // Filtrar solo los que cumplen años HOY (día y mes)
-      const cumpleanosHoy = clientes.filter(cliente => {
-        if (!cliente.fecha_nacimiento) return false;
-        
-        const fechaNac = parsearFechaNacimiento(cliente.fecha_nacimiento);
-        if (!fechaNac) return false;
-        
-        const diaNac = fechaNac.getDate();
-        const mesNac = fechaNac.getMonth() + 1;
-        
-        return diaNac === diaHoy && mesNac === mesHoy;
-      });
-      
-      setCumpleanosMes(cumpleanosHoy);
-    } catch (error) {
-      console.error("Error al cargar cumpleaños:", error);
-      setCumpleanosMes([]);
-    } finally {
-      setLoadingCumpleanos(false);
-    }
-  }, [preferenciasVisualizacion?.mostrarCumpleanos, parsearFechaNacimiento]);
+
+      setLoadingCumpleanos(true);
+      try {
+        let clientes = [];
+
+        // 1) Intentar obtener todos los clientes con cobertura (endpoint usado en ReporteCumpleanosPage)
+        try {
+          const response = await apiRequest("cliente/with-cobertura", "GET");
+          const raw = Array.isArray(response?.data) ? response.data : response;
+          const clientesArray = Array.isArray(raw) ? raw : Object.values(raw || {});
+          clientes = clientesArray.filter((c) => c && c.fecha_nacimiento);
+        } catch (errorWithCobertura) {
+          console.warn(
+            "No se pudo obtener clientes con cobertura para cumpleaños, usando fallback:",
+            errorWithCobertura
+          );
+
+          // 2) Fallback: obtener clientes generales y filtrar
+          try {
+            const res = await apiRequest("cliente?per_page=1000", "GET");
+            const raw = Array.isArray(res?.data) ? res.data : res;
+            const clientesArray = Array.isArray(raw) ? raw : Object.values(raw || {});
+            clientes = clientesArray.filter((c) => c && c.fecha_nacimiento);
+          } catch (errClientes) {
+            console.error("Error al obtener clientes para cumpleaños:", errClientes);
+            setCumpleanosMes([]);
+            return;
+          }
+        }
+
+        // Filtrar solo los que cumplen años HOY (día y mes)
+        const cumpleanosHoy = clientes.filter((cliente) =>
+          esCumpleanosHoy(cliente.fecha_nacimiento)
+        );
+
+        setCumpleanosMes(cumpleanosHoy);
+      } catch (error) {
+        console.error("Error al cargar cumpleaños:", error);
+        setCumpleanosMes([]);
+      } finally {
+        setLoadingCumpleanos(false);
+      }
+    },
+    [preferenciasVisualizacion?.mostrarCumpleanos, esCumpleanosHoy]
+  );
 
   // Función para cargar pagos pendientes del mes seleccionado
   const cargarPagosPendientes = useCallback(async () => {
