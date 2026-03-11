@@ -65,13 +65,16 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   },
 
   // ---- Coberturas ----
-  createCoberturaSimple: async ({
-    grupo_familiar_id,
-    cliente_id,
-    estado_cobertura = "Si/No",
-    parentesco = "Tomador",
-    cobertura_tipo,
-  }, headers = {}) => {
+  createCoberturaSimple: async (
+    {
+      grupo_familiar_id,
+      cliente_id,
+      estado_cobertura = "Si/No",
+      parentesco = "Tomador",
+      cobertura_tipo,
+    },
+    headers = {}
+  ) => {
     const payload = {
       grupo_familiar_id,
       cliente_id,
@@ -82,6 +85,48 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
       activo: true,
     };
     return await apiRequest(`${BASE_COB}/create`, "POST", payload, headers);
+  },
+
+  /**
+   * Busca si un cliente ya tiene una cobertura activa/vigente
+   * para el mismo tipo de producto en OTRO grupo familiar.
+   *
+   * Devuelve:
+   *   - el objeto cobertura en conflicto, o
+   *   - null si no hay conflicto.
+   */
+  findActiveCoverageConflict: async (clienteId, coberturaTipo, currentGrupoFamiliarId = null) => {
+    if (!clienteId || !coberturaTipo) return null;
+
+    const activas = await apiRequest(`${BASE_COB}/activas`, "GET");
+    const tipoActual = coberturaTipo.toString().trim().toUpperCase();
+    const targetClienteId = Number(clienteId);
+
+    if (!Array.isArray(activas) || !activas.length) return null;
+
+    const conflicto = activas.find((c) => {
+      const cClienteId = c?.cliente?.id ?? c.cliente_id;
+      const tipoCob = (c?.cobertura_tipo || "").toString().trim().toUpperCase();
+
+      const estaVigente =
+        c.activo === true &&
+        !c.fecha_cancelacion &&
+        !c.fecha_retiro &&
+        (c.vigente === undefined || c.vigente === null || c.vigente === true);
+
+      if (!estaVigente) return false;
+
+      const mismoCliente = Number(cClienteId) === targetClienteId;
+      const mismoTipo = tipoCob === tipoActual;
+
+      if (!mismoCliente || !mismoTipo) return false;
+
+      if (!c.grupo_familiar_id || currentGrupoFamiliarId == null) return true;
+
+      return Number(c.grupo_familiar_id) !== Number(currentGrupoFamiliarId);
+    });
+
+    return conflicto || null;
   },
 
   deleteCobertura: async (coberturaId, headers = {}) => {

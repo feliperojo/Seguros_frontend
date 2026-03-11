@@ -610,6 +610,65 @@ const ProspectoDatos = ({
     if (!payload?.cliente_id || !clienteSeleccionado?.id) return;
     if (yaEstaEnElGrupo(payload.cliente_id, familyMembers)) return;
 
+    // 🔍 Validación centralizada: evitar duplicar coberturas activas/vigentes
+    if (grupoFamiliarId) {
+      try {
+        const conflicto = await GrupoFamiliarService.findActiveCoverageConflict(
+          payload.cliente_id,
+          payload.cobertura_tipo || defaultCoberturaTipo,
+          grupoFamiliarId
+        );
+
+        if (conflicto) {
+          const nombreCliente =
+            conflicto.cliente?.nombre_completo ??
+            clienteSeleccionado?.nombre_completo ??
+            "Este cliente";
+
+          const descripcionCobertura = [
+            conflicto.cobertura_tipo,
+            conflicto.compania?.nombre,
+            conflicto.codigo_poliza || conflicto.policy_number,
+          ]
+            .filter(Boolean)
+            .join(" - ");
+
+          const grupoTexto = conflicto.grupo_familiar_id
+            ? `Grupo familiar #${conflicto.grupo_familiar_id}`
+            : null;
+
+          const mensajeDetalle = descripcionCobertura
+            ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
+            : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
+
+          if (window?.Swal) {
+            window.Swal.fire({
+              icon: "warning",
+              title: "Cobertura vigente existente",
+              html: `
+                <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto.</p>
+                <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
+                <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
+              `,
+              confirmButtonText: "Entendido",
+            });
+          } else {
+            window.alert(
+              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
+                `${mensajeDetalle}\n\n` +
+                `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
+            );
+          }
+
+          return;
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.error("Error validando coberturas activas del cliente (prospecto):", e);
+        }
+      }
+    }
+
     // Si NO hay grupoFamiliarId, agregar localmente (modo creación)
     if (!grupoFamiliarId) {
       // Si hay un handler externo, usarlo

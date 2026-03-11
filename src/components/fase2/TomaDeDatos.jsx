@@ -251,8 +251,10 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
       </button>
 
       <div
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${
-          isOpen ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
+        className={`transition-all duration-300 ease-in-out ${
+          isOpen
+            ? "max-h-none opacity-100 mt-2 overflow-visible"
+            : "max-h-0 opacity-0 overflow-hidden"
         }`}
       >
         <div className="px-4 py-4 bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -1097,6 +1099,64 @@ const activeNormalized = useMemo(
       if (!grupoFamiliarId || !payload?.cliente_id) return;
       if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
 
+      // 🔍 Validar si el cliente ya tiene una cobertura activa/vigente
+      // para el mismo tipo de producto en OTRO grupo familiar (lógica centralizada en el service)
+      try {
+        const conflicto = await GrupoFamiliarService.findActiveCoverageConflict(
+          payload.cliente_id,
+          payload.cobertura_tipo,
+          grupoFamiliarId
+        );
+
+        if (conflicto) {
+          const nombreCliente =
+            conflicto.cliente?.nombre_completo ??
+            clienteSeleccionado?.nombre_completo ??
+            "Este cliente";
+
+          const descripcionCobertura = [
+            conflicto.cobertura_tipo,
+            conflicto.compania?.nombre,
+            conflicto.codigo_poliza || conflicto.policy_number
+          ]
+            .filter(Boolean)
+            .join(" - ");
+
+          const grupoTexto = conflicto.grupo_familiar_id
+            ? `Grupo familiar #${conflicto.grupo_familiar_id}`
+            : null;
+
+          const mensajeDetalle = descripcionCobertura
+            ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
+            : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
+
+          if (window?.Swal) {
+            window.Swal.fire({
+              icon: "warning",
+              title: "Cobertura vigente existente",
+              html: `
+                <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto.</p>
+                <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
+                <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
+              `,
+              confirmButtonText: "Entendido"
+            });
+          } else {
+            window.alert(
+              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
+              `${mensajeDetalle}\n\n` +
+              `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
+            );
+          }
+
+          return;
+        }
+      } catch (e) {
+        if (import.meta.env.DEV) {
+          console.error("Error validando coberturas activas del cliente:", e);
+        }
+      }
+
       const res = await GrupoFamiliarService.createCoberturaSimple({
         grupo_familiar_id: grupoFamiliarId,
         cliente_id: payload.cliente_id,
@@ -1899,7 +1959,7 @@ const activeNormalized = useMemo(
                                   value={m.codigo_poliza || ""}
                                   onChange={onChange}
                                   disabled={isReadOnly}
-                                  placeholder="ID póliza interno"
+                                  placeholder="Codigo de Poliza"
                                 />
                               </Field>
                             )}
@@ -1977,7 +2037,7 @@ const activeNormalized = useMemo(
                                   value={m.policy_number || ""}
                                   onChange={onChange}
                                   disabled={isReadOnly}
-                                  placeholder="Número de póliza"
+                                  placeholder="Codigo de ID"
                                 />
                               </Field>
                             )}

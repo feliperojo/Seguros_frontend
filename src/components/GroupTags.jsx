@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Modal, Button } from "react-bootstrap";
 import { SUGGESTED_TAGS, AVAILABLE_COLORS, generateTagKey, validateTag } from "../utils/tagsCatalog";
+import systemConfigService from "../services/SystemConfigService";
 import useToast from "../hooks/useToast";
 
 /**
@@ -13,6 +14,7 @@ import useToast from "../hooks/useToast";
  */
 const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) => {
   const toast = useToast();
+  const CONFIG_KEY = "group_tags_custom";
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showMoreTags, setShowMoreTags] = useState(false);
@@ -40,31 +42,91 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     });
   }, [value]);
 
-  // Cargar etiquetas personalizadas desde localStorage al montar
+  // Cargar etiquetas personalizadas desde configuración global (system-config)
+  // con fallback a localStorage para compatibilidad hacia atrás.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("groupTags_custom");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          setCustomTags(parsed.filter(validateTag));
+    let isMounted = true;
+
+    const loadCustomTags = async () => {
+      // 1. Intentar desde system-config (global para todas las personas usuarias)
+      try {
+        const response = await systemConfigService.get(CONFIG_KEY);
+        const data = Array.isArray(response?.value)
+          ? response.value
+          : Array.isArray(response)
+          ? response
+          : Array.isArray(response?.data)
+          ? response.data
+          : null;
+
+        if (isMounted && Array.isArray(data)) {
+          const valid = data.filter(validateTag);
+          if (valid.length > 0) {
+            setCustomTags(valid);
+            // Guardar también en localStorage como caché local
+            try {
+              localStorage.setItem("groupTags_custom", JSON.stringify(valid));
+            } catch {
+              // Ignorar errores de localStorage
+            }
+            return;
+          }
+        }
+      } catch (error) {
+        const status = error?.response?.status ?? error?.status;
+        // Si es 404, la clave aún no existe: no mostrar error.
+        if (status && status !== 404) {
+          console.error("Error al cargar etiquetas personalizadas globales:", error);
         }
       }
-    } catch (error) {
-      console.error("Error al cargar etiquetas personalizadas:", error);
-    }
+
+      // 2. Fallback: intentar cargar desde localStorage (solo navegador actual)
+      try {
+        const saved = localStorage.getItem("groupTags_custom");
+        if (isMounted && saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed)) {
+            setCustomTags(parsed.filter(validateTag));
+          }
+        }
+      } catch (error) {
+        console.error("Error al cargar etiquetas personalizadas desde localStorage:", error);
+      }
+    };
+
+    loadCustomTags();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // Guardar etiquetas personalizadas en localStorage cuando cambian
+  // Guardar etiquetas personalizadas en configuración global cuando cambian
   useEffect(() => {
-    if (customTags.length > 0) {
+    if (!customTags || customTags.length === 0) return;
+
+    // Guardar en segundo plano; no bloquea la UI
+    const saveCustomTags = async () => {
+      try {
+        // Guardar en system-config como JSON para que se comparta entre usuarios
+        await systemConfigService.put(CONFIG_KEY, customTags, "json");
+      } catch (error) {
+        console.error("Error al guardar etiquetas personalizadas globales:", error);
+        if (toast && typeof toast.showError === "function") {
+          toast.showError("No se pudieron guardar las etiquetas personalizadas globales.");
+        }
+      }
+
+      // Siempre intentar mantener una copia local como respaldo
       try {
         localStorage.setItem("groupTags_custom", JSON.stringify(customTags));
       } catch (error) {
-        console.error("Error al guardar etiquetas personalizadas:", error);
+        console.error("Error al guardar etiquetas personalizadas en localStorage:", error);
       }
-    }
-  }, [customTags]);
+    };
+
+    saveCustomTags();
+  }, [customTags, toast, CONFIG_KEY]);
 
   // Combinar etiquetas sugeridas y personalizadas
   const allAvailableTags = useMemo(() => {
