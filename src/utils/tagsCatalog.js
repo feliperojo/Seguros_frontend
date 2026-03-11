@@ -86,6 +86,10 @@ export const validateTag = (tag) => {
   return true;
 };
 
+// Claves usadas en system-config para gestionar el catálogo global de etiquetas
+export const GROUP_TAGS_CONFIG_KEY = "group_tags_custom";
+export const GROUP_TAGS_DELETED_CONFIG_KEY = "group_tags_deleted";
+
 
 
 

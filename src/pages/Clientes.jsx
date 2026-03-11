@@ -310,27 +310,94 @@ const calcularIngresoAnual = (monto, periodo) => {
  const guardarCliente = async () => {
   setAlert({ type: "", message: "", visible: false });
 
-  // Convertir telefonos al formato del API
-  const telefonosFormateados = toApiPhones(Array.isArray(formData.telefonos) ? formData.telefonos : []);
-
-  // Crear una copia limpia del formData
-  // Siempre forzar estado_cliente a "cliente" cuando se crea desde este formulario
-  const formattedData = {
-    ...formData,
-    primer_contacto_info: String(formData.primer_contacto_info || ""),
-    es_prospecto: false, // Siempre false cuando se crea desde este formulario
-    estado_cliente: "cliente", // Siempre "cliente" cuando se crea desde este formulario
-    telefonos: telefonosFormateados, // Array de telefonos en formato API
-    telefono_empleador: formData.telefono_empleador,
-  };
-
-  let jsonFinal = {
-    clientes: [formattedData],
-  };
-
- 
+  // Normalizar nombre completo y fecha de nacimiento para validación
+  const nombreCompleto = (formData.nombre_completo || "")
+    .toString()
+    .trim()
+    .replace(/\s+/g, " ");
+  const fechaNacimiento = formData.fecha_nacimiento
+    ? normalizeDateForInput(formData.fecha_nacimiento)
+    : "";
 
   try {
+    // 🔍 Validación de duplicados: nombre completo + fecha de nacimiento
+    if (nombreCompleto && fechaNacimiento) {
+      const posibles = await apiRequest(
+        `cliente/buscar?nombre=${encodeURIComponent(nombreCompleto)}&incluir_prospectos=false`,
+        "GET"
+      );
+
+      const candidatos = Array.isArray(posibles) ? posibles : [];
+
+      const yaExiste = candidatos.find((c) => {
+        const nombreBD = (
+          c.nombre_completo ||
+          `${c.primer_nombre || ""} ${c.segundo_nombre || ""} ${c.apellidos || ""}` ||
+          `${c.nombre || ""} ${c.apellido || ""}`
+        )
+          .toString()
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase();
+
+        const nombreInput = nombreCompleto.toLowerCase();
+        const palabrasInput = nombreInput.split(" ").filter(Boolean);
+
+        const palabrasCoinciden =
+          palabrasInput.length > 0 &&
+          palabrasInput.every((w) => nombreBD.includes(w));
+
+        const nombreContiene =
+          nombreBD.includes(nombreInput) || nombreInput.includes(nombreBD);
+
+        const fechaBD = c.fecha_nacimiento
+          ? normalizeDateForInput(c.fecha_nacimiento)
+          : "";
+
+        return (
+          (palabrasCoinciden || nombreContiene) &&
+          fechaBD === fechaNacimiento
+        );
+      });
+
+      if (yaExiste) {
+        const msgNombre = yaExiste.nombre_completo || nombreCompleto;
+        const msgFecha = yaExiste.fecha_nacimiento
+          ? normalizeDateForInput(yaExiste.fecha_nacimiento)
+          : fechaNacimiento;
+
+        setAlert({
+          type: "warning",
+          message:
+            `Ya existe un cliente con el mismo nombre y fecha de nacimiento.\n` +
+            `Nombre: ${msgNombre} | Fecha de nacimiento: ${msgFecha}\n\n` +
+            `Por favor, use la búsqueda de clientes existentes o edite el registro actual en lugar de crear un duplicado.`,
+          visible: true,
+        });
+        return;
+      }
+    }
+
+    // Convertir telefonos al formato del API
+    const telefonosFormateados = toApiPhones(
+      Array.isArray(formData.telefonos) ? formData.telefonos : []
+    );
+
+    // Crear una copia limpia del formData
+    // Siempre forzar estado_cliente a "cliente" cuando se crea desde este formulario
+    const formattedData = {
+      ...formData,
+      primer_contacto_info: String(formData.primer_contacto_info || ""),
+      es_prospecto: false, // Siempre false cuando se crea desde este formulario
+      estado_cliente: "cliente", // Siempre "cliente" cuando se crea desde este formulario
+      telefonos: telefonosFormateados, // Array de telefonos en formato API
+      telefono_empleador: formData.telefono_empleador,
+    };
+
+    let jsonFinal = {
+      clientes: [formattedData],
+    };
+
     const response = await apiRequest("cliente/create", "POST", jsonFinal);
 
     if (response?.message && response.message.includes("cliente creado exitosamente")) {

@@ -2352,14 +2352,15 @@ const activeNormalized = useMemo(
         onClose={() => setOpenModal(false)}
         editingMember={editingMember}
         defaultCoberturaTipo={defaultCoberturaTipo}
-        canAdd={canAdd}
         readOnly={readOnly}
         isProspecto={isProspecto}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}
-        grupoFamiliarId={grupoFamiliarId}
-        onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+        onRequestExistingClientModal={() => {
+          setOpenModal(false);
+          setOpenExistente(true);
+        }}
       />
 
       <CopiarDatosModal

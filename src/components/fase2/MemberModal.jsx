@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 import LanguageSelect from "../selects/LanguageSelect";
 import { normalizeDateForInput } from "../../utils/formatters";
+import apiRequest from "../../services/api";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -52,6 +53,7 @@ export default function MemberModalCreate({
   onCreateLocal,
   onUpdateLocal,
   onCreateRemote,
+  onRequestExistingClientModal,
 }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -62,6 +64,13 @@ export default function MemberModalCreate({
     idioma: "", fechaNacimiento: "", edad: "", genero: "Masculino",
     ingresoAnual: "", nota: "", parentesco: "Tomador", estado_cobertura: "Sí", tipo: "Tomador",
   });
+
+  // Estado para validación de existencia
+  const [validating, setValidating] = useState(false);
+  const [validationDone, setValidationDone] = useState(false);
+  const [validationMatches, setValidationMatches] = useState([]);
+  const [allowSaveAfterValidation, setAllowSaveAfterValidation] = useState(false);
+  const [validationError, setValidationError] = useState("");
 
   /* -------- Hidratar al abrir -------- */
   useEffect(() => {
@@ -90,6 +99,13 @@ export default function MemberModalCreate({
       });
       setStep(1);
     }
+
+    // Resetear estado de validación cada vez que se abre
+    setValidating(false);
+    setValidationDone(false);
+    setValidationMatches([]);
+    setAllowSaveAfterValidation(false);
+    setValidationError("");
   }, [open, editingMember]);
 
   /* -------- Handlers -------- */
@@ -112,6 +128,12 @@ export default function MemberModalCreate({
       }
       return next;
     });
+
+    // Cada cambio invalida la validación previa
+    setValidationDone(false);
+    setValidationMatches([]);
+    setAllowSaveAfterValidation(false);
+    setValidationError("");
   };
 
 
@@ -122,6 +144,100 @@ export default function MemberModalCreate({
 
   const onBlurMoney = (field) => () =>
     setData(prev => ({ ...prev, [field]: formatMoney2(prev[field]) }));
+
+  const handleValidateExistence = async () => {
+    setValidationError("");
+    setValidationDone(false);
+    setValidationMatches([]);
+    setAllowSaveAfterValidation(false);
+
+    const nombreCompleto = buildFullName(
+      data.primer_nombre,
+      data.segundo_nombre,
+      data.apellidos
+    )
+      .toString()
+      .trim()
+      .replace(/\s+/g, " ");
+
+    const fechaNacimiento = data.fechaNacimiento
+      ? normalizeDateForInput(data.fechaNacimiento)
+      : "";
+
+    if (!nombreCompleto || !fechaNacimiento) {
+      setValidationError(
+        "Para validar existencia debes ingresar al menos nombre completo y fecha de nacimiento."
+      );
+      return;
+    }
+
+    try {
+      setValidating(true);
+
+      const posibles = await apiRequest(
+        `cliente/buscar?nombre=${encodeURIComponent(
+          nombreCompleto
+        )}&incluir_prospectos=false`,
+        "GET"
+      );
+
+      const candidatos = Array.isArray(posibles) ? posibles : [];
+
+      const matches = candidatos.filter((c) => {
+        const nombreBD = (
+          c.nombre_completo ||
+          buildFullName(
+            c.primer_nombre || c.nombre || "",
+            c.segundo_nombre || "",
+            c.apellidos || c.apellido || ""
+          )
+        )
+          .toString()
+          .trim()
+          .replace(/\s+/g, " ")
+          .toLowerCase();
+
+        const nombreInput = nombreCompleto.toLowerCase();
+
+        // Coincidencia aproximada: todas las palabras del input deben aparecer
+        // en el nombre de BD (en cualquier orden), o el nombre completo de BD
+        // contiene al nombre ingresado (para manejar casos sin segundo nombre/apellido).
+        const palabrasInput = nombreInput.split(" ").filter(Boolean);
+        const palabrasCoinciden =
+          palabrasInput.length > 0 &&
+          palabrasInput.every((w) => nombreBD.includes(w));
+
+        const nombreContiene =
+          nombreBD.includes(nombreInput) || nombreInput.includes(nombreBD);
+
+        const fechaBD = c.fecha_nacimiento
+          ? normalizeDateForInput(c.fecha_nacimiento)
+          : "";
+
+        return (
+          (palabrasCoinciden || nombreContiene) &&
+          fechaBD === fechaNacimiento
+        );
+      });
+
+      setValidationMatches(matches);
+      setValidationDone(true);
+
+      if (matches.length === 0) {
+        // No hay coincidencias → habilitar guardar directo
+        setAllowSaveAfterValidation(true);
+      }
+    } catch (err) {
+      setValidationError(
+        "Ocurrió un error al validar la existencia del cliente. Puedes intentar nuevamente."
+      );
+      if (import.meta.env.DEV) {
+        console.error("Error validando existencia de cliente desde MemberModal:", err);
+      }
+    } finally {
+      setValidating(false);
+    }
+  };
 
   const handleSave = async () => {
     // 1) Normaliza y arma el payload base
@@ -221,6 +337,11 @@ export default function MemberModalCreate({
   const title = step === 1
     ? (editingMember ? "Cambiar Tipo de Miembro" : "Seleccionar Tipo de Miembro")
     : (data.nombreCompleto?.trim() || `Datos del ${data.tipo}`);
+
+  const mustValidateBeforeSave = !editingMember && !isProspecto;
+  const canSave =
+    !mustValidateBeforeSave ||
+    (validationDone && (validationMatches.length === 0 || allowSaveAfterValidation));
 
   return (
     <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
@@ -336,15 +457,102 @@ export default function MemberModalCreate({
 
                 <input type="hidden" name="tipo" value={data.tipo}/>
               </div>
+
+              {/* Bloque de validación de existencia */}
+              <div className="mt-3">
+                {validationError && (
+                  <div className="alert alert-danger py-2 mb-2">
+                    {validationError}
+                  </div>
+                )}
+
+                {validationDone && validationMatches.length === 0 && (
+                  <div className="alert alert-success py-2 mb-2">
+                    No se encontraron clientes con el mismo nombre completo y fecha de nacimiento.
+                    Puedes guardar este nuevo miembro con tranquilidad.
+                  </div>
+                )}
+
+                {validationDone && validationMatches.length > 0 && (
+                  <div className="alert alert-warning mb-2">
+                    <p className="mb-2">
+                      Se encontraron clientes con <strong>datos similares</strong> a los que ingresaste:
+                    </p>
+                    <ul className="mb-2">
+                      {validationMatches.map((c) => (
+                        <li key={c.id}>
+                          <strong>{c.nombre_completo}</strong>{" "}
+                          {c.fecha_nacimiento && `| Nac.: ${normalizeDateForInput(c.fecha_nacimiento)}`}{" "}
+                          {c.estado_cliente && `| Estado: ${c.estado_cliente}`}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mb-2">
+                      ¿Alguno de estos clientes es el que deseas agregar al grupo familiar?
+                    </p>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={() => {
+                          onRequestExistingClientModal?.();
+                          onClose?.();
+                        }}
+                      >
+                        Sí, usar buscador de clientes existentes
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => setAllowSaveAfterValidation(true)}
+                      >
+                        No, ninguno coincide. Continuar y crear nuevo
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           <div className="modal-footer">
-            <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cancelar</button>
-            {(step === 2) && (
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? <><span className="spinner-border spinner-border-sm me-2"/>Guardando…</> : <>Guardar</>}
-              </button>
+            <button className="btn btn-secondary" onClick={onClose} disabled={saving || validating}>
+              Cancelar
+            </button>
+            {step === 2 && (
+              <>
+                {!readOnly && !editingMember && (
+                  <button
+                    type="button"
+                    className="btn btn-outline-primary me-2"
+                    onClick={handleValidateExistence}
+                    disabled={saving || validating}
+                  >
+                    {validating ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" />
+                        Validando…
+                      </>
+                    ) : (
+                      <>Validar existencia</>
+                    )}
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSave}
+                  disabled={saving || validating || (mustValidateBeforeSave && !canSave)}
+                >
+                  {saving ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" />
+                      Guardando…
+                    </>
+                  ) : (
+                    <>Guardar</>
+                  )}
+                </button>
+              </>
             )}
           </div>
 

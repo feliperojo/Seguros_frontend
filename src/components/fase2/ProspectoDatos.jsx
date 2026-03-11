@@ -945,8 +945,10 @@ const sortedMembers = familyMembers
         onCreateLocal={createLocal}
         onUpdateLocal={updateLocal}
         onCreateRemote={createRemote}
-        grupoFamiliarId={grupoFamiliarId}
-        onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
+        onRequestExistingClientModal={() => {
+          setModalOpen(false);
+          setOpenExistente(true);
+        }}
       />
 
        {/* Modal EXISTENTE */}

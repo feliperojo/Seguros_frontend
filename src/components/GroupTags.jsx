@@ -1,6 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Modal, Button } from "react-bootstrap";
-import { SUGGESTED_TAGS, AVAILABLE_COLORS, generateTagKey, validateTag } from "../utils/tagsCatalog";
+import {
+  SUGGESTED_TAGS,
+  AVAILABLE_COLORS,
+  generateTagKey,
+  validateTag,
+  GROUP_TAGS_CONFIG_KEY,
+  GROUP_TAGS_DELETED_CONFIG_KEY,
+} from "../utils/tagsCatalog";
 import systemConfigService from "../services/SystemConfigService";
 import useToast from "../hooks/useToast";
 
@@ -14,7 +21,8 @@ import useToast from "../hooks/useToast";
  */
 const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) => {
   const toast = useToast();
-  const CONFIG_KEY = "group_tags_custom";
+  const CONFIG_KEY = GROUP_TAGS_CONFIG_KEY;
+  const DELETED_KEY = GROUP_TAGS_DELETED_CONFIG_KEY;
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [showMoreTags, setShowMoreTags] = useState(false);
@@ -22,6 +30,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
   const [newTagLabel, setNewTagLabel] = useState("");
   const [newTagColor, setNewTagColor] = useState(AVAILABLE_COLORS[0]);
   const [customTags, setCustomTags] = useState([]);
+  const [deletedTagKeys, setDeletedTagKeys] = useState([]);
 
   // Normalizar y validar el valor recibido desde el padre
   const normalizedValue = useMemo(() => {
@@ -42,8 +51,9 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     });
   }, [value]);
 
-  // Cargar etiquetas personalizadas desde configuración global (system-config)
-  // con fallback a localStorage para compatibilidad hacia atrás.
+  // Cargar etiquetas personalizadas y lista de etiquetas eliminadas
+  // desde configuración global (system-config) con fallback a localStorage
+  // para compatibilidad hacia atrás.
   useEffect(() => {
     let isMounted = true;
 
@@ -80,6 +90,30 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
         }
       }
 
+      // 1.b. Cargar lista de etiquetas eliminadas (para ocultar sugeridas o personalizadas)
+      try {
+        const deletedResponse = await systemConfigService.get(DELETED_KEY);
+        const rawDeleted =
+          Array.isArray(deletedResponse?.value) ? deletedResponse.value : Array.isArray(deletedResponse)
+          ? deletedResponse
+          : Array.isArray(deletedResponse?.data)
+          ? deletedResponse.data
+          : null;
+
+        if (isMounted && Array.isArray(rawDeleted)) {
+          setDeletedTagKeys(
+            rawDeleted
+              .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
+              .filter((k) => k)
+          );
+        }
+      } catch (error) {
+        const status = error?.response?.status ?? error?.status;
+        if (status && status !== 404) {
+          console.error("Error al cargar etiquetas eliminadas globales:", error);
+        }
+      }
+
       // 2. Fallback: intentar cargar desde localStorage (solo navegador actual)
       try {
         const saved = localStorage.getItem("groupTags_custom");
@@ -92,6 +126,22 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
       } catch (error) {
         console.error("Error al cargar etiquetas personalizadas desde localStorage:", error);
       }
+
+      try {
+        const deletedSaved = localStorage.getItem("groupTags_deleted");
+        if (isMounted && deletedSaved) {
+          const parsedDeleted = JSON.parse(deletedSaved);
+          if (Array.isArray(parsedDeleted)) {
+            setDeletedTagKeys(
+              parsedDeleted
+                .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
+                .filter((k) => k)
+            );
+          }
+        }
+      } catch (error) {
+        console.error("Error al cargar etiquetas eliminadas desde localStorage:", error);
+      }
     };
 
     loadCustomTags();
@@ -101,37 +151,44 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     };
   }, []);
 
-  // Guardar etiquetas personalizadas en configuración global cuando cambian
+  // Guardar etiquetas personalizadas y lista de eliminadas en configuración global cuando cambian
   useEffect(() => {
-    if (!customTags || customTags.length === 0) return;
+    // Si no hay ningún dato que guardar, evitar llamar al backend
+    const hasCustom = Array.isArray(customTags) && customTags.length > 0;
+    const hasDeleted = Array.isArray(deletedTagKeys) && deletedTagKeys.length > 0;
+    if (!hasCustom && !hasDeleted) return;
 
     // Guardar en segundo plano; no bloquea la UI
     const saveCustomTags = async () => {
       try {
         // Guardar en system-config como JSON para que se comparta entre usuarios
-        await systemConfigService.put(CONFIG_KEY, customTags, "json");
+        await systemConfigService.put(CONFIG_KEY, hasCustom ? customTags : [], "json");
       } catch (error) {
         console.error("Error al guardar etiquetas personalizadas globales:", error);
         if (toast && typeof toast.showError === "function") {
-          toast.showError("No se pudieron guardar las etiquetas personalizadas globales.");
+          toast.showError("No se pudieron guardar las etiquetas de grupo familiares globales.");
         }
       }
 
       // Siempre intentar mantener una copia local como respaldo
       try {
-        localStorage.setItem("groupTags_custom", JSON.stringify(customTags));
+        localStorage.setItem("groupTags_custom", JSON.stringify(hasCustom ? customTags : []));
+        localStorage.setItem("groupTags_deleted", JSON.stringify(hasDeleted ? deletedTagKeys : []));
       } catch (error) {
-        console.error("Error al guardar etiquetas personalizadas en localStorage:", error);
+        console.error("Error al guardar etiquetas de grupos familiares en localStorage:", error);
       }
     };
 
     saveCustomTags();
-  }, [customTags, toast, CONFIG_KEY]);
+  }, [customTags, deletedTagKeys, toast, CONFIG_KEY, DELETED_KEY]);
 
-  // Combinar etiquetas sugeridas y personalizadas
+  // Combinar etiquetas sugeridas y personalizadas, excluyendo las eliminadas globalmente
   const allAvailableTags = useMemo(() => {
-    return [...SUGGESTED_TAGS, ...customTags];
-  }, [customTags]);
+    const deletedSet = new Set(deletedTagKeys || []);
+    const base = [...SUGGESTED_TAGS, ...customTags];
+    if (!deletedSet.size) return base;
+    return base.filter((tag) => !deletedSet.has(tag.key));
+  }, [customTags, deletedTagKeys]);
 
   // Filtrar etiquetas según búsqueda
   const filteredTags = useMemo(() => {
@@ -275,6 +332,34 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     setNewTagColor(AVAILABLE_COLORS[0]);
   };
 
+  // Eliminar etiqueta (sugerida o personalizada) del catálogo global
+  const handleDeleteTag = (tag) => {
+    if (readOnly || !tag?.key) return;
+
+    const confirmDelete = window.confirm(
+      `¿Eliminar la etiqueta "${tag.label}" para todos los usuarios?`
+    );
+    if (!confirmDelete) return;
+
+    // 1. Si es personalizada, quitarla del listado de customTags
+    const isCustom = customTags.some((t) => t.key === tag.key);
+    if (isCustom) {
+      setCustomTags((prev) => prev.filter((t) => t.key !== tag.key));
+    }
+
+    // 2. Marcarla como eliminada globalmente (esto también oculta las sugeridas)
+    setDeletedTagKeys((prev) => {
+      if (prev.includes(tag.key)) return prev;
+      return [...prev, tag.key];
+    });
+
+    // 3. Si estaba activa en el grupo actual, quitarla de value
+    if (isTagActive(tag.key)) {
+      const newValue = normalizedValue.filter((t) => t.key !== tag.key);
+      onChange?.(newValue);
+    }
+  };
+
   // Cancelar edición
   const handleCancelEdit = () => {
     setEditingTag(null);
@@ -399,6 +484,9 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
                   {editingTag.label}
                 </span>
               </div>
+              <p className="text-xs text-blue-800 mb-2">
+                Cambiar el nombre o el color afecta cómo se verán esta etiqueta en los grupos y reportes donde ya fue usada.
+              </p>
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -455,14 +543,24 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
                         {tag.label}
                       </span>
                       {!readOnly && (
-                        <button
-                          type="button"
-                          onClick={() => handleEditTag(tag)}
-                          className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
-                          title="Editar etiqueta"
-                        >
-                          <i className="fas fa-pencil-alt text-xs"></i>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditTag(tag)}
+                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                            title="Editar etiqueta"
+                          >
+                            <i className="fas fa-pencil-alt text-xs"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTag(tag)}
+                            className="p-1 text-gray-600 hover:text-red-600 transition-colors"
+                            title="Eliminar etiqueta"
+                          >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -501,14 +599,24 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
                         {tag.label}
                       </span>
                       {!readOnly && (
-                        <button
-                          type="button"
-                          onClick={() => handleEditTag(tag)}
-                          className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
-                          title="Editar etiqueta"
-                        >
-                          <i className="fas fa-pencil-alt text-xs"></i>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleEditTag(tag)}
+                            className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                            title="Editar etiqueta"
+                          >
+                            <i className="fas fa-pencil-alt text-xs"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteTag(tag)}
+                            className="p-1 text-gray-600 hover:text-red-600 transition-colors"
+                            title="Eliminar etiqueta"
+                          >
+                            <i className="fas fa-trash-alt text-xs"></i>
+                          </button>
+                        </div>
                       )}
                     </div>
                   );
@@ -519,6 +627,11 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
                 </p>
               )}
             </div>
+            {!readOnly && (
+              <p className="mt-2 text-xs text-gray-500">
+                Al eliminar una etiqueta dejará de estar disponible para nuevos grupos y puede cambiar cómo se ve el historial en algunas vistas.
+              </p>
+            )}
           </div>
 
           {/* Botones de acción */}
