@@ -199,15 +199,32 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     );
   }, [allAvailableTags, searchTerm]);
 
-  // Etiquetas sugeridas (primeras 3-5)
+  // Etiquetas sugeridas: priorizar las que ya están seleccionadas en el grupo actual.
   const suggestedTags = useMemo(() => {
-    return filteredTags.slice(0, 3);
-  }, [filteredTags]);
+    const activeSet = new Set(normalizedValue.map((t) => t.key));
+    const activeFromCatalog = filteredTags.filter((tag) => activeSet.has(tag.key));
 
-  // Etiquetas a mostrar (todas o limitadas)
+    // Si el grupo ya tiene etiquetas asignadas, mostrarlas primero como sugerencias
+    if (activeFromCatalog.length > 0) {
+      return activeFromCatalog;
+    }
+
+    // Si no hay etiquetas activas, usar las primeras del filtro como antes
+    return filteredTags.slice(0, 3);
+  }, [filteredTags, normalizedValue]);
+
+  // Etiquetas a mostrar (todas o limitadas), ordenando primero las seleccionadas
   const tagsToShow = useMemo(() => {
-    return showMoreTags ? filteredTags : filteredTags.slice(0, 8);
-  }, [filteredTags, showMoreTags]);
+    const activeSet = new Set(normalizedValue.map((t) => t.key));
+    const sorted = [...filteredTags].sort((a, b) => {
+      const aActive = activeSet.has(a.key);
+      const bActive = activeSet.has(b.key);
+      if (aActive === bActive) return 0;
+      return aActive ? -1 : 1;
+    });
+
+    return showMoreTags ? sorted : sorted.slice(0, 8);
+  }, [filteredTags, showMoreTags, normalizedValue]);
 
   // Verificar si una etiqueta está activa
   const isTagActive = (tagKey) => {
