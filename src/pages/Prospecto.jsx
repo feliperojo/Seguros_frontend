@@ -567,6 +567,7 @@ useEffect(() => {
                   <TomaDeDatos
                     familyMembers={familyMembers}
                     setFamilyMembers={setFamilyMembers}
+                    estadoActual={estadoActual}
                     onSaveMember={(m) => console.log("Guardar cliente:", m)}
                     onSaveCobertura={(m) => console.log("Guardar cobertura:", m)}
                   />

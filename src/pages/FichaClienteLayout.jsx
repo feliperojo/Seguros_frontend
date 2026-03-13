@@ -72,15 +72,16 @@ const normalizeCliente = (raw) => {
 };
 
 const TABS = [
-  { id: "",            label: "General" },
-  { id: "historial",   label: "Historial" },
-  { id: "ringcentral", label: "RingCentral" },
-  { id: "mas",         label: "Más" },
-  { id: "calendario",  label: "Calendario" },
-  { id: "comentarios", label: "Tareas y Notas" },
-  { id: "auditorias",  label: "Auditorías" },
-  { id: "clientes",    label: "Clientes" },   // 👈 este lo enviaremos a LISTA_CLIENTES_PATH
-  { id: "directorio",  label: "Directorio" },
+  { id: "",              label: "General" },
+  { id: "info-completa", label: "Info completa" },
+  { id: "historial",     label: "Historial" },
+  { id: "ringcentral",   label: "RingCentral" },
+  { id: "mas",           label: "Más" },
+  { id: "calendario",    label: "Calendario" },
+  { id: "comentarios",   label: "Tareas y Notas" },
+  { id: "auditorias",    label: "Auditorías" },
+  { id: "clientes",      label: "Clientes" },   // 👈 este lo enviaremos a LISTA_CLIENTES_PATH
+  { id: "directorio",    label: "Directorio" },
 ];
 
 export default function FichaClienteLayout() {

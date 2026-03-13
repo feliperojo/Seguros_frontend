@@ -224,7 +224,7 @@ export const mapClienteFromMember = (m = {}) => {
     const clienteIdReal = m.cliente_id ?? c.id ?? null;
     const esClienteReal = clienteIdReal && Number(clienteIdReal) > 50;
 
-const payload = {
+  const payload = {
     primer_nombre,
     segundo_nombre,
     apellidos,
@@ -257,6 +257,8 @@ const payload = {
     fecha_emision: cleanDate(pick("fecha_emision")),
     fecha_expiracion: cleanDate(pick("fecha_expiracion")),
     categoria: pick("categoria"),
+    // 🔹 Arreglo de teléfonos (si viene del import o de TomaDeDatos)
+    telefonos: pick("telefonos"),
   };
 
   // 👇 SOLO agregar 'id' si es un cliente REAL de la BD

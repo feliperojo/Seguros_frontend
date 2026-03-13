@@ -1432,6 +1432,7 @@ const clientesPayload = existentes
           grupoFamiliarId={id}  
           familyMembers={familyMembers}
           setFamilyMembers={setFamilyMembers}
+          estadoActual={estadoActual}
           readOnly={readOnly}
           canAdd={canAddMember}
           isProspecto={isProspecto}

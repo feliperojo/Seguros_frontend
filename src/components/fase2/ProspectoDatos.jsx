@@ -90,6 +90,21 @@ const toTitle = (s = "") =>
 
     const tidy = (s = "") => s.replace(/\s+/g, " ").trim();
 
+// Opciones de parentesco/tipo para edición rápida en la card
+const PARENTESCO_OPTIONS = [
+  { value: "Tomador", label: "Tomador" },
+  { value: "Conyuge", label: "Cónyuge" },
+  { value: "Hijo/a", label: "Hijo/a" },
+  { value: "Hermano", label: "Hermano" },
+  { value: "Padre", label: "Padre" },
+  { value: "Madre", label: "Madre" },
+  { value: "Nieto", label: "Nieto" },
+  { value: "Abuelo/a", label: "Abuelo/a" },
+  { value: "Suegro/a", label: "Suegro/a" },
+  { value: "Tio/a", label: "Tio/a" },
+  { value: "Sobrino/a", label: "Sobrino/a" }
+];
+
 
 const getMemberEdad = (m = {}) =>
   m.edad ?? calcAge(m.fecha_nacimiento || m.cliente?.fecha_nacimiento);
@@ -857,14 +872,41 @@ const sortedMembers = familyMembers
                   : member.id 
                     ? `member-${member.id}` 
                     : `temp-${index}`;
+                const currentState = (estadoActual || "").toUpperCase();
+                const canEditParentesco =
+                  !readOnly &&
+                  currentState !== "TERMINADO" &&
+                  currentState !== "GRUPO_FAMILIAR";
+
                 return (
                   <div key={uniqueKey} className="col-md-12 mb-3">
                   <div className="card border">
                     <div className="card-body">
                       <div className="d-flex justify-content-between align-items-start mb-2">
-                        <span className={`badge bg-${getTypeColor(member.tipo)}`}>
-                          {member.tipo}
-                        </span>
+                        <div className="d-flex align-items-center gap-2">
+                          <span className={`badge bg-${getTypeColor(member.tipo)}`}>
+                            {member.tipo}
+                          </span>
+                          {canEditParentesco && (
+                            <select
+                              className="form-select form-select-sm"
+                              value={member.tipo || "Tomador"}
+                              onChange={(e) => {
+                                const nuevoTipo = e.target.value;
+                                updateMemberLocal(member.id, {
+                                  tipo: nuevoTipo,
+                                  parentesco: nuevoTipo
+                                });
+                              }}
+                            >
+                              {PARENTESCO_OPTIONS.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
                         <CoberturaDeleteButton
     member={member}
     readOnly={readOnly}

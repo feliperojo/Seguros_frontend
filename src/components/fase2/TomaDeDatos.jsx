@@ -34,6 +34,21 @@ const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
 const MONEY_FIELDS = new Set(["ingreso_por_periodo", "ingreso_anual", "ingreso_por_periodo_ocasional", "precio"]);
 const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
+// Opciones de parentesco/tipo disponibles para los miembros
+const PARENTESCO_OPTIONS = [
+  { value: "Tomador", tipo: "Tomador", label: "Tomador" },
+  { value: "Conyuge", tipo: "Conyuge", label: "Cónyuge" },
+  { value: "Hijo/a", tipo: "Hijo/a", label: "Hijo/a" },
+  { value: "Hermano", tipo: "Hermano", label: "Hermano" },
+  { value: "Padre", tipo: "Padre", label: "Padre" },
+  { value: "Madre", tipo: "Madre", label: "Madre" },
+  { value: "Nieto", tipo: "Nieto", label: "Nieto" },
+  { value: "Abuelo/a", tipo: "Abuelo/a", label: "Abuelo/a" },
+  { value: "Suegro/a", tipo: "Suegro/a", label: "Suegro/a" },
+  { value: "Tio/a", tipo: "Tio/a", label: "Tio/a" },
+  { value: "Sobrino/a", tipo: "Sobrino/a", label: "Sobrino/a" }
+];
+
 const CLIENTE_FIELDS = new Set([
   "primer_nombre",
   "segundo_nombre",
@@ -588,6 +603,7 @@ const TomaDeDatos = ({
   setFamilyMembers,
   canAdd = false,
   readOnly = false,
+  estadoActual,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote,
@@ -1242,6 +1258,11 @@ const activeNormalized = useMemo(
     const isInactive = m.activo === false;
     // Si está inactiva, bloquear todos los campos
     const isReadOnly = readOnly || isInactive;
+    const currentState = (estadoActual || "").toUpperCase();
+    const canEditParentesco =
+      !isReadOnly &&
+      currentState !== "TERMINADO" &&
+      currentState !== "GRUPO_FAMILIAR";
     
     // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
     const isMedicareOrMedicaid =
@@ -1302,9 +1323,30 @@ const activeNormalized = useMemo(
             <div className={`card-header border-0 px-4 py-3 bg-white`}>
               <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
-                  <span className={`badge bg-${getTypeColor(m.tipo)}`}>
-                    {m.tipo || "Miembro"}
-                  </span>
+                  <div className="d-flex align-items-center gap-2">
+                    <span className={`badge bg-${getTypeColor(m.tipo)}`}>
+                      {m.tipo || "Miembro"}
+                    </span>
+                    {canEditParentesco && (
+                      <select
+                        className="form-select form-select-sm"
+                        value={m.tipo || "Tomador"}
+                        onChange={(e) => {
+                          const nuevoTipo = e.target.value;
+                          patchRoot(idx, {
+                            tipo: nuevoTipo,
+                            parentesco: nuevoTipo
+                          });
+                        }}
+                      >
+                        {PARENTESCO_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
                   <div className="mt-2">
                   <UserCoverageIcon
   status={m.estado_cobertura}

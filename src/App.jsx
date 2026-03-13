@@ -42,6 +42,7 @@ import SignaturePortalPage from "./pages/SignaturePortalPage";
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
 import FichaClienteHistorial from "./pages/tabs/FichaClienteHistorial";
+import FichaClienteInfoCompleta from "./pages/tabs/FichaClienteInfoCompleta";
 import FichaClienteRingCentral from "./pages/tabs/FichaClienteRingCentral";
 import FichaClienteComentarios from "./pages/tabs/FichaClienteComentarios";
 import FichaClienteCalendario from "./pages/tabs/FichaClienteCalendario";
@@ -187,6 +188,7 @@ const App = () => {
           <Route path="clientes" element={<ListaClientes />} />
 
           <Route index element={<FichaClienteGeneral />} />
+          <Route path="info-completa" element={<FichaClienteInfoCompleta />} />
           <Route path="historial" element={<FichaClienteHistorial />} />
           <Route path="ringcentral" element={<FichaClienteRingCentral />} />
           <Route path="calendario" element={<FichaClienteCalendario />} />

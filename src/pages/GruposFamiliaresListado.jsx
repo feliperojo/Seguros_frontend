@@ -482,22 +482,26 @@ useEffect(() => {
 
                           <td>
                             <div className="d-flex justify-content-center gap-2">
-                              <Button
-                                variant="outline-primary"
-                                size="sm"
-                                onClick={() => handleOpenViewModal(grupo)}
-                                title="Ver detalles"
-                              >
-                                <FaEye />
-                              </Button>
-                              <Button
-                                variant="outline-success"
-                                size="sm"
-                                onClick={() => handleOpenEditModal(grupo)}
-                                title="Editar grupo familiar"
-                              >
-                                <FaEdit />
-                              </Button>
+                              {false && (
+                                <Button
+                                  variant="outline-primary"
+                                  size="sm"
+                                  onClick={() => handleOpenViewModal(grupo)}
+                                  title="Ver detalles"
+                                >
+                                  <FaEye />
+                                </Button>
+                              )}
+                              {false && (
+                                <Button
+                                  variant="outline-success"
+                                  size="sm"
+                                  onClick={() => handleOpenEditModal(grupo)}
+                                  title="Editar grupo familiar"
+                                >
+                                  <FaEdit />
+                                </Button>
+                              )}
                               <Button
                                 variant="outline-danger"
                                 size="sm"
@@ -507,22 +511,15 @@ useEffect(() => {
                                 <FaTrashAlt />
                               </Button>
                               <Button
-                                    variant="outline-primary"
-                                    size="sm"
-                                    onClick={() => {
-                                      // Aquí pasamos solo el ID del grupo familiar
-                                      setGrupoFamiliarId(grupo.id); // Establecer el ID del grupo familiar
-                                      setShowDocumentosModal(true); // Mostrar el modal
-                                    }}
-                                  >
-                                    <FaFile />
-                                  </Button>
-
-
-
-                        
-
-
+                                variant="outline-primary"
+                                size="sm"
+                                onClick={() => {
+                                  setGrupoFamiliarId(grupo.id);
+                                  setShowDocumentosModal(true);
+                                }}
+                              >
+                                <FaFile />
+                              </Button>
                             </div>
                           </td>
                         </tr>

@@ -19,6 +19,18 @@ export default function FichaClienteGeneral() {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
+  // Deriva el estado de la póliza: Vigente | Cancelada | Retirada
+  const derivarEstadoPoliza = (c) => {
+    if (!c) return "Vigente";
+    const activo = c?.activo !== undefined && c?.activo !== null ? (c.activo === true || c.activo === "true" || c.activo === 1) : true;
+    const vigente = c?.vigente !== undefined && c?.vigente !== null ? (c.vigente === true || c.vigente === "true" || c.vigente === 1) : true;
+    const tieneRetiro = !!(c?.fecha_retiro && String(c.fecha_retiro).trim() && String(c.fecha_retiro) !== "null");
+    const tieneCancelacion = !!(c?.fecha_cancelacion && String(c.fecha_cancelacion).trim() && String(c.fecha_cancelacion) !== "null");
+    if (!activo || tieneRetiro) return "Retirada";
+    if (!vigente || tieneCancelacion) return "Cancelada";
+    return "Vigente";
+  };
+
   // ===== construir opciones de grupos disponibles =====
   const grupoInicial =
     coberturaPrincipal?.grupo_familiar_id ??
@@ -29,6 +41,11 @@ export default function FichaClienteGeneral() {
     const arr = [];
 
     // 1) desde coberturas (suele venir la info más rica)
+    const gfIdPrincipal = toValidId(
+      coberturaPrincipal?.grupo_familiar_id ??
+      coberturaPrincipal?.grupo_familiar?.id ??
+      null
+    );
     for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
       const id =
         c?.grupo_familiar_id ??
@@ -36,6 +53,9 @@ export default function FichaClienteGeneral() {
         c?.gf_id ??
         null;
       if (!toValidId(id)) continue;
+      // Preferir estado de la cobertura principal cuando este grupo es el de la cobertura principal
+      const esGrupoPrincipal = gfIdPrincipal != null && toValidId(id) === gfIdPrincipal;
+      const coberturaParaEstado = esGrupoPrincipal && coberturaPrincipal ? coberturaPrincipal : c;
 
       arr.push({
         id: toValidId(id),
@@ -45,6 +65,7 @@ export default function FichaClienteGeneral() {
         codigoPoliza: c?.codigo_poliza ?? c?.poliza ?? c?.policy_code ?? "—",
         companiaId: c?.compania_id ?? c?.compania?.id ?? cliente?.compania_id ?? "—",
         companiaNombre: c?.compania?.nombre ?? c?.compania_nombre ?? cliente?.compania_nombre ?? cliente?.compania ?? "—",
+        estadoPoliza: derivarEstadoPoliza(coberturaParaEstado),
         raw: c,
       });
     }
@@ -63,6 +84,7 @@ export default function FichaClienteGeneral() {
           cliente?.compania_nombre ??
           cliente?.compania ??
           "—",
+        estadoPoliza: derivarEstadoPoliza(coberturaPrincipal ?? cliente?.grupo_familiar),
         raw: cliente?.grupo_familiar ?? null,
       });
     }
@@ -99,6 +121,7 @@ export default function FichaClienteGeneral() {
   const gfId          = currentGrupo?.id ?? null;
   const gfResponsable = currentGrupo?.responsable ?? "—";
   const gfEstado      = currentGrupo?.estado ?? "—";
+  const estadoPoliza  = currentGrupo?.estadoPoliza ?? "Vigente";
   const anoCobertura  = currentGrupo?.anoCobertura ?? "—";
   const codigoPoliza  = currentGrupo?.codigoPoliza ?? "—";
   const companiaId    = currentGrupo?.companiaId ?? "—";
@@ -394,6 +417,24 @@ export default function FichaClienteGeneral() {
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Código de Póliza</label>
                     <div className="text-dark small">{codigoPoliza}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
+                    <div className="text-dark small">
+                      <Badge
+                        bg={
+                          estadoPoliza === "Vigente"
+                            ? "success"
+                            : estadoPoliza === "Cancelada"
+                            ? "warning"
+                            : "secondary"
+                        }
+                        className="text-uppercase"
+                        style={{ fontSize: "0.7rem" }}
+                      >
+                        {estadoPoliza}
+                      </Badge>
+                    </div>
                   </div>
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Año de Cobertura</label>

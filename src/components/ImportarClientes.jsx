@@ -11,6 +11,13 @@ const ImportarClientes = () => {
   const [archivo, setArchivo] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [resumenImportacion, setResumenImportacion] = useState(null);
+  // 🔹 Paso del flujo: subir -> mapeo -> revisión/envío
+  const [paso, setPaso] = useState("subir"); // "subir" | "mapeo" | "revision"
+  // 🔹 Columnas originales del CSV y filas crudas
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [csvFilas, setCsvFilas] = useState([]);
+  // 🔹 Mapeo dinámico: campoBD -> nombreColumnaCSV
+  const [fieldMapping, setFieldMapping] = useState({});
 
   // 🔹 Obtener clientes existentes al cargar el componente
   useEffect(() => {
@@ -179,57 +186,83 @@ const ImportarClientes = () => {
     setProcesando(true);
     setErrores([]);
     setResumenImportacion(null);
+    setPaso("subir");
+    setCsvHeaders([]);
+    setCsvFilas([]);
+    setFieldMapping({});
 
     Papa.parse(file, {
       complete: (result) => {
-        const filasFiltradas = result.data.filter(row =>
-          Object.values(row).some(value => value && value.trim() !== "")
+        // Guardamos todas las filas crudas y headers para el mapeo dinámico
+        const filasCrudas = result.data.filter(row =>
+          Object.values(row).some(value => value && String(value).trim() !== "")
         );
 
-        const dataFormateada = filasFiltradas.map((cliente, index) => {
-          const nombreCompleto = limpiarValor(cliente.nombre_completo, "string", 255) || "N/A";
+        const headers = result.meta?.fields || Object.keys(filasCrudas[0] || {});
 
-          if (!nombreCompleto) {
-            console.warn(`⚠️ Registro en línea ${index + 1} tiene nombre_completo vacío:`, cliente);
+        setCsvHeaders(headers);
+        setCsvFilas(filasCrudas);
+
+        // Construir mapeo automático inicial en base a similitud de nombres
+        const normalizar = (s) =>
+          (s || "")
+            .toString()
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "");
+
+        const headersNorm = headers.map((h) => ({
+          original: h,
+          norm: normalizar(h),
+        }));
+
+        const DEST_FIELDS = [
+          { key: "nombre_completo", aliases: ["nombre_completo", "nombre", "full_name"] },
+          { key: "primer_nombre", aliases: ["primer_nombre", "nombre", "first_name", "nombre1"] },
+          { key: "segundo_nombre", aliases: ["segundo_nombre", "second_name", "nombre2"] },
+          { key: "apellidos", aliases: ["apellidos", "apellido", "last_name"] },
+          { key: "fecha_nacimiento", aliases: ["fecha_nacimiento", "dob", "fecha_de_nacimiento"] },
+          { key: "edad", aliases: ["edad", "age"] },
+          { key: "genero", aliases: ["genero", "sexo", "gender"] },
+          { key: "social", aliases: ["social", "ssn", "seguro_social"] },
+          { key: "status", aliases: ["status", "estatus", "migratorio"] },
+          { key: "auscis", aliases: ["auscis", "uscis"] },
+          { key: "tarjeta_numero", aliases: ["tarjeta_numero", "green_card", "card_number"] },
+          { key: "categoria", aliases: ["categoria", "category"] },
+          { key: "fecha_emision", aliases: ["fecha_emision", "issue_date"] },
+          { key: "fecha_expiracion", aliases: ["fecha_expiracion", "expiry_date", "expiration_date"] },
+          { key: "telefono", aliases: ["telefono", "phone", "telefono_principal"] },
+          { key: "secundario", aliases: ["secundario", "telefono_secundario", "secondary_phone"] },
+          { key: "whatsapp_num", aliases: ["whatsapp_num", "whatsapp", "celular"] },
+          { key: "email", aliases: ["email", "correo", "correo_electronico"] },
+          { key: "whatsapp", aliases: ["whatsapp", "whatsapp_flag"] },
+          { key: "telegram", aliases: ["telegram"] },
+          { key: "texto_sms", aliases: ["texto_sms", "sms", "sms_flag"] },
+          { key: "direccion", aliases: ["direccion", "direccion_completa", "address"] },
+          { key: "dir_correspondencia", aliases: ["dir_correspondencia", "direccion_correspondencia"] },
+          { key: "calle", aliases: ["calle", "street"] },
+          { key: "apto", aliases: ["apto", "apartamento", "apt"] },
+          { key: "ciudad", aliases: ["ciudad", "city"] },
+          { key: "condado", aliases: ["condado", "county"] },
+          { key: "estado", aliases: ["estado", "state"] },
+          { key: "codigo_postal", aliases: ["codigo_postal", "zip", "postal_code"] },
+          { key: "idioma", aliases: ["idioma", "language"] },
+        ];
+
+        const autoMap = {};
+
+        DEST_FIELDS.forEach(({ key, aliases }) => {
+          const aliasNorm = aliases.map(normalizar);
+          const match = headersNorm.find((h) => aliasNorm.includes(h.norm));
+          if (match) {
+            autoMap[key] = match.original;
           }
-
-          return {
-            nombre_completo: nombreCompleto,
-            primer_nombre: limpiarValor(cliente.primer_nombre, "string", 255),
-            segundo_nombre: limpiarValor(cliente.segundo_nombre, "string", 255),
-            apellidos: limpiarValor(cliente.apellidos, "string", 255),
-            fecha_nacimiento: formatearFecha(cliente.fecha_nacimiento),  // 🔥 Se toma del archivo
-            edad: limpiarValor(cliente.edad, "integer"),
-            genero: limpiarValor(cliente.genero, "string", 255),
-            cobertura: limpiarValor(cliente.cobertura, "boolean"),
-            social: limpiarValor(cliente.social, "string", 255),
-            status: limpiarValor(cliente.status, "string", 50),
-            auscis: limpiarValor(cliente.auscis, "string", 255),
-            tarjeta_numero: limpiarValor(cliente.tarjeta_numero, "string", 50),
-            categoria: limpiarValor(cliente.categoria, "string", 50),
-            fecha_emision: formatearFecha(cliente.fecha_emision),  // 🔥 Se toma del archivo
-            fecha_expiracion: formatearFecha(cliente.fecha_expiracion),  // 🔥 Se toma del archivo
-            telefono: formatearTelefono(cliente.telefono),
-            email: limpiarValor(cliente.email, "string", 255),
-            whatsapp: limpiarValor(cliente.whatsapp, "boolean"),
-            telegram: limpiarValor(cliente.telegram, "boolean"),
-            texto_sms: limpiarValor(cliente.texto_sms, "boolean"),
-            direccion: limpiarValor(cliente.direccion, "string", 255),
-            dir_correspondencia: limpiarValor(cliente.dir_correspondencia, "string", 255),
-            calle: limpiarValor(cliente.calle, "string", 255),
-            apto: limpiarValor(cliente.apto, "string", 255),
-            ciudad: limpiarValor(cliente.ciudad, "string", 255),
-            condado: limpiarValor(cliente.condado, "string", 255),
-            estado: limpiarValor(cliente.estado, "string", 20),
-            codigo_postal: limpiarValor(cliente.codigo_postal, "string", 10),
-            idioma: limpiarValor(cliente.idioma, "string", 50),
-            secundario: limpiarValor(cliente.secundario, "string", 255),
-            whatsapp_num: formatearTelefono(cliente.whatsapp_num),
-          };
         });
 
-        setClientes(dataFormateada);
-        validarDatos(dataFormateada);
+        setFieldMapping(autoMap);
+        setPaso("mapeo");
         setProcesando(false);
       },
       header: true,
@@ -239,6 +272,162 @@ const ImportarClientes = () => {
         setProcesando(false);
       }
     });
+  };
+
+  // 🔹 Campos destino soportados (para mapeo y normalización)
+  const DESTINO_CAMPOS = [
+    { key: "nombre_completo", label: "Nombre completo", tipo: "string", required: true, maxLength: 255 },
+    { key: "primer_nombre", label: "Primer nombre", tipo: "string", required: false, maxLength: 255 },
+    { key: "segundo_nombre", label: "Segundo nombre", tipo: "string", required: false, maxLength: 255 },
+    { key: "apellidos", label: "Apellidos", tipo: "string", required: false, maxLength: 255 },
+    { key: "fecha_nacimiento", label: "Fecha de nacimiento", tipo: "date", required: false },
+    { key: "edad", label: "Edad", tipo: "integer", required: false },
+    { key: "genero", label: "Género", tipo: "string", required: false, maxLength: 255 },
+    { key: "social", label: "Social (SSN)", tipo: "string", required: false, maxLength: 255 },
+    { key: "status", label: "Status migratorio", tipo: "string", required: false, maxLength: 50 },
+    { key: "auscis", label: "A/USCIS", tipo: "string", required: false, maxLength: 255 },
+    { key: "tarjeta_numero", label: "Tarjeta #", tipo: "string", required: false, maxLength: 50 },
+    { key: "categoria", label: "Categoría", tipo: "string", required: false, maxLength: 50 },
+    { key: "fecha_emision", label: "Fecha emisión", tipo: "date", required: false },
+    { key: "fecha_expiracion", label: "Fecha expiración", tipo: "date", required: false },
+    { key: "telefono", label: "Teléfono principal", tipo: "telefono", required: false },
+    { key: "secundario", label: "Teléfono secundario", tipo: "string", required: false, maxLength: 255 },
+    { key: "whatsapp_num", label: "WhatsApp (número)", tipo: "telefono", required: false },
+    { key: "email", label: "Email", tipo: "string", required: false, maxLength: 255 },
+    { key: "whatsapp", label: "WhatsApp (flag)", tipo: "boolean", required: false },
+    { key: "telegram", label: "Telegram (flag)", tipo: "boolean", required: false },
+    { key: "texto_sms", label: "SMS (flag)", tipo: "boolean", required: false },
+    { key: "direccion", label: "Dirección completa", tipo: "string", required: false, maxLength: 255 },
+    { key: "dir_correspondencia", label: "Dirección de correspondencia", tipo: "string", required: false, maxLength: 255 },
+    { key: "calle", label: "Calle", tipo: "string", required: false, maxLength: 255 },
+    { key: "apto", label: "APT", tipo: "string", required: false, maxLength: 255 },
+    { key: "ciudad", label: "Ciudad", tipo: "string", required: false, maxLength: 255 },
+    { key: "condado", label: "Condado", tipo: "string", required: false, maxLength: 255 },
+    { key: "estado", label: "Estado", tipo: "string", required: false, maxLength: 20 },
+    { key: "codigo_postal", label: "Código postal", tipo: "string", required: false, maxLength: 10 },
+    { key: "idioma", label: "Idioma", tipo: "string", required: false, maxLength: 50 },
+  ];
+
+  // 🔹 Aplica el mapeo seleccionado para construir los objetos de cliente que ya esperaba el flujo anterior
+  const aplicarMapeo = () => {
+    if (!csvFilas.length) return;
+
+    const faltantesObligatorios = DESTINO_CAMPOS.filter(
+      (c) => c.required && !fieldMapping[c.key]
+    );
+    if (faltantesObligatorios.length > 0) {
+      alert(
+        `Debes mapear al menos el campo obligatorio: ${faltantesObligatorios
+          .map((c) => c.label)
+          .join(", ")}`
+      );
+      return;
+    }
+
+    const dataFormateada = csvFilas.map((row, index) => {
+      const cliente = {};
+
+      DESTINO_CAMPOS.forEach((campo) => {
+        const sourceCol = fieldMapping[campo.key];
+        if (!sourceCol) {
+          cliente[campo.key] = null;
+          return;
+        }
+        const raw = row[sourceCol];
+
+        if (campo.tipo === "date") {
+          cliente[campo.key] = formatearFecha(raw);
+          return;
+        }
+
+        if (campo.tipo === "telefono") {
+          cliente[campo.key] = formatearTelefono(raw);
+          return;
+        }
+
+        if (campo.tipo === "boolean") {
+          cliente[campo.key] = limpiarValor(raw, "boolean");
+          return;
+        }
+
+        if (campo.tipo === "integer") {
+          cliente[campo.key] = limpiarValor(raw, "integer");
+          return;
+        }
+
+        // string u otros
+        cliente[campo.key] = limpiarValor(raw, "string", campo.maxLength || null);
+      });
+
+      // Aseguramos nombre_completo por compatibilidad
+      const nombreCompleto =
+        cliente.nombre_completo ||
+        limpiarValor(row["nombre_completo"], "string", 255) ||
+        "N/A";
+      cliente.nombre_completo = nombreCompleto;
+
+      if (!nombreCompleto) {
+        console.warn(
+          `⚠️ Registro en línea ${index + 1} tiene nombre_completo vacío:`,
+          row
+        );
+      }
+
+      // Construir arreglo telefonos a partir de telefono, secundario y whatsapp_num
+      const telefonos = [];
+      const baseIso = "us";
+      const baseIndicativo = "1";
+
+      if (cliente.telefono) {
+        telefonos.push({
+          id: `ph-${index}-1`,
+          iso: baseIso,
+          tipo: "Móvil",
+          numero: cliente.telefono,
+          principal: true,
+          indicativo: baseIndicativo,
+        });
+      }
+
+      if (cliente.secundario) {
+        telefonos.push({
+          id: `ph-${index}-2`,
+          iso: baseIso,
+          tipo: "Móvil",
+          numero: cliente.secundario,
+          principal: !telefonos.length, // si no había principal aún
+          indicativo: baseIndicativo,
+        });
+      }
+
+      if (cliente.whatsapp_num) {
+        telefonos.push({
+          id: `ph-${index}-3`,
+          iso: baseIso,
+          tipo: "Móvil",
+          numero: cliente.whatsapp_num,
+          principal: !telefonos.length, // si es el único, márcalo como principal
+          indicativo: baseIndicativo,
+        });
+      }
+
+      if (telefonos.length) {
+        cliente.telefonos = telefonos;
+      }
+
+      return cliente;
+    });
+
+    setClientes(dataFormateada);
+    validarDatos(dataFormateada);
+    setPaso("revision");
+  };
+
+  const handleChangeMapping = (fieldKey, value) => {
+    setFieldMapping((prev) => ({
+      ...prev,
+      [fieldKey]: value || undefined,
+    }));
   };
 
   // 🔹 Validación de datos antes de enviarlos a la API
@@ -401,9 +590,98 @@ const ImportarClientes = () => {
           <p className="card-text">Sube un archivo CSV con los datos de los clientes. El sistema verificará si ya existen en la base de datos utilizando el campo <strong>social</strong> para evitar duplicados.</p>
         </div>
       </div>
-      
-      <input type="file" accept=".csv" className="form-control" onChange={handleFileUpload} disabled={procesando} />
-      
+
+      <input
+        type="file"
+        accept=".csv"
+        className="form-control"
+        onChange={handleFileUpload}
+        disabled={procesando}
+      />
+
+      {/* Paso 2: Mapeo de campos CSV -> BD */}
+      {paso === "mapeo" && csvHeaders.length > 0 && (
+        <div className="card mt-4">
+          <div className="card-header bg-secondary text-white">
+            Mapeo de columnas del archivo a campos del sistema
+          </div>
+          <div className="card-body">
+            <p className="small text-muted">
+              Asocia cada <strong>campo del sistema</strong> con la columna correspondiente de tu archivo CSV.
+              Los campos no mapeados se enviarán como <code>null</code>. Al menos{" "}
+              <strong>Nombre completo</strong> debe estar mapeado.
+            </p>
+            <div className="table-responsive" style={{ maxHeight: 400, overflowY: "auto" }}>
+              <table className="table table-sm align-middle">
+                <thead>
+                  <tr>
+                    <th>Campo del sistema</th>
+                    <th>Columna del archivo CSV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {DESTINO_CAMPOS.map((campo) => (
+                    <tr key={campo.key}>
+                      <td>
+                        <span className="fw-semibold">
+                          {campo.label}
+                          {campo.required && <span className="text-danger"> *</span>}
+                        </span>
+                        <div className="small text-muted">
+                          <code>{campo.key}</code>
+                        </div>
+                      </td>
+                      <td>
+                        <select
+                          className="form-select form-select-sm"
+                          value={fieldMapping[campo.key] || ""}
+                          onChange={(e) =>
+                            handleChangeMapping(campo.key, e.target.value)
+                          }
+                        >
+                          <option value="">— No mapear —</option>
+                          {csvHeaders.map((h) => (
+                            <option key={h} value={h}>
+                              {h}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="d-flex justify-content-between mt-3">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => {
+                  setPaso("subir");
+                  setCsvHeaders([]);
+                  setCsvFilas([]);
+                  setFieldMapping({});
+                  setClientes([]);
+                  setResumenImportacion(null);
+                  setErrores([]);
+                }}
+              >
+                Cancelar mapeo
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={aplicarMapeo}
+                disabled={procesando}
+              >
+                Aplicar mapeo y validar datos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mostrar resumen de importación */}
       {resumenImportacion && (
         <div className="card mt-3">
