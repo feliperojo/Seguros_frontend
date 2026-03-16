@@ -22,6 +22,7 @@ export default function PersonaContactoCard({
   clienteId = null,
   grupoFamiliarId = null,
   className = "",
+  grupoContextLabel = "",
   relacionOptions = [
     "Cónyuge",
     "Hijo/a",
@@ -372,6 +373,13 @@ export default function PersonaContactoCard({
         </h6>
         <span className="badge bg-secondary ms-2">{items.length}</span>
       </div>
+
+      {/* Contexto del grupo / parentesco para que el usuario sepa dónde asocia el contacto */}
+      {grupoContextLabel && (
+        <div className="alert alert-info py-1 px-2 mb-2 small">
+          {grupoContextLabel}
+        </div>
+      )}
 
       {/* Acordeón: Crear / Editar */}
       <div className="accordion mb-3" id="accordionContactos">

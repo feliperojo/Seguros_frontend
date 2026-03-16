@@ -19,16 +19,87 @@ export default function FichaClienteGeneral() {
     return Number.isFinite(n) && n > 0 ? n : null;
   };
 
-  // Deriva el estado de la póliza: Vigente | Cancelada | Retirada
+  // Deriva el estado de la póliza basándose en los campos "vigente" y "activo"
+  // y retorna también la fecha relevante (retiro / cancelación) y su tipo.
   const derivarEstadoPoliza = (c) => {
-    if (!c) return "Vigente";
-    const activo = c?.activo !== undefined && c?.activo !== null ? (c.activo === true || c.activo === "true" || c.activo === 1) : true;
-    const vigente = c?.vigente !== undefined && c?.vigente !== null ? (c.vigente === true || c.vigente === "true" || c.vigente === 1) : true;
-    const tieneRetiro = !!(c?.fecha_retiro && String(c.fecha_retiro).trim() && String(c.fecha_retiro) !== "null");
-    const tieneCancelacion = !!(c?.fecha_cancelacion && String(c.fecha_cancelacion).trim() && String(c.fecha_cancelacion) !== "null");
-    if (!activo || tieneRetiro) return "Retirada";
-    if (!vigente || tieneCancelacion) return "Cancelada";
-    return "Vigente";
+    try {
+      if (!c || typeof c !== "object") {
+        return { estado: "Vigente", fecha: null, tipoFecha: null };
+      }
+
+      const activo =
+        c?.activo !== undefined && c?.activo !== null
+          ? c.activo === true || c.activo === "true" || c.activo === 1
+          : true;
+      const vigente =
+        c?.vigente !== undefined && c?.vigente !== null
+          ? c.vigente === true || c.vigente === "true" || c.vigente === 1
+          : true;
+
+      const fechaRetiroValida =
+        c?.fecha_retiro &&
+        String(c.fecha_retiro).trim() &&
+        String(c.fecha_retiro) !== "null"
+          ? String(c.fecha_retiro)
+          : null;
+
+      const fechaCancelacionValida =
+        c?.fecha_cancelacion &&
+        String(c.fecha_cancelacion).trim() &&
+        String(c.fecha_cancelacion) !== "null"
+          ? String(c.fecha_cancelacion)
+          : null;
+
+      // 1) Si la póliza está vigente, ese es siempre el estado principal
+      if (vigente) {
+        return { estado: "Vigente", fecha: null, tipoFecha: null };
+      }
+
+      // 2) No vigente + fecha de cancelación => Póliza Cancelada
+      // (aunque "activo" venga true por inconsistencia de datos)
+      if (fechaCancelacionValida) {
+        return {
+          estado: "Póliza Cancelada",
+          fecha: fechaCancelacionValida,
+          tipoFecha: "cancelacion",
+        };
+      }
+
+      // 3) No vigente pero aún activa -> Retirada (se muestra fecha de retiro si existe)
+      if (activo) {
+        return {
+          estado: "Retirada",
+          fecha: fechaRetiroValida,
+          tipoFecha: fechaRetiroValida ? "retiro" : null,
+        };
+      }
+
+      // 4) No vigente y no activa => Retirado del grupo familiar (usa fecha de retiro si existe)
+      return {
+        estado: "Retirado del grupo familiar",
+        fecha: fechaRetiroValida,
+        tipoFecha: fechaRetiroValida ? "retiro" : null,
+      };
+    } catch (_) {
+      return { estado: "Vigente", fecha: null, tipoFecha: null };
+    }
+  };
+
+  // Formatea el valor de la póliza para mostrarlo como monto legible
+  const formatearPrecioPoliza = (valor) => {
+    if (valor === null || valor === undefined || valor === "") return "—";
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) return String(valor);
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(numero);
+    } catch {
+      return numero.toFixed(2);
+    }
   };
 
   // ===== construir opciones de grupos disponibles =====
@@ -46,16 +117,26 @@ export default function FichaClienteGeneral() {
       coberturaPrincipal?.grupo_familiar?.id ??
       null
     );
-    for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
+      for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
       const id =
         c?.grupo_familiar_id ??
         c?.grupo_familiar?.id ??
         c?.gf_id ??
         null;
       if (!toValidId(id)) continue;
-      // Preferir estado de la cobertura principal cuando este grupo es el de la cobertura principal
-      const esGrupoPrincipal = gfIdPrincipal != null && toValidId(id) === gfIdPrincipal;
-      const coberturaParaEstado = esGrupoPrincipal && coberturaPrincipal ? coberturaPrincipal : c;
+
+      // Solo usar "coberturaPrincipal" para estado si es realmente la MISMA cobertura.
+      // Si no, puede “contaminar” el estado del grupo con datos de otra cobertura.
+      const esMismaCobertura =
+        toValidId(coberturaPrincipal?.id) != null &&
+        toValidId(c?.id) != null &&
+        toValidId(coberturaPrincipal?.id) === toValidId(c?.id);
+
+      const coberturaParaEstado = esMismaCobertura ? coberturaPrincipal : c;
+
+      const { estado, fecha, tipoFecha } = derivarEstadoPoliza(
+        coberturaParaEstado
+      );
 
       arr.push({
         id: toValidId(id),
@@ -64,14 +145,26 @@ export default function FichaClienteGeneral() {
         anoCobertura: c?.ano_cobertura ?? c?.anio ?? c?.year ?? "—",
         codigoPoliza: c?.codigo_poliza ?? c?.poliza ?? c?.policy_code ?? "—",
         companiaId: c?.compania_id ?? c?.compania?.id ?? cliente?.compania_id ?? "—",
-        companiaNombre: c?.compania?.nombre ?? c?.compania_nombre ?? cliente?.compania_nombre ?? cliente?.compania ?? "—",
-        estadoPoliza: derivarEstadoPoliza(coberturaParaEstado),
+        companiaNombre:
+          c?.compania?.nombre ??
+          c?.compania_nombre ??
+          cliente?.compania_nombre ??
+          cliente?.compania ??
+          "—",
+        estadoPoliza: estado,
+        fechaEstadoPoliza: fecha,
+        tipoFechaEstadoPoliza: tipoFecha,
+        precioPoliza: c?.precio ?? null,
         raw: c,
       });
     }
 
     // 2) fallback: si no hubo coberturas, intenta desde el propio cliente
     if (arr.length === 0 && toValidId(cliente?.grupo_familiar_id)) {
+      const { estado, fecha, tipoFecha } = derivarEstadoPoliza(
+        coberturaPrincipal ?? cliente?.grupo_familiar
+      );
+
       arr.push({
         id: toValidId(cliente?.grupo_familiar_id),
         responsable: cliente?.grupo_familiar?.responsable ?? "—",
@@ -84,7 +177,10 @@ export default function FichaClienteGeneral() {
           cliente?.compania_nombre ??
           cliente?.compania ??
           "—",
-        estadoPoliza: derivarEstadoPoliza(coberturaPrincipal ?? cliente?.grupo_familiar),
+        estadoPoliza: estado,
+        fechaEstadoPoliza: fecha,
+        tipoFechaEstadoPoliza: tipoFecha,
+        precioPoliza: coberturaPrincipal?.precio ?? null,
         raw: cliente?.grupo_familiar ?? null,
       });
     }
@@ -113,45 +209,149 @@ export default function FichaClienteGeneral() {
   }, [grupoInicial, setSelectedGrupoId]);
 
   const currentGrupo = useMemo(() => {
-    if (!selectedGrupoId) return grupos[0] ?? null;
-    return grupos.find((g) => g.id === selectedGrupoId) ?? grupos[0] ?? null;
+    const selectedId = toValidId(selectedGrupoId);
+    if (!selectedId) return grupos[0] ?? null;
+    return (
+      grupos.find((g) => toValidId(g.id) === selectedId) ??
+      grupos[0] ??
+      null
+    );
   }, [grupos, selectedGrupoId]);
+
+  // ===== Estado para grupo full (fuente de verdad del endpoint de grupo) y etiquetas =====
+  const [grupoFull, setGrupoFull] = useState(null);
+  const [etiquetasGrupo, setEtiquetasGrupo] = useState([]);
+  const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
+
+  // ===== cobertura seleccionada por grupo (fuente de verdad para estado/fechas) =====
+  const coberturaSeleccionada = useMemo(() => {
+    const selectedId = toValidId(selectedGrupoId) ?? toValidId(currentGrupo?.id);
+    const coberturasFuente =
+      Array.isArray(grupoFull?.coberturas)
+        ? grupoFull.coberturas
+        : Array.isArray(grupoFull?.data?.coberturas)
+        ? grupoFull.data.coberturas
+        : Array.isArray(cliente?.coberturas)
+        ? cliente.coberturas
+        : [];
+
+    const coberturas = coberturasFuente;
+    if (!selectedId || coberturas.length === 0) return coberturaPrincipal ?? null;
+
+    const delGrupo = coberturas.filter(
+      (c) => toValidId(c?.grupo_familiar_id) === selectedId
+    );
+    if (delGrupo.length === 0) return coberturaPrincipal ?? null;
+
+    const toBool = (v, dflt = false) => {
+      if (v === undefined || v === null) return dflt;
+      return v === true || v === "true" || v === 1;
+    };
+    const toTime = (s) => {
+      if (!s || String(s).trim() === "" || String(s) === "null") return null;
+      const t = new Date(String(s)).getTime();
+      return Number.isFinite(t) ? t : null;
+    };
+
+    // 1) Preferir siempre la cobertura del cliente actual dentro del grupo seleccionado
+    const clienteIdLocal = toValidId(cliente?.id);
+    const delCliente = clienteIdLocal
+      ? delGrupo.filter((c) => toValidId(c?.cliente?.id) === clienteIdLocal)
+      : [];
+
+    const pool = delCliente.length > 0 ? delCliente : delGrupo;
+
+    // 2) Preferir una cobertura vigente si existe; si no, la más reciente cancelada; si no, la más reciente retirada; si no, la primera.
+    const vigente = pool.find((c) => toBool(c?.vigente, false));
+    if (vigente) return vigente;
+
+    const conCancel = pool
+      .map((c) => ({ c, t: toTime(c?.fecha_cancelacion) }))
+      .filter((x) => x.t != null)
+      .sort((a, b) => b.t - a.t)[0]?.c;
+    if (conCancel) return conCancel;
+
+    const conRetiro = pool
+      .map((c) => ({ c, t: toTime(c?.fecha_retiro) }))
+      .filter((x) => x.t != null)
+      .sort((a, b) => b.t - a.t)[0]?.c;
+    if (conRetiro) return conRetiro;
+
+    return pool[0];
+  }, [
+    grupoFull,
+    cliente?.coberturas,
+    selectedGrupoId,
+    currentGrupo?.id,
+    coberturaPrincipal,
+  ]);
+
+  const estadoPolizaDerivado = useMemo(() => {
+    return derivarEstadoPoliza(coberturaSeleccionada);
+  }, [coberturaSeleccionada]);
 
   // ===== datos derivados visibles según grupo seleccionado =====
   const gfId          = currentGrupo?.id ?? null;
   const gfResponsable = currentGrupo?.responsable ?? "—";
   const gfEstado      = currentGrupo?.estado ?? "—";
-  const estadoPoliza  = currentGrupo?.estadoPoliza ?? "Vigente";
-  const anoCobertura  = currentGrupo?.anoCobertura ?? "—";
-  const codigoPoliza  = currentGrupo?.codigoPoliza ?? "—";
-  const companiaId    = currentGrupo?.companiaId ?? "—";
-  const companiaNombre = currentGrupo?.companiaNombre ??
+  const estadoPoliza  = estadoPolizaDerivado?.estado ?? currentGrupo?.estadoPoliza ?? "Vigente";
+  const fechaEstadoPoliza =
+    estadoPolizaDerivado?.fecha ?? currentGrupo?.fechaEstadoPoliza ?? null;
+  const tipoFechaEstadoPoliza =
+    estadoPolizaDerivado?.tipoFecha ??
+    currentGrupo?.tipoFechaEstadoPoliza ??
+    null;
+
+  const anoCobertura  =
+    coberturaSeleccionada?.ano_cobertura ??
+    currentGrupo?.anoCobertura ??
+    "—";
+  const codigoPoliza  =
+    coberturaSeleccionada?.codigo_poliza ??
+    coberturaSeleccionada?.policy_number ??
+    currentGrupo?.codigoPoliza ??
+    "—";
+  const precioPoliza  =
+    coberturaSeleccionada?.precio ?? currentGrupo?.precioPoliza ?? null;
+  const companiaId    =
+    coberturaSeleccionada?.compania_id ??
+    coberturaSeleccionada?.compania?.id ??
+    currentGrupo?.companiaId ??
+    "—";
+  const companiaNombre =
+    coberturaSeleccionada?.compania?.nombre ??
+    currentGrupo?.companiaNombre ??
     coberturaPrincipal?.compania?.nombre ??
     cliente?.compania_nombre ??
     cliente?.compania ??
     "—";
 
+  const parentescoCobertura =
+    coberturaSeleccionada?.parentesco ??
+    coberturaSeleccionada?.relacion ??
+    cliente?.parentesco ??
+    "—";
+
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
-
-  // ===== Estado para etiquetas del grupo familiar =====
-  const [etiquetasGrupo, setEtiquetasGrupo] = useState([]);
-  const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
 
   // ===== Cargar etiquetas del grupo familiar cuando cambia el grupoId =====
   useEffect(() => {
     const cargarEtiquetasGrupo = async () => {
       if (!grupoId) {
         setEtiquetasGrupo([]);
+        setGrupoFull(null);
         return;
       }
 
       setLoadingEtiquetas(true);
       try {
         const grupoData = await GrupoFamiliarService.getFullById(grupoId);
+        setGrupoFull(grupoData?.data ?? grupoData ?? null);
         
         // Normalizar etiquetas: pueden venir como "tags" o "etiquetas"
-        const tagsRaw = grupoData?.tags || grupoData?.etiquetas || [];
+        const base = grupoData?.data ?? grupoData ?? {};
+        const tagsRaw = base?.tags || base?.etiquetas || [];
         let tagsArray = [];
         
         if (Array.isArray(tagsRaw)) {
@@ -178,6 +378,7 @@ export default function FichaClienteGeneral() {
       } catch (error) {
         console.error("Error al cargar etiquetas del grupo familiar:", error);
         setEtiquetasGrupo([]);
+        setGrupoFull(null);
       } finally {
         setLoadingEtiquetas(false);
       }
@@ -298,7 +499,7 @@ export default function FichaClienteGeneral() {
                 {grupos.length > 1 ? (
                   <select
                     className="form-select form-select-sm border-secondary"
-                    value={selectedGrupoId ?? ""}
+                    value={toValidId(selectedGrupoId) ?? ""}
                     onChange={(e) => setSelectedGrupoId(toValidId(e.target.value))}
                   >
                     {grupos.map((g) => (
@@ -399,7 +600,7 @@ export default function FichaClienteGeneral() {
                   </div>
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Relación</label>
-                    <div className="text-dark small">{cliente?.parentesco ?? "—"}</div>
+                    <div className="text-dark small">{parentescoCobertura}</div>
                   </div>
                 </div>
                 <div className="col-md-6">
@@ -419,13 +620,17 @@ export default function FichaClienteGeneral() {
                     <div className="text-dark small">{codigoPoliza}</div>
                   </div>
                   <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Valor de la Póliza</label>
+                    <div className="text-dark small">{formatearPrecioPoliza(precioPoliza)}</div>
+                  </div>
+                  <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
                     <div className="text-dark small">
                       <Badge
                         bg={
                           estadoPoliza === "Vigente"
                             ? "success"
-                            : estadoPoliza === "Cancelada"
+                            : estadoPoliza === "Póliza Cancelada"
                             ? "warning"
                             : "secondary"
                         }
@@ -434,6 +639,14 @@ export default function FichaClienteGeneral() {
                       >
                         {estadoPoliza}
                       </Badge>
+                      {fechaEstadoPoliza && (
+                        <div className="mt-1 text-muted" style={{ fontSize: "0.7rem" }}>
+                          {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de cancelación: "}
+                          {tipoFechaEstadoPoliza === "retiro" && "Fecha de retiro: "}
+                          {!tipoFechaEstadoPoliza && "Fecha: "}
+                          {formatDate(fechaEstadoPoliza)}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="mb-2">
@@ -470,6 +683,11 @@ export default function FichaClienteGeneral() {
   className="mb-3"
   clienteId={clienteId}           // <- importante
   grupoFamiliarId={grupoId}       // <- importante
+  grupoContextLabel={
+    gfId
+      ? `Estás asociando contactos para el Grupo Familiar ${gfId}, donde este cliente es "${parentescoCobertura}".`
+      : ""
+  }
   primary={false}
   addAnother={false}
   onTogglePrimary={(v) => console.log("primary?", v)}
