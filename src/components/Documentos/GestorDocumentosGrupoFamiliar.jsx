@@ -202,11 +202,6 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     }
   };
 
-  /**
-   * Renombra una carpeta existente
-   * Nota: Esta funcionalidad requiere un endpoint PUT/PATCH en el backend
-   * Si no está disponible, se puede deshabilitar o implementar de otra forma
-   */
   const handleRenombrarCarpeta = async (carpetaId, nuevoNombre) => {
     if (!nuevoNombre?.trim()) {
       setError("El nombre de la carpeta es requerido");
@@ -217,21 +212,11 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     setSuccess("");
 
     try {
-      // Intentar PUT primero, si no existe, intentar PATCH
-      try {
-        await apiRequest(`document-folders/${carpetaId}`, "PUT", {
-          nombre: nuevoNombre.trim(),
-        });
-      } catch (err) {
-        // Si PUT falla, intentar PATCH
-        try {
-          await apiRequest(`document-folders/${carpetaId}`, "PATCH", {
-            nombre: nuevoNombre.trim(),
-          });
-        } catch (err2) {
-          throw new Error("El endpoint para renombrar carpetas no está disponible en el backend");
-        }
-      }
+      // Backend expone: PUT /api/document-folders/{id}
+      // apiRequest ya se encarga de anteponer el prefijo /api
+      await apiRequest(`document-folders/${carpetaId}`, "PUT", {
+        nombre: nuevoNombre.trim(),
+      });
 
       // Refrescar lista de carpetas
       await cargarCarpetas();
