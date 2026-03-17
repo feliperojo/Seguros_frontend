@@ -238,6 +238,52 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   };
 
   /**
+   * Elimina una carpeta (solo si está vacía)
+   * Backend: DELETE /api/document-folders/{id}
+   * Regla: si tiene archivos asociados -> 422
+   */
+  const handleEliminarCarpeta = async (carpeta) => {
+    const carpetaId = carpeta?.id ?? carpeta;
+    const nombre = typeof carpeta === "object" ? carpeta?.nombre : "";
+
+    if (!carpetaId) return;
+
+    const confirmar = window.confirm(
+      `¿Estás seguro de que deseas eliminar la carpeta${nombre ? ` "${nombre}"` : ""}?\n\n` +
+        "Solo se puede eliminar si está vacía. Esta acción no se puede deshacer."
+    );
+    if (!confirmar) return;
+
+    setError("");
+    setSuccess("");
+
+    try {
+      await apiRequest(`document-folders/${carpetaId}`, "DELETE");
+
+      // Si estaba seleccionada, limpiar selección
+      if (carpetaSeleccionada?.id === carpetaId) {
+        setCarpetaSeleccionada(null);
+        setArchivos([]);
+      }
+
+      await cargarCarpetas();
+
+      setSuccess("Carpeta eliminada exitosamente");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      console.error("Error al eliminar carpeta:", err);
+      if (err?.response?.status === 422) {
+        setError(
+          err?.message ||
+            "No se puede eliminar la carpeta porque tiene archivos asociados."
+        );
+        return;
+      }
+      setError(err?.message || "No se pudo eliminar la carpeta");
+    }
+  };
+
+  /**
    * Sube uno o más archivos a la carpeta seleccionada
    * Usa el endpoint: POST /api/documentos-adjuntos/entity-upload
    * FormData debe incluir: archivo, entidad_tipo, entidad_id, grupo_familiar_id, carpeta_id, categoria
@@ -385,6 +431,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
               onSelectCarpeta={setCarpetaSeleccionada}
               onCrearCarpeta={handleCrearCarpeta}
               onRenombrarCarpeta={handleRenombrarCarpeta}
+              onEliminarCarpeta={handleEliminarCarpeta}
               grupoFamiliarId={grupoFamiliarId}
             />
           </div>

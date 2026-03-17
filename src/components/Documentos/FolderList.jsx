@@ -11,6 +11,7 @@ const FolderList = ({
   onSelectCarpeta,
   onCrearCarpeta,
   onRenombrarCarpeta,
+  onEliminarCarpeta,
   grupoFamiliarId,
 }) => {
   const [mostrarFormCrear, setMostrarFormCrear] = useState(false);
@@ -317,6 +318,29 @@ const FolderList = ({
                     >
                       <i className="fas fa-edit me-2"></i>
                       Renombrar
+                    </button>
+                    <button
+                      className="w-100 text-start border-0 bg-transparent px-3 py-2"
+                      style={{
+                        cursor: onEliminarCarpeta ? "pointer" : "not-allowed",
+                        fontSize: "0.875rem",
+                        color: onEliminarCarpeta ? "#dc3545" : "#adb5bd",
+                      }}
+                      disabled={!onEliminarCarpeta}
+                      onMouseEnter={(e) => {
+                        if (onEliminarCarpeta) e.target.style.backgroundColor = "#f8f9fa";
+                      }}
+                      onMouseLeave={(e) => {
+                        if (onEliminarCarpeta) e.target.style.backgroundColor = "transparent";
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setMenuAbierto(null);
+                        if (onEliminarCarpeta) onEliminarCarpeta(carpeta);
+                      }}
+                    >
+                      <i className="fas fa-trash me-2"></i>
+                      Eliminar
                     </button>
                   </div>
                 </div>
