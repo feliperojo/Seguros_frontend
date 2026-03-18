@@ -18,6 +18,7 @@ import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
+import { parseMoney } from "../services/ingresos";
 
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
@@ -171,6 +172,34 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     telefono_1: "us",
     telefono_2: "us"
   });
+
+  // Calcula el ingreso anual ocasional a partir de (periodo, monto) con la misma lógica
+  // que ya se usa en `Clientes.jsx`. Esto evita que diferencias en el formato del período
+  // (espacios, mayúsculas) o factores provoquen que el ocasional se vaya en 0.
+  const calcularIngresoAnualDesdeOcasional = (periodo, monto) => {
+    const montoNumerico = parseMoney(monto ?? "");
+    if (!montoNumerico) return 0;
+    // Importante: el ingreso ocasional NO se anualiza.
+    // El cliente ajusta el monto según su frecuencia (periodo), por eso sumamos el valor tal cual.
+    return montoNumerico;
+  };
+
+  const getIngresoOcasionalAnual = (m) => {
+    // Si el backend ya trae el ingreso ocasional anual en alguna clave, úsalo primero.
+    const directo =
+      parseMoney(
+        m?.ingreso_ocasional ??
+          m?.ingresoOcasional ??
+          m?.incomeOccasional ??
+          ""
+      ) || 0;
+    if (directo) return directo;
+
+    return calcularIngresoAnualDesdeOcasional(
+      m?.periodo_ingreso_ocasional ?? m?.cliente?.periodo_ingreso_ocasional,
+      m?.ingreso_por_periodo_ocasional ?? m?.cliente?.ingreso_por_periodo_ocasional
+    );
+  };
 
  
 
@@ -436,6 +465,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         cliente_id: cob.cliente?.id || null,
         nombre: cob.cliente?.nombre_completo || "Sin nombre",
         ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
+        periodo_ingreso_ocasional: cob.cliente?.periodo_ingreso_ocasional || "",
+        ingreso_por_periodo_ocasional: cob.cliente?.ingreso_por_periodo_ocasional || "",
         compania_id: cob.compania?.id || null,
         agente: cob.agente || "",
         estado_cobertura: cob.estado_cobertura || "No definido",
@@ -588,6 +619,8 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   cliente_id: client.id,
                   nombre: clientData.nombre_completo,
                   ingreso_anual: ingresoAnualCliente,
+                  periodo_ingreso_ocasional: clientData.periodo_ingreso_ocasional || "",
+                  ingreso_por_periodo_ocasional: clientData.ingreso_por_periodo_ocasional || "",
                   parentesco: "",
                   fecha_activacion: new Date().toISOString().split("T")[0],
                   fecha_cancelacion: "",
@@ -645,8 +678,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     const total = groups.reduce((sum, group) =>
       sum + group.members.reduce((gSum, m) => {
         const ingreso = parseFloat(m.ingreso_anual) || 0;
+        const ingresoOcasional = getIngresoOcasionalAnual(m);
         const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-        return gSum + (esValido ? ingreso : 0);
+        return gSum + (esValido ? ingreso + ingresoOcasional : 0);
       }, 0)
     , 0);
   
@@ -660,8 +694,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       const total = coverageGroups.reduce((sum, group) =>
         sum + group.members.reduce((gSum, m) => {
           const ingreso = parseFloat(m.ingreso_anual) || 0;
+          const ingresoOcasional = getIngresoOcasionalAnual(m);
           const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-          return gSum + (esValido ? ingreso : 0);
+          return gSum + (esValido ? ingreso + ingresoOcasional : 0);
         }, 0)
       , 0);
   
@@ -851,8 +886,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       const total = updatedGroups.reduce((sum, group) =>
         sum + group.members.reduce((gSum, m) => {
           const ingreso = parseFloat(m.ingreso_anual) || 0;
+          const ingresoOcasional = getIngresoOcasionalAnual(m);
           const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-          return gSum + (esValido ? ingreso : 0);
+          return gSum + (esValido ? ingreso + ingresoOcasional : 0);
         }, 0)
       , 0);
       
@@ -1006,7 +1042,11 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       // Modo edición: recalcular ingreso familiar si cambia
       if (mode === "edit" && currentStep === 2) {
         const calculatedIncome = coverageGroups.reduce((sum, group) =>
-          sum + group.members.reduce((gSum, m) => gSum + (parseFloat(m.ingreso_anual) || 0), 0)
+          sum + group.members.reduce((gSum, m) => {
+            const ingreso = parseFloat(m.ingreso_anual) || 0;
+            const ingresoOcasional = getIngresoOcasionalAnual(m);
+            return gSum + ingreso + ingresoOcasional;
+          }, 0)
           , 0);
 
         ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;

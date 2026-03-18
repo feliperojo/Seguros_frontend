@@ -1252,6 +1252,21 @@ const activeNormalized = useMemo(
         ? "bg-danger"
         : "bg-secondary";
 
+    const ingresoPrincipalAnual = parseMoney(c.ingreso_anual ?? m.ingreso_anual ?? 0);
+    // El ingreso ocasional NO se anualiza; el cliente ya ajusta el monto según la frecuencia.
+    const ingresoOcasional = parseMoney(
+      c.ingreso_por_periodo_ocasional ??
+        m.ingreso_por_periodo_ocasional ??
+        c.ingreso_ocasional ??
+        m.ingreso_ocasional ??
+        0
+    );
+    const ingresoTotalAnual = ingresoPrincipalAnual + ingresoOcasional;
+    const ingresoTotalLabel = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD"
+    }).format(ingresoTotalAnual || 0);
+
     const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
     
     // Detectar si la cobertura está inactiva
@@ -1399,6 +1414,10 @@ const activeNormalized = useMemo(
                       <span className={`badge ${badgeClass}`}>
                         {grupoValor || "—"}
                       </span>
+                    </div>
+                    <div className="small text-muted mt-1">
+                      Ingreso total:{" "}
+                      <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
                     </div>
                   </div>
                 </div>

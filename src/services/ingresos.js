@@ -96,7 +96,7 @@ export const PERIOD_FACTOR = {
   // 👉 NUEVO: permite sobreescribir horas/semana si algún día lo necesitas
   export const factorForPeriod = (periodo, { hoursPerWeek = 40 } = {}) => {
     if (!periodo) return 0;
-    const p = String(periodo).toUpperCase();
+    const p = String(periodo).trim().toUpperCase();
     if (p === "HOUR") return 52 * hoursPerWeek;
     return PERIOD_FACTOR[p] ?? 0;
   };
@@ -155,7 +155,22 @@ export const getIngresoOcasional = (m = {}) => {
     m?.cliente?.ingresoOcasional ??
     m?.cliente?.incomeOccasional ??
     null;
-    return parseMoney(v);
+
+  const directo = parseMoney(v);
+  if (directo) return directo;
+
+  // Importante: el ingreso ocasional NO debe anualizarse aquí.
+  // En este flujo, el cliente ya ajusta el monto según la frecuencia (periodo),
+  // así que sumamos el monto tal cual viene en el campo "por periodo".
+  return (
+    parseMoney(
+      m.ingreso_por_periodo_ocasional ??
+        m.ingresoPorPeriodoOcasional ??
+        m?.cliente?.ingreso_por_periodo_ocasional ??
+        m?.cliente?.ingresoPorPeriodoOcasional ??
+        ""
+    ) || 0
+  );
   };
   
   // Si no hay anual explícito pero sí periodo + monto por periodo, lo calculamos.
