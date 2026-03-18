@@ -33,13 +33,21 @@ const documentosDisponibles = [
 ];
 
 const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
+  // Fecha para inputs type="date" en formato YYYY-MM-DD, usando hora local
+  const getLocalISODate = () => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  };
+
   const [coberturas, setCoberturas] = useState([]);
   const [nuevo, setNuevo] = useState({
     documento_requerido: "",
-    fecha_solicitud: "",
+    fecha_solicitud: getLocalISODate(),
     observaciones: "",
     cobertura_id: [],  // Asegurarte de que siempre sea un arreglo
     estado: "Pendiente",
+    fecha_vencimiento: "",
   });
 
   const [loading, setLoading] = useState(false);
@@ -53,6 +61,21 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       fetchCoberturas(grupoFamiliarId); // Cargar las coberturas cuando el modal se abre
     }
   }, [show, grupoFamiliarId]);
+
+  // Cuando se abre el modal para crear un nuevo requerimiento, setear fecha_solicitud a la actual por defecto.
+  // Si el usuario la cambia, se respeta hasta que cierre/guarde (no se re-sobrescribe mientras el modal siga abierto).
+  useEffect(() => {
+    if (!show) return;
+    setNuevo({
+      documento_requerido: "",
+      fecha_solicitud: getLocalISODate(),
+      fecha_vencimiento: "",
+      observaciones: "",
+      cobertura_id: [],
+      estado: "Pendiente",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
 
   // Limpiar mensajes después de unos segundos
   useEffect(() => {
@@ -161,7 +184,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       setSuccess("Requerimientos creados exitosamente.");
       setNuevo({
         documento_requerido: "",
-        fecha_solicitud: "",
+        fecha_solicitud: getLocalISODate(),
         fecha_vencimiento: "",
         observaciones: "",
         cobertura_id: [],
