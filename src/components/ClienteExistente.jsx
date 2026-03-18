@@ -220,23 +220,67 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                   <th>Estado Cliente</th>
                   <th>Teléfono</th>
                   <th>Fecha de Nacimiento</th>
+                  <th>Producto / Vigencia</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {getCurrentPageClients().map((cliente) => (
-                  <tr key={cliente.id}>
-                    <td>{cliente.nombre_completo || `${cliente.nombre || ""} ${cliente.apellido || ""}`}</td>
-                    <td>{cliente.estado_cliente || "-"}</td>
-                    <td>{formatTelefonos(cliente)}</td>
-                    <td>{formatDateForDisplay(cliente.fecha_nacimiento)}</td>
-                    <td>
-                      <Button variant="success" size="sm" onClick={() => onClienteSeleccionado?.(cliente)}>
-                        <i className="bi bi-plus-circle me-1"></i> Agregar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {getCurrentPageClients().map((cliente) => {
+                  // Soporta uno o varios registros de cobertura
+                  const coberturas = Array.isArray(cliente.coberturas)
+                    ? cliente.coberturas
+                    : (cliente.cobertura_tipo || cliente.vigente || cliente.activo)
+                    ? [{
+                        cobertura_tipo: cliente.cobertura_tipo,
+                        vigente: cliente.vigente,
+                        activo: cliente.activo,
+                        fecha_cancelacion: cliente.fecha_cancelacion,
+                        fecha_retiro: cliente.fecha_retiro,
+                      }]
+                    : [];
+
+                  return (
+                    <tr key={cliente.id}>
+                      <td>{cliente.nombre_completo || `${cliente.nombre || ""} ${cliente.apellido || ""}`}</td>
+                      <td>{cliente.estado_cliente || "-"}</td>
+                      <td>{formatTelefonos(cliente)}</td>
+                      <td>{formatDateForDisplay(cliente.fecha_nacimiento)}</td>
+                      <td>
+                        {coberturas.length === 0 ? (
+                          <span className="text-muted small">Sin coberturas</span>
+                        ) : (
+                          <div className="d-flex flex-column gap-1 small">
+                            {coberturas.map((cob, idx) => {
+                              const producto = cob.cobertura_tipo || "-";
+                              const esActiva = cob.vigente || cob.activo;
+                              const textoVigencia = esActiva
+                                ? "Activa"
+                                : cob.fecha_cancelacion || cob.fecha_retiro
+                                ? "Finalizada"
+                                : "Sin estado";
+
+                              return (
+                                <div key={idx} className="d-flex align-items-center">
+                                  <span className="badge bg-light text-dark me-2">
+                                    {producto}
+                                  </span>
+                                  <span className={esActiva ? "text-success" : "text-muted"}>
+                                    {textoVigencia}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      <td>
+                        <Button variant="success" size="sm" onClick={() => onClienteSeleccionado?.(cliente)}>
+                          <i className="bi bi-plus-circle me-1"></i> Agregar
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           </div>

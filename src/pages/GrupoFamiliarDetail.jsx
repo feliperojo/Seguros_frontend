@@ -851,7 +851,16 @@ const handleCreateMemberRemote = async (memberData) => {
       idioma: memberData.idioma || null,
       ingreso_anual: ingresoAnual,
       nota: memberData.nota || null,
+      // 📞 Enviar arreglo completo de teléfonos y también el campo legacy "telefono"
       telefonos: toApiPhones(memberData.telefonos || []),
+      telefono: (() => {
+        const list = Array.isArray(memberData.telefonos)
+          ? memberData.telefonos
+          : [];
+        if (!list.length) return null;
+        const principal = list.find((t) => t.principal) || list[0];
+        return principal?.numero || null;
+      })(),
       direccion: memberData.direccion || memberData?.cliente?.direccion || null,
       calle: memberData.calle || memberData?.cliente?.calle || null,
       apto: memberData.apto || memberData?.cliente?.apto || null,

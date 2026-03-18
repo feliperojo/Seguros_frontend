@@ -257,9 +257,20 @@ export const mapClienteFromMember = (m = {}) => {
     fecha_emision: cleanDate(pick("fecha_emision")),
     fecha_expiracion: cleanDate(pick("fecha_expiracion")),
     categoria: pick("categoria"),
-    // 🔹 Arreglo de teléfonos (si viene del import o de TomaDeDatos)
+    // 🔹 Arreglo de teléfonos (si viene del import o de TomaDeDatos/ProspectoDatos)
     telefonos: pick("telefonos"),
   };
+
+  // 📞 Si no hay `telefono` plano pero sí arreglo de `telefonos`, derivar uno principal
+  if (!payload.telefono) {
+    const tels = Array.isArray(payload.telefonos) ? payload.telefonos : [];
+    if (tels.length > 0) {
+      const principal = tels.find((t) => t.principal) || tels[0];
+      if (principal?.numero) {
+        payload.telefono = String(principal.numero);
+      }
+    }
+  }
 
   // 👇 SOLO agregar 'id' si es un cliente REAL de la BD
   if (esClienteReal) {

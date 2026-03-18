@@ -3,12 +3,18 @@ import { Link } from "react-router-dom";
 import UserCoverageIcon from "./UserCoverageIcon";
 import MemberModal from "./MemberModal";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import { sanitizeMoneyInput, formatMoney2, formatMoneyDisplay, parseMoney } from "../../services/ingresos";
+import {
+  sanitizeMoneyInput,
+  formatMoney2,
+  formatMoneyDisplay,
+  parseMoney,
+} from "../../services/ingresos";
 import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
 import { normalizeDateForInput } from "../../utils/formatters";
+import TelefonosPro from "./TelefonosPro";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 
@@ -254,6 +260,38 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     member.fecha_nacimiento || member?.cliente?.fecha_nacimiento || ""
   );
 
+  // Normaliza teléfonos desde distintas fuentes del miembro/cliente
+  const telefonosValue = (() => {
+    // 1) Si el miembro ya tiene arreglo de teléfonos, úsalo
+    if (Array.isArray(member.telefonos) && member.telefonos.length > 0) {
+      return member.telefonos;
+    }
+
+    const c = member.cliente || {};
+
+    // 2) Si el cliente trae arreglo de teléfonos desde BD, úsalo
+    if (Array.isArray(c.telefonos) && c.telefonos.length > 0) {
+      return c.telefonos;
+    }
+
+    // 3) Fallback: si solo hay un string plano `telefono`, conviértelo
+    const numeroPlano = c.telefono || member.telefono || "";
+    if ((numeroPlano || "").toString().trim()) {
+      return [
+        {
+          id: `tel-${c.id || member.id || "local"}`,
+          tipo: "Móvil",
+          numero: numeroPlano.toString().trim(),
+          principal: true,
+          iso: "us",
+          indicativo: "1",
+        },
+      ];
+    }
+
+    return [];
+  })();
+
   const { languages = [] } = useLanguages();
   const resolveIdiomaName = (v) => {
     const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
@@ -470,6 +508,28 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                 <option value="Medicare">Medicare</option>
                 <option value="Medicaid">Medicaid</option>
               </select>
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Teléfonos
+              </label>
+              <TelefonosPro
+                value={telefonosValue}
+                onChange={(arr) => {
+                  const safe = Array.isArray(arr) ? arr : [];
+                  onChange({
+                    telefonos: safe,
+                    cliente: {
+                      ...(member.cliente || {}),
+                      telefonos: safe,
+                    },
+                  });
+                }}
+                readOnly={readOnly}
+                fallbackIso="us"
+                addLabel="Agregar teléfono"
+              />
             </div>
 
             <div className="md:col-span-3">

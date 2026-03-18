@@ -337,17 +337,26 @@ useEffect(() => {
       // 2a) Crear solo los clientes NUEVOS en una sola petición
       const clientesPayload = miembrosNuevos.map((m) => {
         const base = mapClienteFromMember(m);
-      
+
         // Fuerza ingreso_anual numérico para el backend
         const raw = m.ingreso_anual ?? base.ingreso_anual;
-          const limpio = typeof raw === "number"
-            ? raw
-            : parseMoney(String(raw ?? ""));
-        
-          return {
-            ...base,
-            ingreso_anual: moneyToDecimal(limpio),   // ahora numérico y consistente
-          };
+        const limpio =
+          typeof raw === "number" ? raw : parseMoney(String(raw ?? ""));
+
+        // 📞 Normalizar teléfonos al formato esperado por el API
+        const telefonosArray = Array.isArray(base.telefonos)
+          ? base.telefonos
+          : Array.isArray(m.telefonos)
+          ? m.telefonos
+          : Array.isArray(m?.cliente?.telefonos)
+          ? m.cliente.telefonos
+          : [];
+
+        return {
+          ...base,
+          ingreso_anual: moneyToDecimal(limpio), // ahora numérico y consistente
+          telefonos: toApiPhones(telefonosArray),
+        };
       });
       
       // (opcional) debug antes del POST

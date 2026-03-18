@@ -98,26 +98,64 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   findActiveCoverageConflict: async (clienteId, coberturaTipo, currentGrupoFamiliarId = null) => {
     if (!clienteId || !coberturaTipo) return null;
 
-    const activas = await apiRequest(`${BASE_COB}/activas`, "GET");
+    const activasRaw = await apiRequest(`${BASE_COB}/activas`, "GET");
+    // La API puede devolver array directo o envuelto (ej. { data: [...] }).
+    const activas = Array.isArray(activasRaw)
+      ? activasRaw
+      : Array.isArray(activasRaw?.data)
+      ? activasRaw.data
+      : Array.isArray(activasRaw?.data?.data)
+      ? activasRaw.data.data
+      : [];
     const tipoActual = coberturaTipo.toString().trim().toUpperCase();
     const targetClienteId = Number(clienteId);
 
     if (!Array.isArray(activas) || !activas.length) return null;
+
+    const toBool = (v) => v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
+    const isBlank = (v) => v === null || v === undefined || v === "";
+
+    if (import.meta?.env?.DEV) {
+      console.log("[GF] Validando conflicto de cobertura activa", {
+        clienteId: targetClienteId,
+        tipoActual,
+        currentGrupoFamiliarId,
+        totalActivas: activas.length,
+        activasRawShape: Array.isArray(activasRaw) ? "array" : typeof activasRaw,
+      });
+    }
 
     const conflicto = activas.find((c) => {
       const cClienteId = c?.cliente?.id ?? c.cliente_id;
       const tipoCob = (c?.cobertura_tipo || "").toString().trim().toUpperCase();
 
       const estaVigente =
-        c.activo === true &&
-        !c.fecha_cancelacion &&
-        !c.fecha_retiro &&
-        (c.vigente === undefined || c.vigente === null || c.vigente === true);
+        toBool(c.activo) &&
+        isBlank(c.fecha_cancelacion) &&
+        isBlank(c.fecha_retiro) &&
+        (c.vigente === undefined || c.vigente === null || toBool(c.vigente));
 
       if (!estaVigente) return false;
 
       const mismoCliente = Number(cClienteId) === targetClienteId;
       const mismoTipo = tipoCob === tipoActual;
+
+      if (import.meta?.env?.DEV) {
+        console.log("[GF] Cobertura activa revisada", {
+          coberturaId: c.id,
+          clienteId: cClienteId,
+          grupoFamiliarId: c.grupo_familiar_id,
+          tipoCobOriginal: c?.cobertura_tipo,
+          tipoCobNormalizado: tipoCob,
+          estaVigente,
+          mismoCliente,
+          mismoTipo,
+          activoOriginal: c.activo,
+          vigenteOriginal: c.vigente,
+          fecha_cancelacion: c.fecha_cancelacion,
+          fecha_retiro: c.fecha_retiro,
+        });
+      }
 
       if (!mismoCliente || !mismoTipo) return false;
 
@@ -125,6 +163,13 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
 
       return Number(c.grupo_familiar_id) !== Number(currentGrupoFamiliarId);
     });
+
+    if (import.meta?.env?.DEV) {
+      console.log("[GF] Resultado conflicto de cobertura activa", {
+        hayConflicto: Boolean(conflicto),
+        conflicto,
+      });
+    }
 
     return conflicto || null;
   },

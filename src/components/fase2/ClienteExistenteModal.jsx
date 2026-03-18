@@ -21,6 +21,60 @@ export default function ClienteExistenteModal({
 
   if (!open) return null;
 
+  const normalizeTipo = (v) =>
+    (v || "").toString().trim().toUpperCase();
+
+  const toBool = (v) =>
+    v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
+
+  const isBlank = (v) =>
+    v === null || v === undefined || v === "";
+
+  const validarCoberturasLocalmente = (clienteBase) => {
+    if (!clienteBase) return null;
+
+    const tipoActual = normalizeTipo(defaultCoberturaTipo);
+
+    // Soportar tanto un arreglo de coberturas como campos planos en el cliente
+    const coberturas = Array.isArray(clienteBase.coberturas)
+      ? clienteBase.coberturas
+      : (clienteBase.cobertura_tipo || clienteBase.vigente || clienteBase.activo)
+      ? [{
+          cobertura_tipo: clienteBase.cobertura_tipo,
+          vigente: clienteBase.vigente,
+          activo: clienteBase.activo,
+          fecha_cancelacion: clienteBase.fecha_cancelacion,
+          fecha_retiro: clienteBase.fecha_retiro,
+          grupo_familiar_id: clienteBase.grupo_familiar_id,
+        }]
+      : [];
+
+    if (!coberturas.length) return null;
+
+    const conflicto = coberturas.find((c) => {
+      const tipoCob = normalizeTipo(c.cobertura_tipo);
+      const estaVigente =
+        toBool(c.activo) &&
+        isBlank(c.fecha_cancelacion) &&
+        isBlank(c.fecha_retiro) &&
+        (c.vigente === undefined || c.vigente === null || toBool(c.vigente));
+
+      if (!estaVigente) return false;
+
+      const grupoCob = c.grupo_familiar_id ?? c.grupo_id ?? c.grupoFamiliarId ?? null;
+
+      // Regla: cobertura vigente, mismo producto y perteneciendo a OTRO grupo familiar.
+      // Si por alguna razón no viene grupoCob, caemos al bloqueo por producto solamente.
+      if (grupoCob && grupoFamiliarId) {
+        return tipoCob === tipoActual && Number(grupoCob) !== Number(grupoFamiliarId);
+      }
+
+      return tipoCob === tipoActual;
+    });
+
+    return conflicto || null;
+  };
+
   const handlePick = async (cliente) => {
     if (!cliente?.id) return;
     if (!tipo || tipo.trim() === "") {
@@ -37,6 +91,51 @@ export default function ClienteExistenteModal({
     };
 
     try {
+      // Validación rápida con la data que ya viene del buscador
+      const conflictoLocal = validarCoberturasLocalmente(cliente);
+      if (conflictoLocal) {
+        const nombreCliente =
+          cliente.nombre_completo ||
+          `${cliente.primer_nombre || ""} ${cliente.segundo_nombre || ""} ${cliente.apellidos || cliente.apellido || ""}`.trim() ||
+          "Este cliente";
+
+        const descripcionCobertura = [
+          conflictoLocal.cobertura_tipo,
+          conflictoLocal.compania_nombre || conflictoLocal.compania?.nombre,
+          conflictoLocal.codigo_poliza || conflictoLocal.policy_number,
+        ]
+          .filter(Boolean)
+          .join(" - ");
+
+        const grupoTexto = conflictoLocal.grupo_familiar_id
+          ? `Grupo familiar #${conflictoLocal.grupo_familiar_id}`
+          : null;
+
+        const mensajeDetalle = descripcionCobertura
+          ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
+          : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
+
+        if (window?.Swal) {
+          window.Swal.fire({
+            icon: "warning",
+            title: "Cobertura vigente existente",
+            html: `
+              <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto.</p>
+              <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
+              <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
+            `,
+            confirmButtonText: "Entendido",
+          });
+        } else {
+          window.alert(
+            `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
+            `${mensajeDetalle}\n\n` +
+            `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
+          );
+        }
+        return;
+      }
+
       setSaving(true);
     // 1) Traer el cliente completo por id (para hidratar la card)
      //    Si en tu API existe un parámetro tipo hydrate=full, úsalo aquí.
@@ -62,7 +161,7 @@ export default function ClienteExistenteModal({
 
   return (
     <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
-      <div className="modal-dialog modal-lg">
+      <div className="modal-dialog modal-xl">
         <div className="modal-content">
 
           <div className="modal-header">

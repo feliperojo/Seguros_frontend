@@ -59,11 +59,21 @@ export default function MemberModalCreate({
   const [saving, setSaving] = useState(false);
 
       const [data, setData] = useState({
-        primer_nombre: "", segundo_nombre: "", apellidos: "",
-        nombreCompleto: "", nombre_completo: "",
-    idioma: "", fechaNacimiento: "", edad: "", genero: "Masculino",
-    ingresoAnual: "", nota: "", parentesco: "Tomador", estado_cobertura: "Sí", tipo: "Tomador",
-  });
+        primer_nombre: "",
+        segundo_nombre: "",
+        apellidos: "",
+        nombreCompleto: "",
+        nombre_completo: "",
+        idioma: "",
+        fechaNacimiento: "",
+        edad: "",
+        genero: "Masculino",
+        ingresoAnual: "",
+        nota: "",
+        parentesco: "Tomador",
+        estado_cobertura: "Sí",
+        tipo: "Tomador",
+      });
 
   // Estado para validación de existencia
   const [validating, setValidating] = useState(false);
@@ -79,23 +89,43 @@ export default function MemberModalCreate({
     if (editingMember) {
       setData({
         ...editingMember,
-        ingresoAnual: formatMoney2(editingMember.ingresoAnual ?? editingMember.ingreso_anual ?? ""),
+        ingresoAnual: formatMoney2(
+          editingMember.ingresoAnual ?? editingMember.ingreso_anual ?? ""
+        ),
         nombreCompleto:
-             editingMember.nombreCompleto ||
-             editingMember.nombre_completo ||
-             buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
-           nombre_completo:
-             editingMember.nombre_completo ||
-             editingMember.nombreCompleto ||
-             buildFullName(editingMember.primer_nombre, editingMember.segundo_nombre, editingMember.apellidos),
+          editingMember.nombreCompleto ||
+          editingMember.nombre_completo ||
+          buildFullName(
+            editingMember.primer_nombre,
+            editingMember.segundo_nombre,
+            editingMember.apellidos
+          ),
+        nombre_completo:
+          editingMember.nombre_completo ||
+          editingMember.nombreCompleto ||
+          buildFullName(
+            editingMember.primer_nombre,
+            editingMember.segundo_nombre,
+            editingMember.apellidos
+          ),
       });
       setStep(2);
     } else {
       setData({
-          primer_nombre:"", segundo_nombre:"", apellidos:"",
-          nombreCompleto:"", nombre_completo:"",
-        idioma:"", fechaNacimiento:"", edad:"", genero:"Masculino",
-        ingresoAnual:"", nota:"", parentesco:"Tomador", estado_cobertura:"Sí", tipo:"Tomador"
+        primer_nombre: "",
+        segundo_nombre: "",
+        apellidos: "",
+        nombreCompleto: "",
+        nombre_completo: "",
+        idioma: "",
+        fechaNacimiento: "",
+        edad: "",
+        genero: "Masculino",
+        ingresoAnual: "",
+        nota: "",
+        parentesco: "Tomador",
+        estado_cobertura: "Sí",
+        tipo: "Tomador",
       });
       setStep(1);
     }
@@ -279,6 +309,8 @@ export default function MemberModalCreate({
       tipo: data.parentesco || data.tipo || "Tomador",
       estado_cobertura: data.estado_cobertura || "Sí",
       cobertura_tipo: defaultCoberturaTipo,
+      // contact
+      telefonos: Array.isArray(data.telefonos) ? data.telefonos : [],
     };
 
     
