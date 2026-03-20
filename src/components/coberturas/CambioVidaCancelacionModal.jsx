@@ -204,6 +204,16 @@ const CambioVidaCancelacionModal = ({
       setError("La fecha de cancelación es requerida.");
       return false;
     }
+
+    if (!motivoCancelacion) {
+      setError("El motivo de cancelación es requerido.");
+      return false;
+    }
+
+    if (!notaCancel || String(notaCancel).trim().length === 0) {
+      setError("Las observaciones/notas administrativas sobre la cancelación son requeridas.");
+      return false;
+    }
     
     // Validar que todas las coberturas seleccionadas tengan una decisión de renovación
     const coberturasSinDecision = Array.from(coberturasSeleccionadas).filter(
@@ -667,11 +677,14 @@ const CambioVidaCancelacionModal = ({
 
                     <div className="col-md-6">
                       <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">Motivo de Cancelación</Form.Label>
+                        <Form.Label className="fw-semibold mb-2">
+                          Motivo de Cancelación <span className="text-danger">*</span>
+                        </Form.Label>
                         <Form.Select
                           value={motivoCancelacion}
                           onChange={(e) => setMotivoCancelacion(e.target.value)}
                           className="border-secondary"
+                          required
                         >
                           <option value="">Seleccione un motivo...</option>
                           {motivosCancelacion.map((motivo) => (
@@ -688,7 +701,9 @@ const CambioVidaCancelacionModal = ({
 
                     <div className="col-md-6">
                       <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">Observaciones</Form.Label>
+                        <Form.Label className="fw-semibold mb-2">
+                          Observaciones <span className="text-danger">*</span>
+                        </Form.Label>
                         <Form.Control
                           as="textarea"
                           rows={3}
@@ -697,6 +712,7 @@ const CambioVidaCancelacionModal = ({
                           placeholder="Ingrese observaciones adicionales sobre esta operación..."
                           style={{ resize: "none" }}
                           className="border-secondary"
+                          required
                         />
                         <Form.Text className="text-muted small">
                           Notas administrativas sobre la cancelación
@@ -794,7 +810,10 @@ const CambioVidaCancelacionModal = ({
                         disabled={
                           loading ||
                           coberturasSeleccionadas.size === 0 ||
-                          !fechaCancelacion
+                          !fechaCancelacion ||
+                          !motivoCancelacion ||
+                          !notaCancel ||
+                          String(notaCancel).trim().length === 0
                         }
                         className="px-4"
                       >

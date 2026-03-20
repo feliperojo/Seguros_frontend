@@ -1,5 +1,5 @@
 // src/components/coberturas/ReactivacionCoberturasModal.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Modal, Button, Form, Table, Alert, Spinner, Badge } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
@@ -7,7 +7,7 @@ import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 /**
  * ReactivacionCoberturasModal
  * 
- * Modal para reactivar coberturas retiradas de un grupo familiar.
+ * Modal para reactivar coberturas (retiradas y canceladas) de un grupo familiar.
  * 
  * Props:
  * - show (boolean): Controla la visibilidad del modal
@@ -16,10 +16,10 @@ import GrupoFamiliarService from "../../services/GrupoFamiliarService";
  * - grupoFamiliarId (number|string): ID del grupo familiar
  * 
  * El componente:
- * - Carga las coberturas retiradas del grupo familiar (activo: false, vigente: false)
+ * - Carga coberturas retiradas (y también canceladas) según su estado y fechas
  * - Permite seleccionar una o varias coberturas mediante checkboxes
  * - Valida que haya al menos una cobertura seleccionada
- * - Envía peticiones PUT a /api/cobertura/{id} para reactivar cada cobertura
+ * - Envía peticiones PUT a /api/cobertura/{id} para reactivar cada cobertura seleccionada
  * - Actualiza: activo: true, vigente: true, fecha_retiro: null, fecha_cancelacion: null, motivo_cancelacion: null, nota_cancel: null
  * - Muestra estados de loading, éxito y error
  */
@@ -31,10 +31,47 @@ const ReactivacionCoberturasModal = ({
 }) => {
   const [coberturas, setCoberturas] = useState([]);
   const [coberturasSeleccionadas, setCoberturasSeleccionadas] = useState(new Set());
+  // Nuevo flujo: permitir seleccionar/reactivar coberturas "Cancelada"
+  // para no romper el comportamiento existente (por defecto solo "Retirada").
+  const [reactivarCanceladas, setReactivarCanceladas] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingCoberturas, setLoadingCoberturas] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [validandoSeleccion, setValidandoSeleccion] = useState(false);
+  // Cache simple para evitar repetir el endpoint por cliente/producto en cada click
+  const conflictoCacheRef = useRef(new Map()); // Map<string, any|null>
+  // Mensaje estético de validación al intentar seleccionar una cobertura
+  const [seleccionError, setSeleccionError] = useState("");
+  const seleccionErrorTimerRef = useRef(null);
+
+  const isFechaValida = (v) => {
+    if (v === null || v === undefined) return false;
+    const s = String(v).trim();
+    return s !== "" && s.toLowerCase() !== "null";
+  };
+
+  const esActivoFalse = (v) => v === false || v === "false" || v === 0 || v === "0";
+  const esActivoTrue = (v) => v === true || v === "true" || v === 1 || v === "1";
+  const esVigenteFalse = (v) => v === false || v === "false" || v === 0 || v === "0";
+
+  // Nota: para evitar inconsistencias de datos, priorizamos por fechas:
+  // - Cancelada: vigente === false y tiene fecha_cancelacion, pero NO tiene fecha_retiro
+  // - Retirada: vigente === false y (activo === false o tiene fecha_retiro)
+  const esCoberturaRetirada = (c = {}) =>
+    esVigenteFalse(c.vigente) &&
+    (esActivoFalse(c.activo) || isFechaValida(c.fecha_retiro));
+
+  const esCoberturaCancelada = (c = {}) =>
+    esVigenteFalse(c.vigente) &&
+    isFechaValida(c.fecha_cancelacion) &&
+    !isFechaValida(c.fecha_retiro);
+
+  const getEstadoActualEtiqueta = (c = {}) => {
+    if (esCoberturaCancelada(c)) return "Cancelada";
+    if (esCoberturaRetirada(c)) return "Retirada";
+    return "—";
+  };
 
   // Cargar coberturas retiradas cuando se abre el modal
   useEffect(() => {
@@ -48,6 +85,22 @@ const ReactivacionCoberturasModal = ({
     setCoberturasSeleccionadas(new Set());
     setError("");
     setSuccess(false);
+    setReactivarCanceladas(false);
+    conflictoCacheRef.current = new Map();
+    setSeleccionError("");
+    if (seleccionErrorTimerRef.current) {
+      clearTimeout(seleccionErrorTimerRef.current);
+      seleccionErrorTimerRef.current = null;
+    }
+  };
+
+  const mostrarSeleccionError = (msg) => {
+    setSeleccionError(msg);
+    if (seleccionErrorTimerRef.current) clearTimeout(seleccionErrorTimerRef.current);
+    seleccionErrorTimerRef.current = setTimeout(() => {
+      setSeleccionError("");
+      seleccionErrorTimerRef.current = null;
+    }, 4500);
   };
 
   const cargarCoberturas = async () => {
@@ -60,53 +113,212 @@ const ReactivacionCoberturasModal = ({
       // Obtener el grupo familiar completo
       const grupoData = await GrupoFamiliarService.getFullById(grupoFamiliarId);
       
-      // Extraer coberturas retiradas (activo: false y vigente: false)
-      const coberturasRetiradas = (grupoData?.coberturas || []).filter(
-        (c) => 
-          (c.activo === false || c.activo === "false" || c.activo === 0) &&
-          (c.vigente === false || c.vigente === "false" || c.vigente === 0)
-      );
+      const lista = grupoData?.coberturas || [];
 
-      setCoberturas(coberturasRetiradas);
+      // Extraer coberturas retiradas (vigente === false y retiro)
+      // Excluimos las que sean canceladas para evitar duplicados en la tabla.
+      const coberturasRetiradas = lista.filter((c) => esCoberturaRetirada(c) && !esCoberturaCancelada(c));
+
+      // Extraer coberturas canceladas (activo: true y vigente: false + fecha_cancelacion)
+      const coberturasCanceladas = lista.filter((c) => esCoberturaCancelada(c));
+
+      // Mostramos ambas en la tabla; la selección de canceladas depende de reactivarCanceladas
+      setCoberturas([...coberturasRetiradas, ...coberturasCanceladas]);
     } catch (err) {
-      console.error("Error al cargar coberturas retiradas:", err);
-      setError("No se pudieron cargar las coberturas retiradas. Intente nuevamente.");
+      console.error("Error al cargar coberturas retiradas/canceladas:", err);
+      setError("No se pudieron cargar las coberturas para reactivar. Intente nuevamente.");
     } finally {
       setLoadingCoberturas(false);
     }
   };
 
+  const idsSeleccionables = coberturas
+    .filter((c) => c && c.id)
+    .filter((c) => !esCoberturaCancelada(c) || reactivarCanceladas)
+    .map((c) => c.id)
+    .filter(Boolean);
+
+  // Si el usuario desactiva el nuevo flujo, limpiamos selección de canceladas.
+  useEffect(() => {
+    if (reactivarCanceladas) return;
+    setCoberturasSeleccionadas((prev) => {
+      const next = new Set();
+      prev.forEach((id) => {
+        const cobertura = coberturas.find((c) => String(c.id) === String(id));
+        if (!cobertura) return;
+        if (esCoberturaCancelada(cobertura)) return; // no se permite reactivar canceladas
+        next.add(id);
+      });
+      return next;
+    });
+  }, [reactivarCanceladas, coberturas]);
+
   // Manejar selección/deselección de coberturas
-  const toggleCobertura = (coberturaId) => {
-    if (!coberturaId) {
-      console.warn("toggleCobertura: coberturaId es undefined o null");
+  // Reglas:
+  // - Si la cobertura es cancelada y el usuario NO activó reactivarCanceladas => no permitir
+  // - Si al intentar seleccionar (agregar) la cobertura hay conflicto: cliente ya activo en otro grupo familiar
+  //   con el mismo producto => no permitir
+  const toggleCobertura = async (coberturaId) => {
+    if (!coberturaId) return;
+
+    const cobertura = coberturas.find((c) => String(c.id) === String(coberturaId));
+    const seleccionPrevia = coberturasSeleccionadas.has(coberturaId);
+
+    if (import.meta.env.DEV) {
+      console.log("🧩 toggleCobertura click:", {
+        coberturaId,
+        esCancelada: cobertura ? esCoberturaCancelada(cobertura) : null,
+        reactivarCanceladas,
+        seleccionPrevia,
+        idsSeleccionablesCount: idsSeleccionables.length,
+      });
+    }
+
+    // Siempre permitir des-seleccionar
+    if (seleccionPrevia) {
+      setCoberturasSeleccionadas((prev) => {
+        const nuevo = new Set(prev);
+        nuevo.delete(coberturaId);
+        return nuevo;
+      });
       return;
     }
-    
+
+    // Validación de canceladas (antes del conflicto)
+    if (cobertura && esCoberturaCancelada(cobertura) && !reactivarCanceladas) {
+      mostrarSeleccionError(
+        "Para seleccionar coberturas canceladas, activa la opción 'Reactivar también coberturas canceladas'."
+      );
+      return;
+    }
+
+    // Validación de conflicto (solo cuando se intenta seleccionar/agregar)
+    const clienteId =
+      cobertura?.cliente?.id ??
+      cobertura?.cliente_id ??
+      cobertura?.cliente?.cliente_id ??
+      null;
+
+    const coberturaTipo = cobertura?.cobertura_tipo ?? cobertura?.tipoProducto ?? null;
+    const msg =
+      "El cliente ya está activo en otro grupo familiar con el mismo producto. No se puede reactivar esta cobertura.";
+
+    if (clienteId && coberturaTipo) {
+      const cacheKey = `${Number(clienteId)}::${String(coberturaTipo).trim().toUpperCase()}`;
+      if (conflictoCacheRef.current.has(cacheKey)) {
+        const conflicto = conflictoCacheRef.current.get(cacheKey);
+        if (conflicto) {
+          mostrarSeleccionError(msg);
+          return;
+        }
+      } else {
+        try {
+          const conflicto = await GrupoFamiliarService.findActiveCoverageConflictByActivoAndTipo(
+            clienteId,
+            coberturaTipo,
+            grupoFamiliarId
+          );
+          conflictoCacheRef.current.set(cacheKey, conflicto);
+          if (conflicto) {
+            mostrarSeleccionError(msg);
+            return;
+          }
+        } catch (err) {
+          // No romper flujo: si falla la validación, permitimos la selección
+          if (import.meta.env.DEV) {
+            console.warn("⚠️ Error validando conflicto de cliente para reactivación:", err);
+          }
+        }
+      }
+    }
+
     setCoberturasSeleccionadas((prev) => {
       const nuevo = new Set(prev);
-      if (nuevo.has(coberturaId)) {
-        nuevo.delete(coberturaId);
-      } else {
-        nuevo.add(coberturaId);
-      }
+      nuevo.add(coberturaId);
       return nuevo;
     });
+    setSeleccionError("");
   };
 
   // Seleccionar todas / Deseleccionar todas
   const toggleTodas = () => {
-    if (coberturasSeleccionadas.size === coberturas.length) {
+    if (idsSeleccionables.length === 0) return;
+    if (coberturasSeleccionadas.size === idsSeleccionables.length) {
+      setSeleccionError("");
       setCoberturasSeleccionadas(new Set());
-    } else {
-      const todasLasIds = coberturas.map((c) => c.id).filter(id => id);
-      setCoberturasSeleccionadas(new Set(todasLasIds));
+      return;
     }
+    setSeleccionError("");
+    setValidandoSeleccion(true);
+
+    void (async () => {
+      try {
+        const nuevo = new Set();
+        const msg =
+          "El cliente ya está activo en otro grupo familiar con el mismo producto. No se puede reactivar esta cobertura.";
+        let mostroMsg = false;
+
+        for (const id of idsSeleccionables) {
+          const cobertura = coberturas.find((c) => String(c.id) === String(id));
+          if (!cobertura) continue;
+
+          const clienteId =
+            cobertura?.cliente?.id ??
+            cobertura?.cliente_id ??
+            cobertura?.cliente?.cliente_id ??
+            null;
+          const coberturaTipo = cobertura?.cobertura_tipo ?? cobertura?.tipoProducto ?? null;
+
+          // Si no tenemos datos suficientes, no bloqueamos para no romper el flujo.
+          if (!clienteId || !coberturaTipo) {
+            nuevo.add(id);
+            continue;
+          }
+
+          const cacheKey = `${Number(clienteId)}::${String(coberturaTipo).trim().toUpperCase()}`;
+          let conflicto = null;
+
+          if (conflictoCacheRef.current.has(cacheKey)) {
+            conflicto = conflictoCacheRef.current.get(cacheKey);
+          } else {
+            try {
+              conflicto = await GrupoFamiliarService.findActiveCoverageConflictByActivoAndTipo(
+                clienteId,
+                coberturaTipo,
+                grupoFamiliarId
+              );
+              conflictoCacheRef.current.set(cacheKey, conflicto);
+            } catch (err) {
+              if (import.meta.env.DEV) {
+                console.warn("⚠️ Error validando conflicto (seleccionar todas):", err);
+              }
+              // Si falla la validación, permitimos.
+              conflicto = null;
+            }
+          }
+
+          if (conflicto) {
+            if (!mostroMsg) {
+              mostrarSeleccionError(msg);
+              mostroMsg = true;
+            }
+            continue;
+          }
+
+          nuevo.add(id);
+        }
+
+        setCoberturasSeleccionadas(nuevo);
+      } finally {
+        setValidandoSeleccion(false);
+      }
+    })();
   };
 
   // Validar formulario
   const validarFormulario = () => {
-    if (coberturasSeleccionadas.size === 0) {
+    const idsAReactivar = Array.from(coberturasSeleccionadas).filter((id) => idsSeleccionables.includes(id));
+    if (idsAReactivar.length === 0) {
       setError("Debe seleccionar al menos una cobertura para activar nuevamente.");
       return false;
     }
@@ -126,8 +338,10 @@ const ReactivacionCoberturasModal = ({
     setSuccess(false);
 
     try {
+      const idsAReactivar = Array.from(coberturasSeleccionadas).filter((id) => idsSeleccionables.includes(id));
+
       // Reactivar cada cobertura seleccionada
-      const promesas = Array.from(coberturasSeleccionadas).map(async (id) => {
+      const promesas = idsAReactivar.map(async (id) => {
         const payload = {
           activo: true,
           vigente: true,
@@ -181,7 +395,7 @@ const ReactivacionCoberturasModal = ({
             Reactivación de Coberturas
           </Modal.Title>
           <small className="text-muted">
-            Activar nuevamente coberturas que fueron retiradas del grupo familiar
+            Activar nuevamente coberturas retiradas y/o canceladas del grupo familiar
           </small>
         </div>
       </Modal.Header>
@@ -189,12 +403,12 @@ const ReactivacionCoberturasModal = ({
         {loadingCoberturas ? (
           <div className="text-center py-4">
             <Spinner animation="border" variant="primary" />
-            <p className="mt-2 text-muted">Cargando coberturas retiradas...</p>
+            <p className="mt-2 text-muted">Cargando coberturas retiradas y canceladas...</p>
           </div>
         ) : coberturas.length === 0 ? (
           <Alert variant="info">
             <i className="fas fa-info-circle me-2"></i>
-            No hay coberturas retiradas disponibles para reactivar en este grupo familiar.
+            No hay coberturas retiradas o canceladas disponibles para reactivar en este grupo familiar.
           </Alert>
         ) : (
           <>
@@ -220,7 +434,9 @@ const ReactivacionCoberturasModal = ({
                     <span className="badge bg-primary me-2">1</span>
                     Selección de Coberturas para Reactivar
                   </h5>
-                  <small className="text-muted">Seleccione las coberturas que entrarán nuevamente en activación</small>
+                  <small className="text-muted">
+                    Seleccione las coberturas que entrarán nuevamente en activación (canceladas requieren activar la opción).
+                  </small>
                 </div>
                 <Button
                   variant="outline-secondary"
@@ -228,23 +444,48 @@ const ReactivacionCoberturasModal = ({
                   onClick={toggleTodas}
                   className="d-flex align-items-center"
                 >
-                  <i className={`fas ${coberturasSeleccionadas.size === coberturas.length ? "fa-square-check" : "fa-square"} me-2`}></i>
-                  {coberturasSeleccionadas.size === coberturas.length
+                  <i className={`fas ${coberturasSeleccionadas.size === idsSeleccionables.length ? "fa-square-check" : "fa-square"} me-2`}></i>
+                  {coberturasSeleccionadas.size === idsSeleccionables.length
                     ? "Deseleccionar todas"
                     : "Seleccionar todas"}
                 </Button>
               </div>
+
+              <div className="mb-3">
+                <Form.Check
+                  type="checkbox"
+                  id="reactivar-canceladas"
+                  checked={reactivarCanceladas}
+                  onChange={(e) => setReactivarCanceladas(e.target.checked)}
+                  label="Reactivar también coberturas canceladas"
+                />
+                <div className="text-muted small mt-1">
+                  Cuando está desactivado, las coberturas canceladas se muestran pero no se pueden seleccionar.
+                </div>
+              </div>
+
+              {seleccionError && (
+                <Alert variant="danger" className="mb-3">
+                  <div className="d-flex align-items-start gap-2">
+                    <i className="fas fa-exclamation-triangle mt-1" />
+                    <div>
+                      <strong>Validación:</strong> {seleccionError}
+                    </div>
+                  </div>
+                </Alert>
+              )}
 
               <div className="table-responsive border rounded" style={{ maxHeight: "450px", overflowY: "auto" }}>
                 <Table hover size="sm" className="mb-0 table-striped">
                   <thead className="table-dark sticky-top">
                     <tr>
                       <th width="50" className="text-center">
-                        <Form.Check
+                        <input
                           type="checkbox"
-                          checked={coberturasSeleccionadas.size === coberturas.length && coberturas.length > 0}
+                          className="form-check-input"
+                          checked={coberturasSeleccionadas.size === idsSeleccionables.length && idsSeleccionables.length > 0}
                           onChange={toggleTodas}
-                          className="text-white"
+                          disabled={validandoSeleccion}
                         />
                       </th>
                       <th className="fw-semibold">Cliente / Parentesco</th>
@@ -260,6 +501,9 @@ const ReactivacionCoberturasModal = ({
                       const coberturaId = cobertura.id;
                       const isSelected = coberturasSeleccionadas.has(coberturaId);
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
+                      const esCancelada = esCoberturaCancelada(cobertura);
+                      const esSelectable = !esCancelada || reactivarCanceladas;
+                      const estadoActual = getEstadoActualEtiqueta(cobertura);
                       
                       return (
                         <tr
@@ -268,10 +512,17 @@ const ReactivacionCoberturasModal = ({
                           style={isSelected ? { backgroundColor: '#e7f3ff' } : esTomador ? { backgroundColor: '#fff9e6' } : {}}
                         >
                           <td className="text-center align-middle">
-                            <Form.Check
+                            <input
                               type="checkbox"
+                              className="form-check-input"
                               checked={isSelected}
+                              title={
+                                !esSelectable
+                                  ? "Activa la opción para reactivar coberturas canceladas"
+                                  : undefined
+                              }
                               onChange={() => toggleCobertura(coberturaId)}
+                              disabled={validandoSeleccion}
                             />
                           </td>
                           <td className="align-middle">
@@ -328,7 +579,7 @@ const ReactivacionCoberturasModal = ({
                               className="small"
                               style={{ fontWeight: "600" }}
                             >
-                              Retirada
+                              {estadoActual}
                             </Badge>
                           </td>
                         </tr>

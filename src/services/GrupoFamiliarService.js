@@ -174,6 +174,50 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return conflicto || null;
   },
 
+  /**
+   * Variante de conflicto para reactivación:
+   * - Conflicto si existe cobertura con:
+   *   - cliente igual
+   *   - activo == true
+   *   - mismo cobertura_tipo (producto)
+   *   - y en otro grupo_familiar
+   *
+   * Este flujo ignora validaciones adicionales por fechas para alinearse
+   * con la regla de negocio que usa el modal de reactivación.
+   */
+  findActiveCoverageConflictByActivoAndTipo: async (clienteId, coberturaTipo, currentGrupoFamiliarId = null) => {
+    if (!clienteId || !coberturaTipo) return null;
+
+    // Endpoint nuevo: devuelve SOLO coberturas con activo=true para ese cliente
+    // Si retorna [] => no hay coberturas activas y, por tanto, no hay conflicto.
+    const estadoRaw = await apiRequest(
+      `${BASE_COB}/estado?cliente_id=${encodeURIComponent(clienteId)}`,
+      "GET"
+    );
+    const activas = Array.isArray(estadoRaw)
+      ? estadoRaw
+      : Array.isArray(estadoRaw?.data)
+        ? estadoRaw.data
+        : Array.isArray(estadoRaw?.data?.data)
+          ? estadoRaw.data.data
+          : [];
+
+    const tipoActual = String(coberturaTipo).trim().toUpperCase();
+
+    const conflicto = activas.find((c) => {
+      const tipoCob = (c?.cobertura_tipo || "").toString().trim().toUpperCase();
+      const grupoFamiliarId = c?.grupo_familiar_id ?? c?.grupo?.id ?? c?.grupo?.grupo_familiar_id;
+
+      const mismoTipo = tipoCob === tipoActual;
+      if (!mismoTipo) return false;
+
+      if (grupoFamiliarId == null || currentGrupoFamiliarId == null) return true;
+      return Number(grupoFamiliarId) !== Number(currentGrupoFamiliarId);
+    });
+
+    return conflicto || null;
+  },
+
   deleteCobertura: async (coberturaId, headers = {}) => {
     if (!coberturaId) throw new Error("Cobertura ID es requerido para eliminar.");
     return await apiRequest(`${BASE_COB}/${coberturaId}`, "DELETE", null, headers);
