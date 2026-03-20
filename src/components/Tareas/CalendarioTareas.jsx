@@ -1339,7 +1339,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       if (!esAuditoria && taskId) {
                         const numericTaskId = typeof taskId === 'string' ? parseInt(taskId, 10) : taskId;
                         if (notification.task && notification.task.id) {
-                          abrirResponderTarea(notification.task, true);
+                          // Cuando viene desde menciones, el objeto `notification.task` suele venir incompleto
+                          // (por ejemplo sin `log.cliente`), y el modal muestra "Cliente no disponible".
+                          // En ese caso, abrimos el modal cargando `tareas_operativas/{id}`.
+                          const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
+                          if (tieneClienteEnNotificacion) {
+                            abrirResponderTarea(notification.task, true);
+                          } else {
+                            await openTaskResponseModal(numericTaskId, true);
+                          }
                         } else {
                           await openTaskResponseModal(numericTaskId, true);
                         }
@@ -1439,8 +1447,14 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         
                         // Si ya tenemos el objeto task completo en la notificación, usarlo directamente
                         if (notification.task && notification.task.id) {
-                          console.log("✅ Usando objeto task completo de la notificación");
-                          abrirResponderTarea(notification.task, true);
+                          const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
+                          if (tieneClienteEnNotificacion) {
+                            console.log("✅ Usando objeto task completo de la notificación");
+                            abrirResponderTarea(notification.task, true);
+                          } else {
+                            console.log("⚠️ notification.task incompleto; cargando detalle por taskId");
+                            await openTaskResponseModal(numericTaskId, true);
+                          }
                         } else if (isAuditoriaNotification) {
                           // Si es auditoría, cargar y abrir
                           await abrirTareaAuditoria(numericTaskId);
@@ -1540,7 +1554,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       if (esAuditoria) {
                         await abrirTareaAuditoria(numericTaskId);
                       } else if (notification.task && notification.task.id) {
-                        abrirResponderTarea(notification.task, true);
+                        const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
+                        if (tieneClienteEnNotificacion) {
+                          abrirResponderTarea(notification.task, true);
+                        } else {
+                          await openTaskResponseModal(numericTaskId, true);
+                        }
                       } else {
                         await openTaskResponseModal(numericTaskId, true);
                       }
@@ -1553,7 +1572,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         if (esAuditoria) {
                           await abrirTareaAuditoria(numericTaskId);
                         } else if (notification.task && notification.task.id) {
-                          abrirResponderTarea(notification.task, true);
+                          const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
+                          if (tieneClienteEnNotificacion) {
+                            abrirResponderTarea(notification.task, true);
+                          } else {
+                            await openTaskResponseModal(numericTaskId, true);
+                          }
                         } else {
                           await openTaskResponseModal(numericTaskId, true);
                         }
@@ -1568,7 +1592,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       if (esAuditoria) {
                         await abrirTareaAuditoria(numericTaskId);
                       } else if (notification.task && notification.task.id) {
-                        abrirResponderTarea(notification.task, true);
+                        const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
+                        if (tieneClienteEnNotificacion) {
+                          abrirResponderTarea(notification.task, true);
+                        } else {
+                          await openTaskResponseModal(numericTaskId, true);
+                        }
                       } else {
                         await openTaskResponseModal(numericTaskId, true);
                       }
