@@ -923,6 +923,39 @@ const handleCreateMemberRemote = async (memberData) => {
     }
   };
 
+  const formatTodayLocal = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const descartarCoberturasDelGrupo = async () => {
+    const fechaHoy = formatTodayLocal();
+    const coberturasIds = Array.from(
+      new Set(
+        (Array.isArray(familyMembers) ? familyMembers : [])
+          .map((m) => m?.cobertura_id)
+          .filter(Boolean)
+      )
+    );
+
+    if (!coberturasIds.length) return;
+
+    await Promise.all(
+      coberturasIds.map((coberturaId) =>
+        GrupoFamiliarService.updateCobertura(coberturaId, {
+          activo: false,
+          vigente: false,
+          estado_cobertura: "No",
+          fecha_cancelacion: fechaHoy,
+          fecha_retiro: fechaHoy,
+        })
+      )
+    );
+  };
+
   const handleDerivedCounts = useCallback(({ taxes, cobertura }) => {
     setFormData(prev => {
       if (!prev) return prev;
@@ -1243,7 +1276,8 @@ const clientesPayload = existentes
           currentCode={estadoActual}
           grupoId={id}
           onDescartar={async () => {
-            await advanceState('DESCARTADO');
+            await descartarCoberturasDelGrupo();
+            await advanceState("DESCARTADO");
           }}
         />
 

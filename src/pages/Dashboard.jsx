@@ -1,5 +1,5 @@
 // Dashboard.js con integración de modal de edición
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card, Row, Col, Button, Table, Badge, Alert, Form, Dropdown, Accordion } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import {
@@ -37,10 +37,23 @@ const Dashboard = () => {
     totalClientes: 0,
     totalGruposFamiliares: 0,
     polizasActivas: 0,
-    polizasVencidas: 0
+    polizasCanceladas: 0,
+    polizasRetiradas: 0
   });
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
+
+  // Obtiene "total" desde diferentes estructuras de paginación del backend
+  const getTotalFromPaginatedResponse = useCallback((res) => {
+    if (!res) return null;
+    if (typeof res?.total === "number") return res.total;
+    if (typeof res?.data?.total === "number") return res.data.total;
+    if (typeof res?.meta?.total === "number") return res.meta.total;
+    if (typeof res?.data?.meta?.total === "number") return res.data.meta.total;
+    if (typeof res?.pagination?.total === "number") return res.pagination.total;
+    if (typeof res?.data?.pagination?.total === "number") return res.data.pagination.total;
+    return null;
+  }, []);
   
   // Estados para el modal de edición
   const [showEditModal, setShowEditModal] = useState(false);
@@ -50,6 +63,11 @@ const Dashboard = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [clienteToView, setClienteToView] = useState(null);
   const [filtroDias, setFiltroDias] = useState(15);
+  const [mesCoberturasSeleccionado, setMesCoberturasSeleccionado] = useState(() => {
+    const hoy = new Date();
+    return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+  });
+  const [tipoCoberturaFiltro, setTipoCoberturaFiltro] = useState("todos");
 
   // Estados para nuevos KPIs de alertas
   const [cumpleanosMes, setCumpleanosMes] = useState([]);
@@ -74,6 +92,10 @@ const Dashboard = () => {
     mostrarTareasVencidas: true
   });
   const [cargandoPreferencias, setCargandoPreferencias] = useState(true);
+
+  // Evita PUT redundante al hidratar preferencias y agrupa guardados del usuario
+  const skipInitialPrefsSaveRef = useRef(true);
+  const lastSavedPrefsJsonRef = useRef("");
 
   // Función para parsear fecha de nacimiento correctamente
   const parsearFechaNacimiento = useCallback((fechaStr) => {
@@ -323,6 +345,7 @@ const Dashboard = () => {
     }
 
     setCargandoPreferencias(true);
+    skipInitialPrefsSaveRef.current = true;
     try {
       // Intentar cargar desde el backend
       const res = await apiRequest(`users/${userId}/preferences`, 'GET');
@@ -417,32 +440,44 @@ const Dashboard = () => {
     }
   }, [preferenciasVisualizacion?.mostrarTareasVencidas, cargarTareasVencidas, cargandoPreferencias]);
 
-  // Guardar preferencias cuando cambien (tanto en backend como localStorage)
+  // Guardar preferencias cuando el usuario las cambie (debounce + sin PUT en la hidratación)
   useEffect(() => {
-    // No guardar si aún estamos cargando las preferencias iniciales
     if (cargandoPreferencias) return;
 
     const userId = currentUser?.id;
     if (!userId) return;
 
-    const guardarPreferencias = async () => {
-      // Guardar en localStorage como respaldo inmediato
-      const storageKey = `dashboard_preferencias_${userId}`;
-      localStorage.setItem(storageKey, JSON.stringify(preferenciasVisualizacion));
-      
-      // Guardar en el backend para persistir entre dispositivos
+    const storageKey = `dashboard_preferencias_${userId}`;
+    const serialized = JSON.stringify(preferenciasVisualizacion);
+
+    if (skipInitialPrefsSaveRef.current) {
+      skipInitialPrefsSaveRef.current = false;
+      lastSavedPrefsJsonRef.current = serialized;
+      localStorage.setItem(storageKey, serialized);
+      return;
+    }
+
+    if (serialized === lastSavedPrefsJsonRef.current) {
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const latest = JSON.stringify(preferenciasVisualizacion);
+      if (latest === lastSavedPrefsJsonRef.current) return;
+
+      localStorage.setItem(storageKey, latest);
+
       try {
         await apiRequest(`users/${userId}/preferences`, 'PUT', {
-          dashboard_preferences: preferenciasVisualizacion
+          dashboard_preferences: preferenciasVisualizacion,
         });
-        console.log('✅ Preferencias guardadas en el backend');
+        lastSavedPrefsJsonRef.current = latest;
       } catch (error) {
         console.warn('⚠️ No se pudo guardar preferencias en el backend:', error);
-        // Si falla el backend, al menos tenemos localStorage como respaldo
       }
-    };
+    }, 450);
 
-    guardarPreferencias();
+    return () => clearTimeout(timer);
   }, [preferenciasVisualizacion, currentUser?.id, cargandoPreferencias]);
   
   const cargarDatos = async () => {
@@ -458,13 +493,7 @@ const Dashboard = () => {
     setCargando(true);
     setError(null);
     try {
-      // Solo cargar documentos si está activado en preferencias
-      if (preferenciasVisualizacion?.mostrarDocumentosSolicitados) {
-        const resDocumentos = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
-        setDocumentosProximosVencer(resDocumentos);
-      } else {
-        setDocumentosProximosVencer([]);
-      }
+      // Documentos próximos a vencer: un solo fetch vía useEffect (evita duplicar peticiones con cargarDatos)
 
       // Solo cargar clientes recientes si está activado
       if (preferenciasVisualizacion?.mostrarClientesRecientes) {
@@ -476,8 +505,41 @@ const Dashboard = () => {
 
       // Solo cargar pólizas canceladas si está activado
       if (preferenciasVisualizacion?.mostrarPolizasCanceladas) {
-        const resCanceladas = await apiRequest("cobertura/canceladas", "GET");
-        setPolizasCanceladas(resCanceladas.slice(0, 15)); // Mostrar solo 15
+        const [resCanceladas, resHistorial] = await Promise.allSettled([
+          apiRequest("cobertura/canceladas", "GET"),
+          apiRequest("coberturas/historial-renovaciones", "GET"),
+        ]);
+
+        const listaCanceladas = resCanceladas.status === "fulfilled"
+          ? (Array.isArray(resCanceladas.value) ? resCanceladas.value : [])
+          : [];
+
+        const historialRaw = resHistorial.status === "fulfilled" ? resHistorial.value : [];
+        const listaHistorial = Array.isArray(historialRaw)
+          ? historialRaw
+          : Array.isArray(historialRaw?.data)
+          ? historialRaw.data
+          : [];
+
+        const normalizadas = [...listaCanceladas, ...listaHistorial]
+          .map(normalizarCobertura)
+          .filter((e) => e.tipo !== "otros");
+
+        const unicas = Object.values(
+          normalizadas.reduce((acc, e) => {
+            const key = `${e.id}-${e.fecha_cancelacion || ""}-${e.fecha_retiro || ""}-${e.tipo}`;
+            if (!acc[key]) acc[key] = e;
+            return acc;
+          }, {})
+        );
+
+        unicas.sort((a, b) => {
+          const fa = new Date(a.fecha_cancelacion || a.fecha_retiro || 0).getTime();
+          const fb = new Date(b.fecha_cancelacion || b.fecha_retiro || 0).getTime();
+          return fb - fa;
+        });
+
+        setPolizasCanceladas(unicas);
       } else {
         setPolizasCanceladas([]);
       }
@@ -487,7 +549,39 @@ const Dashboard = () => {
       setPolizasProximasVencer(resPolizas.slice(0, 5));
 
       const resEstadisticas = await apiRequest("cliente/general", "GET");
-      setEstadisticas(resEstadisticas);
+      let totalClientesEstadoCliente = null;
+
+      // KPI Total Clientes: contar solo estado_cliente = "cliente"
+      try {
+        const resClientesSoloCliente = await apiRequest("cliente?estado_cliente=cliente&per_page=1", "GET");
+        const totalFromMeta = getTotalFromPaginatedResponse(resClientesSoloCliente);
+
+        if (typeof totalFromMeta === "number") {
+          totalClientesEstadoCliente = totalFromMeta;
+        } else {
+          const rawList = Array.isArray(resClientesSoloCliente?.data)
+            ? resClientesSoloCliente.data
+            : Array.isArray(resClientesSoloCliente)
+              ? resClientesSoloCliente
+              : Array.isArray(resClientesSoloCliente?.data?.data)
+                ? resClientesSoloCliente.data.data
+                : [];
+
+          totalClientesEstadoCliente = rawList.filter((c) =>
+            String(c?.estado_cliente || "").toLowerCase() === "cliente"
+          ).length;
+        }
+      } catch (errClientesKpi) {
+        console.warn("No se pudo calcular total de clientes por estado_cliente=cliente:", errClientesKpi);
+      }
+
+      setEstadisticas({
+        ...(resEstadisticas || {}),
+        totalClientes:
+          typeof totalClientesEstadoCliente === "number"
+            ? totalClientesEstadoCliente
+            : (resEstadisticas?.totalClientes || 0),
+      });
     } catch (err) {
       console.error("Error al cargar datos del dashboard:", err);
       setError("Hubo un problema al cargar los datos. Por favor, intente nuevamente.");
@@ -496,35 +590,37 @@ const Dashboard = () => {
     }
   };
 
-  const handleChangeFiltroDias = async (e) => {
-    const dias = parseInt(e.target.value);
+  const handleChangeFiltroDias = (e) => {
+    const dias = parseInt(e.target.value, 10);
     setFiltroDias(dias);
-    if (!preferenciasVisualizacion?.mostrarDocumentosSolicitados) return;
-    
-    try {
-      const res = await apiRequest(`documentos/proximos-vencer?dias=${dias}`, "GET");
-      setDocumentosProximosVencer(res);
-    } catch (error) {
-      console.error("Error filtrando documentos:", error);
-    }
   };
 
-  // Efecto para cargar documentos cuando se active la preferencia
+  // Carga controlada de documentos: una petición por cambio de preferencia o días (después de hidratar preferencias)
   useEffect(() => {
-    if (preferenciasVisualizacion?.mostrarDocumentosSolicitados) {
-      const cargarDocumentos = async () => {
-        try {
-          const res = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
-          setDocumentosProximosVencer(res);
-        } catch (error) {
-          console.error("Error cargando documentos:", error);
-        }
-      };
-      cargarDocumentos();
-    } else {
+    if (cargandoPreferencias) return;
+
+    if (!preferenciasVisualizacion?.mostrarDocumentosSolicitados) {
       setDocumentosProximosVencer([]);
+      return;
     }
-  }, [preferenciasVisualizacion?.mostrarDocumentosSolicitados, filtroDias]);
+
+    let cancelled = false;
+
+    const cargarDocumentos = async () => {
+      try {
+        const res = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
+        if (!cancelled) setDocumentosProximosVencer(res);
+      } catch (error) {
+        if (!cancelled) console.error("Error cargando documentos:", error);
+      }
+    };
+
+    cargarDocumentos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cargandoPreferencias, preferenciasVisualizacion?.mostrarDocumentosSolicitados, filtroDias]);
 
   // Función para abrir el modal de visualización
 const handleOpenViewModal = (cliente) => {
@@ -576,6 +672,86 @@ const handleOpenViewModal = (cliente) => {
     </tr>
   );
 
+  const formatearFecha = (valor) => {
+    if (!valor) return "—";
+    const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
+    if (isNaN(d.getTime())) return "—";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
+  const normalizarCobertura = (item) => {
+    const isFechaValida = (v) => {
+      if (v === null || v === undefined) return false;
+      const s = String(v).trim();
+      return s !== "" && s.toLowerCase() !== "null";
+    };
+    const esActivoFalse = (v) => v === false || v === "false" || v === 0 || v === "0";
+    const esVigenteFalse = (v) => v === false || v === "false" || v === 0 || v === "0";
+
+    const fechaCancelacion = item?.fecha_cancelacion || item?.fechaCancelacion || null;
+    const fechaRetiro = item?.fecha_retiro || item?.fechaRetiro || null;
+    const vigente = item?.vigente;
+    const activo = item?.activo;
+
+    // Mantener criterio consistente con ReactivacionCoberturasModal:
+    // - Cancelada: vigente false + fecha_cancelacion + NO fecha_retiro
+    // - Retirada: vigente false + (activo false o fecha_retiro)
+    const esRetirada =
+      esVigenteFalse(vigente) &&
+      (esActivoFalse(activo) || isFechaValida(fechaRetiro));
+
+    const esCancelada =
+      esVigenteFalse(vigente) &&
+      isFechaValida(fechaCancelacion) &&
+      !isFechaValida(fechaRetiro);
+
+    return {
+      id: item?.id || item?.cobertura_id || `${item?.cliente_id || "x"}-${fechaCancelacion || fechaRetiro || Math.random()}`,
+      clienteNombre:
+        item?.cliente?.nombre_completo ||
+        item?.cliente_nombre ||
+        item?.nombre_completo ||
+        "Sin cliente",
+      fecha_cancelacion: fechaCancelacion,
+      fecha_retiro: fechaRetiro,
+      concepto:
+        item?.concepto ||
+        item?.concept_name ||
+        item?.subconcepto ||
+        (esCancelada ? "Cancelación" : esRetirada ? "Retiro" : "N/A"),
+      motivo:
+        item?.motivo_cancelacion ||
+        item?.motivo_retiro ||
+        item?.nota_cancel ||
+        item?.nota_retiro ||
+        "—",
+      tipo: esCancelada ? "cancelados" : esRetirada ? "retiros" : "otros",
+    };
+  };
+
+  const eventosCoberturaFiltrados = useMemo(() => {
+    const [anioSel, mesSel] = mesCoberturasSeleccionado.split("-").map(Number);
+    return (Array.isArray(polizasCanceladas) ? polizasCanceladas : []).filter((item) => {
+      const tipoOk = tipoCoberturaFiltro === "todos" ? item.tipo !== "otros" : item.tipo === tipoCoberturaFiltro;
+      if (!tipoOk) return false;
+
+      const fechaBase = item.fecha_cancelacion || item.fecha_retiro;
+      if (!fechaBase) return false;
+      const d = new Date(typeof fechaBase === "string" && !fechaBase.includes("T") ? `${fechaBase}T00:00:00` : fechaBase);
+      if (isNaN(d.getTime())) return false;
+      return d.getFullYear() === anioSel && d.getMonth() + 1 === mesSel;
+    });
+  }, [polizasCanceladas, mesCoberturasSeleccionado, tipoCoberturaFiltro]);
+
+  const resumenCoberturasMes = useMemo(() => {
+    const cancelados = eventosCoberturaFiltrados.filter((e) => e.tipo === "cancelados").length;
+    const retiros = eventosCoberturaFiltrados.filter((e) => e.tipo === "retiros").length;
+    return { cancelados, retiros, total: cancelados + retiros };
+  }, [eventosCoberturaFiltrados]);
+
   return (
     <div className="dashboard-wrapper">
  <Helmet>
@@ -593,8 +769,8 @@ const handleOpenViewModal = (cliente) => {
       )}
 
       <div className="section-container">
-        <Row className="stats-cards g-3">
-          <Col xl={3} md={6}>
+        <Row className="stats-cards g-3 row-cols-1 row-cols-md-2 row-cols-xl-5">
+          <Col>
             <Card className="dashboard-card h-100">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center">
@@ -608,7 +784,7 @@ const handleOpenViewModal = (cliente) => {
               </Card.Body>
             </Card>
           </Col>
-          <Col xl={3} md={6}>
+          <Col>
             <Card className="dashboard-card h-100">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center">
@@ -622,12 +798,12 @@ const handleOpenViewModal = (cliente) => {
               </Card.Body>
             </Card>
           </Col>
-          <Col xl={3} md={6}>
+          <Col>
             <Card className="dashboard-card h-100">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
-                    <h6 className="stats-title">Pólizas Activas</h6>
+                    <h6 className="stats-title">Coberturas Activas</h6>
                     <h3 className="stats-value">{estadisticas.polizasActivas}</h3>
                   </div>
                   <div className="stats-icon"><FaFileInvoiceDollar /></div>
@@ -635,17 +811,31 @@ const handleOpenViewModal = (cliente) => {
               </Card.Body>
             </Card>
           </Col>
-          <Col xl={3} md={6}>
+          <Col>
             <Card className="dashboard-card alert-card h-100">
               <Card.Body>
                 <div className="d-flex justify-content-between align-items-center">
                   <div>
-                    <h6 className="stats-title">Pólizas Canceladas</h6>
+                    <h6 className="stats-title">Coberturas Canceladas</h6>
                     <h3 className="stats-value">{estadisticas.polizasCanceladas}</h3>
                   </div>
                   <div className="stats-icon"><FaCalendarAlt /></div>
                 </div>
                 
+              </Card.Body>
+            </Card>
+          </Col>
+
+          <Col>
+            <Card className="dashboard-card alert-card h-100">
+              <Card.Body>
+                <div className="d-flex justify-content-between align-items-center">
+                  <div>
+                    <h6 className="stats-title">Coberturas Retiradas</h6>
+                    <h3 className="stats-value">{estadisticas.polizasRetiradas}</h3>
+                  </div>
+                  <div className="stats-icon"><FaExclamationTriangle /></div>
+                </div>
               </Card.Body>
             </Card>
           </Col>
@@ -1111,7 +1301,7 @@ const handleOpenViewModal = (cliente) => {
         </Row>
       </div>
 
-      {/* Sección Clientes Recientes y Pólizas Canceladas */}
+      {/* Sección Clientes Recientes y Coberturas Canceladas */}
       {(preferenciasVisualizacion.mostrarClientesRecientes || preferenciasVisualizacion.mostrarPolizasCanceladas) && (
       <Row className="mb-4 g-4 align-items-stretch">
       {preferenciasVisualizacion.mostrarClientesRecientes && (
@@ -1194,7 +1384,7 @@ const handleOpenViewModal = (cliente) => {
         <div className="section-container table-section h-100">
             <div className="d-flex justify-content-between align-items-center mb-3">
               <div className="d-flex align-items-center gap-2">
-                <h5 className="section-title mb-0">Pólizas Canceladas</h5>
+                <h5 className="section-title mb-0">Coberturas Canceladas y Retiradas</h5>
                 <Form.Check
                   type="switch"
                   id="toggle-polizas-canceladas-inline"
@@ -1203,42 +1393,81 @@ const handleOpenViewModal = (cliente) => {
                   className="small"
                 />
               </div>
-              <Link to="/grupofamiliar/vencimientos" className="btn btn-sm btn-link text-decoration-none">
-                Ver todas <FaList className="ms-1" />
-              </Link>
+              <div className="d-flex align-items-center gap-2">
+                <Form.Select
+                  size="sm"
+                  value={mesCoberturasSeleccionado}
+                  onChange={(e) => setMesCoberturasSeleccionado(e.target.value)}
+                  style={{ minWidth: "150px" }}
+                >
+                  {(() => {
+                    const meses = [];
+                    const hoy = new Date();
+                    for (let i = 0; i < 12; i++) {
+                      const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+                      const anio = fecha.getFullYear();
+                      const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+                      const mesNombre = fecha.toLocaleString("es-ES", { month: "long" });
+                      meses.push(
+                        <option key={`${anio}-${mes}`} value={`${anio}-${mes}`}>
+                          {mesNombre.charAt(0).toUpperCase() + mesNombre.slice(1)} {anio}
+                        </option>
+                      );
+                    }
+                    return meses;
+                  })()}
+                </Form.Select>
+                <Form.Select
+                  size="sm"
+                  value={tipoCoberturaFiltro}
+                  onChange={(e) => setTipoCoberturaFiltro(e.target.value)}
+                  style={{ minWidth: "130px" }}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="cancelados">Cancelados</option>
+                  <option value="retiros">Retiros</option>
+                </Form.Select>
+              </div>
+            </div>
+            <div className="mb-2 small text-muted">
+              Mes seleccionado: <strong>{resumenCoberturasMes.total}</strong> registros
+              {" "}(<strong>{resumenCoberturasMes.cancelados}</strong> cancelados,{" "}
+              <strong>{resumenCoberturasMes.retiros}</strong> retiros)
             </div>
             <div className="table-responsive">
               <Table hover className="mb-0 table-borderless">
                 <thead>
                   <tr>
-                    <th>GF</th>
-                    <th>Cliente</th>
-                    <th>Vencimiento</th>
+                    <th>Nombre</th>
+                    <th>Fecha de cancelación</th>
+                    <th>Fecha de retiro</th>
+                    <th>Concepto</th>
+                    <th>Motivo</th>
                     <th className="text-end">Estado</th>
                   </tr>
                 </thead>
                 <tbody>
                       {cargando ? (
                         renderLoading()
-                      ) : polizasCanceladas.length > 0 ? (
-                        polizasCanceladas.map(poliza => (
-                          <tr key={poliza.id}>
-                            <td className="fw-medium">{poliza.grupo_familiar?.id || 'Sin grupo'}</td>
-                            <td>{poliza.cliente.nombre_completo || 'Sin tipo'}</td>
-                            <td>{poliza.fecha_cancelacion ? (() => {
-                              const d = new Date(poliza.fecha_cancelacion);
-                              const month = String(d.getMonth() + 1).padStart(2, "0");
-                              const day = String(d.getDate()).padStart(2, "0");
-                              const year = d.getFullYear();
-                              return `${month}/${day}/${year}`;
-                            })() : 'Sin fecha'}</td>
+                      ) : eventosCoberturaFiltrados.length > 0 ? (
+                        eventosCoberturaFiltrados.slice(0, 15).map(poliza => (
+                          <tr key={`${poliza.id}-${poliza.fecha_cancelacion || ""}-${poliza.fecha_retiro || ""}`}>
+                            <td className="fw-medium">{poliza.clienteNombre}</td>
+                            <td>{formatearFecha(poliza.fecha_cancelacion)}</td>
+                            <td>{formatearFecha(poliza.fecha_retiro)}</td>
+                            <td>{poliza.concepto || "—"}</td>
+                            <td>{poliza.motivo || "—"}</td>
                             <td className="text-end">
-                              <Badge bg="danger" pill>Cancelada</Badge>
+                              {poliza.tipo === "cancelados" ? (
+                                <Badge bg="danger" pill>Cancelada</Badge>
+                              ) : (
+                                <Badge bg="secondary" pill>Retirada</Badge>
+                              )}
                             </td>
                           </tr>
                         ))
                       ) : (
-                        renderEmptyMessage("No hay pólizas canceladas")
+                        renderEmptyMessage("No hay coberturas para los filtros seleccionados")
                       )}
                     </tbody>
 
@@ -1384,7 +1613,7 @@ const handleOpenViewModal = (cliente) => {
                       label={
                         <span>
                           <FaFileInvoiceDollar className="me-2" />
-                          Pólizas Canceladas
+                          Coberturas Canceladas
                         </span>
                       }
                       checked={preferenciasVisualizacion.mostrarPolizasCanceladas}

@@ -491,7 +491,7 @@ export default function ContactosAdmin() {
         <div className="col-lg-5">
           <div className="card">
             <div className="card-body">
-              <h5 className="mb-3">Directorio de Clientes</h5>
+              <h5 className="mb-3">Directorio de Contactos</h5>
 
               <div className="mb-2">
                 <input

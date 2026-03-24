@@ -533,7 +533,7 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
                   
                   {(clienteData.periodo_ingreso_ocasional || clienteData.ingreso_por_periodo_ocasional || clienteData.nota_ingreso_ocasional) && (
                     <div className="mt-4">
-                      <h6 className="border-bottom pb-2">Ingreso Ocasional</h6>
+                      <h6 className="border-bottom pb-2">Otro Ingreso</h6>
                       <Row>
                         <Col md={12}>
                           <dl className="row mb-0">

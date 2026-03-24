@@ -58,6 +58,22 @@
     background: #0d6efd;
     color: #fff;
   }
+
+  /* Estado descartado: resaltar en rojo */
+  .progressbar .step.discarded,
+  .progressbar .step.discarded.active {
+    color: #dc3545;
+    font-weight: 700;
+  }
+  .progressbar .step.discarded::before,
+  .progressbar .step.discarded.active::before {
+    border-color: #dc3545;
+    background: #dc3545;
+    color: #fff;
+  }
+  .progressbar .step.discarded::after {
+    background: #dc3545;
+  }
   
   /* Responsive: evita que el texto se rompa feo */
   .progressbar .step span {

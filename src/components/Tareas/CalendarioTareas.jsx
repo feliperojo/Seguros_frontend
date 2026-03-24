@@ -746,6 +746,30 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         });
       }
       
+      // ✅ Si se cambió el usuario asignado y estamos filtrando por asignación (no menciones),
+      // removemos la tarea del estado local si ya no pertenece al usuario actual del calendario.
+      try {
+        const updatedTaskId = tareaActualizada?.id || tareaActualizada?.task_id || tareaActualizada?.tarea_id;
+        const updatedAssignedId =
+          tareaActualizada?.assigned_user_id ||
+          tareaActualizada?.assign_to_user_id ||
+          tareaActualizada?.assigned_user?.id ||
+          tareaActualizada?.assign_to_user?.id ||
+          tareaActualizada?.log?.assigned_user?.id ||
+          tareaActualizada?.log?.assign_to_user?.id;
+
+        if (!filtroMenciones && updatedTaskId && updatedAssignedId && usuarioSeleccionado) {
+          if (String(updatedAssignedId) !== String(usuarioSeleccionado)) {
+            return actualizado.filter((t) => {
+              const tId = t?.id || t?.task_id || t?.tarea_id;
+              return String(tId) !== String(updatedTaskId);
+            });
+          }
+        }
+      } catch {
+        // No bloqueamos si falla el cálculo
+      }
+      
       return actualizado;
     });
     

@@ -876,7 +876,7 @@ const calcularIngresoAnual = (monto, periodo) => {
 
         <div className="row mt-3">
           <hr />
-          <h4 className="mb-3">Ingreso Ocasional</h4>
+          <h4 className="mb-3">Otro Ingreso</h4>
           <div className="col-md-6">
                   <label>Nota</label>
                   <div className="form-group">

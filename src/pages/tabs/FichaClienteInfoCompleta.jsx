@@ -368,7 +368,7 @@ export default function FichaClienteInfoCompleta() {
                 cliente.nota_ingreso_ocasional) && (
                 <div className="mt-4">
                   <h6 className="border-bottom pb-2 small text-uppercase text-muted">
-                    Ingreso ocasional
+                    Otro Ingreso
                   </h6>
                   <Row>
                     <Col md={12}>

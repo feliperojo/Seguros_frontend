@@ -223,6 +223,11 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return await apiRequest(`${BASE_COB}/${coberturaId}`, "DELETE", null, headers);
   },
 
+  updateCobertura: async (coberturaId, payload, headers = {}) => {
+    if (!coberturaId) throw new Error("Cobertura ID es requerido para actualizar.");
+    return await apiRequest(`${BASE_COB}/${coberturaId}`, "PUT", payload, headers);
+  },
+
   // Guarda múltiples coberturas (cada una es un create)
   saveCoberturas: async (grupoFamiliarId, coverageGroups, headers = {}) => {
     const requests = [];

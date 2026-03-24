@@ -40,8 +40,9 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar }) => {
         <div className="flex-grow-1">
           <ul className="progressbar d-flex justify-content-between list-unstyled mb-0">
             {STEPS.map((s, idx) => {
-              // Ocultar DESCARTADO en la barra si no se puede cambiar a ese estado
-              if (s.code === "DESCARTADO" && !puedeDescartar) {
+              // Mostrar DESCARTADO solo si se puede descartar desde aquí
+              // o cuando el grupo ya está efectivamente en estado DESCARTADO.
+              if (s.code === "DESCARTADO" && !puedeDescartar && safeCode !== "DESCARTADO") {
                 return null;
               }
               
@@ -50,7 +51,7 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar }) => {
               return (
                 <li
                   key={s.code}
-                  className={`step ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}
+                  className={`step ${isActive ? "active" : ""} ${isDone ? "done" : ""} ${s.code === "DESCARTADO" && safeCode === "DESCARTADO" ? "discarded" : ""}`}
                   title={s.code}
                 >
                   <span>{s.label}</span>

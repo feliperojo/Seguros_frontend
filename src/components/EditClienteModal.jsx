@@ -1221,7 +1221,7 @@ const renderDireccionTab = () => (
         </Col>
       </Row>
       
-      <h6 className="mt-4 mb-3">Ingreso Ocasional</h6>
+      <h6 className="mt-4 mb-3">Otro Ingreso</h6>
       
       <Row className="mb-3">
         <Col md={12}>

@@ -332,6 +332,15 @@ export default function FichaClienteGeneral() {
     cliente?.parentesco ??
     "—";
 
+  const esEstadoDescartado = useMemo(() => {
+    const estadoNormalizado = String(gfEstado ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    return estadoNormalizado === "descartado";
+  }, [gfEstado]);
+
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
@@ -606,7 +615,9 @@ export default function FichaClienteGeneral() {
                 <div className="col-md-6">
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado del Grupo</label>
-                    <div className="text-dark small">{gfEstado}</div>
+                    <div className={`small ${esEstadoDescartado ? "text-danger fw-semibold" : "text-dark"}`}>
+                      {gfEstado}
+                    </div>
                   </div>
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Compañía</label>
@@ -623,32 +634,34 @@ export default function FichaClienteGeneral() {
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Valor de la Póliza</label>
                     <div className="text-dark small">{formatearPrecioPoliza(precioPoliza)}</div>
                   </div>
-                  <div className="mb-2">
-                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
-                    <div className="text-dark small">
-                      <Badge
-                        bg={
-                          estadoPoliza === "Vigente"
-                            ? "success"
-                            : estadoPoliza === "Póliza Cancelada"
-                            ? "warning"
-                            : "secondary"
-                        }
-                        className="text-uppercase"
-                        style={{ fontSize: "0.7rem" }}
-                      >
-                        {estadoPoliza}
-                      </Badge>
-                      {fechaEstadoPoliza && (
-                        <div className="mt-1 text-muted" style={{ fontSize: "0.7rem" }}>
-                          {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de cancelación: "}
-                          {tipoFechaEstadoPoliza === "retiro" && "Fecha de retiro: "}
-                          {!tipoFechaEstadoPoliza && "Fecha: "}
-                          {formatDate(fechaEstadoPoliza)}
-                        </div>
-                      )}
+                  {!esEstadoDescartado && (
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
+                      <div className="text-dark small">
+                        <Badge
+                          bg={
+                            estadoPoliza === "Vigente"
+                              ? "success"
+                              : estadoPoliza === "Póliza Cancelada"
+                              ? "warning"
+                              : "secondary"
+                          }
+                          className="text-uppercase"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {estadoPoliza}
+                        </Badge>
+                        {fechaEstadoPoliza && (
+                          <div className="mt-1 text-muted" style={{ fontSize: "0.7rem" }}>
+                            {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de cancelación: "}
+                            {tipoFechaEstadoPoliza === "retiro" && "Fecha de retiro: "}
+                            {!tipoFechaEstadoPoliza && "Fecha: "}
+                            {formatDate(fechaEstadoPoliza)}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Año de Cobertura</label>
                     <div className="text-dark small">{anoCobertura}</div>

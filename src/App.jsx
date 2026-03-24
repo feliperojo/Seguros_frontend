@@ -47,6 +47,7 @@ import FichaClienteRingCentral from "./pages/tabs/FichaClienteRingCentral";
 import FichaClienteComentarios from "./pages/tabs/FichaClienteComentarios";
 import FichaClienteCalendario from "./pages/tabs/FichaClienteCalendario";
 import FichaClienteAuditorias from "./pages/tabs/FichaClienteAuditorias";
+import FichaClienteRequerimientos from "./pages/tabs/FichaClienteRequerimientos";
 
 // Módulo de Administración
 import UsersList from "./pages/admin/UsersList";
@@ -192,6 +193,7 @@ const App = () => {
           <Route path="historial" element={<FichaClienteHistorial />} />
           <Route path="ringcentral" element={<FichaClienteRingCentral />} />
           <Route path="calendario" element={<FichaClienteCalendario />} />
+          <Route path="requerimientos" element={<FichaClienteRequerimientos />} />
           <Route path="comentarios" element={<FichaClienteComentarios />} />
           <Route path="auditorias" element={<FichaClienteAuditorias />} />
           <Route path="directorio" element={<ContactosAdmin />} />

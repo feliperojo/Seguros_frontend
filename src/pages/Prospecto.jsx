@@ -490,6 +490,36 @@ useEffect(() => {
     }
   };
 
+  const formatTodayLocal = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const descartarCoberturasDelGrupo = async (grupoIdTarget) => {
+    if (!grupoIdTarget) return;
+    const grupoCompleto = await GrupoFamiliarService.getFullById(grupoIdTarget);
+    const coberturas = Array.isArray(grupoCompleto?.coberturas) ? grupoCompleto.coberturas : [];
+    const fechaHoy = formatTodayLocal();
+
+    const coberturasIds = coberturas.map((c) => c?.id).filter(Boolean);
+    if (!coberturasIds.length) return;
+
+    await Promise.all(
+      coberturasIds.map((coberturaId) =>
+        GrupoFamiliarService.updateCobertura(coberturaId, {
+          activo: false,
+          vigente: false,
+          estado_cobertura: "No",
+          fecha_cancelacion: fechaHoy,
+          fecha_retiro: fechaHoy,
+        })
+      )
+    );
+  };
+
   return (
     <div className="container-fluid bg-light min-vh-100 py-4">
       <div className="container">
@@ -499,6 +529,7 @@ useEffect(() => {
           onDescartar={async () => {
             if (!grupoId) return;
             try {
+              await descartarCoberturasDelGrupo(grupoId);
               await GrupoFamiliarService.setEstado(grupoId, 'DESCARTADO', 'Cambio a estado DESCARTADO');
               setEstadoActual('DESCARTADO');
               alert('Prospecto marcado como DESCARTADO');

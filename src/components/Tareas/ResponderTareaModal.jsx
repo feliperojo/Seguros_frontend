@@ -182,6 +182,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     new Date(tarea.due_date) < new Date() &&
     tarea?.status !== "completed";
 
+  // ✅ Reasignación del usuario asignado (operativa)
+  const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignPreview, setAssignPreview] = useState(null); // para render inmediato sin depender del padre
+
   // ✅ Estados para menciones
   const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
   const [mentionedUserIds, setMentionedUserIds] = useState([]); // IDs de usuarios mencionados en el comentario actual
@@ -559,6 +564,24 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       mounted = false;
     };
   }, [show]); // Solo cuando se abre el modal
+
+  // ✅ Sincronizar el usuario seleccionado cuando cambia la tarea o se abre el modal
+  useEffect(() => {
+    if (!show) return;
+
+    const currentAssignedUserId =
+      tarea?.assign_to_user_id ||
+      tarea?.assigned_user_id ||
+      tarea?.assign_to_user?.id ||
+      tarea?.assigned_user?.id ||
+      tarea?.log?.assigned_user?.id ||
+      tarea?.log?.assigned_user_id ||
+      tarea?.log?.assign_to_user?.id ||
+      tarea?.log?.assign_to_user_id;
+
+    setAssignPreview(null);
+    setSelectedAssignUserId(currentAssignedUserId ? String(currentAssignedUserId) : "");
+  }, [show, tarea?.id]);
 
   // ✅ Usar useRef para rastrear la tarea actual y evitar loops infinitos
   const tareaIdRef = useRef(null);
@@ -1279,6 +1302,91 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
   };
 
+  // ✅ Función para reasignar tarea (operativa)
+  const handleReasignar = async () => {
+    const nuevaAsignacionId = parseInt(selectedAssignUserId, 10);
+    if (!nuevaAsignacionId) {
+      setToastVariant("warning");
+      setToastMessage("Debes seleccionar un usuario");
+      setShowToast(true);
+      return;
+    }
+
+    const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+    if (!tareaId) {
+      setToastVariant("danger");
+      setToastMessage("No se pudo identificar la tarea");
+      setShowToast(true);
+      return;
+    }
+
+    const numericTareaId = typeof tareaId === "string" ? parseInt(tareaId, 10) : tareaId;
+    if (isNaN(numericTareaId) || numericTareaId <= 0) {
+      setToastVariant("danger");
+      setToastMessage("ID de tarea inválido");
+      setShowToast(true);
+      return;
+    }
+
+    setAssignLoading(true);
+    try {
+      const payload = {
+        assigned_user_id: nuevaAsignacionId,
+        assign_to_user_id: nuevaAsignacionId,
+      };
+
+      // Intento 1: endpoint con convención similar a auditoría (si existe)
+      let updatedTask = null;
+      try {
+        const res = await apiRequest(`tareas_operativas/${numericTareaId}/asignar`, "PUT", payload);
+        updatedTask = res?.data || res || null;
+      } catch (e1) {
+        // Fallback 2: intentar actualizar la tarea directamente
+        const res = await apiRequest(`tareas_operativas/${numericTareaId}`, "PUT", payload);
+        updatedTask = res?.data || res || null;
+      }
+
+      // Recargar para traer la estructura completa (cliente/historial/usuarios) si el backend lo retorna diferente
+      try {
+        const freshRes = await apiRequest(`tareas_operativas/${numericTareaId}`, "GET");
+        const freshTask = freshRes?.data || freshRes || null;
+        if (freshTask && typeof freshTask === "object") updatedTask = freshTask;
+      } catch {
+        // No bloqueamos si falla el refresh
+      }
+
+      const userObj =
+        usuarios?.find((u) => String(u.id) === String(nuevaAsignacionId)) ||
+        updatedTask?.assigned_user ||
+        updatedTask?.assign_to_user ||
+        null;
+
+      const tareaActualizada = {
+        ...tarea,
+        ...(updatedTask && typeof updatedTask === "object" ? updatedTask : {}),
+        assigned_user_id: nuevaAsignacionId,
+        assign_to_user_id: nuevaAsignacionId,
+        assigned_user: updatedTask?.assigned_user || userObj,
+        assign_to_user: updatedTask?.assign_to_user || userObj,
+      };
+
+      setAssignPreview(tareaActualizada);
+      if (onUpdated) onUpdated(tareaActualizada);
+
+      setToastVariant("success");
+      setToastMessage("Asignación actualizada exitosamente");
+      setShowToast(true);
+    } catch (error) {
+      console.error("Error al reasignar tarea:", error);
+      const msg = error.response?.data?.message || error.message || "Error al reasignar la tarea";
+      setToastVariant("danger");
+      setToastMessage(msg);
+      setShowToast(true);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
     try {
@@ -1935,7 +2043,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada por:</strong>
                     </div>
                     <p className="text-content mb-0">
-                      {tarea?.assigned_user?.name || 
+                      {assignPreview?.assigned_user?.name ||
+                       assignPreview?.assign_to_user?.name ||
+                       tarea?.assigned_user?.name || 
                        tarea?.assign_to_user?.name || 
                        tarea?.assigned_to_user?.name ||
                        tarea?.assignedUser?.name ||
@@ -1946,6 +2056,48 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                        tarea?.assigned_to_name ||
                        "N/A"}
                     </p>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <i className="fas fa-user-check text-success"></i>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Reasignar a:</strong>
+                    </div>
+                    <Form.Select
+                      value={selectedAssignUserId || ""}
+                      onChange={(e) => setSelectedAssignUserId(e.target.value)}
+                      disabled={assignLoading}
+                    >
+                      <option value="">Selecciona un usuario</option>
+                      {(usuarios || []).map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name || user.nombre || user.email || `Usuario #${user.id}`}
+                        </option>
+                      ))}
+                    </Form.Select>
+
+                    {selectedAssignUserId &&
+                      selectedAssignUserId !==
+                        String(
+                          assignPreview?.assigned_user_id ||
+                          assignPreview?.assign_to_user_id ||
+                          tarea?.assigned_user_id ||
+                          tarea?.assign_to_user_id ||
+                          tarea?.assigned_user?.id ||
+                          tarea?.assign_to_user?.id ||
+                          tarea?.log?.assigned_user?.id ||
+                          ""
+                        ) && (
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          className="mt-2"
+                          onClick={handleReasignar}
+                          disabled={assignLoading}
+                        >
+                          {assignLoading ? "Actualizando..." : "Guardar Asignación"}
+                        </Button>
+                      )}
                   </div>
                   <div className="mt-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
