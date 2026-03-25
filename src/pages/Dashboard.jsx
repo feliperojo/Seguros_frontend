@@ -16,7 +16,21 @@ import CalendarioTareas from "../components/Tareas/CalendarioTareas";
 import VerTareaModal from "../components/Tareas/VerTareaModal";
 import { Helmet } from "react-helmet-async";
 
+/** Evita errores al usar .slice cuando el backend devuelve { data: [] } u otras formas. */
+function normalizeDashboardList(res) {
+  if (res == null) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res?.data?.data)) return res.data.data;
+  return [];
+}
 
+function normalizeTareasOperativasResponse(res) {
+  if (res == null) return [];
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res)) return res;
+  return [];
+}
 
 const Dashboard = () => {
   const currentUser = JSON.parse(localStorage.getItem("user"));
@@ -172,6 +186,14 @@ const Dashboard = () => {
       setLoadingCumpleanos(true);
       try {
         let clientes = [];
+
+        try {
+          const response = await apiRequest("cliente/cumpleanos-hoy", "GET");
+          setCumpleanosMes(normalizeDashboardList(response));
+          return;
+        } catch (e) {
+          console.warn("cliente/cumpleanos-hoy no disponible, usando flujo anterior:", e);
+        }
 
         // 1) Intentar obtener todos los clientes con cobertura (endpoint usado en ReporteCumpleanosPage)
         try {
@@ -481,45 +503,52 @@ const Dashboard = () => {
   }, [preferenciasVisualizacion, currentUser?.id, cargandoPreferencias]);
   
   const cargarDatos = async () => {
-    // Solo cargar tareas si el calendario está activo
+    setCargando(true);
+    setError(null);
+
     if (preferenciasVisualizacion?.mostrarCalendario) {
-      const resTareas = await apiRequest("tareas_operativas?per_page=100", "GET");
-      setTareas(resTareas.data || []);
+      try {
+        const resTareas = await apiRequest("tareas_operativas?per_page=100", "GET");
+        setTareas(normalizeTareasOperativasResponse(resTareas));
+      } catch (e) {
+        console.warn("No se pudieron cargar tareas del calendario:", e);
+        setTareas([]);
+      }
     } else {
       setTareas([]);
     }
     setLoadingTareas(false);
 
-    setCargando(true);
-    setError(null);
     try {
-      // Documentos próximos a vencer: un solo fetch vía useEffect (evita duplicar peticiones con cargarDatos)
+      const showRecientes = preferenciasVisualizacion?.mostrarClientesRecientes;
+      const showCanceladas = preferenciasVisualizacion?.mostrarPolizasCanceladas;
 
-      // Solo cargar clientes recientes si está activado
-      if (preferenciasVisualizacion?.mostrarClientesRecientes) {
-        const resClientes = await apiRequest("cliente/recientes", "GET");
-        setClientesRecientes(resClientes.slice(0, 15));
+      const recientesP = showRecientes ? apiRequest("cliente/recientes", "GET") : Promise.resolve(null);
+      const proximasP = apiRequest("cobertura/proximas-vencer", "GET");
+      const generalP = apiRequest("cliente/general", "GET");
+      const kpiP = apiRequest("cliente?estado_cliente=cliente&per_page=1", "GET");
+      const canceladasP = showCanceladas
+        ? Promise.allSettled([
+            apiRequest("cobertura/canceladas", "GET"),
+            apiRequest("coberturas/historial-renovaciones", "GET"),
+          ])
+        : Promise.resolve(null);
+
+      const [resClientes, resPolizas, resEstadisticas, resClientesSoloCliente, resCanceladasBundle] =
+        await Promise.all([recientesP, proximasP, generalP, kpiP, canceladasP]);
+
+      if (showRecientes) {
+        setClientesRecientes(normalizeDashboardList(resClientes).slice(0, 15));
       } else {
         setClientesRecientes([]);
       }
 
-      // Solo cargar pólizas canceladas si está activado
-      if (preferenciasVisualizacion?.mostrarPolizasCanceladas) {
-        const [resCanceladas, resHistorial] = await Promise.allSettled([
-          apiRequest("cobertura/canceladas", "GET"),
-          apiRequest("coberturas/historial-renovaciones", "GET"),
-        ]);
-
-        const listaCanceladas = resCanceladas.status === "fulfilled"
-          ? (Array.isArray(resCanceladas.value) ? resCanceladas.value : [])
-          : [];
-
-        const historialRaw = resHistorial.status === "fulfilled" ? resHistorial.value : [];
-        const listaHistorial = Array.isArray(historialRaw)
-          ? historialRaw
-          : Array.isArray(historialRaw?.data)
-          ? historialRaw.data
-          : [];
+      if (showCanceladas && resCanceladasBundle) {
+        const [resCanceladas, resHistorial] = resCanceladasBundle;
+        const listaCanceladas =
+          resCanceladas.status === "fulfilled" ? normalizeDashboardList(resCanceladas.value) : [];
+        const historialRaw = resHistorial.status === "fulfilled" ? resHistorial.value : null;
+        const listaHistorial = normalizeDashboardList(historialRaw);
 
         const normalizadas = [...listaCanceladas, ...listaHistorial]
           .map(normalizarCobertura)
@@ -544,29 +573,16 @@ const Dashboard = () => {
         setPolizasCanceladas([]);
       }
 
+      setPolizasProximasVencer(normalizeDashboardList(resPolizas).slice(0, 5));
 
-      const resPolizas = await apiRequest("cobertura/proximas-vencer", "GET");
-      setPolizasProximasVencer(resPolizas.slice(0, 5));
-
-      const resEstadisticas = await apiRequest("cliente/general", "GET");
       let totalClientesEstadoCliente = null;
-
-      // KPI Total Clientes: contar solo estado_cliente = "cliente"
       try {
-        const resClientesSoloCliente = await apiRequest("cliente?estado_cliente=cliente&per_page=1", "GET");
         const totalFromMeta = getTotalFromPaginatedResponse(resClientesSoloCliente);
 
         if (typeof totalFromMeta === "number") {
           totalClientesEstadoCliente = totalFromMeta;
         } else {
-          const rawList = Array.isArray(resClientesSoloCliente?.data)
-            ? resClientesSoloCliente.data
-            : Array.isArray(resClientesSoloCliente)
-              ? resClientesSoloCliente
-              : Array.isArray(resClientesSoloCliente?.data?.data)
-                ? resClientesSoloCliente.data.data
-                : [];
-
+          const rawList = normalizeDashboardList(resClientesSoloCliente);
           totalClientesEstadoCliente = rawList.filter((c) =>
             String(c?.estado_cliente || "").toLowerCase() === "cliente"
           ).length;
@@ -609,7 +625,7 @@ const Dashboard = () => {
     const cargarDocumentos = async () => {
       try {
         const res = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
-        if (!cancelled) setDocumentosProximosVencer(res);
+        if (!cancelled) setDocumentosProximosVencer(normalizeDashboardList(res));
       } catch (error) {
         if (!cancelled) console.error("Error cargando documentos:", error);
       }
@@ -877,7 +893,7 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : cumpleanosMes.length > 0 ? (
-                      <div className="table-responsive" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--compact">
                         <Table hover size="sm" className="mb-0">
                           <thead>
                             <tr>
@@ -1012,7 +1028,7 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : pagosPendientes.length > 0 ? (
-                      <div className="table-responsive" style={{ maxHeight: "200px", overflowY: "auto" }}>
+                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--compact">
                         <Table hover size="sm" className="mb-0">
                           <thead>
                             <tr>
@@ -1083,7 +1099,7 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : tareasVencidas.length > 0 ? (
-                      <div className="table-responsive" style={{ maxHeight: "220px", overflowY: "auto" }}>
+                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--tasks">
                         <Table hover size="sm" className="mb-0">
                           <thead>
                             <tr>
@@ -1217,7 +1233,7 @@ const handleOpenViewModal = (cliente) => {
             </div>
           </div>
 
-  <div className="table-responsive">
+  <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
     <Table hover className="mb-0 table-borderless">
       <thead>
         <tr>
@@ -1323,7 +1339,7 @@ const handleOpenViewModal = (cliente) => {
                 Ver todos <FaList className="ms-1" />
               </Link>
             </div>
-            <div className="table-responsive">
+            <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
               <Table hover className="mb-0 table-borderless">
                 <thead>
                   <tr>
@@ -1434,7 +1450,7 @@ const handleOpenViewModal = (cliente) => {
               {" "}(<strong>{resumenCoberturasMes.cancelados}</strong> cancelados,{" "}
               <strong>{resumenCoberturasMes.retiros}</strong> retiros)
             </div>
-            <div className="table-responsive">
+            <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
               <Table hover className="mb-0 table-borderless">
                 <thead>
                   <tr>

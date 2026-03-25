@@ -35,14 +35,16 @@ axiosInstance.interceptors.response.use(
     return response;
   },
   (error) => {
-    if (error.response?.status === 401) {
-      // Limpiar token inválido
+    const reqUrl = error.config?.url || '';
+    const isAuthLoginAttempt =
+      reqUrl.includes('/v1/auth/login') ||
+      reqUrl.includes('/auth/login');
+    if (error.response?.status === 401 && !isAuthLoginAttempt) {
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       localStorage.removeItem('roles');
       localStorage.removeItem('permissions');
-      
-      // Redirigir a login si no estamos ya ahí
+
       const currentPath = window.location.pathname;
       if (currentPath !== '/login') {
         window.location.href = '/login';

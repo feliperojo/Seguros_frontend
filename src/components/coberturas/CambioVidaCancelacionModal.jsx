@@ -57,6 +57,24 @@ const CambioVidaCancelacionModal = ({
     "Otro",
   ];
 
+  const esTrue = (v) => v === true || v === "true" || v === 1 || v === "1";
+  const hasFechaValida = (v) => {
+    if (v === null || v === undefined) return false;
+    const s = String(v).trim();
+    return s !== "" && s.toLowerCase() !== "null" && s.toLowerCase() !== "undefined";
+  };
+
+  const getEstadoActualInfo = (c = {}) => {
+    const vigente = esTrue(c.vigente);
+    const activo = esTrue(c.activo);
+    const fueCancelada = hasFechaValida(c.fecha_cancelacion || c.fechaCancelacion);
+
+    if (vigente) return { bg: "success", text: "Vigente en póliza" };
+    if (fueCancelada) return { bg: "danger", text: "Póliza cancelada" };
+    if (activo) return { bg: "warning", text: "Póliza sin cobertura" };
+    return { bg: "secondary", text: "No tiene cobertura" };
+  };
+
   // Cargar coberturas vigentes cuando se abre el modal
   useEffect(() => {
     if (show && grupoFamiliarId) {
@@ -536,7 +554,7 @@ const CambioVidaCancelacionModal = ({
                       <th className="fw-semibold">Plan / Cobertura</th>
                       <th width="250" className="text-center fw-semibold">Decisión de Renovación</th>
                       <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
-                      <th width="100" className="text-center fw-semibold">Estado Actual</th>
+                      <th width="170" className="text-center fw-semibold">Estado Actual</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -548,6 +566,7 @@ const CambioVidaCancelacionModal = ({
                         renovar: true,
                         fecha_retiro: "",
                       };
+                      const estadoActual = getEstadoActualInfo(cobertura);
                       
                       return (
                         <tr
@@ -632,11 +651,11 @@ const CambioVidaCancelacionModal = ({
                           </td>
                           <td className="align-middle text-center">
                             <Badge 
-                              bg={cobertura.activo ? "success" : "secondary"} 
+                              bg={estadoActual.bg}
                               className="small"
-                              style={{ fontWeight: "600" }}
+                              style={{ fontWeight: "600", whiteSpace: "normal", lineHeight: 1.1 }}
                             >
-                              {cobertura.activo ? "Activa" : "Inactiva"}
+                              {estadoActual.text}
                             </Badge>
                           </td>
                         </tr>

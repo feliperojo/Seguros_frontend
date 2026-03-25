@@ -5,6 +5,22 @@ import { normalizePermissions, normalizePermission, getPermissionAliases } from 
 
 const AuthContext = createContext(null);
 
+/**
+ * Acepta { data: { user } }, { data: { id, email, ... } } (usuario plano en data) o { user }.
+ * Evita guardar el envelope completo en localStorage (sin user.id en la raíz).
+ */
+function extractUserFromAuthPayload(response) {
+  if (!response || typeof response !== "object") return null;
+  const d = response.data;
+  if (d && typeof d === "object") {
+    if (d.user && typeof d.user === "object") return d.user;
+    if (d.id != null || d.email != null || d.name != null) return d;
+  }
+  if (response.user && typeof response.user === "object") return response.user;
+  if (response.id != null || response.email != null) return response;
+  return null;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [roles, setRoles] = useState([]);
@@ -32,11 +48,14 @@ export const AuthProvider = ({ children }) => {
       // { success, message, data: { user: { roles: [...], permissions: [...] }, roles: [...], permissions: [...] } }
       // Prioridad para permisos: data.permissions (array de strings) > data.user.permissions (objetos) > otros
       // Prioridad para roles: data.user.roles (objetos completos) > data.roles (objetos) > otros
-      const userData = response.data?.user || response.user || response;
-      
+      let userData = extractUserFromAuthPayload(response);
+      if (!userData) {
+        userData = response.data?.user || response.user || response;
+      }
+
       // Extraer roles: preferir data.user.roles (objetos completos), luego data.roles
       let rolesData = userData?.roles || response.data?.roles || response.roles || [];
-      
+
       // Extraer permisos: preferir data.permissions (array de strings), luego data.user.permissions (objetos)
       let permissionsData = response.data?.permissions || userData?.permissions || response.permissions || [];
       
@@ -74,20 +93,43 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem("permissions", JSON.stringify(normalizedPermissions));
       }
     } catch (error) {
-      // Limpiar estado silenciosamente para no bloquear la app
-      localStorage.removeItem("auth_token");
-      localStorage.removeItem("user");
-      localStorage.removeItem("roles");
-      localStorage.removeItem("permissions");
-      setUser(null);
-      setRoles([]);
-      setPermissions([]);
-      setIsAuthenticated(false);
-      
-      if (error.response?.status === 401 || error.response?.status === 403) {
+      const status = error.response?.status;
+      // Solo cerrar sesión ante rechazo de autenticación/autorización, no por fallos de red o 5xx
+      if (status === 401 || status === 403) {
+        localStorage.removeItem("auth_token");
+        localStorage.removeItem("user");
+        localStorage.removeItem("roles");
+        localStorage.removeItem("permissions");
+        setUser(null);
+        setRoles([]);
+        setPermissions([]);
+        setIsAuthenticated(false);
         const currentPath = window.location.pathname;
         if (currentPath !== "/login") {
           navigate("/login", { replace: true });
+        }
+      } else {
+        console.warn("No se pudo refrescar /v1/auth/me:", error);
+        try {
+          const rawUser = localStorage.getItem("user");
+          const token = localStorage.getItem("auth_token");
+          if (rawUser && token) {
+            const parsed = JSON.parse(rawUser);
+            setUser(parsed);
+            setRoles(JSON.parse(localStorage.getItem("roles") || "[]"));
+            setPermissions(normalizePermissions(JSON.parse(localStorage.getItem("permissions") || "[]")));
+            setIsAuthenticated(true);
+          } else {
+            setUser(null);
+            setRoles([]);
+            setPermissions([]);
+            setIsAuthenticated(false);
+          }
+        } catch {
+          setUser(null);
+          setRoles([]);
+          setPermissions([]);
+          setIsAuthenticated(false);
         }
       }
     } finally {
@@ -105,7 +147,10 @@ export const AuthProvider = ({ children }) => {
       // El backend retorna: { success, message, data: { token, user: { roles, permissions } } }
       // Estructura: response.data.token y response.data.user
       const token = response.data?.token || response.token;
-      const userData = response.data?.user || response.user;
+      let userData = extractUserFromAuthPayload(response);
+      if (!userData) {
+        userData = response.data?.user || response.user;
+      }
 
       if (token) {
         localStorage.setItem("auth_token", token);
@@ -148,8 +193,14 @@ export const AuthProvider = ({ children }) => {
       
       if (error.response) {
         const status = error.response.status;
-        const backendMessage = error.response.data?.message;
-        
+        const errs = error.response.data?.errors;
+        const firstFieldError =
+          errs && typeof errs === "object"
+            ? Object.values(errs).flat().find((m) => typeof m === "string")
+            : null;
+        const backendMessage =
+          error.response.data?.message || firstFieldError || null;
+
         if (status === 401 || status === 422) {
           errorType = "credentials";
           errorMessage = backendMessage || "Usuario o contraseña incorrectos";

@@ -43,31 +43,56 @@ const normalizeNombre = (r) =>
 
 const normalizeCliente = (raw) => {
   if (!raw) return null;
+  // El backend a veces devuelve la info del "cliente" anidada en la cobertura:
+  // data.coberturas[0].cliente. Para la ficha, priorizamos esos campos.
+  const nestedCliente = raw?.cliente ?? raw?.coberturas?.[0]?.cliente ?? null;
+  const merged = nestedCliente ? { ...raw, ...nestedCliente } : raw;
+
   const gfId =
-    raw.grupo_familiar_id ??
-    raw?.grupo_familiar?.id ??
-    raw?.coberturas?.[0]?.grupo_familiar_id ??
+    merged.grupo_familiar_id ??
+    merged?.grupo_familiar?.id ??
+    merged?.coberturas?.[0]?.grupo_familiar_id ??
     null;
 
   const telefono =
-    raw.telefono ??
-    raw.tel_1 ??
-    raw.tel1 ??
-    (raw.cod_tel_1 ? `${raw.cod_tel_1} ${raw.tel_1 || ""}`.trim() : null);
+    merged.telefono ??
+    merged.tel_1 ??
+    merged.tel1 ??
+    (merged.cod_tel_1 ? `${merged.cod_tel_1} ${merged.tel_1 || ""}`.trim() : null);
 
-  const estado = raw.estado_cliente ?? raw.estado_Cliente ?? raw.estado ?? raw.status ?? null;
-  const fecha_nacimiento = raw.fecha_nacimiento ?? raw.fechaNacimiento ?? raw.fecha_nac ?? null;
+  const estado = merged.estado_cliente ?? merged.estado_Cliente ?? merged.estado ?? merged.status ?? null;
+  const fecha_nacimiento = merged.fecha_nacimiento ?? merged.fechaNacimiento ?? merged.fecha_nac ?? null;
+
+  const whatsapp = merged?.whatsapp ?? merged?.telefonos?.whatsapp ?? raw?.telefonos?.whatsapp ?? null;
+  const telegram = merged?.telegram ?? merged?.telefonos?.telegram ?? raw?.telefonos?.telegram ?? null;
+  const texto_sms =
+    merged?.texto_sms ??
+    merged?.telefonos?.texto_sms ??
+    raw?.telefonos?.texto_sms ??
+    merged?.telefonos?.mensaje_sms ??
+    raw?.telefonos?.mensaje_sms ??
+    null;
+
+  const medioContactoDerivado = (() => {
+    const medios = [];
+    if (whatsapp) medios.push("WhatsApp");
+    if (telegram) medios.push("Telegram");
+    if (texto_sms) medios.push("SMS");
+    return medios.length ? medios.join(", ") : null;
+  })();
 
   return {
-    ...raw,
-    nombre_completo: normalizeNombre(raw),
+    ...merged,
+    nombre_completo: normalizeNombre(merged),
     telefono,
     estado,
     fecha_nacimiento,
-    edad: raw.edad ?? calcEdad(fecha_nacimiento),
+    edad: merged.edad ?? calcEdad(fecha_nacimiento),
     grupo_familiar_id: gfId,
-    coberturas: Array.isArray(raw.coberturas) ? raw.coberturas : [],
-    grupo_estados: Array.isArray(raw.grupo_estados) ? raw.grupo_estados : [],
+    coberturas: Array.isArray(merged.coberturas) ? merged.coberturas : [],
+    grupo_estados: Array.isArray(merged.grupo_estados) ? merged.grupo_estados : [],
+    // Mantener compatibilidad con vistas que esperan cliente.medio_contacto
+    medio_contacto: merged.medio_contacto ?? merged.medioContacto ?? medioContactoDerivado,
   };
 };
 

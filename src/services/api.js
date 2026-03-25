@@ -60,7 +60,10 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
       errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
       // No borrar el token si el 401 es por contraseña incorrecta del super admin (el usuario sigue autenticado)
       const isVerifySuperAdminPassword = url.includes("verify-super-admin-password");
-      if (!isVerifySuperAdminPassword) {
+      // 401 en login = credenciales incorrectas: no debe cerrar sesiones válidas (otras pestañas / token previo)
+      const isAuthLoginAttempt =
+        url.includes("/v1/auth/login") || url.includes("/auth/login");
+      if (!isVerifySuperAdminPassword && !isAuthLoginAttempt) {
         localStorage.removeItem("auth_token");
       }
     } else if (response.status === 403) {
@@ -137,7 +140,9 @@ const apiRequestFormData = async (endpoint, method = "POST", formData = null) =>
     if (response.status === 401) {
       errorMessage = data?.message || "No autorizado. Por favor, inicia sesión nuevamente.";
       const isVerifySuperAdminPassword = url.includes("verify-super-admin-password");
-      if (!isVerifySuperAdminPassword) {
+      const isAuthLoginAttempt =
+        url.includes("/v1/auth/login") || url.includes("/auth/login");
+      if (!isVerifySuperAdminPassword && !isAuthLoginAttempt) {
         localStorage.removeItem("auth_token");
       }
     } else if (response.status === 403) {

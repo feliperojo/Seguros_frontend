@@ -158,7 +158,46 @@
 /* Tablas */
 .table-responsive {
   border-radius: 0 0 12px 12px;
-  overflow: hidden;
+  /* overflow-x para tablas anchas; visible en Y para no romper position:sticky en scroll de página */
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+/*
+ * Informes del panel con scroll interno: las cabeceras permanecen visibles al desplazar filas.
+ * border-collapse: separate evita fallos de sticky en algunos navegadores con tablas Bootstrap.
+ */
+.dashboard-report-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0 0 12px 12px;
+}
+
+.dashboard-report-scroll--compact {
+  max-height: 200px;
+}
+
+.dashboard-report-scroll--tasks {
+  max-height: 220px;
+}
+
+.dashboard-report-scroll--panel {
+  max-height: min(420px, 55vh);
+}
+
+.dashboard-report-scroll table {
+  border-collapse: separate;
+  border-spacing: 0;
+  margin-bottom: 0;
+}
+
+.dashboard-report-scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: #f9fafc;
+  box-shadow: 0 1px 0 #e0e0e0;
 }
 
 .table {

@@ -69,6 +69,14 @@ export default function FichaClienteInfoCompleta() {
     );
   }
 
+  const medioContactoValue = cliente?.medio_contacto;
+  const medioContacto =
+    medioContactoValue === null ||
+    medioContactoValue === undefined ||
+    medioContactoValue === ""
+      ? null
+      : medioContactoValue;
+
   return (
     <div className="mt-3">
       {/* Datos Principales */}
@@ -242,7 +250,7 @@ export default function FichaClienteInfoCompleta() {
 
                     <dt className="col-sm-4">Medio de Contacto</dt>
                     <dd className="col-sm-8">
-                      {cliente.medio_contacto || <NotAvailable />}
+                      {medioContacto ?? <NotAvailable />}
                     </dd>
                   </dl>
                 </Col>
