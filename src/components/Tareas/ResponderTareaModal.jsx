@@ -151,6 +151,34 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
+
+  // Orden del historial: Pendiente -> En progreso -> Completada, luego fecha (creación/inicio).
+  const getEstadoPrioridad = (estado) => {
+    const estadoNormalizado = String(estado || "").toLowerCase().trim();
+    if (["pending", "pendiente"].includes(estadoNormalizado)) return 0;
+    if (["in_progress", "in progress", "en_progreso", "en progreso"].includes(estadoNormalizado)) return 1;
+    if (["completed", "completada", "terminada", "finalizada"].includes(estadoNormalizado)) return 2;
+    return 3;
+  };
+
+  const getFechaOrdenHistorial = (item) => {
+    const fechaRaw =
+      item?.created_at ||
+      item?.fecha_creacion ||
+      item?.start_date ||
+      item?.fecha_inicio ||
+      item?.fecha;
+    const timestamp = fechaRaw ? new Date(fechaRaw).getTime() : 0;
+    return Number.isNaN(timestamp) ? 0 : timestamp;
+  };
+
+  const historialOrdenado = [...historial].sort((a, b) => {
+    const prioridadA = getEstadoPrioridad(a?.estado);
+    const prioridadB = getEstadoPrioridad(b?.estado);
+    if (prioridadA !== prioridadB) return prioridadA - prioridadB;
+    return getFechaOrdenHistorial(b) - getFechaOrdenHistorial(a);
+  });
+
   // ✅ Usar comentarios directamente de la tarea si están disponibles (nuevo endpoint)
   // Si no, usar del historial como antes (estructura antigua)
   const comentariosDeEstaTarea = tarea?.comments && Array.isArray(tarea.comments) 
@@ -2774,7 +2802,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                   gap: "10px"
                 }}
               >
-                {historial.map((h, idx) => (
+                {historialOrdenado.map((h, idx) => (
                   <div
                     key={idx}
                     className="p-3 rounded"

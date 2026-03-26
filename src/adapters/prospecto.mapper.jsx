@@ -127,7 +127,7 @@ export const mapGrupoFromForm = (f = {}) => {
     tags: tagsArray ? `[Array con ${tagsArray.length} tags]` : null
   });
 
-  return payload;
+  return stripNulls(payload);
 };
 
 // --- Fecha helpers ---

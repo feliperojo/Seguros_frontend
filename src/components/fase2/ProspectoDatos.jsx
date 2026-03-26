@@ -207,6 +207,18 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
     const value = e?.target?.value ?? e;
     onChange({ [field]: value });
   };
+  const channelIdBase = member.id ?? member.cliente_id ?? member?.cliente?.id ?? "tmp";
+  const getCommValue = (field) => !!(member?.[field] ?? member?.cliente?.[field] ?? false);
+  const handleCommChange = (field) => (e) => {
+    const checked = !!e?.target?.checked;
+    onChange({
+      [field]: checked,
+      cliente: {
+        ...(member.cliente || {}),
+        [field]: checked,
+      },
+    });
+  };
 
   const handleMoneyChange = (e) => {
     const raw = sanitizeMoneyInput(e.target.value);
@@ -530,6 +542,58 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                 fallbackIso="us"
                 addLabel="Agregar teléfono"
               />
+            </div>
+
+            <div className="md:col-span-3">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Medio de Comunicación Principal
+              </label>
+              <div className="d-flex flex-wrap gap-3">
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={`whatsapp-${channelIdBase}`}
+                    checked={getCommValue("whatsapp")}
+                    onChange={handleCommChange("whatsapp")}
+                    disabled={readOnly}
+                  />
+                  <label className="form-check-label" htmlFor={`whatsapp-${channelIdBase}`}>
+                    <i className="fab fa-whatsapp text-success me-1" />
+                    WhatsApp
+                  </label>
+                </div>
+
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={`telegram-${channelIdBase}`}
+                    checked={getCommValue("telegram")}
+                    onChange={handleCommChange("telegram")}
+                    disabled={readOnly}
+                  />
+                  <label className="form-check-label" htmlFor={`telegram-${channelIdBase}`}>
+                    <i className="fab fa-telegram text-info me-1" />
+                    Telegram
+                  </label>
+                </div>
+
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={`texto-sms-${channelIdBase}`}
+                    checked={getCommValue("texto_sms")}
+                    onChange={handleCommChange("texto_sms")}
+                    disabled={readOnly}
+                  />
+                  <label className="form-check-label" htmlFor={`texto-sms-${channelIdBase}`}>
+                    <i className="fas fa-sms text-primary me-1" />
+                    SMS
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="md:col-span-3">

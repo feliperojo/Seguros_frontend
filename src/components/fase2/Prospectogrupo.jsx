@@ -56,19 +56,6 @@ const Prospectogrupo = ({
     }
   }, [formData?.drive_url]);
 
-  // ---- helpers teléfono (se mantienen) ----
-  const formatPhone = (raw) => {
-    const digits = String(raw || "").replace(/\D+/g, "");
-    if (digits.length <= 3) return digits;
-    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
-    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-  };
-
-  const handlePhoneChange = (name) => (e) => {
-    const formatted = formatPhone(e.target.value);
-    onChange?.({ target: { name, value: formatted, type: "text" } });
-  };
-
   // Resolver id de grupo desde distintas fuentes
   const resolvedGrupoId =
     grupoFamiliarId ??
