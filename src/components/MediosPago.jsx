@@ -25,6 +25,10 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     cliente_id: ''
   });
   const [error, setError] = useState({ campo: '', mensaje: '' });
+  const [clienteDireccion, setClienteDireccion] = useState('');
+  const [copiarDireccion, setCopiarDireccion] = useState(false);
+  const [direccionAntesCopiar, setDireccionAntesCopiar] = useState('');
+  const [huboCopia, setHuboCopia] = useState(false);
   const tarjetas = mediosPago.filter(m => m.forma_pago === 'tarjeta');
   const cuentasBancarias = mediosPago.filter(m => m.forma_pago === 'cuenta_bancaria');
 
@@ -39,6 +43,32 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       }));
     }
   }, [clienteId]);
+
+  // Cargar dirección del cliente para el checkbox "Copiar dirección"
+  useEffect(() => {
+    const fetchClienteDireccion = async () => {
+      if (!clienteId) return;
+      try {
+        const response = await apiRequest(`cliente/${clienteId}`, 'GET');
+        const direccion = response?.direccion ?? response?.dir_correspondencia ?? '';
+        setClienteDireccion(direccion || '');
+      } catch (error) {
+        console.error('Error al cargar la dirección del cliente:', error);
+        setClienteDireccion('');
+      }
+    };
+
+    fetchClienteDireccion();
+  }, [clienteId]);
+
+  // Si el usuario activó el checkbox, mantener sincronizado el campo dirección
+  useEffect(() => {
+    if (!copiarDireccion) return;
+    setCurrentMedioPago(prev => ({
+      ...prev,
+      direccion: clienteDireccion || ''
+    }));
+  }, [copiarDireccion, clienteDireccion]);
 
   
   
@@ -60,6 +90,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   // Manejador para abrir modal y agregar nuevo medio de pago
   const handleAddClick = () => {
     setEditingIndex(-1);
+    setCopiarDireccion(false);
+    setDireccionAntesCopiar('');
+    setHuboCopia(false);
     setCurrentMedioPago({
       forma_pago: 'tarjeta_credito', // Por defecto tarjeta de crédito
       tipo_tarjeta_pago: 'credito',
@@ -82,6 +115,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   // Manejador para editar medio de pago existente
   const handleEditClick = (index) => {
     setEditingIndex(index);
+    setCopiarDireccion(false);
+    setDireccionAntesCopiar('');
+    setHuboCopia(false);
     const medioPago = mediosPago[index];
     // Convertir forma_pago del backend a formato interno
     let formaPagoInterna = medioPago.forma_pago;
@@ -206,12 +242,45 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
         ...prev,
         [name]: digitsOnly.slice(0, maxLength)
       }));
+    } else if (name === 'direccion' && copiarDireccion) {
+      // Si el usuario edita manualmente la dirección, desactivar el copiado
+      setCopiarDireccion(false);
+      setHuboCopia(false);
+      setDireccionAntesCopiar('');
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        [name]: value
+      }));
     } else {
       setCurrentMedioPago(prev => ({
         ...prev,
         [name]: value
       }));
     }
+  };
+
+  const handleToggleCopiarDireccion = (e) => {
+    const checked = e.target.checked;
+    setCopiarDireccion(checked);
+
+    if (checked) {
+      setDireccionAntesCopiar(currentMedioPago.direccion || '');
+      setHuboCopia(true);
+      setCurrentMedioPago(prev => ({
+        ...prev,
+        direccion: clienteDireccion || ''
+      }));
+      return;
+    }
+
+    // Al desactivar, restaurar lo que había antes del copiado
+    setHuboCopia(false);
+    setCopiarDireccion(false);
+    setCurrentMedioPago(prev => ({
+      ...prev,
+      direccion: huboCopia ? direccionAntesCopiar : prev.direccion
+    }));
+    setDireccionAntesCopiar('');
   };
 
   // Validar formulario antes de guardar
@@ -436,7 +505,20 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               </div>
             </div>
             <div className="form-group mb-3">
-              <label htmlFor="direccion">Dirección</label>
+              <label htmlFor="direccion" className="mb-2">Dirección</label>
+              <div className="form-check mb-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="copiar_direccion"
+                  checked={copiarDireccion}
+                  onChange={handleToggleCopiarDireccion}
+                  disabled={!clienteDireccion}
+                />
+                <label className="form-check-label" htmlFor="copiar_direccion">
+                  Copiar dirección
+                </label>
+              </div>
               <input
                 type="text"
                 className="form-control"
@@ -470,7 +552,20 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
             </div>
 
             <div className="form-group mb-3">
-              <label htmlFor="direccion">Dirección</label>
+              <label htmlFor="direccion" className="mb-2">Dirección</label>
+              <div className="form-check mb-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="copiar_direccion"
+                  checked={copiarDireccion}
+                  onChange={handleToggleCopiarDireccion}
+                  disabled={!clienteDireccion}
+                />
+                <label className="form-check-label" htmlFor="copiar_direccion">
+                  Copiar dirección
+                </label>
+              </div>
               <input
                 type="text"
                 className="form-control"

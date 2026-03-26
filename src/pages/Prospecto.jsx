@@ -538,6 +538,17 @@ useEffect(() => {
               throw error;
             }
           }}
+          onReactivarSeguimiento={async () => {
+            if (!grupoId) return;
+            try {
+              await GrupoFamiliarService.setEstado(grupoId, "SEGUIMIENTO", "Reactivación desde DESCARTADO a SEGUIMIENTO");
+              setEstadoActual("SEGUIMIENTO");
+              alert("Prospecto reactivado en SEGUIMIENTO");
+              navigate(`/grupo_familiar/${grupoId}`);
+            } catch (error) {
+              throw error;
+            }
+          }}
         />
         
         {/* Modal de selección de producto - SE MUESTRA PRIMERO */}

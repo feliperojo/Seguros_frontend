@@ -12,12 +12,13 @@ const STEPS = [
   { code: "DESCARTADO",      label: "DESCARTADO" },
 ];
 
-const ProspectoBarra = ({ currentCode, grupoId, onDescartar }) => {
+const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimiento }) => {
   const safeCode = (currentCode || "PROSPECTO").toUpperCase();
   const currentIndex = Math.max(0, STEPS.findIndex((s) => s.code === safeCode));
   
   // Determinar si se puede cambiar a DESCARTADO (solo en COTIZACION o SEGUIMIENTO)
   const puedeDescartar = (safeCode === "COTIZACION" || safeCode === "SEGUIMIENTO") && grupoId && onDescartar;
+  const puedeReactivarSeguimiento = safeCode === "DESCARTADO" && grupoId && onReactivarSeguimiento;
 
   const handleDescartar = async () => {
     if (!window.confirm("¿Está seguro de que desea marcar este prospecto como DESCARTADO?")) {
@@ -30,6 +31,21 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar }) => {
       } catch (error) {
         console.error("Error al cambiar estado a DESCARTADO:", error);
         alert("Error al cambiar el estado a DESCARTADO");
+      }
+    }
+  };
+
+  const handleReactivarSeguimiento = async () => {
+    if (!window.confirm("¿Desea reactivar este grupo familiar y volverlo a SEGUIMIENTO?")) {
+      return;
+    }
+
+    if (onReactivarSeguimiento) {
+      try {
+        await onReactivarSeguimiento();
+      } catch (error) {
+        console.error("Error al cambiar estado a SEGUIMIENTO:", error);
+        alert("Error al cambiar el estado a SEGUIMIENTO");
       }
     }
   };
@@ -69,6 +85,17 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar }) => {
           >
             <i className="fas fa-times-circle me-2"></i>
             Marcar como Descartado
+          </button>
+        )}
+        {puedeReactivarSeguimiento && (
+          <button
+            type="button"
+            className="btn btn-outline-primary ms-3"
+            onClick={handleReactivarSeguimiento}
+            title="Volver a seguimiento"
+          >
+            <i className="fas fa-undo me-2"></i>
+            Reactivar en Seguimiento
           </button>
         )}
       </div>

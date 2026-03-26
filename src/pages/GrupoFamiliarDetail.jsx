@@ -1279,6 +1279,9 @@ const clientesPayload = existentes
             await descartarCoberturasDelGrupo();
             await advanceState("DESCARTADO");
           }}
+          onReactivarSeguimiento={async () => {
+            await advanceState("SEGUIMIENTO");
+          }}
         />
 
 
