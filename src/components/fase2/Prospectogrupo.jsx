@@ -318,7 +318,7 @@ const Prospectogrupo = ({
                     className="btn btn-sm btn-outline-warning"
                     onClick={() => setShowCambioVidaModal(true)}
                     disabled={!resolvedGrupoId || readOnly}
-                    title="Renovaciones"
+                    title="Reno/Canc/Reti"
                     style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
                     <i className="fas fa-exclamation-triangle me-1"></i>

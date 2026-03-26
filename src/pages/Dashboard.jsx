@@ -25,6 +25,68 @@ function normalizeDashboardList(res) {
   return [];
 }
 
+/** Nombre legible del cliente para filas de requerimientos/documentos (API puede variar forma y profundidad). */
+function nombreClienteDesdeObjeto(cliente) {
+  if (cliente == null) return null;
+  if (typeof cliente === "string") {
+    const t = cliente.trim();
+    return t || null;
+  }
+  if (typeof cliente !== "object") return null;
+  const directo =
+    cliente.nombre_completo ||
+    cliente.nombreCompleto ||
+    cliente.nombre ||
+    cliente.nombre_cliente ||
+    cliente.nombreCliente;
+  if (directo) {
+    const t = String(directo).trim();
+    if (t) return t;
+  }
+  const partes = [
+    cliente.primer_nombre,
+    cliente.primerNombre,
+    cliente.segundo_nombre,
+    cliente.segundoNombre,
+    cliente.apellidos,
+    cliente.apellido,
+  ].filter(Boolean);
+  const armado = partes.join(" ").trim();
+  return armado || null;
+}
+
+/** Documento/requerimiento del dashboard: cliente puede venir en cobertura o en la raíz, u omitir nombre_completo. */
+function getNombreClienteDocumentoSolicitado(doc) {
+  if (!doc) return null;
+  const desdeCobertura = nombreClienteDesdeObjeto(doc.cobertura?.cliente);
+  if (desdeCobertura) return desdeCobertura;
+  const desdeRaiz = nombreClienteDesdeObjeto(doc.cliente);
+  if (desdeRaiz) return desdeRaiz;
+  if (doc.nombre_cliente || doc.cliente_nombre || doc.nombreCliente) {
+    const t = String(doc.nombre_cliente || doc.cliente_nombre || doc.nombreCliente).trim();
+    if (t) return t;
+  }
+  return null;
+}
+
+/** Parentesco en documentos/requerimientos: el API puede exponerlo en cobertura o en la raíz, y como `relacion`. */
+function getParentescoDocumentoSolicitado(doc) {
+  if (!doc) return null;
+  const cob = doc.cobertura;
+  const v =
+    cob?.parentesco ??
+    cob?.relacion ??
+    cob?.tipo_parentesco ??
+    doc.parentesco ??
+    doc.relacion ??
+    doc.tipo_parentesco ??
+    cob?.cliente?.parentesco ??
+    doc.cliente?.parentesco;
+  if (v == null || v === "") return null;
+  const t = String(v).trim();
+  return t || null;
+}
+
 function normalizeTareasOperativasResponse(res) {
   if (res == null) return [];
   if (Array.isArray(res.data)) return res.data;
@@ -1256,9 +1318,9 @@ const handleOpenViewModal = (cliente) => {
             const diasRestantes = Math.ceil((fechaVenc - hoy) / (1000 * 60 * 60 * 24));
             return (
               <tr key={doc.id}>
-                <td className="fw-medium">{doc.cobertura?.cliente?.nombre_completo || 'Cliente desconocido'}</td>
+                <td className="fw-medium">{getNombreClienteDocumentoSolicitado(doc) || "Cliente desconocido"}</td>
                 <td>{doc.cobertura?.codigo_poliza || 'N/D'}</td>
-                <td>{doc.cobertura?.parentesco || 'N/D'}</td>
+                <td>{getParentescoDocumentoSolicitado(doc) || "N/D"}</td>
                 <td>{doc.documento_requerido}</td>
                 <td>
                   <Badge bg="primary">{doc.estado}</Badge>

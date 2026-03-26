@@ -422,7 +422,7 @@ useEffect(() => {
                         <th>P. TAXES</th>
                         <th>ASEGURADORA</th>
                         <th>RESPONSABLE</th>
-                        <th>ESTADO</th>
+                        <th>PROCESO</th>
                         <th className="text-center">ACCIONES</th>
                       </tr>
                     </thead>

@@ -88,11 +88,13 @@ export const mapGrupoFromForm = (f = {}) => {
     }
   }
 
+  const parsedId = Number(f.id);
+  const hasValidId = Number.isInteger(parsedId) && parsedId > 0;
+
   const payload = {
     personas_taxes: toNumberOrZero(f.personasTaxes),
     personas_cobertura: toNumberOrZero(f.personasCobertura),
     ingreso_familiar_anual: toNumberOrZero(f.ingresoFamiliar),
-    id: !!f.id,
     persona_contacto: toNullIfEmpty((f.nombre ?? "").trim()),
     apellido_persona_contacto: toNullIfEmpty((f.apellidos ?? "").trim()),
     captado_por: toNullIfEmpty(f.captadoPor),
@@ -114,6 +116,10 @@ export const mapGrupoFromForm = (f = {}) => {
     // Tags: enviar como array directamente (el backend espera "tags" como array)
     tags: tagsArray,
   };
+
+  if (hasValidId) {
+    payload.id = parsedId;
+  }
 
   // Log del payload completo (sin datos sensibles)
   console.log("📤 [mapGrupoFromForm] Payload completo para backend:", {
