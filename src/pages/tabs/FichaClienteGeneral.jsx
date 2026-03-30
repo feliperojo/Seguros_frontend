@@ -55,8 +55,17 @@ export default function FichaClienteGeneral() {
         return { estado: "Vigente", fecha: null, tipoFecha: null };
       }
 
-      // 2) No vigente + fecha de cancelación => Póliza Cancelada
-      // (aunque "activo" venga true por inconsistencia de datos)
+      // 2) No vigente y no activa => Retirada
+      // Regla solicitada: si "vigente" y "activo" son false, se considera retirada (aun si existe fecha_cancelacion).
+      if (!activo) {
+        return {
+          estado: "Retirada",
+          fecha: fechaRetiroValida,
+          tipoFecha: fechaRetiroValida ? "retiro" : null,
+        };
+      }
+
+      // 3) No vigente + fecha de cancelación => Póliza Cancelada
       if (fechaCancelacionValida) {
         return {
           estado: "Póliza Cancelada",
@@ -65,20 +74,11 @@ export default function FichaClienteGeneral() {
         };
       }
 
-      // 3) No vigente pero aún activa -> Retirada (se muestra fecha de retiro si existe)
-      if (activo) {
-        return {
-          estado: "Retirada",
-          fecha: fechaRetiroValida,
-          tipoFecha: fechaRetiroValida ? "retiro" : null,
-        };
-      }
-
-      // 4) No vigente y no activa => Retirado del grupo familiar (usa fecha de retiro si existe)
+      // 4) No vigente y activa, sin fecha de cancelación => Póliza Cancelada (sin fecha)
       return {
-        estado: "Retirado del grupo familiar",
-        fecha: fechaRetiroValida,
-        tipoFecha: fechaRetiroValida ? "retiro" : null,
+        estado: "Póliza Cancelada",
+        fecha: null,
+        tipoFecha: null,
       };
     } catch (_) {
       return { estado: "Vigente", fecha: null, tipoFecha: null };
