@@ -5,6 +5,7 @@ import { Spinner, Modal, Button } from "react-bootstrap";
 import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
 import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
 import { formatDateForDisplay, formatDateTimeForDisplay } from "../../utils/formatters";
+import { isTaskOverdue } from "../../utils/taskDueDate";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -919,6 +920,7 @@ export default function FichaClienteComentarios() {
                     const estadoTarea = comentario.task?.status || comentario.status || null;
                     const logId = getLogId(comentario);
                     const tareaId = getTareaId(comentario);
+                    const tareaVencida = isTaskOverdue(comentario.due_date) && comentario.task?.status !== "completed";
 
                     // 🔍 DEBUG: Ver campos del comentario al renderizar
                     if (esTarea) {
@@ -1245,9 +1247,9 @@ export default function FichaClienteComentarios() {
                                 )}
                                 {comentario.due_date && (
                                   <div className="flex items-center gap-2 text-gray-600">
-                                    <i className={`fas fa-calendar-times ${new Date(comentario.due_date) < new Date() && comentario.task?.status !== "completed" ? "text-red-600" : "text-gray-400"}`}></i>
+                                    <i className={`fas fa-calendar-times ${tareaVencida ? "text-red-600" : "text-gray-400"}`}></i>
                                     <span className="font-medium">Vence:</span>
-                                    <span className={new Date(comentario.due_date) < new Date() && comentario.task?.status !== "completed" ? "text-red-600 font-semibold" : ""}>
+                                    <span className={tareaVencida ? "text-red-600 font-semibold" : ""}>
                                       {formatDateForDisplay(comentario.due_date)}
                                     </span>
                                   </div>

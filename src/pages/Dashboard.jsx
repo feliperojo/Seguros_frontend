@@ -15,6 +15,7 @@ import DetalleClienteModal from "../components/DetalleClienteModal";
 import CalendarioTareas from "../components/Tareas/CalendarioTareas";
 import VerTareaModal from "../components/Tareas/VerTareaModal";
 import { Helmet } from "react-helmet-async";
+import { getTaskOverdueDays } from "../utils/taskDueDate";
 
 /** Evita errores al usar .slice cuando el backend devuelve { data: [] } u otras formas. */
 function normalizeDashboardList(res) {
@@ -356,24 +357,9 @@ const Dashboard = () => {
         tareasData = res;
       }
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
-
-      const parseFecha = (valor) => {
-        if (!valor) return null;
-        if (valor instanceof Date) return isNaN(valor.getTime()) ? null : valor;
-        const str = String(valor);
-        const base = str.includes("T") ? str : `${str}T00:00:00`;
-        const d = new Date(base);
-        return isNaN(d.getTime()) ? null : d;
-      };
-
       const calcularDiasAtraso = (fechaVenc) => {
-        const fecha = parseFecha(fechaVenc);
-        if (!fecha) return null;
-        const diffMs = hoy.getTime() - fecha.getTime();
-        if (diffMs <= 0) return null;
-        return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const dias = getTaskOverdueDays(fechaVenc);
+        return dias > 0 ? dias : null;
       };
 
       const pendientesVencidas = tareasData

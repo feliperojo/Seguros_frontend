@@ -17,6 +17,7 @@ import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import systemConfigService from "../../services/SystemConfigService";
 import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
@@ -207,7 +208,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
   const esTareaVencida =
     tarea?.due_date &&
-    new Date(tarea.due_date) < new Date() &&
+    isTaskOverdue(tarea.due_date) &&
     tarea?.status !== "completed";
 
   // ✅ Reasignación del usuario asignado (operativa)

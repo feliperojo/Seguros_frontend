@@ -14,6 +14,7 @@ import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { 
@@ -148,7 +149,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   const quillEditorRef = useRef(null);
   const esTareaVencida =
     tarea?.due_date &&
-    new Date(tarea.due_date) < new Date() &&
+    isTaskOverdue(tarea.due_date) &&
     tarea?.status !== "completed";
   
   // Hook para manejo de menciones en Quill

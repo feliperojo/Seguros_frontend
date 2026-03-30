@@ -4,6 +4,7 @@ import { useFichaCliente } from "../../context/fichaClienteContext";
 import { listTasks, getTaskComments } from "../../services/auditoriasTasksService";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import { formatDateForDisplay } from "../../utils/formatters";
+import { isTaskOverdue } from "../../utils/taskDueDate";
 import ResponderTareaAuditoriaModal from "../../components/Tareas/ResponderTareaAuditoriaModal";
 import { highlightMentions } from "../../utils/mentions";
 
@@ -489,6 +490,7 @@ export default function FichaClienteAuditorias() {
                     const usuarioAsignado = getUsuarioAsignadoNombre(tarea);
                     const nota = tarea.response_note || "Sin contenido";
                     const estadoTarea = tarea.status || null;
+                    const tareaVencida = isTaskOverdue(tarea.due_date) && tarea.status !== "completed";
                     const auditoriaId = getAuditoriaId(tarea);
                     const tipoAuditoriaNombre = getTipoAuditoriaNombre(tarea);
                     const coberturaId = getCoberturaId(tarea);
@@ -631,9 +633,9 @@ export default function FichaClienteAuditorias() {
                             )}
                             {tarea.due_date && (
                               <div className="flex items-center gap-2 text-gray-600">
-                                <i className={`fas fa-calendar-times ${new Date(tarea.due_date) < new Date() && tarea.status !== "completed" ? "text-red-600" : "text-gray-400"}`}></i>
+                                <i className={`fas fa-calendar-times ${tareaVencida ? "text-red-600" : "text-gray-400"}`}></i>
                                 <span className="font-medium">Vence:</span>
-                                <span className={new Date(tarea.due_date) < new Date() && tarea.status !== "completed" ? "text-red-600 font-semibold" : ""}>
+                                <span className={tareaVencida ? "text-red-600 font-semibold" : ""}>
                                   {formatDateForDisplay(tarea.due_date)}
                                 </span>
                               </div>

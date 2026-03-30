@@ -49,12 +49,16 @@ const CambioVidaCancelacionModal = ({
 
   // Opciones predefinidas para motivo_cancelacion
   const motivosCancelacion = [
-    "Cambio de ingresos",
-    "Renovación anual",
-    "Cambio de empleo",
-    "Cambio de estado civil",
-    "Cambio de residencia",
-    "Otro",
+    "CAMBIO DE AGENTE",
+    "MS CANCELO POR FALTA DE DOCUMENTOS",
+    "POR FALTA DE PAGO",
+    "POR FALTA DE PAGO INICIAL",
+    "TOMO MEDICAID",
+    "TOMO MEDICARE",
+    "TOMO SEGURO POR EL TRABAJO",
+    "CLIENTE CANCELO",
+    "CLIENTE SE MUDO A OTRO ESTADO",
+    "OTRO",
   ];
 
   const esTrue = (v) => v === true || v === "true" || v === 1 || v === "1";

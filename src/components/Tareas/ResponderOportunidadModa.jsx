@@ -15,6 +15,7 @@ import apiRequest from "../../services/api";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds } from "../../utils/mentions";
 import { durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import { isTaskOverdue } from "../../utils/taskDueDate";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
@@ -1143,7 +1144,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const esCerrada = tarea?.status === "completed";
   const esVencida =
     tarea?.due_date &&
-    new Date(tarea.due_date) < new Date() &&
+    isTaskOverdue(tarea.due_date) &&
     tarea?.status !== "completed";
 
   // Extraer datos de manera más robusta

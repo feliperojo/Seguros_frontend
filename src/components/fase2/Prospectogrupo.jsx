@@ -309,7 +309,7 @@ const Prospectogrupo = ({
                     style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
                     <i className="fas fa-exclamation-triangle me-1"></i>
-                    <span className="d-none d-lg-inline">Renovaciones</span>
+                    <span className="d-none d-lg-inline">Renov/Canc/Reti</span>
                   </button>
                   <button
                     className="btn btn-sm btn-outline-success"
