@@ -1888,10 +1888,6 @@ const activeNormalized = useMemo(
                                   />
                                 </Field>
 
-                                <div className="col-12">
-                                  <div className="small fw-semibold text-muted mt-2">Otro Ingreso</div>
-                                </div>
-
                                 <Field label="Nota" className="col-12">
                                   <textarea
                                     rows={3}

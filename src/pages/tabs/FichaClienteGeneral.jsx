@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import ProductosButtons from "../../components/fase2/ProductosButtons";
 import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
+import ProductosDescartadosButtons from "../../components/fase2/ProductosDescartadosButtons";
 import PersonaContactoCard from "../../components/fase2/PersonaContactoCard";
 import TareasPendientesPanel from "../../components/fase2/TareasPendientesPanel";
 import TareasTerminadasPanel from "../../components/fase2/TareasTerminadasPanel";
@@ -724,6 +725,12 @@ export default function FichaClienteGeneral() {
               className="mb-3"
               coberturas={cliente?.coberturas ?? []}
               onSelectCobertura={(c) => console.log("Cotización:", c)}
+            />
+
+            <ProductosDescartadosButtons
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
+              onSelectCobertura={(c) => console.log("Producto descartado (GF):", c)}
             />
           </div>
         </div>
