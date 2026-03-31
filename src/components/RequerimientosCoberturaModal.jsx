@@ -8,25 +8,19 @@ import useToast from "../hooks/useToast";
 // Mapeo de estados a colores de Bootstrap
 const estadosBadge = {
   Pendiente: "warning",
+  "Se pidio": "primary",
   Enviado: "info",
-  Aprobado: "success",
-  Rechazado: "danger",
   Insuficiente: "danger",
-  Procesando: "primary",
   Completado: "success",
-  Cancelado: "danger",
 };
 
 // Opciones de estados disponibles
 const estadosOptions = [
   { value: "Pendiente", label: "Pendiente" },
+  { value: "Se pidio", label: "Se pidio" },
   { value: "Enviado", label: "Enviado" },
-  { value: "Aprobado", label: "Aprobado" },
-  { value: "Rechazado", label: "Rechazado" },
   { value: "Insuficiente", label: "Insuficiente" },
-  { value: "Procesando", label: "Procesando" },
   { value: "Completado", label: "Completado" },
-  { value: "Cancelado", label: "Cancelado" },
 ];
 
 /**

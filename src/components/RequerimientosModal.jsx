@@ -4,24 +4,18 @@ import apiRequest from "../services/api"; // Asumiendo que usas este servicio pa
 
 const estados = {
   Pendiente: "warning",
+  "Se pidio": "primary",
   Enviado: "info",
-  Aprobado: "success",
-  Rechazado: "danger",
   Insuficiente: "danger",
-  Procesando: "primary",
   Completado: "success",
-  Cancelado: "danger",
 };
 
 const estadosOptions = [
   { value: "Pendiente", label: "Pendiente" },
+  { value: "Se pidio", label: "Se pidio" },
   { value: "Enviado", label: "Enviado" },
-  { value: "Aprobado", label: "Aprobado" },
-  { value: "Rechazado", label: "Rechazado" },
   { value: "Insuficiente", label: "Insuficiente" },
-  { value: "Procesando", label: "Procesando" },
   { value: "Completado", label: "Completado" },
-  { value: "Cancelado", label: "Cancelado" },
 ];
 
 const documentosDisponibles = [

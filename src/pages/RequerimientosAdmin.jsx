@@ -13,13 +13,10 @@ import {
 } from "react-icons/fa";
 const estados = {
   Pendiente: { label: 'Pendiente', color: 'badge bg-warning text-dark' },
+  'Se pidio': { label: 'Se pidio', color: 'badge bg-primary' },
   Enviado: { label: 'Enviado', color: 'badge bg-info text-dark' },
-  Aprobado: { label: 'Aprobado', color: 'badge bg-success' },
-  Rechazado: { label: 'Rechazado', color: 'badge bg-danger' },
-  Procesando: { label: 'Procesando', color: 'badge bg-secondary' },
-  Completado: { label: 'Completado', color: 'badge bg-success' },
   Insuficiente: { label: 'Insuficiente', color: 'badge bg-danger' },
-  Cancelado: { label: 'Cancelado', color: 'badge bg-danger' },
+  Completado: { label: 'Completado', color: 'badge bg-success' },
 };
 
 export default function RequerimientosAdmin() {
@@ -226,7 +223,7 @@ const [reqActivo, setReqActivo] = useState(null);
                         </select>
                       ) : (
                         <span className={estados[req.estado]?.color || 'badge bg-secondary'}>
-                          {estados[req.estado]?.label || 'Sin estado'}
+                          {estados[req.estado]?.label || req.estado || 'Sin estado'}
                         </span>
                       )}
                     </td>
