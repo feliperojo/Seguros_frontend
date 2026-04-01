@@ -182,7 +182,7 @@ export default function TareasPendientesPanel({
     const tareaId = raw?.id || raw?.task?.id || raw?.task_id || null;
     // El logId puede estar en raw.log.id o directamente en raw.id (si la tarea está relacionada con un log)
     // También puede estar en raw.bitacora_operativa_id o similar
-    const logId = raw?.log?.id || raw?.bitacora_operativa_id || raw?.log_id || raw?.id || null;
+    const logId = raw?.log?.id || raw?.bitacora_operativa_id || raw?.log_id || null;
     
     // Debug: loguear para ver qué estructura tiene
     if (tareaId && !logId) {

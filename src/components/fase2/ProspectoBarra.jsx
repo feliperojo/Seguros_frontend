@@ -16,8 +16,13 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
   const safeCode = (currentCode || "PROSPECTO").toUpperCase();
   const currentIndex = Math.max(0, STEPS.findIndex((s) => s.code === safeCode));
   
-  // Determinar si se puede cambiar a DESCARTADO (solo en COTIZACION o SEGUIMIENTO)
-  const puedeDescartar = (safeCode === "COTIZACION" || safeCode === "SEGUIMIENTO") && grupoId && onDescartar;
+  // Determinar si se puede cambiar a DESCARTADO (hasta INSCRIPCION_INI inclusive)
+  const inscripcionIniIndex = STEPS.findIndex((s) => s.code === "INSCRIPCION_INI");
+  const puedeDescartar =
+    safeCode !== "DESCARTADO" &&
+    currentIndex <= inscripcionIniIndex &&
+    grupoId &&
+    onDescartar;
   const puedeReactivarSeguimiento = safeCode === "DESCARTADO" && grupoId && onReactivarSeguimiento;
 
   const handleDescartar = async () => {

@@ -59,6 +59,19 @@ const isNoteEmpty = (html) => {
   return text.trim().length === 0;
 };
 
+/** ID de la bitácora vinculada a la tarea (no el id de la fila de tarea_operativa). */
+const obtenerLogIdBitacora = (t) => {
+  if (!t) return null;
+  return (
+    t.log?.id ??
+    t.bitacora_operativa_id ??
+    t.log_id ??
+    t.bitacora_id ??
+    t.log?.bitacora_id ??
+    null
+  );
+};
+
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -115,6 +128,8 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   // ✅ Estados para adjuntos de comentarios
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
   const [loadingAdjuntos, setLoadingAdjuntos] = useState({}); // { comentarioId: boolean }
+  const [adjuntosBitacoraTarea, setAdjuntosBitacoraTarea] = useState([]);
+  const [loadingAdjuntosBitacoraTarea, setLoadingAdjuntosBitacoraTarea] = useState(false);
   const [archivoPreview, setArchivoPreview] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
@@ -369,6 +384,52 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     setShowPreviewModal(true);
   };
 
+  const descargarArchivoAdjunto = async (adjunto) => {
+    try {
+      if (adjunto.id) {
+        try {
+          const res = await apiRequest(`adjuntos/bitacora/${adjunto.id}/descargar`, "GET");
+          if (res?.url) {
+            const link = document.createElement("a");
+            link.href = res.url;
+            link.download = adjunto.nombre_original || "archivo";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            return;
+          }
+        } catch {
+          /* usar URL directa */
+        }
+      }
+      const response = await fetch(adjunto.url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = adjunto.nombre_original || "archivo";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error al descargar archivo:", error);
+      window.open(adjunto.url, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  const refrescarAdjuntosBitacoraTarea = async (t) => {
+    const logBitacoraId = obtenerLogIdBitacora(t);
+    if (!logBitacoraId) return;
+    try {
+      const data = await apiRequest(`adjuntos/bitacora/${logBitacoraId}`, "GET");
+      const lista = Array.isArray(data) ? data : data?.data || [];
+      setAdjuntosBitacoraTarea(lista);
+    } catch (err) {
+      console.error("Error al refrescar adjuntos de la tarea:", err);
+    }
+  };
+
   // ✅ Cargar usuarios para menciones
   useEffect(() => {
     if (!show) return;
@@ -561,7 +622,31 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   };
 
   useEffect(() => {
+    if (!show) {
+      setAdjuntosBitacoraTarea([]);
+      setLoadingAdjuntosBitacoraTarea(false);
+    }
+
     if (show && tarea?.id) {
+      const logBitacoraId = obtenerLogIdBitacora(tarea);
+      if (logBitacoraId) {
+        setAdjuntosBitacoraTarea([]);
+        setLoadingAdjuntosBitacoraTarea(true);
+        apiRequest(`adjuntos/bitacora/${logBitacoraId}`, "GET")
+          .then((data) => {
+            const lista = Array.isArray(data) ? data : data?.data || [];
+            setAdjuntosBitacoraTarea(lista);
+          })
+          .catch((err) => {
+            console.error("Error al cargar adjuntos de la bitácora de la tarea:", err);
+            setAdjuntosBitacoraTarea([]);
+          })
+          .finally(() => setLoadingAdjuntosBitacoraTarea(false));
+      } else {
+        setAdjuntosBitacoraTarea([]);
+        setLoadingAdjuntosBitacoraTarea(false);
+      }
+
       // Log para depuración
       console.log('🔍 Tarea completa recibida:', tarea);
       console.log('📋 Estructura completa de la tarea (JSON):', JSON.stringify(tarea, null, 2));
@@ -778,6 +863,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
             console.log(`📤 Intentando subir ${archivos.length} archivo(s) con logId: ${logId}`);
             await subirArchivosBitacora(logId);
             console.log("✅ Archivos subidos exitosamente");
+            await refrescarAdjuntosBitacoraTarea(tarea);
           } catch (err) {
             console.error("❌ Error al subir archivos:", err);
             alert(`⚠️ Se creó el comentario pero hubo un error al subir algunos archivos:\n${err.message || err}`);
@@ -937,6 +1023,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               console.log(`📤 Intentando subir ${archivos.length} archivo(s) con logId: ${logId}`);
               await subirArchivosBitacora(logId);
               console.log("✅ Archivos subidos exitosamente");
+              await refrescarAdjuntosBitacoraTarea(tarea);
             } catch (err) {
               console.error("❌ Error al subir archivos:", err);
               alert(`⚠️ Se creó el comentario pero hubo un error al subir algunos archivos:\n${err.message || err}`);
@@ -1435,6 +1522,121 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                       }}
                       dangerouslySetInnerHTML={{ __html: notaTarea || 'Sin nota' }}
                     />
+                  </div>
+                )}
+
+                {loadingAdjuntosBitacoraTarea && (
+                  <div className="mt-3 pt-3 border-top">
+                    <div className="d-flex align-items-center gap-2 text-muted small">
+                      <Spinner animation="border" size="sm" />
+                      <span>Cargando archivos adjuntos...</span>
+                    </div>
+                  </div>
+                )}
+
+                {!loadingAdjuntosBitacoraTarea && adjuntosBitacoraTarea.length > 0 && (
+                  <div className="mt-3 pt-3 border-top">
+                    <label className="text-muted small fw-semibold text-uppercase mb-2 d-block" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>
+                      Archivos adjuntos de la tarea
+                    </label>
+                    <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
+                      <Badge bg="primary">
+                        {adjuntosBitacoraTarea.length}{" "}
+                        {adjuntosBitacoraTarea.length === 1 ? "archivo" : "archivos"}
+                      </Badge>
+                      {adjuntosBitacoraTarea.filter(esImagenAdjunto).length > 0 && (
+                        <small className="text-muted">
+                          <i className="fas fa-image text-primary me-1" />
+                          {adjuntosBitacoraTarea.filter(esImagenAdjunto).length}
+                        </small>
+                      )}
+                      {adjuntosBitacoraTarea.filter(esPDF).length > 0 && (
+                        <small className="text-muted">
+                          <i className="fas fa-file-pdf text-danger me-1" />
+                          {adjuntosBitacoraTarea.filter(esPDF).length}
+                        </small>
+                      )}
+                      {adjuntosBitacoraTarea.filter(esWord).length > 0 && (
+                        <small className="text-muted">
+                          <i className="fas fa-file-word text-primary me-1" />
+                          {adjuntosBitacoraTarea.filter(esWord).length}
+                        </small>
+                      )}
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {adjuntosBitacoraTarea.map((adjunto) => {
+                        const esImg = esImagenAdjunto(adjunto);
+                        const esPdfA = esPDF(adjunto);
+                        const esDocA = esWord(adjunto);
+                        return (
+                          <div
+                            key={adjunto.id}
+                            className="position-relative border rounded"
+                            style={{
+                              width: "120px",
+                              height: "120px",
+                              cursor: "pointer",
+                              overflow: "hidden",
+                              backgroundColor: "#f8f9fa",
+                            }}
+                            onClick={() => abrirPreview(adjunto)}
+                            title="Haz clic para previsualizar"
+                          >
+                            {esImg ? (
+                              <>
+                                <img
+                                  src={adjunto.url}
+                                  alt={adjunto.nombre_original || "Imagen"}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  onError={(e) => {
+                                    e.target.style.display = "none";
+                                    e.target.parentElement.innerHTML =
+                                      '<i class="fas fa-image text-muted" style="font-size: 2rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></i>';
+                                  }}
+                                />
+                                <div className="position-absolute top-0 start-0 end-0 bottom-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all d-flex align-items-center justify-content-center">
+                                  <i className="fas fa-eye text-white opacity-0 hover:opacity-100" />
+                                </div>
+                              </>
+                            ) : esPdfA ? (
+                              <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-danger bg-opacity-10">
+                                <i className="fas fa-file-pdf text-danger" style={{ fontSize: "2rem" }} />
+                                <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                                  {adjunto.nombre_original || "PDF"}
+                                </small>
+                              </div>
+                            ) : esDocA ? (
+                              <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-primary bg-opacity-10">
+                                <i className="fas fa-file-word text-primary" style={{ fontSize: "2rem" }} />
+                                <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                                  {adjunto.nombre_original || "Word"}
+                                </small>
+                              </div>
+                            ) : (
+                              <div className="d-flex flex-column align-items-center justify-content-center h-100">
+                                <i className="fas fa-file text-secondary" style={{ fontSize: "2rem" }} />
+                                <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+                                  {adjunto.nombre_original || "Archivo"}
+                                </small>
+                              </div>
+                            )}
+                            <div className="position-absolute top-1 end-1 opacity-0 hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-primary rounded-circle p-1 shadow"
+                                title="Descargar"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  descargarArchivoAdjunto(adjunto);
+                                }}
+                              >
+                                <i className="fas fa-download" style={{ fontSize: "0.7rem" }} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
