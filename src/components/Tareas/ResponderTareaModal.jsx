@@ -153,7 +153,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
 
-  // Orden del historial: Pendiente -> En progreso -> Completada, luego fecha (creación/inicio).
+  // Orden del historial:
+  // - Primero por "última actividad" (tarea modificada / comentario más reciente)
+  // - Luego por estado (Pendiente -> En progreso -> Completada)
+  // - Luego por fecha base (creación/inicio)
   const getEstadoPrioridad = (estado) => {
     const estadoNormalizado = String(estado || "").toLowerCase().trim();
     if (["pending", "pendiente"].includes(estadoNormalizado)) return 0;
@@ -173,10 +176,51 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     return Number.isNaN(timestamp) ? 0 : timestamp;
   };
 
+  const getUltimaActividadHistorial = (item) => {
+    const fechas = [];
+
+    // Campos típicos de actualización en tareas/logs
+    [
+      item?.updated_at,
+      item?.fecha_actualizacion,
+      item?.last_activity_at,
+      item?.last_updated_at,
+      item?.completed_at,
+      item?.end_date,
+      item?.fecha_fin,
+    ].forEach((f) => {
+      const t = f ? new Date(f).getTime() : 0;
+      if (t && !Number.isNaN(t)) fechas.push(t);
+    });
+
+    // Comentarios del historial: usar el comentario más reciente si existe
+    if (Array.isArray(item?.comentarios) && item.comentarios.length > 0) {
+      item.comentarios.forEach((c) => {
+        const raw =
+          c?.fecha ||
+          c?.created_at ||
+          c?.updated_at ||
+          c?.fecha_creacion ||
+          c?.fecha_actualizacion;
+        const t = raw ? new Date(raw).getTime() : 0;
+        if (t && !Number.isNaN(t)) fechas.push(t);
+      });
+    }
+
+    // Fallback a la fecha base del item
+    fechas.push(getFechaOrdenHistorial(item));
+    return Math.max(...fechas);
+  };
+
   const historialOrdenado = [...historial].sort((a, b) => {
+    const actA = getUltimaActividadHistorial(a);
+    const actB = getUltimaActividadHistorial(b);
+    if (actA !== actB) return actB - actA;
+
     const prioridadA = getEstadoPrioridad(a?.estado);
     const prioridadB = getEstadoPrioridad(b?.estado);
     if (prioridadA !== prioridadB) return prioridadA - prioridadB;
+
     return getFechaOrdenHistorial(b) - getFechaOrdenHistorial(a);
   });
 
