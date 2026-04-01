@@ -198,10 +198,27 @@ export const formatDateTimeForDisplay = (dateString) => {
   if (!dateString) return "-";
   
   try {
+    // Si el backend envía timestamps sin zona horaria (ej: "2026-04-01 13:55:00" o "2026-04-01T13:55:00"),
+    // normalmente representan UTC. El parser nativo los interpreta como hora local y "corre" la hora.
+    // Normalizamos esos casos a ISO UTC agregando "Z".
+    const normalizeToUtcIsoIfNoTz = (raw) => {
+      if (typeof raw !== "string") return raw;
+      const s = raw.trim();
+      // Ya tiene TZ explícita (Z o ±HH:MM) => no tocar
+      if (/[zZ]$/.test(s) || /[+-]\d{2}:\d{2}$/.test(s)) return raw;
+      // "YYYY-MM-DD HH:mm(:ss)?" o "YYYY-MM-DDTHH:mm(:ss)?"
+      if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?(\.\d+)?$/.test(s)) {
+        const iso = s.replace(" ", "T");
+        return `${iso}Z`;
+      }
+      return raw;
+    };
+
+    const normalized = normalizeToUtcIsoIfNoTz(dateString);
     const parts = extractDateParts(dateString);
     if (!parts) {
       // Intentar parsear como fecha con hora
-      const date = new Date(dateString);
+      const date = new Date(normalized);
       if (isNaN(date.getTime())) return "-";
       
       const monthStr = String(date.getMonth() + 1).padStart(2, "0");
@@ -218,7 +235,7 @@ export const formatDateTimeForDisplay = (dateString) => {
     }
     
     // Si solo tenemos fecha, intentar obtener la hora del objeto Date original
-    const date = new Date(dateString);
+    const date = new Date(normalized);
     if (!isNaN(date.getTime())) {
       const monthStr = String(parts.month).padStart(2, "0");
       const dayStr = String(parts.day).padStart(2, "0");
