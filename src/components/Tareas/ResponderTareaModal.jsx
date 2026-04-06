@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+// @ts-nocheck — evita diagnósticos en cascada del language service sobre este .jsx
+import { useState, useEffect, useRef } from "react";
 import {
   Modal,
   Button,
@@ -12,6 +13,7 @@ import {
   Toast,
   ToastContainer,
 } from "react-bootstrap";
+import { PatternFormat } from "react-number-format";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
@@ -83,6 +85,43 @@ const fechaToInputDate = (fecha) => {
   } catch {
     return "";
   }
+};
+
+/** YYYY-MM-DD → MM/DD/YYYY para el campo de edición (orden mes / día / año) */
+const ymdIsoToMdySlash = (ymd) => {
+  if (!ymd || typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
+  const [y, m, d] = ymd.split("-");
+  return `${m}/${d}/${y}`;
+};
+
+/** MM/DD/YYYY (con o sin slashes) → YYYY-MM-DD o null si incompleta / inválida */
+const parseMdySlashToYmdIso = (formattedValue) => {
+  if (!formattedValue || typeof formattedValue !== "string") return null;
+  const digits = formattedValue.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const mm = parseInt(digits.slice(0, 2), 10);
+  const dd = parseInt(digits.slice(2, 4), 10);
+  const yyyy = parseInt(digits.slice(4, 8), 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
+  const dt = new Date(yyyy, mm - 1, dd);
+  if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
+  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+};
+
+/** Timestamp para ordenar comentarios del historial (más reciente primero) */
+const getComentarioHistorialOrdenMs = (c) => {
+  const raw =
+    c?.fecha ||
+    c?.created_at ||
+    c?.updated_at ||
+    c?.fecha_creacion ||
+    c?.fecha_actualizacion;
+  if (raw) {
+    const t = new Date(raw).getTime();
+    if (!Number.isNaN(t)) return t;
+  }
+  const nid = Number(c?.id);
+  return Number.isFinite(nid) ? nid : 0;
 };
 
 /** Vista amigable mes–día–año (español) para fechas en YYYY-MM-DD; sin corrimientos por zona horaria */
@@ -171,6 +210,87 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
+  const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
+  /** Valores mostrados en los campos mes/día/año (MM/DD/AAAA) */
+  const [scheduledDateMdy, setScheduledDateMdy] = useState(() =>
+    ymdIsoToMdySlash(fechaToInputDate(tarea?.scheduled_date) || "")
+  );
+  const [dueDateMdy, setDueDateMdy] = useState(() =>
+    ymdIsoToMdySlash(fechaToInputDate(tarea?.due_date) || "")
+  );
+  // Fecha de vencimiento: bloqueada para todos; editable solo tras ingresar la clave del super admin
+  const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
+  const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
+  const [adminPasswordForDueDate, setAdminPasswordForDueDate] = useState("");
+  const [adminPasswordInput, setAdminPasswordInput] = useState("");
+  const [verifyingDueDatePassword, setVerifyingDueDatePassword] = useState(false);
+  const [dueDatePasswordError, setDueDatePasswordError] = useState("");
+  // ✅ Reasignación del usuario asignado (operativa)
+  const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignPreview, setAssignPreview] = useState(null); // para render inmediato sin depender del padre
+
+  // ✅ Estados para menciones
+  const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
+  const [mentionedUserIds, setMentionedUserIds] = useState([]); // IDs de usuarios mencionados en el comentario actual
+
+  // Estados para archivos adjuntos de la respuesta
+  const [archivos, setArchivos] = useState([]);
+  const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+
+  // Estados para reconocimiento de voz
+  const [grabando, setGrabando] = useState(false);
+  const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
+  const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
+  const grabandoRef = useRef(false);
+  const quillEditorRef = useRef(null);
+  const usuariosCargadosRef = useRef(false);
+  const tareaIdRef = useRef(null);
+
+  // ✅ Hook para manejo de menciones en Quill
+  const {
+    quillRef: mentionQuillRef,
+    showMentionList,
+    mentionList,
+    selectedMentionIndex,
+    insertMention,
+    handleQuillChange,
+    handleQuillKeyDown,
+    updateSelectedIndex,
+  } = useMentionableQuill(usuarios, (ids) => {
+    setMentionedUserIds(ids);
+  });
+
+  const onScheduledDateMdyChange = ({ formattedValue }) => {
+    setScheduledDateMdy(formattedValue);
+    const digits = (formattedValue || "").replace(/\D/g, "");
+    if (digits.length === 0) {
+      setScheduledDate("");
+      return;
+    }
+    const ymd = parseMdySlashToYmdIso(formattedValue);
+    setScheduledDate(ymd || "");
+  };
+
+  const onDueDateMdyChange = ({ formattedValue }) => {
+    setDueDateMdy(formattedValue);
+    const digits = (formattedValue || "").replace(/\D/g, "");
+    if (digits.length === 0) {
+      setDueDate("");
+      return;
+    }
+    const ymd = parseMdySlashToYmdIso(formattedValue);
+    setDueDate(ymd || "");
+  };
+
+  const isDueDateLocked = tarea?.id && !dueDateUnlocked;
+  const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
+  const esTareaVencida =
+    tarea?.due_date &&
+    isTaskOverdue(tarea.due_date) &&
+    tarea?.status !== "completed";
 
   // Orden del historial:
   // - Primero por "última actividad" (tarea modificada / comentario más reciente)
@@ -255,59 +375,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const comentariosTareaActual = historial
     .filter(h => h.tipo === 'tarea' && h.concepto === tarea?.log?.concept?.name)
     .flatMap(h => h.comentarios || []);
-
-  const [loadingHistorial, setLoadingHistorial] = useState(false);
-
-  const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
-  const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
-  // Fecha de vencimiento: bloqueada para todos; editable solo tras ingresar la clave del super admin
-  const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
-  const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
-  const [adminPasswordForDueDate, setAdminPasswordForDueDate] = useState("");
-  const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  const [verifyingDueDatePassword, setVerifyingDueDatePassword] = useState(false);
-  const [dueDatePasswordError, setDueDatePasswordError] = useState("");
-  const isDueDateLocked = tarea?.id && !dueDateUnlocked;
-  const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
-  const esTareaVencida =
-    tarea?.due_date &&
-    isTaskOverdue(tarea.due_date) &&
-    tarea?.status !== "completed";
-
-  // ✅ Reasignación del usuario asignado (operativa)
-  const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
-  const [assignLoading, setAssignLoading] = useState(false);
-  const [assignPreview, setAssignPreview] = useState(null); // para render inmediato sin depender del padre
-
-  // ✅ Estados para menciones
-  const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
-  const [mentionedUserIds, setMentionedUserIds] = useState([]); // IDs de usuarios mencionados en el comentario actual
-
-  // Estados para archivos adjuntos de la respuesta
-  const [archivos, setArchivos] = useState([]);
-  const [subiendoArchivos, setSubiendoArchivos] = useState(false);
-
-  // Estados para reconocimiento de voz
-  const [grabando, setGrabando] = useState(false);
-  const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
-  const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
-  const grabandoRef = useRef(false);
-  const quillEditorRef = useRef(null);
-
-  // ✅ Hook para manejo de menciones en Quill
-  const {
-    quillRef: mentionQuillRef,
-    showMentionList,
-    mentionList,
-    selectedMentionIndex,
-    insertMention,
-    handleQuillChange,
-    handleQuillKeyDown,
-    updateSelectedIndex,
-  } = useMentionableQuill(usuarios, (ids) => {
-    setMentionedUserIds(ids);
-  });
-
 
   // Sincronizar ref con estado
   useEffect(() => {
@@ -580,7 +647,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   };
 
   // ✅ Cargar usuarios para menciones (precargar inmediatamente)
-  const usuariosCargadosRef = useRef(false);
   useEffect(() => {
     if (!show) {
       // No limpiar usuarios al cerrar para mantener cache
@@ -676,8 +742,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   }, [show, tarea?.id]);
 
   // ✅ Usar useRef para rastrear la tarea actual y evitar loops infinitos
-  const tareaIdRef = useRef(null);
-  
   useEffect(() => {
     const currentTareaId = tarea?.id;
     
@@ -712,8 +776,12 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     tareaIdRef.current = currentTareaId;
 
     // ✅ Resetear fechas cuando cambia la tarea
-    setScheduledDate(fechaToInputDate(tarea?.scheduled_date) || "");
-    setDueDate(fechaToInputDate(tarea?.due_date) || "");
+    const schedInit = fechaToInputDate(tarea?.scheduled_date) || "";
+    const dueInit = fechaToInputDate(tarea?.due_date) || "";
+    setScheduledDate(schedInit);
+    setDueDate(dueInit);
+    setScheduledDateMdy(ymdIsoToMdySlash(schedInit));
+    setDueDateMdy(ymdIsoToMdySlash(dueInit));
     setDueDateUnlocked(false);
     setShowDueDatePasswordModal(false);
     setAdminPasswordForDueDate("");
@@ -1320,11 +1388,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   };
 
   const handleActualizarFechas = async () => {
-    if (!scheduledDate || !dueDate) {
-      alert("Las fechas no pueden estar vacías.");
+    const schedYmd = parseMdySlashToYmdIso(scheduledDateMdy);
+    const dueYmd = parseMdySlashToYmdIso(dueDateMdy);
+    if (!schedYmd || !dueYmd) {
+      alert("Ingrese fechas completas y válidas en formato mes/día/año (MM/DD/AAAA).");
       return;
     }
-    if (scheduledDate > dueDate) {
+    if (schedYmd > dueYmd) {
       setToastVariant("danger");
       setToastMessage("La fecha de inicio no puede ser mayor que la fecha de vencimiento.");
       setShowToast(true);
@@ -1339,7 +1409,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
 
     const dueDateOriginal = fechaToInputDate(tarea?.due_date) || "";
-    const dueDateCambiada = dueDate !== dueDateOriginal;
+    const dueDateCambiada = dueYmd !== dueDateOriginal;
     const requierePassword = dueDateCambiada;
     if (requierePassword && !adminPasswordForDueDate) {
       setToastVariant("warning");
@@ -1358,8 +1428,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       }
       
       const payload = {
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: schedYmd,
+        due_date: dueYmd,
       };
       if (dueDateCambiada) {
         payload.admin_password = adminPasswordForDueDate;
@@ -1368,11 +1438,15 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
       const tareaActualizada = {
         ...tarea,
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: schedYmd,
+        due_date: dueYmd,
       };
 
       if (onUpdated) onUpdated(tareaActualizada);
+      setScheduledDate(schedYmd);
+      setDueDate(dueYmd);
+      setScheduledDateMdy(ymdIsoToMdySlash(schedYmd));
+      setDueDateMdy(ymdIsoToMdySlash(dueYmd));
       setDueDateUnlocked(false);
       setAdminPasswordForDueDate("");
       setToastVariant("success");
@@ -2078,15 +2152,17 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-calendar-alt text-primary me-1"></i>
-                          Programada: <small className="text-muted">(mes / día / año)</small>
+                          Programada: <small className="text-muted">(mes / día / año, MM/DD/AAAA)</small>
                         </Form.Label>
-                        <Form.Control
-                          type="date"
-                          lang="es"
-                          value={scheduledDate}
-                          onChange={(e) => setScheduledDate(e.target.value)}
-                          max={dueDate || undefined}
-                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes / día / año"}
+                        <PatternFormat
+                          customInput={Form.Control}
+                          format="##/##/####"
+                          mask="_"
+                          placeholder="mm/dd/aaaa"
+                          inputMode="numeric"
+                          value={scheduledDateMdy}
+                          onValueChange={onScheduledDateMdyChange}
+                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes / día / año (MM/DD/AAAA)"}
                           style={{ borderRadius: "6px" }}
                         />
                         {!!scheduledDate && (
@@ -2100,21 +2176,23 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-clock text-warning me-1"></i>
-                          Vencimiento: <small className="text-muted">(mes / día / año)</small>
+                          Vencimiento: <small className="text-muted">(mes / día / año, MM/DD/AAAA)</small>
                           {isDueDateLocked && (
                             <small className="text-muted ms-2">(requiere clave del super admin)</small>
                           )}
                         </Form.Label>
                         <div className="d-flex gap-2 align-items-start">
-                          <Form.Control
-                            type="date"
-                            lang="es"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
-                            min={scheduledDate || undefined}
+                          <PatternFormat
+                            customInput={Form.Control}
+                            format="##/##/####"
+                            mask="_"
+                            placeholder="mm/dd/aaaa"
+                            inputMode="numeric"
+                            value={dueDateMdy}
+                            onValueChange={onDueDateMdyChange}
                             disabled={isDueDateLocked}
                             readOnly={isDueDateLocked}
-                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes / día / año")}
+                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes / día / año (MM/DD/AAAA)")}
                             style={{ borderRadius: "6px", flex: 1 }}
                           />
                           {isDueDateLocked && (
@@ -3100,13 +3178,26 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       const historialComentariosKey = String(
                         h.id ?? h.log_id ?? h.log?.id ?? `hist-${idx}`
                       );
-                      const comentariosList = h.comentarios.filter((c) => {
-                        if (!c.id) {
-                          console.warn("⚠️ Comentario historial sin ID, saltando:", c);
-                          return false;
-                        }
-                        return true;
-                      });
+                      const comentariosList = h.comentarios
+                        .filter((c) => {
+                          if (!c.id) {
+                            console.warn("⚠️ Comentario historial sin ID, saltando:", c);
+                            return false;
+                          }
+                          return true;
+                        })
+                        .slice()
+                        .sort((a, b) => {
+                          const tb = getComentarioHistorialOrdenMs(b);
+                          const ta = getComentarioHistorialOrdenMs(a);
+                          if (tb !== ta) return tb - ta;
+                          const idb = Number(b.id);
+                          const ida = Number(a.id);
+                          if (Number.isFinite(idb) && Number.isFinite(ida) && idb !== ida) {
+                            return idb - ida;
+                          }
+                          return String(b.id).localeCompare(String(a.id), undefined, { numeric: true });
+                        });
                       if (comentariosList.length === 0) return null;
 
                       const algunoEnEdicion = comentariosList.some((c) =>
