@@ -131,7 +131,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   const [comentariosActualizados, setComentariosActualizados] = useState({});
   const [comentariosHistorialActualizados, setComentariosHistorialActualizados] = useState({});
-  /** Comentarios del historial (columna derecha): cuerpo colapsado por ID hasta que el usuario expande */
+  /** Comentarios del historial (columna derecha): un solo panel desplegable por ítem de historial (clave = id del log/tarea) */
   const [historialComentariosExpandidos, setHistorialComentariosExpandidos] = useState({});
 
   // ✅ Estados para adjuntos de comentarios
@@ -3066,152 +3066,181 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       );
                     })()}
 
-                    {/* ✅ Mostrar comentarios si existen */}
-                    {h.comentarios && h.comentarios.length > 0 && (
-                      <div
-                        className="mt-2 p-2 rounded"
-                        style={{
-                          background: "#f8f9fa",
-                          border: "1px solid #dee2e6",
-                          fontSize: "0.85rem"
-                        }}
-                      >
-                        <strong>💬 Comentarios:</strong>
-                        {h.comentarios.map((c) => {
-                          if (!c.id) {
-                            console.warn("⚠️ Comentario historial sin ID, saltando:", c);
-                            return null;
-                          }
+                    {/* ✅ Comentarios: un solo desplegable por ítem del historial */}
+                    {h.comentarios && h.comentarios.length > 0 && (() => {
+                      const historialComentariosKey = String(
+                        h.id ?? h.log_id ?? h.log?.id ?? `hist-${idx}`
+                      );
+                      const comentariosList = h.comentarios.filter((c) => {
+                        if (!c.id) {
+                          console.warn("⚠️ Comentario historial sin ID, saltando:", c);
+                          return false;
+                        }
+                        return true;
+                      });
+                      if (comentariosList.length === 0) return null;
 
-                          const estaEnEdicion = comentariosHistorialEnEdicion.hasOwnProperty(c.id);
-                          const fueActualizado = comentariosHistorialActualizados[c.id];
+                      const algunoEnEdicion = comentariosList.some((c) =>
+                        comentariosHistorialEnEdicion.hasOwnProperty(c.id)
+                      );
+                      const panelExpandido =
+                        !!historialComentariosExpandidos[historialComentariosKey] || algunoEnEdicion;
 
-                          return (
-                            <div 
-                              key={c.id} 
-                              style={{ 
-                                borderBottom: "1px solid #e9ecef", 
-                                padding: "4px 0",
-                                backgroundColor: fueActualizado ? '#d4edda' : 'transparent'
-                              }}
-                            >
-                              {fueActualizado && (
-                                <Badge bg="success" size="sm" className="mb-1">Actualizado ✓</Badge>
-                              )}
-                              
-                              {estaEnEdicion ? (
-                                <>
-                                  <div className="mb-2 edit-comment-quill">
-                                    <ReactQuill
-                                      theme="snow"
-                                      value={comentariosHistorialEnEdicion[c.id] || ''}
-                                      onChange={(content) =>
-                                        setComentariosHistorialEnEdicion((prev) => ({
-                                          ...prev,
-                                          [c.id]: content,
-                                        }))
-                                      }
-                                      modules={quillModules}
-                                      formats={quillFormats}
-                                    />
-                                  </div>
-                                  <div className="d-flex gap-2">
-                                    <Button
-                                      size="sm"
-                                      variant="success"
-                                      onClick={() => handleGuardarComentarioHistorial(c.id)}
-                                      disabled={isNoteEmpty(comentariosHistorialEnEdicion[c.id])}
-                                    >
-                                      Guardar
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="secondary"
-                                      onClick={() =>
-                                        setComentariosHistorialEnEdicion((prev) => {
-                                          const nuevo = { ...prev };
-                                          delete nuevo[c.id];
-                                          return nuevo;
-                                        })
-                                      }
-                                    >
-                                      Cancelar
-                                    </Button>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div className="d-flex align-items-start justify-content-between gap-2 flex-wrap">
-                                    <button
-                                      type="button"
-                                      className="btn btn-link text-start p-0 text-decoration-none flex-grow-1"
-                                      style={{ minWidth: 0 }}
-                                      onClick={() =>
-                                        setHistorialComentariosExpandidos((prev) => ({
-                                          ...prev,
-                                          [c.id]: !prev[c.id],
-                                        }))
-                                      }
-                                      aria-expanded={!!historialComentariosExpandidos[c.id]}
-                                    >
-                                      <span className="d-flex align-items-center gap-2 flex-wrap">
-                                        <strong>{c.user}</strong>
-                                        <i
-                                          className={`fas text-muted ${historialComentariosExpandidos[c.id] ? "fa-chevron-up" : "fa-chevron-down"}`}
-                                          style={{ fontSize: "0.75rem" }}
-                                          aria-hidden
-                                        />
-                                      </span>
-                                      <small className="text-muted d-block mt-1">
-                                        {c.fecha ? formatDateTimeForDisplay(c.fecha) : "Fecha inválida"}
-                                      </small>
-                                      <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
-                                        {historialComentariosExpandidos[c.id] ? "Ocultar comentario" : "Ver comentario"}
-                                      </small>
-                                    </button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline-secondary"
-                                      className="align-self-start flex-shrink-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setComentariosHistorialEnEdicion((prev) => ({
-                                          ...prev,
-                                          [c.id]: c.comment,
-                                        }));
-                                      }}
-                                    >
-                                      ✏️ Editar
-                                    </Button>
-                                  </div>
-                                  {historialComentariosExpandidos[c.id] && (
-                                    <>
-                                      <div
-                                        className="mt-2"
-                                        style={{
-                                          fontSize: "14px",
-                                          lineHeight: "1.5",
-                                          wordBreak: "break-word",
-                                        }}
-                                        dangerouslySetInnerHTML={{
-                                          __html: highlightMentions(c.comment || "Sin contenido"),
-                                        }}
-                                      />
-                                      {(() => {
-                                        if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
-                                          setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
-                                        }
-                                        return <MostrarAdjuntosComentario comentarioId={c.id} />;
-                                      })()}
-                                    </>
-                                  )}
-                                </>
-                              )}
+                      return (
+                        <div
+                          className="mt-2 p-2 rounded"
+                          style={{
+                            background: "#f8f9fa",
+                            border: "1px solid #dee2e6",
+                            fontSize: "0.85rem",
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="w-100 d-flex align-items-center justify-content-between p-2 bg-white rounded border-0 gap-2"
+                            style={{ cursor: algunoEnEdicion ? "default" : "pointer", border: "1px solid #dee2e6" }}
+                            onClick={() => {
+                              if (algunoEnEdicion) return;
+                              setHistorialComentariosExpandidos((prev) => ({
+                                ...prev,
+                                [historialComentariosKey]: !prev[historialComentariosKey],
+                              }));
+                            }}
+                            aria-expanded={panelExpandido}
+                          >
+                            <div className="d-flex align-items-center gap-2 flex-wrap text-start">
+                              <span className="fw-semibold">💬 Comentarios</span>
+                              <Badge bg="secondary">{comentariosList.length}</Badge>
+                              <small className="text-muted">
+                                {panelExpandido ? "Ocultar lista" : "Ver comentarios"}
+                              </small>
                             </div>
-                          );
-                        })}
-                      </div>
-                    )}
+                            <i
+                              className={`fas ${panelExpandido ? "fa-chevron-up" : "fa-chevron-down"} text-muted flex-shrink-0`}
+                              aria-hidden
+                            />
+                          </button>
+
+                          {panelExpandido && (
+                            <div
+                              className="mt-2 pt-2"
+                              style={{ borderTop: "1px solid #dee2e6" }}
+                            >
+                              {comentariosList.map((c) => {
+                                const estaEnEdicion = comentariosHistorialEnEdicion.hasOwnProperty(c.id);
+                                const fueActualizado = comentariosHistorialActualizados[c.id];
+
+                                return (
+                                  <div
+                                    key={c.id}
+                                    style={{
+                                      borderBottom: "1px solid #e9ecef",
+                                      padding: "8px 0",
+                                      backgroundColor: fueActualizado ? "#d4edda" : "transparent",
+                                    }}
+                                  >
+                                    {fueActualizado && (
+                                      <Badge bg="success" size="sm" className="mb-1">
+                                        Actualizado ✓
+                                      </Badge>
+                                    )}
+
+                                    {estaEnEdicion ? (
+                                      <>
+                                        <div className="mb-2 edit-comment-quill">
+                                          <ReactQuill
+                                            theme="snow"
+                                            value={comentariosHistorialEnEdicion[c.id] || ""}
+                                            onChange={(content) =>
+                                              setComentariosHistorialEnEdicion((prev) => ({
+                                                ...prev,
+                                                [c.id]: content,
+                                              }))
+                                            }
+                                            modules={quillModules}
+                                            formats={quillFormats}
+                                          />
+                                        </div>
+                                        <div className="d-flex gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="success"
+                                            onClick={() => handleGuardarComentarioHistorial(c.id)}
+                                            disabled={isNoteEmpty(comentariosHistorialEnEdicion[c.id])}
+                                          >
+                                            Guardar
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="secondary"
+                                            onClick={() =>
+                                              setComentariosHistorialEnEdicion((prev) => {
+                                                const nuevo = { ...prev };
+                                                delete nuevo[c.id];
+                                                return nuevo;
+                                              })
+                                            }
+                                          >
+                                            Cancelar
+                                          </Button>
+                                        </div>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <div className="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                          <div style={{ minWidth: 0 }}>
+                                            <strong>{c.user}</strong>
+                                            <small className="text-muted d-block mt-1">
+                                              {c.fecha
+                                                ? formatDateTimeForDisplay(c.fecha)
+                                                : "Fecha inválida"}
+                                            </small>
+                                          </div>
+                                          <Button
+                                            size="sm"
+                                            variant="outline-secondary"
+                                            className="flex-shrink-0"
+                                            onClick={() => {
+                                              setHistorialComentariosExpandidos((prev) => ({
+                                                ...prev,
+                                                [historialComentariosKey]: true,
+                                              }));
+                                              setComentariosHistorialEnEdicion((prev) => ({
+                                                ...prev,
+                                                [c.id]: c.comment,
+                                              }));
+                                            }}
+                                          >
+                                            ✏️ Editar
+                                          </Button>
+                                        </div>
+                                        <div
+                                          className="mt-2"
+                                          style={{
+                                            fontSize: "14px",
+                                            lineHeight: "1.5",
+                                            wordBreak: "break-word",
+                                          }}
+                                          dangerouslySetInnerHTML={{
+                                            __html: highlightMentions(c.comment || "Sin contenido"),
+                                          }}
+                                        />
+                                        {(() => {
+                                          if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                                            setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+                                          }
+                                          return <MostrarAdjuntosComentario comentarioId={c.id} />;
+                                        })()}
+                                      </>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 ))}
               </div>
