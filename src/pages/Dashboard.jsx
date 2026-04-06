@@ -1000,7 +1000,7 @@ const handleOpenViewModal = (cliente) => {
                                       {cliente.nombre_completo}
                                     </Link>
                                   </td>
-                                  <td>{String(dia).padStart(2, '0')}/{String(mes).padStart(2, '0')}/{año}</td>
+                                  <td>{String(mes).padStart(2, '0')}/{String(dia).padStart(2, '0')}/{año}</td>
                                   <td className="fw-medium">{edad} años</td>
                                   <td className="small text-muted">
                                     {cliente.telefono || cliente.email || "—"}

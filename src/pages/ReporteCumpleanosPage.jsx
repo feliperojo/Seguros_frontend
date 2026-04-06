@@ -142,7 +142,7 @@ const formatDate = (dateString) => {
     // Si es una fecha en formato ISO (YYYY-MM-DD), usar directamente
     if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
       const [year, month, day] = dateString.split('T')[0].split('-');
-      return `${day}/${month}/${year}`;
+      return `${month}/${day}/${year}`;
     }
     // Si tiene hora, extraer solo la fecha
     const date = new Date(dateString);
@@ -150,7 +150,7 @@ const formatDate = (dateString) => {
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
-    return `${day}/${month}/${year}`;
+    return `${month}/${day}/${year}`;
   } catch {
     return dateString;
   }

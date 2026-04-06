@@ -34,6 +34,17 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   };
 
+  // Formato visible para el usuario: MM/DD/AAAA (sin cambiar el valor real guardado)
+  const formatMDY = (valor) => {
+    if (!valor) return "-";
+    const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
+    if (isNaN(d.getTime())) return "-";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${month}/${day}/${year}`;
+  };
+
   const [coberturas, setCoberturas] = useState([]);
   const [nuevo, setNuevo] = useState({
     documento_requerido: "",
@@ -366,10 +377,10 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                               size="sm"
                             />
                           ) : (
-                            r.fecha_vencimiento || "-"
+                            formatMDY(r.fecha_vencimiento)
                           )}
                         </td>
-                        <td>{r.fecha_solicitud || "-"}</td>
+                        <td>{formatMDY(r.fecha_solicitud)}</td>
                         <td>
                           {editingId === r.id ? (
                             <Form.Control
