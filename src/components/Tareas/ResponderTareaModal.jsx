@@ -85,6 +85,23 @@ const fechaToInputDate = (fecha) => {
   }
 };
 
+/** Vista amigable mes–día–año (español) para fechas en YYYY-MM-DD; sin corrimientos por zona horaria */
+const formatYmdMesDiaAnoVisual = (ymd) => {
+  if (!ymd || typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
+  const [yStr, mStr, dStr] = ymd.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  const d = parseInt(dStr, 10);
+  if (!y || !m || !d) return "";
+  const dt = new Date(y, m - 1, d);
+  if (Number.isNaN(dt.getTime())) return "";
+  return dt.toLocaleDateString("es-ES", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
+
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
   const { hasPermission, hasRole } = useAuth();
   // ✅ Log de depuración para verificar la estructura de la tarea (solo una vez por tarea)
@@ -2061,23 +2078,29 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-calendar-alt text-primary me-1"></i>
-                          Programada: <small className="text-muted">(mm/dd/yyyy)</small>
+                          Programada: <small className="text-muted">(mes / día / año)</small>
                         </Form.Label>
                         <Form.Control
                           type="date"
+                          lang="es"
                           value={scheduledDate}
                           onChange={(e) => setScheduledDate(e.target.value)}
                           max={dueDate || undefined}
-                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mm/dd/yyyy"}
+                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes / día / año"}
                           style={{ borderRadius: "6px" }}
                         />
+                        {!!scheduledDate && (
+                          <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
+                            {formatYmdMesDiaAnoVisual(scheduledDate)}
+                          </Form.Text>
+                        )}
                       </Form.Group>
                     </Col>
                     <Col>
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-clock text-warning me-1"></i>
-                          Vencimiento: <small className="text-muted">(mm/dd/yyyy)</small>
+                          Vencimiento: <small className="text-muted">(mes / día / año)</small>
                           {isDueDateLocked && (
                             <small className="text-muted ms-2">(requiere clave del super admin)</small>
                           )}
@@ -2085,12 +2108,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         <div className="d-flex gap-2 align-items-start">
                           <Form.Control
                             type="date"
+                            lang="es"
                             value={dueDate}
                             onChange={(e) => setDueDate(e.target.value)}
                             min={scheduledDate || undefined}
                             disabled={isDueDateLocked}
                             readOnly={isDueDateLocked}
-                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mm/dd/yyyy")}
+                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes / día / año")}
                             style={{ borderRadius: "6px", flex: 1 }}
                           />
                           {isDueDateLocked && (
@@ -2106,6 +2130,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                             </Button>
                           )}
                         </div>
+                        {!!dueDate && (
+                          <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
+                            {formatYmdMesDiaAnoVisual(dueDate)}
+                          </Form.Text>
+                        )}
                       </Form.Group>
                     </Col>
                   </Row>
