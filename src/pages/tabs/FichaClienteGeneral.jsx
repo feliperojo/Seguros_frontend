@@ -615,7 +615,7 @@ export default function FichaClienteGeneral() {
                 </div>
                 <div className="col-md-6">
                   <div className="mb-2">
-                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado del Grupo</label>
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Proceso</label>
                     <div className={`small ${esEstadoDescartado ? "text-danger fw-semibold" : "text-dark"}`}>
                       {gfEstado}
                     </div>

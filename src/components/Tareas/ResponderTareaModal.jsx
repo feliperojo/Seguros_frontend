@@ -131,6 +131,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   const [comentariosActualizados, setComentariosActualizados] = useState({});
   const [comentariosHistorialActualizados, setComentariosHistorialActualizados] = useState({});
+  /** Comentarios del historial (columna derecha): cuerpo colapsado por ID hasta que el usuario expande */
+  const [historialComentariosExpandidos, setHistorialComentariosExpandidos] = useState({});
 
   // ✅ Estados para adjuntos de comentarios
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
@@ -672,6 +674,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         setArchivos([]);
         setComentariosEnEdicion({});
         setComentariosHistorialEnEdicion({});
+        setHistorialComentariosExpandidos({});
         // ✅ Limpiar responseNote al cerrar el modal
         setResponseNote("");
         tareaIdRef.current = null;
@@ -704,6 +707,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     setComentariosHistorialEnEdicion({});
     setComentariosActualizados({});
     setComentariosHistorialActualizados({});
+    setHistorialComentariosExpandidos({});
     // ✅ Siempre inicializar responseNote vacío al abrir el modal
     setResponseNote("");
 
@@ -3137,44 +3141,70 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                                 </>
                               ) : (
                                 <>
-                                  <div>
-                                    <strong>{c.user}</strong>:
-                                    <div 
-                                      style={{ 
-                                        marginTop: 4,
-                                        fontSize: '14px',
-                                        lineHeight: '1.5',
-                                        wordBreak: 'break-word'
-                                      }}
-                                      dangerouslySetInnerHTML={{ __html: highlightMentions(c.comment || 'Sin contenido') }}
-                                    />
-                                  </div>
-                                  <br />
-                                  <small className="text-muted">
-                                    {c.fecha ? formatDateTimeForDisplay(c.fecha) : "Fecha inválida"}
-                                  </small>
-                                  {/* ✅ Mostrar adjuntos del comentario del historial */}
-                                  {(() => {
-                                    if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
-                                      // Cargar adjuntos usando los datos del comentario
-                                      setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
-                                    }
-                                    return <MostrarAdjuntosComentario comentarioId={c.id} />;
-                                  })()}
-                                  <div className="mt-1">
+                                  <div className="d-flex align-items-start justify-content-between gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      className="btn btn-link text-start p-0 text-decoration-none flex-grow-1"
+                                      style={{ minWidth: 0 }}
+                                      onClick={() =>
+                                        setHistorialComentariosExpandidos((prev) => ({
+                                          ...prev,
+                                          [c.id]: !prev[c.id],
+                                        }))
+                                      }
+                                      aria-expanded={!!historialComentariosExpandidos[c.id]}
+                                    >
+                                      <span className="d-flex align-items-center gap-2 flex-wrap">
+                                        <strong>{c.user}</strong>
+                                        <i
+                                          className={`fas text-muted ${historialComentariosExpandidos[c.id] ? "fa-chevron-up" : "fa-chevron-down"}`}
+                                          style={{ fontSize: "0.75rem" }}
+                                          aria-hidden
+                                        />
+                                      </span>
+                                      <small className="text-muted d-block mt-1">
+                                        {c.fecha ? formatDateTimeForDisplay(c.fecha) : "Fecha inválida"}
+                                      </small>
+                                      <small className="text-muted d-block" style={{ fontSize: "0.75rem" }}>
+                                        {historialComentariosExpandidos[c.id] ? "Ocultar comentario" : "Ver comentario"}
+                                      </small>
+                                    </button>
                                     <Button
                                       size="sm"
                                       variant="outline-secondary"
-                                      onClick={() =>
+                                      className="align-self-start flex-shrink-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
                                         setComentariosHistorialEnEdicion((prev) => ({
                                           ...prev,
                                           [c.id]: c.comment,
-                                        }))
-                                      }
+                                        }));
+                                      }}
                                     >
                                       ✏️ Editar
                                     </Button>
                                   </div>
+                                  {historialComentariosExpandidos[c.id] && (
+                                    <>
+                                      <div
+                                        className="mt-2"
+                                        style={{
+                                          fontSize: "14px",
+                                          lineHeight: "1.5",
+                                          wordBreak: "break-word",
+                                        }}
+                                        dangerouslySetInnerHTML={{
+                                          __html: highlightMentions(c.comment || "Sin contenido"),
+                                        }}
+                                      />
+                                      {(() => {
+                                        if (!adjuntosComentarios[c.id] && !loadingAdjuntos[c.id]) {
+                                          setTimeout(() => cargarAdjuntosComentario(c.id, c), 100);
+                                        }
+                                        return <MostrarAdjuntosComentario comentarioId={c.id} />;
+                                      })()}
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>
