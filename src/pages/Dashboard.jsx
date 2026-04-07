@@ -743,7 +743,7 @@ const handleOpenViewModal = (cliente) => {
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     const year = d.getFullYear();
-    return `${month}/${day}/${year}`;
+    return `${month}-${day}-${year}`;
   };
 
   const normalizarCobertura = (item) => {
@@ -1000,7 +1000,7 @@ const handleOpenViewModal = (cliente) => {
                                       {cliente.nombre_completo}
                                     </Link>
                                   </td>
-                                  <td>{String(mes).padStart(2, '0')}/{String(dia).padStart(2, '0')}/{año}</td>
+                                  <td>{String(mes).padStart(2, '0')}-{String(dia).padStart(2, '0')}-{año}</td>
                                   <td className="fw-medium">{edad} años</td>
                                   <td className="small text-muted">
                                     {cliente.telefono || cliente.email || "—"}
@@ -1315,7 +1315,7 @@ const handleOpenViewModal = (cliente) => {
                   const month = String(fechaVenc.getMonth() + 1).padStart(2, "0");
                   const day = String(fechaVenc.getDate()).padStart(2, "0");
                   const year = fechaVenc.getFullYear();
-                  return `${month}/${day}/${year}`;
+                  return `${month}-${day}-${year}`;
                 })()}</td>
                 <td>
                   {diasRestantes <= 5 ? (
@@ -1409,7 +1409,7 @@ const handleOpenViewModal = (cliente) => {
                               const month = String(d.getMonth() + 1).padStart(2, "0");
                               const day = String(d.getDate()).padStart(2, "0");
                               const year = d.getFullYear();
-                              return `${month}/${day}/${year}`;
+                              return `${month}-${day}-${year}`;
                             })()}</td>
                             <td>{cliente.telefono || cliente.email}</td>
                             <td className="text-end">

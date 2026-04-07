@@ -20,6 +20,97 @@ import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
 import { parseMoney } from "../services/ingresos";
 
+// Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
+const formatDateMdyDash = (value) => {
+  if (!value) return "";
+  try {
+    const s = String(value).trim();
+    // YYYY-MM-DD (o ISO con hora) => parse manual para evitar TZ
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const [y, m, d] = s.split("T")[0].split("-");
+      if (y && m && d) return `${m}-${d}-${y}`;
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return s;
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${mm}-${dd}-${yyyy}`;
+  } catch {
+    return String(value);
+  }
+};
+
+// --- Input controlado MM-DD-YYYY que guarda YYYY-MM-DD ---
+const pad2 = (n) => String(n).padStart(2, "0");
+const isoYmd = (v) => {
+  if (v == null || v === "") return "";
+  const s = String(v).trim().split("T")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+};
+const mdyDashToIso = (display) => {
+  const t = String(display ?? "").trim();
+  if (!t) return "";
+  // Si ya viene ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const digits = t.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const mm = parseInt(digits.slice(0, 2), 10);
+  const dd = parseInt(digits.slice(2, 4), 10);
+  const yyyy = parseInt(digits.slice(4, 8), 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
+  const test = new Date(yyyy, mm - 1, dd);
+  if (test.getFullYear() !== yyyy || test.getMonth() !== mm - 1 || test.getDate() !== dd) return null;
+  return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+};
+const formatMdyDashTyping = (raw) => {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+};
+const MdyDashDateInput = ({
+  valueIso,
+  onChangeIso,
+  disabled = false,
+  placeholder = "MM-DD-YYYY",
+  size = "sm",
+}) => {
+  const [display, setDisplay] = React.useState(() => formatDateMdyDash(valueIso));
+
+  React.useEffect(() => {
+    // sincronizar cuando cambia desde afuera
+    setDisplay(formatDateMdyDash(valueIso));
+  }, [valueIso]);
+
+  return (
+    <Form.Control
+      size={size}
+      type="text"
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={display}
+      disabled={disabled}
+      onChange={(e) => {
+        const next = formatMdyDashTyping(e.target.value);
+        setDisplay(next);
+        const iso = mdyDashToIso(next);
+        // solo commit cuando está completa y válida, o cuando se limpia
+        if (iso === "") onChangeIso?.("");
+        else if (iso) onChangeIso?.(iso);
+      }}
+      onBlur={() => {
+        // Si quedó incompleta, no rompas el valor ISO actual; solo re-sincroniza display con ISO
+        const iso = mdyDashToIso(display);
+        if (iso === null) {
+          setDisplay(formatDateMdyDash(valueIso));
+        }
+      }}
+    />
+  );
+};
+
 
 const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
   // Estado para controlar la pestaña activa en el modal
@@ -1856,12 +1947,12 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         <Col xs={6}>
                                           <Form.Group>
                                             <Form.Label className="small text-muted mb-1">Activación</Form.Label>
-                                            <Form.Control
-                                              size="sm"
-                                              type="date"
-                                              value={member.fecha_activacion || ""}
-                                              onChange={(e) => updateMemberData(group.id, member.id, "fecha_activacion", e.target.value)}
+                                            <MdyDashDateInput
+                                              valueIso={isoYmd(member.fecha_activacion)}
                                               disabled={member.estado_cobertura === "No"}
+                                              onChangeIso={(iso) =>
+                                                updateMemberData(group.id, member.id, "fecha_activacion", iso)
+                                              }
                                             />
 
                                           </Form.Group>
@@ -1869,12 +1960,10 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                                         <Col xs={6}>
                                           <Form.Group>
                                             <Form.Label className="small text-muted mb-1">Cancelación</Form.Label>
-                                            <Form.Control
-                                              size="sm"
-                                              type="date"
-                                              value={member.fecha_cancelacion || ""}
-                                              onChange={(e) => updateMemberData(group.id, member.id, "fecha_cancelacion", e.target.value)}
-                                              disabled
+                                            <MdyDashDateInput
+                                              valueIso={isoYmd(member.fecha_cancelacion)}
+                                              disabled={true}
+                                              onChangeIso={() => {}}
                                             />
                                           </Form.Group>
                                         </Col>
@@ -2142,11 +2231,13 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                 <Col md={6}>
                   <Form.Group className="fw-semibold">
                     <Form.Label>Fecha Activación</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={currentEditMember.fecha_activacion || ""}
-                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, fecha_activacion: e.target.value })}
+                    <MdyDashDateInput
+                      size="md"
+                      valueIso={isoYmd(currentEditMember.fecha_activacion)}
                       disabled={currentEditMember.estado_cobertura !== "Yes"}
+                      onChangeIso={(iso) =>
+                        setCurrentEditMember({ ...currentEditMember, fecha_activacion: iso })
+                      }
                     />
 
                   </Form.Group>

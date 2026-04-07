@@ -172,22 +172,22 @@ const yaEstaEnElGrupo = (clienteId, members) =>
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 
 /* =================== UTILIDADES DE FECHA =================== */
-// Convierte YYYY-MM-DD a mm/dd/yyyy (formato visual)
+// Convierte YYYY-MM-DD a mm-dd-yyyy (formato visual)
 const formatDateForDisplay = (dateStr) => {
   if (!dateStr) return "";
   const normalized = normalizeDateForInput(dateStr);
   if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) return "";
   const [year, month, day] = normalized.split("-");
-  return `${month}/${day}/${year}`;
+  return `${month}-${day}-${year}`;
 };
 
-// Convierte mm/dd/yyyy (formato visual) a YYYY-MM-DD (formato interno)
+// Convierte mm-dd-yyyy o mm/dd/yyyy (formato visual) a YYYY-MM-DD (formato interno)
 const parseDateFromDisplay = (displayStr) => {
   if (!displayStr) return "";
-  // Eliminar espacios y caracteres no numéricos excepto /
-  const cleaned = displayStr.trim().replace(/[^\d\/]/g, "");
-  // Intentar parsear mm/dd/yyyy o mm/dd/yy
-  const parts = cleaned.split("/").filter(Boolean);
+  // Eliminar espacios y caracteres no numéricos excepto / o -
+  const cleaned = displayStr.trim().replace(/[^\d\/-]/g, "");
+  // Intentar parsear mm-dd-yyyy o mm/dd/yyyy (o yy)
+  const parts = cleaned.split(/[-/]/).filter(Boolean);
   if (parts.length === 3) {
     let [month, day, year] = parts;
     // Si el año tiene 2 dígitos, asumir 2000-2099
@@ -207,17 +207,17 @@ const parseDateFromDisplay = (displayStr) => {
   return normalizeDateForInput(displayStr);
 };
 
-// Formatea el input mientras el usuario escribe (mm/dd/yyyy)
+// Formatea el input mientras el usuario escribe (mm-dd-yyyy)
 const formatDateInput = (value) => {
   // Eliminar todo excepto números
   const digits = value.replace(/\D/g, "");
   
   if (digits.length === 0) return "";
   if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-  if (digits.length <= 8) return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
-  // Limitar a 8 dígitos (mm/dd/yyyy)
-  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  if (digits.length <= 8) return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+  // Limitar a 8 dígitos (mm-dd-yyyy)
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
 };
 
 /* =================== COMPONENTE ACORDEÓN TAILWIND =================== */
@@ -614,8 +614,11 @@ const TomaDeDatos = ({
   const [editingMember, setEditingMember] = useState(null);
   const [openExistente, setOpenExistente] = useState(false);
   const [openCopy, setOpenCopy] = useState(false);
-  // Estado para mantener valores visuales temporales de fecha de nacimiento (formato mm/dd/yyyy)
+  // Estado para mantener valores visuales temporales de fecha de nacimiento (formato mm-dd-yyyy)
   const [fechaNacimientoDisplay, setFechaNacimientoDisplay] = useState({});
+  // Estado para mantener valores visuales temporales de fechas de cobertura (formato mm-dd-yyyy)
+  // key: `${idx}-${field}`
+  const [fechaCoberturaDisplay, setFechaCoberturaDisplay] = useState({});
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
   // Estado para controlar la visualización de miembros retirados
@@ -886,7 +889,7 @@ const activeNormalized = useMemo(
     if (NAME_FIELDS.has(name)) v = toTitle(v);
 
     // Normalizar fecha de nacimiento para asegurar formato YYYY-MM-DD
-    // Si viene en formato visual mm/dd/yyyy, convertirlo
+    // Si viene en formato visual mm-dd/yyyy o mm/dd/yyyy, convertirlo
     if (name === "fecha_nacimiento" && v) {
       if (v.includes("/")) {
         // Es formato visual, convertir a interno
@@ -918,11 +921,11 @@ const activeNormalized = useMemo(
     return patchCliente(idx, patch);
   };
 
-  // Handler especial para fecha de nacimiento con formato visual mm/dd/yyyy
-  // El usuario ve y escribe en formato mm/dd/yyyy, pero guardamos internamente en YYYY-MM-DD
+  // Handler especial para fecha de nacimiento con formato visual mm-dd-yyyy
+  // El usuario ve y escribe en formato mm-dd-yyyy, pero guardamos internamente en YYYY-MM-DD
   const fechaNacimientoChangeFactory = (idx) => (e) => {
     const { value } = e.target;
-    // Formatear mientras el usuario escribe (mm/dd/yyyy)
+    // Formatear mientras el usuario escribe (mm-dd-yyyy)
     const formatted = formatDateInput(value);
     
     // Guardar el valor visual temporalmente para que el usuario vea lo que está escribiendo
@@ -948,7 +951,7 @@ const activeNormalized = useMemo(
   // Asegura que siempre guardamos en formato interno YYYY-MM-DD
   const fechaNacimientoBlurFactory = (idx) => (e) => {
     const { value } = e.target;
-    // Convertir formato visual mm/dd/yyyy a formato interno YYYY-MM-DD
+    // Convertir formato visual mm-dd-yyyy (o mm/dd/yyyy) a formato interno YYYY-MM-DD
     const internalFormat = parseDateFromDisplay(value);
     
     // Limpiar el valor visual temporal
@@ -989,6 +992,54 @@ const activeNormalized = useMemo(
     }
     // De lo contrario, convertir el formato interno a visual
     return formatDateForDisplay(fechaNacimiento || "");
+  };
+
+  // Handlers genéricos para fechas de cobertura con formato visual mm-dd-yyyy
+  const coberturaDateChangeFactory = (idx, fieldName) => (e) => {
+    const { value } = e.target;
+    const key = `${idx}-${fieldName}`;
+    const formatted = formatDateInput(value);
+    setFechaCoberturaDisplay((prev) => ({ ...prev, [key]: formatted }));
+    const internalFormat = parseDateFromDisplay(formatted);
+    if (internalFormat) {
+      onChangeFactory(idx)({
+        target: { name: fieldName, value: internalFormat, type: "text" },
+      });
+    } else if (formatted.trim() === "") {
+      onChangeFactory(idx)({
+        target: { name: fieldName, value: "", type: "text" },
+      });
+    }
+  };
+
+  const coberturaDateBlurFactory = (idx, fieldName, currentIso) => (e) => {
+    const raw = e?.target?.value ?? "";
+    const internalFormat = parseDateFromDisplay(raw);
+    const key = `${idx}-${fieldName}`;
+    setFechaCoberturaDisplay((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    // Si el formato es válido, guardar; si está vacío, limpiar; si es inválido, volver al valor interno.
+    if (internalFormat) {
+      onChangeFactory(idx)({
+        target: { name: fieldName, value: internalFormat, type: "text" },
+      });
+    } else if (String(raw).trim() === "") {
+      onChangeFactory(idx)({
+        target: { name: fieldName, value: "", type: "text" },
+      });
+    } else {
+      // inválido/incompleto: restaurar display al valor interno
+      setFechaCoberturaDisplay((prev) => ({ ...prev, [key]: formatDateForDisplay(currentIso || "") }));
+    }
+  };
+
+  const getCoberturaDateDisplayValue = (idx, fieldName, isoValue) => {
+    const key = `${idx}-${fieldName}`;
+    if (fechaCoberturaDisplay[key] !== undefined) return fechaCoberturaDisplay[key];
+    return formatDateForDisplay(isoValue || "");
   };
 
   // Obtener el valor visual formateado para campos de dinero
@@ -1483,7 +1534,7 @@ const activeNormalized = useMemo(
                                     onChange={fechaNacimientoChangeFactory(idx)}
                                     onBlur={fechaNacimientoBlurFactory(idx)}
                                     disabled={isReadOnly}
-                                    placeholder="mm/dd/yyyy"
+                                    placeholder="mm-dd-yyyy"
                                     maxLength={10}
                                   />
                                 </Field>
@@ -2026,17 +2077,39 @@ const activeNormalized = useMemo(
                                 label="Fecha de Activación"
                                 className="col-md-3"
                               >
-                                <input
-                                  type="date"
-                                  className="form-control form-control-sm"
-                                  name="fecha_activacion"
-                                  value={(m.fecha_activacion || "").slice(
-                                    0,
-                                    10
-                                  )}
-                                  onChange={onChange}
-                                  disabled={isReadOnly}
-                                />
+                                {isReadOnly ? (
+                                  <input
+                                    type="text"
+                                    className="form-control form-control-sm"
+                                    name="fecha_activacion"
+                                    value={
+                                      formatDateForDisplay((m.fecha_activacion || "").slice(0, 10)) === "-"
+                                        ? ""
+                                        : formatDateForDisplay((m.fecha_activacion || "").slice(0, 10))
+                                    }
+                                    disabled
+                                    readOnly
+                                  />
+                                ) : (
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    className="form-control form-control-sm"
+                                    name="fecha_activacion"
+                                    placeholder="MM-DD-YYYY"
+                                    value={getCoberturaDateDisplayValue(
+                                      idx,
+                                      "fecha_activacion",
+                                      (m.fecha_activacion || "").slice(0, 10)
+                                    )}
+                                    onChange={coberturaDateChangeFactory(idx, "fecha_activacion")}
+                                    onBlur={coberturaDateBlurFactory(
+                                      idx,
+                                      "fecha_activacion",
+                                      (m.fecha_activacion || "").slice(0, 10)
+                                    )}
+                                  />
+                                )}
                               </Field>
                             )}
 
@@ -2252,12 +2325,16 @@ const activeNormalized = useMemo(
                               <>
                                 <Field label="Fecha de Cancelación" className="col-md-3">
                                   <input
-                                    type="date"
+                                    type="text"
                                     className="form-control form-control-sm"
                                     name="fecha_cancelacion"
-                                    value={(m.fecha_cancelacion || "").slice(0, 10)}
-                                    onChange={onChange}
+                                    value={
+                                      formatDateForDisplay((m.fecha_cancelacion || "").slice(0, 10)) === "-"
+                                        ? ""
+                                        : formatDateForDisplay((m.fecha_cancelacion || "").slice(0, 10))
+                                    }
                                     disabled={true}
+                                    readOnly
                                     title="Este campo solo puede ser modificado por procesos automáticos de renovación"
                                   />
                                 </Field>
@@ -2280,12 +2357,16 @@ const activeNormalized = useMemo(
                               <>
                                 <Field label="Fecha de Retiro" className="col-md-3">
                                   <input
-                                    type="date"
+                                    type="text"
                                     className="form-control form-control-sm"
                                     name="fecha_retiro"
-                                    value={(m.fecha_retiro || "").slice(0, 10)}
-                                    onChange={onChange}
+                                    value={
+                                      formatDateForDisplay((m.fecha_retiro || "").slice(0, 10)) === "-"
+                                        ? ""
+                                        : formatDateForDisplay((m.fecha_retiro || "").slice(0, 10))
+                                    }
                                     disabled={true}
+                                    readOnly
                                     title="Este campo solo puede ser modificado por procesos automáticos de renovación"
                                   />
                                 </Field>

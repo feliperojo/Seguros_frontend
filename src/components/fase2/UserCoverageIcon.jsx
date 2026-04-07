@@ -1,5 +1,6 @@
 // src/components/fase2/UserCoverageIcon.jsx
 import React from "react";
+import { formatDateForDisplay } from "../../utils/formatters";
 
 const UserCoverageIcon = React.memo(function UserCoverageIcon({
   status,
@@ -18,8 +19,12 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const hasRetiro = !!fechaRetiro;
   const hasCancel = !!fechaCancelacion;
 
-  const shortDate = (d) =>
-    d ? String(d).slice(0, 10) : "";
+  const shortDate = (d) => {
+    if (!d) return "";
+    const s = String(d).slice(0, 10);
+    const formatted = formatDateForDisplay(s);
+    return formatted === "-" ? "" : formatted;
+  };
 
   /* ================== COLOR ================== */
   let color = colorProp;

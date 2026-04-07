@@ -22,7 +22,7 @@ const formatDate = (datetime) => {
     hours = hours % 12;
     hours = hours ? hours : 12;
     const hoursStr = String(hours).padStart(2, "0");
-    return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+    return `${month}-${day}-${year} ${hoursStr}:${minutes} ${ampm}`;
   } catch {
     return "-";
   }

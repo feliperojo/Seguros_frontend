@@ -256,7 +256,7 @@ export default function FichaClienteComentarios() {
       hours = hours ? hours : 12;
       const hoursStr = String(hours).padStart(2, "0");
       
-      return `${month}/${day}/${year} ${hoursStr}:${minutes} ${ampm}`;
+      return `${month}-${day}-${year} ${hoursStr}:${minutes} ${ampm}`;
     } catch {
       return fecha;
     }

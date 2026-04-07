@@ -171,13 +171,13 @@ const extractDateParts = (dateString) => {
 };
 
 /**
- * Formatea una fecha para mostrar en la interfaz en formato mm/dd/yyyy
+ * Formatea una fecha para mostrar en la interfaz en formato mm-dd-yyyy
  * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
  * que pueden causar que se muestre un día menos
  * 
  * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
- * @param {string} locale - Locale para formatear (no usado, siempre retorna mm/dd/yyyy)
- * @returns {string} Fecha formateada en formato mm/dd/yyyy o "-" si no es válida
+ * @param {string} locale - Locale para formatear (no usado, siempre retorna mm-dd-yyyy)
+ * @returns {string} Fecha formateada en formato mm-dd-yyyy o "-" si no es válida
  */
 export const formatDateForDisplay = (dateString, locale = "es-ES") => {
   const parts = extractDateParts(dateString);
@@ -185,11 +185,11 @@ export const formatDateForDisplay = (dateString, locale = "es-ES") => {
   
   const monthStr = String(parts.month).padStart(2, "0");
   const dayStr = String(parts.day).padStart(2, "0");
-  return `${monthStr}/${dayStr}/${parts.year}`;
+  return `${monthStr}-${dayStr}-${parts.year}`;
 };
 
 /**
- * Formatea una fecha con hora para mostrar en formato mm/dd/yyyy hh:mm AM/PM
+ * Formatea una fecha con hora para mostrar en formato mm-dd-yyyy hh:mm AM/PM
  * 
  * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
  * @returns {string} Fecha y hora formateada o "-" si no es válida
@@ -231,7 +231,7 @@ export const formatDateTimeForDisplay = (dateString) => {
       hours = hours ? hours : 12; // 0 debería ser 12
       const hoursStr = String(hours).padStart(2, "0");
       
-      return `${monthStr}/${dayStr}/${year} ${hoursStr}:${minutes} ${ampm}`;
+      return `${monthStr}-${dayStr}-${year} ${hoursStr}:${minutes} ${ampm}`;
     }
     
     // Si solo tenemos fecha, intentar obtener la hora del objeto Date original
@@ -246,13 +246,13 @@ export const formatDateTimeForDisplay = (dateString) => {
       hours = hours ? hours : 12;
       const hoursStr = String(hours).padStart(2, "0");
       
-      return `${monthStr}/${dayStr}/${parts.year} ${hoursStr}:${minutes} ${ampm}`;
+      return `${monthStr}-${dayStr}-${parts.year} ${hoursStr}:${minutes} ${ampm}`;
     }
     
     // Solo fecha sin hora
     const monthStr = String(parts.month).padStart(2, "0");
     const dayStr = String(parts.day).padStart(2, "0");
-    return `${monthStr}/${dayStr}/${parts.year}`;
+    return `${monthStr}-${dayStr}-${parts.year}`;
   } catch {
     return typeof dateString === 'string' ? dateString : "-";
   }

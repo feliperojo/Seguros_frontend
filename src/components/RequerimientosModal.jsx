@@ -46,15 +46,15 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     if (!ymd) return "";
     const [, m, d] = ymd.split("-");
     const y = ymd.slice(0, 4);
-    return `${m}/${d}/${y}`;
+    return `${m}-${d}-${y}`;
   };
 
-  /** Acepta MM/DD/AAAA, M/D/AAAA o YYYY-MM-DD; devuelve YYYY-MM-DD o "" si viene vacío, null si es inválido */
+  /** Acepta MM-DD-AAAA, M-D-AAAA, MM/DD/AAAA, M/D/AAAA o YYYY-MM-DD; devuelve YYYY-MM-DD o "" si viene vacío, null si es inválido */
   const parseUserDateToISO = (s) => {
     const t = String(s == null ? "" : s).trim();
     if (!t) return "";
     if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-    const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    const m = t.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
     if (!m) return null;
     const month = parseInt(m[1], 10);
     const day = parseInt(m[2], 10);
@@ -65,7 +65,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     return `${year}-${pad2(month)}-${pad2(day)}`;
   };
 
-  // Formato visible para el usuario: MM/DD/AAAA (sin cambiar el valor real guardado)
+  // Formato visible para el usuario: MM-DD-AAAA (sin cambiar el valor real guardado)
   const formatMDY = (valor) => {
     if (!valor) return "-";
     const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
@@ -73,7 +73,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     const year = d.getFullYear();
-    return `${month}/${day}/${year}`;
+    return `${month}-${day}-${year}`;
   };
 
   const [coberturas, setCoberturas] = useState([]);
@@ -173,7 +173,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       return;
     }
     if (!isoVenc) {
-      setError("La fecha de vencimiento es obligatoria. Use MM/DD/AAAA.");
+      setError("La fecha de vencimiento es obligatoria. Use MM-DD-AAAA.");
       return;
     }
 
@@ -218,13 +218,13 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
 
     const isoSol = parseUserDateToISO(fechaSolicitudInput);
     if (!isoSol) {
-      setError("Fecha de solicitud inválida. Use MM/DD/AAAA.");
+      setError("Fecha de solicitud inválida. Use MM-DD-AAAA.");
       return;
     }
     const venRaw = fechaVencimientoInput.trim();
     const isoVen = venRaw ? parseUserDateToISO(fechaVencimientoInput) : "";
     if (venRaw && !isoVen) {
-      setError("Fecha de vencimiento inválida. Use MM/DD/AAAA.");
+      setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
       return;
     }
   
@@ -361,7 +361,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                   <Form.Label>Fecha de solicitud</Form.Label>
                   <Form.Control
                     type="text"
-                    placeholder="MM/DD/AAAA"
+                    placeholder="MM-DD-AAAA"
                     autoComplete="off"
                     value={fechaSolicitudInput}
                     onChange={(e) => setFechaSolicitudInput(e.target.value)}
@@ -369,7 +369,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                       const trimmed = String(fechaSolicitudInput).trim();
                       const iso = parseUserDateToISO(fechaSolicitudInput);
                       if (iso === null && trimmed !== "") {
-                        setError("Fecha de solicitud inválida. Use MM/DD/AAAA.");
+                        setError("Fecha de solicitud inválida. Use MM-DD-AAAA.");
                         setFechaSolicitudInput(isoDateToMDY(nuevo.fecha_solicitud) || isoDateToMDY(getLocalISODate()));
                         return;
                       }
@@ -386,7 +386,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                   <Form.Label>Fecha de vencimiento</Form.Label>
                   <Form.Control
                     type="text"
-                    placeholder="MM/DD/AAAA"
+                    placeholder="MM-DD-AAAA"
                     autoComplete="off"
                     value={fechaVencimientoInput}
                     onChange={(e) => setFechaVencimientoInput(e.target.value)}
@@ -399,7 +399,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                       }
                       const iso = parseUserDateToISO(fechaVencimientoInput);
                       if (!iso) {
-                        setError("Fecha de vencimiento inválida. Use MM/DD/AAAA.");
+                        setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
                         setFechaVencimientoInput(isoDateToMDY(nuevo.fecha_vencimiento));
                         return;
                       }
@@ -464,7 +464,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                           {editingId === r.id ? (
                             <Form.Control
                               type="text"
-                              placeholder="MM/DD/AAAA"
+                              placeholder="MM-DD-AAAA"
                               autoComplete="off"
                               value={editFechaVencimientoInput}
                               onChange={(e) => setEditFechaVencimientoInput(e.target.value)}
@@ -477,7 +477,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                                     );
                                     return;
                                   }
-                                  setError("Fecha de vencimiento inválida. Use MM/DD/AAAA.");
+                                  setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
                                   setEditFechaVencimientoInput(
                                     isoDateToMDY(editableRequerimiento?.fecha_vencimiento || "")
                                   );

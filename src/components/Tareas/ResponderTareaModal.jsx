@@ -87,14 +87,14 @@ const fechaToInputDate = (fecha) => {
   }
 };
 
-/** YYYY-MM-DD → MM/DD/YYYY para el campo de edición (orden mes / día / año) */
-const ymdIsoToMdySlash = (ymd) => {
+/** YYYY-MM-DD → MM-DD-YYYY para el campo de edición (orden mes / día / año) */
+  const ymdIsoToMdySlash = (ymd) => {
   if (!ymd || typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
   const [y, m, d] = ymd.split("-");
-  return `${m}/${d}/${y}`;
+  return `${m}-${d}-${y}`;
 };
 
-/** MM/DD/YYYY (con o sin slashes) → YYYY-MM-DD o null si incompleta / inválida */
+/** MM-DD-YYYY o MM/DD/YYYY (con o sin separadores) → YYYY-MM-DD o null si incompleta / inválida */
 const parseMdySlashToYmdIso = (formattedValue) => {
   if (!formattedValue || typeof formattedValue !== "string") return null;
   const digits = formattedValue.replace(/\D/g, "");
@@ -213,7 +213,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
   const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
-  /** Valores mostrados en los campos mes/día/año (MM/DD/AAAA) */
+  /** Valores mostrados en los campos mes-día-año (MM-DD-AAAA) */
   const [scheduledDateMdy, setScheduledDateMdy] = useState(() =>
     ymdIsoToMdySlash(fechaToInputDate(tarea?.scheduled_date) || "")
   );
@@ -1391,7 +1391,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     const schedYmd = parseMdySlashToYmdIso(scheduledDateMdy);
     const dueYmd = parseMdySlashToYmdIso(dueDateMdy);
     if (!schedYmd || !dueYmd) {
-      alert("Ingrese fechas completas y válidas en formato mes/día/año (MM/DD/AAAA).");
+      alert("Ingrese fechas completas y válidas en formato mes-día-año (MM-DD-AAAA).");
       return;
     }
     if (schedYmd > dueYmd) {
@@ -1561,7 +1561,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       // Si es string en formato YYYY-MM-DD, extraer directamente
       if (typeof fecha === "string" && fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
         const [year, month, day] = fecha.split("T")[0].split("-");
-        return `${month}/${day}/${year}`;
+        return `${month}-${day}-${year}`;
       }
       // Si es Date object o string ISO, usar métodos locales
       const date = new Date(fecha);
@@ -1570,7 +1570,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       const month = String(date.getMonth() + 1).padStart(2, "0");
       const day = String(date.getDate()).padStart(2, "0");
       const year = date.getFullYear();
-      return `${month}/${day}/${year}`;
+      return `${month}-${day}-${year}`;
     } catch {
       return "N/A";
     }
@@ -2163,7 +2163,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-calendar-alt text-primary me-1"></i>
-                          Programada: <small className="text-muted">(mes / día / año, MM/DD/AAAA)</small>
+                          Programada: <small className="text-muted">(mes - día - año, MM-DD-AAAA)</small>
                         </Form.Label>
                         <PatternFormat
                           customInput={Form.Control}
@@ -2173,7 +2173,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                           inputMode="numeric"
                           value={scheduledDateMdy}
                           onValueChange={onScheduledDateMdyChange}
-                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes / día / año (MM/DD/AAAA)"}
+                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes - día - año (MM-DD-AAAA)"}
                           style={{ borderRadius: "6px" }}
                         />
                         {!!scheduledDate && (
@@ -2187,7 +2187,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-clock text-warning me-1"></i>
-                          Vencimiento: <small className="text-muted">(mes / día / año, MM/DD/AAAA)</small>
+                          Vencimiento: <small className="text-muted">(mes - día - año, MM-DD-AAAA)</small>
                           {isDueDateLocked && (
                             <small className="text-muted ms-2">(requiere clave del super admin)</small>
                           )}
@@ -2203,7 +2203,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                             onValueChange={onDueDateMdyChange}
                             disabled={isDueDateLocked}
                             readOnly={isDueDateLocked}
-                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes / día / año (MM/DD/AAAA)")}
+                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes - día - año (MM-DD-AAAA)")}
                             style={{ borderRadius: "6px", flex: 1 }}
                           />
                           {isDueDateLocked && (
