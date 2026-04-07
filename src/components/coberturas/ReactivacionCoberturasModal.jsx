@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal, Button, Form, Table, Alert, Spinner, Badge } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { formatDateForDisplay } from "../../utils/formatters";
 
 /**
  * ReactivacionCoberturasModal
@@ -553,23 +554,15 @@ const ReactivacionCoberturasModal = ({
                           </td>
                           <td className="align-middle text-center">
                             <span className="text-muted small">
-                              {cobertura.fecha_retiro 
-                                ? new Date(cobertura.fecha_retiro).toLocaleDateString('es-ES', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit'
-                                  })
+                              {cobertura.fecha_retiro
+                                ? formatDateForDisplay(String(cobertura.fecha_retiro).slice(0, 10))
                                 : "-"}
                             </span>
                           </td>
                           <td className="align-middle text-center">
                             <span className="text-muted small">
-                              {cobertura.fecha_cancelacion 
-                                ? new Date(cobertura.fecha_cancelacion).toLocaleDateString('es-ES', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit'
-                                  })
+                              {cobertura.fecha_cancelacion
+                                ? formatDateForDisplay(String(cobertura.fecha_cancelacion).slice(0, 10))
                                 : "-"}
                             </span>
                           </td>

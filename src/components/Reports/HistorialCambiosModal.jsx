@@ -5,6 +5,7 @@
 import React, { useEffect, useState } from "react";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { formatDateTimeForDisplay } from "../../utils/formatters";
 
 // ==================== CONSTANTES ====================
 
@@ -68,9 +69,7 @@ const COB_FIELDS = [
 // ==================== HELPERS ====================
 
 const formatDateTime = (value) => {
-  if (!value) return "";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleString();
+  return formatDateTimeForDisplay(value);
 };
 
 const formatValue = (val) => {
