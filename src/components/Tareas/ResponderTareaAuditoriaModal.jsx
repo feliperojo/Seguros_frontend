@@ -475,7 +475,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   
   // Handler para pegar desde el portapapeles
   useEffect(() => {
-    if (!show) return;
+    if (!show || tarea?.status === "completed") return;
     
     const handlePaste = (e) => {
       const items = e.clipboardData?.items;
@@ -509,7 +509,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       document.removeEventListener('paste', handlePaste);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [show]);
+  }, [show, tarea?.status]);
   
   // Función para mostrar confirmación antes de agregar comentario
   const handleAgregarComentario = () => {
@@ -1561,6 +1561,9 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                         <p className="mb-1">Haz clic para seleccionar archivos o arrastra y suelta</p>
                         <small className="text-muted">
                           Formatos: JPG, PNG, GIF, WEBP, PDF (máx. 5MB cada uno)
+                          <span className="d-block mt-1">
+                            También puede usar Ctrl+V (Cmd+V en Mac) para pegar imágenes
+                          </span>
                         </small>
                       </div>
                     </div>

@@ -230,6 +230,44 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     }
   };
 
+  // Pegar imágenes desde el portapapeles (Ctrl+V / Cmd+V) mientras el modal permite adjuntar archivos
+  useEffect(() => {
+    if (!show || tarea?.status === "completed") return;
+
+    const handlePaste = (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      const imageFiles = [];
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            const timestamp = Date.now();
+            const extension = file.type.split("/")[1] || "png";
+            const blob = new Blob([file], { type: file.type });
+            const namedFile = new File([blob], `imagen-pegada-${timestamp}.${extension}`, {
+              type: file.type,
+              lastModified: Date.now(),
+            });
+            imageFiles.push(namedFile);
+          }
+        }
+      }
+
+      if (imageFiles.length > 0) {
+        agregarArchivos(imageFiles);
+      }
+    };
+
+    document.addEventListener("paste", handlePaste);
+    return () => {
+      document.removeEventListener("paste", handlePaste);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- agregarArchivos es estable en la práctica (usa setState funcional)
+  }, [show, tarea?.status]);
+
   // ✅ Función para subir archivos a bitácora
   const subirArchivosBitacora = async (bitacoraId) => {
     if (archivos.length === 0) {
@@ -2262,6 +2300,11 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                       </p>
                       <small className="text-muted">
                         Formatos: JPG, PNG, GIF, WEBP, PDF, DOC, DOCX (máx. 10MB cada uno)
+                        {!isDragging && (
+                          <span className="d-block mt-1">
+                            También puede usar Ctrl+V (Cmd+V en Mac) para pegar imágenes
+                          </span>
+                        )}
                       </small>
                     </div>
                   </div>
