@@ -1201,8 +1201,17 @@ const handleOpenViewModal = (cliente) => {
 
                               const formatFecha = (valor) => {
                                 if (!valor) return "—";
+                                // Priorizar parseo manual si viene ISO YYYY-MM-DD para evitar corrimientos por TZ
+                                if (typeof valor === "string" && /^\d{4}-\d{2}-\d{2}/.test(valor)) {
+                                  const [y, m, d] = valor.split("T")[0].split("-");
+                                  return m && d && y ? `${m}-${d}-${y}` : "—";
+                                }
                                 const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
-                                return isNaN(d.getTime()) ? "—" : `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+                                if (isNaN(d.getTime())) return "—";
+                                const mm = String(d.getMonth() + 1).padStart(2, "0");
+                                const dd = String(d.getDate()).padStart(2, "0");
+                                const yyyy = d.getFullYear();
+                                return `${mm}-${dd}-${yyyy}`;
                               };
                               const fechaInicio = tarea.scheduled_date ?? tarea.scheduled_at ?? tarea.fecha_programada ?? tarea.fecha_inicio ?? tarea.created_at;
                               const fechaVenc = tarea._fecha_vencimiento_original ?? tarea.due_date ?? tarea.fecha_vencimiento ?? tarea.fechaLimite;
