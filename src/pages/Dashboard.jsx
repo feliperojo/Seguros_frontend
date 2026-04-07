@@ -1082,7 +1082,7 @@ const handleOpenViewModal = (cliente) => {
                             <tr>
                               <th>Cliente</th>
                               <th>Monto</th>
-                              <th>Fecha</th>
+                              <th>Día de pago</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1099,7 +1099,7 @@ const handleOpenViewModal = (cliente) => {
                                     </Badge>
                                   </td>
                                   <td className="small text-muted">
-                                    {fechaPago ? `${fechaPago.getDate()}/${fechaPago.getMonth() + 1}` : "—"}
+                                    {fechaPago ? String(fechaPago.getDate()) : "—"}
                                   </td>
                                 </tr>
                               );
