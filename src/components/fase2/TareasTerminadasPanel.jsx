@@ -9,6 +9,52 @@ const COMPLETED_STATES = new Set([
   "done", "completed", "complete", "finished", "resolved", "closed", "completada", "terminada",
 ]);
 
+const API_PUBLIC_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "") || "/api";
+
+function pickBitacoraIdFromRaw(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const pick = (v) => (v !== undefined && v !== null && v !== "" ? String(v) : null);
+
+  const fromLog = raw.log && typeof raw.log === "object" ? raw.log : null;
+  const nestedBo =
+    raw.bitacora_operativa && typeof raw.bitacora_operativa === "object"
+      ? raw.bitacora_operativa
+      : null;
+  const logNestedBo =
+    fromLog?.bitacora_operativa && typeof fromLog.bitacora_operativa === "object"
+      ? fromLog.bitacora_operativa
+      : null;
+  const taskNested = raw.task && typeof raw.task === "object" ? raw.task : null;
+
+  return (
+    pick(fromLog?.id) ||
+    pick(fromLog?.bitacora_operativa_id) ||
+    pick(fromLog?.log_id) ||
+    pick(fromLog?.bitacora_id) ||
+    pick(logNestedBo?.id) ||
+    pick(nestedBo?.id) ||
+    pick(raw.bitacora_operativa_id) ||
+    pick(raw.log_id) ||
+    pick(raw.bitacora_id) ||
+    pick(raw.bitacoraOperativa?.id) ||
+    pick(raw.bitacora_operativa?.id) ||
+    pick(taskNested?.log?.id) ||
+    pick(taskNested?.log_id) ||
+    pick(taskNested?.bitacora_operativa_id) ||
+    null
+  );
+}
+
+function resolveAttachmentPublicUrl(url) {
+  if (url == null || typeof url !== "string") return url;
+  const trimmed = url.trim();
+  if (!trimmed) return url;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return trimmed;
+  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return `${API_PUBLIC_BASE}${path}`;
+}
+
 export default function TareasTerminadasPanel({
   className = "",
   clienteId,
@@ -80,16 +126,13 @@ export default function TareasTerminadasPanel({
   // Obtener IDs de tarea y log desde el objeto raw
   const getTaskIds = useCallback((task) => {
     const raw = task?.__raw ?? task;
-    const tareaId = raw?.id || raw?.task?.id || raw?.task_id || null;
-    // El logId puede estar en raw.log.id o directamente en raw.id (si la tarea está relacionada con un log)
-    // También puede estar en raw.bitacora_operativa_id o similar
-    const logId = raw?.log?.id || raw?.bitacora_operativa_id || raw?.log_id || null;
-    
-    // Debug: loguear para ver qué estructura tiene
-    if (tareaId && !logId) {
-      console.log("⚠️ Tarea sin logId:", { tareaId, raw: Object.keys(raw || {}) });
+    const tareaId = raw?.id ?? raw?.task?.id ?? raw?.task_id ?? null;
+    const logId = pickBitacoraIdFromRaw(raw);
+
+    if (tareaId && !logId && import.meta.env.DEV) {
+      console.log("⚠️ Tarea sin logId:", { tareaId, keys: Object.keys(raw || {}) });
     }
-    
+
     return { tareaId, logId };
   }, []);
 
@@ -129,59 +172,61 @@ export default function TareasTerminadasPanel({
 
   // Cargar adjuntos de un log
   const cargarAdjuntos = useCallback(async (logId) => {
-    if (!logId) {
+    if (logId === undefined || logId === null || logId === "") {
       console.log("⚠️ cargarAdjuntos llamado sin logId");
       return;
     }
-    
+
+    const key = String(logId);
+
     // Verificar usando ref si ya se está cargando
-    if (logIdsCargandoRef.current.has(logId)) {
-      console.log("⏳ Adjuntos ya se están cargando para logId:", logId);
+    if (logIdsCargandoRef.current.has(key)) {
+      console.log("⏳ Adjuntos ya se están cargando para logId:", key);
       return;
     }
-    
+
     // Verificar si ya están cargados en el estado
     setAdjuntos((prev) => {
-      if (prev[logId]) {
-        console.log("✅ Adjuntos ya cargados en estado para logId:", logId);
+      if (prev[key]) {
+        console.log("✅ Adjuntos ya cargados en estado para logId:", key);
         return prev;
       }
-      
+
       // Marcar que se está cargando
-      logIdsCargandoRef.current.add(logId);
-      setLoadingAdjuntos((prevLoading) => ({ ...prevLoading, [logId]: true }));
-      
+      logIdsCargandoRef.current.add(key);
+      setLoadingAdjuntos((prevLoading) => ({ ...prevLoading, [key]: true }));
+
       // Cargar adjuntos
-      apiRequest(`adjuntos/bitacora/${logId}`, "GET")
+      apiRequest(`adjuntos/bitacora/${key}`, "GET")
         .then((data) => {
           const adjuntosLista = Array.isArray(data) ? data : data?.data || [];
-          console.log(`✅ Adjuntos cargados para logId ${logId}:`, adjuntosLista.length, "archivos");
-          
+          console.log(`✅ Adjuntos cargados para logId ${key}:`, adjuntosLista.length, "archivos");
+
           setAdjuntos((prevAdj) => {
-            if (prevAdj[logId]) {
-              console.log("⚠️ Adjuntos ya existían, no sobrescribiendo para logId:", logId);
+            if (prevAdj[key]) {
+              console.log("⚠️ Adjuntos ya existían, no sobrescribiendo para logId:", key);
               return prevAdj;
             }
             return {
               ...prevAdj,
-              [logId]: adjuntosLista,
+              [key]: adjuntosLista,
             };
           });
         })
         .catch((err) => {
-          console.error(`❌ Error al cargar adjuntos del log ${logId}:`, err);
+          console.error(`❌ Error al cargar adjuntos del log ${key}:`, err);
           setAdjuntos((prevAdj) => {
-            if (!prevAdj[logId]) {
-              return { ...prevAdj, [logId]: [] };
+            if (!prevAdj[key]) {
+              return { ...prevAdj, [key]: [] };
             }
             return prevAdj;
           });
         })
         .finally(() => {
-          logIdsCargandoRef.current.delete(logId);
-          setLoadingAdjuntos((prevLoading) => ({ ...prevLoading, [logId]: false }));
+          logIdsCargandoRef.current.delete(key);
+          setLoadingAdjuntos((prevLoading) => ({ ...prevLoading, [key]: false }));
         });
-      
+
       return prev;
     });
   }, []);
@@ -220,7 +265,7 @@ export default function TareasTerminadasPanel({
           const res = await apiRequest(`adjuntos/bitacora/${adjunto.id}/descargar`, "GET");
           if (res?.url) {
             const link = document.createElement("a");
-            link.href = res.url;
+            link.href = resolveAttachmentPublicUrl(res.url);
             link.download = adjunto.nombre_original || "archivo";
             document.body.appendChild(link);
             link.click();
@@ -233,7 +278,7 @@ export default function TareasTerminadasPanel({
       }
       
       // Fallback: usar la URL directa con fetch para forzar descarga
-      const response = await fetch(adjunto.url);
+      const response = await fetch(resolveAttachmentPublicUrl(adjunto.url));
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -246,7 +291,7 @@ export default function TareasTerminadasPanel({
     } catch (error) {
       console.error("Error al descargar archivo:", error);
       // Fallback final: abrir en nueva pestaña
-      window.open(adjunto.url, "_blank");
+      window.open(resolveAttachmentPublicUrl(adjunto.url), "_blank");
     }
   }, []);
 
@@ -260,7 +305,15 @@ export default function TareasTerminadasPanel({
   // Normaliza y DERIVA fechaTermino y fechaInicio (para duración)
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
-    const nota = t?.nota ?? t?.note ?? t?.descripcion ?? t?.description ?? t?.detalle ?? "";
+    const nota =
+      t?.nota ??
+      t?.note ??
+      t?.log?.nota ??
+      t?.log?.note ??
+      t?.descripcion ??
+      t?.description ??
+      t?.detalle ??
+      "";
 
     const fechaCreacion = t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null;
     const fechaTermino =
@@ -282,7 +335,13 @@ export default function TareasTerminadasPanel({
 
     return {
       id: t?.id,
-      titulo: t?.titulo || t?.concepto || (typeof nota === "string" ? nota : "") || "Tarea",
+      titulo:
+        t?.titulo ||
+        t?.concepto ||
+        t?.log?.concept?.name ||
+        t?.concept?.name ||
+        (typeof nota === "string" ? nota : "") ||
+        "Tarea",
       responsable: t?.responsable ?? t?.asignado_a ?? t?.assignedUser?.name ?? t?.assigned_user?.name ?? "—",
       estado: rawEstado,
       fechaCreacion,
@@ -357,6 +416,28 @@ export default function TareasTerminadasPanel({
           .map(normalizeTask)
           .sort(sortTasks);
 
+        const sinBitacora = unique.filter((norm) => !pickBitacoraIdFromRaw(norm.__raw));
+        if (sinBitacora.length > 0) {
+          await Promise.all(
+            sinBitacora.map(async (norm) => {
+              const tid = norm.id;
+              if (tid == null) return;
+              try {
+                const detailRes = await apiRequest(`tareas_operativas/${tid}`, "GET");
+                const d = detailRes?.data ?? detailRes?.task ?? detailRes;
+                if (!d || typeof d !== "object") return;
+                norm.__raw = {
+                  ...(norm.__raw || {}),
+                  ...d,
+                  log: d.log ?? (norm.__raw || {}).log,
+                };
+              } catch {
+                /* ignorar */
+              }
+            })
+          );
+        }
+
         if (!cancelled) setItems(unique);
       } catch {
         if (!cancelled) {
@@ -397,25 +478,22 @@ export default function TareasTerminadasPanel({
     return Array.from(map.entries());
   }, [filtered]);
 
-  // Cargar adjuntos automáticamente cuando cambian las tareas
+  const adjuntosLogIdsKey = useMemo(() => {
+    if (!Array.isArray(filtered) || filtered.length === 0) return "";
+    const ids = filtered
+      .map((task) => getTaskIds(task).logId)
+      .filter(Boolean)
+      .map(String)
+      .sort();
+    return ids.join(",");
+  }, [filtered, getTaskIds]);
+
   useEffect(() => {
-    if (!filtered || filtered.length === 0) return;
-    
-    // Recopilar todos los logIds únicos
-    const logIdsSet = new Set();
-    filtered.forEach((task) => {
-      const { logId } = getTaskIds(task);
-      if (logId) {
-        logIdsSet.add(logId);
-      }
+    if (!adjuntosLogIdsKey) return;
+    adjuntosLogIdsKey.split(",").forEach((id) => {
+      if (id) cargarAdjuntos(id);
     });
-    
-    // Intentar cargar adjuntos para cada logId (la función cargarAdjuntos maneja la verificación de si ya están cargados)
-    logIdsSet.forEach((logId) => {
-      cargarAdjuntos(logId);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.length]); // Cuando cambia el número de tareas
+  }, [adjuntosLogIdsKey, cargarAdjuntos]);
 
   // ==== Render ====
   return (
@@ -632,7 +710,7 @@ export default function TareasTerminadasPanel({
                                 title={adjunto.nombre_original || "Haz clic para previsualizar"}
                               >
                                 <img
-                                  src={adjunto.url}
+                                  src={resolveAttachmentPublicUrl(adjunto.url)}
                                   alt={adjunto.nombre_original || "Imagen adjunta"}
                                   className="w-100 h-100"
                                   style={{ objectFit: "cover" }}
@@ -788,7 +866,7 @@ export default function TareasTerminadasPanel({
                                   {esImg ? (
                                     <>
                                       <img
-                                        src={adjunto.url}
+                                        src={resolveAttachmentPublicUrl(adjunto.url)}
                                         alt={adjunto.nombre_original || "Imagen adjunta"}
                                         className="w-100 h-100"
                                         style={{ objectFit: "cover" }}
@@ -910,7 +988,7 @@ export default function TareasTerminadasPanel({
                     className="mt-3"
                     onClick={() => {
                       const link = document.createElement("a");
-                      link.href = archivoPreview.adjunto.url;
+                      link.href = resolveAttachmentPublicUrl(archivoPreview.adjunto.url);
                       link.target = "_blank";
                       link.rel = "noopener noreferrer";
                       document.body.appendChild(link);
@@ -924,7 +1002,7 @@ export default function TareasTerminadasPanel({
                 </div>
               ) : (
                 <img
-                  src={archivoPreview.adjunto.url}
+                  src={resolveAttachmentPublicUrl(archivoPreview.adjunto.url)}
                   alt={archivoPreview.adjunto.nombre_original || "Imagen"}
                   className="img-fluid"
                   style={{ maxHeight: "80vh", maxWidth: "100%", objectFit: "contain" }}
@@ -947,7 +1025,7 @@ export default function TareasTerminadasPanel({
                 </div>
               ) : (
                 <iframe
-                  src={`${archivoPreview.adjunto.url}#toolbar=0`}
+                  src={`${resolveAttachmentPublicUrl(archivoPreview.adjunto.url)}#toolbar=0`}
                   title={archivoPreview.adjunto.nombre_original || "PDF"}
                   style={{
                     width: "100%",
@@ -1004,7 +1082,7 @@ export default function TareasTerminadasPanel({
             <Button
               variant="outline-primary"
               onClick={() => {
-                window.open(archivoPreview.adjunto.url, "_blank", "noopener,noreferrer");
+                window.open(resolveAttachmentPublicUrl(archivoPreview.adjunto.url), "_blank", "noopener,noreferrer");
               }}
             >
               <i className="fas fa-external-link-alt me-2"></i>

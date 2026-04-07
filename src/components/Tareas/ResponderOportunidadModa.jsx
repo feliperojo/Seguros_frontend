@@ -1360,6 +1360,16 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     <>
       {/* Estilos para renderizar contenido HTML de Quill */}
       <style>{`
+        /* Nota de la tarea (solo lectura): compacta y distinta del editor de respuesta */
+        .ql-editor--readonly-tarea-nota {
+          max-height: 220px;
+          overflow-y: auto;
+          background: #f8fafc !important;
+          border: 1px solid #e2e8f0 !important;
+          border-left: 4px solid #0d6efd !important;
+          border-radius: 0.375rem;
+          padding: 0.65rem 0.85rem !important;
+        }
         .ql-editor {
           font-size: 14px;
           line-height: 1.5;
@@ -1524,7 +1534,9 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                   </div>
                   <div>
                     <h6 className="mb-0 text-dark fw-bold">Información de la Tarea</h6>
-                    <small className="text-muted">Detalles y contexto</small>
+                    <small className="text-muted">
+                      La descripción y archivos son de la creación de la tarea. Tu respuesta nueva va en <strong className="text-secondary">«Mi respuesta»</strong> más abajo.
+                    </small>
                   </div>
                 </div>
               </div>
@@ -1542,21 +1554,25 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                 
                 {notaTarea && (
                   <div className="mb-0 pt-3 border-top">
-                    <label className="text-muted small fw-semibold text-uppercase mb-2 d-block" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>
-                      Nota
-                    </label>
+                    <div className="d-flex align-items-center flex-wrap gap-2 mb-2">
+                      <label className="text-muted small fw-semibold text-uppercase mb-0" style={{ fontSize: "0.7rem", letterSpacing: "0.5px" }}>
+                        Descripción de la tarea
+                      </label>
+                      <Badge bg="secondary" className="fw-normal" style={{ fontSize: "0.65rem" }}>
+                        Solo lectura
+                      </Badge>
+                    </div>
+                    <p className="text-muted small mb-2" style={{ fontSize: "0.78rem" }}>
+                      Texto definido al crear la tarea. No es el campo para comentar.
+                    </p>
                     <div 
-                      className="ql-editor"
+                      className="ql-editor ql-editor--readonly-tarea-nota"
                       style={{ 
                         fontSize: '14px',
-                        lineHeight: '1.6',
+                        lineHeight: '1.55',
                         wordBreak: 'break-word',
                         overflowWrap: 'break-word',
-                        color: '#495057',
-                        background: "#fff",
-                        padding: "0.75rem",
-                        borderRadius: "0.375rem",
-                        border: "1px solid #e9ecef"
+                        color: '#334155',
                       }}
                       dangerouslySetInnerHTML={{ __html: notaTarea || 'Sin nota' }}
                     />
@@ -2134,18 +2150,19 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     </small>
                   </div>
                 )}
-                <div style={{ position: 'relative' }}>
+                <div className="responder-tarea-nuevo-comentario-quill" style={{ position: 'relative' }}>
                   <style>{`
-                    .ql-editor {
-                      min-height: 280px;
+                    /* Importante: acotar min-height solo al editor de respuesta; si es global rompe la nota en solo lectura */
+                    .responder-tarea-nuevo-comentario-quill .ql-editor {
+                      min-height: 200px;
                       font-size: 16px;
                       line-height: 1.6;
                     }
-                    .ql-container {
+                    .responder-tarea-nuevo-comentario-quill .ql-container {
                       font-size: 16px;
                       font-family: inherit;
                     }
-                    .ql-editor.ql-blank::before {
+                    .responder-tarea-nuevo-comentario-quill .ql-editor.ql-blank::before {
                       font-size: 16px;
                       font-style: normal;
                       color: #6c757d;
