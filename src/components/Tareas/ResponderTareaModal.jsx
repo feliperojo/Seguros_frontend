@@ -1948,10 +1948,16 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         .responder-tarea-modal .modal-dialog {
           max-width: 95vw;
           width: 1400px;
+          height: 95vh;
+          margin-top: 2.5vh;
+          margin-bottom: 2.5vh;
         }
         .responder-tarea-modal .modal-content {
           border-radius: 12px;
           box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
         .responder-tarea-modal .modal-header {
           background: transparent;
@@ -1979,6 +1985,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         .responder-tarea-modal .modal-body {
           padding: 2rem;
           background: #f8f9fa;
+          flex: 1 1 auto;
+          overflow: hidden;
+        }
+        .responder-tarea-modal .modal-footer {
+          flex: 0 0 auto;
         }
         .responder-tarea-modal .section-title {
           font-size: 1.1rem;
@@ -2027,9 +2038,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         </Modal.Title>
       </Modal.Header>
         <Modal.Body>
-          <Row className="g-4">
+          <Row className="g-4" style={{ height: "100%" }}>
             {/* ✅ Columna izquierda: Tarea */}
-            <Col md={6} style={{ borderRight: "2px solid #e9ecef", paddingRight: "2rem" }}>
+            <Col md={6} style={{ borderRight: "2px solid #e9ecef", paddingRight: "2rem", height: "100%", overflowY: "auto" }}>
               <div className="section-title">
                 <i className="fas fa-info-circle text-primary"></i>
                 Detalles de la Tarea
@@ -2932,7 +2943,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
           </Col>
 
           {/* ✅ Columna derecha: Historial */}
-          <Col md={6} style={{ overflowY: "auto", maxHeight: "calc(100vh - 250px)" }}>
+          <Col md={6} style={{ overflowY: "auto", height: "100%" }}>
             <div className="section-title">
               <i className="fas fa-history text-info"></i>
               Historial del Cliente
