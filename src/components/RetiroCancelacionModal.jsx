@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Button, Form, Row, Col, Badge } from "react-bootstrap";
+import { Modal, Button, Form, Row, Col, Badge, InputGroup } from "react-bootstrap";
 import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
+import { formatDateForDisplay } from "../utils/formatters";
 
 // Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
 const normalizeDate = (dateString) => {
@@ -36,6 +37,84 @@ const RetiroCancelacionModal = ({
   const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
   const [fechasOriginales, setFechasOriginales] = useState([]);
   const [cambiosDetectados, setCambiosDetectados] = useState(false);
+
+  // Input controlado MM-DD-YYYY que guarda YYYY-MM-DD (sin placeholder)
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const mdyDashToIso = (display) => {
+    const t = String(display ?? "").trim();
+    if (!t) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const digits = t.replace(/\D/g, "");
+    if (digits.length !== 8) return null;
+    const mm = parseInt(digits.slice(0, 2), 10);
+    const dd = parseInt(digits.slice(2, 4), 10);
+    const yyyy = parseInt(digits.slice(4, 8), 10);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
+    const test = new Date(yyyy, mm - 1, dd);
+    if (test.getFullYear() !== yyyy || test.getMonth() !== mm - 1 || test.getDate() !== dd) return null;
+    return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+  };
+  const formatMdyDashTyping = (raw) => {
+    const digits = String(raw ?? "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+  };
+  const DateInputMdyDash = ({ valueIso, onChangeIso, disabled }) => {
+    const toDisplay = (iso) => {
+      const s = String(iso ?? "").slice(0, 10);
+      const f = formatDateForDisplay(s);
+      return f === "-" ? "" : f;
+    };
+    const [display, setDisplay] = useState(() => toDisplay(valueIso));
+    const dateRef = React.useRef(null);
+    useEffect(() => {
+      setDisplay(toDisplay(valueIso));
+    }, [valueIso]);
+    return (
+      <div style={{ position: "relative" }}>
+        <InputGroup>
+          <Form.Control
+            type="text"
+            value={display}
+            disabled={disabled}
+            readOnly
+            title="Formato: MM-DD-YYYY"
+          />
+          <Button
+            variant="outline-secondary"
+            disabled={disabled}
+            onClick={() => {
+              const el = dateRef.current;
+              if (!el) return;
+              if (typeof el.showPicker === "function") el.showPicker();
+              else el.click();
+            }}
+            title="Seleccionar fecha"
+          >
+            <i className="bi bi-calendar3" />
+          </Button>
+        </InputGroup>
+
+        <input
+          ref={dateRef}
+          type="date"
+          value={String(valueIso ?? "").slice(0, 10)}
+          onChange={(e) => onChangeIso?.(e.target.value)}
+          disabled={disabled}
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
@@ -280,21 +359,20 @@ const RetiroCancelacionModal = ({
                 <Col md={6}>
                   <Form.Group>
                     <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={cobertura.fecha_cancelacion}
-                      onChange={(e) => handleChange(index, "fecha_cancelacion", e.target.value)}
+                    <DateInputMdyDash
+                      valueIso={cobertura.fecha_cancelacion}
+                      disabled={false}
+                      onChangeIso={(iso) => handleChange(index, "fecha_cancelacion", iso)}
                     />
                   </Form.Group>
                 </Col>
                 <Col md={6}>
                   <Form.Group>
                     <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={cobertura.fecha_retiro}
+                    <DateInputMdyDash
+                      valueIso={cobertura.fecha_retiro}
                       disabled={cobertura.activo === true} // ← aquí se desactiva
-                      onChange={(e) => handleChange(index, "fecha_retiro", e.target.value)}
+                      onChangeIso={(iso) => handleChange(index, "fecha_retiro", iso)}
                     />
 
 

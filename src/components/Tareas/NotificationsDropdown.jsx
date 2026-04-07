@@ -146,11 +146,11 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
       if (diffDays === 1) return 'Ayer';
       if (diffDays < 7) return `Hace ${diffDays} días`;
       
-      // Formato dd/mm/yyyy
-      const day = String(d.getDate()).padStart(2, '0');
+      // Formato mm-dd-yyyy
       const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
       const year = d.getFullYear();
-      return `${day}/${month}/${year}`;
+      return `${month}-${day}-${year}`;
     } catch {
       return fecha;
     }

@@ -207,14 +207,14 @@ const HistorialCoberturasCanceladasModal = ({
         const matchDateOnly = fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (matchDateOnly) {
           const [, year, month, day] = matchDateOnly;
-          return `${day}/${month}/${year}`;
+          return `${month}-${day}-${year}`;
         }
         
         // Formato ISO con hora: YYYY-MM-DDTHH:mm:ss o YYYY-MM-DD HH:mm:ss
         const matchDateTime = fecha.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
         if (matchDateTime) {
           const [, year, month, day] = matchDateTime;
-          return `${day}/${month}/${year}`;
+          return `${month}-${day}-${year}`;
         }
       }
       
@@ -226,7 +226,7 @@ const HistorialCoberturasCanceladasModal = ({
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
       const day = String(d.getDate()).padStart(2, "0");
-      return `${day}/${month}/${year}`;
+      return `${month}-${day}-${year}`;
     } catch {
       return fecha;
     }
@@ -242,14 +242,14 @@ const HistorialCoberturasCanceladasModal = ({
         const matchDateTime = fecha.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2}):(\d{2})/);
         if (matchDateTime) {
           const [, year, month, day, hour, minute, second] = matchDateTime;
-          return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+          return `${month}-${day}-${year} ${hour}:${minute}:${second}`;
         }
         
         // Formato YYYY-MM-DD (solo fecha)
         const matchDateOnly = fecha.match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (matchDateOnly) {
           const [, year, month, day] = matchDateOnly;
-          return `${day}/${month}/${year} 00:00:00`;
+          return `${month}-${day}-${year} 00:00:00`;
         }
       }
       
@@ -264,7 +264,7 @@ const HistorialCoberturasCanceladasModal = ({
       const hour = String(d.getHours()).padStart(2, "0");
       const minute = String(d.getMinutes()).padStart(2, "0");
       const second = String(d.getSeconds()).padStart(2, "0");
-      return `${day}/${month}/${year} ${hour}:${minute}:${second}`;
+      return `${month}-${day}-${year} ${hour}:${minute}:${second}`;
     } catch {
       return fecha;
     }
