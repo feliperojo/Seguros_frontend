@@ -8,13 +8,14 @@ import {
   Row,
   Col,
   Badge,
+  InputGroup,
 } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds } from "../../utils/mentions";
-import { durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import { durationFromStartToEnd, formatDhmString, formatDateForDisplay } from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
 
 // Constantes para subir archivos
@@ -72,6 +73,81 @@ const obtenerLogIdBitacora = (t) => {
   );
 };
 
+/** Valor de fecha de tarea siempre como YYYY-MM-DD para API y estado (sin corrimientos por locale del input nativo). */
+const taskDateToIso = (fecha) => {
+  if (!fecha) return "";
+  const s = String(fecha).trim().split("T")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+};
+
+/**
+ * Muestra MM-DD-YYYY de forma fija; mantiene YYYY-MM-DD al elegir fecha en el calendario.
+ * Evita input type="date" visible, que depende del locale del navegador (dd/mm vs mm/dd).
+ */
+const OportunidadMdyDashDateField = ({ valueIso, onChangeIso, className = "" }) => {
+  const iso = taskDateToIso(valueIso);
+  const [display, setDisplay] = useState(() => {
+    if (!iso) return "";
+    const f = formatDateForDisplay(iso);
+    return f === "-" ? "" : f;
+  });
+  const dateRef = useRef(null);
+
+  useEffect(() => {
+    const i = taskDateToIso(valueIso);
+    if (!i) {
+      setDisplay("");
+      return;
+    }
+    const f = formatDateForDisplay(i);
+    setDisplay(f === "-" ? "" : f);
+  }, [valueIso]);
+
+  return (
+    <div style={{ position: "relative" }}>
+      <InputGroup className={className}>
+        <Form.Control
+          type="text"
+          value={display}
+          readOnly
+          title="Formato: MM-DD-YYYY"
+          className="border-secondary"
+          style={{ borderRadius: "0.5rem 0 0 0.5rem" }}
+        />
+        <Button
+          variant="outline-secondary"
+          type="button"
+          className="border-secondary"
+          onClick={() => {
+            const el = dateRef.current;
+            if (!el) return;
+            if (typeof el.showPicker === "function") el.showPicker();
+            else el.click();
+          }}
+          title="Seleccionar fecha"
+          style={{ borderRadius: "0 0.5rem 0.5rem 0" }}
+        >
+          <i className="bi bi-calendar3" aria-hidden />
+        </Button>
+      </InputGroup>
+      <input
+        ref={dateRef}
+        type="date"
+        value={iso}
+        onChange={(e) => onChangeIso?.(e.target.value)}
+        style={{
+          position: "absolute",
+          inset: 0,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
+    </div>
+  );
+};
+
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -86,9 +162,9 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [historial, setHistorial] = useState([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
 
-  // Fechas de seguimiento
-  const [scheduledDate, setScheduledDate] = useState(tarea?.scheduled_date || "");
-  const [dueDate, setDueDate] = useState(tarea?.due_date || "");
+  // Fechas de seguimiento (siempre YYYY-MM-DD internamente)
+  const [scheduledDate, setScheduledDate] = useState(() => taskDateToIso(tarea?.scheduled_date));
+  const [dueDate, setDueDate] = useState(() => taskDateToIso(tarea?.due_date));
 
   // ✅ Nuevos estados para manejo de archivos
   const [archivos, setArchivos] = useState([]);
@@ -758,8 +834,8 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
 
     // Resetear fechas cuando cambia la tarea
     if (tarea) {
-      setScheduledDate(tarea?.scheduled_date || "");
-      setDueDate(tarea?.due_date || "");
+      setScheduledDate(taskDateToIso(tarea?.scheduled_date));
+      setDueDate(taskDateToIso(tarea?.due_date));
     }
 
     // Limpiar estados de edición al cambiar de tarea
@@ -1221,17 +1297,21 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     }
     setLoading(true);
     try {
+      const sched = taskDateToIso(scheduledDate);
+      const due = taskDateToIso(dueDate);
       await apiRequest(`tareas_operativas/${tarea.id}/reprogramar`, "PUT", {
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: sched,
+        due_date: due,
       });
 
       const tareaActualizada = {
         ...tarea,
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: sched,
+        due_date: due,
       };
 
+      setScheduledDate(sched);
+      setDueDate(due);
       if (onUpdated) onUpdated(tareaActualizada);
       alert("✅ Fechas actualizadas");
     } catch (error) {
@@ -1244,6 +1324,10 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
 
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
+    if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}/.test(fecha)) {
+      const s = formatDateForDisplay(fecha.split("T")[0]);
+      return s === "-" ? "N/A" : s;
+    }
     try {
       const date = new Date(fecha);
       if (isNaN(date.getTime())) return "N/A";
@@ -1724,14 +1808,13 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                         <Form.Group>
                           <Form.Label className="text-muted small fw-semibold mb-2 d-block">
                             <i className="fas fa-calendar-alt text-primary me-2"></i>
-                            Fecha Programada
+                            Fecha Programada{" "}
+                            <span className="fw-normal text-muted">(MM-DD-YYYY)</span>
                           </Form.Label>
-                          <Form.Control
-                            type="date"
-                            value={scheduledDate}
-                            onChange={(e) => setScheduledDate(e.target.value)}
+                          <OportunidadMdyDashDateField
+                            valueIso={scheduledDate}
+                            onChangeIso={(iso) => setScheduledDate(iso)}
                             className="border-secondary"
-                            style={{ borderRadius: "0.5rem" }}
                           />
                         </Form.Group>
                       </Col>
@@ -1739,14 +1822,13 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                         <Form.Group>
                           <Form.Label className="text-muted small fw-semibold mb-2 d-block">
                             <i className="fas fa-clock text-warning me-2"></i>
-                            Fecha de Vencimiento
+                            Fecha de Vencimiento{" "}
+                            <span className="fw-normal text-muted">(MM-DD-YYYY)</span>
                           </Form.Label>
-                          <Form.Control
-                            type="date"
-                            value={dueDate}
-                            onChange={(e) => setDueDate(e.target.value)}
+                          <OportunidadMdyDashDateField
+                            valueIso={dueDate}
+                            onChangeIso={(iso) => setDueDate(iso)}
                             className="border-secondary"
-                            style={{ borderRadius: "0.5rem" }}
                           />
                         </Form.Group>
                       </Col>

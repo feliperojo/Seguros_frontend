@@ -18,7 +18,13 @@ import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import systemConfigService from "../../services/SystemConfigService";
-import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import {
+  formatDateForDisplay,
+  formatDateTimeForDisplay,
+  formatTaskTimeDhm,
+  durationFromStartToEnd,
+  formatDhmString,
+} from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
@@ -122,23 +128,6 @@ const getComentarioHistorialOrdenMs = (c) => {
   }
   const nid = Number(c?.id);
   return Number.isFinite(nid) ? nid : 0;
-};
-
-/** Vista amigable mes–día–año (español) para fechas en YYYY-MM-DD; sin corrimientos por zona horaria */
-const formatYmdMesDiaAnoVisual = (ymd) => {
-  if (!ymd || typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
-  const [yStr, mStr, dStr] = ymd.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  const d = parseInt(dStr, 10);
-  if (!y || !m || !d) return "";
-  const dt = new Date(y, m - 1, d);
-  if (Number.isNaN(dt.getTime())) return "";
-  return dt.toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
 };
 
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
@@ -248,6 +237,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const quillEditorRef = useRef(null);
   const usuariosCargadosRef = useRef(false);
   const tareaIdRef = useRef(null);
+  const lastValidScheduledYmdRef = useRef(fechaToInputDate(tarea?.scheduled_date) || "");
+  const lastValidDueYmdRef = useRef(fechaToInputDate(tarea?.due_date) || "");
 
   // ✅ Hook para manejo de menciones en Quill
   const {
@@ -268,9 +259,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     const digits = (formattedValue || "").replace(/\D/g, "");
     if (digits.length === 0) {
       setScheduledDate("");
+      lastValidScheduledYmdRef.current = "";
       return;
     }
     const ymd = parseMdySlashToYmdIso(formattedValue);
+    if (ymd) lastValidScheduledYmdRef.current = ymd;
     setScheduledDate(ymd || "");
   };
 
@@ -279,13 +272,57 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     const digits = (formattedValue || "").replace(/\D/g, "");
     if (digits.length === 0) {
       setDueDate("");
+      lastValidDueYmdRef.current = "";
       return;
     }
     const ymd = parseMdySlashToYmdIso(formattedValue);
+    if (ymd) lastValidDueYmdRef.current = ymd;
     setDueDate(ymd || "");
   };
 
   const isDueDateLocked = tarea?.id && !dueDateUnlocked;
+
+  /** Normaliza la máscara MM-DD-AAAA y evita desajustes visuales entre navegadores (valor alineado al ISO guardado). */
+  const onScheduledDateMdyBlur = (e) => {
+    const raw = e?.target?.value ?? "";
+    const digits = String(raw).replace(/\D/g, "");
+    if (!digits.length) {
+      setScheduledDate("");
+      setScheduledDateMdy("");
+      lastValidScheduledYmdRef.current = "";
+      return;
+    }
+    const ymd = parseMdySlashToYmdIso(String(raw));
+    if (ymd) {
+      setScheduledDate(ymd);
+      setScheduledDateMdy(ymdIsoToMdySlash(ymd));
+    } else {
+      const fb = lastValidScheduledYmdRef.current;
+      setScheduledDateMdy(fb ? ymdIsoToMdySlash(fb) : "");
+      if (fb) setScheduledDate(fb);
+    }
+  };
+
+  const onDueDateMdyBlur = (e) => {
+    if (isDueDateLocked) return;
+    const raw = e?.target?.value ?? "";
+    const digits = String(raw).replace(/\D/g, "");
+    if (!digits.length) {
+      setDueDate("");
+      setDueDateMdy("");
+      lastValidDueYmdRef.current = "";
+      return;
+    }
+    const ymd = parseMdySlashToYmdIso(String(raw));
+    if (ymd) {
+      setDueDate(ymd);
+      setDueDateMdy(ymdIsoToMdySlash(ymd));
+    } else {
+      const fb = lastValidDueYmdRef.current;
+      setDueDateMdy(fb ? ymdIsoToMdySlash(fb) : "");
+      if (fb) setDueDate(fb);
+    }
+  };
   const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
   const esTareaVencida =
     tarea?.due_date &&
@@ -820,6 +857,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     setDueDate(dueInit);
     setScheduledDateMdy(ymdIsoToMdySlash(schedInit));
     setDueDateMdy(ymdIsoToMdySlash(dueInit));
+    lastValidScheduledYmdRef.current = schedInit;
+    lastValidDueYmdRef.current = dueInit;
     setDueDateUnlocked(false);
     setShowDueDatePasswordModal(false);
     setAdminPasswordForDueDate("");
@@ -1485,6 +1524,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       setDueDate(dueYmd);
       setScheduledDateMdy(ymdIsoToMdySlash(schedYmd));
       setDueDateMdy(ymdIsoToMdySlash(dueYmd));
+      lastValidScheduledYmdRef.current = schedYmd || "";
+      lastValidDueYmdRef.current = dueYmd || "";
       setDueDateUnlocked(false);
       setAdminPasswordForDueDate("");
       setToastVariant("success");
@@ -2205,18 +2246,22 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         </Form.Label>
                         <PatternFormat
                           customInput={Form.Control}
-                          format="##/##/####"
+                          format="##-##-####"
                           mask="_"
-                          placeholder="mm/dd/aaaa"
+                          placeholder="MM-DD-AAAA"
                           inputMode="numeric"
                           value={scheduledDateMdy}
                           onValueChange={onScheduledDateMdyChange}
+                          onBlur={onScheduledDateMdyBlur}
                           title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes - día - año (MM-DD-AAAA)"}
                           style={{ borderRadius: "6px" }}
                         />
                         {!!scheduledDate && (
                           <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
-                            {formatYmdMesDiaAnoVisual(scheduledDate)}
+                            {(() => {
+                              const s = formatDateForDisplay(scheduledDate);
+                              return s === "-" ? "" : s;
+                            })()}
                           </Form.Text>
                         )}
                       </Form.Group>
@@ -2233,12 +2278,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         <div className="d-flex gap-2 align-items-start">
                           <PatternFormat
                             customInput={Form.Control}
-                            format="##/##/####"
+                            format="##-##-####"
                             mask="_"
-                            placeholder="mm/dd/aaaa"
+                            placeholder="MM-DD-AAAA"
                             inputMode="numeric"
                             value={dueDateMdy}
                             onValueChange={onDueDateMdyChange}
+                            onBlur={onDueDateMdyBlur}
                             disabled={isDueDateLocked}
                             readOnly={isDueDateLocked}
                             title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes - día - año (MM-DD-AAAA)")}
@@ -2259,7 +2305,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         </div>
                         {!!dueDate && (
                           <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
-                            {formatYmdMesDiaAnoVisual(dueDate)}
+                            {(() => {
+                              const s = formatDateForDisplay(dueDate);
+                              return s === "-" ? "" : s;
+                            })()}
                           </Form.Text>
                         )}
                       </Form.Group>
