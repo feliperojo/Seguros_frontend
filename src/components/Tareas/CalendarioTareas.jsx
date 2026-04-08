@@ -11,6 +11,51 @@ import { useHasPermission } from "../../hooks/useHasPermission";
 import { isUserMentioned } from "../../utils/mentions";
 import { listTasks as listAuditoriaTasks, getTask as getAuditoriaTask } from "../../services/auditoriasTasksService";
 
+function getListFromApi(res) {
+  if (res == null) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res?.data?.data)) return res.data.data;
+  if (Array.isArray(res?.data)) return res.data;
+  if (Array.isArray(res?.data?.tasks)) return res.data.tasks;
+  if (Array.isArray(res?.tasks)) return res.tasks;
+  return [];
+}
+
+function normalizeOperativaLite(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const t = { ...raw };
+
+  t.id = t.id ?? t.task_id ?? t.task?.id;
+  t.status = t.status ?? t.estado ?? t.state ?? t.task?.status ?? t.task?.estado ?? "pending";
+  t.scheduled_date =
+    t.scheduled_date ??
+    t.scheduled_at ??
+    t.fechaProgramada ??
+    t.task?.scheduled_date ??
+    t.task?.scheduled_at ??
+    null;
+  t.due_date =
+    t.due_date ??
+    t.due_at ??
+    t.fechaLimite ??
+    t.task?.due_date ??
+    t.task?.due_at ??
+    null;
+
+  // Compatibilidad con nueva estructura donde `cliente` viene directo en la respuesta
+  if (t.cliente?.id) {
+    t.log = t.log || {};
+    t.log.cliente = t.log.cliente || {
+      id: t.cliente.id,
+      nombre_completo: t.cliente.nombre_completo || t.cliente.nombre || "Cliente",
+      telefono: t.cliente.telefono || "",
+      estado_cliente: t.cliente.estado_cliente || "cliente",
+    };
+  }
+
+  return t;
+}
+
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   const hoy = new Date();
@@ -900,19 +945,13 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           : `tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`;
         
         const response = await apiRequest(endpoint, "GET");
-      
-        let tareasOperativas = [];
-        if (response && Array.isArray(response.data)) {
-          tareasOperativas = response.data;
-        } else if (Array.isArray(response)) {
-          tareasOperativas = response;
-        }
+        let tareasOperativas = getListFromApi(response).map(normalizeOperativaLite);
 
         // ✅ Si buscamos por menciones, también verificar en comentarios (por si el backend no lo soporta aún)
         if (filtroMenciones && tareasOperativas.length === 0) {
           // Fallback: obtener todas las tareas y filtrar localmente
           const allResponse = await apiRequest(`tareas_operativas?assigned_user_id=${usuarioSeleccionado}&per_page=100`, "GET");
-          const allTareas = Array.isArray(allResponse?.data) ? allResponse.data : Array.isArray(allResponse) ? allResponse : [];
+          const allTareas = getListFromApi(allResponse).map(normalizeOperativaLite);
           
           // Filtrar tareas que tienen comentarios mencionando al usuario
           tareasOperativas = allTareas.filter(tarea => {
@@ -937,11 +976,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           
           const auditoriaResponse = await listAuditoriaTasks(auditoriaParams);
           
-          if (auditoriaResponse?.data && Array.isArray(auditoriaResponse.data)) {
-            tareasAuditoria = auditoriaResponse.data;
-          } else if (Array.isArray(auditoriaResponse)) {
-            tareasAuditoria = auditoriaResponse;
-          }
+          tareasAuditoria = getListFromApi(auditoriaResponse);
 
           // ✅ Marcar tareas de auditoría con tipo
           tareasAuditoria = tareasAuditoria.map(t => ({ ...t, tipo: 'auditoria' }));
