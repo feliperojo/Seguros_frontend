@@ -10,6 +10,7 @@ import NotificationsDropdown from "../Tareas/NotificationsDropdown";
 import { useHasPermission } from "../../hooks/useHasPermission";
 import { isUserMentioned } from "../../utils/mentions";
 import { listTasks as listAuditoriaTasks, getTask as getAuditoriaTask } from "../../services/auditoriasTasksService";
+import { parseApiDateToLocalDate, formatDateToYmd } from "../../utils/formatters";
 
 function getListFromApi(res) {
   if (res == null) return [];
@@ -573,7 +574,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       // ✅ Navegar a la fecha de la tarea en el calendario si tiene fecha programada
       if (taskDetail.scheduled_date || taskDetail.due_date) {
         const fechaTarea = taskDetail.scheduled_date || taskDetail.due_date;
-        const fecha = new Date(fechaTarea + 'T00:00:00');
+        const fecha = parseApiDateToLocalDate(fechaTarea);
+        if (!fecha) return;
         
         if (!isNaN(fecha.getTime())) {
           const mesTarea = fecha.getMonth();
@@ -631,7 +633,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     // ✅ Si la tarea tiene fecha programada, navegar a ese mes/año en el calendario
     if (tarea.scheduled_date || tarea.due_date) {
       const fechaTarea = tarea.scheduled_date || tarea.due_date;
-      const fecha = new Date(fechaTarea + 'T00:00:00');
+      const fecha = parseApiDateToLocalDate(fechaTarea);
+      if (!fecha) return;
       
       if (!isNaN(fecha.getTime())) {
         const mesTarea = fecha.getMonth();
@@ -829,9 +832,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       const fechaStr = t.scheduled_date || t.due_date || t.created_at;
       if (!fechaStr) return false;
       
-      const fecha = fechaStr.includes('T') 
-        ? new Date(fechaStr) 
-        : new Date(`${fechaStr}T00:00:00`);
+      const fecha = parseApiDateToLocalDate(fechaStr);
+      if (!fecha) return false;
       
       if (isNaN(fecha.getTime())) return false;
       return fecha.getDate() === dia && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual;
@@ -1015,9 +1017,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         const fechaStr = t.scheduled_date || t.due_date || t.created_at;
         if (!fechaStr) return;
         
-        const fecha = fechaStr.includes('T') 
-          ? new Date(fechaStr) 
-          : new Date(`${fechaStr}T00:00:00`);
+        const fecha = parseApiDateToLocalDate(fechaStr);
+        if (!fecha) return;
         
         if (!isNaN(fecha.getTime()) && fecha.getMonth() === mesActual && fecha.getFullYear() === añoActual) {
           const dia = fecha.getDate();
@@ -1094,13 +1095,16 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     const tareaId = e.dataTransfer.getData("tareaId");
     if (!tareaId || !Array.isArray(tareas)) return;
 
-    const nuevaFecha = new Date(añoActual, mesActual, dia).toISOString().split("T")[0];
+    // Usar formato estable YYYY-MM-DD para el front y compatibilidad.
+    // Si el backend ahora acepta/retorna MM-DD-YYYY, igual parseamos ambos al leer.
+    const nuevaFecha = formatDateToYmd(new Date(añoActual, mesActual, dia));
 
     const tarea = tareas.find((t) => t && t.id === parseInt(tareaId));
     if (!tarea) return;
 
     // No permitir que la fecha de programación quede por encima de la de vencimiento
-    const dueDateStr = tarea.due_date ? new Date(tarea.due_date).toISOString().split("T")[0] : null;
+    const dueDateParsed = tarea.due_date ? parseApiDateToLocalDate(tarea.due_date) : null;
+    const dueDateStr = dueDateParsed ? formatDateToYmd(dueDateParsed) : null;
     if (dueDateStr && nuevaFecha > dueDateStr) {
       setToast({
         show: true,

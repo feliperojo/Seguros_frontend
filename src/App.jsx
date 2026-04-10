@@ -38,6 +38,7 @@ import ContactosAdmin from "./pages/ContactosAdmin";
 import AuditoriasPage from "./pages/AuditoriasPage";
 import AuditoriaRunDetallePage from "./pages/AuditoriaRunDetallePage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
+import DictadoPlayground from "./pages/dev/DictadoPlayground";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
@@ -181,6 +182,10 @@ const App = () => {
             </PermissionRoute>
           }
         />
+
+        {import.meta.env.DEV && (
+          <Route path="/dev/dictado" element={<DictadoPlayground />} />
+        )}
       
       </Route>
       {/* 🔹 Ficha con tabs: layout + rutas hijas */}

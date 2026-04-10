@@ -4,6 +4,7 @@ import { Spinner } from 'react-bootstrap';
 import { useNotifications } from '../../hooks/useNotifications';
 import { Link } from 'react-router-dom';
 import apiRequest from '../../services/api';
+import { parseApiDateToLocalDate } from '../../utils/formatters';
 import { listTasks as listAuditoriaTasks } from '../../services/auditoriasTasksService';
 
 /**
@@ -84,12 +85,15 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
           // ✅ Combinar ambas listas
           const todasLasTareas = [...tareasPendientes, ...tareasAuditoriaPendientes];
           
-          // Ordenar por fecha de creación (más recientes primero)
-          todasLasTareas.sort((a, b) => {
-            const fechaA = new Date(a.created_at || a.scheduled_date || 0);
-            const fechaB = new Date(b.created_at || b.scheduled_date || 0);
-            return fechaB - fechaA;
-          });
+          const sortKeyMs = (t) => {
+            if (t.created_at) {
+              const ms = new Date(t.created_at).getTime();
+              return Number.isNaN(ms) ? 0 : ms;
+            }
+            const d = parseApiDateToLocalDate(t.scheduled_date);
+            return d ? d.getTime() : 0;
+          };
+          todasLasTareas.sort((a, b) => sortKeyMs(b) - sortKeyMs(a));
 
           setPendingTasks(todasLasTareas);
         } catch (error) {

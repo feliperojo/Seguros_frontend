@@ -53,121 +53,131 @@ export const formatPhoneFlexible = (raw = "") => {
 /** Quitar guiones para enviar al backend */
 export const unformatPhone = (raw = "") => onlyDigits(raw).slice(0, 15);
 
-/**
- * Normaliza una fecha a formato YYYY-MM-DD para inputs type="date"
- * Evita problemas de zona horaria al extraer solo la parte de la fecha
- * sin convertir a objeto Date que puede alterar el día
- * 
- * @param {string|Date|null|undefined} fecha - Fecha en cualquier formato
- * @returns {string} Fecha en formato YYYY-MM-DD o cadena vacía si no es válida
- */
-export const normalizeDateForInput = (fecha) => {
-  if (!fecha) return "";
-  
-  // Si ya está en formato YYYY-MM-DD, devolverlo directamente
-  if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
-    return fecha;
-  }
-  
-  // Si es un string ISO (ej: "2024-01-15T00:00:00.000Z" o "2024-01-15T00:00:00")
-  // extraer solo la parte de la fecha para evitar problemas de zona horaria
-  if (typeof fecha === "string") {
-    // Intentar extraer YYYY-MM-DD del string (incluye casos con T y sin T)
-    const match = fecha.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|$)/);
-    if (match) {
-      // Validar que la fecha sea válida
-      const year = parseInt(match[1], 10);
-      const month = parseInt(match[2], 10);
-      const day = parseInt(match[3], 10);
-      if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-        return `${match[1]}-${match[2]}-${match[3]}`;
-      }
-    }
-    
-    // Si tiene T, extraer solo la parte de la fecha
-    if (fecha.includes("T")) {
-      const datePart = fecha.split("T")[0];
-      if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
-        return datePart;
-      }
-    }
-  }
-  
-  // Si es un objeto Date, usar métodos locales
-  // Nota: Si el Date fue creado desde un string ISO, podría haber problemas de zona horaria
-  // pero en ese caso debería haberse manejado antes como string
-  if (fecha instanceof Date) {
-    if (isNaN(fecha.getTime())) return "";
-    const year = fecha.getFullYear();
-    const month = String(fecha.getMonth() + 1).padStart(2, "0");
-    const day = String(fecha.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-  
-  // Último recurso: intentar parsear como string que no sea ISO
-  // Solo para formatos no estándar (MM/DD/YYYY, DD/MM/YYYY, etc.)
-  if (typeof fecha === "string") {
-    const d = new Date(fecha);
-    if (!isNaN(d.getTime())) {
-      // Para formatos no ISO, usar métodos locales ya que no hay forma de saber
-      // si el string original representaba una fecha local o UTC
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    }
-  }
-  
-  return "";
+const isValidCalendarYmd = (year, month, day) => {
+  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 1000 || year > 9999) return false;
+  const dt = new Date(year, month - 1, day);
+  return dt.getFullYear() === year && dt.getMonth() === month - 1 && dt.getDate() === day;
 };
 
 /**
- * Extrae año, mes y día de una fecha en cualquier formato
- * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
- * 
- * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato
- * @returns {object|null} Objeto con {year, month, day} o null si no es válida
+ * Extrae año, mes y día (calendario local) de valores que vienen del API.
+ * Soporta YYYY-MM-DD, ISO con T, MM-DD-YYYY y MM/DD/YYYY (respuesta nueva del backend).
+ *
+ * @param {string|Date|null|undefined} dateString
+ * @returns {{ year: number, month: number, day: number }|null}
  */
 const extractDateParts = (dateString) => {
   if (!dateString) return null;
-  
+
   try {
-    let year, month, day;
-    
-    // Si la fecha viene en formato ISO (YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss)
-    // parsearla manualmente como fecha local para evitar problemas de zona horaria
-    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}(T|$)/.test(dateString)) {
-      // Extraer año, mes y día del string ISO
-      const [datePart] = dateString.split('T');
-      [year, month, day] = datePart.split('-').map(Number);
-      
-      // Validar que los valores sean válidos
-      if (month < 1 || month > 12 || day < 1 || day > 31) {
-        return null;
-      }
-    } else if (dateString instanceof Date) {
-      // Si ya es un objeto Date, validar que sea válido
-      if (isNaN(dateString.getTime())) {
-        return null;
-      }
-      year = dateString.getFullYear();
-      month = dateString.getMonth() + 1;
-      day = dateString.getDate();
-    } else {
-      // Para otros formatos, intentar parsear con el constructor estándar
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return null;
-      }
-      year = date.getFullYear();
-      month = date.getMonth() + 1;
-      day = date.getDate();
+    if (dateString instanceof Date) {
+      if (isNaN(dateString.getTime())) return null;
+      return {
+        year: dateString.getFullYear(),
+        month: dateString.getMonth() + 1,
+        day: dateString.getDate(),
+      };
     }
-    
-    return { year, month, day };
+
+    if (typeof dateString !== "string") return null;
+
+    const s = dateString.trim();
+    if (!s) return null;
+
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?!\d)/);
+    if (m) {
+      const year = Number(m[1]);
+      const month = Number(m[2]);
+      const day = Number(m[3]);
+      if (!isValidCalendarYmd(year, month, day)) return null;
+      return { year, month, day };
+    }
+
+    m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (m) {
+      const month = Number(m[1]);
+      const day = Number(m[2]);
+      const year = Number(m[3]);
+      if (!isValidCalendarYmd(year, month, day)) return null;
+      return { year, month, day };
+    }
+
+    m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m) {
+      const month = Number(m[1]);
+      const day = Number(m[2]);
+      const year = Number(m[3]);
+      if (!isValidCalendarYmd(year, month, day)) return null;
+      return { year, month, day };
+    }
+
+    const date = new Date(s);
+    if (isNaN(date.getTime())) return null;
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+    };
   } catch {
     return null;
   }
+};
+
+/**
+ * Normaliza una fecha a YYYY-MM-DD para inputs type="date" y payloads al API.
+ *
+ * @param {string|Date|null|undefined} fecha
+ * @returns {string} YYYY-MM-DD o cadena vacía
+ */
+export const normalizeDateForInput = (fecha) => {
+  if (!fecha) return "";
+  const parts = extractDateParts(fecha);
+  if (!parts) return "";
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+};
+
+/**
+ * Convierte un valor de fecha del API en un Date a medianoche en hora local (sin hora).
+ * Fechas con componente horario (T o "YYYY-MM-DD HH:mm") usan el instante y luego el día local.
+ *
+ * @param {string|Date|null|undefined} input
+ * @returns {Date|null}
+ */
+export const parseApiDateToLocalDate = (input) => {
+  if (!input) return null;
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) return null;
+    return new Date(input.getFullYear(), input.getMonth(), input.getDate());
+  }
+  if (typeof input !== "string") return null;
+  const s = input.trim();
+  if (!s) return null;
+
+  const looksLikeDateTime =
+    s.includes("T") || /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s);
+  if (looksLikeDateTime) {
+    const d = new Date(s);
+    if (Number.isNaN(d.getTime())) return null;
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  const parts = extractDateParts(s);
+  if (!parts) return null;
+  return new Date(parts.year, parts.month - 1, parts.day);
+};
+
+/**
+ * Formatea un objeto Date local a YYYY-MM-DD (p. ej. tras drag en calendario).
+ *
+ * @param {Date|null|undefined} date
+ * @returns {string|null}
+ */
+export const formatDateToYmd = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 };
 
 /**

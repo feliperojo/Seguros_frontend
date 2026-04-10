@@ -3,6 +3,7 @@ import { FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import { formatDateForDisplay, formatDurationBetweenDates } from "../../utils/formatters";
+import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClienteGrupo";
 
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
@@ -295,13 +296,6 @@ export default function TareasTerminadasPanel({
     }
   }, []);
 
-  const getList = (res) => {
-    if (Array.isArray(res?.data?.data)) return res.data.data; // axios: {data:{data:[...]}}
-    if (Array.isArray(res?.data)) return res.data;            // apiRequest devolvió JSON
-    if (Array.isArray(res)) return res;                       // array directo
-    return [];
-  };
-
   // Normaliza y DERIVA fechaTermino y fechaInicio (para duración)
   const normalizeTask = (t) => {
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
@@ -396,13 +390,7 @@ export default function TareasTerminadasPanel({
       setLoading(true);
       setErrMsg("");
       try {
-        const qs = `include=log,log.cliente,concept,comments,assignedUser&per_page=${perPage}`;
-        const res = await apiRequest(
-          `tareas_operativas/cliente/${clienteId}/grupo/${grupoId}?${qs}`,
-          "GET"
-        );
-
-        const list = getList(res).filter((t) => {
+        const list = (await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage)).filter((t) => {
           const st = String(t?.estado ?? t?.status ?? "").toLowerCase();
           return COMPLETED_STATES.has(st); // incluye "completed"
         });
@@ -439,9 +427,14 @@ export default function TareasTerminadasPanel({
         }
 
         if (!cancelled) setItems(unique);
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          setErrMsg("No fue posible cargar las tareas terminadas.");
+          console.error("TareasTerminadasPanel:", err?.response?.status, err?.message, err);
+          setErrMsg(
+            err?.response?.status === 403
+              ? "No tienes permiso para ver las tareas de este cliente."
+              : "No fue posible cargar las tareas terminadas."
+          );
           setItems([]);
         }
       } finally {

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import MdyDashDateInput from "../components/common/MdyDashDateInput";
 import { NumericFormat } from 'react-number-format';
 import { FaMapMarkerAlt } from "react-icons/fa";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -526,15 +527,16 @@ const calcularIngresoAnual = (monto, periodo) => {
             {/* Fecha de Nacimiento y Edad */}
             <div className="row mt-3">
               <div className="col-md-4">
-                <label>Fecha de Nacimiento <small className="text-muted">(mm-dd-yyyy)</small></label>
-                <input type="date" 
-                name="fecha_nacimiento" 
-                className="form-control" 
-                value={normalizeDateForInput(formData.fecha_nacimiento)} 
-                onChange={handleChange}
-                max="2099-12-31"
-                min="1900-01-01"
-                title="Formato: mm-dd-yyyy" />
+                <label>Fecha de Nacimiento</label>
+                <MdyDashDateInput
+                  className="w-100"
+                  valueIso={normalizeDateForInput(formData.fecha_nacimiento)}
+                  minIso="1900-01-01"
+                  maxIso="2099-12-31"
+                  onChangeIso={(iso) =>
+                    handleChange({ target: { name: "fecha_nacimiento", value: iso } })
+                  }
+                />
               </div>
               <div className="col-md-2">
                 <label>Edad</label>
@@ -621,18 +623,28 @@ const calcularIngresoAnual = (monto, periodo) => {
                 <input type="text" name="categoria" className="form-control" value={formData.categoria} onChange={handleChange} />
               </div>
               <div className="col-md-3">
-                <label>Fecha Emision <small className="text-muted">(mm-dd-yyyy)</small></label>
-                <input type="date" name="fecha_emision" className="form-control" value={formData.fecha_emision} onChange={handleChange}
-                max="2099-12-31"
-                min="1900-01-01"
-                title="Formato: mm-dd-yyyy"/>
+                <label>Fecha Emision</label>
+                <MdyDashDateInput
+                  className="w-100"
+                  valueIso={formData.fecha_emision}
+                  minIso="1900-01-01"
+                  maxIso="2099-12-31"
+                  onChangeIso={(iso) =>
+                    handleChange({ target: { name: "fecha_emision", value: iso } })
+                  }
+                />
               </div>
               <div className="col-md-3">
-                <label>Fecha Expiración <small className="text-muted">(mm-dd-yyyy)</small></label>
-                <input type="date" name="fecha_expiracion" className="form-control" value={formData.fecha_expiracion} onChange={handleChange}
-                max="2099-12-31"
-                min="1900-01-01"
-                title="Formato: mm-dd-yyyy"/>
+                <label>Fecha Expiración</label>
+                <MdyDashDateInput
+                  className="w-100"
+                  valueIso={formData.fecha_expiracion}
+                  minIso="1900-01-01"
+                  maxIso="2099-12-31"
+                  onChangeIso={(iso) =>
+                    handleChange({ target: { name: "fecha_expiracion", value: iso } })
+                  }
+                />
               </div>
             </div>
           </>

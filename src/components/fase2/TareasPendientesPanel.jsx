@@ -8,6 +8,7 @@ import { useMentions } from "../../hooks/useMentions";
 import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
 import { formatDateForDisplay } from "../../utils/formatters";
+import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClienteGrupo";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
 
@@ -165,13 +166,6 @@ export default function TareasPendientesPanel({
     return adj.tipo_mime?.includes("word") || 
            /\.(doc|docx)$/i.test(adj.nombre_original || "");
   }, []);
-
-  const getList = (res) => {
-    if (Array.isArray(res?.data?.data)) return res.data.data;
-    if (Array.isArray(res?.data)) return res.data;
-    if (Array.isArray(res)) return res;
-    return [];
-  };
 
   const fetchTaskDetail = useCallback(async (task) => {
     const raw = task?.__raw ?? task;
@@ -482,12 +476,7 @@ export default function TareasPendientesPanel({
     setLoading(true);
     setErrMsg("");
     try {
-      const qs = `include=log,log.cliente,concept,comments,assignedUser&per_page=${perPage}`;
-      const res = await apiRequest(
-        `tareas_operativas/cliente/${clienteId}/grupo/${grupoId}?${qs}`,
-        "GET"
-      );
-      const merged = getList(res);
+      const merged = await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage);
       const filtered = merged.filter((t) =>
         PENDING_STATES.has(String(t?.estado ?? t?.status ?? "").toLowerCase())
       );
@@ -522,8 +511,13 @@ export default function TareasPendientesPanel({
       }
 
       setAutoItems(unique);
-    } catch {
-      setErrMsg("No fue posible cargar las tareas.");
+    } catch (err) {
+      console.error("TareasPendientesPanel:", err?.response?.status, err?.message, err);
+      setErrMsg(
+        err?.response?.status === 403
+          ? "No tienes permiso para ver las tareas de este cliente."
+          : "No fue posible cargar las tareas."
+      );
       setAutoItems([]);
     } finally {
       setLoading(false);

@@ -8,15 +8,21 @@ import {
   Row,
   Col,
   Badge,
-  InputGroup,
 } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds } from "../../utils/mentions";
-import { durationFromStartToEnd, formatDhmString, formatDateForDisplay } from "../../utils/formatters";
+import {
+  durationFromStartToEnd,
+  formatDhmString,
+  formatDateForDisplay,
+  normalizeDateForInput,
+} from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
@@ -76,76 +82,7 @@ const obtenerLogIdBitacora = (t) => {
 /** Valor de fecha de tarea siempre como YYYY-MM-DD para API y estado (sin corrimientos por locale del input nativo). */
 const taskDateToIso = (fecha) => {
   if (!fecha) return "";
-  const s = String(fecha).trim().split("T")[0];
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
-};
-
-/**
- * Muestra MM-DD-YYYY de forma fija; mantiene YYYY-MM-DD al elegir fecha en el calendario.
- * Evita input type="date" visible, que depende del locale del navegador (dd/mm vs mm/dd).
- */
-const OportunidadMdyDashDateField = ({ valueIso, onChangeIso, className = "" }) => {
-  const iso = taskDateToIso(valueIso);
-  const [display, setDisplay] = useState(() => {
-    if (!iso) return "";
-    const f = formatDateForDisplay(iso);
-    return f === "-" ? "" : f;
-  });
-  const dateRef = useRef(null);
-
-  useEffect(() => {
-    const i = taskDateToIso(valueIso);
-    if (!i) {
-      setDisplay("");
-      return;
-    }
-    const f = formatDateForDisplay(i);
-    setDisplay(f === "-" ? "" : f);
-  }, [valueIso]);
-
-  return (
-    <div style={{ position: "relative" }}>
-      <InputGroup className={className}>
-        <Form.Control
-          type="text"
-          value={display}
-          readOnly
-          title="Formato: MM-DD-YYYY"
-          className="border-secondary"
-          style={{ borderRadius: "0.5rem 0 0 0.5rem" }}
-        />
-        <Button
-          variant="outline-secondary"
-          type="button"
-          className="border-secondary"
-          onClick={() => {
-            const el = dateRef.current;
-            if (!el) return;
-            if (typeof el.showPicker === "function") el.showPicker();
-            else el.click();
-          }}
-          title="Seleccionar fecha"
-          style={{ borderRadius: "0 0.5rem 0.5rem 0" }}
-        >
-          <i className="bi bi-calendar3" aria-hidden />
-        </Button>
-      </InputGroup>
-      <input
-        ref={dateRef}
-        type="date"
-        value={iso}
-        onChange={(e) => onChangeIso?.(e.target.value)}
-        style={{
-          position: "absolute",
-          inset: 0,
-          opacity: 0,
-          pointerEvents: "none",
-        }}
-        aria-hidden="true"
-        tabIndex={-1}
-      />
-    </div>
-  );
+  return normalizeDateForInput(String(fecha).trim()) || "";
 };
 
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
@@ -171,6 +108,8 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
   const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  const quillSelectionBoundToRef = useRef(null);
 
   // Estados para reconocimiento de voz
   const [grabando, setGrabando] = useState(false);
@@ -200,6 +139,14 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   useEffect(() => {
     grabandoRef.current = grabando;
   }, [grabando]);
+
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show, tarea?.id]);
   
   // ✅ Estados para adjuntos de comentarios
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({}); // { comentarioId: [adjuntos] }
@@ -631,11 +578,18 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
         }
         
         if (textoTranscrito) {
-          if (quillEditorRef.current) {
-            const quill = quillEditorRef.current.getEditor();
+          const quill =
+            getQuillInstance(mentionQuillRef.current) ||
+            getQuillInstance(quillEditorRef.current);
+          if (quill) {
             const length = quill.getLength();
-            quill.insertText(length - 1, (quill.getText(length - 2, 1) !== '' ? ' ' : '') + textoTranscrito + ' ');
-            quill.setSelection(length + textoTranscrito.length);
+            try { quill.focus(); } catch (e) {}
+            const range = quill.getSelection(true) || lastSelectionRef.current;
+            const insertPosition = range ? range.index : Math.max(length - 1, 0);
+            const prevChar = insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+            const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+            quill.insertText(insertPosition, `${prefix}${textoTranscrito} `, "user");
+            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
             setResponseNote(quill.root.innerHTML);
           } else {
             setResponseNote((prev) => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + textoTranscrito + ' ');
@@ -649,27 +603,29 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
           return;
         } else if (event.error === 'audio-capture') {
           alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error === 'not-allowed') {
           alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error !== 'aborted') {
+          grabandoRef.current = false;
           setGrabando(false);
         }
       };
 
       recognition.onend = () => {
-        if (grabandoRef.current) {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
           try {
-            setTimeout(() => {
-              if (grabandoRef.current) {
-                recognition.start();
-              }
-            }, 100);
-          } catch (err) {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
             setGrabando(false);
           }
-        }
+        }, 150);
       };
 
       setReconocimientoVoz(recognition);
@@ -707,16 +663,31 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
     }
 
     try {
+      const q =
+        getQuillInstance(mentionQuillRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      // Evita que onend reinicie por un estado stale
+      grabandoRef.current = true;
       reconocimientoVoz.start();
       setGrabando(true);
     } catch (err) {
       console.error('Error al iniciar reconocimiento:', err);
       alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      grabandoRef.current = false;
       setGrabando(false);
     }
   };
 
   const detenerDictado = () => {
+    // Marcar inmediatamente como detenido para que onend no reinicie
+    grabandoRef.current = false;
     if (reconocimientoVoz) {
       try {
         reconocimientoVoz.stop();
@@ -1811,7 +1782,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                             Fecha Programada{" "}
                             <span className="fw-normal text-muted">(MM-DD-YYYY)</span>
                           </Form.Label>
-                          <OportunidadMdyDashDateField
+                          <MdyDashDateInput
                             valueIso={scheduledDate}
                             onChangeIso={(iso) => setScheduledDate(iso)}
                             className="border-secondary"
@@ -1825,7 +1796,7 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                             Fecha de Vencimiento{" "}
                             <span className="fw-normal text-muted">(MM-DD-YYYY)</span>
                           </Form.Label>
-                          <OportunidadMdyDashDateField
+                          <MdyDashDateInput
                             valueIso={dueDate}
                             onChangeIso={(iso) => setDueDate(iso)}
                             className="border-secondary"
@@ -2256,10 +2227,21 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
                     value={responseNote || ""}
                     onChange={(value, delta, source, editor) => {
                       setResponseNote(value);
-                      if (editor && !quillEditorRef.current) {
-                        quillEditorRef.current = editor;
-                      }
                       handleQuillChange(value, delta, source, editor);
+                      const q =
+                        getQuillInstance(editor) ??
+                        getQuillInstance(mentionQuillRef.current);
+                      if (q) {
+                        quillEditorRef.current = q;
+                        if (quillSelectionBoundToRef.current !== q) {
+                          quillSelectionBoundToRef.current = q;
+                          try {
+                            q.on("selection-change", (range) => {
+                              if (range) lastSelectionRef.current = range;
+                            });
+                          } catch (e) {}
+                        }
+                      }
                     }}
                     onKeyDown={handleQuillKeyDown}
                     modules={quillModules}

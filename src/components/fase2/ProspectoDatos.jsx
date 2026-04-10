@@ -13,10 +13,11 @@ import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
-import { formatDateForDisplay, normalizeDateForInput } from "../../utils/formatters";
+import { normalizeDateForInput } from "../../utils/formatters";
 import TelefonosPro from "./TelefonosPro";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 
 
 /* ---------- Helpers de UI ---------- */
@@ -448,22 +449,16 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha de Nacimiento
               </label>
-              {readOnly ? (
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed shadow-sm"
-                  value={formatDateForDisplay(fechaBase) === "-" ? "" : formatDateForDisplay(fechaBase)}
-                  disabled
-                  readOnly
-                />
-              ) : (
-                <input
-                  type="date"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  value={normalizeDateForInput(fechaBase)}
-                  onChange={handle("fecha_nacimiento")}
-                />
-              )}
+              <MdyDashDateInput
+                className="shadow-sm"
+                valueIso={fechaBase}
+                minIso="1900-01-01"
+                maxIso="2099-12-31"
+                disabled={readOnly}
+                onChangeIso={(iso) =>
+                  handle("fecha_nacimiento")({ target: { value: iso } })
+                }
+              />
             </div>
 
             <div>

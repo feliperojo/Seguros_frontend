@@ -13,7 +13,16 @@ import {
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
-import { formatDateTimeForDisplay, formatTaskTimeDhm, durationFromStartToEnd, formatDhmString } from "../../utils/formatters";
+import MdyDashDateInput from "../common/MdyDashDateInput";
+import {
+  formatDateTimeForDisplay,
+  formatDateForDisplay,
+  formatTaskTimeDhm,
+  durationFromStartToEnd,
+  formatDhmString,
+  normalizeDateForInput,
+  parseApiDateToLocalDate,
+} from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
@@ -29,6 +38,7 @@ import {
 } from "../../services/auditoriasTasksService";
 import useToast from "../../hooks/useToast";
 import { useAuth } from "../../context/AuthContext";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -78,26 +88,6 @@ const htmlToPlainText = (html) => {
   return (tempDiv.textContent || tempDiv.innerText || '').trim();
 };
 
-// Función helper para convertir fecha a formato YYYY-MM-DD
-const fechaToInputDate = (fecha) => {
-  if (!fecha) return "";
-  try {
-    if (typeof fecha === "string") {
-      const fechaPart = fecha.split("T")[0];
-      if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return fechaPart;
-      }
-    }
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return "";
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  } catch {
-    return "";
-  }
-};
 
 const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   const toast = useToast();
@@ -147,6 +137,8 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
   const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  const quillSelectionBoundToRef = useRef(null);
   const esTareaVencida =
     tarea?.due_date &&
     isTaskOverdue(tarea.due_date) &&
@@ -170,12 +162,20 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   useEffect(() => {
     grabandoRef.current = grabando;
   }, [grabando]);
+
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show, tarea?.id]);
   
   // Cargar datos de la tarea cuando se abre el modal
   useEffect(() => {
     if (show && tarea?.id) {
-      setScheduledDate(fechaToInputDate(tarea.scheduled_date) || "");
-      setDueDate(fechaToInputDate(tarea.due_date) || "");
+      setScheduledDate(normalizeDateForInput(tarea.scheduled_date) || "");
+      setDueDate(normalizeDateForInput(tarea.due_date) || "");
       setSelectedUserId(tarea.assigned_user_id || "");
       setDueDateUnlocked(false);
       setShowDueDatePasswordModal(false);
@@ -260,37 +260,41 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
           }
         }
         
-        if (textoTranscrito && quillEditorRef.current) {
-          const quill = quillEditorRef.current.getEditor 
-            ? quillEditorRef.current.getEditor() 
-            : quillEditorRef.current;
+        if (textoTranscrito) {
+          const quill =
+            getQuillInstance(mentionQuillRef.current) ||
+            getQuillInstance(quillEditorRef.current);
           if (quill) {
             const length = quill.getLength();
-            quill.insertText(length - 1, (quill.getText(length - 2, 1) !== '' ? ' ' : '') + textoTranscrito + ' ');
-            quill.setSelection(length + textoTranscrito.length);
+            try { quill.focus(); } catch (e) {}
+            const range = quill.getSelection(true) || lastSelectionRef.current;
+            const insertPosition = range ? range.index : Math.max(length - 1, 0);
+            const prevChar = insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+            const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+            quill.insertText(insertPosition, `${prefix}${textoTranscrito} `, "user");
+            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
             setResponseNote(quill.root.innerHTML);
           }
         }
       };
       
       recognition.onerror = (event) => {
-        if (event.error !== 'no-speech' && event.error !== 'aborted') {
-          setGrabando(false);
-        }
+        if (event.error === "no-speech" || event.error === "aborted") return;
+        grabandoRef.current = false;
+        setGrabando(false);
       };
       
       recognition.onend = () => {
-        if (grabandoRef.current) {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
           try {
-            setTimeout(() => {
-              if (grabandoRef.current) {
-                recognition.start();
-              }
-            }, 100);
-          } catch (err) {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
             setGrabando(false);
           }
-        }
+        }, 150);
       };
       
       setReconocimientoVoz(recognition);
@@ -323,15 +327,30 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       return;
     }
     try {
+      const q =
+        getQuillInstance(mentionQuillRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      // Evita que onend reinicie por un estado stale
+      grabandoRef.current = true;
       reconocimientoVoz.start();
       setGrabando(true);
     } catch (err) {
       console.error('Error al iniciar reconocimiento:', err);
+      grabandoRef.current = false;
       setGrabando(false);
     }
   };
   
   const detenerDictado = () => {
+    // Marcar inmediatamente como detenido para que onend no reinicie
+    grabandoRef.current = false;
     if (reconocimientoVoz) {
       try {
         reconocimientoVoz.stop();
@@ -710,7 +729,7 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       return;
     }
 
-    const dueDateOriginal = fechaToInputDate(tarea.due_date) || "";
+    const dueDateOriginal = normalizeDateForInput(tarea.due_date) || "";
     const dueDateCambiada = dueDate !== dueDateOriginal;
     const requierePassword = dueDateCambiada && !canEditDueDateWithoutPassword;
     if (requierePassword && !adminPasswordForDueDate) {
@@ -1000,27 +1019,18 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
-    try {
-      if (typeof fecha === "string" && fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
-        const [year, month, day] = fecha.split("T")[0].split("-");
-        return `${month}-${day}-${year}`;
-      }
-      const date = new Date(fecha);
-      if (isNaN(date.getTime())) return "N/A";
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${month}-${day}-${year}`;
-    } catch {
-      return "N/A";
-    }
+    const d = formatDateForDisplay(fecha);
+    return d === "-" ? "N/A" : d;
   };
   
   const getBadgeColor = (fecha) => {
     if (!fecha) return "secondary";
+    const target = parseApiDateToLocalDate(fecha);
+    if (!target) return "secondary";
     const hoy = new Date();
-    const date = new Date(fecha);
-    const diffDias = Math.ceil((date - hoy) / (1000 * 60 * 60 * 24));
+    const todayStart = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const diffMs = target.getTime() - todayStart.getTime();
+    const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
     if (diffDias < 0) return "danger";
     if (diffDias <= 3) return "warning";
     return "success";
@@ -1164,11 +1174,9 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                             <i className="fas fa-calendar-alt text-primary me-1"></i>
                             Fecha Programada:
                           </Form.Label>
-                          <Form.Control
-                            type="date"
-                            value={scheduledDate}
-                            onChange={(e) => setScheduledDate(e.target.value)}
-                            style={{ borderRadius: "6px" }}
+                          <MdyDashDateInput
+                            valueIso={scheduledDate}
+                            onChangeIso={(iso) => setScheduledDate(iso)}
                           />
                         </Form.Group>
                       </Col>
@@ -1182,14 +1190,10 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                             )}
                           </Form.Label>
                           <div className="d-flex gap-2 align-items-start">
-                            <Form.Control
-                              type="date"
-                              value={dueDate}
-                              onChange={(e) => setDueDate(e.target.value)}
+                            <MdyDashDateInput
+                              valueIso={dueDate}
+                              onChangeIso={(iso) => setDueDate(iso)}
                               disabled={isDueDateLocked}
-                              readOnly={isDueDateLocked}
-                              style={{ borderRadius: "6px", flex: 1 }}
-                              title={isDueDateLocked ? "Desbloquee con la contraseña de administrador para editar" : ""}
                             />
                             {tarea?.id && !canEditDueDateWithoutPassword && (
                               <Button
@@ -1438,14 +1442,19 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                         onChange={(value, delta, source, editor) => {
                           setResponseNote(value);
                           handleQuillChange(value, delta, source, editor);
-                          if (editor) {
-                            try {
-                              if (typeof editor.getEditor === 'function') {
-                                quillEditorRef.current = editor.getEditor();
-                              } else if (editor.getSelection) {
-                                quillEditorRef.current = editor;
-                              }
-                            } catch (e) {}
+                          const q =
+                            getQuillInstance(editor) ??
+                            getQuillInstance(mentionQuillRef.current);
+                          if (q) {
+                            quillEditorRef.current = q;
+                            if (quillSelectionBoundToRef.current !== q) {
+                              quillSelectionBoundToRef.current = q;
+                              try {
+                                q.on("selection-change", (range) => {
+                                  if (range) lastSelectionRef.current = range;
+                                });
+                              } catch (e) {}
+                            }
                           }
                         }}
                         onKeyDown={handleQuillKeyDown}

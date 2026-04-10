@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Form, Table, Badge, Alert } from "react-bootstrap";
 import apiRequest from "../services/api"; // Asumiendo que usas este servicio para tus requests
+import { formatDateForDisplay } from "../utils/formatters";
+import MdyDashDateInput from "./common/MdyDashDateInput";
 
 const estados = {
   Pendiente: "warning",
@@ -41,39 +43,11 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
   };
 
-  const isoDateToMDY = (iso) => {
-    const ymd = isoYmd(iso);
-    if (!ymd) return "";
-    const [, m, d] = ymd.split("-");
-    const y = ymd.slice(0, 4);
-    return `${m}-${d}-${y}`;
-  };
-
-  /** Acepta MM-DD-AAAA, M-D-AAAA, MM/DD/AAAA, M/D/AAAA o YYYY-MM-DD; devuelve YYYY-MM-DD o "" si viene vacío, null si es inválido */
-  const parseUserDateToISO = (s) => {
-    const t = String(s == null ? "" : s).trim();
-    if (!t) return "";
-    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-    const m = t.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
-    if (!m) return null;
-    const month = parseInt(m[1], 10);
-    const day = parseInt(m[2], 10);
-    const year = parseInt(m[3], 10);
-    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-    const test = new Date(year, month - 1, day);
-    if (test.getFullYear() !== year || test.getMonth() !== month - 1 || test.getDate() !== day) return null;
-    return `${year}-${pad2(month)}-${pad2(day)}`;
-  };
-
-  // Formato visible para el usuario: MM-DD-AAAA (sin cambiar el valor real guardado)
-  const formatMDY = (valor) => {
+  /** Tabla / solo lectura: MM-DD-YYYY consistente con el resto de la app */
+  const formatReqDateCell = (valor) => {
     if (!valor) return "-";
-    const d = new Date(typeof valor === "string" && !valor.includes("T") ? `${valor}T00:00:00` : valor);
-    if (isNaN(d.getTime())) return "-";
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const year = d.getFullYear();
-    return `${month}-${day}-${year}`;
+    const s = formatDateForDisplay(String(valor).split("T")[0]);
+    return s === "-" ? "-" : s;
   };
 
   const [coberturas, setCoberturas] = useState([]);
@@ -86,18 +60,11 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     fecha_vencimiento: "",
   });
 
-  const [fechaSolicitudInput, setFechaSolicitudInput] = useState(() =>
-    isoDateToMDY(getLocalISODate())
-  );
-  const [fechaVencimientoInput, setFechaVencimientoInput] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");  // Manejo de errores
   const [success, setSuccess] = useState(""); // Mensaje de éxito
   const [editableRequerimiento, setEditableRequerimiento] = useState(null); // For storing the requerimiento being edited
   const [editingId, setEditingId] = useState(null); // ID del requerimiento que se está editando
-  const [editFechaVencimientoInput, setEditFechaVencimientoInput] = useState("");
-
   useEffect(() => {
     if (show && grupoFamiliarId) {
       fetchCoberturas(grupoFamiliarId); // Cargar las coberturas cuando el modal se abre
@@ -117,9 +84,6 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       cobertura_id: [],
       estado: "Pendiente",
     });
-    setFechaSolicitudInput(isoDateToMDY(hoyIso));
-    setFechaVencimientoInput("");
-    setEditFechaVencimientoInput("");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [show]);
 
@@ -157,23 +121,21 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       estado: requerimiento.estado || "Pendiente",
       codigo_poliza: requerimiento.codigo_poliza || null
     });
-    setEditFechaVencimientoInput(fvIso ? isoDateToMDY(fvIso) : "");
   };
 
   const handleCancelEdit = () => {
     setEditingId(null);
     setEditableRequerimiento(null);
-    setEditFechaVencimientoInput("");
   };
 
   const saveChanges = async () => {
-    const isoVenc = parseUserDateToISO(editFechaVencimientoInput);
+    const isoVenc = isoYmd(editableRequerimiento?.fecha_vencimiento);
     if (!editableRequerimiento.estado) {
       setError("Debe completar todos los campos obligatorios.");
       return;
     }
     if (!isoVenc) {
-      setError("La fecha de vencimiento es obligatoria. Use MM-DD-AAAA.");
+      setError("La fecha de vencimiento es obligatoria.");
       return;
     }
 
@@ -199,7 +161,6 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       setSuccess("Requerimiento actualizado exitosamente.");
       setEditableRequerimiento(null);
       setEditingId(null);
-      setEditFechaVencimientoInput("");
       fetchCoberturas(grupoFamiliarId);  // Refresh the data
     } catch (error) {
       setError("Error al actualizar requerimiento: " + error.message);
@@ -216,17 +177,12 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       return;
     }
 
-    const isoSol = parseUserDateToISO(fechaSolicitudInput);
+    const isoSol = isoYmd(nuevo.fecha_solicitud);
     if (!isoSol) {
-      setError("Fecha de solicitud inválida. Use MM-DD-AAAA.");
+      setError("La fecha de solicitud es obligatoria.");
       return;
     }
-    const venRaw = fechaVencimientoInput.trim();
-    const isoVen = venRaw ? parseUserDateToISO(fechaVencimientoInput) : "";
-    if (venRaw && !isoVen) {
-      setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
-      return;
-    }
+    const isoVen = isoYmd(nuevo.fecha_vencimiento);
   
     setLoading(true);
     try {
@@ -258,8 +214,6 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
         cobertura_id: [],
         estado: "Pendiente",
       });
-      setFechaSolicitudInput(isoDateToMDY(hoyIso));
-      setFechaVencimientoInput("");
       fetchCoberturas(grupoFamiliarId); // Refresh data after creating
     } catch (error) {
       setError("Error al crear requerimiento: " + error.message);
@@ -356,60 +310,30 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
             </div>
           </Form.Group>
 
-          <Form.Group className="d-flex gap-3">
-                <div style={{ flex: 1 }}>
+          <Form.Group className="d-flex gap-3 flex-wrap">
+                <div style={{ flex: 1, minWidth: 200 }}>
                   <Form.Label>Fecha de solicitud</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="MM-DD-AAAA"
-                    autoComplete="off"
-                    value={fechaSolicitudInput}
-                    onChange={(e) => setFechaSolicitudInput(e.target.value)}
-                    onBlur={() => {
-                      const trimmed = String(fechaSolicitudInput).trim();
-                      const iso = parseUserDateToISO(fechaSolicitudInput);
-                      if (iso === null && trimmed !== "") {
-                        setError("Fecha de solicitud inválida. Use MM-DD-AAAA.");
-                        setFechaSolicitudInput(isoDateToMDY(nuevo.fecha_solicitud) || isoDateToMDY(getLocalISODate()));
-                        return;
-                      }
-                      const hoyIso = getLocalISODate();
-                      const next = iso || (trimmed === "" ? hoyIso : nuevo.fecha_solicitud);
-                      setNuevo((prev) => ({ ...prev, fecha_solicitud: next }));
-                      setFechaSolicitudInput(isoDateToMDY(next));
-                    }}
+                  <MdyDashDateInput
+                    valueIso={nuevo.fecha_solicitud}
+                    minIso="1900-01-01"
+                    maxIso="2099-12-31"
+                    onChangeIso={(iso) =>
+                      setNuevo((prev) => ({ ...prev, fecha_solicitud: iso }))
+                    }
                   />
-                  <Form.Text className="text-muted">Mes/día/año (ej. 04/06/2026)</Form.Text>
                 </div>
 
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 200 }}>
                   <Form.Label>Fecha de vencimiento</Form.Label>
-                  <Form.Control
-                    type="text"
-                    placeholder="MM-DD-AAAA"
-                    autoComplete="off"
-                    value={fechaVencimientoInput}
-                    onChange={(e) => setFechaVencimientoInput(e.target.value)}
-                    onBlur={() => {
-                      const t = String(fechaVencimientoInput).trim();
-                      if (!t) {
-                        setNuevo((prev) => ({ ...prev, fecha_vencimiento: "" }));
-                        setFechaVencimientoInput("");
-                        return;
-                      }
-                      const iso = parseUserDateToISO(fechaVencimientoInput);
-                      if (!iso) {
-                        setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
-                        setFechaVencimientoInput(isoDateToMDY(nuevo.fecha_vencimiento));
-                        return;
-                      }
-                      setNuevo((prev) => ({ ...prev, fecha_vencimiento: iso }));
-                      setFechaVencimientoInput(isoDateToMDY(iso));
-                    }}
+                  <MdyDashDateInput
+                    valueIso={nuevo.fecha_vencimiento}
+                    minIso={isoYmd(nuevo.fecha_solicitud) || undefined}
+                    maxIso="2099-12-31"
+                    onChangeIso={(iso) =>
+                      setNuevo((prev) => ({ ...prev, fecha_vencimiento: iso }))
+                    }
                   />
-                  <Form.Text className="text-muted">Opcional · Mes/día/año</Form.Text>
                 </div>
-
               </Form.Group>
 
           <Form.Group>
@@ -462,39 +386,22 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                         <td>{r.documento_requerido}</td>
                         <td>
                           {editingId === r.id ? (
-                            <Form.Control
-                              type="text"
-                              placeholder="MM-DD-AAAA"
-                              autoComplete="off"
-                              value={editFechaVencimientoInput}
-                              onChange={(e) => setEditFechaVencimientoInput(e.target.value)}
-                              onBlur={() => {
-                                const iso = parseUserDateToISO(editFechaVencimientoInput);
-                                if (!iso) {
-                                  if (String(editFechaVencimientoInput).trim() === "") {
-                                    setEditableRequerimiento((prev) =>
-                                      prev ? { ...prev, fecha_vencimiento: "" } : prev
-                                    );
-                                    return;
-                                  }
-                                  setError("Fecha de vencimiento inválida. Use MM-DD-AAAA.");
-                                  setEditFechaVencimientoInput(
-                                    isoDateToMDY(editableRequerimiento?.fecha_vencimiento || "")
-                                  );
-                                  return;
-                                }
+                            <MdyDashDateInput
+                              size="sm"
+                              valueIso={editableRequerimiento?.fecha_vencimiento}
+                              minIso={isoYmd(r.fecha_solicitud) || "1900-01-01"}
+                              maxIso="2099-12-31"
+                              onChangeIso={(iso) =>
                                 setEditableRequerimiento((prev) =>
                                   prev ? { ...prev, fecha_vencimiento: iso } : prev
-                                );
-                                setEditFechaVencimientoInput(isoDateToMDY(iso));
-                              }}
-                              size="sm"
+                                )
+                              }
                             />
                           ) : (
-                            formatMDY(r.fecha_vencimiento)
+                            formatReqDateCell(r.fecha_vencimiento)
                           )}
                         </td>
-                        <td>{formatMDY(r.fecha_solicitud)}</td>
+                        <td>{formatReqDateCell(r.fecha_solicitud)}</td>
                         <td>
                           {editingId === r.id ? (
                             <Form.Control

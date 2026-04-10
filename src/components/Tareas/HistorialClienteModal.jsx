@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Spinner, Badge, Button, Form, Card } from "react-bootstrap";
 import apiRequest from "../../services/api";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 
 const HistorialClienteModal = ({ show, onHide, clienteId, clienteNombre }) => {
   const [loading, setLoading] = useState(false);
@@ -81,11 +82,11 @@ const HistorialClienteModal = ({ show, onHide, clienteId, clienteNombre }) => {
         <div className="mb-3 d-flex flex-wrap gap-2 align-items-end">
           <Form.Group>
             <Form.Label>Desde</Form.Label>
-            <Form.Control type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
+            <MdyDashDateInput valueIso={fechaInicio} onChangeIso={(iso) => setFechaInicio(iso)} />
           </Form.Group>
           <Form.Group>
             <Form.Label>Hasta</Form.Label>
-            <Form.Control type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+            <MdyDashDateInput valueIso={fechaFin} onChangeIso={(iso) => setFechaFin(iso)} />
           </Form.Group>
           <Form.Group style={{ flex: "1" }}>
             <Form.Label>Búsqueda</Form.Label>

@@ -1,28 +1,6 @@
-const parseToLocalDateStart = (value) => {
-  if (!value) return null;
+import { parseApiDateToLocalDate } from "./formatters";
 
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) return null;
-    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-  }
-
-  const raw = String(value).trim();
-  if (!raw) return null;
-
-  const datePart = raw.includes("T") ? raw.split("T")[0] : raw;
-  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-
-  if (match) {
-    const year = Number(match[1]);
-    const month = Number(match[2]) - 1;
-    const day = Number(match[3]);
-    return new Date(year, month, day);
-  }
-
-  const parsed = new Date(raw);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
-};
+const parseToLocalDateStart = (value) => parseApiDateToLocalDate(value);
 
 export const isTaskOverdue = (dueDate, now = new Date()) => {
   const dueStart = parseToLocalDateStart(dueDate);

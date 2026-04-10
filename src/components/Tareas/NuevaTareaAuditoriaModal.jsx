@@ -3,10 +3,12 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 import { createTaskFromRun, addComment } from "../../services/auditoriasTasksService";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds } from "../../utils/mentions";
 import useToast from "../../hooks/useToast";
+import { parseApiDateToLocalDate } from "../../utils/formatters";
 
 // Configuración de módulos para ReactQuill
 const quillModules = {
@@ -37,29 +39,6 @@ const isNoteEmpty = (html) => {
   tempDiv.innerHTML = html;
   const text = tempDiv.textContent || tempDiv.innerText || '';
   return text.trim().length === 0;
-};
-
-/**
- * Función helper para convertir fecha a formato YYYY-MM-DD
- */
-const fechaToInputDate = (fecha) => {
-  if (!fecha) return "";
-  try {
-    if (typeof fecha === "string") {
-      const fechaPart = fecha.split("T")[0];
-      if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return fechaPart;
-      }
-    }
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return "";
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  } catch {
-    return "";
-  }
 };
 
 const NuevaTareaAuditoriaModal = ({ 
@@ -364,9 +343,9 @@ const NuevaTareaAuditoriaModal = ({
     }
     
     if (formData.scheduled_date && formData.due_date) {
-      const scheduled = new Date(formData.scheduled_date);
-      const due = new Date(formData.due_date);
-      if (due < scheduled) {
+      const scheduled = parseApiDateToLocalDate(formData.scheduled_date);
+      const due = parseApiDateToLocalDate(formData.due_date);
+      if (scheduled && due && due.getTime() < scheduled.getTime()) {
         newErrors.due_date = "La fecha límite no puede ser anterior a la fecha programada";
       }
     }
@@ -517,6 +496,7 @@ const NuevaTareaAuditoriaModal = ({
       
       if (!quill) return { top: 0, left: 0 };
       
+      try { quill.focus(); } catch (e) {}
       const range = quill.getSelection(true);
       if (!range) return { top: 0, left: 0 };
       
@@ -574,11 +554,9 @@ const NuevaTareaAuditoriaModal = ({
                 <Form.Label>
                   Fecha Programada <span className="text-danger">*</span>
                 </Form.Label>
-                <Form.Control
-                  type="date"
-                  value={formData.scheduled_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, scheduled_date: e.target.value }))}
-                  isInvalid={!!errors.scheduled_date}
+                <MdyDashDateInput
+                  valueIso={formData.scheduled_date}
+                  onChangeIso={(iso) => setFormData((prev) => ({ ...prev, scheduled_date: iso }))}
                 />
                 {errors.scheduled_date && (
                   <Form.Text className="text-danger">{errors.scheduled_date}</Form.Text>
@@ -589,11 +567,9 @@ const NuevaTareaAuditoriaModal = ({
                 <Form.Label>
                   Fecha Límite <span className="text-danger">*</span>
                 </Form.Label>
-                <Form.Control
-                  type="date"
-                  value={formData.due_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
-                  isInvalid={!!errors.due_date}
+                <MdyDashDateInput
+                  valueIso={formData.due_date}
+                  onChangeIso={(iso) => setFormData((prev) => ({ ...prev, due_date: iso }))}
                 />
                 {errors.due_date && (
                   <Form.Text className="text-danger">{errors.due_date}</Form.Text>

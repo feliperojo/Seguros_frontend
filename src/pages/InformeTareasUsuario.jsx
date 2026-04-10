@@ -15,6 +15,7 @@ import { FaChevronDown, FaChevronUp, FaComments } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { usersService } from "../services/adminApi";
 import { listTasks as listAuditoriaTasks, getTaskComments as getAuditoriaTaskComments } from "../services/auditoriasTasksService";
+import MdyDashDateInput from "../components/common/MdyDashDateInput";
 
 const InformeTareasUsuario = () => {
   const [usuarios, setUsuarios] = useState([]);
@@ -493,11 +494,10 @@ const InformeTareasUsuario = () => {
 
             <Col md={6} lg={3} className="mb-3">
               <Form.Label>Fecha Inicio</Form.Label>
-              <Form.Control
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => {
-                  setFechaInicio(e.target.value);
+              <MdyDashDateInput
+                valueIso={fechaInicio}
+                onChangeIso={(iso) => {
+                  setFechaInicio(iso);
                   setEjecutado(false);
                 }}
               />
@@ -506,14 +506,13 @@ const InformeTareasUsuario = () => {
 
             <Col md={6} lg={3} className="mb-3">
               <Form.Label>Fecha Fin</Form.Label>
-              <Form.Control
-                type="date"
-                value={fechaFin}
-                onChange={(e) => {
-                  setFechaFin(e.target.value);
+              <MdyDashDateInput
+                valueIso={fechaFin}
+                minIso={fechaInicio || undefined}
+                onChangeIso={(iso) => {
+                  setFechaFin(iso);
                   setEjecutado(false);
                 }}
-                min={fechaInicio || undefined}
               />
               <Form.Text className="text-muted">Opcional</Form.Text>
             </Col>

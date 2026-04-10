@@ -2,10 +2,13 @@ import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
+import ReactQuill from "react-quill";
+import "react-quill/dist/quill.snow.css";
 import NuevoComentarioModal from "../../components/Tareas/NuevoComentarioModal";
 import NuevaTareaModal from "../../components/Tareas/NuevaTareaModal";
 import { formatDateForDisplay, formatDateTimeForDisplay } from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
+import { useAuth } from "../../context/AuthContext";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -14,6 +17,7 @@ const toValidId = (v) => {
 
 export default function FichaClienteComentarios() {
   const { cliente, coberturaPrincipal, id: clienteId, selectedGrupoId } = useFichaCliente();
+  const { user } = useAuth();
   const [comentarios, setComentarios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +32,42 @@ export default function FichaClienteComentarios() {
   const [archivoPreview, setArchivoPreview] = useState(null); // { adjunto, tipo }
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
+
+  // ✅ Edición (solo dueño)
+  const [editOpen, setEditOpen] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editDraft, setEditDraft] = useState("");
+  const [editTarget, setEditTarget] = useState(null);
+
+  // Configuración mínima de Quill para edición
+  const quillModules = useMemo(() => ({
+    toolbar: [
+      [{ header: [1, 2, 3, false] }],
+      ["bold", "italic", "underline", "strike"],
+      [{ color: [] }, { background: [] }],
+      [{ list: "ordered" }, { list: "bullet" }],
+      [{ align: [] }],
+      ["blockquote", "code-block"],
+      ["link"],
+      ["clean"],
+    ],
+  }), []);
+  const quillFormats = useMemo(() => ([
+    "header",
+    "bold", "italic", "underline", "strike",
+    "color", "background",
+    "list", "bullet",
+    "align",
+    "blockquote", "code-block",
+    "link",
+  ]), []);
+
+  const currentUserId = useMemo(() => {
+    const id = user?.id ?? user?.user_id ?? user?.usuario_id ?? null;
+    const n = Number(id);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [user]);
 
   // ✅ Estados para filtros
   const [filtroConceptoPadre, setFiltroConceptoPadre] = useState("");
@@ -319,6 +359,125 @@ export default function FichaClienteComentarios() {
   // Obtener ID del log/bitácora desde el item
   const getLogId = (item) => {
     return item?.id || item?.log?.id || item?.log_id || null;
+  };
+
+  const getOwnerUserId = (item) => {
+    const id =
+      item?.user_id ??
+      item?.created_by_id ??
+      item?.usuario_id ??
+      item?.user?.id ??
+      item?.created_by?.id ??
+      item?.usuario?.id ??
+      null;
+    const n = Number(id);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  const puedeEditarItem = (item) => {
+    const ownerId = getOwnerUserId(item);
+    return !!currentUserId && !!ownerId && Number(ownerId) === Number(currentUserId);
+  };
+
+  const openEditModal = (target) => {
+    setEditError("");
+    setEditTarget(target);
+    setEditDraft(target?.initialHtml || "");
+    setEditOpen(true);
+  };
+
+  const closeEditModal = () => {
+    if (editSaving) return;
+    setEditOpen(false);
+    setEditTarget(null);
+    setEditDraft("");
+    setEditError("");
+  };
+
+  const buildBitacoraUpdatePayload = (item, newHtml) => {
+    const conceptId =
+      item?.concept_id ??
+      item?.concepto_id ??
+      item?.concept?.id ??
+      item?.concepto?.id ??
+      null;
+
+    const payload = {
+      note: newHtml,
+      ...(conceptId ? { concept_id: conceptId } : {}),
+      // Mantener contexto para no romper validaciones del backend
+      ...(item?.cliente_id ? { cliente_id: item.cliente_id } : {}),
+      ...(item?.grupo_familiar_id ? { grupo_familiar_id: item.grupo_familiar_id } : {}),
+      ...(item?.historial_id ? { historial_id: item.historial_id } : {}),
+    };
+
+    // Si es tarea, conservar campos de programación/asignación cuando existan
+    const assignTo =
+      item?.assign_to_user_id ??
+      item?.task?.assign_to_user_id ??
+      item?.task?.assigned_user_id ??
+      null;
+    const scheduled = item?.scheduled_date ?? item?.task?.scheduled_date ?? null;
+    const due = item?.due_date ?? item?.task?.due_date ?? null;
+
+    if (assignTo || scheduled || due) {
+      payload.assign_to_user_id = assignTo || payload.assign_to_user_id;
+      payload.scheduled_date = scheduled || payload.scheduled_date;
+      payload.due_date = due || payload.due_date;
+    }
+
+    // action_type puede variar; se respeta si existe
+    const actionType = item?.action_type || item?.tipo || null;
+    if (actionType) payload.action_type = actionType;
+
+    // entity_type suele ser requerido en algunos backends
+    if (item?.entity_type) payload.entity_type = item.entity_type;
+
+    return payload;
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      if (editTarget.kind === "bitacora") {
+        const { logId, itemId } = editTarget;
+        const payload = buildBitacoraUpdatePayload(editTarget.item, editDraft || " ");
+        await apiRequest(`bitacora_operativa/${logId}/update`, "PUT", payload);
+
+        // Actualización local optimista
+        setComentarios((prev) =>
+          prev.map((it) => {
+            const id = it?.id || it?.log?.id || it?.log_id;
+            if (String(id) !== String(itemId)) return it;
+            return {
+              ...it,
+              note: editDraft,
+              nota: editDraft,
+              comment: editDraft,
+            };
+          })
+        );
+      } else if (editTarget.kind === "taskComment") {
+        const { comentarioId, tareaId } = editTarget;
+        await apiRequest(`tareas_operativas/comentarios/${comentarioId}`, "PUT", { comment: editDraft || " " });
+        setComentariosTareas((prev) => {
+          const list = Array.isArray(prev?.[tareaId]) ? prev[tareaId] : [];
+          return {
+            ...prev,
+            [tareaId]: list.map((c) => (String(c.id) === String(comentarioId) ? { ...c, comment: editDraft } : c)),
+          };
+        });
+      }
+
+      closeEditModal();
+    } catch (e) {
+      console.error("Error al guardar edición:", e);
+      setEditError(e?.message || e?.response?.data?.message || "No se pudo guardar. Intenta nuevamente.");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   // Funciones helper para determinar tipo de archivo
@@ -1046,9 +1205,34 @@ export default function FichaClienteComentarios() {
                           </div>
                           
                           {/* Fecha */}
-                          <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full">
-                            <i className="fas fa-clock text-[10px]"></i>
-                            <span className="font-medium">{formatFecha(fecha)}</span>
+                          <div className="flex items-center gap-2">
+                            {puedeEditarItem(comentario) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const itemId = comentario.id || comentario.log?.id || comentario.log_id;
+                                  const logId = getLogId(comentario);
+                                  if (!logId) return;
+                                  openEditModal({
+                                    kind: "bitacora",
+                                    logId,
+                                    itemId,
+                                    item: comentario,
+                                    initialHtml: nota,
+                                    title: esTarea ? "Editar tarea" : "Editar comentario",
+                                  });
+                                }}
+                                className="opacity-0 group-hover:opacity-100 transition-opacity text-xs px-3 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 flex items-center gap-2"
+                                title="Editar (solo dueño)"
+                              >
+                                <i className="fas fa-pen text-[10px]"></i>
+                                Editar
+                              </button>
+                            )}
+                            <div className="flex items-center gap-2 text-xs text-gray-500 bg-gray-50 px-3 py-1.5 rounded-full">
+                              <i className="fas fa-clock text-[10px]"></i>
+                              <span className="font-medium">{formatFecha(fecha)}</span>
+                            </div>
                           </div>
                         </div>
                         
@@ -1324,6 +1508,37 @@ export default function FichaClienteComentarios() {
                                                 {formatFecha(comentarioTarea.created_at || comentarioTarea.fecha)}
                                               </span>
                                             </div>
+                                            {(() => {
+                                              const ownerOk = puedeEditarItem(comentarioTarea);
+                                              if (!ownerOk) return null;
+                                              const currentHtml =
+                                                comentarioTarea.comment ||
+                                                comentarioTarea.response_note ||
+                                                comentarioTarea.note ||
+                                                "";
+                                              return (
+                                                <div className="mt-2">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      openEditModal({
+                                                        kind: "taskComment",
+                                                        comentarioId: comentarioTarea.id,
+                                                        tareaId,
+                                                        item: comentarioTarea,
+                                                        initialHtml: currentHtml,
+                                                        title: "Editar comentario",
+                                                      })
+                                                    }
+                                                    className="text-xs px-3 py-1.5 rounded-full border border-gray-200 bg-white hover:bg-gray-100 text-gray-700 flex items-center gap-2"
+                                                    title="Editar comentario (solo dueño)"
+                                                  >
+                                                    <i className="fas fa-pen text-[10px]"></i>
+                                                    Editar
+                                                  </button>
+                                                </div>
+                                              );
+                                            })()}
                                             <div 
                                               className="text-gray-700 text-sm mt-2 m-0"
                                               style={{
@@ -1514,6 +1729,59 @@ export default function FichaClienteComentarios() {
               Abrir en nueva pestaña
             </Button>
           )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Modal de edición (tarea/comentario/comentario de tarea) */}
+      <Modal
+        show={editOpen}
+        onHide={closeEditModal}
+        size="lg"
+        centered
+        backdrop={editSaving ? "static" : true}
+        keyboard={!editSaving}
+      >
+        <Modal.Header closeButton={!editSaving}>
+          <Modal.Title className="d-flex align-items-center gap-2">
+            <i className="fas fa-pen"></i>
+            <span>{editTarget?.title || "Editar"}</span>
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {editError && (
+            <div className="alert alert-danger" role="alert">
+              {editError}
+            </div>
+          )}
+          <div className="border rounded" style={{ overflow: "hidden" }}>
+            <ReactQuill
+              theme="snow"
+              value={editDraft || ""}
+              onChange={(v) => setEditDraft(v)}
+              modules={quillModules}
+              formats={quillFormats}
+              placeholder="Edita el contenido..."
+              style={{ backgroundColor: "#fff" }}
+            />
+          </div>
+          <div className="text-muted small mt-2">
+            Solo puedes editar elementos creados por ti.
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closeEditModal} disabled={editSaving}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={handleSaveEdit} disabled={editSaving}>
+            {editSaving ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Guardando...
+              </>
+            ) : (
+              "Guardar cambios"
+            )}
+          </Button>
         </Modal.Footer>
       </Modal>
     </>

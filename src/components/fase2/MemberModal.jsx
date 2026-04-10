@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 import LanguageSelect from "../selects/LanguageSelect";
 import { normalizeDateForInput } from "../../utils/formatters";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 import apiRequest from "../../services/api";
 
 /* ---------- Constantes de UI ---------- */
@@ -444,7 +445,17 @@ export default function MemberModalCreate({
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>
-                  <input type="date" className="form-control" name="fechaNacimiento" value={normalizeDateForInput(data.fechaNacimiento)} onChange={onChange} disabled={readOnly}/>
+                  <MdyDashDateInput
+                    valueIso={normalizeDateForInput(data.fechaNacimiento)}
+                    minIso="1900-01-01"
+                    maxIso="2099-12-31"
+                    disabled={readOnly}
+                    onChangeIso={(iso) =>
+                      onChange({
+                        target: { name: "fechaNacimiento", value: iso, type: "date" },
+                      })
+                    }
+                  />
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Edad</label>

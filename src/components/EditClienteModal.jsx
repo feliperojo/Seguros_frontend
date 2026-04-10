@@ -16,7 +16,8 @@ import TelefonosPro from "./fase2/TelefonosPro";
 import { toLegacyFields, toStructuredPhones } from "../utils/phones";
 import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
 import countryCodes from "../services/countryCodes";
-import { normalizeDateForInput } from "../utils/formatters";    
+import { normalizeDateForInput } from "../utils/formatters";
+import MdyDashDateInput from "./common/MdyDashDateInput";
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
 const renderMediosPagoTab = () => (
@@ -756,12 +757,13 @@ useEffect(() => {
         <Col md={4}>
           <Form.Group>
             <Form.Label>Fecha de Nacimiento</Form.Label>
-            <Form.Control
-              type="date"
-              value={normalizeDateForInput(formData.datosPrincipales.fecha_nacimiento)}
-              onChange={(e) => handleInputChange("datosPrincipales", "fecha_nacimiento", e.target.value)}
-            max="2099-12-31"
-            min="1900-01-01"
+            <MdyDashDateInput
+              valueIso={normalizeDateForInput(formData.datosPrincipales.fecha_nacimiento)}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("datosPrincipales", "fecha_nacimiento", iso)
+              }
             />
           </Form.Group>
         </Col>
@@ -918,24 +920,26 @@ useEffect(() => {
         <Col md={6}>
           <Form.Group>
             <Form.Label>Fecha Emisión</Form.Label>
-            <Form.Control
-              type="date"
-              value={formData.statusMigratorio.fecha_emision}
-              onChange={(e) => handleInputChange("statusMigratorio", "fecha_emision", e.target.value)}
-              max="2099-12-31"
-              min="1900-01-01" 
-              />
+            <MdyDashDateInput
+              valueIso={formData.statusMigratorio.fecha_emision}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("statusMigratorio", "fecha_emision", iso)
+              }
+            />
           </Form.Group>
         </Col>
         <Col md={6}>
           <Form.Group>
             <Form.Label>Fecha Expiración</Form.Label>
-            <Form.Control
-              type="date"
-              value={formData.statusMigratorio.fecha_expedicion}
-              onChange={(e) => handleInputChange("statusMigratorio", "fecha_expedicion", e.target.value)}
-                max="2099-12-31"
-                min="1900-01-01"
+            <MdyDashDateInput
+              valueIso={formData.statusMigratorio.fecha_expedicion}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("statusMigratorio", "fecha_expedicion", iso)
+              }
             />
           </Form.Group>
         </Col>

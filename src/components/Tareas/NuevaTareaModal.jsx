@@ -3,7 +3,9 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
 import { extractMentionedUserIds } from "../../utils/mentions";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -80,6 +82,8 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [isDragging, setIsDragging] = useState(false);
   const dropAreaRef = useRef(null);
   const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  const quillSelectionBoundToRef = useRef(null);
   const [mentionedUserIds, setMentionedUserIds] = useState([]);
 
   // ✅ Hook para manejo de menciones en Quill
@@ -164,6 +168,14 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     grabandoRef.current = grabando;
   }, [grabando]);
 
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show]);
+
   // Verificar disponibilidad del reconocimiento de voz
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -183,15 +195,25 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         }
         
         if (textoTranscrito) {
-          // Insertar texto transcrito en el editor Quill
-          const quill = quillEditorRef.current;
+          const quill =
+            getQuillInstance(mentionQuillRef.current) ||
+            getQuillInstance(quillEditorRef.current);
           if (quill) {
-            const range = quill.getSelection(true);
+            try { quill.focus(); } catch (e) {}
             const length = quill.getLength();
-            const insertPosition = range ? range.index : length - 1;
-            const prefix = insertPosition > 1 && !quill.getText(insertPosition - 1, 1).endsWith(' ') ? ' ' : '';
-            quill.insertText(insertPosition, prefix + textoTranscrito + ' ', 'user');
-            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
+            const range = quill.getSelection(true) || lastSelectionRef.current;
+            const insertPosition = range ? range.index : Math.max(length - 1, 0);
+            const prevChar =
+              insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+            const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+            quill.insertText(
+              insertPosition,
+              `${prefix}${textoTranscrito} `,
+              "user"
+            );
+            quill.setSelection(
+              insertPosition + prefix.length + textoTranscrito.length + 1
+            );
           } else {
             // Fallback: actualizar estado directamente agregando texto como HTML
             setFormData((prev) => {
@@ -217,28 +239,29 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
           return;
         } else if (event.error === 'audio-capture') {
           alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error === 'not-allowed') {
           alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error !== 'aborted') {
+          grabandoRef.current = false;
           setGrabando(false);
         }
       };
 
       recognition.onend = () => {
-        // Solo reiniciar si aún debería estar grabando
-        if (grabandoRef.current) {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
           try {
-            setTimeout(() => {
-              if (grabandoRef.current) {
-                recognition.start();
-              }
-            }, 100);
-          } catch (err) {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
             setGrabando(false);
           }
-        }
+        }, 150);
       };
 
       setReconocimientoVoz(recognition);
@@ -646,16 +669,31 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     }
 
     try {
+      const q =
+        getQuillInstance(mentionQuillRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      // Evita que onend reinicie por un estado stale
+      grabandoRef.current = true;
       reconocimientoVoz.start();
       setGrabando(true);
     } catch (err) {
       console.error('Error al iniciar reconocimiento:', err);
       alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      grabandoRef.current = false;
       setGrabando(false);
     }
   };
 
   const detenerDictado = () => {
+    // Marcar inmediatamente como detenido para que onend no reinicie
+    grabandoRef.current = false;
     if (reconocimientoVoz) {
       try {
         reconocimientoVoz.stop();
@@ -1009,12 +1047,18 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                 value={formData.note || ""}
                 onChange={(value, delta, source, editor) => {
                   setFormData((prev) => ({ ...prev, note: value }));
-                  // Guardar referencia al editor
-                  if (editor) {
-                    if (typeof editor.getEditor === 'function') {
-                      quillEditorRef.current = editor.getEditor();
-                    } else {
-                      quillEditorRef.current = editor;
+                  const quill =
+                    getQuillInstance(editor) ??
+                    getQuillInstance(mentionQuillRef.current);
+                  if (quill) {
+                    quillEditorRef.current = quill;
+                    if (quillSelectionBoundToRef.current !== quill) {
+                      quillSelectionBoundToRef.current = quill;
+                      try {
+                        quill.on("selection-change", (range) => {
+                          if (range) lastSelectionRef.current = range;
+                        });
+                      } catch (e) {}
                     }
                   }
                   // Limpiar error cuando el usuario empiece a escribir
@@ -1167,14 +1211,12 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
 
         <div className="row mb-3">
           <Form.Group className="col-md-6">
-            <Form.Label>Fecha Programada <small className="text-muted">(mm-dd-yyyy)</small></Form.Label>
-            <Form.Control
-              type="date"
-              name="scheduled_date"
-              value={formData.scheduled_date}
-              onChange={handleChange}
-              isInvalid={!!errors.scheduled_date}
-              title="Formato: mm-dd-yyyy"
+            <Form.Label>Fecha Programada</Form.Label>
+            <MdyDashDateInput
+              valueIso={formData.scheduled_date}
+              onChangeIso={(iso) => handleChange({ target: { name: "scheduled_date", value: iso } })}
+              disabled={false}
+              required={false}
             />
             <Form.Control.Feedback type="invalid">
               {errors.scheduled_date}
@@ -1182,15 +1224,13 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
           </Form.Group>
 
           <Form.Group className="col-md-6">
-            <Form.Label>Fecha de Vencimiento <small className="text-muted">(mm-dd-yyyy)</small></Form.Label>
-            <Form.Control
-              type="date"
-              name="due_date"
-              value={formData.due_date}
-              onChange={handleChange}
-              isInvalid={!!errors.due_date}
-              min={formData.scheduled_date}
-              title="Formato: mm-dd-yyyy"
+            <Form.Label>Fecha de Vencimiento</Form.Label>
+            <MdyDashDateInput
+              valueIso={formData.due_date}
+              onChangeIso={(iso) => handleChange({ target: { name: "due_date", value: iso } })}
+              disabled={false}
+              required={false}
+              minIso={formData.scheduled_date}
             />
             <Form.Control.Feedback type="invalid">
               {errors.due_date}

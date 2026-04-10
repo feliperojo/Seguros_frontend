@@ -24,11 +24,14 @@ import {
   formatTaskTimeDhm,
   durationFromStartToEnd,
   formatDhmString,
+  normalizeDateForInput,
+  parseApiDateToLocalDate,
 } from "../../utils/formatters";
 import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -68,29 +71,6 @@ const isNoteEmpty = (html) => {
   tempDiv.innerHTML = html;
   const text = tempDiv.textContent || tempDiv.innerText || '';
   return text.trim().length === 0;
-};
-
-// Función helper para convertir fecha a formato YYYY-MM-DD sin problemas de zona horaria
-const fechaToInputDate = (fecha) => {
-  if (!fecha) return "";
-  try {
-    // Si es string, extraer solo la parte de fecha (YYYY-MM-DD)
-    if (typeof fecha === "string") {
-      const fechaPart = fecha.split("T")[0];
-      if (fechaPart.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return fechaPart;
-      }
-    }
-    // Si es Date object, usar métodos locales para evitar problemas de zona horaria
-    const date = new Date(fecha);
-    if (isNaN(date.getTime())) return "";
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  } catch {
-    return "";
-  }
 };
 
 /** YYYY-MM-DD → MM-DD-YYYY para el campo de edición (orden mes / día / año) */
@@ -200,14 +180,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   // ✅ Historial del cliente
   const [historial, setHistorial] = useState([]);
   const [loadingHistorial, setLoadingHistorial] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState(fechaToInputDate(tarea?.scheduled_date) || "");
-  const [dueDate, setDueDate] = useState(fechaToInputDate(tarea?.due_date) || "");
+  const [scheduledDate, setScheduledDate] = useState(normalizeDateForInput(tarea?.scheduled_date) || "");
+  const [dueDate, setDueDate] = useState(normalizeDateForInput(tarea?.due_date) || "");
   /** Valores mostrados en los campos mes-día-año (MM-DD-AAAA) */
   const [scheduledDateMdy, setScheduledDateMdy] = useState(() =>
-    ymdIsoToMdySlash(fechaToInputDate(tarea?.scheduled_date) || "")
+    ymdIsoToMdySlash(normalizeDateForInput(tarea?.scheduled_date) || "")
   );
   const [dueDateMdy, setDueDateMdy] = useState(() =>
-    ymdIsoToMdySlash(fechaToInputDate(tarea?.due_date) || "")
+    ymdIsoToMdySlash(normalizeDateForInput(tarea?.due_date) || "")
   );
   // Fecha de vencimiento: bloqueada para todos; editable solo tras ingresar la clave del super admin
   const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
@@ -235,10 +215,12 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
   const grabandoRef = useRef(false);
   const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  const quillSelectionBoundToRef = useRef(null);
   const usuariosCargadosRef = useRef(false);
   const tareaIdRef = useRef(null);
-  const lastValidScheduledYmdRef = useRef(fechaToInputDate(tarea?.scheduled_date) || "");
-  const lastValidDueYmdRef = useRef(fechaToInputDate(tarea?.due_date) || "");
+  const lastValidScheduledYmdRef = useRef(normalizeDateForInput(tarea?.scheduled_date) || "");
+  const lastValidDueYmdRef = useRef(normalizeDateForInput(tarea?.due_date) || "");
 
   // ✅ Hook para manejo de menciones en Quill
   const {
@@ -418,6 +400,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     grabandoRef.current = grabando;
   }, [grabando]);
 
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show, tarea?.id]);
+
   // Verificar disponibilidad del reconocimiento de voz
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -437,13 +427,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         }
         
         if (textoTranscrito) {
-          // Insertar texto en el editor Quill si está disponible
-          if (quillEditorRef.current) {
-            const quill = quillEditorRef.current.getEditor();
+          const quill =
+            getQuillInstance(mentionQuillRef.current) ||
+            getQuillInstance(quillEditorRef.current);
+          if (quill) {
             const length = quill.getLength();
-            quill.insertText(length - 1, (quill.getText(length - 2, 1) !== '' ? ' ' : '') + textoTranscrito + ' ');
-            quill.setSelection(length + textoTranscrito.length);
-            // Actualizar el estado también
+            try { quill.focus(); } catch (e) {}
+            const range = quill.getSelection(true) || lastSelectionRef.current;
+            const insertPosition = range ? range.index : Math.max(length - 1, 0);
+            const prevChar = insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+            const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+            quill.insertText(insertPosition, `${prefix}${textoTranscrito} `, "user");
+            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
             setResponseNote(quill.root.innerHTML);
           } else {
             // Fallback al método anterior si Quill no está disponible
@@ -459,28 +454,29 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
           return;
         } else if (event.error === 'audio-capture') {
           alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error === 'not-allowed') {
           alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error !== 'aborted') {
+          grabandoRef.current = false;
           setGrabando(false);
         }
       };
 
       recognition.onend = () => {
-        // Solo reiniciar si aún debería estar grabando
-        if (grabandoRef.current) {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
           try {
-            setTimeout(() => {
-              if (grabandoRef.current) {
-                recognition.start();
-              }
-            }, 100);
-          } catch (err) {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
             setGrabando(false);
           }
-        }
+        }, 150);
       };
 
       setReconocimientoVoz(recognition);
@@ -518,16 +514,31 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     }
 
     try {
+      const q =
+        getQuillInstance(mentionQuillRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      // Evita que onend reinicie por un estado stale
+      grabandoRef.current = true;
       reconocimientoVoz.start();
       setGrabando(true);
     } catch (err) {
       console.error('Error al iniciar reconocimiento:', err);
       alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      grabandoRef.current = false;
       setGrabando(false);
     }
   };
 
   const detenerDictado = () => {
+    // Marcar inmediatamente como detenido para que onend no reinicie
+    grabandoRef.current = false;
     if (reconocimientoVoz) {
       try {
         reconocimientoVoz.stop();
@@ -851,8 +862,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     tareaIdRef.current = currentTareaId;
 
     // ✅ Resetear fechas cuando cambia la tarea
-    const schedInit = fechaToInputDate(tarea?.scheduled_date) || "";
-    const dueInit = fechaToInputDate(tarea?.due_date) || "";
+    const schedInit = normalizeDateForInput(tarea?.scheduled_date) || "";
+    const dueInit = normalizeDateForInput(tarea?.due_date) || "";
     setScheduledDate(schedInit);
     setDueDate(dueInit);
     setScheduledDateMdy(ymdIsoToMdySlash(schedInit));
@@ -1485,7 +1496,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       return;
     }
 
-    const dueDateOriginal = fechaToInputDate(tarea?.due_date) || "";
+    const dueDateOriginal = normalizeDateForInput(tarea?.due_date) || "";
     const dueDateCambiada = dueYmd !== dueDateOriginal;
     const requierePassword = dueDateCambiada;
     if (requierePassword && !adminPasswordForDueDate) {
@@ -1636,30 +1647,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
-    try {
-      // Si es string en formato YYYY-MM-DD, extraer directamente
-      if (typeof fecha === "string" && fecha.match(/^\d{4}-\d{2}-\d{2}/)) {
-        const [year, month, day] = fecha.split("T")[0].split("-");
-        return `${month}-${day}-${year}`;
-      }
-      // Si es Date object o string ISO, usar métodos locales
-      const date = new Date(fecha);
-      if (isNaN(date.getTime())) return "N/A";
-      // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${month}-${day}-${year}`;
-    } catch {
-      return "N/A";
-    }
+    const d = formatDateForDisplay(fecha);
+    return d === "-" ? "N/A" : d;
   };
 
   const getBadgeColor = (fecha) => {
     if (!fecha) return "secondary";
+    const target = parseApiDateToLocalDate(fecha);
+    if (!target) return "secondary";
     const hoy = new Date();
-    const date = new Date(fecha);
-    const diffDias = Math.ceil((date - hoy) / (1000 * 60 * 60 * 24));
+    const todayStart = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+    const diffMs = target.getTime() - todayStart.getTime();
+    const diffDias = Math.round(diffMs / (1000 * 60 * 60 * 24));
     if (diffDias < 0) return "danger";
     if (diffDias <= 3) return "warning";
     return "success";
@@ -2806,19 +2805,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       // Esto asegura que la detección funcione correctamente
                       handleQuillChange(value, delta, source, editor);
                       
-                      if (editor) {
-                        // Guardar referencia al editor
-                        try {
-                          if (typeof editor.getEditor === 'function') {
-                            quillEditorRef.current = editor.getEditor();
-                          } else if (editor.getSelection) {
-                            quillEditorRef.current = editor;
-                          }
-                        } catch (e) {
-                          // Solo log en desarrollo
-                          if (import.meta.env.DEV) {
-                            console.error('Error guardando referencia al editor:', e);
-                          }
+                      const q =
+                        getQuillInstance(editor) ??
+                        getQuillInstance(mentionQuillRef.current);
+                      if (q) {
+                        quillEditorRef.current = q;
+                        if (quillSelectionBoundToRef.current !== q) {
+                          quillSelectionBoundToRef.current = q;
+                          try {
+                            q.on("selection-change", (range) => {
+                              if (range) lastSelectionRef.current = range;
+                            });
+                          } catch (e) {}
                         }
                       }
                     }}

@@ -3,6 +3,7 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -67,7 +68,11 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
   const grabandoRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const dropAreaRef = useRef(null);
+  const quillWrapperRef = useRef(null);
   const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  /** Instancia Quill a la que ya se enlazó selection-change (evita duplicados al remount). */
+  const quillSelectionBoundToRef = useRef(null);
 
   // Función para limpiar HTML y verificar si está vacío
   const isNoteEmpty = (html) => {
@@ -117,6 +122,14 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     grabandoRef.current = grabando;
   }, [grabando]);
 
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show]);
+
   // Verificar disponibilidad del reconocimiento de voz
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -136,15 +149,25 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
         }
         
         if (textoTranscrito) {
-          // Insertar texto transcrito en el editor Quill
-          const quill = quillEditorRef.current;
+          const quill =
+            getQuillInstance(quillWrapperRef.current) ||
+            getQuillInstance(quillEditorRef.current);
           if (quill) {
-            const range = quill.getSelection(true);
+            try { quill.focus(); } catch (e) {}
             const length = quill.getLength();
-            const insertPosition = range ? range.index : length - 1;
-            const prefix = insertPosition > 1 && !quill.getText(insertPosition - 1, 1).endsWith(' ') ? ' ' : '';
-            quill.insertText(insertPosition, prefix + textoTranscrito + ' ', 'user');
-            quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
+            const range = quill.getSelection(true) || lastSelectionRef.current;
+            const insertPosition = range ? range.index : Math.max(length - 1, 0);
+            const prevChar =
+              insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+            const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+            quill.insertText(
+              insertPosition,
+              `${prefix}${textoTranscrito} `,
+              "user"
+            );
+            quill.setSelection(
+              insertPosition + prefix.length + textoTranscrito.length + 1
+            );
           } else {
             // Fallback: actualizar estado directamente agregando texto como HTML
             setFormData((prev) => {
@@ -170,28 +193,29 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
           return;
         } else if (event.error === 'audio-capture') {
           alert('No se pudo acceder al micrófono. Por favor, verifica los permisos.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error === 'not-allowed') {
           alert('Permiso de micrófono denegado. Por favor, permite el acceso al micrófono.');
+          grabandoRef.current = false;
           setGrabando(false);
         } else if (event.error !== 'aborted') {
+          grabandoRef.current = false;
           setGrabando(false);
         }
       };
 
       recognition.onend = () => {
-        // Solo reiniciar si aún debería estar grabando
-        if (grabandoRef.current) {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
           try {
-            setTimeout(() => {
-              if (grabandoRef.current) {
-                recognition.start();
-              }
-            }, 100);
-          } catch (err) {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
             setGrabando(false);
           }
-        }
+        }, 150);
       };
 
       setReconocimientoVoz(recognition);
@@ -533,16 +557,31 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
     }
 
     try {
+      const q =
+        getQuillInstance(quillWrapperRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      // Evita que onend reinicie por un estado stale
+      grabandoRef.current = true;
       reconocimientoVoz.start();
       setGrabando(true);
     } catch (err) {
       console.error('Error al iniciar reconocimiento:', err);
       alert('Error al iniciar el reconocimiento de voz. Por favor, intenta nuevamente.');
+      grabandoRef.current = false;
       setGrabando(false);
     }
   };
 
   const detenerDictado = () => {
+    // Marcar inmediatamente como detenido para que onend no reinicie
+    grabandoRef.current = false;
     if (reconocimientoVoz) {
       try {
         reconocimientoVoz.stop();
@@ -893,13 +932,24 @@ const NuevoComentarioModal = ({ show, onHide, onCreated, grupoFamiliarId, client
               }
             `}</style>
             <ReactQuill
+              ref={quillWrapperRef}
               theme="snow"
               value={formData.note || ""}
               onChange={(value, delta, source, editor) => {
                 setFormData((prev) => ({ ...prev, note: value }));
-                // Guardar referencia al editor
-                if (editor && !quillEditorRef.current) {
-                  quillEditorRef.current = editor;
+                const quill =
+                  getQuillInstance(editor) ??
+                  getQuillInstance(quillWrapperRef.current);
+                if (quill) {
+                  quillEditorRef.current = quill;
+                  if (quillSelectionBoundToRef.current !== quill) {
+                    quillSelectionBoundToRef.current = quill;
+                    try {
+                      quill.on("selection-change", (range) => {
+                        if (range) lastSelectionRef.current = range;
+                      });
+                    } catch (e) {}
+                  }
                 }
                 // Limpiar error cuando el usuario empiece a escribir
                 if (errors.note && !isNoteEmpty(value)) {

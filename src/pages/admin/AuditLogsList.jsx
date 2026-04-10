@@ -20,6 +20,7 @@ import {
 import { toast } from "react-toastify";
 import { auditLogsService } from "../../services/adminApi";
 import AuditLogDetailModal from "../../components/admin/AuditLogDetailModal";
+import MdyDashDateInput from "../../components/common/MdyDashDateInput";
 
 const AuditLogsList = () => {
   const [logs, setLogs] = useState([]);
@@ -161,23 +162,15 @@ const AuditLogsList = () => {
                 />
               </div>
               <div className="col-md-2">
-                <Form.Control
-                  type="date"
-                  placeholder="Fecha inicio"
-                  value={filters.start_date}
-                  onChange={(e) =>
-                    handleFilterChange("start_date", e.target.value)
-                  }
+                <MdyDashDateInput
+                  valueIso={filters.start_date}
+                  onChangeIso={(iso) => handleFilterChange("start_date", iso)}
                 />
               </div>
               <div className="col-md-2">
-                <Form.Control
-                  type="date"
-                  placeholder="Fecha fin"
-                  value={filters.end_date}
-                  onChange={(e) =>
-                    handleFilterChange("end_date", e.target.value)
-                  }
+                <MdyDashDateInput
+                  valueIso={filters.end_date}
+                  onChangeIso={(iso) => handleFilterChange("end_date", iso)}
                 />
               </div>
               <div className="col-md-1">
