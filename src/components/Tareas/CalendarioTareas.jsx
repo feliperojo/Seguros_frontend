@@ -649,6 +649,21 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     // ✅ Determinar el tipo de tarea (operativa o auditoría)
     const tipo = tarea.tipo || (tarea.auditoria || tarea.item || tarea.run_id ? 'auditoria' : 'operativa');
     
+    // ✅ Si es tarea operativa, SIEMPRE abrir con detalle completo (evita N/A en el modal)
+    if (tipo !== 'auditoria') {
+      const taskId = tarea?.id || tarea?.task_id || tarea?.task?.id || null;
+      if (taskId) {
+        await openTaskResponseModal(Number(taskId), isFromNotification);
+      } else {
+        // Fallback: si no hay ID, abrir con lo que hay (mejor que romper)
+        setTareaSeleccionada(tarea);
+        setTareaTipo(tipo);
+        setFromNotification(isFromNotification);
+        setShowResponderModal(true);
+      }
+      return;
+    }
+
     // ✅ Si es tarea de auditoría, cargar detalles completos
     if (tipo === 'auditoria' && tarea.id) {
       try {
