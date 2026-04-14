@@ -730,11 +730,22 @@ export default function TareasTerminadasPanel({
         }
       `}</style>
       
-    <div className={`card ${className}`}>
-      <div className="card-header py-2 d-flex justify-content-between align-items-center">
-        <div className="text-primary fw-semibold">Tareas Terminadas</div>
+    <div
+      className={`card w-100 ${className}`}
+      style={{ overflowX: "hidden" }}
+    >
+      <div
+        className="card-header py-2 d-flex justify-content-between align-items-center"
+        style={{ flexWrap: "wrap", rowGap: 8 }}
+      >
+        <div className="text-primary fw-semibold" style={{ whiteSpace: "nowrap" }}>
+          Tareas Terminadas
+        </div>
 
-        <div className="d-flex align-items-center gap-2">
+        <div
+          className="d-flex align-items-center gap-2"
+          style={{ flex: "1 1 360px", minWidth: 0, justifyContent: "flex-end", flexWrap: "wrap" }}
+        >
           {!loadRequested && (
             <button
               type="button"
@@ -775,7 +786,10 @@ export default function TareasTerminadasPanel({
             </button>
           )}
 
-        <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
+        <div
+          className="input-group input-group-sm"
+          style={{ flex: "1 1 260px", minWidth: 220, maxWidth: 360 }}
+        >
           <span className="input-group-text">Filtrar / Buscar</span>
           <input
             className="form-control"
@@ -793,7 +807,14 @@ export default function TareasTerminadasPanel({
         </div>
       </div>
 
-      <div className="card-body">
+      <div
+        className="card-body"
+        style={{
+          overflowX: "hidden",
+          overflowY: "auto",
+          maxHeight: "70vh",
+        }}
+      >
         {!loadRequested && (
           <div className="text-muted small">
             Presiona <strong>Cargar tareas terminadas</strong> para traerlas. Así evitamos peticiones cuando no necesitas verlas.
