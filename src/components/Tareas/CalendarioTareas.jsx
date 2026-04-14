@@ -233,6 +233,20 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       
       // Normalizar estado
       normalizedTask.status = normalizedTask.status || normalizedTask.estado || 'pending';
+
+      // ✅ Normalizar "responsable" (cuando backend no envía objeto de asignación)
+      // El modal usa campos como `assign_to_user_name` / `assigned_to_name` como fallback.
+      if (normalizedTask?.responsable && typeof normalizedTask.responsable === "string") {
+        const resp = normalizedTask.responsable.trim();
+        if (resp) {
+          normalizedTask.assign_to_user_name = normalizedTask.assign_to_user_name || resp;
+          normalizedTask.assigned_to_name = normalizedTask.assigned_to_name || resp;
+          if (!normalizedTask.log) normalizedTask.log = {};
+          // Algunos flujos leen `tarea.log.assigned_user.name`
+          if (!normalizedTask.log.assigned_user) normalizedTask.log.assigned_user = {};
+          normalizedTask.log.assigned_user.name = normalizedTask.log.assigned_user.name || resp;
+        }
+      }
       
       // ✅ Normalizar cliente si viene directamente en la nueva estructura
       if (normalizedTask.cliente && normalizedTask.cliente.id) {

@@ -256,6 +256,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignPreview, setAssignPreview] = useState(null); // para render inmediato sin depender del padre
+  const [showReassign, setShowReassign] = useState(false);
 
   // ✅ Estados para menciones
   const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
@@ -812,6 +813,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
 
     setAssignPreview(null);
     setSelectedAssignUserId(currentAssignedUserId ? String(currentAssignedUserId) : "");
+    setShowReassign(false);
   }, [show, tarea?.id]);
 
   // ✅ Usar useRef para rastrear la tarea actual y evitar loops infinitos
@@ -2310,21 +2312,13 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                   <div className="mb-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-user text-info"></i>
-                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada a:</strong>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada por:</strong>
                     </div>
                     <p className="text-content mb-0">
-                      {assignPreview?.assigned_user?.name ||
-                       assignPreview?.assign_to_user?.name ||
-                       tarea?.assigned_user?.name ||
-                       tarea?.assign_to_user?.name ||
-                       tarea?.assigned_to_user?.name ||
-                       tarea?.assignedUser?.name ||
-                       tarea?.log?.assigned_user?.name ||
-                       tarea?.assign_to_user_name ||
-                       tarea?.assigned_to_name ||
-                       // Fallback final: si no hay asignado, mostrar el creador para no dejar vacío
-                       tarea?.log?.user?.name ||
+                      {tarea?.log?.user?.name ||
                        tarea?.user?.name ||
+                       tarea?.created_by?.name ||
+                       tarea?.createdBy?.name ||
                        "N/A"}
                     </p>
                   </div>
@@ -2332,80 +2326,119 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                   <div className="mb-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-user-check text-success"></i>
-                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Reasignar a:</strong>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignado a:</strong>
                     </div>
-                    <Form.Select
-                      value={selectedAssignUserId || ""}
-                      onChange={(e) => setSelectedAssignUserId(e.target.value)}
-                      disabled={assignLoading}
-                    >
-                      <option value="">Selecciona un usuario</option>
-                      {(() => {
-                        const currentId =
-                          assignPreview?.assigned_user_id ||
-                          assignPreview?.assign_to_user_id ||
-                          assignPreview?.assigned_user?.id ||
-                          assignPreview?.assign_to_user?.id ||
-                          tarea?.assigned_user_id ||
-                          tarea?.assign_to_user_id ||
-                          tarea?.assigned_user?.id ||
-                          tarea?.assign_to_user?.id ||
-                          tarea?.log?.assigned_user_id ||
-                          tarea?.log?.assign_to_user_id ||
-                          tarea?.log?.assigned_user?.id ||
-                          tarea?.log?.assign_to_user?.id ||
-                          null;
+                    {(() => {
+                      const currentId =
+                        assignPreview?.assigned_user_id ||
+                        assignPreview?.assign_to_user_id ||
+                        assignPreview?.assigned_user?.id ||
+                        assignPreview?.assign_to_user?.id ||
+                        tarea?.assigned_user_id ||
+                        tarea?.assign_to_user_id ||
+                        tarea?.assigned_user?.id ||
+                        tarea?.assign_to_user?.id ||
+                        tarea?.log?.assigned_user_id ||
+                        tarea?.log?.assign_to_user_id ||
+                        tarea?.log?.assigned_user?.id ||
+                        tarea?.log?.assign_to_user?.id ||
+                        null;
 
-                        const currentName =
-                          assignPreview?.assigned_user?.name ||
-                          assignPreview?.assign_to_user?.name ||
-                          tarea?.assigned_user?.name ||
-                          tarea?.assign_to_user?.name ||
-                          tarea?.assigned_to_user?.name ||
-                          tarea?.assignedUser?.name ||
-                          tarea?.log?.assigned_user?.name ||
-                          tarea?.assign_to_user_name ||
-                          tarea?.assigned_to_name ||
-                          null;
+                      const currentIdStr = currentId ? String(currentId) : "";
+                      const userFromList =
+                        currentIdStr ? (usuarios || []).find((u) => String(u.id) === currentIdStr) : null;
 
-                        if (!currentId) return null;
-                        const existsInList = (usuarios || []).some((u) => String(u.id) === String(currentId));
-                        if (existsInList) return null;
-                        return (
-                          <option key={`current-assignee-${currentId}`} value={currentId}>
-                            {currentName || `Usuario #${currentId}`}
-                          </option>
-                        );
-                      })()}
-                      {(usuarios || []).map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name || user.nombre || user.email || `Usuario #${user.id}`}
-                        </option>
-                      ))}
-                    </Form.Select>
+                      const currentName =
+                        assignPreview?.assigned_user?.name ||
+                        assignPreview?.assign_to_user?.name ||
+                        tarea?.assigned_user?.name ||
+                        tarea?.assign_to_user?.name ||
+                        tarea?.assigned_to_user?.name ||
+                        tarea?.assignedUser?.name ||
+                        tarea?.log?.assigned_user?.name ||
+                        tarea?.responsable ||
+                        tarea?.log?.responsable ||
+                        tarea?.assign_to_user_name ||
+                        tarea?.assigned_to_name ||
+                        userFromList?.name ||
+                        userFromList?.nombre ||
+                        userFromList?.email ||
+                        null;
 
-                    {selectedAssignUserId &&
-                      selectedAssignUserId !==
-                        String(
-                          assignPreview?.assigned_user_id ||
-                          assignPreview?.assign_to_user_id ||
-                          tarea?.assigned_user_id ||
-                          tarea?.assign_to_user_id ||
-                          tarea?.assigned_user?.id ||
-                          tarea?.assign_to_user?.id ||
-                          tarea?.log?.assigned_user?.id ||
-                          ""
-                        ) && (
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
-                          className="mt-2"
-                          onClick={handleReasignar}
-                          disabled={assignLoading}
-                        >
-                          {assignLoading ? "Actualizando..." : "Guardar Asignación"}
-                        </Button>
-                      )}
+                      return (
+                        <>
+                          <p className="text-content mb-2">
+                            {currentName || (currentIdStr ? `Usuario #${currentIdStr}` : "N/A")}
+                          </p>
+
+                          {!showReassign ? (
+                            <Button
+                              type="button"
+                              variant="outline-primary"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedAssignUserId(currentIdStr);
+                                setShowReassign(true);
+                              }}
+                              disabled={assignLoading}
+                            >
+                              Reasignar
+                            </Button>
+                          ) : (
+                            <div className="mt-2">
+                              <Form.Select
+                                value={selectedAssignUserId || ""}
+                                onChange={(e) => setSelectedAssignUserId(e.target.value)}
+                                disabled={assignLoading}
+                              >
+                                <option value="">Selecciona un usuario</option>
+                                {(() => {
+                                  if (!currentIdStr) return null;
+                                  const existsInList = (usuarios || []).some((u) => String(u.id) === currentIdStr);
+                                  if (existsInList) return null;
+                                  return (
+                                    <option key={`current-assignee-${currentIdStr}`} value={currentIdStr}>
+                                      {currentName || `Usuario #${currentIdStr}`}
+                                    </option>
+                                  );
+                                })()}
+                                {(usuarios || []).map((user) => (
+                                  <option key={user.id} value={user.id}>
+                                    {user.name || user.nombre || user.email || `Usuario #${user.id}`}
+                                  </option>
+                                ))}
+                              </Form.Select>
+
+                              <div className="d-flex gap-2 mt-2">
+                                <Button
+                                  variant="outline-secondary"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedAssignUserId(currentIdStr);
+                                    setShowReassign(false);
+                                  }}
+                                  disabled={assignLoading}
+                                >
+                                  Cancelar
+                                </Button>
+
+                                {selectedAssignUserId &&
+                                  selectedAssignUserId !== currentIdStr && (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={handleReasignar}
+                                      disabled={assignLoading}
+                                    >
+                                      {assignLoading ? "Actualizando..." : "Guardar"}
+                                    </Button>
+                                  )}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="mt-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
