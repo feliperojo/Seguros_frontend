@@ -2310,20 +2310,21 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                   <div className="mb-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-user text-info"></i>
-                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada por:</strong>
+                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada a:</strong>
                     </div>
                     <p className="text-content mb-0">
                       {assignPreview?.assigned_user?.name ||
                        assignPreview?.assign_to_user?.name ||
-                       tarea?.assigned_user?.name || 
-                       tarea?.assign_to_user?.name || 
+                       tarea?.assigned_user?.name ||
+                       tarea?.assign_to_user?.name ||
                        tarea?.assigned_to_user?.name ||
                        tarea?.assignedUser?.name ||
-                       tarea?.log?.user?.name || 
                        tarea?.log?.assigned_user?.name ||
-                       tarea?.user?.name ||
                        tarea?.assign_to_user_name ||
                        tarea?.assigned_to_name ||
+                       // Fallback final: si no hay asignado, mostrar el creador para no dejar vacío
+                       tarea?.log?.user?.name ||
+                       tarea?.user?.name ||
                        "N/A"}
                     </p>
                   </div>
@@ -2339,6 +2340,43 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       disabled={assignLoading}
                     >
                       <option value="">Selecciona un usuario</option>
+                      {(() => {
+                        const currentId =
+                          assignPreview?.assigned_user_id ||
+                          assignPreview?.assign_to_user_id ||
+                          assignPreview?.assigned_user?.id ||
+                          assignPreview?.assign_to_user?.id ||
+                          tarea?.assigned_user_id ||
+                          tarea?.assign_to_user_id ||
+                          tarea?.assigned_user?.id ||
+                          tarea?.assign_to_user?.id ||
+                          tarea?.log?.assigned_user_id ||
+                          tarea?.log?.assign_to_user_id ||
+                          tarea?.log?.assigned_user?.id ||
+                          tarea?.log?.assign_to_user?.id ||
+                          null;
+
+                        const currentName =
+                          assignPreview?.assigned_user?.name ||
+                          assignPreview?.assign_to_user?.name ||
+                          tarea?.assigned_user?.name ||
+                          tarea?.assign_to_user?.name ||
+                          tarea?.assigned_to_user?.name ||
+                          tarea?.assignedUser?.name ||
+                          tarea?.log?.assigned_user?.name ||
+                          tarea?.assign_to_user_name ||
+                          tarea?.assigned_to_name ||
+                          null;
+
+                        if (!currentId) return null;
+                        const existsInList = (usuarios || []).some((u) => String(u.id) === String(currentId));
+                        if (existsInList) return null;
+                        return (
+                          <option key={`current-assignee-${currentId}`} value={currentId}>
+                            {currentName || `Usuario #${currentId}`}
+                          </option>
+                        );
+                      })()}
                       {(usuarios || []).map((user) => (
                         <option key={user.id} value={user.id}>
                           {user.name || user.nombre || user.email || `Usuario #${user.id}`}
