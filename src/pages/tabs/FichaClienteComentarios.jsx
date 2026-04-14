@@ -1451,6 +1451,21 @@ export default function FichaClienteComentarios() {
                               const comentariosTarea = comentariosTareas[tareaId] || [];
                               const estaExpandida = tareasExpandidas[tareaId];
                               const estaCargando = loadingComentariosTareas[tareaId];
+                              const fallbackCountRaw =
+                                comentario?.task?.comments_count ??
+                                comentario?.task?.comentarios_count ??
+                                comentario?.task?.commentsCount ??
+                                comentario?.comments_count ??
+                                comentario?.comentarios_count ??
+                                comentario?.commentsCount ??
+                                0;
+                              const fallbackCount = Number(fallbackCountRaw);
+                              const countToShow =
+                                comentariosTarea.length > 0
+                                  ? comentariosTarea.length
+                                  : Number.isFinite(fallbackCount) && fallbackCount > 0
+                                    ? fallbackCount
+                                    : 0;
 
                               return (
                                 <div className="mt-4 pt-4 border-t border-gray-200">
@@ -1464,11 +1479,9 @@ export default function FichaClienteComentarios() {
                                       <span className="font-semibold text-gray-700">
                                         Comentarios de la tarea
                                       </span>
-                                      {comentariosTarea.length > 0 && (
-                                        <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                                          {comentariosTarea.length}
-                                        </span>
-                                      )}
+                                      <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                                        {countToShow}
+                                      </span>
                                     </div>
                                     <i className={`fas ${estaExpandida ? "fa-chevron-up" : "fa-chevron-down"} text-gray-400`}></i>
                                     {estaCargando && (

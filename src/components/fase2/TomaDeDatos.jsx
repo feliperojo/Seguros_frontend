@@ -37,7 +37,13 @@ import { buildPayerOptions } from "../../utils/payers";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
-const MONEY_FIELDS = new Set(["ingreso_por_periodo", "ingreso_anual", "ingreso_por_periodo_ocasional", "precio"]);
+const MONEY_FIELDS = new Set([
+  "ingreso_por_periodo",
+  "ingreso_anual",
+  "ingreso_por_periodo_ocasional",
+  "ingreso_ocasional_anual",
+  "precio",
+]);
 const PHONE_FIELDS = new Set(["telefono", "secundario", "whatsapp_num", "telefono_empleador"]);
 
 // Opciones de parentesco/tipo disponibles para los miembros
@@ -98,6 +104,7 @@ const CLIENTE_FIELDS = new Set([
   "nota_ingreso_ocasional",
   "periodo_ingreso_ocasional",
   "ingreso_por_periodo_ocasional",
+  "ingreso_ocasional_anual",
   "whatsapp",
   "telegram",
   "texto_sms"
@@ -331,6 +338,7 @@ const normalizeMember = (m, idx) => {
       nota_ingreso_ocasional: m.nota_ingreso_ocasional || "",
       periodo_ingreso_ocasional: m.periodo_ingreso_ocasional || "",
       ingreso_por_periodo_ocasional: m.ingreso_por_periodo_ocasional || "",
+      ingreso_ocasional_anual: m.ingreso_ocasional_anual || "",
       whatsapp: !!m.whatsapp,
       telegram: !!m.telegram,
       texto_sms: !!m.texto_sms,
@@ -860,6 +868,17 @@ const activeNormalized = useMemo(
       patch.ingreso_anual = formatMoney2(computeAnnual(periodo, perDollars));
     }
 
+    if (name === "ingreso_por_periodo_ocasional" || name === "periodo_ingreso_ocasional") {
+      const periodo =
+        name === "periodo_ingreso_ocasional" ? v : (current.periodo_ingreso_ocasional ?? "");
+      const perRaw =
+        name === "ingreso_por_periodo_ocasional"
+          ? v
+          : (current.ingreso_por_periodo_ocasional ?? "");
+      const perParsed = parseMoney(String(perRaw)) || 0;
+      patch.ingreso_ocasional_anual = formatMoney2(computeAnnual(periodo, perParsed));
+    }
+
     if (CLIENTE_FIELDS.has(name)) return patchCliente(idx, patch);
     if (ROOT_FIELDS.has(name)) return patchRoot(idx, patch);
     return patchCliente(idx, patch);
@@ -897,6 +916,13 @@ const activeNormalized = useMemo(
       const annual = computeAnnual(periodo, parsed);
       patch.ingreso_anual = annual === 0 ? "" : String(annual);
     }
+
+    if (fieldName === "ingreso_por_periodo_ocasional") {
+      const cur = getC(normalized[idx] || {});
+      const periodo = cur.periodo_ingreso_ocasional ?? "";
+      const annual = computeAnnual(periodo, parsed);
+      patch.ingreso_ocasional_anual = annual === 0 ? "" : String(annual);
+    }
     
     // Aplicar el cambio
     if (isCliente) {
@@ -929,6 +955,12 @@ const activeNormalized = useMemo(
       const parsed = parseMoney(formatted);
       patch.ingreso_anual = formatMoney2(computeAnnual(periodo, parsed));
     }
+
+    if (fieldName === "ingreso_por_periodo_ocasional") {
+      const periodo = cur.periodo_ingreso_ocasional ?? "";
+      const parsed = parseMoney(formatted);
+      patch.ingreso_ocasional_anual = formatMoney2(computeAnnual(periodo, parsed));
+    }
     
     // Aplicar el cambio
     if (isCliente) {
@@ -947,6 +979,12 @@ const activeNormalized = useMemo(
     if (fieldName === "ingreso_por_periodo") {
       patch.ingreso_anual = formatMoney2(
         computeAnnual(cur.periodo_ingreso ?? "", formatted)
+      );
+    }
+
+    if (fieldName === "ingreso_por_periodo_ocasional") {
+      patch.ingreso_ocasional_anual = formatMoney2(
+        computeAnnual(cur.periodo_ingreso_ocasional ?? "", formatted)
       );
     }
     return isCliente ? patchCliente(idx, patch) : patchRoot(idx, patch);
@@ -1127,15 +1165,19 @@ const activeNormalized = useMemo(
         : "bg-secondary";
 
     const ingresoPrincipalAnual = parseMoney(c.ingreso_anual ?? m.ingreso_anual ?? 0);
-    // El ingreso ocasional NO se anualiza; el cliente ya ajusta el monto según la frecuencia.
-    const ingresoOcasional = parseMoney(
-      c.ingreso_por_periodo_ocasional ??
-        m.ingreso_por_periodo_ocasional ??
-        c.ingreso_ocasional ??
-        m.ingreso_ocasional ??
-        0
+    const ingresoOcasionalAnualStored = parseMoney(
+      c.ingreso_ocasional_anual ?? m.ingreso_ocasional_anual ?? ""
     );
-    const ingresoTotalAnual = ingresoPrincipalAnual + ingresoOcasional;
+    const ingresoOcasionalAnual =
+      ingresoOcasionalAnualStored ||
+      computeAnnual(
+        c.periodo_ingreso_ocasional ?? m.periodo_ingreso_ocasional ?? "",
+        c.ingreso_por_periodo_ocasional ?? m.ingreso_por_periodo_ocasional ?? ""
+      ) ||
+      parseMoney(
+        c.ingreso_ocasional ?? m.ingreso_ocasional ?? c.ingreso_por_periodo_ocasional ?? m.ingreso_por_periodo_ocasional ?? 0
+      );
+    const ingresoTotalAnual = ingresoPrincipalAnual + ingresoOcasionalAnual;
     const ingresoTotalLabel = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD"
@@ -1351,6 +1393,7 @@ const activeNormalized = useMemo(
                                 <Field label="Fecha de Nacimiento" className="col-md-4">
                                   <MdyDashDateInput
                                     size="sm"
+                                    allowManualEntry
                                     valueIso={normalizeDateForInput(c.fecha_nacimiento || "")}
                                     minIso="1900-01-01"
                                     maxIso="2099-12-31"
@@ -1530,6 +1573,7 @@ const activeNormalized = useMemo(
                                 <Field label="Fecha Emisión" className="col-md-3">
                                   <MdyDashDateInput
                                     size="sm"
+                                    allowManualEntry
                                     valueIso={(c.fecha_emision || "").slice(0, 10)}
                                     minIso="1900-01-01"
                                     maxIso="2099-12-31"
@@ -1549,6 +1593,7 @@ const activeNormalized = useMemo(
                                 <Field label="Fecha Expiración" className="col-md-3">
                                   <MdyDashDateInput
                                     size="sm"
+                                    allowManualEntry
                                     valueIso={(c.fecha_expiracion || "").slice(0, 10)}
                                     minIso="1900-01-01"
                                     maxIso="2099-12-31"
@@ -1794,7 +1839,7 @@ const activeNormalized = useMemo(
                                   />
                                 </Field>
 
-                                <Field label="Período de Ingreso Ocasional" className="col-md-6">
+                                <Field label="Período de Ingreso Ocasional" className="col-md-4">
                                   <select
                                     className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="periodo_ingreso_ocasional"
@@ -1812,16 +1857,29 @@ const activeNormalized = useMemo(
                                   </select>
                                 </Field>
 
-                                <Field label="Ingreso por Período ocasional ($)" className="col-md-6">
+                                <Field label="Ingreso por Período ocasional ($)" className="col-md-4">
                                   <input
                                     className="form-control form-control-sm"
                                     inputMode="decimal"
                                     name="ingreso_por_periodo_ocasional"
-                                    value={c.ingreso_por_periodo_ocasional ?? ""}
-                                    onChange={onChange}
-                                    onBlur={onBlurMoneyFactory(idx, "ingreso_por_periodo_ocasional")}
+                                    value={getMoneyDisplayValue(idx, "ingreso_por_periodo_ocasional", c.ingreso_por_periodo_ocasional)}
+                                    onChange={moneyChangeFactory(idx, "ingreso_por_periodo_ocasional")}
+                                    onBlur={moneyBlurFactory(idx, "ingreso_por_periodo_ocasional")}
                                     disabled={isReadOnly}
-                                    placeholder="0.00"
+                                    placeholder="0,00"
+                                  />
+                                </Field>
+
+                                <Field label="Ingreso ocasional anual ($)" className="col-md-4">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    inputMode="decimal"
+                                    name="ingreso_ocasional_anual"
+                                    value={getMoneyDisplayValue(idx, "ingreso_ocasional_anual", c.ingreso_ocasional_anual)}
+                                    onChange={moneyChangeFactory(idx, "ingreso_ocasional_anual")}
+                                    onBlur={moneyBlurFactory(idx, "ingreso_ocasional_anual")}
+                                    disabled={isReadOnly}
+                                    placeholder="0,00"
                                   />
                                 </Field>
                               </div>

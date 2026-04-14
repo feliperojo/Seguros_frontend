@@ -145,32 +145,40 @@ export const PERIOD_FACTOR = {
     return nfES.format(n);
   };
   
-  // Lee ingreso ocasional en distintas claves
+  // Lee ingreso ocasional anual (campo persistido o cálculo desde período + monto)
 export const getIngresoOcasional = (m = {}) => {
+    const anualGuardado =
+      parseMoney(
+        m.ingreso_ocasional_anual ??
+          m.ingresoOcasionalAnual ??
+          m?.cliente?.ingreso_ocasional_anual ??
+          m?.cliente?.ingresoOcasionalAnual ??
+          ""
+      ) || 0;
+    if (anualGuardado) return anualGuardado;
+
     const v =
       m.ingreso_ocasional ??
       m.ingresoOcasional ??
       m.incomeOccasional ??
       m?.cliente?.ingreso_ocasional ??
-    m?.cliente?.ingresoOcasional ??
-    m?.cliente?.incomeOccasional ??
-    null;
+      m?.cliente?.ingresoOcasional ??
+      m?.cliente?.incomeOccasional ??
+      null;
 
-  const directo = parseMoney(v);
-  if (directo) return directo;
+    const directo = parseMoney(v);
+    if (directo) return directo;
 
-  // Importante: el ingreso ocasional NO debe anualizarse aquí.
-  // En este flujo, el cliente ya ajusta el monto según la frecuencia (periodo),
-  // así que sumamos el monto tal cual viene en el campo "por periodo".
-  return (
-    parseMoney(
+    const periodo =
+      m.periodo_ingreso_ocasional ?? m?.cliente?.periodo_ingreso_ocasional;
+    const porPeriodo =
       m.ingreso_por_periodo_ocasional ??
-        m.ingresoPorPeriodoOcasional ??
-        m?.cliente?.ingreso_por_periodo_ocasional ??
-        m?.cliente?.ingresoPorPeriodoOcasional ??
-        ""
-    ) || 0
-  );
+      m.ingresoPorPeriodoOcasional ??
+      m?.cliente?.ingreso_por_periodo_ocasional ??
+      m?.cliente?.ingresoPorPeriodoOcasional ??
+      "";
+
+    return computeAnnual(periodo, porPeriodo) || 0;
   };
   
   // Si no hay anual explícito pero sí periodo + monto por periodo, lo calculamos.

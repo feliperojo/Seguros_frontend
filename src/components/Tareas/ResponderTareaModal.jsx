@@ -1,5 +1,5 @@
 // @ts-nocheck — evita diagnósticos en cascada del language service sobre este .jsx
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Modal,
   Button,
@@ -13,8 +13,8 @@ import {
   Toast,
   ToastContainer,
 } from "react-bootstrap";
-import { PatternFormat } from "react-number-format";
 import ReactQuill from "react-quill";
+import MdyDashDateInput from "../common/MdyDashDateInput";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import systemConfigService from "../../services/SystemConfigService";
@@ -73,27 +73,6 @@ const isNoteEmpty = (html) => {
   return text.trim().length === 0;
 };
 
-/** YYYY-MM-DD → MM-DD-YYYY para el campo de edición (orden mes / día / año) */
-  const ymdIsoToMdySlash = (ymd) => {
-  if (!ymd || typeof ymd !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return "";
-  const [y, m, d] = ymd.split("-");
-  return `${m}-${d}-${y}`;
-};
-
-/** MM-DD-YYYY o MM/DD/YYYY (con o sin separadores) → YYYY-MM-DD o null si incompleta / inválida */
-const parseMdySlashToYmdIso = (formattedValue) => {
-  if (!formattedValue || typeof formattedValue !== "string") return null;
-  const digits = formattedValue.replace(/\D/g, "");
-  if (digits.length !== 8) return null;
-  const mm = parseInt(digits.slice(0, 2), 10);
-  const dd = parseInt(digits.slice(2, 4), 10);
-  const yyyy = parseInt(digits.slice(4, 8), 10);
-  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
-  const dt = new Date(yyyy, mm - 1, dd);
-  if (dt.getFullYear() !== yyyy || dt.getMonth() !== mm - 1 || dt.getDate() !== dd) return null;
-  return `${yyyy}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
-};
-
 /** Timestamp para ordenar comentarios del historial (más reciente primero) */
 const getComentarioHistorialOrdenMs = (c) => {
   const raw =
@@ -110,8 +89,92 @@ const getComentarioHistorialOrdenMs = (c) => {
   return Number.isFinite(nid) ? nid : 0;
 };
 
+const toPositiveUserId = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** Usuario asignado a la tarea (quien puede completarla según backend). */
+const getTareaAsignadoUserId = (t) => {
+  if (!t) return null;
+  return (
+    toPositiveUserId(t.assign_to_user_id) ??
+    toPositiveUserId(t.assigned_user_id) ??
+    toPositiveUserId(t.assign_to_user?.id) ??
+    toPositiveUserId(t.assigned_user?.id) ??
+    toPositiveUserId(t.assigned_to_user_id) ??
+    toPositiveUserId(t.assigned_to_user?.id) ??
+    toPositiveUserId(t.log?.assigned_user?.id) ??
+    toPositiveUserId(t.log?.assigned_user_id) ??
+    toPositiveUserId(t.log?.assign_to_user?.id) ??
+    toPositiveUserId(t.log?.assign_to_user_id) ??
+    null
+  );
+};
+
+const getAuthUserId = (u) => {
+  if (!u) return null;
+  return toPositiveUserId(u.id ?? u.user_id ?? u.userId);
+};
+
+const normalizeNombre = (s) =>
+  String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+/** Nombre visible del usuario en sesión (para coincidir con `asignado_a` cuando no hay ID). */
+const getAuthNombreVisible = (u) => {
+  if (!u) return "";
+  return (
+    u.name ??
+    u.nombre ??
+    u.full_name ??
+    u.username ??
+    ""
+  );
+};
+
+/**
+ * Textos posibles de "asignado a" en el payload (incl. `asignado_a` como string).
+ */
+const getTareaAsignadoNombres = (t) => {
+  if (!t) return [];
+  const candidates = [
+    t.asignado_a,
+    t.asignadoA,
+    t.assign_to_user_name,
+    t.assigned_to_name,
+    t.assign_to_user?.name,
+    t.assigned_user?.name,
+    t.assigned_to_user?.name,
+    t.task?.asignado_a,
+    t.task?.assign_to_user?.name,
+    t.log?.asignado_a,
+    t.log?.assign_to_user?.name,
+    t.log?.assigned_user?.name,
+  ];
+  return candidates
+    .map((x) => (typeof x === "string" ? normalizeNombre(x) : ""))
+    .filter(Boolean);
+};
+
+const coincideAsignacionPorNombre = (u, t) => {
+  const mine = normalizeNombre(getAuthNombreVisible(u));
+  if (!mine) return false;
+  const nombres = getTareaAsignadoNombres(t);
+  return nombres.some((n) => n && n === mine);
+};
+
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
-  const { hasPermission, hasRole } = useAuth();
+  const { hasPermission, hasRole, user } = useAuth();
+
+  const puedeMarcarCompletada = useMemo(() => {
+    const uid = getAuthUserId(user);
+    const aid = getTareaAsignadoUserId(tarea);
+    if (uid && aid && uid === aid) return true;
+    return coincideAsignacionPorNombre(user, tarea);
+  }, [user, tarea]);
   // ✅ Log de depuración para verificar la estructura de la tarea (solo una vez por tarea)
   const tareaLogRef = useRef(null);
   useEffect(() => {
@@ -182,13 +245,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [scheduledDate, setScheduledDate] = useState(normalizeDateForInput(tarea?.scheduled_date) || "");
   const [dueDate, setDueDate] = useState(normalizeDateForInput(tarea?.due_date) || "");
-  /** Valores mostrados en los campos mes-día-año (MM-DD-AAAA) */
-  const [scheduledDateMdy, setScheduledDateMdy] = useState(() =>
-    ymdIsoToMdySlash(normalizeDateForInput(tarea?.scheduled_date) || "")
-  );
-  const [dueDateMdy, setDueDateMdy] = useState(() =>
-    ymdIsoToMdySlash(normalizeDateForInput(tarea?.due_date) || "")
-  );
   // Fecha de vencimiento: bloqueada para todos; editable solo tras ingresar la clave del super admin
   const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
   const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
@@ -219,8 +275,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   const quillSelectionBoundToRef = useRef(null);
   const usuariosCargadosRef = useRef(false);
   const tareaIdRef = useRef(null);
-  const lastValidScheduledYmdRef = useRef(normalizeDateForInput(tarea?.scheduled_date) || "");
-  const lastValidDueYmdRef = useRef(normalizeDateForInput(tarea?.due_date) || "");
 
   // ✅ Hook para manejo de menciones en Quill
   const {
@@ -236,75 +290,8 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     setMentionedUserIds(ids);
   });
 
-  const onScheduledDateMdyChange = ({ formattedValue }) => {
-    setScheduledDateMdy(formattedValue);
-    const digits = (formattedValue || "").replace(/\D/g, "");
-    if (digits.length === 0) {
-      setScheduledDate("");
-      lastValidScheduledYmdRef.current = "";
-      return;
-    }
-    const ymd = parseMdySlashToYmdIso(formattedValue);
-    if (ymd) lastValidScheduledYmdRef.current = ymd;
-    setScheduledDate(ymd || "");
-  };
-
-  const onDueDateMdyChange = ({ formattedValue }) => {
-    setDueDateMdy(formattedValue);
-    const digits = (formattedValue || "").replace(/\D/g, "");
-    if (digits.length === 0) {
-      setDueDate("");
-      lastValidDueYmdRef.current = "";
-      return;
-    }
-    const ymd = parseMdySlashToYmdIso(formattedValue);
-    if (ymd) lastValidDueYmdRef.current = ymd;
-    setDueDate(ymd || "");
-  };
-
   const isDueDateLocked = tarea?.id && !dueDateUnlocked;
 
-  /** Normaliza la máscara MM-DD-AAAA y evita desajustes visuales entre navegadores (valor alineado al ISO guardado). */
-  const onScheduledDateMdyBlur = (e) => {
-    const raw = e?.target?.value ?? "";
-    const digits = String(raw).replace(/\D/g, "");
-    if (!digits.length) {
-      setScheduledDate("");
-      setScheduledDateMdy("");
-      lastValidScheduledYmdRef.current = "";
-      return;
-    }
-    const ymd = parseMdySlashToYmdIso(String(raw));
-    if (ymd) {
-      setScheduledDate(ymd);
-      setScheduledDateMdy(ymdIsoToMdySlash(ymd));
-    } else {
-      const fb = lastValidScheduledYmdRef.current;
-      setScheduledDateMdy(fb ? ymdIsoToMdySlash(fb) : "");
-      if (fb) setScheduledDate(fb);
-    }
-  };
-
-  const onDueDateMdyBlur = (e) => {
-    if (isDueDateLocked) return;
-    const raw = e?.target?.value ?? "";
-    const digits = String(raw).replace(/\D/g, "");
-    if (!digits.length) {
-      setDueDate("");
-      setDueDateMdy("");
-      lastValidDueYmdRef.current = "";
-      return;
-    }
-    const ymd = parseMdySlashToYmdIso(String(raw));
-    if (ymd) {
-      setDueDate(ymd);
-      setDueDateMdy(ymdIsoToMdySlash(ymd));
-    } else {
-      const fb = lastValidDueYmdRef.current;
-      setDueDateMdy(fb ? ymdIsoToMdySlash(fb) : "");
-      if (fb) setDueDate(fb);
-    }
-  };
   const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
   const esTareaVencida =
     tarea?.due_date &&
@@ -866,10 +853,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     const dueInit = normalizeDateForInput(tarea?.due_date) || "";
     setScheduledDate(schedInit);
     setDueDate(dueInit);
-    setScheduledDateMdy(ymdIsoToMdySlash(schedInit));
-    setDueDateMdy(ymdIsoToMdySlash(dueInit));
-    lastValidScheduledYmdRef.current = schedInit;
-    lastValidDueYmdRef.current = dueInit;
     setDueDateUnlocked(false);
     setShowDueDatePasswordModal(false);
     setAdminPasswordForDueDate("");
@@ -1203,6 +1186,14 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
     setShowConfirmCompletarModal(false);
     setLoading(true);
     try {
+      if (!puedeMarcarCompletada) {
+        setToastMessage("Solo el usuario asignado a la tarea puede marcarla como completada.");
+        setToastVariant("warning");
+        setShowToast(true);
+        setLoading(false);
+        return;
+      }
+
       // ✅ Validar que tenemos un ID de tarea válido
       const tareaId = tarea?.id || tarea?.task_id || tarea?.tarea_id;
       if (!tareaId) {
@@ -1291,7 +1282,18 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       // Tiempo dedicado: desde inicio de la tarea hasta ahora (liquidación calculada por el front)
       const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
       const { dias, horas, minutos } = durationFromStartToEnd(fechaInicio || new Date(), new Date());
-      await apiRequest(`tareas_operativas/${numericTareaIdFinal}/completar`, "PUT", { dias, horas, minutos });
+      const completarEndpoint = `tareas_operativas/${numericTareaIdFinal}/completar`;
+      try {
+        await apiRequest(completarEndpoint, "PUT", { dias, horas, minutos });
+      } catch (err) {
+        const status = err?.response?.status;
+        // Algunos backends exponen este endpoint como POST (no PUT). Si PUT da 404, reintentar con POST.
+        if (status === 404) {
+          await apiRequest(completarEndpoint, "POST", { dias, horas, minutos });
+        } else {
+          throw err;
+        }
+      }
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
@@ -1476,10 +1478,10 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
   };
 
   const handleActualizarFechas = async () => {
-    const schedYmd = parseMdySlashToYmdIso(scheduledDateMdy);
-    const dueYmd = parseMdySlashToYmdIso(dueDateMdy);
-    if (!schedYmd || !dueYmd) {
-      alert("Ingrese fechas completas y válidas en formato mes-día-año (MM-DD-AAAA).");
+    const schedYmd = normalizeDateForInput(scheduledDate);
+    const dueYmd = normalizeDateForInput(dueDate);
+    if (!schedYmd || !dueYmd || !/^\d{4}-\d{2}-\d{2}$/.test(schedYmd) || !/^\d{4}-\d{2}-\d{2}$/.test(dueYmd)) {
+      alert("Ingrese fechas completas y válidas (MM-DD-YYYY).");
       return;
     }
     if (schedYmd > dueYmd) {
@@ -1533,10 +1535,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
       if (onUpdated) onUpdated(tareaActualizada);
       setScheduledDate(schedYmd);
       setDueDate(dueYmd);
-      setScheduledDateMdy(ymdIsoToMdySlash(schedYmd));
-      setDueDateMdy(ymdIsoToMdySlash(dueYmd));
-      lastValidScheduledYmdRef.current = schedYmd || "";
-      lastValidDueYmdRef.current = dueYmd || "";
       setDueDateUnlocked(false);
       setAdminPasswordForDueDate("");
       setToastVariant("success");
@@ -2241,54 +2239,53 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-calendar-alt text-primary me-1"></i>
-                          Programada: <small className="text-muted">(mes - día - año, MM-DD-AAAA)</small>
+                          Programada
                         </Form.Label>
-                        <PatternFormat
-                          customInput={Form.Control}
-                          format="##-##-####"
-                          mask="_"
-                          placeholder="MM-DD-AAAA"
-                          inputMode="numeric"
-                          value={scheduledDateMdy}
-                          onValueChange={onScheduledDateMdyChange}
-                          onBlur={onScheduledDateMdyBlur}
-                          title={dueDate ? "No puede ser mayor que la fecha de vencimiento" : "Formato: mes - día - año (MM-DD-AAAA)"}
-                          style={{ borderRadius: "6px" }}
+                        <MdyDashDateInput
+                          allowManualEntry
+                          size="sm"
+                          className="rounded"
+                          valueIso={scheduledDate}
+                          minIso="1900-01-01"
+                          maxIso={normalizeDateForInput(dueDate) || "2099-12-31"}
+                          onChangeIso={setScheduledDate}
+                          title={
+                            dueDate
+                              ? "No puede ser posterior a la fecha de vencimiento"
+                              : undefined
+                          }
                         />
-                        {!!scheduledDate && (
-                          <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
-                            {(() => {
-                              const s = formatDateForDisplay(scheduledDate);
-                              return s === "-" ? "" : s;
-                            })()}
-                          </Form.Text>
-                        )}
                       </Form.Group>
                     </Col>
                     <Col>
                       <Form.Group>
                         <Form.Label>
                           <i className="fas fa-clock text-warning me-1"></i>
-                          Vencimiento: <small className="text-muted">(mes - día - año, MM-DD-AAAA)</small>
+                          Vencimiento
                           {isDueDateLocked && (
                             <small className="text-muted ms-2">(requiere clave del super admin)</small>
                           )}
                         </Form.Label>
                         <div className="d-flex gap-2 align-items-start">
-                          <PatternFormat
-                            customInput={Form.Control}
-                            format="##-##-####"
-                            mask="_"
-                            placeholder="MM-DD-AAAA"
-                            inputMode="numeric"
-                            value={dueDateMdy}
-                            onValueChange={onDueDateMdyChange}
-                            onBlur={onDueDateMdyBlur}
-                            disabled={isDueDateLocked}
-                            readOnly={isDueDateLocked}
-                            title={isDueDateLocked ? "Desbloquee con la clave del super administrador para editar" : (scheduledDate ? "No puede ser anterior a la fecha programada" : "Formato: mes - día - año (MM-DD-AAAA)")}
-                            style={{ borderRadius: "6px", flex: 1 }}
-                          />
+                          <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                            <MdyDashDateInput
+                              allowManualEntry
+                              size="sm"
+                              className="rounded"
+                              valueIso={dueDate}
+                              minIso={normalizeDateForInput(scheduledDate) || "1900-01-01"}
+                              maxIso="2099-12-31"
+                              disabled={isDueDateLocked}
+                              onChangeIso={setDueDate}
+                              title={
+                                isDueDateLocked
+                                  ? "Desbloquee con la clave del super administrador para editar"
+                                  : scheduledDate
+                                    ? "No puede ser anterior a la fecha programada"
+                                    : undefined
+                              }
+                            />
+                          </div>
                           {isDueDateLocked && (
                             <Button
                               type="button"
@@ -2302,14 +2299,6 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                             </Button>
                           )}
                         </div>
-                        {!!dueDate && (
-                          <Form.Text className="text-muted d-block" style={{ fontSize: "0.8rem" }}>
-                            {(() => {
-                              const s = formatDateForDisplay(dueDate);
-                              return s === "-" ? "" : s;
-                            })()}
-                          </Form.Text>
-                        )}
                       </Form.Group>
                     </Col>
                   </Row>
@@ -3487,9 +3476,11 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                 <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
                   Agregar Comentario
                 </Button>
-                <Button variant="success" onClick={handleCompletar} disabled={loading || esTareaVencida}>
-                  Marcar completada
-                </Button>
+                {puedeMarcarCompletada && (
+                  <Button variant="success" onClick={handleCompletar} disabled={loading || esTareaVencida}>
+                    Marcar completada
+                  </Button>
+                )}
               </>
             )}
           </>
@@ -3751,7 +3742,7 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         <Button 
           variant="success" 
           onClick={confirmarYCompletarTarea}
-          disabled={loading || esTareaVencida}
+          disabled={loading || esTareaVencida || !puedeMarcarCompletada}
         >
           {loading ? (
             <>

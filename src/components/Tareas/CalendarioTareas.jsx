@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
-import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup, Tooltip, OverlayTrigger } from "react-bootstrap";
-import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt, FaClipboardCheck } from "react-icons/fa";
+import React, { useState, useEffect, useRef } from "react";
+import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup, Tooltip, OverlayTrigger, Alert } from "react-bootstrap";
+import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt, FaClipboardCheck, FaBell } from "react-icons/fa";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
 import ResponderTareaModal from "../Tareas/ResponderTareaModal";
@@ -57,6 +57,13 @@ function normalizeOperativaLite(raw) {
   return t;
 }
 
+function taskStableKey(t) {
+  if (!t || t.id == null && t.task_id == null) return null;
+  const tipo = t.tipo || (t.auditoria || t.item || t.run_id ? "auditoria" : "operativa");
+  const id = t.id ?? t.task_id;
+  return `${tipo}-${id}`;
+}
+
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   const hoy = new Date();
@@ -81,6 +88,18 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [pendientes, setPendientes] = useState(0);
   const [loadingTarea, setLoadingTarea] = useState(false);
   const [fromNotification, setFromNotification] = useState(false);
+
+  /** Claves de tareas ya vistas (para detectar nuevas en refrescos en segundo plano). */
+  const prevTareaKeysRef = useRef(null);
+  const [avisoLateral, setAvisoLateral] = useState({ show: false, message: "" });
+
+  useEffect(() => {
+    if (!avisoLateral.show) return;
+    const t = setTimeout(() => {
+      setAvisoLateral({ show: false, message: "" });
+    }, 12000);
+    return () => clearTimeout(t);
+  }, [avisoLateral.show]);
 
   const diasSemana = ["L", "M", "X", "J", "V", "S", "D"];
   const diasEnMes = new Date(añoActual, mesActual + 1, 0).getDate();
@@ -937,7 +956,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [filtroMenciones, setFiltroMenciones] = useState(false); // ✅ Filtro para mostrar tareas con menciones
 
   React.useEffect(() => {
-    const fetchTareasPorUsuario = async () => {
+    prevTareaKeysRef.current = null;
+
+    const fetchTareasPorUsuario = async ({ silent = false } = {}) => {
       try {
         if (!usuarioSeleccionado) return;
   
@@ -989,19 +1010,47 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         
         // ✅ Combinar ambas listas
         const todasLasTareas = [...tareasOperativas, ...tareasAuditoria];
+
+        const keysActual = new Set(
+          todasLasTareas.map(taskStableKey).filter(Boolean)
+        );
+        const prevKeys = prevTareaKeysRef.current;
+        if (silent && prevKeys) {
+          const nuevas = [...keysActual].filter((k) => !prevKeys.has(k));
+          if (nuevas.length > 0) {
+            setAvisoLateral({
+              show: true,
+              message:
+                nuevas.length === 1
+                  ? "Hay 1 tarea nueva asignada. El calendario ya está actualizado."
+                  : `Hay ${nuevas.length} tareas nuevas. El calendario ya está actualizado.`,
+            });
+          }
+        }
+        prevTareaKeysRef.current = keysActual;
+
         setTareas(todasLasTareas);
         
       } catch (error) {
         console.error("Error al cargar tareas por usuario:", error);
-        setToast({
-          show: true,
-          message: "Error al cargar tareas del usuario",
-          variant: "danger",
-        });
+        if (!silent) {
+          setToast({
+            show: true,
+            message: "Error al cargar tareas del usuario",
+            variant: "danger",
+          });
+        }
       }
     };
   
-    fetchTareasPorUsuario();
+    fetchTareasPorUsuario({ silent: false });
+
+    // Refresco en segundo plano: nuevas asignaciones / cambios desde otros usuarios
+    const interval = setInterval(() => {
+      fetchTareasPorUsuario({ silent: true });
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, [usuarioSeleccionado, filtroMenciones]);
   
   
@@ -1176,7 +1225,42 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         .calendario-tareas-container .position-relative {
           position: relative !important;
         }
+        @keyframes calendario-aviso-lateral-in {
+          from {
+            transform: translateX(110%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .calendario-aviso-lateral {
+          animation: calendario-aviso-lateral-in 0.38s ease-out;
+        }
       `}</style>
+      {avisoLateral.show && avisoLateral.message ? (
+        <Alert
+          variant="info"
+          className="calendario-aviso-lateral shadow-sm border-0 mb-0 d-flex align-items-start gap-2 py-3"
+          style={{
+            position: "fixed",
+            top: "72px",
+            right: 0,
+            zIndex: 1085,
+            maxWidth: "min(380px, calc(100vw - 12px))",
+            borderRadius: "12px 0 0 12px",
+            boxShadow: "0 8px 24px rgba(13, 110, 253, 0.18) !important",
+          }}
+          onClose={() => setAvisoLateral({ show: false, message: "" })}
+          dismissible
+        >
+          <FaBell className="text-primary mt-1 flex-shrink-0" aria-hidden />
+          <div className="small text-dark flex-grow-1" style={{ lineHeight: 1.45 }}>
+            {avisoLateral.message}
+          </div>
+        </Alert>
+      ) : null}
       {/* Header mejorado */}
       <Card className="mb-4 shadow-sm border-0" style={{ position: 'relative', overflow: 'visible' }}>
         <Card.Body className="p-3" style={{ position: 'relative', overflow: 'visible' }}>

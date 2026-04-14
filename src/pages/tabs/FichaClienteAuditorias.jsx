@@ -675,6 +675,18 @@ export default function FichaClienteAuditorias() {
                           const comentariosTarea = comentariosTareas[tareaId] || [];
                           const estaExpandida = tareasExpandidas[tareaId];
                           const estaCargando = loadingComentariosTareas[tareaId];
+                          const fallbackCountRaw =
+                            tarea?.comments_count ??
+                            tarea?.comentarios_count ??
+                            tarea?.commentsCount ??
+                            0;
+                          const fallbackCount = Number(fallbackCountRaw);
+                          const countToShow =
+                            comentariosTarea.length > 0
+                              ? comentariosTarea.length
+                              : Number.isFinite(fallbackCount) && fallbackCount > 0
+                                ? fallbackCount
+                                : 0;
 
                           return (
                             <div className="mt-4 pt-4 border-t border-gray-200">
@@ -688,16 +700,9 @@ export default function FichaClienteAuditorias() {
                                   <span className="font-semibold text-gray-700">
                                     Comentarios de la tarea
                                   </span>
-                                  {comentariosTarea.length > 0 && (
-                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                                      {comentariosTarea.length}
-                                    </span>
-                                  )}
-                                  {tarea.comments_count > 0 && comentariosTarea.length === 0 && (
-                                    <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
-                                      {tarea.comments_count}
-                                    </span>
-                                  )}
+                                  <span className="px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                                    {countToShow}
+                                  </span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   {estaCargando && (

@@ -7,7 +7,7 @@ import apiRequest from "../services/api";
 import FormDireccion from "../components/FormDireccion";
 import CountrySelectWithFlags from "../components/CountrySelect";
 import { NumericFormat } from 'react-number-format';
-import { calcularIngresoAnual } from "../services/calcularIngresoAnual";
+import { computeAnnual } from "../services/ingresos";
 import MediosPagoTablas from './MediosPagoTablas';
 import PrimerContacto from "../components/PrimerContacto";
 import CartaAutorizacion from "./Reports/CartaAutorizacion";
@@ -147,6 +147,7 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
       periodo_ingreso: "",
       ingreso_por_periodo: "",
       ingreso_anual: "",
+      ingreso_ocasional_anual: "",
       ingreso_ocasional: {
         nota_ingreso_ocasional: "",
         periodo: "",
@@ -249,18 +250,6 @@ const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdat
     return phones;
   };
   
-  const recalcularIngresoAnualTotal = (datosEmpleo) => {
-    const montoPrincipal = datosEmpleo.ingreso_por_periodo;
-    const periodoPrincipal = datosEmpleo.periodo_ingreso;
-  
-    const montoOcasional = datosEmpleo.ingreso_ocasional.monto;
-    const periodoOcasional = datosEmpleo.ingreso_ocasional.periodo;
-  
-    const ingresoPrincipal = parseFloat(calcularIngresoAnual(montoPrincipal, periodoPrincipal));
-    const ingresoOcasional = parseFloat(calcularIngresoAnual(montoOcasional, periodoOcasional));
-  
-    return (ingresoPrincipal + ingresoOcasional).toFixed(2);
-  };
   const calcularEdad = (fechaNacimiento) => {
     if (!fechaNacimiento) return "";
     const hoy = new Date();
@@ -401,6 +390,16 @@ const mapClienteDataToForm = (data) => {
       periodo_ingreso: data.periodo_ingreso || "",
       ingreso_por_periodo: data.ingreso_por_periodo || "",
       ingreso_anual: data.ingreso_anual || "",
+      ingreso_ocasional_anual:
+        data.ingreso_ocasional_anual != null && String(data.ingreso_ocasional_anual).trim() !== ""
+          ? String(data.ingreso_ocasional_anual)
+          : (() => {
+              const n = computeAnnual(
+                data.periodo_ingreso_ocasional,
+                data.ingreso_por_periodo_ocasional
+              );
+              return n ? n.toFixed(2) : "";
+            })(),
       ingreso_ocasional: {
         nota_ingreso_ocasional: data.nota_ingreso_ocasional || "",
         periodo: data.periodo_ingreso_ocasional || "",
@@ -585,6 +584,7 @@ useEffect(() => {
       nota_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.nota_ingreso_ocasional,
       periodo_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.periodo,
       ingreso_por_periodo_ocasional: formData.datosEmpleo.ingreso_ocasional.monto,
+      ingreso_ocasional_anual: formData.datosEmpleo.ingreso_ocasional_anual,
 
 
     };
@@ -758,6 +758,7 @@ useEffect(() => {
           <Form.Group>
             <Form.Label>Fecha de Nacimiento</Form.Label>
             <MdyDashDateInput
+              allowManualEntry
               valueIso={normalizeDateForInput(formData.datosPrincipales.fecha_nacimiento)}
               minIso="1900-01-01"
               maxIso="2099-12-31"
@@ -1152,13 +1153,17 @@ const renderDireccionTab = () => (
                     value={formData.datosEmpleo.periodo_ingreso}
                     onChange={(e) => {
                       const value = e.target.value;
-                      const nuevosDatosEmpleo = {
-                        ...formData.datosEmpleo,
-                        periodo_ingreso: value
-                      };
-                      const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
-                      handleInputChange("datosEmpleo", "periodo_ingreso", value);
-                      handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
+                      setFormData((prev) => {
+                        const datosEmpleo = { ...prev.datosEmpleo, periodo_ingreso: value };
+                        const principal = computeAnnual(value, datosEmpleo.ingreso_por_periodo);
+                        return {
+                          ...prev,
+                          datosEmpleo: {
+                            ...datosEmpleo,
+                            ingreso_anual: principal ? principal.toFixed(2) : "",
+                          },
+                        };
+                      });
                     }}
                     
                   >
@@ -1189,13 +1194,17 @@ const renderDireccionTab = () => (
                     allowNegative={false}
                     className="form-control"
                     onValueChange={({ value }) => {
-                      const nuevosDatosEmpleo = {
-                        ...formData.datosEmpleo,
-                        ingreso_por_periodo: value,
-                      };
-                      const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
-                      handleInputChange("datosEmpleo", "ingreso_por_periodo", value);
-                      handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
+                      setFormData((prev) => {
+                        const datosEmpleo = { ...prev.datosEmpleo, ingreso_por_periodo: value };
+                        const principal = computeAnnual(datosEmpleo.periodo_ingreso, value);
+                        return {
+                          ...prev,
+                          datosEmpleo: {
+                            ...datosEmpleo,
+                            ingreso_anual: principal ? principal.toFixed(2) : "",
+                          },
+                        };
+                      });
                     }}
                   />
 
@@ -1243,12 +1252,29 @@ const renderDireccionTab = () => (
       </Row>
       
       <Row className="mb-3">
-        <Col md={6}>
+        <Col md={4}>
           <Form.Group>
             <Form.Label>Período de Ingreso Ocasional</Form.Label>
             <Form.Select
               value={formData.datosEmpleo.ingreso_ocasional.periodo}
-              onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "periodo", e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData((prev) => {
+                  const ingreso_ocasional = {
+                    ...prev.datosEmpleo.ingreso_ocasional,
+                    periodo: value,
+                  };
+                  const datosEmpleo = { ...prev.datosEmpleo, ingreso_ocasional };
+                  const ocasional = computeAnnual(value, ingreso_ocasional.monto);
+                  return {
+                    ...prev,
+                    datosEmpleo: {
+                      ...datosEmpleo,
+                      ingreso_ocasional_anual: ocasional ? ocasional.toFixed(2) : "",
+                    },
+                  };
+                });
+              }}
             >
               <option value="">Seleccione</option>
               <option value="HOUR">HOUR</option>
@@ -1260,7 +1286,7 @@ const renderDireccionTab = () => (
             </Form.Select>
           </Form.Group>
         </Col>
-        <Col md={6}>
+        <Col md={4}>
           <Form.Group>
           <Form.Label>Ingreso por Período ocasional ($)</Form.Label>
               <NumericFormat
@@ -1274,20 +1300,44 @@ const renderDireccionTab = () => (
                 className="form-control"
                 onValueChange={(values) => {
                   const { value } = values;
-                  const nuevosDatosEmpleo = {
-                    ...formData.datosEmpleo,
-                    ingreso_ocasional: {
-                      ...formData.datosEmpleo.ingreso_ocasional,
-                      monto: value
-                    }
-                  };
-                  const nuevoTotal = recalcularIngresoAnualTotal(nuevosDatosEmpleo);
-                  handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "monto", value);
-                  handleInputChange("datosEmpleo", "ingreso_anual", nuevoTotal);
+                  setFormData((prev) => {
+                    const ingreso_ocasional = {
+                      ...prev.datosEmpleo.ingreso_ocasional,
+                      monto: value,
+                    };
+                    const datosEmpleo = { ...prev.datosEmpleo, ingreso_ocasional };
+                    const ocasional = computeAnnual(ingreso_ocasional.periodo, value);
+                    return {
+                      ...prev,
+                      datosEmpleo: {
+                        ...datosEmpleo,
+                        ingreso_ocasional_anual: ocasional ? ocasional.toFixed(2) : "",
+                      },
+                    };
+                  });
                 }}
                 
               />
 
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Ingreso ocasional anual ($)</Form.Label>
+            <NumericFormat
+              value={formData.datosEmpleo.ingreso_ocasional_anual}
+              thousandSeparator=","
+              decimalSeparator="."
+              prefix="$"
+              decimalScale={2}
+              fixedDecimalScale
+              allowNegative={false}
+              className="form-control"
+              onValueChange={(values) => {
+                const { value } = values;
+                handleInputChange("datosEmpleo", "ingreso_ocasional_anual", value);
+              }}
+            />
           </Form.Group>
         </Col>
       </Row>

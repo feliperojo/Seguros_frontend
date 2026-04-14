@@ -7,7 +7,7 @@ import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
-import { calcIngresoFamiliar, parseMoney } from '../services/ingresos';
+import { calcIngresoFamiliar, parseMoney, computeAnnual, formatMoney2 } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
@@ -70,6 +70,15 @@ const unwrapFull = (res) => res?.data ?? res ?? {};
   const n = parseMoney(v ?? "");
   if (!Number.isFinite(n)) return 0;
   return Math.min(Number(n.toFixed(2)), 99999999.99);
+};
+
+/** Si el backend aún no devuelve `ingreso_ocasional_anual`, se deriva del período y el monto. */
+const hydrateIngresoOcasionalAnual = (cli = {}) => {
+  const raw = cli.ingreso_ocasional_anual;
+  if (raw != null && String(raw).trim() !== "") return raw;
+  const n = computeAnnual(cli.periodo_ingreso_ocasional, cli.ingreso_por_periodo_ocasional);
+  if (!n) return "";
+  return formatMoney2(n);
 };
 
 
@@ -154,6 +163,7 @@ const mapClienteForSave = (m) => {
       nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
       periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
       ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
+      ingreso_ocasional_anual: moneyToDecimal(pick("ingreso_ocasional_anual")),
     };
     // Solo incluir campos que tienen valor (no null/undefined)
     // Para telefonos, siempre incluirlo aunque sea array vacío
@@ -211,6 +221,7 @@ const mapClienteForSave = (m) => {
     nota_ingreso_ocasional: pick("nota_ingreso_ocasional"),
     periodo_ingreso_ocasional: pick("periodo_ingreso_ocasional"),
     ingreso_por_periodo_ocasional: moneyToDecimal(pick("ingreso_por_periodo_ocasional")),
+    ingreso_ocasional_anual: moneyToDecimal(pick("ingreso_ocasional_anual")),
     whatsapp: pick("whatsapp") === true,
     telegram: pick("telegram") === true,
     texto_sms: pick("texto_sms") === true,
@@ -388,6 +399,7 @@ const mapFullToMembers = (fullRaw) => {
       nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
       periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
       ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
+      ingreso_ocasional_anual: hydrateIngresoOcasionalAnual(cli),
 
       // metadatos de cobertura
       parentesco: cov.parentesco || "Tomador",
@@ -481,6 +493,7 @@ const mapFullToMembers = (fullRaw) => {
         nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
         periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
         ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
+        ingreso_ocasional_anual: hydrateIngresoOcasionalAnual(cli),
 
         whatsapp: !!cli.whatsapp,
         telegram: !!cli.telegram,
@@ -837,6 +850,33 @@ const handleCreateMemberRemote = async (memberData) => {
     ? memberData.ingreso_anual 
     : (parseMoney(String(memberData.ingreso_anual || "")) || 0);
 
+  const src = memberData?.cliente && typeof memberData.cliente === "object"
+    ? { ...memberData.cliente, ...memberData }
+    : memberData;
+
+  let ingresoOcasionalAnualNum =
+    typeof src?.ingreso_ocasional_anual === "number"
+      ? src.ingreso_ocasional_anual
+      : parseMoney(String(src?.ingreso_ocasional_anual ?? ""));
+  if (!ingresoOcasionalAnualNum) {
+    ingresoOcasionalAnualNum = computeAnnual(
+      src?.periodo_ingreso_ocasional,
+      src?.ingreso_por_periodo_ocasional
+    );
+  }
+
+  const pickStr = (k) => {
+    const v = src?.[k];
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s === "" ? null : s;
+  };
+
+  const pickMoney = (k) => {
+    const n = parseMoney(String(src?.[k] ?? ""));
+    return Number.isFinite(n) && n !== 0 ? Math.min(Number(n.toFixed(2)), 99999999.99) : null;
+  };
+
   // payload mínimo: cliente nuevo + cobertura
   const payload = {
     request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -850,6 +890,27 @@ const handleCreateMemberRemote = async (memberData) => {
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,
       ingreso_anual: ingresoAnual,
+      ...(ingresoOcasionalAnualNum
+        ? {
+            ingreso_ocasional_anual: Math.min(
+              Number(Number(ingresoOcasionalAnualNum).toFixed(2)),
+              99999999.99
+            ),
+          }
+        : {}),
+      ...(pickStr("tipo_ingreso") ? { tipo_ingreso: pickStr("tipo_ingreso") } : {}),
+      ...(pickStr("actividad_economica") ? { actividad_economica: pickStr("actividad_economica") } : {}),
+      ...(pickStr("empleador") ? { empleador: pickStr("empleador") } : {}),
+      ...(pickStr("telefono_empleador") ? { telefono_empleador: pickStr("telefono_empleador") } : {}),
+      ...(pickStr("periodo_ingreso") ? { periodo_ingreso: pickStr("periodo_ingreso") } : {}),
+      ...(pickMoney("ingreso_por_periodo") != null ? { ingreso_por_periodo: pickMoney("ingreso_por_periodo") } : {}),
+      ...(pickStr("nota_ingreso_ocasional") ? { nota_ingreso_ocasional: pickStr("nota_ingreso_ocasional") } : {}),
+      ...(pickStr("periodo_ingreso_ocasional")
+        ? { periodo_ingreso_ocasional: pickStr("periodo_ingreso_ocasional") }
+        : {}),
+      ...(pickMoney("ingreso_por_periodo_ocasional") != null
+        ? { ingreso_por_periodo_ocasional: pickMoney("ingreso_por_periodo_ocasional") }
+        : {}),
       nota: memberData.nota || null,
       // 📞 Enviar arreglo completo de teléfonos y también el campo legacy "telefono"
       telefonos: toApiPhones(memberData.telefonos || []),

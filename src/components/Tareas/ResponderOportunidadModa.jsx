@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Modal,
   Button,
@@ -23,6 +23,7 @@ import {
 import { isTaskOverdue } from "../../utils/taskDueDate";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import MdyDashDateInput from "../common/MdyDashDateInput";
+import { useAuth } from "../../context/AuthContext";
 
 // Constantes para subir archivos
 const RAW = import.meta.env.VITE_API_BASE_URL || "";
@@ -79,6 +80,71 @@ const obtenerLogIdBitacora = (t) => {
   );
 };
 
+const toPositiveUserId = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const getTareaAsignadoUserId = (t) => {
+  if (!t) return null;
+  return (
+    toPositiveUserId(t.assign_to_user_id) ??
+    toPositiveUserId(t.assigned_user_id) ??
+    toPositiveUserId(t.assign_to_user?.id) ??
+    toPositiveUserId(t.assigned_user?.id) ??
+    toPositiveUserId(t.assigned_to_user_id) ??
+    toPositiveUserId(t.assigned_to_user?.id) ??
+    toPositiveUserId(t.log?.assigned_user?.id) ??
+    toPositiveUserId(t.log?.assigned_user_id) ??
+    toPositiveUserId(t.log?.assign_to_user?.id) ??
+    toPositiveUserId(t.log?.assign_to_user_id) ??
+    null
+  );
+};
+
+const getAuthUserId = (u) => {
+  if (!u) return null;
+  return toPositiveUserId(u.id ?? u.user_id ?? u.userId);
+};
+
+const normalizeNombre = (s) =>
+  String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const getAuthNombreVisible = (u) => {
+  if (!u) return "";
+  return u.name ?? u.nombre ?? u.full_name ?? u.username ?? "";
+};
+
+const getTareaAsignadoNombres = (t) => {
+  if (!t) return [];
+  const candidates = [
+    t.asignado_a,
+    t.asignadoA,
+    t.assign_to_user_name,
+    t.assigned_to_name,
+    t.assign_to_user?.name,
+    t.assigned_user?.name,
+    t.assigned_to_user?.name,
+    t.task?.asignado_a,
+    t.task?.assign_to_user?.name,
+    t.log?.asignado_a,
+    t.log?.assign_to_user?.name,
+    t.log?.assigned_user?.name,
+  ];
+  return candidates
+    .map((x) => (typeof x === "string" ? normalizeNombre(x) : ""))
+    .filter(Boolean);
+};
+
+const coincideAsignacionPorNombre = (u, t) => {
+  const mine = normalizeNombre(getAuthNombreVisible(u));
+  if (!mine) return false;
+  return getTareaAsignadoNombres(t).some((n) => n && n === mine);
+};
+
 /** Valor de fecha de tarea siempre como YYYY-MM-DD para API y estado (sin corrimientos por locale del input nativo). */
 const taskDateToIso = (fecha) => {
   if (!fecha) return "";
@@ -86,6 +152,14 @@ const taskDateToIso = (fecha) => {
 };
 
 const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
+  const { user } = useAuth();
+
+  const puedeMarcarCompletada = useMemo(() => {
+    const uid = getAuthUserId(user);
+    const aid = getTareaAsignadoUserId(tarea);
+    if (uid && aid && uid === aid) return true;
+    return coincideAsignacionPorNombre(user, tarea);
+  }, [user, tarea]);
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
   
@@ -1012,6 +1086,10 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
   };
 
   const handleCompletar = async () => {
+    if (!puedeMarcarCompletada) {
+      alert("Solo el usuario asignado a la tarea puede completarla.");
+      return;
+    }
     setLoading(true);
     try {
       if (
@@ -1120,7 +1198,17 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
       // Tiempo dedicado: desde inicio de la tarea hasta ahora (liquidación calculada por el front)
       const fechaInicio = tarea?.created_at || tarea?.scheduled_date || tarea?.fecha_inicio;
       const { dias, horas, minutos } = durationFromStartToEnd(fechaInicio || new Date(), new Date());
-      await apiRequest(`tareas_operativas/${tarea.id}/completar`, "PUT", { dias, horas, minutos });
+      const completarEndpoint = `tareas_operativas/${tarea.id}/completar`;
+      try {
+        await apiRequest(completarEndpoint, "PUT", { dias, horas, minutos });
+      } catch (err) {
+        const status = err?.response?.status;
+        if (status === 404) {
+          await apiRequest(completarEndpoint, "POST", { dias, horas, minutos });
+        } else {
+          throw err;
+        }
+      }
 
       const tareaActualizada = { ...tarea, status: "completed" };
       if (onUpdated) onUpdated(tareaActualizada);
@@ -2509,15 +2597,17 @@ const ResponderOportunidadModal = ({ show, onHide, tarea, onUpdated }) => {
               <i className="fas fa-comment me-1"></i>
               Agregar Comentario
             </Button>
-            <Button 
-              variant="success" 
-              onClick={handleCompletar}
-              disabled={loading || esVencida}
-              style={{ borderRadius: "0.5rem", minWidth: "160px", fontWeight: "600" }}
-            >
-              <i className="fas fa-check-circle me-1"></i>
-              Completar Tarea
-            </Button>
+            {puedeMarcarCompletada && (
+              <Button 
+                variant="success" 
+                onClick={handleCompletar}
+                disabled={loading || esVencida}
+                style={{ borderRadius: "0.5rem", minWidth: "160px", fontWeight: "600" }}
+              >
+                <i className="fas fa-check-circle me-1"></i>
+                Completar Tarea
+              </Button>
+            )}
           </>
         )}
       </Modal.Footer>

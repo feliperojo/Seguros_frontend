@@ -298,6 +298,38 @@ export default function TareasTerminadasPanel({
 
   // Normaliza y DERIVA fechaTermino y fechaInicio (para duración)
   const normalizeTask = (t) => {
+    const toMs = (v) => {
+      if (!v) return null;
+      const ms = new Date(v).getTime();
+      return Number.isNaN(ms) ? null : ms;
+    };
+
+    const getLastCommentMs = (taskLike) => {
+      const buckets = [
+        taskLike?.comentarios,
+        taskLike?.comments,
+        taskLike?.task_comments,
+        taskLike?.taskComments,
+        taskLike?.log?.comentarios,
+        taskLike?.log?.comments,
+      ].filter(Array.isArray);
+
+      let best = null;
+      for (const arr of buckets) {
+        for (const c of arr) {
+          const raw =
+            c?.fecha ||
+            c?.created_at ||
+            c?.updated_at ||
+            c?.createdAt ||
+            c?.updatedAt;
+          const ms = toMs(raw);
+          if (ms != null && (best == null || ms > best)) best = ms;
+        }
+      }
+      return best;
+    };
+
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
     const nota =
       t?.nota ??
@@ -310,19 +342,31 @@ export default function TareasTerminadasPanel({
       "";
 
     const fechaCreacion = t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null;
-    const fechaTermino =
-      t?.fechaTermino ??
-      t?.finished_at ??
-      t?.completed_at ??
-      t?.closed_at ??
-      t?.fecha_cierre ??
-      t?.fecha_termino ??
-      t?.fecha_fin ??
-      t?.fecha ??
-      t?.fechaLimite ??
-      t?.due_at ??
-      t?.scheduled_at ??
-      null;
+    const lastCommentMs = getLastCommentMs(t);
+    const finishedCandidates = [
+      t?.fechaTermino,
+      t?.finished_at,
+      t?.completed_at,
+      t?.closed_at,
+      t?.fecha_cierre,
+      t?.fecha_termino,
+      t?.fecha_fin,
+      t?.ended_at,
+      t?.end_date,
+      t?.completedAt,
+      t?.updated_at, // último recurso razonable si el backend no envía completed_at
+      t?.updatedAt,
+    ];
+
+    let bestFinishMs = null;
+    for (const v of finishedCandidates) {
+      const ms = toMs(v);
+      if (ms != null && (bestFinishMs == null || ms > bestFinishMs)) bestFinishMs = ms;
+    }
+    if (lastCommentMs != null && (bestFinishMs == null || lastCommentMs > bestFinishMs)) {
+      bestFinishMs = lastCommentMs;
+    }
+    const fechaTermino = bestFinishMs != null ? new Date(bestFinishMs).toISOString() : null;
     // Para duración: usar fecha_inicio o scheduled_date si existen, si no fecha de creación
     const fechaInicio =
       t?.fecha_inicio ?? t?.scheduled_date ?? t?.scheduled_at ?? fechaCreacion;

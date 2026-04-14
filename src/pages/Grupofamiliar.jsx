@@ -18,7 +18,7 @@ import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
-import { parseMoney } from "../services/ingresos";
+import { parseMoney, computeAnnual } from "../services/ingresos";
 
 // Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
 const formatDateMdyDash = (value) => {
@@ -264,31 +264,30 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     telefono_2: "us"
   });
 
-  // Calcula el ingreso anual ocasional a partir de (periodo, monto) con la misma lógica
-  // que ya se usa en `Clientes.jsx`. Esto evita que diferencias en el formato del período
-  // (espacios, mayúsculas) o factores provoquen que el ocasional se vaya en 0.
-  const calcularIngresoAnualDesdeOcasional = (periodo, monto) => {
-    const montoNumerico = parseMoney(monto ?? "");
-    if (!montoNumerico) return 0;
-    // Importante: el ingreso ocasional NO se anualiza.
-    // El cliente ajusta el monto según su frecuencia (periodo), por eso sumamos el valor tal cual.
-    return montoNumerico;
-  };
-
   const getIngresoOcasionalAnual = (m) => {
-    // Si el backend ya trae el ingreso ocasional anual en alguna clave, úsalo primero.
+    const anualGuardado =
+      parseMoney(
+        m?.ingreso_ocasional_anual ??
+          m?.cliente?.ingreso_ocasional_anual ??
+          ""
+      ) || 0;
+    if (anualGuardado) return anualGuardado;
+
     const directo =
       parseMoney(
         m?.ingreso_ocasional ??
           m?.ingresoOcasional ??
           m?.incomeOccasional ??
+          m?.cliente?.ingreso_ocasional ??
           ""
       ) || 0;
     if (directo) return directo;
 
-    return calcularIngresoAnualDesdeOcasional(
-      m?.periodo_ingreso_ocasional ?? m?.cliente?.periodo_ingreso_ocasional,
-      m?.ingreso_por_periodo_ocasional ?? m?.cliente?.ingreso_por_periodo_ocasional
+    return (
+      computeAnnual(
+        m?.periodo_ingreso_ocasional ?? m?.cliente?.periodo_ingreso_ocasional,
+        m?.ingreso_por_periodo_ocasional ?? m?.cliente?.ingreso_por_periodo_ocasional
+      ) || 0
     );
   };
 
@@ -558,6 +557,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
         periodo_ingreso_ocasional: cob.cliente?.periodo_ingreso_ocasional || "",
         ingreso_por_periodo_ocasional: cob.cliente?.ingreso_por_periodo_ocasional || "",
+        ingreso_ocasional_anual: cob.cliente?.ingreso_ocasional_anual || "",
         compania_id: cob.compania?.id || null,
         agente: cob.agente || "",
         estado_cobertura: cob.estado_cobertura || "No definido",
@@ -712,6 +712,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   ingreso_anual: ingresoAnualCliente,
                   periodo_ingreso_ocasional: clientData.periodo_ingreso_ocasional || "",
                   ingreso_por_periodo_ocasional: clientData.ingreso_por_periodo_ocasional || "",
+                  ingreso_ocasional_anual: clientData.ingreso_ocasional_anual || "",
                   parentesco: "",
                   fecha_activacion: new Date().toISOString().split("T")[0],
                   fecha_cancelacion: "",

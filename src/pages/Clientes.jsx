@@ -15,6 +15,7 @@ import { Helmet } from "react-helmet-async";
 import { normalizeDateForInput } from "../utils/formatters";
 import TelefonosPro from "../components/fase2/TelefonosPro";
 import { toApiPhones } from "../utils/phone-mappers";
+import { computeAnnual } from "../services/ingresos";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -65,6 +66,7 @@ const Clientes = ({ onClienteCreado, isModal = false }) => {
     nota:"",
     periodo_ingreso_ocasional: "", // Valor por defecto
     ingreso_por_periodo_ocasional: "",
+    ingreso_ocasional_anual: "",
     es_prospecto:false,
     estado_cliente: "cliente",
     primer_contacto: {}, // para guardar el objeto
@@ -231,17 +233,23 @@ const closeModal = () => setShowModal(false);
   
       // Si cambia ingreso_por_periodo o periodo_ingreso, calcular ingreso anual
       if (
-        ['ingreso_por_periodo', 'periodo_ingreso', 'ingreso_por_periodo_ocasional', 'periodo_ingreso_ocasional'].includes(name)
+        ["ingreso_por_periodo", "periodo_ingreso", "ingreso_por_periodo_ocasional", "periodo_ingreso_ocasional"].includes(
+          name
+        )
       ) {
         const newData = {
           ...updatedData,
-          [name]: updatedValue
+          [name]: updatedValue,
         };
-      
-        const anualPrincipal = parseFloat(calcularIngresoAnual(newData.ingreso_por_periodo, newData.periodo_ingreso));
-        const anualOcasional = parseFloat(calcularIngresoAnual(newData.ingreso_por_periodo_ocasional, newData.periodo_ingreso_ocasional));
-      
-        updatedData.ingreso_anual = (anualPrincipal + anualOcasional).toFixed(2);
+
+        const anualPrincipal = computeAnnual(newData.periodo_ingreso, newData.ingreso_por_periodo);
+        const anualOcasional = computeAnnual(
+          newData.periodo_ingreso_ocasional,
+          newData.ingreso_por_periodo_ocasional
+        );
+
+        updatedData.ingreso_anual = anualPrincipal ? anualPrincipal.toFixed(2) : "";
+        updatedData.ingreso_ocasional_anual = anualOcasional ? anualOcasional.toFixed(2) : "";
       }
       
       
@@ -251,28 +259,6 @@ const closeModal = () => setShowModal(false);
   };
 
 
-  // Función para calcular ingreso anual automáticamente - fuera del método guardarCliente
-const calcularIngresoAnual = (monto, periodo) => {
-  let montoNumerico = parseFloat(monto) || 0;
-  
-  switch (periodo) {
-    case 'HOUR':
-      return (montoNumerico * 40 * 52).toFixed(2); // Asumiendo 40 horas por semana
-    case 'WEEKLY P.TIME':
-      return (montoNumerico * 52 * 0.5).toFixed(2); // Asumiendo medio tiempo
-    case 'WEEKLY':
-      return (montoNumerico * 52).toFixed(2);
-    case 'BIWEEKLY':
-      return (montoNumerico * 26).toFixed(2);
-    case 'MONTHLY':
-      return (montoNumerico * 12).toFixed(2);
-    case 'ANNUAL':
-      return montoNumerico.toFixed(2);
-    default:
-      return "0.00";
-  }
-};
-  
   // Función para avanzar al siguiente paso
 
 
@@ -949,6 +935,28 @@ const calcularIngresoAnual = (monto, periodo) => {
 
             </div>
           </div>
+
+        <div className="col-md-3">
+          <label>Ingreso ocasional anual ($)</label>
+          <div className="input-group">
+            <span className="input-group-text">$</span>
+            <input
+              type="text"
+              name="ingreso_ocasional_anual"
+              className="form-control bg-light"
+              readOnly
+              value={
+                formData.ingreso_ocasional_anual
+                  ? parseFloat(formData.ingreso_ocasional_anual).toLocaleString("en-US", {
+                      style: "currency",
+                      currency: "USD",
+                      minimumFractionDigits: 2,
+                    })
+                  : "$0.00"
+              }
+            />
+          </div>
+        </div>
 
         </div>
       </div>

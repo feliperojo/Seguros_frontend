@@ -373,6 +373,7 @@ export default function FichaClienteInfoCompleta() {
 
               {(cliente.periodo_ingreso_ocasional ||
                 cliente.ingreso_por_periodo_ocasional ||
+                cliente.ingreso_ocasional_anual != null ||
                 cliente.nota_ingreso_ocasional) && (
                 <div className="mt-4">
                   <h6 className="border-bottom pb-2 small text-uppercase text-muted">
@@ -398,6 +399,14 @@ export default function FichaClienteInfoCompleta() {
                             ? `$${Number(
                                 cliente.ingreso_por_periodo_ocasional
                               ).toLocaleString()}`
+                            : <NotAvailable />}
+                        </dd>
+
+                        <dt className="col-sm-2">Anual ocasional</dt>
+                        <dd className="col-sm-4">
+                          {cliente.ingreso_ocasional_anual != null &&
+                          String(cliente.ingreso_ocasional_anual).trim() !== ""
+                            ? `$${Number(cliente.ingreso_ocasional_anual).toLocaleString()}`
                             : <NotAvailable />}
                         </dd>
                       </dl>

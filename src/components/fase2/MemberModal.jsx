@@ -446,6 +446,7 @@ export default function MemberModalCreate({
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>
                   <MdyDashDateInput
+                    allowManualEntry
                     valueIso={normalizeDateForInput(data.fechaNacimiento)}
                     minIso="1900-01-01"
                     maxIso="2099-12-31"
