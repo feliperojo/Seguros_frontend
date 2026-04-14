@@ -287,13 +287,27 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       }
       
       // ✅ Normalizar concepto para log si viene en la nueva estructura
-      if (normalizedTask.concepto && !normalizedTask.log?.concept) {
-        if (!normalizedTask.log) {
-          normalizedTask.log = {};
+      {
+        // El modal usa `tarea.log.concept.name`. Aseguramos compatibilidad con múltiples payloads.
+        const conceptName =
+          normalizedTask?.log?.concept?.name ||
+          normalizedTask?.concepto ||
+          normalizedTask?.concept_name ||
+          normalizedTask?.concept?.name ||
+          normalizedTask?.concept?.nombre ||
+          normalizedTask?.concept?.title ||
+          normalizedTask?.log?.concepto ||
+          normalizedTask?.log?.concept_name ||
+          normalizedTask?.log?.concept?.titulo ||
+          null;
+
+        if (conceptName && !normalizedTask.log?.concept?.name) {
+          if (!normalizedTask.log) normalizedTask.log = {};
+          normalizedTask.log.concept = {
+            ...(normalizedTask.log.concept || {}),
+            name: String(conceptName),
+          };
         }
-        normalizedTask.log.concept = {
-          name: normalizedTask.concepto
-        };
       }
       
       // ✅ Normalizar nota para log si viene en la nueva estructura
