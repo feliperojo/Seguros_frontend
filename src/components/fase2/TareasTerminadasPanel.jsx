@@ -8,6 +8,7 @@ import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClient
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
   "done", "completed", "complete", "finished", "resolved", "closed", "completada", "terminada",
+  "completado", "finalizada", "finalizado", "cerrada", "cerrado",
 ]);
 
 const API_PUBLIC_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "") || "/api";
@@ -67,6 +68,8 @@ export default function TareasTerminadasPanel({
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
   const [term, setTerm] = useState("");         // 👈 SOLO UNA VEZ
+  const [hasLoaded, setHasLoaded] = useState(false); // evita peticiones innecesarias
+  const [loadRequested, setLoadRequested] = useState(false); // se activa con el botón
 
   // Estados para adjuntos
   const [adjuntos, setAdjuntos] = useState({}); // { logId: [adjuntos] }
@@ -78,6 +81,20 @@ export default function TareasTerminadasPanel({
   
   // Ref para rastrear qué logIds ya se están cargando o se cargaron
   const logIdsCargandoRef = useRef(new Set());
+
+  // Si cambia el cliente/grupo, volver a "no cargado" (evita peticiones automáticas al navegar)
+  useEffect(() => {
+    setItems([]);
+    setLoading(false);
+    setErrMsg("");
+    setTerm("");
+    setAdjuntos({});
+    setLoadingAdjuntos({});
+    setArchivosExpandidos({});
+    logIdsCargandoRef.current = new Set();
+    setHasLoaded(false);
+    setLoadRequested(false);
+  }, [clienteId, grupoId]);
 
   // ==== Helpers (usan formatDateForDisplay para evitar desfase de 1 día por zona horaria) ====
   const formatDate = (v) => {
@@ -390,6 +407,27 @@ export default function TareasTerminadasPanel({
     };
   };
 
+  const isCompletedLike = useCallback((t) => {
+    const st = String(t?.estado ?? t?.status ?? "").toLowerCase().trim();
+    if (COMPLETED_STATES.has(st)) return true;
+    // Fallback: si el backend no marca status pero sí trae fecha de cierre/termino
+    const hasFinishDate = !!(
+      t?.fechaTermino ||
+      t?.finished_at ||
+      t?.completed_at ||
+      t?.closed_at ||
+      t?.fecha_cierre ||
+      t?.fecha_termino ||
+      t?.fecha_fin ||
+      t?.ended_at ||
+      t?.end_date ||
+      t?.completedAt
+    );
+    if (hasFinishDate) return true;
+    // Último recurso: algunos backends actualizan updated_at al cerrar sin status consistente
+    return false;
+  }, []);
+
   // Orden: terminada desc; si no hay, creada desc
   const sortTasks = (a, b) => {
     const at = a.fechaTermino ? new Date(a.fechaTermino).getTime() : -Infinity;
@@ -409,7 +447,12 @@ export default function TareasTerminadasPanel({
       case "resolved":
       case "closed":
       case "completada":
+      case "completado":
       case "terminada":
+      case "finalizada":
+      case "finalizado":
+      case "cerrada":
+      case "cerrado":
         return "Completada";
       case "cancelled":
       case "canceled":
@@ -426,18 +469,21 @@ export default function TareasTerminadasPanel({
       setItems([]);
       setLoading(false);
       setErrMsg("");
+      setHasLoaded(false);
+      setLoadRequested(false);
       return;
     }
+
+    // No cargar automáticamente: solo cuando el usuario lo solicite
+    if (!loadRequested) return;
 
     let cancelled = false;
     (async () => {
       setLoading(true);
       setErrMsg("");
       try {
-        const list = (await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage)).filter((t) => {
-          const st = String(t?.estado ?? t?.status ?? "").toLowerCase();
-          return COMPLETED_STATES.has(st); // incluye "completed"
-        });
+        const rawList = await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage);
+        const list = (Array.isArray(rawList) ? rawList : []).filter(isCompletedLike);
 
         const unique = Object.values(
           list.reduce((acc, t) => {
@@ -470,7 +516,10 @@ export default function TareasTerminadasPanel({
           );
         }
 
-        if (!cancelled) setItems(unique);
+        if (!cancelled) {
+          setItems(unique);
+          setHasLoaded(true);
+        }
       } catch (err) {
         if (!cancelled) {
           console.error("TareasTerminadasPanel:", err?.response?.status, err?.message, err);
@@ -480,6 +529,7 @@ export default function TareasTerminadasPanel({
               : "No fue posible cargar las tareas terminadas."
           );
           setItems([]);
+          setHasLoaded(true);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -489,7 +539,7 @@ export default function TareasTerminadasPanel({
     return () => {
       cancelled = true;
     };
-  }, [clienteId, grupoId, perPage]);
+  }, [clienteId, grupoId, perPage, loadRequested, isCompletedLike]);
 
   // ==== Búsqueda local (usa el ÚNICO 'term') ====
   const filtered = useMemo(() => {
@@ -514,23 +564,6 @@ export default function TareasTerminadasPanel({
     }
     return Array.from(map.entries());
   }, [filtered]);
-
-  const adjuntosLogIdsKey = useMemo(() => {
-    if (!Array.isArray(filtered) || filtered.length === 0) return "";
-    const ids = filtered
-      .map((task) => getTaskIds(task).logId)
-      .filter(Boolean)
-      .map(String)
-      .sort();
-    return ids.join(",");
-  }, [filtered, getTaskIds]);
-
-  useEffect(() => {
-    if (!adjuntosLogIdsKey) return;
-    adjuntosLogIdsKey.split(",").forEach((id) => {
-      if (id) cargarAdjuntos(id);
-    });
-  }, [adjuntosLogIdsKey, cargarAdjuntos]);
 
   // ==== Render ====
   return (
@@ -615,6 +648,47 @@ export default function TareasTerminadasPanel({
       <div className="card-header py-2 d-flex justify-content-between align-items-center">
         <div className="text-primary fw-semibold">Tareas Terminadas</div>
 
+        <div className="d-flex align-items-center gap-2">
+          {!loadRequested && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-primary"
+              onClick={() => {
+                setErrMsg("");
+                setItems([]);
+                setAdjuntos({});
+                setLoadingAdjuntos({});
+                setArchivosExpandidos({});
+                setLoadRequested(true);
+              }}
+              disabled={!clienteId || !grupoId || loading}
+              title={!clienteId || !grupoId ? "Selecciona un cliente/grupo para cargar" : "Cargar tareas terminadas"}
+            >
+              Cargar tareas terminadas
+            </button>
+          )}
+
+          {loadRequested && hasLoaded && (
+            <button
+              type="button"
+              className="btn btn-sm btn-outline-secondary"
+              onClick={() => {
+                setTerm("");
+                setItems([]);
+                setErrMsg("");
+                setAdjuntos({});
+                setLoadingAdjuntos({});
+                setArchivosExpandidos({});
+                setHasLoaded(false);
+                setLoadRequested(false);
+              }}
+              disabled={loading}
+              title="Ocultar y liberar datos (no vuelve a pedir hasta que lo cargues de nuevo)"
+            >
+              Ocultar
+            </button>
+          )}
+
         <div className="input-group input-group-sm" style={{ maxWidth: 260 }}>
           <span className="input-group-text">Filtrar / Buscar</span>
           <input
@@ -622,6 +696,7 @@ export default function TareasTerminadasPanel({
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Título, responsable, nota…"
+            disabled={!loadRequested || loading}
           />
           {!!term && (
             <button className="btn btn-outline-secondary" onClick={() => setTerm("")}>
@@ -629,9 +704,16 @@ export default function TareasTerminadasPanel({
             </button>
           )}
         </div>
+        </div>
       </div>
 
       <div className="card-body">
+        {!loadRequested && (
+          <div className="text-muted small">
+            Presiona <strong>Cargar tareas terminadas</strong> para traerlas. Así evitamos peticiones cuando no necesitas verlas.
+          </div>
+        )}
+
         {loading && (
           <div className="d-flex align-items-center text-muted small mb-2">
             <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true" />
@@ -641,11 +723,11 @@ export default function TareasTerminadasPanel({
 
         {!loading && errMsg && <div className="text-danger small">{errMsg}</div>}
 
-        {!loading && !errMsg && groups.length === 0 && (
+        {!loading && loadRequested && !errMsg && groups.length === 0 && (
           <div className="text-muted small">{emptyMessage}</div>
         )}
 
-        {!loading && !errMsg && groups.map(([label, arr]) => (
+        {!loading && loadRequested && !errMsg && groups.map(([label, arr]) => (
           <div key={label} className="mb-3">
             <div className="text-center small text-muted mb-2">{label}</div>
 
@@ -712,6 +794,9 @@ export default function TareasTerminadasPanel({
                     const adjuntosLog = adjuntos[logId] || [];
                     const estaCargandoAdjuntos = loadingAdjuntos[logId];
                     const imagenesAdjuntas = adjuntosLog.filter(esImagen);
+
+                    // No precargar adjuntos: solo mostrar previews si ya fueron cargados al expandir
+                    if (!archivosExpandidos[logId] && adjuntosLog.length === 0) return null;
 
                     // Mostrar spinner si está cargando
                     if (estaCargandoAdjuntos) {
@@ -825,23 +910,13 @@ export default function TareasTerminadasPanel({
                     const estaCargandoAdjuntos = loadingAdjuntos[logId];
                     const estaExpandido = archivosExpandidos[logId];
 
-                    if (estaCargandoAdjuntos) {
-                      return null; // Ya se muestra arriba
-                    }
-
-                    if (adjuntosLog.length === 0) return null;
+                    // Mostrar botón incluso si aún no se han cargado adjuntos (lazy)
+                    const totalCargados = adjuntosLog.length;
 
                     const imagenesCount = adjuntosLog.filter(esImagen).length;
                     const pdfsCount = adjuntosLog.filter(esPDF).length;
                     const wordsCount = adjuntosLog.filter(esWord).length;
                     const otrosCount = adjuntosLog.length - imagenesCount - pdfsCount - wordsCount;
-                    
-                    // Solo mostrar sección expandible si hay archivos que no sean imágenes
-                    // o si hay más de 4 imágenes (para permitir ver todas)
-                    const hayArchivosNoImagen = pdfsCount > 0 || wordsCount > 0 || otrosCount > 0;
-                    const hayMasDe4Imagenes = imagenesCount > 4;
-                    
-                    if (!hayArchivosNoImagen && !hayMasDe4Imagenes) return null;
 
                     return (
                       <div className="mt-3">
@@ -854,10 +929,17 @@ export default function TareasTerminadasPanel({
                           <div className="d-flex align-items-center gap-2">
                             <FaPaperclip className="text-primary" />
                             <strong>Archivos adjuntos</strong>
-                            <span className="badge bg-primary rounded-pill">
-                              {adjuntosLog.length} {adjuntosLog.length === 1 ? "archivo" : "archivos"}
-                            </span>
-                            {(imagenesCount > 0 || pdfsCount > 0 || wordsCount > 0) && (
+                            {estaCargandoAdjuntos ? (
+                              <span className="text-muted small d-flex align-items-center">
+                                <Spinner animation="border" size="sm" className="me-2" />
+                                Cargando…
+                              </span>
+                            ) : (
+                              <span className="badge bg-primary rounded-pill">
+                                {totalCargados} {totalCargados === 1 ? "archivo" : "archivos"}
+                              </span>
+                            )}
+                            {(totalCargados > 0 && (imagenesCount > 0 || pdfsCount > 0 || wordsCount > 0 || otrosCount > 0)) && (
                               <div className="d-flex align-items-center gap-2 ms-2">
                                 {imagenesCount > 0 && (
                                   <span className="text-muted small">
@@ -887,6 +969,12 @@ export default function TareasTerminadasPanel({
 
                         {estaExpandido && (
                           <div className="mt-2 d-flex flex-wrap gap-2">
+                            {estaCargandoAdjuntos && (
+                              <div className="text-muted small">Cargando adjuntos…</div>
+                            )}
+                            {!estaCargandoAdjuntos && adjuntosLog.length === 0 && (
+                              <div className="text-muted small">No hay adjuntos para esta tarea.</div>
+                            )}
                             {adjuntosLog.map((adjunto) => {
                               const esImg = esImagen(adjunto);
                               const esPdf = esPDF(adjunto);
