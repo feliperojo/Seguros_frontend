@@ -371,7 +371,28 @@ export default function TareasTerminadasPanel({
       t?.ended_at,
       t?.end_date,
       t?.completedAt,
+      // A veces el API manda las fechas dentro de `log` o `task`
+      t?.log?.fechaTermino,
+      t?.log?.finished_at,
+      t?.log?.completed_at,
+      t?.log?.closed_at,
+      t?.log?.fecha_cierre,
+      t?.log?.fecha_termino,
+      t?.log?.fecha_fin,
+      t?.log?.ended_at,
+      t?.log?.end_date,
+      t?.task?.fechaTermino,
+      t?.task?.finished_at,
+      t?.task?.completed_at,
+      t?.task?.closed_at,
+      t?.task?.fecha_cierre,
+      t?.task?.fecha_termino,
+      t?.task?.fecha_fin,
+      t?.task?.ended_at,
+      t?.task?.end_date,
       t?.updated_at, // último recurso razonable si el backend no envía completed_at
+      t?.log?.updated_at,
+      t?.task?.updated_at,
       t?.updatedAt,
     ];
 
@@ -421,7 +442,25 @@ export default function TareasTerminadasPanel({
       t?.fecha_fin ||
       t?.ended_at ||
       t?.end_date ||
-      t?.completedAt
+      t?.completedAt ||
+      t?.log?.fechaTermino ||
+      t?.log?.finished_at ||
+      t?.log?.completed_at ||
+      t?.log?.closed_at ||
+      t?.log?.fecha_cierre ||
+      t?.log?.fecha_termino ||
+      t?.log?.fecha_fin ||
+      t?.log?.ended_at ||
+      t?.log?.end_date ||
+      t?.task?.fechaTermino ||
+      t?.task?.finished_at ||
+      t?.task?.completed_at ||
+      t?.task?.closed_at ||
+      t?.task?.fecha_cierre ||
+      t?.task?.fecha_termino ||
+      t?.task?.fecha_fin ||
+      t?.task?.ended_at ||
+      t?.task?.end_date
     );
     if (hasFinishDate) return true;
     // Último recurso: algunos backends actualizan updated_at al cerrar sin status consistente
