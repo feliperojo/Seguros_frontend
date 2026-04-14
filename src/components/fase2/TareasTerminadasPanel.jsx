@@ -317,6 +317,32 @@ export default function TareasTerminadasPanel({
   const normalizeTask = (t) => {
     const toMs = (v) => {
       if (!v) return null;
+      if (v instanceof Date) {
+        const ms = v.getTime();
+        return Number.isNaN(ms) ? null : ms;
+      }
+      // Soporte para formatos del backend tipo "04/14/2026 16:34:59" o "04/14/2026"
+      if (typeof v === "string") {
+        const s = v.trim();
+        // ISO / RFC: delegar al parser nativo
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+          const ms = new Date(s).getTime();
+          return Number.isNaN(ms) ? null : ms;
+        }
+        // MM/DD/YYYY HH:mm:ss (o sin hora)
+        const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+        if (m) {
+          const mm = Number(m[1]);
+          const dd = Number(m[2]);
+          const yyyy = Number(m[3]);
+          const hh = Number(m[4] ?? 0);
+          const mi = Number(m[5] ?? 0);
+          const ss = Number(m[6] ?? 0);
+          const d = new Date(yyyy, mm - 1, dd, hh, mi, ss);
+          const ms = d.getTime();
+          return Number.isNaN(ms) ? null : ms;
+        }
+      }
       const ms = new Date(v).getTime();
       return Number.isNaN(ms) ? null : ms;
     };
@@ -365,6 +391,11 @@ export default function TareasTerminadasPanel({
       t?.finished_at,
       t?.completed_at,
       t?.closed_at,
+      // Campos comunes en tu backend
+      t?.fecha_raw,
+      t?.last_activity_at_iso,
+      t?.last_activity_at,
+      t?.fecha,
       t?.fecha_cierre,
       t?.fecha_termino,
       t?.fecha_fin,
@@ -376,6 +407,10 @@ export default function TareasTerminadasPanel({
       t?.log?.finished_at,
       t?.log?.completed_at,
       t?.log?.closed_at,
+      t?.log?.fecha_raw,
+      t?.log?.last_activity_at_iso,
+      t?.log?.last_activity_at,
+      t?.log?.fecha,
       t?.log?.fecha_cierre,
       t?.log?.fecha_termino,
       t?.log?.fecha_fin,
@@ -385,6 +420,10 @@ export default function TareasTerminadasPanel({
       t?.task?.finished_at,
       t?.task?.completed_at,
       t?.task?.closed_at,
+      t?.task?.fecha_raw,
+      t?.task?.last_activity_at_iso,
+      t?.task?.last_activity_at,
+      t?.task?.fecha,
       t?.task?.fecha_cierre,
       t?.task?.fecha_termino,
       t?.task?.fecha_fin,
@@ -430,41 +469,8 @@ export default function TareasTerminadasPanel({
 
   const isCompletedLike = useCallback((t) => {
     const st = String(t?.estado ?? t?.status ?? "").toLowerCase().trim();
-    if (COMPLETED_STATES.has(st)) return true;
-    // Fallback: si el backend no marca status pero sí trae fecha de cierre/termino
-    const hasFinishDate = !!(
-      t?.fechaTermino ||
-      t?.finished_at ||
-      t?.completed_at ||
-      t?.closed_at ||
-      t?.fecha_cierre ||
-      t?.fecha_termino ||
-      t?.fecha_fin ||
-      t?.ended_at ||
-      t?.end_date ||
-      t?.completedAt ||
-      t?.log?.fechaTermino ||
-      t?.log?.finished_at ||
-      t?.log?.completed_at ||
-      t?.log?.closed_at ||
-      t?.log?.fecha_cierre ||
-      t?.log?.fecha_termino ||
-      t?.log?.fecha_fin ||
-      t?.log?.ended_at ||
-      t?.log?.end_date ||
-      t?.task?.fechaTermino ||
-      t?.task?.finished_at ||
-      t?.task?.completed_at ||
-      t?.task?.closed_at ||
-      t?.task?.fecha_cierre ||
-      t?.task?.fecha_termino ||
-      t?.task?.fecha_fin ||
-      t?.task?.ended_at ||
-      t?.task?.end_date
-    );
-    if (hasFinishDate) return true;
-    // Último recurso: algunos backends actualizan updated_at al cerrar sin status consistente
-    return false;
+    // Requisito: SOLO traer tareas realmente terminadas por estado.
+    return COMPLETED_STATES.has(st);
   }, []);
 
   // Orden: terminada desc; si no hay, creada desc
@@ -524,30 +530,69 @@ export default function TareasTerminadasPanel({
         const rawList = await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage);
         const list = (Array.isArray(rawList) ? rawList : []).filter(isCompletedLike);
 
-        const unique = Object.values(
+        // Dedupe sin normalizar aún (para poder enriquecer antes de derivar fechas)
+        const uniqueRaw = Object.values(
           list.reduce((acc, t) => {
             if (t && t.id != null) acc[t.id] = t;
             return acc;
           }, {})
-        )
-          .map(normalizeTask)
-          .sort(sortTasks);
+        );
 
-        const sinBitacora = unique.filter((norm) => !pickBitacoraIdFromRaw(norm.__raw));
-        if (sinBitacora.length > 0) {
+        const rawHasFinishDate = (t) =>
+          !!(
+            t?.fechaTermino ||
+            t?.finished_at ||
+            t?.completed_at ||
+            t?.closed_at ||
+            t?.fecha_cierre ||
+            t?.fecha_termino ||
+            t?.fecha_fin ||
+            t?.ended_at ||
+            t?.end_date ||
+            t?.completedAt ||
+            t?.log?.fechaTermino ||
+            t?.log?.finished_at ||
+            t?.log?.completed_at ||
+            t?.log?.closed_at ||
+            t?.log?.fecha_cierre ||
+            t?.log?.fecha_termino ||
+            t?.log?.fecha_fin ||
+            t?.log?.ended_at ||
+            t?.log?.end_date ||
+            t?.task?.fechaTermino ||
+            t?.task?.finished_at ||
+            t?.task?.completed_at ||
+            t?.task?.closed_at ||
+            t?.task?.fecha_cierre ||
+            t?.task?.fecha_termino ||
+            t?.task?.fecha_fin ||
+            t?.task?.ended_at ||
+            t?.task?.end_date
+          );
+
+        // Enriquecer SOLO si faltan datos críticos (bitácora o fecha de término)
+        const needDetail = uniqueRaw.filter((raw) => {
+          const tid = raw?.id;
+          if (tid == null) return false;
+          const lacksBitacora = !pickBitacoraIdFromRaw(raw);
+          const lacksFinish = !rawHasFinishDate(raw);
+          return lacksBitacora || lacksFinish;
+        });
+
+        if (needDetail.length > 0) {
           await Promise.all(
-            sinBitacora.map(async (norm) => {
-              const tid = norm.id;
+            needDetail.map(async (raw) => {
+              const tid = raw?.id;
               if (tid == null) return;
               try {
                 const detailRes = await apiRequest(`tareas_operativas/${tid}`, "GET");
                 const d = detailRes?.data ?? detailRes?.task ?? detailRes;
                 if (!d || typeof d !== "object") return;
-                norm.__raw = {
-                  ...(norm.__raw || {}),
+                Object.assign(raw, {
                   ...d,
-                  log: d.log ?? (norm.__raw || {}).log,
-                };
+                  log: d.log ?? raw.log,
+                  task: d.task ?? raw.task,
+                });
               } catch {
                 /* ignorar */
               }
@@ -555,8 +600,10 @@ export default function TareasTerminadasPanel({
           );
         }
 
+        const normalized = uniqueRaw.map(normalizeTask).sort(sortTasks);
+
         if (!cancelled) {
-          setItems(unique);
+          setItems(normalized);
           setHasLoaded(true);
         }
       } catch (err) {

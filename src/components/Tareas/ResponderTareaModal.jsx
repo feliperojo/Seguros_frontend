@@ -1297,7 +1297,27 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
         }
       }
 
-      const tareaActualizada = { ...tarea, status: "completed" };
+      // ✅ IMPORTANTE: después de completar, refrescar el detalle para obtener completed_at/closed_at/log actualizado
+      // (si solo cambiamos status localmente, algunos listados se quedan sin "fecha terminada")
+      let freshTask = null;
+      try {
+        const freshRes = await apiRequest(`tareas_operativas/${numericTareaIdFinal}`, "GET");
+        freshTask = freshRes?.data ?? freshRes?.task ?? freshRes ?? null;
+      } catch (e) {
+        // No bloquear si el refresh falla: seguimos con el fallback local
+        if (import.meta.env.DEV) console.warn("⚠️ No se pudo refrescar tarea completada:", e?.message || e);
+      }
+
+      const tareaActualizada = {
+        ...tarea,
+        ...(freshTask && typeof freshTask === "object" ? freshTask : {}),
+        status: "completed",
+        estado: "completed",
+        completed_at:
+          (freshTask && (freshTask.completed_at || freshTask.closed_at || freshTask.finished_at)) ||
+          tarea?.completed_at ||
+          new Date().toISOString(),
+      };
       if (onUpdated) onUpdated(tareaActualizada);
       
       // Limpiar archivos después de subirlos
