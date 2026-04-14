@@ -16,6 +16,29 @@ const isoYmd = (v) => {
 
 const formatMdyFromDigits = (digits) => chunkJoin(digits.slice(0, 8), [2, 2, 4]);
 
+const countDigitsBefore = (s, idx) => {
+  const end = Math.max(0, Math.min(idx ?? 0, s?.length ?? 0));
+  let n = 0;
+  for (let i = 0; i < end; i++) {
+    const c = s[i];
+    if (c >= "0" && c <= "9") n++;
+  }
+  return n;
+};
+
+const caretFromDigitIndex = (formatted, digitIndex) => {
+  const target = Math.max(0, digitIndex ?? 0);
+  let seen = 0;
+  for (let i = 0; i < (formatted?.length ?? 0); i++) {
+    const c = formatted[i];
+    if (c >= "0" && c <= "9") {
+      seen++;
+      if (seen >= target) return i + 1;
+    }
+  }
+  return formatted?.length ?? 0;
+};
+
 function MdyDashDateInputReadonly({
   valueIso,
   onChangeIso,
@@ -138,6 +161,7 @@ function MdyDashDateInputEditable({
   const dateRef = React.useRef(null);
   const textRef = React.useRef(null);
   const focusedRef = React.useRef(false);
+  const pendingSelectionRef = React.useRef(null);
 
   const iso = isoYmd(valueIso);
   const syncedDisplay = React.useMemo(() => {
@@ -187,6 +211,19 @@ function MdyDashDateInputEditable({
     }
   }, [syncedDisplay]);
 
+  React.useLayoutEffect(() => {
+    const sel = pendingSelectionRef.current;
+    if (!sel) return;
+    pendingSelectionRef.current = null;
+    const el = textRef.current;
+    if (!el) return;
+    try {
+      el.setSelectionRange(sel.start, sel.end);
+    } catch {
+      // noop
+    }
+  }, [text]);
+
   const commitText = React.useCallback(() => {
     const r = tryParseCommitted(text);
     if (!text.trim()) {
@@ -206,7 +243,10 @@ function MdyDashDateInputEditable({
   }, [text, tryParseCommitted, syncedDisplay, iso, emitIso]);
 
   const handleTextChange = (e) => {
+    const inputEl = e.currentTarget;
     const raw = e.target.value;
+    const selStart = inputEl?.selectionStart ?? raw.length;
+    const selEnd = inputEl?.selectionEnd ?? raw.length;
     const tryNorm = normalizeDateForInput(raw);
     if (
       tryNorm &&
@@ -215,12 +255,19 @@ function MdyDashDateInputEditable({
     ) {
       const disp = formatDateForDisplay(tryNorm);
       if (disp !== "-") {
+        pendingSelectionRef.current = { start: disp.length, end: disp.length };
         setText(disp);
         return;
       }
     }
     const d = onlyDigits(raw).slice(0, 8);
-    setText(formatMdyFromDigits(d));
+    const next = formatMdyFromDigits(d);
+    const startDigits = countDigitsBefore(raw, selStart);
+    const endDigits = countDigitsBefore(raw, selEnd);
+    const nextStart = caretFromDigitIndex(next, startDigits);
+    const nextEnd = caretFromDigitIndex(next, endDigits);
+    pendingSelectionRef.current = { start: nextStart, end: nextEnd };
+    setText(next);
   };
 
   const openNativePicker = React.useCallback(() => {
