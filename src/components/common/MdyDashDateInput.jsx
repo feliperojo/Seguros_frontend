@@ -162,6 +162,7 @@ function MdyDashDateInputEditable({
   const textRef = React.useRef(null);
   const focusedRef = React.useRef(false);
   const pendingSelectionRef = React.useRef(null);
+  const stableName = React.useId();
 
   const iso = isoYmd(valueIso);
   const syncedDisplay = React.useMemo(() => {
@@ -328,10 +329,15 @@ function MdyDashDateInputEditable({
       <InputGroup className={className}>
         <Form.Control
           ref={textRef}
+          name={`mdy-date-${stableName}`}
           size={size}
           type="text"
           inputMode="numeric"
-          autoComplete="off"
+          // Chrome a veces ignora "off" y auto-rellena fechas por heurística.
+          // "new-password" suele desactivar el autofill sin afectar UX.
+          autoComplete="new-password"
+          autoCorrect="off"
+          autoCapitalize="none"
           spellCheck={false}
           value={text}
           disabled={disabled}
@@ -372,6 +378,7 @@ function MdyDashDateInputEditable({
       <input
         ref={dateRef}
         type="date"
+        autoComplete="off"
         value={iso}
         onChange={(e) => {
           const next = e.target.value;
