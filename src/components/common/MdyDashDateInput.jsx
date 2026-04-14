@@ -270,6 +270,43 @@ function MdyDashDateInputEditable({
     setText(next);
   };
 
+  const handleKeyDown = (e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start == null || end == null) return;
+    if (start !== end) return;
+    const v = el.value ?? "";
+
+    if (e.key === "Backspace" && start > 0 && v[start - 1] === "-") {
+      e.preventDefault();
+      const nextPos = start - 1;
+      pendingSelectionRef.current = { start: nextPos, end: nextPos };
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(nextPos, nextPos);
+        } catch {
+          // noop
+        }
+      });
+      return;
+    }
+
+    if (e.key === "Delete" && start < v.length && v[start] === "-") {
+      e.preventDefault();
+      const nextPos = start + 1;
+      pendingSelectionRef.current = { start: nextPos, end: nextPos };
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(nextPos, nextPos);
+        } catch {
+          // noop
+        }
+      });
+    }
+  };
+
   const openNativePicker = React.useCallback(() => {
     const el = dateRef.current;
     if (!el) return;
@@ -308,6 +345,7 @@ function MdyDashDateInputEditable({
             focusedRef.current = false;
             commitText();
           }}
+          onKeyDown={handleKeyDown}
           onChange={handleTextChange}
         />
         <Button
