@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import apiRequest from "../../services/api";
 import { Spinner, Modal, Button } from "react-bootstrap";
@@ -39,6 +39,7 @@ export default function FichaClienteComentarios() {
   const [editError, setEditError] = useState("");
   const [editDraft, setEditDraft] = useState("");
   const [editTarget, setEditTarget] = useState(null);
+  const comentariosIdsCargandoRef = useRef(new Set());
 
   // Configuración mínima de Quill para edición
   const quillModules = useMemo(() => ({
@@ -550,29 +551,49 @@ export default function FichaClienteComentarios() {
   };
 
   // Cargar comentarios de una tarea
-  const cargarComentariosTarea = async (tareaId) => {
-    if (!tareaId || comentariosTareas[tareaId]) {
-      // Ya están cargados o no hay ID
-      return;
-    }
+  const cargarComentariosTarea = useCallback(async (tareaId) => {
+    if (!tareaId) return;
+    const key = String(tareaId);
 
-    setLoadingComentariosTareas((prev) => ({ ...prev, [tareaId]: true }));
+    // Evitar duplicar requests (y conservar la carga perezosa del dropdown)
+    if (comentariosIdsCargandoRef.current.has(key)) return;
+    if (comentariosTareas?.[key]) return;
+
+    comentariosIdsCargandoRef.current.add(key);
+    setLoadingComentariosTareas((prev) => ({ ...prev, [key]: true }));
     try {
-      const data = await apiRequest(`tareas_operativas/${tareaId}/comentarios`, "GET");
+      const data = await apiRequest(`tareas_operativas/${key}/comentarios`, "GET");
       setComentariosTareas((prev) => ({
         ...prev,
-        [tareaId]: Array.isArray(data) ? data : data?.data || [],
+        [key]: Array.isArray(data) ? data : data?.data || [],
       }));
     } catch (err) {
-      console.error(`Error al cargar comentarios de la tarea ${tareaId}:`, err);
+      console.error(`Error al cargar comentarios de la tarea ${key}:`, err);
       setComentariosTareas((prev) => ({
         ...prev,
-        [tareaId]: [],
+        [key]: [],
       }));
     } finally {
-      setLoadingComentariosTareas((prev) => ({ ...prev, [tareaId]: false }));
+      comentariosIdsCargandoRef.current.delete(key);
+      setLoadingComentariosTareas((prev) => ({ ...prev, [key]: false }));
     }
-  };
+  }, [comentariosTareas]);
+
+  // ✅ Precargar (en segundo plano) comentarios para calcular el contador sin abrir el dropdown
+  useEffect(() => {
+    const taskIds = comentarios
+      .filter((item) => getTipoItem(item) === "tarea")
+      .map((item) => getTareaId(item))
+      .filter(Boolean)
+      .map((id) => String(id));
+
+    const unique = Array.from(new Set(taskIds));
+    unique.forEach((id) => {
+      if (!comentariosTareas?.[id] && !loadingComentariosTareas?.[id]) {
+        void cargarComentariosTarea(id);
+      }
+    });
+  }, [comentarios, cargarComentariosTarea, comentariosTareas, loadingComentariosTareas]);
 
   // Toggle para expandir/colapsar comentarios de una tarea
   const toggleComentariosTarea = (tareaId) => {
