@@ -166,6 +166,42 @@ const coincideAsignacionPorNombre = (u, t) => {
   return nombres.some((n) => n && n === mine);
 };
 
+const pickNombreFrom = (v) => {
+  if (!v) return "";
+  if (typeof v === "string") return String(v).trim();
+  if (typeof v === "object") {
+    return String(v.name ?? v.nombre ?? v.full_name ?? v.username ?? v.email ?? "").trim();
+  }
+  return "";
+};
+
+/** "Asignada por" (creador/autor) según variantes del backend. */
+const getTareaAsignadaPorNombre = (t) => {
+  if (!t) return "";
+  const candidates = [
+    t.creado_por,
+    t.creadoPor,
+    t.created_by,
+    t.createdBy,
+    t.user,
+    t.assigned_by,
+    t.assignedBy,
+    t.log?.creado_por,
+    t.log?.creadoPor,
+    t.log?.created_by,
+    t.log?.user,
+    t.log?.createdBy,
+    t.created_by_name,
+    t.creado_por_name,
+    t.log?.created_by_name,
+  ];
+  for (const c of candidates) {
+    const name = pickNombreFrom(c);
+    if (name) return name;
+  }
+  return "";
+};
+
 const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification = false }) => {
   const { hasPermission, hasRole, user } = useAuth();
 
@@ -2329,26 +2365,26 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                       La fecha de inicio no puede ser mayor que la fecha de vencimiento.
                     </Alert>
                   )}
-                  <div className="mb-3">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <i className="fas fa-user text-info"></i>
-                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignada por:</strong>
-                    </div>
-                    <p className="text-content mb-0">
-                      {tarea?.log?.user?.name ||
-                       tarea?.user?.name ||
-                       tarea?.created_by?.name ||
-                       tarea?.createdBy?.name ||
-                       "N/A"}
-                    </p>
-                  </div>
+                  <Row className="mb-3 g-3">
+                    <Col xs={12} md={6}>
+                      <div className="h-100">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <i className="fas fa-user text-info"></i>
+                          <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Creado por:</strong>
+                        </div>
+                        <p className="text-content mb-0">
+                          {getTareaAsignadaPorNombre(tarea) || "N/A"}
+                        </p>
+                      </div>
+                    </Col>
 
-                  <div className="mb-3">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <i className="fas fa-user-check text-success"></i>
-                      <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignado a:</strong>
-                    </div>
-                    {(() => {
+                    <Col xs={12} md={6}>
+                      <div className="h-100">
+                        <div className="d-flex align-items-center gap-2 mb-2">
+                          <i className="fas fa-user-check text-success"></i>
+                          <strong style={{ fontSize: "0.95rem", color: "#495057" }}>Asignado a:</strong>
+                        </div>
+                        {(() => {
                       const currentId =
                         assignPreview?.assigned_user_id ||
                         assignPreview?.assign_to_user_id ||
@@ -2376,6 +2412,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         tarea?.assigned_to_user?.name ||
                         tarea?.assignedUser?.name ||
                         tarea?.log?.assigned_user?.name ||
+                        tarea?.asignado_a ||
+                        tarea?.asignadoA ||
+                        tarea?.log?.asignado_a ||
                         tarea?.responsable ||
                         tarea?.log?.responsable ||
                         tarea?.assign_to_user_name ||
@@ -2459,7 +2498,9 @@ const ResponderTareaModal = ({ show, onHide, tarea, onUpdated, fromNotification 
                         </>
                       );
                     })()}
-                  </div>
+                      </div>
+                    </Col>
+                  </Row>
                   <div className="mt-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-sticky-note text-success"></i>

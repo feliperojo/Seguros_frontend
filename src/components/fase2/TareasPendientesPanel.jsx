@@ -3,7 +3,7 @@ import { FaExternalLinkAlt, FaComments, FaPaperclip, FaChevronDown, FaChevronUp,
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import NuevaTareaModal from "../Tareas/NuevaTareaModal";
-import ResponderOportunidadModal from "../Tareas/ResponderOportunidadModa";
+import ResponderTareaModal from "../Tareas/ResponderTareaModal";
 import { useMentions } from "../../hooks/useMentions";
 import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
@@ -1160,7 +1160,7 @@ export default function TareasPendientesPanel({
       />
 
       {selectedTask && (
-        <ResponderOportunidadModal
+        <ResponderTareaModal
           show={showResponder}
           onHide={closeResponder}
           tarea={selectedTask}

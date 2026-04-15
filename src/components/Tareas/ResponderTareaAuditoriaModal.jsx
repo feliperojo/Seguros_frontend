@@ -1155,15 +1155,40 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                   {getStatusBadge(tarea.status)}
                 </div>
                 
-                <div className="mb-3">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-user text-info"></i>
-                    <strong>Asignada a:</strong>
-                  </div>
-                  <p className="mb-0">
-                    {tarea.assigned_user?.name || tarea.assigned_user?.nombre || "N/A"}
-                  </p>
-                </div>
+                <Row className="mb-3 g-3">
+                  <Col xs={12} md={6}>
+                    <div className="h-100">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="fas fa-user text-info"></i>
+                        <strong>Creado por:</strong>
+                      </div>
+                      <p className="mb-0">
+                        {tarea?.creado_por ||
+                          tarea?.created_by?.name ||
+                          tarea?.createdBy?.name ||
+                          tarea?.log?.user?.name ||
+                          tarea?.user?.name ||
+                          "N/A"}
+                      </p>
+                    </div>
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <div className="h-100">
+                      <div className="d-flex align-items-center gap-2 mb-2">
+                        <i className="fas fa-user-check text-success"></i>
+                        <strong>Asignado a:</strong>
+                      </div>
+                      <p className="mb-0">
+                        {tarea?.assigned_user?.name ||
+                          tarea?.assigned_user?.nombre ||
+                          tarea?.assign_to_user?.name ||
+                          tarea?.assigned_to_user?.name ||
+                          tarea?.asignado_a ||
+                          "N/A"}
+                      </p>
+                    </div>
+                  </Col>
+                </Row>
                 
                 {tarea.status !== "completed" ? (
                   <>
