@@ -39,6 +39,20 @@ const caretFromDigitIndex = (formatted, digitIndex) => {
   return formatted?.length ?? 0;
 };
 
+/**
+ * Fecha “cerrada” para parsear con `normalizeDateForInput`.
+ * Evita que `new Date()` complete años cortos al escribir (p. ej. "04-15-20" → 2020).
+ */
+const isStructurallyCompleteDateInput = (raw) => {
+  const s = String(raw ?? "").trim();
+  if (!s) return false;
+  if (/[a-zA-Z]/.test(s)) return true;
+  if (/^\d{4}-\d{2}-\d{2}(?!\d)/.test(s)) return true;
+  if (/^\d{2}-\d{2}-\d{4}$/.test(s)) return true;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return true;
+  return false;
+};
+
 function MdyDashDateInputReadonly({
   valueIso,
   onChangeIso,
@@ -189,6 +203,9 @@ function MdyDashDateInputEditable({
     (raw) => {
       const trimmed = String(raw ?? "").trim();
       if (!trimmed) return { ok: true, iso: "" };
+      if (!isStructurallyCompleteDateInput(trimmed)) {
+        return { ok: false };
+      }
       const normalized = normalizeDateForInput(trimmed);
       if (!normalized || !/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
         return { ok: false };
@@ -233,6 +250,10 @@ function MdyDashDateInputEditable({
       return;
     }
     if (!r.ok) {
+      const digitCount = onlyDigits(text).length;
+      if (digitCount > 0 && digitCount < 8) {
+        return;
+      }
       setText(syncedDisplay);
       return;
     }
@@ -250,6 +271,7 @@ function MdyDashDateInputEditable({
     const selEnd = inputEl?.selectionEnd ?? raw.length;
     const tryNorm = normalizeDateForInput(raw);
     if (
+      isStructurallyCompleteDateInput(raw) &&
       tryNorm &&
       /^\d{4}-\d{2}-\d{2}$/.test(tryNorm) &&
       isWithinBounds(tryNorm)
