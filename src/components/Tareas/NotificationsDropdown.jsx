@@ -15,7 +15,13 @@ import { listTasks as listAuditoriaTasks } from '../../services/auditoriasTasksS
  * @param {boolean} loadingTask - Indica si se está cargando una tarea (opcional)
  * @param {Function} onNotificationClick - Callback cuando se hace clic en una notificación
  */
-const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = false, onNotificationClick }) => {
+const NotificationsDropdown = ({
+  currentUser,
+  pendientes = 0,
+  loadingTask = false,
+  onNotificationClick,
+  onNotificationsChange,
+}) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showReadSection, setShowReadSection] = useState(false);
   const dropdownRef = useRef(null);
@@ -172,6 +178,12 @@ const NotificationsDropdown = ({ currentUser, pendientes = 0, loadingTask = fals
   const mentionNotifications = notifications.filter(isMentionType);
   const unreadMentionNotifications = mentionNotifications.filter((notification) => isNotificationUnread(notification));
   const readMentionNotifications = mentionNotifications.filter((notification) => !isNotificationUnread(notification));
+
+  useEffect(() => {
+    if (typeof onNotificationsChange === 'function') {
+      onNotificationsChange(notifications);
+    }
+  }, [notifications, onNotificationsChange]);
 
   // Manejar clic en notificación
   const handleNotificationClick = (notification) => {

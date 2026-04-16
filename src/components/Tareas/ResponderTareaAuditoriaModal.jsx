@@ -1,5 +1,5 @@
 // src/components/Tareas/ResponderTareaAuditoriaModal.jsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Modal,
   Button,
@@ -89,7 +89,13 @@ const htmlToPlainText = (html) => {
 };
 
 
-const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
+const ResponderTareaAuditoriaModal = ({
+  show,
+  onHide,
+  tarea,
+  onUpdated,
+  notificationContext = null,
+}) => {
   const toast = useToast();
   const { hasPermission, hasRole } = useAuth();
   
@@ -113,6 +119,12 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
   // Estados para confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showConfirmCompletarModal, setShowConfirmCompletarModal] = useState(false);
+  const highlightedCommentId = useMemo(() => {
+    const rawId = notificationContext?.commentId;
+    if (rawId == null || rawId === "") return null;
+    return String(rawId);
+  }, [notificationContext?.commentId]);
+  const hasScrolledToHighlightedCommentRef = useRef(false);
   
   const [scheduledDate, setScheduledDate] = useState("");
   const [dueDate, setDueDate] = useState("");
@@ -168,8 +180,26 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
       quillEditorRef.current = null;
       lastSelectionRef.current = null;
       quillSelectionBoundToRef.current = null;
+      hasScrolledToHighlightedCommentRef.current = false;
     }
   }, [show, tarea?.id]);
+
+  useEffect(() => {
+    if (!show || !highlightedCommentId) return;
+    if (hasScrolledToHighlightedCommentRef.current) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.querySelector(
+        `[data-highlight-comment-id="${highlightedCommentId}"]`
+      );
+      if (!target) return;
+
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      hasScrolledToHighlightedCommentRef.current = true;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [show, comentarios, highlightedCommentId]);
   
   // Cargar datos de la tarea cuando se abre el modal
   useEffect(() => {
@@ -1123,6 +1153,19 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
             margin-bottom: 1.5rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
           }
+          @keyframes highlighted-comment-pulse {
+            0%, 100% {
+              box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.24);
+            }
+            50% {
+              box-shadow: 0 0 0 6px rgba(220, 53, 69, 0.08);
+            }
+          }
+          .responder-tarea-auditoria-modal .highlighted-comment-card {
+            border: 1px solid rgba(220, 53, 69, 0.35) !important;
+            background: #fff5f5;
+            animation: highlighted-comment-pulse 1.4s ease-in-out infinite;
+          }
         `}</style>
         
         <Modal.Header closeButton>
@@ -1145,6 +1188,14 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                 <i className="fas fa-info-circle text-primary"></i>
                 <h5 className="mb-0">Detalles de la Tarea</h5>
               </div>
+              {highlightedCommentId && (
+                <div className="alert alert-danger py-2 px-3 d-flex align-items-center gap-2">
+                  <i className="fas fa-comment-dots"></i>
+                  <span className="small mb-0">
+                    Se resalt&oacute; el comentario nuevo relacionado con esta notificaci&oacute;n.
+                  </span>
+                </div>
+              )}
               
               <div className="info-card">
                 <div className="mb-3">
@@ -1316,17 +1367,22 @@ const ResponderTareaAuditoriaModal = ({ show, onHide, tarea, onUpdated }) => {
                   {comentarios.map((c) => {
                     const estaEnEdicion = comentariosEnEdicion.hasOwnProperty(c.id);
                     const fueActualizado = comentariosActualizados[c.id];
+                    const isHighlightedComment = highlightedCommentId && String(c.id) === highlightedCommentId;
                     
                     return (
                       <ListGroup.Item 
                         key={c.id} 
-                        className={fueActualizado ? 'border-success' : ''}
+                        data-highlight-comment-id={isHighlightedComment ? String(c.id) : undefined}
+                        className={`${fueActualizado ? 'border-success' : ''} ${isHighlightedComment ? 'highlighted-comment-card' : ''}`.trim()}
                       >
                         <div className="d-flex justify-content-between align-items-start mb-2">
                           <div>
                             <strong>{c.user?.name || c.user?.nombre || c.created_by?.name || "Usuario"}:</strong>
                             {fueActualizado && (
                               <Badge bg="success" className="ms-2">Actualizado ✓</Badge>
+                            )}
+                            {isHighlightedComment && (
+                              <Badge bg="danger" className="ms-2">Nuevo comentario</Badge>
                             )}
                           </div>
                           <small className="text-muted">

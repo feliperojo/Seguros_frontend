@@ -98,6 +98,7 @@ export default function TareasPendientesPanel({
   // Obtener usuario actual del contexto de autenticación
   const { user: currentUser } = useAuth();
 
+
   // Combinar tareas con sus comentarios cargados para el hook de menciones
   const tareasConComentarios = useMemo(() => {
     return autoItems.map(tarea => ({
@@ -208,6 +209,7 @@ export default function TareasPendientesPanel({
   const closeResponder = (updated) => {
     setShowResponder(false);
     setSelectedTask(null);
+    setNotificationContext(null);
     if (updated) fetchTasks();
   };
 

@@ -43,6 +43,61 @@ const PUSHER_APP_PORT = import.meta.env.VITE_PUSHER_APP_PORT || import.meta.env.
 const PUSHER_APP_USE_TLS = (import.meta.env.VITE_PUSHER_APP_USE_TLS === 'true') ||
   ((import.meta.env.VITE_PUSHER_SCHEME || import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https');
 
+// En dev/local: si el WS no está disponible, evitamos reintentos ruidosos durante la sesión
+const ECHO_DISABLE_SESSION_KEY = 'echo_disabled_for_session';
+
+const buildWsProbeUrl = ({ useTls }) => {
+  const host = PUSHER_APP_HOST;
+  const port = PUSHER_APP_PORT || '8080';
+  const key = PUSHER_APP_KEY;
+  if (!host || !key) return null;
+  const protocol = useTls ? 'wss' : 'ws';
+  // Ruta típica para laravel-websockets / reverb (pusher protocol emulation)
+  return `${protocol}://${host}:${port}/app/${encodeURIComponent(key)}?protocol=7&client=js&version=8.4.0&flash=false`;
+};
+
+const canOpenWebSocketQuick = async ({ timeoutMs = 1500 } = {}) => {
+  // Pusher Cloud: no hacemos probe aquí, dejamos que Pusher maneje
+  if (isPusherCloud) return true;
+
+  // Si ya se deshabilitó durante esta sesión, no insistir
+  try {
+    if (sessionStorage.getItem(ECHO_DISABLE_SESSION_KEY) === 'true') return false;
+  } catch (_) {}
+
+  if (!PUSHER_APP_HOST || !PUSHER_APP_KEY) return false;
+  if (typeof WebSocket === 'undefined') return false;
+
+  const urlsToTry = [
+    buildWsProbeUrl({ useTls: true }),
+    buildWsProbeUrl({ useTls: false }),
+  ].filter(Boolean);
+
+  for (const url of urlsToTry) {
+    const ok = await new Promise((resolve) => {
+      let done = false;
+      let ws = null;
+      const finish = (val) => {
+        if (done) return;
+        done = true;
+        try { if (ws) ws.close(); } catch (_) {}
+        resolve(val);
+      };
+      const t = setTimeout(() => finish(false), timeoutMs);
+      try {
+        ws = new WebSocket(url);
+        ws.onopen = () => { clearTimeout(t); finish(true); };
+        ws.onerror = () => { clearTimeout(t); finish(false); };
+      } catch {
+        clearTimeout(t);
+        finish(false);
+      }
+    });
+    if (ok) return true;
+  }
+  return false;
+};
+
 // BroadcastChannel para evitar eventos duplicados entre pestañas
 const broadcastChannel = typeof BroadcastChannel !== 'undefined' 
   ? new BroadcastChannel('incoming_calls')
@@ -152,6 +207,14 @@ const useIncomingCalls = () => {
       }
       if (!isPusherCloud && !PUSHER_APP_HOST) {
         console.warn('⚠️ Laravel Echo: con Reverb/self-host faltan VITE_PUSHER_HOST o VITE_REVERB_HOST.');
+        return false;
+      }
+
+      // ✅ Preflight: si el WS no responde rápido, no inicializar (evita spam de errores en consola)
+      const wsOk = await canOpenWebSocketQuick({ timeoutMs: 1500 });
+      if (!wsOk) {
+        try { sessionStorage.setItem(ECHO_DISABLE_SESSION_KEY, 'true'); } catch (_) {}
+        logDiagnostic('⚠️ WebSocket no disponible (preflight). Echo deshabilitado para esta sesión.');
         return false;
       }
 

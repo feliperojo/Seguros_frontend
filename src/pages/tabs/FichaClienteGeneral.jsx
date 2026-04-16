@@ -28,6 +28,19 @@ export default function FichaClienteGeneral() {
         return { estado: "Vigente", fecha: null, tipoFecha: null };
       }
 
+      const estadoCoberturaRaw =
+        c?.estado_cobertura != null ? String(c.estado_cobertura).trim() : "";
+      const estadoCoberturaNormalizado = estadoCoberturaRaw.toLowerCase();
+      const estadoCoberturaMostrar =
+        estadoCoberturaNormalizado === "no"
+          ? "Sin cobertura"
+          : estadoCoberturaRaw;
+      const mostrarEstadoCoberturaDirecto =
+        estadoCoberturaNormalizado === "no" ||
+        estadoCoberturaNormalizado === "medicare" ||
+        estadoCoberturaNormalizado === "medicaid" ||
+        estadoCoberturaNormalizado === "medicai";
+
       const activo =
         c?.activo !== undefined && c?.activo !== null
           ? c.activo === true || c.activo === "true" || c.activo === 1
@@ -51,14 +64,9 @@ export default function FichaClienteGeneral() {
           ? String(c.fecha_cancelacion)
           : null;
 
-      // 1) Si la póliza está vigente, ese es siempre el estado principal
-      if (vigente) {
-        return { estado: "Vigente", fecha: null, tipoFecha: null };
-      }
-
-      // 2) No vigente y no activa => Retirada
+      // 1) Si está retirada, ese estado tiene prioridad
       // Regla solicitada: si "vigente" y "activo" son false, se considera retirada (aun si existe fecha_cancelacion).
-      if (!activo) {
+      if (fechaRetiroValida || !activo) {
         return {
           estado: "Retirada",
           fecha: fechaRetiroValida,
@@ -66,7 +74,7 @@ export default function FichaClienteGeneral() {
         };
       }
 
-      // 3) No vigente + fecha de cancelación => Póliza Cancelada
+      // 2) Si está cancelada, ese estado tiene prioridad sobre el estado_cobertura
       if (fechaCancelacionValida) {
         return {
           estado: "Póliza Cancelada",
@@ -75,7 +83,21 @@ export default function FichaClienteGeneral() {
         };
       }
 
-      // 4) No vigente y activa, sin fecha de cancelación => Póliza Cancelada (sin fecha)
+      // 3) Si no está cancelada ni retirada, mostrar el estado real de cobertura
+      if (mostrarEstadoCoberturaDirecto) {
+        return {
+          estado: estadoCoberturaMostrar,
+          fecha: null,
+          tipoFecha: null,
+        };
+      }
+
+      // 4) Si la póliza está vigente, ese es el estado principal
+      if (vigente) {
+        return { estado: "Vigente", fecha: null, tipoFecha: null };
+      }
+
+      // 5) No vigente y activa, sin fecha de cancelación => Póliza Cancelada (sin fecha)
       return {
         estado: "Póliza Cancelada",
         fecha: null,
@@ -645,6 +667,12 @@ export default function FichaClienteGeneral() {
                               ? "success"
                               : estadoPoliza === "Póliza Cancelada"
                               ? "warning"
+                              : estadoPoliza === "Sin cobertura" ||
+                                estadoPoliza === "No" ||
+                                estadoPoliza === "Medicare" ||
+                                estadoPoliza === "Medicaid" ||
+                                estadoPoliza === "Medicai"
+                              ? "danger"
                               : "secondary"
                           }
                           className="text-uppercase"

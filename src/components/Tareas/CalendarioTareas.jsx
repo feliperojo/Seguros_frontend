@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Card, Badge, Button, Toast, ToastContainer, Modal, ListGroup, Tooltip, OverlayTrigger, Alert } from "react-bootstrap";
 import { FaPlus, FaChartBar, FaChevronLeft, FaChevronRight, FaCalendarAlt, FaUser, FaCalendarCheck, FaTasks, FaAt, FaClipboardCheck, FaBell } from "react-icons/fa";
 import apiRequest from "../../services/api";
@@ -57,11 +57,118 @@ function normalizeOperativaLite(raw) {
   return t;
 }
 
+function getTaskNumericId(t) {
+  const raw = t?.id ?? t?.task_id ?? t?.tarea_id ?? t?.task?.id ?? null;
+  const n = typeof raw === "string" ? Number(raw) : Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function taskStableKey(t) {
-  if (!t || t.id == null && t.task_id == null) return null;
+  if (!t) return null;
+  const id = getTaskNumericId(t);
+  if (!id) return null;
   const tipo = t.tipo || (t.auditoria || t.item || t.run_id ? "auditoria" : "operativa");
-  const id = t.id ?? t.task_id;
   return `${tipo}-${id}`;
+}
+
+function toMsLoose(v) {
+  if (!v) return null;
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string") {
+    const s = v.trim();
+    if (!s) return null;
+    const isoMs = new Date(s).getTime();
+    if (!Number.isNaN(isoMs)) return isoMs;
+    // MM-DD-YYYY o MM-DD-YYYY HH:mm:ss
+    const m = s.match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m) {
+      const mm = Number(m[1]);
+      const dd = Number(m[2]);
+      const yyyy = Number(m[3]);
+      const hh = Number(m[4] ?? 0);
+      const mi = Number(m[5] ?? 0);
+      const ss = Number(m[6] ?? 0);
+      const d = new Date(yyyy, mm - 1, dd, hh, mi, ss);
+      const ms = d.getTime();
+      return Number.isNaN(ms) ? null : ms;
+    }
+    // MM/DD/YYYY o MM/DD/YYYY HH:mm:ss
+    const m2 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+    if (m2) {
+      const mm = Number(m2[1]);
+      const dd = Number(m2[2]);
+      const yyyy = Number(m2[3]);
+      const hh = Number(m2[4] ?? 0);
+      const mi = Number(m2[5] ?? 0);
+      const ss = Number(m2[6] ?? 0);
+      const d = new Date(yyyy, mm - 1, dd, hh, mi, ss);
+      const ms = d.getTime();
+      return Number.isNaN(ms) ? null : ms;
+    }
+  }
+  const ms = new Date(v).getTime();
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function getLastCommentMeta(taskLike) {
+  const buckets = [
+    taskLike?.comentarios,
+    taskLike?.comments,
+    taskLike?.task_comments,
+    taskLike?.taskComments,
+    taskLike?.log?.comentarios,
+    taskLike?.log?.comments,
+  ].filter(Array.isArray);
+
+  let best = null; // { ms, id }
+  for (const arr of buckets) {
+    for (const c of arr) {
+      const raw =
+        c?.fecha ||
+        c?.created_at ||
+        c?.updated_at ||
+        c?.createdAt ||
+        c?.updatedAt;
+      const ms = toMsLoose(raw);
+      if (ms != null && (!best || ms > best.ms)) {
+        best = { ms, id: c?.id ?? c?.comment_id ?? null };
+      }
+    }
+  }
+  return best;
+}
+
+function getLastActivityMs(taskLike) {
+  const candidates = [
+    taskLike?.last_activity_at_iso,
+    taskLike?.last_activity_at,
+    taskLike?.last_updated_at,
+    taskLike?.updated_at,
+    taskLike?.updatedAt,
+    taskLike?.log?.last_activity_at_iso,
+    taskLike?.log?.last_activity_at,
+    taskLike?.log?.updated_at,
+    taskLike?.task?.last_activity_at_iso,
+    taskLike?.task?.last_activity_at,
+    taskLike?.task?.updated_at,
+  ];
+  let best = null;
+  for (const v of candidates) {
+    const ms = toMsLoose(v);
+    if (ms != null && (best == null || ms > best)) best = ms;
+  }
+  const lastComment = getLastCommentMeta(taskLike);
+  if (lastComment?.ms != null && (best == null || lastComment.ms > best)) {
+    best = lastComment.ms;
+  }
+  return best;
+}
+
+function isTaskCompleted(taskLike) {
+  const s = String(taskLike?.status ?? taskLike?.estado ?? taskLike?.state ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "completed" || s === "completada" || s === "completado";
 }
 
 const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
@@ -88,6 +195,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   const [pendientes, setPendientes] = useState(0);
   const [loadingTarea, setLoadingTarea] = useState(false);
   const [fromNotification, setFromNotification] = useState(false);
+  const [notificationContext, setNotificationContext] = useState(null);
+  const [notificationsSnapshot, setNotificationsSnapshot] = useState([]);
+  const [lastSeenTick, setLastSeenTick] = useState(0);
 
   /** Claves de tareas ya vistas (para detectar nuevas en refrescos en segundo plano). */
   const prevTareaKeysRef = useRef(null);
@@ -112,6 +222,169 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   // Verificar permiso para ver usuarios
   const canViewUsers = useHasPermission("users.view");
+  const mentionLikeTypes = ['mention', 'audit_mention', 'reply_on_mentioned_task', 'mention_reply'];
+  const isViewingOwnCalendar = React.useMemo(() => {
+    const selected = usuarioSeleccionado != null ? String(usuarioSeleccionado) : "";
+    const me = currentUser?.id != null ? String(currentUser.id) : "";
+    return !!selected && !!me && selected === me;
+  }, [usuarioSeleccionado, currentUser?.id]);
+
+  const getNotificationTaskContext = useCallback((notification) => {
+    if (!notification || typeof notification !== "object") return null;
+
+    const taskId =
+      notification.task_id ??
+      notification.auditoria_task_id ??
+      notification.audit_task_id ??
+      notification.data?.task_id ??
+      notification.data?.auditoria_task_id ??
+      notification.data?.audit_task_id ??
+      notification.metadata?.task_id ??
+      notification.metadata?.auditoria_task_id ??
+      notification.metadata?.audit_task_id ??
+      notification.task?.id ??
+      null;
+
+    const taskIdNum = Number(taskId);
+    if (!Number.isFinite(taskIdNum) || taskIdNum <= 0) return null;
+
+    return {
+      notificationId: notification.id ?? null,
+      taskId: taskIdNum,
+      commentId: notification.comment_id ?? notification.auditoria_comment_id ?? notification.audit_comment_id ?? null,
+      type: notification.type ?? null,
+      isAuditoria: Boolean(
+        notification.auditoria_task_id ||
+          notification.audit_task_id ||
+          notification.data?.auditoria_task_id ||
+          notification.data?.audit_task_id ||
+          notification.metadata?.auditoria_task_id ||
+          notification.metadata?.audit_task_id ||
+          notification.task_type === "auditoria" ||
+          notification.data?.task_type === "auditoria" ||
+          notification.task?.tipo === "auditoria" ||
+          notification.task?.auditoria ||
+          notification.task?.item ||
+          notification.task?.run_id
+      ),
+    };
+  }, []);
+
+  const lastSeenStorageKey = React.useMemo(() => {
+    // ✅ Estas alertas solo son para el dueño de la tarea (usuario actual).
+    // Nunca persistimos "lastSeen" para ver calendarios de otros usuarios.
+    const uid = currentUser?.id || null;
+    return uid ? `tareas:lastSeenActivityMs:${uid}` : null;
+  }, [currentUser?.id]);
+
+  const readLastSeenMap = useCallback(() => {
+    if (!lastSeenStorageKey) return {};
+    try {
+      const raw = localStorage.getItem(lastSeenStorageKey);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }, [lastSeenStorageKey]);
+
+  const writeLastSeenMap = useCallback((map) => {
+    if (!lastSeenStorageKey) return;
+    try {
+      localStorage.setItem(lastSeenStorageKey, JSON.stringify(map || {}));
+    } catch {
+      // no-op
+    }
+  }, [lastSeenStorageKey]);
+
+  const markTaskAsSeen = useCallback((stableKey, activityMs) => {
+    if (!isViewingOwnCalendar) return;
+    if (!stableKey) return;
+    const now = Date.now();
+    const ms = Number.isFinite(activityMs) ? activityMs : now;
+    const map = readLastSeenMap();
+    const prev = map[stableKey] ? Number(map[stableKey]) : 0;
+    const next = Math.max(prev || 0, ms, now);
+    map[stableKey] = next;
+    writeLastSeenMap(map);
+    // Forzar re-render para recalcular indicadores locales
+    setLastSeenTick((t) => t + 1);
+  }, [readLastSeenMap, writeLastSeenMap, isViewingOwnCalendar]);
+
+  const localUnreadByTask = React.useMemo(() => {
+    const map = new Map();
+    if (!isViewingOwnCalendar) return map;
+    const seen = readLastSeenMap();
+    (Array.isArray(tareas) ? tareas : []).forEach((t) => {
+      // ✅ No mostrar alertas de "novedad" en tareas ya completadas
+      if (isTaskCompleted(t)) return;
+      const key = taskStableKey(t);
+      if (!key) return;
+      const lastActivity = getLastActivityMs(t);
+      const lastSeen = seen?.[key] ? Number(seen[key]) : 0;
+      if (lastActivity != null && Number.isFinite(lastActivity) && lastActivity > lastSeen) {
+        map.set(key, true);
+      }
+    });
+    return map;
+  }, [tareas, readLastSeenMap, lastSeenTick]);
+
+  const unreadCommentNotificationsByTask = React.useMemo(() => {
+    const map = new Map();
+    if (!isViewingOwnCalendar) return map;
+    const seenMap = readLastSeenMap();
+
+    notificationsSnapshot.forEach((notification) => {
+      const isUnread = notification?.read === false || !notification?.read_at;
+      if (!isUnread || !mentionLikeTypes.includes(notification?.type)) return;
+
+      const context = getNotificationTaskContext(notification);
+      if (!context?.taskId) return;
+
+      const stableKey = `${context.isAuditoria ? "auditoria" : "operativa"}-${context.taskId}`;
+
+      // ✅ Si el usuario ya abrió la tarea DESPUÉS de creada la notificación,
+      // dejamos de mostrar el indicador aunque el backend aún la marque como no leída.
+      const notifMs = toMsLoose(notification?.created_at || notification?.createdAt || notification?.fecha);
+      const lastSeen = seenMap?.[stableKey] ? Number(seenMap[stableKey]) : 0;
+      if (notifMs != null && Number.isFinite(notifMs) && lastSeen && lastSeen >= notifMs) {
+        return;
+      }
+
+      const current = map.get(stableKey) || [];
+      current.push(context);
+      map.set(stableKey, current);
+    });
+
+    return map;
+  }, [getNotificationTaskContext, mentionLikeTypes, notificationsSnapshot, readLastSeenMap, lastSeenTick, isViewingOwnCalendar]);
+
+  // Push notifications: se manejan globalmente en `useNotifications`.
+
+  const markNotificationAsReadLocally = useCallback(async (notificationMeta) => {
+    const notificationId = notificationMeta?.notificationId;
+    if (!notificationId) return;
+
+    setNotificationsSnapshot((prev) =>
+      prev.map((notification) =>
+        notification.id === notificationId
+          ? {
+              ...notification,
+              read: true,
+              read_at: notification.read_at || new Date().toISOString(),
+            }
+          : notification
+      )
+    );
+
+    try {
+      await apiRequest(`notifications/${notificationId}/read`, "PATCH");
+    } catch (error) {
+      if (error?.response?.status !== 404 && error?.response?.status !== 501) {
+        console.warn("No se pudo marcar la notificación como leída desde el calendario:", error);
+      }
+    }
+  }, []);
 
   // ✅ Cargar contador de tareas pendientes
   useEffect(() => {
@@ -524,8 +797,11 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
   };
 
   // ✅ Función para abrir el modal de respuesta con una tarea
-  const openTaskResponseModal = async (taskId = null, isFromNotification = false) => {
+  const openTaskResponseModal = async (taskId = null, isFromNotification = false, notificationMeta = null) => {
     try {
+      if (notificationMeta?.notificationId) {
+        markNotificationAsReadLocally(notificationMeta);
+      }
       setLoadingTarea(true);
       
       // Si no se proporciona un taskId, obtener la primera tarea pendiente
@@ -646,8 +922,32 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         }
       }
       
+      const stableKey = taskStableKey(taskDetail);
+      const activityMs = getLastActivityMs(taskDetail);
+      if (stableKey) {
+        // Si no venía un commentId (p.ej. no hubo notificación backend),
+        // intentar inferir el último comentario para resaltar.
+        if (!notificationMeta?.commentId) {
+          const lastComment = getLastCommentMeta(taskDetail);
+          const inferredCommentId = lastComment?.id ?? null;
+          const seenMap = readLastSeenMap();
+          const lastSeen = seenMap?.[stableKey] ? Number(seenMap[stableKey]) : 0;
+          if (activityMs != null && activityMs > lastSeen && inferredCommentId != null) {
+            notificationMeta = {
+              ...(notificationMeta || {}),
+              taskId: Number(taskId),
+              commentId: inferredCommentId,
+              isAuditoria: false,
+            };
+          }
+        }
+        // Al abrir la tarea, marcamos como vista su actividad actual.
+        markTaskAsSeen(stableKey, activityMs);
+      }
+
       setTareaSeleccionada(taskDetail);
       setFromNotification(isFromNotification);
+      setNotificationContext(notificationMeta);
       setShowResponderModal(true);
     } catch (error) {
       console.error("Error al abrir modal de respuesta:", error);
@@ -657,7 +957,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }
   };
 
-  const abrirResponderTarea = async (tarea, isFromNotification = false) => {
+  const abrirResponderTarea = async (tarea, isFromNotification = false, notificationMeta = null) => {
     if (!tarea) return;
     
     // ✅ Determinar el tipo de tarea (operativa o auditoría)
@@ -667,12 +967,13 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     if (tipo !== 'auditoria') {
       const taskId = tarea?.id || tarea?.task_id || tarea?.task?.id || null;
       if (taskId) {
-        await openTaskResponseModal(Number(taskId), isFromNotification);
+        await openTaskResponseModal(Number(taskId), isFromNotification, notificationMeta);
       } else {
         // Fallback: si no hay ID, abrir con lo que hay (mejor que romper)
         setTareaSeleccionada(tarea);
         setTareaTipo(tipo);
         setFromNotification(isFromNotification);
+        setNotificationContext(notificationMeta);
         setShowResponderModal(true);
       }
       return;
@@ -717,10 +1018,26 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         }
       }
     }
+
+    if (notificationMeta?.notificationId) {
+      markNotificationAsReadLocally(notificationMeta);
+    }
+
+    // ✅ Fallback sin websocket: al abrir la tarea, marcar su actividad como vista
+    try {
+      const key = taskStableKey(tarea);
+      if (key) {
+        const ms = getLastActivityMs(tarea);
+        markTaskAsSeen(key, ms);
+      }
+    } catch {
+      // no-op
+    }
     
     setTareaSeleccionada(tarea);
     setTareaTipo(tipo);
     setFromNotification(isFromNotification);
+    setNotificationContext(notificationMeta);
     
     // ✅ Abrir el modal correcto según el tipo
     if (tipo === 'auditoria') {
@@ -1281,6 +1598,25 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         .calendario-aviso-lateral {
           animation: calendario-aviso-lateral-in 0.38s ease-out;
         }
+        @keyframes task-comment-dot-pulse {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 1;
+          }
+          50% {
+            transform: scale(1.18);
+            opacity: 0.72;
+          }
+        }
+        .task-comment-dot {
+          width: 9px;
+          height: 9px;
+          border-radius: 50%;
+          background: #dc3545;
+          box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.16);
+          animation: task-comment-dot-pulse 1.2s ease-in-out infinite;
+          flex-shrink: 0;
+        }
       `}</style>
       {avisoLateral.show && avisoLateral.message ? (
         <Alert
@@ -1416,8 +1752,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                 currentUser={currentUser}
                 pendientes={pendientes}
                 loadingTask={loadingTarea}
+                onNotificationsChange={setNotificationsSnapshot}
                 onNotificationClick={async (notification) => {
                   try {
+                    const notificationMeta = getNotificationTaskContext(notification);
                     // ✅ Detectar si es una notificación de auditoría
                     // El backend usa 'auditoria_task_id' (no 'audit_task_id')
                     const isAuditoriaNotification = 
@@ -1439,7 +1777,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         const tareaCompleta = await getAuditoriaTask(taskId);
                         const tarea = tareaCompleta?.data || tareaCompleta;
                         if (tarea) {
-                          abrirResponderTarea({ ...tarea, tipo: 'auditoria' }, true);
+                          abrirResponderTarea({ ...tarea, tipo: 'auditoria' }, true, notificationMeta);
                         } else {
                           throw new Error("No se pudo cargar la tarea de auditoría");
                         }
@@ -1534,12 +1872,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                           // En ese caso, abrimos el modal cargando `tareas_operativas/{id}`.
                           const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
                           if (tieneClienteEnNotificacion) {
-                            abrirResponderTarea(notification.task, true);
+                            abrirResponderTarea(notification.task, true, notificationMeta);
                           } else {
-                            await openTaskResponseModal(numericTaskId, true);
+                            await openTaskResponseModal(numericTaskId, true, notificationMeta);
                           }
                         } else {
-                          await openTaskResponseModal(numericTaskId, true);
+                          await openTaskResponseModal(numericTaskId, true, notificationMeta);
                         }
                         return;
                       }
@@ -1640,10 +1978,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                           const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
                           if (tieneClienteEnNotificacion) {
                             console.log("✅ Usando objeto task completo de la notificación");
-                            abrirResponderTarea(notification.task, true);
+                            abrirResponderTarea(notification.task, true, notificationMeta);
                           } else {
                             console.log("⚠️ notification.task incompleto; cargando detalle por taskId");
-                            await openTaskResponseModal(numericTaskId, true);
+                            await openTaskResponseModal(numericTaskId, true, notificationMeta);
                           }
                         } else if (isAuditoriaNotification) {
                           // Si es auditoría, cargar y abrir
@@ -1651,7 +1989,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         } else {
                           // Usar el mismo método que funciona para notificaciones de tareas operativas
                           console.log("✅ Abriendo modal con taskId usando openTaskResponseModal:", numericTaskId);
-                          await openTaskResponseModal(numericTaskId, true);
+                          await openTaskResponseModal(numericTaskId, true, notificationMeta);
                         }
                       } else {
                         // ✅ Intentar obtener task_id desde otros campos de la notificación
@@ -1687,7 +2025,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                             if (esAuditoriaFromData || isAuditoriaNotification) {
                               await abrirTareaAuditoria(numericTaskId);
                             } else {
-                              await openTaskResponseModal(numericTaskId, true);
+                              await openTaskResponseModal(numericTaskId, true, notificationMeta);
                             }
                             return;
                           }
@@ -1706,7 +2044,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                                 if (esAuditoriaFromLink) {
                                   await abrirTareaAuditoria(numericTaskId);
                                 } else {
-                                  await openTaskResponseModal(numericTaskId, true);
+                                await openTaskResponseModal(numericTaskId, true, notificationMeta);
                                 }
                                 return;
                               }
@@ -1746,12 +2084,12 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       } else if (notification.task && notification.task.id) {
                         const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
                         if (tieneClienteEnNotificacion) {
-                          abrirResponderTarea(notification.task, true);
+                          abrirResponderTarea(notification.task, true, notificationMeta);
                         } else {
-                          await openTaskResponseModal(numericTaskId, true);
+                          await openTaskResponseModal(numericTaskId, true, notificationMeta);
                         }
                       } else {
-                        await openTaskResponseModal(numericTaskId, true);
+                        await openTaskResponseModal(numericTaskId, true, notificationMeta);
                       }
                     } else if (notification.type === 'task_pending') {
                       const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
@@ -1764,15 +2102,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                         } else if (notification.task && notification.task.id) {
                           const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
                           if (tieneClienteEnNotificacion) {
-                            abrirResponderTarea(notification.task, true);
+                            abrirResponderTarea(notification.task, true, notificationMeta);
                           } else {
-                            await openTaskResponseModal(numericTaskId, true);
+                            await openTaskResponseModal(numericTaskId, true, notificationMeta);
                           }
                         } else {
-                          await openTaskResponseModal(numericTaskId, true);
+                          await openTaskResponseModal(numericTaskId, true, notificationMeta);
                         }
                       } else {
-                        await openTaskResponseModal(null, true);
+                        await openTaskResponseModal(null, true, notificationMeta);
                       }
                     } else if (notification.type === 'task' && (notification.task_id || notification.auditoria_task_id || notification.audit_task_id)) {
                       const taskId = notification.auditoria_task_id || notification.audit_task_id || notification.task_id;
@@ -1784,19 +2122,19 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       } else if (notification.task && notification.task.id) {
                         const tieneClienteEnNotificacion = !!notification.task?.log?.cliente?.id;
                         if (tieneClienteEnNotificacion) {
-                          abrirResponderTarea(notification.task, true);
+                          abrirResponderTarea(notification.task, true, notificationMeta);
                         } else {
-                          await openTaskResponseModal(numericTaskId, true);
+                          await openTaskResponseModal(numericTaskId, true, notificationMeta);
                         }
                       } else {
-                        await openTaskResponseModal(numericTaskId, true);
+                        await openTaskResponseModal(numericTaskId, true, notificationMeta);
                       }
                     } else if (notification.type === 'view_all') {
                       // Navegar a operaciones (opcional)
                       window.location.href = '/Herramientas/operaciones';
                     } else {
                       if (pendientes > 0) {
-                        await openTaskResponseModal(null, true);
+                        await openTaskResponseModal(null, true, notificationMeta);
                       }
                     }
                   } catch (error) {
@@ -1846,6 +2184,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
           const esHoy = dia === hoy.getDate() && mesActual === hoy.getMonth() && añoActual === hoy.getFullYear();
           const esPasado = new Date(añoActual, mesActual, dia) < new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
           const tieneTareas = tareasDia.length > 0;
+          const tieneComentariosNoLeidos = tareasDia
+            .filter((t) => t && !isTaskCompleted(t))
+            .some((t) => unreadCommentNotificationsByTask.has(taskStableKey(t)) || localUnreadByTask.has(taskStableKey(t)));
           
           // Calcular contadores por estado para este día
           const contadoresPorEstado = {
@@ -1889,6 +2230,8 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                 borderRadius: "12px",
                 border: esHoy 
                   ? "2px solid #0d6efd" 
+                  : tieneComentariosNoLeidos
+                    ? "2px solid rgba(220, 53, 69, 0.55)"
                   : tieneTareas 
                     ? "1px solid #0d6efd" 
                     : "1px solid #e0e0e0",
@@ -1928,6 +2271,15 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                 >
                   {dia}
                 </strong>
+                <div className="d-flex gap-2 align-items-start">
+                {tieneComentariosNoLeidos && (
+                  <OverlayTrigger
+                    placement="top"
+                    overlay={<Tooltip>Hay comentarios nuevos pendientes de revisar en este d&iacute;a</Tooltip>}
+                  >
+                    <span className="task-comment-dot" aria-label="Comentarios nuevos" />
+                  </OverlayTrigger>
+                )}
                 {/* Badges circulares por estado */}
                 {tieneTareas && (
                   <div className="d-flex gap-1 align-items-center flex-wrap justify-content-end" style={{ maxWidth: "60%" }}>
@@ -1987,6 +2339,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                     )}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* Lista de tareas - Solo mostrar tareas no completadas en la lista */}
@@ -2003,6 +2356,9 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                       const tipo = t.tipo || (t.auditoria || t.item || t.run_id ? 'auditoria' : 'operativa');
                       const clienteNombre = getClienteNombre(t);
                       const esAuditoria = tipo === 'auditoria';
+                      const notificationContexts = unreadCommentNotificationsByTask.get(taskStableKey(t)) || [];
+                      const hasUnreadCommentNotification =
+                        notificationContexts.length > 0 || localUnreadByTask.has(taskStableKey(t));
                       const tooltipText = `${esAuditoria ? '🔍 ' : ''}${clienteNombre} - ${getStatusLabel(t?.status)}${esAuditoria ? ' (Auditoría)' : ''}`;
                       
                       // ✅ Key única combinando ID de tarea, día e índice para evitar duplicados
@@ -2022,8 +2378,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                               cursor: "pointer",
                               maxWidth: "100%",
                               transition: "all 0.2s ease",
+                              position: "relative",
                               borderLeft: esAuditoria ? "3px solid #64748b" : "none",
                               paddingLeft: esAuditoria ? "4px" : "8px",
+                              paddingRight: hasUnreadCommentNotification ? "10px" : undefined,
                               backgroundColor: esAuditoria ? (t.status === "pending" ? "#e2e8f0" : t.status === "in_progress" ? "#cbd5e1" : undefined) : undefined
                             }}
                             draggable={t?.status !== "completed" && !esAuditoria}
@@ -2036,7 +2394,19 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                             }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              abrirResponderTarea(t);
+                              const key = taskStableKey(t);
+                              const metaFromNotif = notificationContexts[0] || null;
+                              const fallbackCommentId = getLastCommentMeta(t)?.id ?? null;
+                              const meta =
+                                metaFromNotif ||
+                                (hasUnreadCommentNotification
+                                  ? {
+                                      taskId: Number(t?.id ?? t?.task_id),
+                                      commentId: fallbackCommentId,
+                                      isAuditoria: esAuditoria,
+                                    }
+                                  : null);
+                              abrirResponderTarea(t, false, meta);
                             }}
                             onMouseEnter={(e) => {
                               e.currentTarget.style.transform = "scale(1.05)";
@@ -2053,6 +2423,13 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
                               }
                             }}
                           >
+                            {hasUnreadCommentNotification && (
+                              <span
+                                className="task-comment-dot"
+                                style={{ width: "8px", height: "8px", marginRight: "4px", boxShadow: "none" }}
+                                aria-label="Comentario nuevo"
+                              />
+                            )}
                             {esAuditoria && <FaClipboardCheck style={{ fontSize: "0.6rem", marginRight: "2px" }} />}
                             <span className="text-truncate" style={{ flex: 1, minWidth: 0 }}>
                               {clienteNombre}
@@ -2192,6 +2569,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       setShowResponderModal(false);
       setTareaSeleccionada(null);
       setFromNotification(false);
+      setNotificationContext(null);
       if (updated) {
         // ✅ Actualizar contador de pendientes cuando se cierra el modal
         apiRequest("tareas_operativas/pendientes", "GET")
@@ -2202,6 +2580,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }}
     tarea={tareaSeleccionada}
     fromNotification={fromNotification}
+    notificationContext={notificationContext}
     onUpdated={(tareaActualizada) => {
       // ✅ Actualizar el estado INMEDIATAMENTE cuando se agrega el comentario
       // Esto asegura que el cambio de color se vea antes de cerrar el modal
@@ -2231,8 +2610,10 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
       setTareaSeleccionada(null);
       setTareaTipo(null);
       setFromNotification(false);
+      setNotificationContext(null);
     }}
     tarea={tareaSeleccionada}
+    notificationContext={notificationContext}
     onUpdated={(tareaActualizada) => {
       // ✅ Actualizar la tarea en el estado del calendario
       onUpdated(tareaActualizada);

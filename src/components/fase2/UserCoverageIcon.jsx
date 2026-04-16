@@ -81,7 +81,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     } else if (normalizedStatus === "medicaid") {
       label = "Medicaid";
     } else {
-      label = "Inactivo";
+      label = "Sin cobertura";
     }
   } else if (!status || status === "") {
     label = "Sin estado";

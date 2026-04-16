@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import apiRequest from '../services/api';
 
 /**
@@ -11,6 +11,8 @@ export const useNotifications = (currentUser) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const pushedIdsRef = useRef(new Set());
+  const prevIdsRef = useRef(new Set());
 
   const deriveUnreadCount = useCallback((items, serverUnreadCount) => {
     if (typeof serverUnreadCount === 'number' && !Number.isNaN(serverUnreadCount)) {
@@ -143,6 +145,60 @@ export const useNotifications = (currentUser) => {
       return () => clearInterval(interval);
     }
   }, [currentUser, fetchNotifications]);
+
+  // ✅ Push notifications (notificación del navegador) para nuevas notificaciones no leídas.
+  // Solo dispara si el usuario ya otorgó permiso (no pedimos permiso aquí para no interrumpir).
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    if (typeof window === 'undefined' || typeof window.Notification === 'undefined') return;
+    if (window.Notification.permission !== 'granted') return;
+
+    const mentionLikeTypes = new Set(['mention', 'audit_mention', 'reply_on_mentioned_task', 'mention_reply']);
+
+    const currentIds = new Set(
+      (Array.isArray(notifications) ? notifications : [])
+        .map((n) => n?.id)
+        .filter((id) => id != null)
+        .map(String)
+    );
+
+    const newUnread = (Array.isArray(notifications) ? notifications : []).filter((n) => {
+      const id = n?.id != null ? String(n.id) : null;
+      if (!id) return false;
+      const isUnread = n?.read === false || !n?.read_at;
+      if (!isUnread) return false;
+      if (!mentionLikeTypes.has(n?.type)) return false;
+      // Solo nuevas desde el último render
+      if (prevIdsRef.current.has(id)) return false;
+      // Evitar duplicados en la sesión
+      if (pushedIdsRef.current.has(id)) return false;
+      return true;
+    });
+
+    if (newUnread.length === 0) {
+      prevIdsRef.current = currentIds;
+      return;
+    }
+
+    const notif = newUnread[0];
+    try {
+      const title = notif?.title || 'Nueva notificación';
+      const body =
+        notif?.message ||
+        (notif?.comment_id ? `Nuevo comentario #${notif.comment_id}` : 'Tienes una novedad en una tarea.');
+      const tag = `notif-${notif.id}`;
+
+      const n = new window.Notification(title, { body, tag, renotify: false });
+      pushedIdsRef.current.add(String(notif.id));
+      setTimeout(() => {
+        try { n.close(); } catch (_) {}
+      }, 7000);
+    } catch {
+      // No-op si el navegador bloquea la notificación
+    } finally {
+      prevIdsRef.current = currentIds;
+    }
+  }, [currentUser?.id, notifications]);
 
   return {
     notifications,
