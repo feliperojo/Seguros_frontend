@@ -282,11 +282,13 @@ const ResponderTareaModal = ({
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
   const [toastVariant, setToastVariant] = useState("success");
+  // ✅ Congelar el comentario resaltado al abrir el modal (no debe desaparecer hasta cerrar)
+  const [frozenHighlightedCommentId, setFrozenHighlightedCommentId] = useState(null);
   const highlightedCommentId = useMemo(() => {
-    const rawId = notificationContext?.commentId;
-    if (rawId == null || rawId === "") return null;
-    return String(rawId);
-  }, [notificationContext?.commentId]);
+    return frozenHighlightedCommentId != null && frozenHighlightedCommentId !== ""
+      ? String(frozenHighlightedCommentId)
+      : null;
+  }, [frozenHighlightedCommentId]);
   const hasScrolledToHighlightedCommentRef = useRef(false);
 
   // ✅ Historial del cliente
@@ -443,8 +445,16 @@ const ResponderTareaModal = ({
       lastSelectionRef.current = null;
       quillSelectionBoundToRef.current = null;
       hasScrolledToHighlightedCommentRef.current = false;
+      // Capturar el commentId al abrir; mantenerlo aunque el padre consuma la notificación
+      const rawId = notificationContext?.commentId;
+      setFrozenHighlightedCommentId(
+        rawId == null || rawId === "" ? null : String(rawId)
+      );
+    } else {
+      // Al cerrar el modal, limpiar
+      setFrozenHighlightedCommentId(null);
     }
-  }, [show, tarea?.id]);
+  }, [show, tarea?.id, notificationContext?.commentId]);
 
   useEffect(() => {
     if (!show || !highlightedCommentId) return;

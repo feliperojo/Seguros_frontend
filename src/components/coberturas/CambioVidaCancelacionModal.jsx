@@ -161,9 +161,28 @@ const CambioVidaCancelacionModal = ({
     const vigente = esTrue(c.vigente);
     const activo = esTrue(c.activo);
     const fueCancelada = hasFechaValida(c.fecha_cancelacion || c.fechaCancelacion);
+    const fueRetirada = hasFechaValida(c.fecha_retiro || c.fechaRetiro) || !activo;
+    const estadoCoberturaRaw =
+      c?.estado_cobertura != null ? String(c.estado_cobertura).trim() : "";
+    const estadoCoberturaNorm = estadoCoberturaRaw.toLowerCase();
+    const estadoCoberturaMostrar =
+      estadoCoberturaNorm === "no" ? "Sin cobertura" : estadoCoberturaRaw;
+
+    // Prioridad: retirada / cancelada
+    if (fueRetirada) return { bg: "secondary", text: "Retirada" };
+    if (fueCancelada) return { bg: "danger", text: "Póliza cancelada" };
+
+    // Mostrar el estado real cuando aplica (igual que ficha de cliente)
+    if (
+      estadoCoberturaNorm === "no" ||
+      estadoCoberturaNorm === "medicare" ||
+      estadoCoberturaNorm === "medicaid" ||
+      estadoCoberturaNorm === "medicai"
+    ) {
+      return { bg: "danger", text: estadoCoberturaMostrar || "Sin cobertura" };
+    }
 
     if (vigente) return { bg: "success", text: "Vigente en póliza" };
-    if (fueCancelada) return { bg: "danger", text: "Póliza cancelada" };
     if (activo) return { bg: "warning", text: "Póliza sin cobertura" };
     return { bg: "secondary", text: "No tiene cobertura" };
   };

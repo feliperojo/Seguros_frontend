@@ -119,11 +119,13 @@ const ResponderTareaAuditoriaModal = ({
   // Estados para confirmación
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showConfirmCompletarModal, setShowConfirmCompletarModal] = useState(false);
+  // ✅ Congelar el comentario resaltado al abrir el modal (no debe desaparecer hasta cerrar)
+  const [frozenHighlightedCommentId, setFrozenHighlightedCommentId] = useState(null);
   const highlightedCommentId = useMemo(() => {
-    const rawId = notificationContext?.commentId;
-    if (rawId == null || rawId === "") return null;
-    return String(rawId);
-  }, [notificationContext?.commentId]);
+    return frozenHighlightedCommentId != null && frozenHighlightedCommentId !== ""
+      ? String(frozenHighlightedCommentId)
+      : null;
+  }, [frozenHighlightedCommentId]);
   const hasScrolledToHighlightedCommentRef = useRef(false);
   
   const [scheduledDate, setScheduledDate] = useState("");
@@ -181,8 +183,14 @@ const ResponderTareaAuditoriaModal = ({
       lastSelectionRef.current = null;
       quillSelectionBoundToRef.current = null;
       hasScrolledToHighlightedCommentRef.current = false;
+      const rawId = notificationContext?.commentId;
+      setFrozenHighlightedCommentId(
+        rawId == null || rawId === "" ? null : String(rawId)
+      );
+    } else {
+      setFrozenHighlightedCommentId(null);
     }
-  }, [show, tarea?.id]);
+  }, [show, tarea?.id, notificationContext?.commentId]);
 
   useEffect(() => {
     if (!show || !highlightedCommentId) return;
