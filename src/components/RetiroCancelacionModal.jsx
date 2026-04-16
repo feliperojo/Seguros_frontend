@@ -21,6 +21,63 @@ const normalizeDate = (dateString) => {
   return `${year}-${month}-${day}`;
 };
 
+// Deriva el estado visible de la póliza (misma lógica que ficha de cliente)
+const derivarEstadoPolizaVisible = (c) => {
+  try {
+    if (!c || typeof c !== "object") return "Vigente";
+
+    const estadoCoberturaRaw =
+      c?.estado_cobertura != null ? String(c.estado_cobertura).trim() : "";
+    const estadoCoberturaNormalizado = estadoCoberturaRaw.toLowerCase();
+    const estadoCoberturaMostrar =
+      estadoCoberturaNormalizado === "no" ? "Sin cobertura" : estadoCoberturaRaw;
+
+    const fechaRetiroValida =
+      c?.fecha_retiro &&
+      String(c.fecha_retiro).trim() &&
+      String(c.fecha_retiro) !== "null"
+        ? String(c.fecha_retiro)
+        : null;
+
+    const fechaCancelacionValida =
+      c?.fecha_cancelacion &&
+      String(c.fecha_cancelacion).trim() &&
+      String(c.fecha_cancelacion) !== "null"
+        ? String(c.fecha_cancelacion)
+        : null;
+
+    const activo =
+      c?.activo !== undefined && c?.activo !== null
+        ? c.activo === true || c.activo === "true" || c.activo === 1
+        : true;
+
+    const vigente =
+      c?.vigente !== undefined && c?.vigente !== null
+        ? c.vigente === true || c.vigente === "true" || c.vigente === 1
+        : true;
+
+    // Prioridad: retirada
+    if (fechaRetiroValida || !activo) return "Retirada";
+    // Prioridad: cancelada
+    if (fechaCancelacionValida) return "Póliza Cancelada";
+
+    // Mostrar estado real cuando aplica (sin romper valores existentes)
+    if (
+      estadoCoberturaNormalizado === "no" ||
+      estadoCoberturaNormalizado === "medicare" ||
+      estadoCoberturaNormalizado === "medicaid" ||
+      estadoCoberturaNormalizado === "medicai"
+    ) {
+      return estadoCoberturaMostrar;
+    }
+
+    if (vigente) return "Vigente";
+    return "Póliza Cancelada";
+  } catch {
+    return "Vigente";
+  }
+};
+
 const RetiroCancelacionModal = ({ 
   show, 
   onHide, 
@@ -340,17 +397,46 @@ const RetiroCancelacionModal = ({
               </div>
 
               <Row className="mb-3">
-                <Col md={4}>
+                <Col md={3}>
                   <div className="text-muted small">ID Póliza</div>
                   <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
                 </Col>
-                <Col md={4}>
+                <Col md={3}>
                   <div className="text-muted small">Compañía</div>
                   <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
                 </Col>
-                <Col md={4}>
+                <Col md={3}>
                   <div className="text-muted small">Año de Cobertura</div>
                   <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
+                </Col>
+                <Col md={3}>
+                  <div className="text-muted small">Estado de la Póliza</div>
+                  <div className="fw-semibold">
+                    {(() => {
+                      const estadoPoliza = derivarEstadoPolizaVisible(cobertura);
+                      const bg =
+                        estadoPoliza === "Vigente"
+                          ? "success"
+                          : estadoPoliza === "Póliza Cancelada"
+                          ? "warning"
+                          : estadoPoliza === "Sin cobertura" ||
+                            estadoPoliza === "No" ||
+                            estadoPoliza === "Medicare" ||
+                            estadoPoliza === "Medicaid" ||
+                            estadoPoliza === "Medicai"
+                          ? "danger"
+                          : "secondary";
+                      return (
+                        <Badge
+                          bg={bg}
+                          className="text-uppercase"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {estadoPoliza}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
                 </Col>
               </Row>
 

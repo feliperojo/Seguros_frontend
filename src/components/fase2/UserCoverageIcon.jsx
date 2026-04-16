@@ -70,7 +70,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     // Prioridad 2: Si tiene fecha de cancelación y NO tiene retiro → Cancelado
     label = "Cancelado";
   } else if (normalizedStatus === "sí") {
-    label = "Activo";
+    label = "Vigente";
   } else if (
     normalizedStatus === "no" ||
     normalizedStatus === "medicare" ||
