@@ -94,6 +94,7 @@ export default function TareasPendientesPanel({
   
   // Ref para rastrear qué logIds ya se están cargando o se cargaron
   const logIdsCargandoRef = useRef(new Set());
+  const comentariosIdsCargandoRef = useRef(new Set());
 
   // Obtener usuario actual del contexto de autenticación
   const { user: currentUser } = useAuth();
@@ -181,12 +182,36 @@ export default function TareasPendientesPanel({
     const due_date =
       raw?.due_date ?? raw?.due_at ?? raw?.fechaLimite ?? null;
 
+    // Normalizar campos para que el modal compartido funcione también desde "Tareas pendientes"
+    // (en esta vista suelen venir `concepto`/`nota` en el root y `log` incompleto).
+    const conceptName =
+      raw?.log?.concept?.name ??
+      raw?.concepto ??
+      raw?.concept ??
+      raw?.log?.concepto ??
+      null;
+
+    const noteHtml =
+      raw?.log?.note ??
+      raw?.nota ??
+      raw?.note ??
+      null;
+
+    const normalizedStatus = raw?.status ?? raw?.estado ?? null;
+
     return {
       ...raw,
       scheduled_date,
       due_date,
+      ...(normalizedStatus ? { status: normalizedStatus } : {}),
       log: {
         ...(raw.log || {}),
+        ...(raw?.log?.concept
+          ? null
+          : conceptName
+            ? { concept: { name: conceptName } }
+            : null),
+        ...(raw?.log?.note ? null : noteHtml ? { note: noteHtml } : null),
         cliente: cliente || {
           id: clienteId,
           nombre_completo: "Cliente", // Aquí se ajusta para tener un valor por defecto
@@ -269,8 +294,11 @@ export default function TareasPendientesPanel({
 
   // Cargar comentarios de una tarea
   const cargarComentariosTarea = useCallback(async (tareaId) => {
-    if (!tareaId || comentariosTareas[tareaId]) return;
+    if (!tareaId) return;
+    if (comentariosTareas[tareaId]) return;
+    if (comentariosIdsCargandoRef.current.has(String(tareaId))) return;
 
+    comentariosIdsCargandoRef.current.add(String(tareaId));
     setLoadingComentariosTareas((prev) => ({ ...prev, [tareaId]: true }));
     try {
       const data = await apiRequest(`tareas_operativas/${tareaId}/comentarios`, "GET");
@@ -282,9 +310,34 @@ export default function TareasPendientesPanel({
       console.error(`Error al cargar comentarios de la tarea ${tareaId}:`, err);
       setComentariosTareas((prev) => ({ ...prev, [tareaId]: [] }));
     } finally {
+      comentariosIdsCargandoRef.current.delete(String(tareaId));
       setLoadingComentariosTareas((prev) => ({ ...prev, [tareaId]: false }));
     }
   }, [comentariosTareas]);
+
+  // Precargar comentarios (para mostrar conteo sin abrir el dropdown)
+  useEffect(() => {
+    if (!autoItems?.length) return;
+
+    // Evitar un "burst" muy agresivo: cargar en cadena.
+    let cancelled = false;
+    (async () => {
+      for (const t of autoItems) {
+        if (cancelled) return;
+        const { tareaId } = getTaskIds(t);
+        if (!tareaId) continue;
+        if (comentariosTareas[tareaId]) continue;
+        if (comentariosIdsCargandoRef.current.has(String(tareaId))) continue;
+
+        // eslint-disable-next-line no-await-in-loop
+        await cargarComentariosTarea(tareaId);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [autoItems, comentariosTareas, cargarComentariosTarea, getTaskIds]);
 
   // Cargar adjuntos de un log
   const cargarAdjuntos = useCallback(async (logId) => {
@@ -1032,7 +1085,14 @@ export default function TareasPendientesPanel({
                 const { tareaId } = getTaskIds(t);
                 if (!tareaId) return null;
 
-                const comentariosTarea = comentariosTareas[tareaId] || [];
+                const rawTask = t?.__raw ?? t;
+                const comentariosDesdeTarea =
+                  rawTask?.comments ||
+                  rawTask?.comentarios ||
+                  rawTask?.comments_list ||
+                  rawTask?.task?.comments ||
+                  [];
+                const comentariosTarea = comentariosTareas[tareaId] || (Array.isArray(comentariosDesdeTarea) ? comentariosDesdeTarea : []);
                 const estaExpandida = tareasExpandidas[tareaId];
                 const estaCargando = loadingComentariosTareas[tareaId];
 
@@ -1047,11 +1107,9 @@ export default function TareasPendientesPanel({
                       <div className="d-flex align-items-center gap-2">
                         <FaComments className="text-primary" />
                         <strong>Comentarios de la tarea</strong>
-                        {comentariosTarea.length > 0 && (
-                          <span className="badge bg-primary rounded-pill">
-                            {comentariosTarea.length}
-                          </span>
-                        )}
+                        <span className={`badge rounded-pill ${comentariosTarea.length > 0 ? "bg-primary" : "bg-secondary"}`}>
+                          {comentariosTarea.length}
+                        </span>
                       </div>
                       <div className="d-flex align-items-center gap-2">
                         {estaCargando && (
