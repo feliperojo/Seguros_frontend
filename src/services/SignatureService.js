@@ -39,6 +39,8 @@ export const createSubmission = async ({
     throw new Error("documentType debe ser 'AUTORIZACION' o 'CONFIRMACION'");
   }
 
+  const normalizedDocumentType = documentType.toUpperCase();
+
   // Validar emails y preparar signers con order (1-indexed según validación del backend)
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const preparedSigners = signers.map((signer, index) => {
@@ -83,7 +85,7 @@ export const createSubmission = async ({
   formData.append("filename", filename || "documento.pdf");
 
   // Agregar document_type
-  formData.append("document_type", documentType.toUpperCase());
+  formData.append("document_type", normalizedDocumentType);
 
   // Agregar language para que el backend maneje coordenadas por formato + idioma
   if (language && (language === "es" || language === "en")) {
@@ -94,7 +96,11 @@ export const createSubmission = async ({
   formData.append("signers", JSON.stringify(preparedSigners));
 
   // Agregar metadata como JSON stringificado
-  formData.append("metadata", JSON.stringify(metadata));
+  const enrichedMetadata =
+    normalizedDocumentType === "CONFIRMACION"
+      ? { ...metadata, document_type: "CONFIRMACION" }
+      : metadata;
+  formData.append("metadata", JSON.stringify(enrichedMetadata));
 
   // Agregar email_subject si está disponible
   if (emailSubject && emailSubject.trim()) {

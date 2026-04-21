@@ -1,6 +1,8 @@
 import jsPDF from "jspdf";
 import { jsPDFToBlob } from "../utils/pdfHelpers";
 
+const DOCUSEAL_CONFIRMACION_SIGNATURE_TAG = "{{Sign;type=signature;role=First Party}}";
+
 /**
  * Genera un documento PDF de confirmación de datos.
  * @param {Object} grupo - Datos del grupo familiar
@@ -167,7 +169,17 @@ export const generarPDFConfirmacion = async (grupo, download = true, language = 
   doc.text(texts.cordialmente, margin, y);
   y += 30;
   doc.setFont("helvetica", "bold");
-  doc.text(texts.firma, margin, y);
+  // Campo de firma DocuSeal (reemplaza el texto "Firma/Signature" solo en Confirmación)
+  // Nota: el tag debe EXISTIR en el PDF para que DocuSeal lo detecte, pero no queremos que se vea.
+  // Por eso lo renderizamos con color blanco y luego restauramos el color por defecto.
+  const prevTextColor = doc.getTextColor?.();
+  doc.setTextColor(255, 255, 255);
+  doc.text(DOCUSEAL_CONFIRMACION_SIGNATURE_TAG, margin, y);
+  if (typeof prevTextColor !== "undefined") {
+    doc.setTextColor(prevTextColor);
+  } else {
+    doc.setTextColor(0, 0, 0);
+  }
   y += 20;
   doc.text(nombreTomador, margin, y);
 
