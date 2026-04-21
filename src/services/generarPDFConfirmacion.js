@@ -148,8 +148,18 @@ export const generarPDFConfirmacion = async (grupo, download = true, language = 
   (grupo.coberturas || []).forEach(c => {
     doc.text(c.cliente?.nombre_completo || "N/A", margin, y);
     doc.text(formatFecha(c.cliente?.fecha_nacimiento, locale) || "N/A", margin + 250, y);
-    const coberturaVal = c.estado_cobertura?.toLowerCase() === "yes" ? (language === "en" ? "YES" : "SI") : "NO";
-    doc.text(coberturaVal, margin + 350, y);
+    const rawCobertura = c.estado_cobertura;
+    const normalizedCobertura =
+      rawCobertura === null || rawCobertura === undefined || String(rawCobertura).trim() === ""
+        ? "N/A"
+        : (() => {
+            const v = String(rawCobertura).trim();
+            const lower = v.toLowerCase();
+            if (lower === "yes" || lower === "si" || lower === "sí") return language === "en" ? "YES" : "SI";
+            if (lower === "no") return "NO";
+            return v;
+          })();
+    doc.text(normalizedCobertura, margin + 350, y);
     y += 14;
   });
 
