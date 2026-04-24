@@ -60,16 +60,30 @@ const PagosActualizar = () => {
     fetchPagos();
   }, []);
 
-  const handleEstadoChange = async (pagoId, nuevoEstado) => {
-    try {
-      await apiRequest(`cobertura/pagos/${pagoId}`, "PUT", { estado: nuevoEstado });
+  const updatePago = async (pagoId, patch) => {
+    const pagoActual = pagos.find((p) => p.id === pagoId);
+    const payload = {
+      estado: patch?.estado ?? pagoActual?.estado,
+      portal: patch?.portal ?? (pagoActual?.portal ?? false),
+    };
 
-      setPagos((prev) => prev.map((p) => (p.id === pagoId ? { ...p, estado: nuevoEstado } : p)));
-      mostrarAlerta("Estado actualizado correctamente", "success");
+    try {
+      await apiRequest(`cobertura/pagos/${pagoId}`, "PUT", payload);
+
+      setPagos((prev) => prev.map((p) => (p.id === pagoId ? { ...p, ...payload } : p)));
+      mostrarAlerta("Pago actualizado correctamente", "success");
     } catch (err) {
-      console.error("Error al actualizar el estado:", err);
-      mostrarAlerta("Error al actualizar el estado del pago", "danger");
+      console.error("Error al actualizar el pago:", err);
+      mostrarAlerta("Error al actualizar el pago", "danger");
     }
+  };
+
+  const handleEstadoChange = async (pagoId, nuevoEstado) => {
+    await updatePago(pagoId, { estado: nuevoEstado });
+  };
+
+  const handlePortalChange = async (pagoId, portal) => {
+    await updatePago(pagoId, { portal });
   };
 
   const handleFiltroChange = (e) => {
@@ -180,6 +194,7 @@ const PagosActualizar = () => {
                 <th>Compañía</th>
                 <th>Monto</th>
                 <th>Medios</th>
+                <th>Portal</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -223,6 +238,15 @@ const PagosActualizar = () => {
                           <FaEye />
                         </Button>
                       </td>
+
+                  <td className="text-center align-middle">
+                    <Form.Check
+                      type="checkbox"
+                      checked={!!p.portal}
+                      onChange={(e) => handlePortalChange(p.id, e.target.checked)}
+                      aria-label="Portal"
+                    />
+                  </td>
 
                   <td>
                     <Form.Select

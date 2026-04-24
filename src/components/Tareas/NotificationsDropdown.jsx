@@ -211,6 +211,20 @@ const NotificationsDropdown = ({
     const isUnread = isNotificationUnread(notification);
     const hasComment = !!notification.comment_id;
     const hasTask = !!notification.task_id;
+    const clienteNombre =
+      notification?.client_name ||
+      notification?.task?.client_name ||
+      notification?.data?.client_name ||
+      notification?.metadata?.client_name ||
+      notification?.task?.log?.cliente?.nombre_completo ||
+      notification?.task?.cliente?.nombre_completo ||
+      notification?.task?.log?.cliente?.nombre ||
+      notification?.task?.cliente?.nombre ||
+      notification?.cliente?.nombre_completo ||
+      notification?.cliente?.nombre ||
+      notification?.data?.cliente?.nombre_completo ||
+      notification?.data?.cliente?.nombre ||
+      null;
 
     return (
       <div
@@ -275,6 +289,14 @@ const NotificationsDropdown = ({
                   >
                     {notification.message}
                   </p>
+                )}
+
+                {clienteNombre && (
+                  <div className="mt-1">
+                    <span className="text-muted" style={{ fontSize: '0.72rem' }}>
+                      👤 {clienteNombre}
+                    </span>
+                  </div>
                 )}
 
                 <div className="d-flex gap-1 flex-wrap mt-1">

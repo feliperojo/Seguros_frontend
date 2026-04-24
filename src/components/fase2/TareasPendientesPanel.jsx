@@ -505,13 +505,67 @@ export default function TareasPendientesPanel({
     };
   };
 
+  const toTime = (v) => {
+    if (!v) return null;
+    if (v instanceof Date) {
+      const t = v.getTime();
+      return Number.isFinite(t) ? t : null;
+    }
+    if (typeof v === "number") return Number.isFinite(v) ? v : null;
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (!s) return null;
+
+      // Intento 1: Date nativo (ISO / RFC).
+      const native = new Date(s);
+      const nativeTime = native.getTime();
+      if (!Number.isNaN(nativeTime)) return nativeTime;
+
+      // Intento 2: formatos tipo "MM-DD-YYYY" o "DD-MM-YYYY" o "YYYY-MM-DD".
+      const m = s.match(/^(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})(?:\s|T|$)/);
+      if (m) {
+        const p1 = Number(m[1]);
+        const p2 = Number(m[2]);
+        const p3 = Number(m[3]);
+        if (Number.isFinite(p1) && Number.isFinite(p2) && Number.isFinite(p3)) {
+          let year, month, day;
+          if (m[1].length === 4) {
+            // YYYY-MM-DD
+            year = p1; month = p2; day = p3;
+          } else if (m[3].length === 4) {
+            // Preferimos MM-DD-YYYY (como se muestra en la UI); si no cuadra, cae a DD-MM-YYYY.
+            const asMDY = { year: p3, month: p1, day: p2 };
+            const asDMY = { year: p3, month: p2, day: p1 };
+            const valid = (x) => x.month >= 1 && x.month <= 12 && x.day >= 1 && x.day <= 31;
+            const chosen = valid(asMDY) ? asMDY : asDMY;
+            year = chosen.year; month = chosen.month; day = chosen.day;
+          }
+          if (year && month && day) {
+            const dt = new Date(year, month - 1, day);
+            const t = dt.getTime();
+            return Number.isNaN(t) ? null : t;
+          }
+        }
+      }
+    }
+    return null;
+  };
+
+  // Orden solicitado: más reciente (creación) arriba.
   const sortTasks = (a, b) => {
-    const ad = a.fechaLimite ? new Date(a.fechaLimite).getTime() : Number.POSITIVE_INFINITY;
-    const bd = b.fechaLimite ? new Date(b.fechaLimite).getTime() : Number.POSITIVE_INFINITY;
-    if (ad !== bd) return ad - bd;
-    const ac = a.fechaCreacion ? new Date(a.fechaCreacion).getTime() : 0;
-    const bc = b.fechaCreacion ? new Date(b.fechaCreacion).getTime() : 0;
-    return bc - ac;
+    const ac = toTime(a?.fechaCreacion);
+    const bc = toTime(b?.fechaCreacion);
+    const at = ac ?? 0;
+    const bt = bc ?? 0;
+    if (at !== bt) return bt - at;
+
+    // Desempate: fecha límite ascendente (si existe)
+    const ad = toTime(a?.fechaLimite);
+    const bd = toTime(b?.fechaLimite);
+    const adt = ad ?? Number.POSITIVE_INFINITY;
+    const bdt = bd ?? Number.POSITIVE_INFINITY;
+    if (adt !== bdt) return adt - bdt;
+    return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
   };
 
   const estadoLabel = (estado) => {
@@ -587,6 +641,11 @@ export default function TareasPendientesPanel({
     if (clienteId && grupoId) return byApi.length ? byApi : byProp;
     return byProp.length ? byProp : byApi;
   }, [items, autoItems, clienteId, grupoId]);
+
+  const orderedData = useMemo(() => {
+    if (!Array.isArray(data) || data.length === 0) return [];
+    return [...data].sort(sortTasks);
+  }, [data, sortTasks]);
 
   // Cargar adjuntos automáticamente cuando cambian los logIds (no solo el length)
   const logIdsKey = useMemo(() => {
@@ -720,7 +779,7 @@ export default function TareasPendientesPanel({
         )}
 
         {/* ✅ SOLO UN map (quitamos el duplicado) */}
-        {!loading && !errMsg && data?.map((t) => (
+        {!loading && !errMsg && orderedData?.map((t) => (
           <div key={t.id} className="card mb-3 shadow-sm border-0">
             <div className="card-body py-3">
               <div className="d-flex justify-content-between">

@@ -14,6 +14,68 @@ export const useNotifications = (currentUser) => {
   const pushedIdsRef = useRef(new Set());
   const prevIdsRef = useRef(new Set());
 
+  const getNotificationTaskId = useCallback((n) => {
+    const raw =
+      n?.task_id ??
+      n?.auditoria_task_id ??
+      n?.audit_task_id ??
+      n?.data?.task_id ??
+      n?.data?.auditoria_task_id ??
+      n?.data?.audit_task_id ??
+      n?.metadata?.task_id ??
+      n?.metadata?.auditoria_task_id ??
+      n?.metadata?.audit_task_id ??
+      n?.task?.id ??
+      null;
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, []);
+
+  const getNotificationCommentId = useCallback((n) => {
+    const raw =
+      n?.comment_id ??
+      n?.auditoria_comment_id ??
+      n?.audit_comment_id ??
+      n?.data?.comment_id ??
+      n?.data?.auditoria_comment_id ??
+      n?.data?.audit_comment_id ??
+      n?.metadata?.comment_id ??
+      n?.metadata?.auditoria_comment_id ??
+      n?.metadata?.audit_comment_id ??
+      null;
+    const num = Number(raw);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }, []);
+
+  const dedupeMentionAndReply = useCallback((items) => {
+    const arr = Array.isArray(items) ? items : [];
+    if (arr.length === 0) return arr;
+
+    // Si existe una mención para el mismo task+comment, ocultar la notificación tipo "reply"
+    // (evita mostrar "Nueva respuesta..." cuando realmente es la primera mención).
+    const mentionTypes = new Set(['mention', 'audit_mention']);
+    const replyTypes = new Set(['reply_on_mentioned_task', 'mention_reply']);
+
+    const mentionKeys = new Set();
+    for (const n of arr) {
+      if (!mentionTypes.has(n?.type)) continue;
+      const taskId = getNotificationTaskId(n);
+      const commentId = getNotificationCommentId(n);
+      if (!taskId || !commentId) continue;
+      mentionKeys.add(`${taskId}:${commentId}`);
+    }
+
+    if (mentionKeys.size === 0) return arr;
+
+    return arr.filter((n) => {
+      if (!replyTypes.has(n?.type)) return true;
+      const taskId = getNotificationTaskId(n);
+      const commentId = getNotificationCommentId(n);
+      if (!taskId || !commentId) return true;
+      return !mentionKeys.has(`${taskId}:${commentId}`);
+    });
+  }, [getNotificationTaskId, getNotificationCommentId]);
+
   const deriveUnreadCount = useCallback((items, serverUnreadCount) => {
     if (typeof serverUnreadCount === 'number' && !Number.isNaN(serverUnreadCount)) {
       return serverUnreadCount;
@@ -59,13 +121,17 @@ export const useNotifications = (currentUser) => {
           : Boolean(notification.read_at),
       }));
 
-      setNotifications(normalizedNotifications);
+      const dedupedNotifications = dedupeMentionAndReply(normalizedNotifications);
+      setNotifications(dedupedNotifications);
       const unreadFromServer =
         response?.unread_count ??
         response?.data?.unread_count ??
         response?.meta?.unread_count;
 
-      setUnreadCount(deriveUnreadCount(normalizedNotifications, unreadFromServer));
+      // Importante: el contador debe concordar con lo que se visualiza.
+      // Como deduplicamos notificaciones para el UI (ej. ocultamos "reply" si hay "mention" equivalente),
+      // no podemos confiar en unread_count del backend porque incluiría elementos ocultos.
+      setUnreadCount(dedupedNotifications.filter((n) => n.read === false).length);
     } catch (err) {
       // Si el endpoint no existe aún, no mostrar error (backend aún no implementado)
       if (err.response?.status !== 404 && err.response?.status !== 501) {
