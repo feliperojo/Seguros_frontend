@@ -104,6 +104,93 @@ const MainLayout = ({ children }) => {
       // Asegurar que el objeto tenga las fechas normalizadas
       normalizedTask.scheduled_date = scheduled_date;
       normalizedTask.due_date = due_date;
+
+      // Normalizar estado (algunas respuestas usan `estado`)
+      normalizedTask.status = normalizedTask.status || normalizedTask.estado || normalizedTask.state || "pending";
+
+      // ✅ Normalizar "responsable" (cuando backend no envía objeto de asignación)
+      // El modal usa campos como `assign_to_user_name` / `assigned_to_name` como fallback.
+      if (normalizedTask?.responsable && typeof normalizedTask.responsable === "string") {
+        const resp = normalizedTask.responsable.trim();
+        if (resp) {
+          normalizedTask.assign_to_user_name = normalizedTask.assign_to_user_name || resp;
+          normalizedTask.assigned_to_name = normalizedTask.assigned_to_name || resp;
+          if (!normalizedTask.log) normalizedTask.log = {};
+          if (!normalizedTask.log.assigned_user) normalizedTask.log.assigned_user = {};
+          normalizedTask.log.assigned_user.name = normalizedTask.log.assigned_user.name || resp;
+        }
+      }
+
+      // ✅ Normalizar cliente si viene directamente en la estructura nueva
+      // El modal espera `tarea.log.cliente.{id,nombre_completo,telefono,...}`
+      if (normalizedTask?.cliente && normalizedTask.cliente?.id) {
+        if (!normalizedTask.log) normalizedTask.log = {};
+
+        const clienteData = normalizedTask.cliente;
+        let telefonoPrincipal = "";
+        if (clienteData.telefonos && Array.isArray(clienteData.telefonos) && clienteData.telefonos.length > 0) {
+          const telefonoPrincipalObj = clienteData.telefonos.find((t) => t.principal) || clienteData.telefonos[0];
+          if (telefonoPrincipalObj) {
+            const indicativo = telefonoPrincipalObj.indicativo ? `+${telefonoPrincipalObj.indicativo} ` : "";
+            telefonoPrincipal = `${indicativo}${telefonoPrincipalObj.numero || ""}`.trim();
+          }
+        }
+
+        normalizedTask.log.cliente = {
+          id: clienteData.id,
+          nombre_completo: clienteData.nombre_completo || clienteData.nombre || "Cliente",
+          telefono: telefonoPrincipal || clienteData.telefono || "",
+          estado_cliente: clienteData.estado_cliente || "cliente",
+          email: clienteData.email || null,
+          telefonos: clienteData.telefonos || [],
+        };
+      }
+
+      // ✅ Normalizar comentarios si vienen en estructura nueva (`comentarios`)
+      if (Array.isArray(normalizedTask.comentarios) && !Array.isArray(normalizedTask.comments)) {
+        normalizedTask.comments = normalizedTask.comentarios.map((c) => ({
+          id: c.id,
+          comment: c.comment || "",
+          user: c.user || "Usuario",
+          fecha: c.fecha || c.created_at,
+          adjuntos: c.adjuntos || [],
+        }));
+      }
+
+      // ✅ Normalizar concepto para `log.concept.name` (compatibilidad UI)
+      {
+        const conceptName =
+          normalizedTask?.log?.concept?.name ||
+          normalizedTask?.concepto ||
+          normalizedTask?.concept_name ||
+          normalizedTask?.concept?.name ||
+          normalizedTask?.concept?.nombre ||
+          normalizedTask?.concept?.title ||
+          normalizedTask?.log?.concepto ||
+          normalizedTask?.log?.concept_name ||
+          normalizedTask?.log?.concept?.titulo ||
+          null;
+
+        if (conceptName && !normalizedTask?.log?.concept?.name) {
+          if (!normalizedTask.log) normalizedTask.log = {};
+          normalizedTask.log.concept = {
+            ...(normalizedTask.log.concept || {}),
+            name: String(conceptName),
+          };
+        }
+      }
+
+      // ✅ Normalizar nota para `log.note`
+      if (normalizedTask?.nota && !normalizedTask?.log?.note) {
+        if (!normalizedTask.log) normalizedTask.log = {};
+        normalizedTask.log.note = normalizedTask.nota;
+      }
+
+      // ✅ Normalizar usuario creador para `log.user`
+      if (normalizedTask?.creado_por && !normalizedTask?.log?.user) {
+        if (!normalizedTask.log) normalizedTask.log = {};
+        normalizedTask.log.user = normalizedTask.creado_por;
+      }
       
       // Si tiene log pero no tiene cliente completo, intentar obtenerlo
       if (normalizedTask.log) {

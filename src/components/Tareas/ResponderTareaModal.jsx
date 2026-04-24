@@ -1220,12 +1220,7 @@ const ResponderTareaModal = ({
       setToastMessage("✅ Comentario agregado exitosamente a la tarea");
       setToastVariant("success");
       setShowToast(true);
-      
-      // ✅ Cerrar el modal después de un breve delay para que se vea el toast
-      // El estado ya se actualizó arriba, así que el cambio de color debería verse inmediatamente
-      setTimeout(() => {
-        onHide(true);
-      }, 1500);
+      // ✅ No cerrar automáticamente: el usuario puede seguir revisando el modal.
     } catch (error) {
       console.error("❌ Error al agregar el comentario:", error);
       
@@ -1430,8 +1425,11 @@ const ResponderTareaModal = ({
         if (arch.preview) URL.revokeObjectURL(arch.preview);
       });
       setArchivos([]);
-      
-      onHide(true);
+
+      // ✅ No cerrar automáticamente: el usuario puede revisar que todo quede bien.
+      setToastMessage("✅ Tarea completada exitosamente");
+      setToastVariant("success");
+      setShowToast(true);
     } catch (error) {
       console.error("❌ Error al completar la tarea:", error);
       alert("❌ Error al completar la tarea");

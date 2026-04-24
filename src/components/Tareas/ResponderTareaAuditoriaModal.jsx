@@ -729,9 +729,7 @@ const ResponderTareaAuditoriaModal = ({
       await cargarComentarios();
       
       toast.showSuccess("Tarea completada exitosamente");
-      setTimeout(() => {
-        onHide();
-      }, 1500);
+      // ✅ No cerrar automáticamente: el usuario puede revisar el resultado.
     } catch (error) {
       console.error("Error al completar tarea:", error);
       toast.showError(error.response?.data?.message || error.message || "Error al completar tarea");
