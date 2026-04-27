@@ -94,6 +94,34 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
     );
   };
 
+  const formatVencimiento = (value) => {
+    if (!value) return "-";
+    const raw = String(value).trim();
+    if (!raw) return "-";
+
+    // Si ya viene como MM/AAAA, respetarlo
+    const mmYyyy = raw.match(/^(0[1-9]|1[0-2])\/(\d{4})$/);
+    if (mmYyyy) return raw;
+
+    // Si viene como YYYY-MM o YYYY-MM-DD (o ISO con hora)
+    const iso = raw.match(/^(\d{4})-(\d{2})/);
+    if (iso) {
+      const [, yyyy, mm] = iso;
+      return `${mm}/${yyyy}`;
+    }
+
+    // Último intento: Date parseable
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = String(d.getFullYear());
+      return `${mm}/${yyyy}`;
+    }
+
+    // Fallback: devolver tal cual si no se pudo inferir
+    return raw;
+  };
+
   return (
     <>
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -154,16 +182,13 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         <td>
                           {isUnlocked ? medio.numero_tarjeta : maskCardNumber(medio.numero_tarjeta)}
                         </td>
-                        <td>{medio.fecha_expiracion}</td>
+                        <td>{formatVencimiento(medio.fecha_expiracion)}</td>
                         <td>
                           {isUnlocked ? (medio.cvv || '-') : maskCVV()}
                         </td>
                         {showActions && (
                         <td>
                             <div className="d-flex gap-2">
-                            <button className="btn btn-sm btn-outline-primary" onClick={() => onView(medio, index)}>
-                                <FaEye />
-                            </button>
                             <button className="btn btn-sm btn-outline-success" onClick={() => onEdit(medio, index)}>
                                 <FaEdit />
                             </button>
@@ -217,9 +242,6 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         {showActions && (
                         <td>
                             <div className="d-flex gap-2">
-                            <button className="btn btn-sm btn-outline-primary" onClick={() => onView(medio, index)}>
-                                <FaEye />
-                            </button>
                             <button className="btn btn-sm btn-outline-success" onClick={() => onEdit(medio, index)}>
                                 <FaEdit />
                             </button>
