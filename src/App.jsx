@@ -49,6 +49,7 @@ import FichaClienteComentarios from "./pages/tabs/FichaClienteComentarios";
 import FichaClienteCalendario from "./pages/tabs/FichaClienteCalendario";
 import FichaClienteAuditorias from "./pages/tabs/FichaClienteAuditorias";
 import FichaClienteRequerimientos from "./pages/tabs/FichaClienteRequerimientos";
+import FichaClienteMediosPago from "./pages/tabs/FichaClienteMediosPago";
 
 // Módulo de Administración
 import UsersList from "./pages/admin/UsersList";
@@ -196,6 +197,7 @@ const App = () => {
           <Route index element={<FichaClienteGeneral />} />
           <Route path="info-completa" element={<FichaClienteInfoCompleta />} />
           <Route path="historial" element={<FichaClienteHistorial />} />
+          <Route path="medios-pago" element={<FichaClienteMediosPago />} />
           <Route path="ringcentral" element={<FichaClienteRingCentral />} />
           <Route path="calendario" element={<FichaClienteCalendario />} />
           <Route path="requerimientos" element={<FichaClienteRequerimientos />} />

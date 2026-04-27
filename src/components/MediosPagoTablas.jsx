@@ -8,6 +8,15 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [unlockExpiry, setUnlockExpiry] = useState(null);
 
+  const inferFormaPago = (medio) => {
+    const fp = medio?.forma_pago;
+    if (fp) return fp;
+    // Fallback: si backend no envía forma_pago, inferir por campos
+    if (medio?.cuenta_numero || medio?.banco || medio?.ruta) return "cuenta_bancaria";
+    if (medio?.numero_tarjeta || medio?.tipo_tarjeta || medio?.cvv) return "tarjeta";
+    return null;
+  };
+
   // Verificar si el desbloqueo sigue vigente
   useEffect(() => {
     if (unlockExpiry && new Date() > unlockExpiry) {
@@ -50,29 +59,39 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
     setIsUnlocked(false);
     setUnlockExpiry(null);
   };
-    const tarjetas = mediosPago.filter(m => 
-      m.forma_pago === 'tarjeta' || 
-      m.forma_pago === 'tarjeta_credito' || 
-      m.forma_pago === 'tarjeta_debito'
-    );
-  const cuentasBancarias = mediosPago.filter(m => m.forma_pago === 'cuenta_bancaria');
+  const tarjetas = mediosPago.filter((m) => {
+    const fp = inferFormaPago(m);
+    return fp === "tarjeta" || fp === "tarjeta_credito" || fp === "tarjeta_debito";
+  });
+  const cuentasBancarias = mediosPago.filter((m) => inferFormaPago(m) === "cuenta_bancaria");
   
   // Verificar si hay datos sensibles que necesiten protección
   const hasSensitiveData = tarjetas.length > 0 || cuentasBancarias.length > 0;
   
   // Función auxiliar para determinar el tipo de pago (Crédito/Débito)
   const getTipoPago = (medio) => {
-    if (medio.forma_pago === 'tarjeta_debito' || medio.tipo_tarjeta_pago === 'debito') {
+    const fp = inferFormaPago(medio);
+    if (fp === 'tarjeta_debito' || medio.tipo_tarjeta_pago === 'debito') {
       return 'Débito';
     }
-    if (medio.forma_pago === 'tarjeta_credito' || medio.tipo_tarjeta_pago === 'credito') {
+    if (fp === 'tarjeta_credito' || medio.tipo_tarjeta_pago === 'credito') {
       return 'Crédito';
     }
     // Si viene como 'tarjeta' genérico, intentar determinar por tipo_tarjeta_pago
-    if (medio.forma_pago === 'tarjeta') {
+    if (fp === 'tarjeta') {
       return medio.tipo_tarjeta_pago === 'debito' ? 'Débito' : 'Crédito';
     }
     return 'N/A';
+  };
+
+  const renderPrincipal = (medio) => {
+    const isPrincipal =
+      medio?.es_principal === true || medio?.es_principal === 1 || medio?.es_principal === "1";
+    return isPrincipal ? (
+      <span className="badge bg-primary">Principal</span>
+    ) : (
+      <span className="text-muted">—</span>
+    );
   };
 
   return (
@@ -110,6 +129,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
           <table className="table table-bordered table-sm">
              <thead>
                 <tr>
+                    <th>Principal</th>
                     <th>Tipo de Pago</th>
                     <th>Tipo</th>
                     <th>Quien paga</th>
@@ -125,6 +145,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
           <tbody>
             {tarjetas.map((medio, index) => (
                     <tr key={medio.id}>
+                        <td>{renderPrincipal(medio)}</td>
                         <td>{getTipoPago(medio)}</td>
                         <td>{medio.tipo_tarjeta}</td>
                         <td>{medio.quien_paga}</td>
@@ -170,6 +191,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
           <table className="table table-bordered table-sm">
           <thead>
                 <tr>
+                    <th>Principal</th>
                     <th>Banco</th>
                     <th>Quien paga</th>
                     <th>Titular</th>
@@ -183,6 +205,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
           <tbody>
           {cuentasBancarias.map((medio, index) => (
                     <tr key={medio.id}>
+                        <td>{renderPrincipal(medio)}</td>
                         <td>{medio.banco}</td>
                         <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>

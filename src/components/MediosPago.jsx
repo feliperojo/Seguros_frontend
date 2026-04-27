@@ -13,6 +13,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     forma_pago: 'tarjeta_credito', // 'tarjeta_credito', 'tarjeta_debito', 'cuenta_bancaria'
     tipo_tarjeta_pago: 'credito', // 'credito' o 'debito' (para compatibilidad con backend)
     quien_paga: '',
+    es_principal: false,
     titular: '',
     direccion: '',
     tipo_tarjeta: '',
@@ -29,8 +30,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   const [copiarDireccion, setCopiarDireccion] = useState(false);
   const [direccionAntesCopiar, setDireccionAntesCopiar] = useState('');
   const [huboCopia, setHuboCopia] = useState(false);
-  const tarjetas = mediosPago.filter(m => m.forma_pago === 'tarjeta');
-  const cuentasBancarias = mediosPago.filter(m => m.forma_pago === 'cuenta_bancaria');
+  const inferFormaPago = (medio) => {
+    const fp = medio?.forma_pago;
+    if (fp) return fp;
+    if (medio?.cuenta_numero || medio?.banco || medio?.ruta) return "cuenta_bancaria";
+    if (medio?.numero_tarjeta || medio?.tipo_tarjeta || medio?.cvv) return "tarjeta";
+    return null;
+  };
+
+  const tarjetas = mediosPago.filter((m) => inferFormaPago(m) === "tarjeta");
+  const cuentasBancarias = mediosPago.filter((m) => inferFormaPago(m) === "cuenta_bancaria");
 
   // Cargar medios de pago cuando el componente se monta o cambia clienteId
   useEffect(() => {
@@ -97,6 +106,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       forma_pago: 'tarjeta_credito', // Por defecto tarjeta de crédito
       tipo_tarjeta_pago: 'credito',
       quien_paga: '',
+      es_principal: false,
       titular: '',
       direccion: '',
       tipo_tarjeta: '',
@@ -131,7 +141,8 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     setCurrentMedioPago({
       ...medioPago,
       forma_pago: formaPagoInterna,
-      tipo_tarjeta_pago: tipoTarjetaPago
+      tipo_tarjeta_pago: tipoTarjetaPago,
+      es_principal: medioPago?.es_principal === true || medioPago?.es_principal === 1 || medioPago?.es_principal === "1",
     });
     setError({ campo: '', mensaje: '' });
     setShowModal(true);
@@ -189,8 +200,16 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
 
   // Manejador para cambios en campos del formulario
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setError({ campo: '', mensaje: '' }); // Limpiar errores previos
+
+    if (type === "checkbox") {
+      setCurrentMedioPago((prev) => ({
+        ...prev,
+        [name]: !!checked,
+      }));
+      return;
+    }
     
     if (name === 'forma_pago') {
       // Al cambiar el tipo de medio de pago
@@ -353,17 +372,14 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     
     try {
       let response;
-      // Preparar datos para el backend
-      // Convertir forma_pago interna a formato del backend
-      let formaPagoBackend = currentMedioPago.forma_pago;
-      if (formaPagoBackend === 'tarjeta_credito' || formaPagoBackend === 'tarjeta_debito') {
-        formaPagoBackend = 'tarjeta';
-      }
-      
+      // Preparar datos para el backend.
+      // El backend/DB no siempre tiene la columna "forma_pago"; se infiere por los campos
+      // (tarjeta vs cuenta) y/o se calcula en la respuesta. Para evitar errores SQL,
+      // no enviamos "forma_pago" en el payload.
+      const { forma_pago: _formaPago, ...rest } = currentMedioPago;
       const payloadData = {
-        ...currentMedioPago,
-        forma_pago: formaPagoBackend, // Convertir a formato del backend
-        cliente_id: clienteId
+        ...rest,
+        cliente_id: clienteId,
       };
       
       if (editingIndex >= 0 && mediosPago[editingIndex].id) {
@@ -687,6 +703,20 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                       <option value="tarjeta_debito">Tarjeta Débito</option>
                       <option value="cuenta_bancaria">Cuenta Bancaria</option>
                     </select>
+                  </div>
+
+                  <div className="form-check mb-3">
+                    <input
+                      className="form-check-input"
+                      type="checkbox"
+                      id="es_principal"
+                      name="es_principal"
+                      checked={!!currentMedioPago.es_principal}
+                      onChange={handleChange}
+                    />
+                    <label className="form-check-label" htmlFor="es_principal">
+                      Marcar como principal
+                    </label>
                   </div>
 
                   <div className="form-group mb-3">
