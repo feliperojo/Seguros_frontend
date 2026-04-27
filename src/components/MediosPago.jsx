@@ -130,12 +130,24 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     setHuboCopia(false);
     const medioPago = mediosPago[index];
     // Convertir forma_pago del backend a formato interno
-    let formaPagoInterna = medioPago.forma_pago;
+    const formaPagoBackend = medioPago?.forma_pago ?? inferFormaPago(medioPago);
+    let formaPagoInterna = formaPagoBackend;
     let tipoTarjetaPago = medioPago.tipo_tarjeta_pago || 'credito';
     
     // Si viene del backend como 'tarjeta', determinar si es crédito o débito
     if (formaPagoInterna === 'tarjeta') {
       formaPagoInterna = tipoTarjetaPago === 'debito' ? 'tarjeta_debito' : 'tarjeta_credito';
+    }
+
+    // Normalizar valores legacy/variantes
+    if (formaPagoInterna === 'tarjeta_credito' || formaPagoInterna === 'tarjeta_debito') {
+      // ok
+    } else if (formaPagoInterna === 'cuenta_bancaria') {
+      // ok
+    } else if (formaPagoInterna == null) {
+      // fallback seguro: si no logramos inferir, asumimos tarjeta crédito para mostrar campos y permitir edición
+      formaPagoInterna = 'tarjeta_credito';
+      tipoTarjetaPago = tipoTarjetaPago || 'credito';
     }
     
     setCurrentMedioPago({
