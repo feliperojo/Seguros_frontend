@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
-import { FaEye, FaEdit, FaTrashAlt, FaLock, FaUnlock } from 'react-icons/fa';
+import { FaEdit, FaTrashAlt, FaLock, FaUnlock } from 'react-icons/fa';
 import PasswordUnlockModal from './PasswordUnlockModal';
 
 const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = true }) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [unlockExpiry, setUnlockExpiry] = useState(null);
+  const pendingActionRef = useRef(null);
 
   const inferFormaPago = (medio) => {
     const fp = medio?.forma_pago;
@@ -53,11 +54,23 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
     const expiry = new Date();
     expiry.setMinutes(expiry.getMinutes() + 5);
     setUnlockExpiry(expiry);
+
+    // Si había una acción pendiente (p.ej. editar), ejecutarla luego del unlock
+    const pending = pendingActionRef.current;
+    pendingActionRef.current = null;
+    if (pending?.type === "edit" && typeof onEdit === "function") {
+      onEdit(pending.medio, pending.index);
+    }
   };
 
   const handleLock = () => {
     setIsUnlocked(false);
     setUnlockExpiry(null);
+  };
+
+  const requestUnlockThen = (action) => {
+    pendingActionRef.current = action;
+    setShowPasswordModal(true);
   };
   const tarjetas = mediosPago.filter((m) => {
     const fp = inferFormaPago(m);
@@ -189,7 +202,14 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         {showActions && (
                         <td>
                             <div className="d-flex gap-2">
-                            <button className="btn btn-sm btn-outline-success" onClick={() => onEdit(medio, index)}>
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() => {
+                                if (typeof onEdit !== "function") return;
+                                if (isUnlocked) return onEdit(medio, index);
+                                requestUnlockThen({ type: "edit", medio, index });
+                              }}
+                            >
                                 <FaEdit />
                             </button>
                             <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(medio, index)}>
@@ -242,7 +262,14 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         {showActions && (
                         <td>
                             <div className="d-flex gap-2">
-                            <button className="btn btn-sm btn-outline-success" onClick={() => onEdit(medio, index)}>
+                            <button
+                              className="btn btn-sm btn-outline-success"
+                              onClick={() => {
+                                if (typeof onEdit !== "function") return;
+                                if (isUnlocked) return onEdit(medio, index);
+                                requestUnlockThen({ type: "edit", medio, index });
+                              }}
+                            >
                                 <FaEdit />
                             </button>
                             <button className="btn btn-sm btn-outline-danger" onClick={() => onDelete(medio, index)}>
