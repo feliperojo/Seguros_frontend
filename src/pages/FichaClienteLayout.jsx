@@ -102,7 +102,6 @@ const TABS = [
   { id: "historial",     label: "Historial" },
   { id: "medios-pago",   label: "Medios de pago" },
   { id: "ringcentral",   label: "RingCentral" },
-  { id: "mas",           label: "Más" },
   { id: "calendario",    label: "Calendario" },
   { id: "requerimientos", label: "Requerimientos" },
   { id: "comentarios",   label: "Tareas y Notas" },

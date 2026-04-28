@@ -155,6 +155,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       forma_pago: formaPagoInterna,
       tipo_tarjeta_pago: tipoTarjetaPago,
       es_principal: medioPago?.es_principal === true || medioPago?.es_principal === 1 || medioPago?.es_principal === "1",
+      fecha_expiracion: normalizeExpirationForInput(medioPago?.fecha_expiracion),
     });
     setError({ campo: '', mensaje: '' });
     setShowModal(true);
@@ -200,6 +201,34 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     const year = numbers.slice(2, 6);
     
     return `${month}/${year}`;
+  };
+
+  // Normaliza valores provenientes del backend para el input (MM/AAAA)
+  const normalizeExpirationForInput = (value) => {
+    if (!value) return "";
+    const raw = String(value).trim();
+    if (!raw) return "";
+
+    // Ya está en MM/AAAA
+    if (/^(0[1-9]|1[0-2])\/\d{4}$/.test(raw)) return raw;
+
+    // ISO / fecha: YYYY-MM..., tomar año y mes
+    const m = raw.match(/^(\d{4})-(\d{2})/);
+    if (m) {
+      const yyyy = m[1];
+      const mm = m[2];
+      return `${mm}/${yyyy}`;
+    }
+
+    // Último intento: parsear Date
+    const d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const yyyy = String(d.getFullYear());
+      return `${mm}/${yyyy}`;
+    }
+
+    return raw;
   };
 
   // Validar CVV
