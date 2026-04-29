@@ -5,6 +5,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { buscarCliente } from '../services/apiService';
 import { usersService } from '../services/adminApi';
+import apiRequest from '../services/api';
+import { emitRealtimeStatus } from '../utils/realtimeStatusBus';
+import { fetchValidateRealtime, summarizeRealtimeChecks } from '../services/ringCentralRealtimeDiagnostics';
 
 // Importaciones dinámicas para Laravel Echo
 let Echo = null;
@@ -156,7 +159,12 @@ const useIncomingCalls = () => {
   const [buscandoCliente, setBuscandoCliente] = useState(false);
   const [error, setError] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [wsConnectionState, setWsConnectionState] = useState('disconnected'); // connecting | connected | disconnected
+  const [wsDisconnectedSinceMs, setWsDisconnectedSinceMs] = useState(null);
   const [connectedChannels, setConnectedChannels] = useState([]);
+  const [realtimeValidation, setRealtimeValidation] = useState(null);
+  const [realtimeValidationError, setRealtimeValidationError] = useState(null);
+  const [isFallbackPollingActive, setIsFallbackPollingActive] = useState(false);
   const echoRef = useRef(null);
   const channelsRef = useRef([]);
   const ultimoCallIdRef = useRef(null);
@@ -165,6 +173,8 @@ const useIncomingCalls = () => {
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelayRef = useRef(1000);
+  const fallbackPollingTimerRef = useRef(null);
+  const lastPolledSignatureRef = useRef(null);
 
   // Log de diagnóstico
   const logDiagnostic = (message, data = null) => {
@@ -200,13 +210,21 @@ const useIncomingCalls = () => {
   const initializeEcho = async () => {
     try {
       logDiagnostic('Inicializando Laravel Echo...');
+      setWsConnectionState('connecting');
+      emitRealtimeStatus({ source: 'echo', state: 'connecting' });
 
       if (!PUSHER_APP_KEY) {
         console.warn('⚠️ Laravel Echo: falta VITE_PUSHER_APP_KEY (o VITE_REVERB_APP_KEY).');
+        setWsConnectionState('disconnected');
+        setWsDisconnectedSinceMs(Date.now());
+        emitRealtimeStatus({ source: 'echo', state: 'disconnected', reason: 'missing_key' });
         return false;
       }
       if (!isPusherCloud && !PUSHER_APP_HOST) {
         console.warn('⚠️ Laravel Echo: con Reverb/self-host faltan VITE_PUSHER_HOST o VITE_REVERB_HOST.');
+        setWsConnectionState('disconnected');
+        setWsDisconnectedSinceMs(Date.now());
+        emitRealtimeStatus({ source: 'echo', state: 'disconnected', reason: 'missing_host' });
         return false;
       }
 
@@ -215,6 +233,9 @@ const useIncomingCalls = () => {
       if (!wsOk) {
         try { sessionStorage.setItem(ECHO_DISABLE_SESSION_KEY, 'true'); } catch (_) {}
         logDiagnostic('⚠️ WebSocket no disponible (preflight). Echo deshabilitado para esta sesión.');
+        setWsConnectionState('disconnected');
+        setWsDisconnectedSinceMs(Date.now());
+        emitRealtimeStatus({ source: 'echo', state: 'disconnected', reason: 'preflight_failed' });
         return false;
       }
 
@@ -265,6 +286,9 @@ const useIncomingCalls = () => {
       echoRef.current.connector.pusher.connection.bind('connected', () => {
         logDiagnostic('✅ Conectado a Laravel Echo (WebSocket)');
         setIsConnected(true);
+        setWsConnectionState('connected');
+        setWsDisconnectedSinceMs(null);
+        emitRealtimeStatus({ source: 'echo', state: 'connected' });
         reconnectAttemptsRef.current = 0;
         reconnectDelayRef.current = 1000;
       });
@@ -272,18 +296,27 @@ const useIncomingCalls = () => {
       echoRef.current.connector.pusher.connection.bind('disconnected', () => {
         logDiagnostic('⚠️ Desconectado de Laravel Echo');
         setIsConnected(false);
+        setWsConnectionState('disconnected');
+        setWsDisconnectedSinceMs((prev) => prev ?? Date.now());
+        emitRealtimeStatus({ source: 'echo', state: 'disconnected' });
         attemptReconnect();
       });
 
       echoRef.current.connector.pusher.connection.bind('error', (error) => {
         logDiagnostic('❌ Error en conexión Echo', error);
         setIsConnected(false);
+        setWsConnectionState('disconnected');
+        setWsDisconnectedSinceMs((prev) => prev ?? Date.now());
+        emitRealtimeStatus({ source: 'echo', state: 'disconnected', error });
       });
 
       logDiagnostic('✅ Laravel Echo inicializado correctamente');
       return true;
     } catch (error) {
       logDiagnostic('❌ Error al inicializar Laravel Echo', error);
+      setWsConnectionState('disconnected');
+      setWsDisconnectedSinceMs((prev) => prev ?? Date.now());
+      emitRealtimeStatus({ source: 'echo', state: 'disconnected', error });
       return false;
     }
   };
@@ -614,9 +647,100 @@ const useIncomingCalls = () => {
     };
   }, []);
 
+  // Validación de tiempo real (backend) al montar
+  useEffect(() => {
+    let cancelled = false;
+    fetchValidateRealtime({ minutes: 60, force: false })
+      .then((res) => {
+        if (cancelled) return;
+        setRealtimeValidation(res);
+        setRealtimeValidationError(null);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setRealtimeValidationError(e?.message || 'No se pudo validar el estado de tiempo real');
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const shouldEnableFallbackPolling = () => {
+    const status = (realtimeValidation?.status || '').toLowerCase();
+    const checks = realtimeValidation?.checks || [];
+    const summary = summarizeRealtimeChecks(checks);
+    // Solo habilitar fallback cuando el diagnóstico viene en rojo (error) o status=error.
+    return status === 'error' || summary.hasError;
+  };
+
+  const stopFallbackPolling = () => {
+    if (fallbackPollingTimerRef.current) {
+      clearInterval(fallbackPollingTimerRef.current);
+      fallbackPollingTimerRef.current = null;
+    }
+    setIsFallbackPollingActive(false);
+  };
+
+  const startFallbackPolling = () => {
+    if (fallbackPollingTimerRef.current) return;
+    setIsFallbackPollingActive(true);
+    // 5–10s según requisito. Tomamos 7s.
+    fallbackPollingTimerRef.current = setInterval(async () => {
+      try {
+        const res = await apiRequest('/llamada-activa', 'GET');
+        const payload = res?.data ?? res?.call ?? res;
+        if (!payload || typeof payload !== 'object') return;
+
+        const sessionId = payload.session_id || payload.call_id || payload.id || payload.sessionId;
+        const status = payload.status || payload.estado;
+        if (!sessionId || !status) return;
+
+        const signature = `${sessionId}|${status}`;
+        if (lastPolledSignatureRef.current === signature) return;
+        lastPolledSignatureRef.current = signature;
+
+        const statusNorm = String(status).toLowerCase();
+        const isInteresting = ['ringing', 'callconnected', 'connected', 'active'].includes(statusNorm);
+        if (!isInteresting) return;
+
+        const mapped = {
+          call_id: payload.call_id || payload.session_id || payload.sessionId || sessionId,
+          phone_number: payload.phone_number || payload.phoneNumber || payload.telefono || payload.numero || payload.phone,
+          extension_id: payload.extension_id || payload.extensionId || payload.extension,
+          extension_number: payload.extension_number || payload.extensionNumber,
+          cliente: payload.cliente,
+          direction: payload.direction || payload.direccion,
+          status: payload.status || payload.estado,
+          timestamp: payload.timestamp || payload.start_time || payload.startTime || new Date().toISOString(),
+          __fallback_polling: true,
+        };
+
+        handleIncomingCallRef.current(mapped, 'fallback-polling');
+      } catch (_) {
+        // No bloquear: si el endpoint falla, solo seguimos intentando sin afectar el modal.
+      }
+    }, 7000);
+  };
+
+  // Activar/Desactivar polling fallback según diagnóstico y estado WS.
+  useEffect(() => {
+    const enable = shouldEnableFallbackPolling();
+    const wsDown = wsConnectionState === 'disconnected';
+    if (enable && wsDown) {
+      startFallbackPolling();
+      return;
+    }
+    stopFallbackPolling();
+  }, [realtimeValidation, wsConnectionState]);
+
   // Cleanup al desmontar
   useEffect(() => {
     return () => {
+      // Detener polling fallback
+      if (fallbackPollingTimerRef.current) {
+        clearInterval(fallbackPollingTimerRef.current);
+        fallbackPollingTimerRef.current = null;
+      }
+      setIsFallbackPollingActive(false);
+
       // Limpiar canales (nombre completo ej. private-ringcentral.extension.123)
       channelsRef.current.forEach(channel => {
         try {
@@ -655,7 +779,12 @@ const useIncomingCalls = () => {
     buscandoCliente,
     error,
     isConnected,
+    wsConnectionState,
+    wsDisconnectedSinceMs,
     connectedChannels,
+    realtimeValidation,
+    realtimeValidationError,
+    isFallbackPollingActive,
     cerrarModal,
   };
 };

@@ -16,6 +16,7 @@ import {
 } from 'react-bootstrap';
 import ringCentralService from '../../services/ringCentralService';
 import { STORAGE_KEYS } from '../../utils/constants';
+import RealtimeConnectionStatus from './RealtimeConnectionStatus';
 
 const RingCentralConfig = ({ show, onClose, onAuthenticated }) => {
   const [step, setStep] = useState(1); // 1: Credenciales, 2: Autenticación
@@ -139,6 +140,10 @@ const RingCentralConfig = ({ show, onClose, onAuthenticated }) => {
       </Modal.Header>
 
       <Modal.Body>
+        <div className="mb-3">
+          <RealtimeConnectionStatus minutes={60} />
+        </div>
+
         {/* Indicador de pasos */}
         <div className="d-flex justify-content-center mb-4">
           <div className="d-flex align-items-center">
