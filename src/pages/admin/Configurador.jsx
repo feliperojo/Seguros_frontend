@@ -14,6 +14,7 @@ import { useHasPermission } from "../../hooks/useHasPermission";
 import { usersService } from "../../services/adminApi";
 import { getExtensions } from "../../services/ringCentralIntegrationApi";
 import systemConfigService from "../../services/SystemConfigService";
+import RealtimeConnectionStatus from "../../components/CallIdentifier/RealtimeConnectionStatus";
 import SystemConfigSection, {
   configFromApiResponse,
 } from "../../components/SystemConfigSection";
@@ -364,6 +365,20 @@ const Configurador = () => {
           {error}
         </Alert>
       )}
+
+      <Card className="mb-4">
+        <Card.Header className="d-flex align-items-center gap-2">
+          <FaPhone />
+          <span>RingCentral: estado de conexión (tiempo real)</span>
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted small mb-3">
+            Este estado es global (no depende del cliente). Indica si el sistema está listo para recibir
+            eventos de llamadas en tiempo real y muestra advertencias/errores del backend.
+          </p>
+          <RealtimeConnectionStatus minutes={60} />
+        </Card.Body>
+      </Card>
 
       <Card className="mb-4">
         <Card.Header className="d-flex align-items-center gap-2">

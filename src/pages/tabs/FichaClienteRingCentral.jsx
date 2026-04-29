@@ -589,7 +589,6 @@ useEffect(() => {
           </div>
 
           <div className="p-6 space-y-6">
-
             {/* Información del Cliente */}
             <div className="bg-gray-50 rounded-lg border border-gray-200 p-5">
               <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
