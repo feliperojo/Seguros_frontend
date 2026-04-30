@@ -170,11 +170,13 @@ const useIncomingCalls = () => {
   const ultimoCallIdRef = useRef(null);
   const processedCallIdsRef = useRef(new Set());
   const userExtensionIdsRef = useRef([]); // Extensiones asignadas al usuario (para filtrar qué llamadas mostrar)
+  const extensionsRefreshedRef = useRef(false);
   const reconnectAttemptsRef = useRef(0);
   const maxReconnectAttempts = 5;
   const reconnectDelayRef = useRef(1000);
   const fallbackPollingTimerRef = useRef(null);
   const lastPolledSignatureRef = useRef(null);
+  const DEDUP_TTL_MS = 60 * 1000; // 60s (requisito: 30–60s)
 
   // Log de diagnóstico
   const logDiagnostic = (message, data = null) => {
@@ -182,28 +184,47 @@ const useIncomingCalls = () => {
     console.log(`[${timestamp}] 🔍 ${message}`, data || '');
   };
 
-  // Precargar extensiones del usuario al montar y guardarlas siempre en la clave dedicada de localStorage
+  // Precargar/refrescar extensiones del usuario (fuente de verdad: backend) y sobrescribir cache local
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (!token) return;
-    let ids = getStoredExtensionIds();
-    if (ids.length > 0) {
-      userExtensionIdsRef.current = ids;
-      setStoredExtensionIds(ids); // Escribir en clave dedicada por si vinieron solo de user (para que queden cargadas)
-      logDiagnostic('Extensiones del usuario precargadas y guardadas en localStorage', { count: ids.length, ids });
-      return;
-    }
     const user = JSON.parse(localStorage.getItem('user') || '{}');
     const userId = user.id || user.user_id;
     if (!userId) return;
+
+    // Evitar llamadas repetidas en la misma sesión del hook
+    if (extensionsRefreshedRef.current) return;
+    extensionsRefreshedRef.current = true;
+
+    const cached = getStoredExtensionIds();
     usersService.get(userId).then((fullUser) => {
       const fromApi = normalizeExtensionIds(fullUser?.ringcentral_extension_ids);
       userExtensionIdsRef.current = fromApi;
-      if (fromApi.length > 0) {
+
+      // Si el cache tiene extensiones que no están en backend, limpiar y recalcular (sobrescribir)
+      const cachedHasExtra = cached.some((id) => !fromApi.includes(String(id)));
+      const shouldOverwrite = cachedHasExtra || JSON.stringify(cached) !== JSON.stringify(fromApi);
+
+      if (shouldOverwrite) {
         setStoredExtensionIds(fromApi);
-        logDiagnostic('Extensiones del usuario cargadas desde API y guardadas en localStorage', { count: fromApi.length, ids: fromApi });
+        logDiagnostic('Extensiones refrescadas desde backend (fuente de verdad) y cache sobrescrito', {
+          userId,
+          cachedCount: cached.length,
+          apiCount: fromApi.length,
+          cachedHasExtra,
+          ids: fromApi,
+        });
+      } else {
+        logDiagnostic('Extensiones OK (cache coincide con backend)', { userId, count: fromApi.length });
       }
-    }).catch(() => {});
+    }).catch(() => {
+      // Si falla backend, usamos lo que haya en cache para no romper
+      const ids = getStoredExtensionIds();
+      userExtensionIdsRef.current = ids;
+      if (ids.length > 0) {
+        logDiagnostic('No se pudieron refrescar extensiones desde backend; usando cache local', { count: ids.length, ids });
+      }
+    });
   }, []);
 
   // Inicializar Echo
@@ -364,13 +385,13 @@ const useIncomingCalls = () => {
 
   // Verificar si el evento ya fue procesado (evitar duplicados).
   // Usamos callId|extensionId porque la misma llamada (mismo call_id) puede sonar en distintas extensiones al reenviarse.
-  const isEventProcessed = (callId, extensionId) => {
-    const key = extensionId ? `${callId}|${String(extensionId)}` : callId;
+  const isEventProcessed = (callId) => {
+    const key = String(callId);
     if (processedCallIdsRef.current.has(key)) {
       return true;
     }
     processedCallIdsRef.current.add(key);
-    setTimeout(() => processedCallIdsRef.current.delete(key), 5 * 60 * 1000);
+    setTimeout(() => processedCallIdsRef.current.delete(key), DEDUP_TTL_MS);
     return false;
   };
 
@@ -378,7 +399,7 @@ const useIncomingCalls = () => {
   // Criterio único: el backend envía extension_id (extensión donde suena la llamada). Solo mostramos el modal si ese extension_id está en las extensiones asignadas al usuario (guardadas en localStorage).
   const handleIncomingCall = async (data, channelDisplayName = '') => {
     try {
-      logDiagnostic('📞 Evento incoming_call recibido', data);
+      logDiagnostic('📞 Evento incoming_call recibido', { channel: channelDisplayName || 'unknown', call_id: data?.call_id, session_id: data?.session_id });
 
       const isSimulatedFromConsole = import.meta.env.DEV && data && data.__simulate === true;
 
@@ -431,13 +452,18 @@ const useIncomingCalls = () => {
       // call_id es el ID de sesión de la llamada (payload estándar del backend)
       const callId = data.call_id || data.session_id || data.id || `${(data.phone_number || data.telefono || data.numero || data.phone || '')}-${Date.now()}`;
 
-      if (isEventProcessed(callId, eventExtensionId)) {
-        logDiagnostic('⚠️ Evento duplicado ignorado', { callId, extension_id: eventExtensionId });
+      if (isEventProcessed(callId)) {
+        logDiagnostic('⏭️ Evento duplicado ignorado (dedup por call_id)', {
+          channel: channelDisplayName || 'unknown',
+          callId,
+          ignored: true,
+        });
         return;
       }
+      logDiagnostic('✅ Evento aceptado (no duplicado)', { channel: channelDisplayName || 'unknown', callId, ignored: false });
 
       if (broadcastChannel) {
-        broadcastChannel.postMessage({ type: 'call_processed', callId, extensionId: eventExtensionId });
+        broadcastChannel.postMessage({ type: 'call_processed', callId });
       }
 
       ultimoCallIdRef.current = callId;
@@ -504,11 +530,10 @@ const useIncomingCalls = () => {
     const handleMessage = (event) => {
       if (event.data.type === 'call_processed') {
         const callId = event.data.callId;
-        const extId = event.data.extensionId;
-        const key = extId ? `${callId}|${String(extId)}` : callId;
+        const key = String(callId);
         if (!processedCallIdsRef.current.has(key)) {
           processedCallIdsRef.current.add(key);
-          setTimeout(() => processedCallIdsRef.current.delete(key), 5 * 60 * 1000);
+          setTimeout(() => processedCallIdsRef.current.delete(key), DEDUP_TTL_MS);
         }
       }
     };
