@@ -7,12 +7,19 @@ import {
   Alert,
   ListGroup,
   Badge,
+  Collapse,
+  Table,
+  Modal,
 } from "react-bootstrap";
 import { FaCogs, FaPhone, FaUser, FaSave } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
 import { usersService } from "../../services/adminApi";
 import { getExtensions } from "../../services/ringCentralIntegrationApi";
+import {
+  ensureSubscription,
+  getSubscriptionsStatus,
+} from "../../services/ringCentralSubscriptionsApi";
 import systemConfigService from "../../services/SystemConfigService";
 import RealtimeConnectionStatus from "../../components/CallIdentifier/RealtimeConnectionStatus";
 import SystemConfigSection, {
@@ -104,6 +111,103 @@ const Configurador = () => {
 
   const canEdit = useHasPermission("users.edit");
   const canView = useHasPermission("users.view");
+
+  // === RingCentral → Suscripción Webhook ===
+  const [rcStatus, setRcStatus] = useState(null);
+  const [rcLoading, setRcLoading] = useState(false);
+  const [rcEnsuring, setRcEnsuring] = useState(false);
+  const [rcError, setRcError] = useState(null);
+  const [rcShowForm, setRcShowForm] = useState(false);
+  const [rcShowDetail, setRcShowDetail] = useState(false);
+  const [rcWebhookUrl, setRcWebhookUrl] = useState("");
+  const [rcExtensionIds, setRcExtensionIds] = useState([]);
+  const [rcForceModalOpen, setRcForceModalOpen] = useState(false);
+
+  const parseExtensionIds = (raw) => {
+    const parts = String(raw || "")
+      .split(/[\s,]+/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // Unique, preserve order
+    const seen = new Set();
+    const unique = [];
+    for (const p of parts) {
+      if (!seen.has(p)) {
+        seen.add(p);
+        unique.push(p);
+      }
+    }
+    return unique;
+  };
+
+  const loadRingCentralSubscriptionsStatus = useCallback(
+    async ({ sync = true } = {}) => {
+      try {
+        setRcLoading(true);
+        setRcError(null);
+        const res = await getSubscriptionsStatus({ sync: sync ? 1 : 0 });
+        setRcStatus(res || null);
+
+        const configured = res?.config?.webhook_url;
+        if (configured && !rcWebhookUrl) {
+          setRcWebhookUrl(String(configured));
+        }
+      } catch (err) {
+        const status = err?.response?.status;
+        if (status === 401) {
+          toast.error("Sesión expirada / sin permisos");
+        } else {
+          toast.error(err?.message || "Error al consultar estado de suscripciones");
+        }
+        setRcError(err?.message || "Error al consultar estado");
+        setRcStatus(null);
+      } finally {
+        setRcLoading(false);
+      }
+    },
+    [rcWebhookUrl]
+  );
+
+  useEffect(() => {
+    // Carga inicial con sync=1 para que el panel muestre datos reales de RingCentral.
+    loadRingCentralSubscriptionsStatus({ sync: true });
+  }, [loadRingCentralSubscriptionsStatus]);
+
+  const runEnsureSubscription = async ({ forceCreate = false } = {}) => {
+    if (!canEdit) return;
+    try {
+      setRcEnsuring(true);
+      setRcError(null);
+
+      const body = {
+        force_create: !!forceCreate,
+      };
+      const url = String(rcWebhookUrl || "").trim();
+      if (url) body.webhook_url = url;
+      if (Array.isArray(rcExtensionIds) && rcExtensionIds.length > 0) {
+        body.extension_ids = rcExtensionIds;
+      }
+
+      const res = await ensureSubscription(body);
+      const msg =
+        res?.message ||
+        (res?.created
+          ? "Suscripción creada correctamente."
+          : "Suscripción verificada/actualizada correctamente.");
+      toast.success(msg);
+      await loadRingCentralSubscriptionsStatus({ sync: true });
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 401) {
+        toast.error("Sesión expirada / sin permisos");
+      } else {
+        toast.error(err?.message || "Error al asegurar suscripción");
+      }
+      setRcError(err?.message || "Error al asegurar suscripción");
+    } finally {
+      setRcEnsuring(false);
+    }
+  };
 
   const loadUsers = useCallback(async () => {
     try {
@@ -676,6 +780,354 @@ const Configurador = () => {
           </Button>
         </Card.Body>
       </Card>
+
+      {/* RingCentral → Suscripción Webhook */}
+      <Card className="mb-4">
+        <Card.Header className="d-flex align-items-center justify-content-between gap-2 flex-wrap">
+          <div className="d-flex align-items-center gap-2">
+            <FaPhone />
+            <span>RingCentral → Suscripción Webhook</span>
+          </div>
+          <div className="d-flex align-items-center gap-2">
+            <Button
+              variant="outline-secondary"
+              size="sm"
+              onClick={() => loadRingCentralSubscriptionsStatus({ sync: true })}
+              disabled={rcLoading}
+            >
+              {rcLoading ? (
+                <>
+                  <Spinner animation="border" size="sm" className="me-2" />
+                  Actualizando...
+                </>
+              ) : (
+                "Actualizar estado"
+              )}
+            </Button>
+            {canEdit && (
+              <>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => runEnsureSubscription({ forceCreate: false })}
+                  disabled={rcEnsuring || rcLoading}
+                >
+                  {rcEnsuring ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Procesando...
+                    </>
+                  ) : (
+                    "Reparar / Asegurar suscripción"
+                  )}
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  size="sm"
+                  onClick={() => setRcForceModalOpen(true)}
+                  disabled={rcEnsuring || rcLoading}
+                >
+                  Forzar nueva suscripción
+                </Button>
+              </>
+            )}
+          </div>
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted small mb-3">
+            Estado y validación de la suscripción webhook (DB + RingCentral). Si ves{" "}
+            <strong>WARNING/ERROR</strong>, puedes ejecutar “Asegurar” o “Forzar”.
+          </p>
+
+          {rcError && (
+            <Alert variant="danger" className="mb-3">
+              {rcError}
+            </Alert>
+          )}
+
+          {/* Panel de estado */}
+          {rcLoading && !rcStatus ? (
+            <div className="d-flex align-items-center gap-2">
+              <Spinner animation="border" size="sm" />
+              <span>Cargando estado...</span>
+            </div>
+          ) : (
+            <>
+              {(() => {
+                const webhookUrl = rcStatus?.config?.webhook_url || "";
+                const summary = rcStatus?.summary || {};
+                const activeCount = Number(summary?.ringcentral_active_count || 0);
+                const matches = !!summary?.address_matches_configured_webhook_url;
+                const hasFilter = !!summary?.has_account_telephony_sessions_filter;
+
+                const webhookOk = !!String(webhookUrl || "").trim();
+                const activeOk = activeCount > 0;
+
+                const badgeFor = (level) => {
+                  if (level === "OK") return <Badge bg="success">OK</Badge>;
+                  if (level === "WARNING") return <Badge bg="warning" text="dark">WARNING</Badge>;
+                  return <Badge bg="danger">ERROR</Badge>;
+                };
+
+                return (
+                  <div className="mb-3 p-3 rounded border bg-light">
+                    <div className="d-flex flex-column gap-2">
+                      <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold">Webhook URL configurada</div>
+                          <div className="small text-muted">
+                            {webhookUrl ? (
+                              <span style={{ wordBreak: "break-all" }}>{webhookUrl}</span>
+                            ) : (
+                              "No hay URL configurada."
+                            )}
+                          </div>
+                        </div>
+                        <div>{badgeFor(webhookOk ? "OK" : "ERROR")}</div>
+                      </div>
+
+                      <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold">Suscripciones activas en RingCentral</div>
+                          <div className="small text-muted">
+                            {Number.isFinite(activeCount) ? `${activeCount}` : "—"}
+                          </div>
+                        </div>
+                        <div>{badgeFor(activeOk ? "OK" : "ERROR")}</div>
+                      </div>
+
+                      <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold">La URL coincide con la configurada</div>
+                          <div className="small text-muted">
+                            {matches
+                              ? "La dirección del delivery_mode coincide con la URL configurada."
+                              : "La dirección NO coincide con la URL configurada (recomendado reparar)."}
+                          </div>
+                        </div>
+                        <div>{badgeFor(matches ? "OK" : "WARNING")}</div>
+                      </div>
+
+                      <div className="d-flex align-items-start justify-content-between gap-3 flex-wrap">
+                        <div className="flex-grow-1">
+                          <div className="fw-semibold">Existe filtro account telephony sessions</div>
+                          <div className="small text-muted">
+                            {hasFilter
+                              ? "La suscripción incluye el filtro requerido."
+                              : "No se encontró el filtro requerido (recomendado reparar)."}
+                          </div>
+                        </div>
+                        <div>{badgeFor(hasFilter ? "OK" : "WARNING")}</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Formulario opcional */}
+              <div className="mb-3 d-flex align-items-center gap-2">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setRcShowForm((v) => !v)}
+                  aria-controls="rc-sub-form"
+                  aria-expanded={rcShowForm}
+                >
+                  {rcShowForm ? "Ocultar formulario" : "Mostrar formulario opcional"}
+                </Button>
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setRcShowDetail((v) => !v)}
+                  aria-controls="rc-sub-detail"
+                  aria-expanded={rcShowDetail}
+                >
+                  {rcShowDetail ? "Ocultar detalle" : "Mostrar detalle"}
+                </Button>
+              </div>
+
+              <Collapse in={rcShowForm}>
+                <div id="rc-sub-form" className="mb-3">
+                  <div className="p-3 rounded border">
+                    <div className="row">
+                      <div className="col-md-6 mb-3">
+                        <Form.Group>
+                          <Form.Label>webhook_url</Form.Label>
+                          <Form.Control
+                            type="url"
+                            placeholder="https://api.vantun.com/api/webhooks/ringcentral"
+                            value={rcWebhookUrl}
+                            onChange={(e) => setRcWebhookUrl(e.target.value)}
+                            disabled={!canEdit}
+                          />
+                          <div className="form-text">
+                            Si lo dejas vacío, el backend usará el valor configurado en el sistema.
+                          </div>
+                        </Form.Group>
+                      </div>
+
+                      <div className="col-md-6 mb-3">
+                        <Form.Group>
+                          <Form.Label>extension_ids</Form.Label>
+                          <Form.Control
+                            type="text"
+                            placeholder="Pega IDs separados por coma (ej: 6301...,6301...)"
+                            onChange={(e) => setRcExtensionIds(parseExtensionIds(e.target.value))}
+                            disabled={!canEdit}
+                          />
+                          <div className="form-text">
+                            Puedes pegar una lista separada por coma o espacios. Se normaliza automáticamente.
+                          </div>
+                        </Form.Group>
+
+                        {Array.isArray(rcExtensionIds) && rcExtensionIds.length > 0 && (
+                          <div className="mt-2 d-flex flex-wrap gap-2">
+                            {rcExtensionIds.map((id) => (
+                              <Badge
+                                key={id}
+                                bg="secondary"
+                                className="d-inline-flex align-items-center gap-2"
+                                style={{ cursor: canEdit ? "pointer" : "default" }}
+                                onClick={() => {
+                                  if (!canEdit) return;
+                                  setRcExtensionIds((prev) => prev.filter((x) => x !== id));
+                                }}
+                                title={canEdit ? "Click para quitar" : undefined}
+                              >
+                                {id}
+                                {canEdit ? <span className="ms-1">×</span> : null}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Collapse>
+
+              {/* Detalle colapsable */}
+              <Collapse in={rcShowDetail}>
+                <div id="rc-sub-detail">
+                  <div className="p-3 rounded border">
+                    <div className="mb-3">
+                      <div className="fw-semibold mb-1">Última suscripción en DB</div>
+                      {rcStatus?.db?.latest ? (
+                        <div className="small text-muted">
+                          <div>
+                            <strong>ID:</strong> {String(rcStatus.db.latest?.id ?? "—")}
+                          </div>
+                          <div>
+                            <strong>Status:</strong> {String(rcStatus.db.latest?.status ?? "—")}
+                          </div>
+                          <div>
+                            <strong>Expiration:</strong>{" "}
+                            {String(rcStatus.db.latest?.expiration_time ?? "—")}
+                          </div>
+                          <div>
+                            <strong>Delivery address:</strong>{" "}
+                            {String(
+                              rcStatus.db.latest?.delivery_mode_address ??
+                                rcStatus.db.latest?.delivery_mode?.address ??
+                                "—"
+                            )}
+                          </div>
+                          <div>
+                            <strong>Event filters:</strong>{" "}
+                            {Array.isArray(rcStatus.db.latest?.event_filters)
+                              ? rcStatus.db.latest.event_filters.length
+                              : "—"}
+                          </div>
+                        </div>
+                      ) : (
+                        <Alert variant="warning" className="mb-0">
+                          No hay registro de suscripción en DB.
+                        </Alert>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="fw-semibold mb-2">Suscripciones en RingCentral</div>
+                      {Array.isArray(rcStatus?.ringcentral?.subscriptions) &&
+                      rcStatus.ringcentral.subscriptions.length > 0 ? (
+                        <Table responsive size="sm" bordered hover className="mb-0">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Status</th>
+                              <th>Expiration</th>
+                              <th>Delivery address</th>
+                              <th>Event filters</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rcStatus.ringcentral.subscriptions.map((s, idx) => (
+                              <tr key={String(s?.id ?? idx)}>
+                                <td style={{ wordBreak: "break-all" }}>
+                                  {String(s?.id ?? "—")}
+                                </td>
+                                <td>{String(s?.status ?? "—")}</td>
+                                <td>{String(s?.expiration_time ?? "—")}</td>
+                                <td style={{ wordBreak: "break-all" }}>
+                                  {String(s?.delivery_mode?.address ?? "—")}
+                                </td>
+                                <td>
+                                  {Array.isArray(s?.event_filters)
+                                    ? s.event_filters.length
+                                    : "—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </Table>
+                      ) : (
+                        <Alert variant="warning" className="mb-0">
+                          No se encontraron suscripciones en RingCentral (o no se sincronizó).
+                        </Alert>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Collapse>
+            </>
+          )}
+
+          {!canEdit && (
+            <Alert variant="info" className="mt-3 mb-0">
+              No tienes permisos para ejecutar acciones de reparación/creación. Puedes ver el estado y el detalle.
+            </Alert>
+          )}
+        </Card.Body>
+      </Card>
+
+      <Modal show={rcForceModalOpen} onHide={() => setRcForceModalOpen(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Forzar nueva suscripción</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          Esta acción intentará crear una nueva suscripción en RingCentral (force_create=true).
+          Úsala solo si “Asegurar suscripción” no resolvió el problema.
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="outline-secondary"
+            onClick={() => setRcForceModalOpen(false)}
+            disabled={rcEnsuring}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="danger"
+            onClick={async () => {
+              setRcForceModalOpen(false);
+              await runEnsureSubscription({ forceCreate: true });
+            }}
+            disabled={rcEnsuring}
+          >
+            Sí, forzar
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       <SystemConfigSection
         config={systemConfig}
