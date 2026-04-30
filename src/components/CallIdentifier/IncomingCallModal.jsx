@@ -167,6 +167,19 @@ const IncomingCallModal = ({
               <p className="mb-0 text-muted small">
                 ID: {clienteData.id}
               </p>
+              {clienteData?.id && (
+                <div className="mt-3 d-flex flex-wrap gap-2">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={handleVerFicha}
+                    title="Abrir ficha del cliente"
+                  >
+                    <FiExternalLink className="me-2" />
+                    Ver ficha del cliente
+                  </Button>
+                </div>
+              )}
             </Alert>
           </div>
         ) : (
