@@ -15,7 +15,7 @@ export const buscarCliente = async (phoneNumber) => {
     // Limpiar el número de teléfono (remover caracteres especiales)
     const cleanPhone = phoneNumber.replace(/[^\d+]/g, '');
     
-    const response = await apiRequest('/api/buscar-cliente', 'POST', {
+    const response = await apiRequest('/buscar-cliente', 'POST', {
       telefono: cleanPhone
     });
 
