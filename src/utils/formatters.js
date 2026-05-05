@@ -93,20 +93,45 @@ const extractDateParts = (dateString) => {
       return { year, month, day };
     }
 
+    // DD-MM-YYYY vs MM-DD-YYYY: si un grupo es > 12, es día o mes según el formato regional.
     m = s.match(/^(\d{2})-(\d{2})-(\d{4})$/);
     if (m) {
-      const month = Number(m[1]);
-      const day = Number(m[2]);
+      const a = Number(m[1]);
+      const b = Number(m[2]);
       const year = Number(m[3]);
+      let month;
+      let day;
+      if (a > 12) {
+        day = a;
+        month = b;
+      } else if (b > 12) {
+        month = a;
+        day = b;
+      } else {
+        month = a;
+        day = b;
+      }
       if (!isValidCalendarYmd(year, month, day)) return null;
       return { year, month, day };
     }
 
     m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
     if (m) {
-      const month = Number(m[1]);
-      const day = Number(m[2]);
+      const a = Number(m[1]);
+      const b = Number(m[2]);
       const year = Number(m[3]);
+      let month;
+      let day;
+      if (a > 12) {
+        day = a;
+        month = b;
+      } else if (b > 12) {
+        month = a;
+        day = b;
+      } else {
+        month = a;
+        day = b;
+      }
       if (!isValidCalendarYmd(year, month, day)) return null;
       return { year, month, day };
     }
@@ -152,6 +177,18 @@ export const parseApiDateToLocalDate = (input) => {
   if (typeof input !== "string") return null;
   const s = input.trim();
   if (!s) return null;
+
+  // Auditorías / Laravel: "2026-05-01T00:00:00.000000Z" es un día civil, no un instante a colocar en local.
+  // new Date(...Z) en medianoche UTC cambia el día en US/LATAM; usamos Y-M-D literal del prefijo ISO.
+  const isoCivil = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:T|\s)\d{2}:\d{2}/);
+  if (isoCivil) {
+    const year = Number(isoCivil[1]);
+    const month = Number(isoCivil[2]);
+    const day = Number(isoCivil[3]);
+    if (isValidCalendarYmd(year, month, day)) {
+      return new Date(year, month - 1, day);
+    }
+  }
 
   const looksLikeDateTime =
     s.includes("T") || /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(s);

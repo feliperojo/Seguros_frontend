@@ -34,11 +34,11 @@ import {
   completeTask, 
   rescheduleTask, 
   assignTask,
-  updateTask 
 } from "../../services/auditoriasTasksService";
 import useToast from "../../hooks/useToast";
 import { useAuth } from "../../context/AuthContext";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
+import systemConfigService from "../../services/SystemConfigService";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -88,6 +88,62 @@ const htmlToPlainText = (html) => {
   return (tempDiv.textContent || tempDiv.innerText || '').trim();
 };
 
+const toPositiveUserId = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const getTareaAsignadoUserId = (t) => {
+  if (!t) return null;
+  return (
+    toPositiveUserId(t.assign_to_user_id) ??
+    toPositiveUserId(t.assigned_user_id) ??
+    toPositiveUserId(t.assign_to_user?.id) ??
+    toPositiveUserId(t.assigned_user?.id) ??
+    toPositiveUserId(t.assigned_to_user_id) ??
+    toPositiveUserId(t.assigned_to_user?.id) ??
+    null
+  );
+};
+
+const getAuthUserId = (u) => {
+  if (!u) return null;
+  return toPositiveUserId(u.id ?? u.user_id ?? u.userId);
+};
+
+const normalizeNombre = (s) =>
+  String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+
+const getAuthNombreVisible = (u) => {
+  if (!u) return "";
+  return u.name ?? u.nombre ?? u.full_name ?? u.username ?? "";
+};
+
+const getTareaAsignadoNombres = (t) => {
+  if (!t) return [];
+  const candidates = [
+    t.asignado_a,
+    t.asignadoA,
+    t.assign_to_user_name,
+    t.assigned_to_name,
+    t.assign_to_user?.name,
+    t.assigned_user?.name,
+    t.assigned_to_user?.name,
+  ];
+  return candidates
+    .map((x) => (typeof x === "string" ? normalizeNombre(x) : ""))
+    .filter(Boolean);
+};
+
+const coincideAsignacionPorNombre = (u, t) => {
+  const mine = normalizeNombre(getAuthNombreVisible(u));
+  if (!mine) return false;
+  const nombres = getTareaAsignadoNombres(t);
+  return nombres.some((n) => n && n === mine);
+};
 
 const ResponderTareaAuditoriaModal = ({
   show,
@@ -97,8 +153,8 @@ const ResponderTareaAuditoriaModal = ({
   notificationContext = null,
 }) => {
   const toast = useToast();
-  const { hasPermission, hasRole } = useAuth();
-  
+  const { user } = useAuth();
+
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [comentarios, setComentarios] = useState([]);
@@ -130,14 +186,34 @@ const ResponderTareaAuditoriaModal = ({
   
   const [scheduledDate, setScheduledDate] = useState("");
   const [dueDate, setDueDate] = useState("");
-  // Fecha límite: solo editable por admin o con contraseña de administrador
+  // Fecha límite: bloqueada para todos; editable solo tras clave del super admin (igual que tarea operativa)
   const [dueDateUnlocked, setDueDateUnlocked] = useState(false);
   const [showDueDatePasswordModal, setShowDueDatePasswordModal] = useState(false);
   const [adminPasswordForDueDate, setAdminPasswordForDueDate] = useState("");
   const [adminPasswordInput, setAdminPasswordInput] = useState("");
-  const canEditDueDateWithoutPassword = hasPermission("users.view") || hasRole("admin") || false;
-  const isDueDateLocked = tarea?.id && !canEditDueDateWithoutPassword && !dueDateUnlocked;
-  const [selectedUserId, setSelectedUserId] = useState("");
+  const [verifyingDueDatePassword, setVerifyingDueDatePassword] = useState(false);
+  const [dueDatePasswordError, setDueDatePasswordError] = useState("");
+  const isDueDateLocked = tarea?.id && !dueDateUnlocked;
+  const fechasInvalidas = scheduledDate && dueDate && scheduledDate > dueDate;
+
+  const [selectedAssignUserId, setSelectedAssignUserId] = useState("");
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignPreview, setAssignPreview] = useState(null);
+  const [showReassign, setShowReassign] = useState(false);
+
+  const tareaEfectiva = useMemo(() => {
+    if (!assignPreview || !tarea?.id) return tarea;
+    if (String(assignPreview.id) !== String(tarea.id)) return tarea;
+    return { ...tarea, ...assignPreview };
+  }, [tarea, assignPreview]);
+
+  const puedeMarcarCompletada = useMemo(() => {
+    const uid = getAuthUserId(user);
+    const aid = getTareaAsignadoUserId(tareaEfectiva);
+    if (uid && aid && uid === aid) return true;
+    return coincideAsignacionPorNombre(user, tareaEfectiva);
+  }, [user, tareaEfectiva]);
+
   const [usuarios, setUsuarios] = useState([]);
   const [mentionedUserIds, setMentionedUserIds] = useState([]);
   
@@ -214,11 +290,15 @@ const ResponderTareaAuditoriaModal = ({
     if (show && tarea?.id) {
       setScheduledDate(normalizeDateForInput(tarea.scheduled_date) || "");
       setDueDate(normalizeDateForInput(tarea.due_date) || "");
-      setSelectedUserId(tarea.assigned_user_id || "");
+      setSelectedAssignUserId(tarea.assigned_user_id ? String(tarea.assigned_user_id) : "");
+      setShowReassign(false);
+      setAssignPreview(null);
       setDueDateUnlocked(false);
       setShowDueDatePasswordModal(false);
       setAdminPasswordForDueDate("");
       setAdminPasswordInput("");
+      setDueDatePasswordError("");
+      setVerifyingDueDatePassword(false);
       cargarComentarios();
     } else {
       setResponseNote("");
@@ -662,6 +742,12 @@ const ResponderTareaAuditoriaModal = ({
     setShowConfirmCompletarModal(false);
     setLoading(true);
     try {
+      if (!puedeMarcarCompletada) {
+        toast.showWarning("Solo el usuario asignado a la tarea puede marcarla como completada.");
+        setLoading(false);
+        return;
+      }
+
       const taskId = tarea?.id;
       if (!taskId) {
         toast.showError("No se pudo identificar la tarea");
@@ -738,27 +824,43 @@ const ResponderTareaAuditoriaModal = ({
     }
   };
   
-  // Confirmar contraseña de administrador para desbloquear fecha límite
-  const handleVerificarPasswordDueDate = () => {
+  const handleVerificarPasswordDueDate = async () => {
     const pwd = (adminPasswordInput || "").trim();
     if (!pwd) {
-      toast.showWarning("Ingrese la contraseña del administrador");
+      toast.showWarning("Ingrese la clave del super administrador");
       return;
     }
-    setAdminPasswordForDueDate(pwd);
-    setDueDateUnlocked(true);
-    setAdminPasswordInput("");
-    setShowDueDatePasswordModal(false);
-    toast.showSuccess("Fecha límite desbloqueada. Puede modificarla y guardar.");
+    setDueDatePasswordError("");
+    setVerifyingDueDatePassword(true);
+    try {
+      await systemConfigService.verifySuperAdminPassword(pwd);
+      setAdminPasswordForDueDate(pwd);
+      setDueDateUnlocked(true);
+      setAdminPasswordInput("");
+      setDueDatePasswordError("");
+      setShowDueDatePasswordModal(false);
+      toast.showSuccess("Fecha de vencimiento desbloqueada. Puede modificarla y guardar.");
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Contraseña incorrecta.";
+      setDueDatePasswordError(msg);
+      toast.showError("La clave del super administrador no es correcta.");
+    } finally {
+      setVerifyingDueDatePassword(false);
+    }
   };
 
-  // Función para actualizar fechas
   const handleActualizarFechas = async () => {
-    if (!scheduledDate || !dueDate) {
-      toast.showWarning("Las fechas no pueden estar vacías");
+    const schedYmd = normalizeDateForInput(scheduledDate);
+    const dueYmd = normalizeDateForInput(dueDate);
+    if (!schedYmd || !dueYmd || !/^\d{4}-\d{2}-\d{2}$/.test(schedYmd) || !/^\d{4}-\d{2}-\d{2}$/.test(dueYmd)) {
+      toast.showWarning("Ingrese fechas completas y válidas.");
       return;
     }
-    
+    if (schedYmd > dueYmd) {
+      toast.showError("La fecha de programación no puede ser mayor que la fecha de vencimiento.");
+      return;
+    }
+
     const taskId = tarea?.id;
     if (!taskId) {
       toast.showError("No se pudo identificar la tarea");
@@ -766,10 +868,10 @@ const ResponderTareaAuditoriaModal = ({
     }
 
     const dueDateOriginal = normalizeDateForInput(tarea.due_date) || "";
-    const dueDateCambiada = dueDate !== dueDateOriginal;
-    const requierePassword = dueDateCambiada && !canEditDueDateWithoutPassword;
+    const dueDateCambiada = dueYmd !== dueDateOriginal;
+    const requierePassword = dueDateCambiada;
     if (requierePassword && !adminPasswordForDueDate) {
-      toast.showWarning("Para cambiar la fecha límite debe desbloquearla con la contraseña del administrador.");
+      toast.showWarning("Para cambiar la fecha de vencimiento debe ingresar la clave del super administrador.");
       setShowDueDatePasswordModal(true);
       return;
     }
@@ -777,24 +879,26 @@ const ResponderTareaAuditoriaModal = ({
     setLoading(true);
     try {
       const payload = {
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: schedYmd,
+        due_date: dueYmd,
       };
       if (dueDateCambiada && adminPasswordForDueDate) {
         payload.admin_password = adminPasswordForDueDate;
       }
       await rescheduleTask(taskId, payload);
-      
+
       const tareaActualizada = {
         ...tarea,
-        scheduled_date: scheduledDate,
-        due_date: dueDate,
+        scheduled_date: schedYmd,
+        due_date: dueYmd,
       };
-      
+
       if (onUpdated) {
         onUpdated(tareaActualizada);
       }
-      
+
+      setScheduledDate(schedYmd);
+      setDueDate(dueYmd);
       setDueDateUnlocked(false);
       setAdminPasswordForDueDate("");
       toast.showSuccess("Fechas actualizadas exitosamente");
@@ -804,7 +908,7 @@ const ResponderTareaAuditoriaModal = ({
       if (error.response?.status === 403 || (msg && (msg.toLowerCase().includes("contraseña") || msg.toLowerCase().includes("password") || msg.toLowerCase().includes("autoriz")))) {
         setAdminPasswordForDueDate("");
         setDueDateUnlocked(false);
-        toast.showError("Contraseña de administrador incorrecta o sin permisos.");
+        toast.showError("Clave del super administrador incorrecta o sin permisos.");
       } else {
         toast.showError(msg);
       }
@@ -812,41 +916,59 @@ const ResponderTareaAuditoriaModal = ({
       setLoading(false);
     }
   };
-  
-  // Función para reasignar tarea
+
   const handleReasignar = async () => {
-    if (!selectedUserId) {
+    const nuevaAsignacionId = parseInt(selectedAssignUserId, 10);
+    if (!nuevaAsignacionId) {
       toast.showWarning("Debes seleccionar un usuario");
       return;
     }
-    
-    setLoading(true);
+
+    const taskId = tarea?.id;
+    if (!taskId) {
+      toast.showError("No se pudo identificar la tarea");
+      return;
+    }
+
+    setAssignLoading(true);
     try {
-      const taskId = tarea?.id;
-      if (!taskId) {
-        toast.showError("No se pudo identificar la tarea");
-        setLoading(false);
-        return;
+      await assignTask(taskId, nuevaAsignacionId);
+
+      let tareaCompleta = null;
+      try {
+        const raw = await getTask(taskId);
+        tareaCompleta =
+          raw?.data && typeof raw.data === "object" && !Array.isArray(raw.data)
+            ? raw.data
+            : raw;
+      } catch {
+        tareaCompleta = null;
       }
-      
-      await assignTask(taskId, parseInt(selectedUserId));
-      
+
+      const userObj =
+        usuarios.find((u) => String(u.id) === String(nuevaAsignacionId)) ||
+        tareaCompleta?.assigned_user ||
+        null;
+
       const tareaActualizada = {
         ...tarea,
-        assigned_user_id: parseInt(selectedUserId),
-        assigned_user: usuarios.find(u => u.id === parseInt(selectedUserId)),
+        ...(tareaCompleta && typeof tareaCompleta === "object" ? tareaCompleta : {}),
+        assigned_user_id: nuevaAsignacionId,
+        assigned_user: tareaCompleta?.assigned_user || userObj,
       };
-      
+
+      setAssignPreview(tareaActualizada);
+      setShowReassign(false);
       if (onUpdated) {
         onUpdated(tareaActualizada);
       }
-      
-      toast.showSuccess("Tarea reasignada exitosamente");
+
+      toast.showSuccess("Asignación actualizada exitosamente");
     } catch (error) {
       console.error("Error al reasignar tarea:", error);
       toast.showError(error.response?.data?.message || error.message || "Error al reasignar tarea");
     } finally {
-      setLoading(false);
+      setAssignLoading(false);
     }
   };
   
@@ -1148,8 +1270,8 @@ const ResponderTareaAuditoriaModal = ({
             padding: 1rem 1.5rem;
           }
           .responder-tarea-auditoria-modal .modal-body {
-            padding: 2rem;
-            background: #f8f9fa;
+            padding: 1.25rem 1.5rem 1.75rem;
+            background: #f1f5f9;
           }
           .responder-tarea-auditoria-modal .info-card {
             background: #fff;
@@ -1158,6 +1280,28 @@ const ResponderTareaAuditoriaModal = ({
             padding: 1.5rem;
             margin-bottom: 1.5rem;
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+          }
+          .responder-tarea-auditoria-modal .audit-panel-card,
+          .responder-tarea-auditoria-modal .audit-side-card,
+          .responder-tarea-auditoria-modal .audit-thread-card,
+          .responder-tarea-auditoria-modal .audit-compose-card {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 1.25rem 1.5rem;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+          }
+          .responder-tarea-auditoria-modal .audit-field-label {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+            margin-bottom: 0.35rem;
+          }
+          .responder-tarea-auditoria-modal .audit-note-readonly {
+            border-left: 4px solid #0d6efd !important;
+            background: #f8fafc !important;
           }
           @keyframes highlighted-comment-pulse {
             0%, 100% {
@@ -1187,62 +1331,49 @@ const ResponderTareaAuditoriaModal = ({
         </Modal.Header>
         
         <Modal.Body>
-          <Row className="g-4">
-            {/* Columna izquierda: Detalles de la Tarea */}
-            <Col md={6} style={{ borderRight: "2px solid #e9ecef", paddingRight: "2rem" }}>
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <i className="fas fa-info-circle text-primary"></i>
-                <h5 className="mb-0">Detalles de la Tarea</h5>
-              </div>
+          <Row className="g-4 align-items-stretch">
+            <Col lg={7}>
+              <div className="audit-panel-card h-100">
+                <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3 pb-2 border-bottom border-light">
+                  <h6 className="mb-0 fw-semibold text-body">Detalles de la tarea</h6>
+                </div>
               {highlightedCommentId && (
-                <div className="alert alert-danger py-2 px-3 d-flex align-items-center gap-2">
+                <div className="alert alert-danger py-2 px-3 d-flex align-items-center gap-2 mb-3">
                   <i className="fas fa-comment-dots"></i>
                   <span className="small mb-0">
                     Se resalt&oacute; el comentario nuevo relacionado con esta notificaci&oacute;n.
                   </span>
                 </div>
               )}
-              
-              <div className="info-card">
-                <div className="mb-3">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-info-circle text-primary"></i>
-                    <strong>Estado:</strong>
-                  </div>
-                  {getStatusBadge(tarea.status)}
+
+                <div className="mb-4">
+                  <div className="audit-field-label">Estado</div>
+                  <div className="mt-1">{getStatusBadge(tarea.status)}</div>
                 </div>
-                
-                <Row className="mb-3 g-3">
-                  <Col xs={12} md={6}>
-                    <div className="h-100">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <i className="fas fa-user text-info"></i>
-                        <strong>Creado por:</strong>
-                      </div>
-                      <p className="mb-0">
+
+                <Row className="mb-4 g-3">
+                  <Col xs={12} sm={6}>
+                    <div className="audit-field-label">Creado por</div>
+                    <div className="fw-medium text-body">
                         {tarea?.creado_por ||
                           tarea?.created_by?.name ||
                           tarea?.createdBy?.name ||
                           tarea?.log?.user?.name ||
                           tarea?.user?.name ||
                           "N/A"}
-                      </p>
                     </div>
                   </Col>
-                  <Col xs={12} md={6}>
-                    <div className="h-100">
-                      <div className="d-flex align-items-center gap-2 mb-2">
-                        <i className="fas fa-user-check text-success"></i>
-                        <strong>Asignado a:</strong>
-                      </div>
-                      <p className="mb-0">
-                        {tarea?.assigned_user?.name ||
-                          tarea?.assigned_user?.nombre ||
-                          tarea?.assign_to_user?.name ||
-                          tarea?.assigned_to_user?.name ||
-                          tarea?.asignado_a ||
-                          "N/A"}
-                      </p>
+                  <Col xs={12} sm={6}>
+                    <div className="audit-field-label">Asignado a</div>
+                    <div className="fw-medium text-body">
+                      {assignPreview?.assigned_user?.name ||
+                        assignPreview?.assigned_user?.nombre ||
+                        tarea?.assigned_user?.name ||
+                        tarea?.assigned_user?.nombre ||
+                        tarea?.assign_to_user?.name ||
+                        tarea?.assigned_to_user?.name ||
+                        tarea?.asignado_a ||
+                        "N/A"}
                     </div>
                   </Col>
                 </Row>
@@ -1252,9 +1383,8 @@ const ResponderTareaAuditoriaModal = ({
                     <Row className="mb-3 g-3">
                       <Col>
                         <Form.Group>
-                          <Form.Label>
-                            <i className="fas fa-calendar-alt text-primary me-1"></i>
-                            Fecha Programada:
+                          <Form.Label className="audit-field-label d-block text-uppercase">
+                            Fecha programada
                           </Form.Label>
                           <MdyDashDateInput
                             valueIso={scheduledDate}
@@ -1264,27 +1394,38 @@ const ResponderTareaAuditoriaModal = ({
                       </Col>
                       <Col>
                         <Form.Group>
-                          <Form.Label>
-                            <i className="fas fa-clock text-warning me-1"></i>
-                            Fecha Límite:
+                          <Form.Label className="audit-field-label d-block text-uppercase">
+                            Fecha límite
                             {isDueDateLocked && (
-                              <small className="text-muted ms-2">(solo administrador o con autorización)</small>
+                              <span className="text-muted fw-normal text-lowercase small ms-1">
+                                (requiere clave del super admin)
+                              </span>
                             )}
                           </Form.Label>
                           <div className="d-flex gap-2 align-items-start">
-                            <MdyDashDateInput
-                              valueIso={dueDate}
-                              onChangeIso={(iso) => setDueDate(iso)}
-                              disabled={isDueDateLocked}
-                            />
-                            {tarea?.id && !canEditDueDateWithoutPassword && (
+                            <div className="flex-grow-1" style={{ minWidth: 0 }}>
+                              <MdyDashDateInput
+                                valueIso={dueDate}
+                                onChangeIso={(iso) => setDueDate(iso)}
+                                disabled={isDueDateLocked}
+                              />
+                            </div>
+                            {isDueDateLocked && (
                               <Button
                                 type="button"
                                 variant={dueDateUnlocked ? "outline-success" : "outline-warning"}
                                 size="sm"
-                                onClick={() => (dueDateUnlocked ? (setDueDateUnlocked(false), setAdminPasswordForDueDate("")) : setShowDueDatePasswordModal(true))}
+                                onClick={() =>
+                                  dueDateUnlocked
+                                    ? (setDueDateUnlocked(false), setAdminPasswordForDueDate(""))
+                                    : setShowDueDatePasswordModal(true)
+                                }
                                 style={{ whiteSpace: "nowrap" }}
-                                title={dueDateUnlocked ? "Bloquear de nuevo" : "Desbloquear para editar (requiere contraseña de administrador)"}
+                                title={
+                                  dueDateUnlocked
+                                    ? "Bloquear de nuevo"
+                                    : "Desbloquear para editar (requiere clave del super admin)"
+                                }
                               >
                                 {dueDateUnlocked ? "Bloquear" : "Desbloquear"}
                               </Button>
@@ -1293,43 +1434,111 @@ const ResponderTareaAuditoriaModal = ({
                         </Form.Group>
                       </Col>
                     </Row>
-                    
-                    <Form.Group className="mb-3">
-                      <Form.Label>
-                        <i className="fas fa-user-check text-success me-1"></i>
-                        Reasignar a:
-                      </Form.Label>
-                      <Form.Select
-                        value={selectedUserId}
-                        onChange={(e) => setSelectedUserId(e.target.value)}
-                      >
-                        <option value="">Selecciona un usuario</option>
-                        {usuarios.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.name || user.nombre}
-                          </option>
-                        ))}
-                      </Form.Select>
-                      {selectedUserId && selectedUserId !== String(tarea.assigned_user_id) && (
-                        <Button
-                          variant="outline-primary"
-                          size="sm"
-                          className="mt-2"
-                          onClick={handleReasignar}
-                          disabled={loading}
-                        >
-                          Guardar Asignación
-                        </Button>
-                      )}
-                    </Form.Group>
+
+                    {fechasInvalidas && (
+                      <div className="alert alert-danger py-2 small mb-3">
+                        La fecha de programación no puede ser mayor que la fecha de vencimiento.
+                      </div>
+                    )}
+
+                    <div className="mb-3">
+                      <div className="audit-field-label">Reasignar</div>
+                      {(() => {
+                        const currentId =
+                          assignPreview?.assigned_user_id ??
+                          tarea?.assigned_user_id ??
+                          tarea?.assigned_user?.id ??
+                          null;
+                        const currentIdStr = currentId != null ? String(currentId) : "";
+                        const currentName =
+                          assignPreview?.assigned_user?.name ||
+                          assignPreview?.assigned_user?.nombre ||
+                          tarea?.assigned_user?.name ||
+                          tarea?.assigned_user?.nombre ||
+                          null;
+
+                        return (
+                          <>
+                            {!showReassign ? (
+                              <Button
+                                type="button"
+                                variant="outline-primary"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedAssignUserId(currentIdStr);
+                                  setShowReassign(true);
+                                }}
+                                disabled={assignLoading}
+                              >
+                                Reasignar
+                              </Button>
+                            ) : (
+                              <div className="mt-1">
+                                <Form.Select
+                                  value={selectedAssignUserId || ""}
+                                  onChange={(e) => setSelectedAssignUserId(e.target.value)}
+                                  disabled={assignLoading}
+                                >
+                                  <option value="">Selecciona un usuario</option>
+                                  {(() => {
+                                    if (!currentIdStr) return null;
+                                    const existsInList = (usuarios || []).some(
+                                      (u) => String(u.id) === currentIdStr
+                                    );
+                                    if (existsInList) return null;
+                                    return (
+                                      <option key={`current-assignee-${currentIdStr}`} value={currentIdStr}>
+                                        {currentName || `Usuario #${currentIdStr}`}
+                                      </option>
+                                    );
+                                  })()}
+                                  {(usuarios || []).map((u) => (
+                                    <option key={u.id} value={u.id}>
+                                      {u.name || u.nombre || u.email || `Usuario #${u.id}`}
+                                    </option>
+                                  ))}
+                                </Form.Select>
+                                <div className="d-flex gap-2 mt-2">
+                                  <Button
+                                    variant="outline-secondary"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedAssignUserId(currentIdStr);
+                                      setShowReassign(false);
+                                    }}
+                                    disabled={assignLoading}
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  {selectedAssignUserId &&
+                                    selectedAssignUserId !== currentIdStr && (
+                                      <Button
+                                        variant="primary"
+                                        size="sm"
+                                        onClick={handleReasignar}
+                                        disabled={assignLoading}
+                                      >
+                                        {assignLoading ? "Actualizando..." : "Guardar"}
+                                      </Button>
+                                    )}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </>
                 ) : (
                   <>
-                    <div className="mb-2">
-                      <Badge bg="info" className="me-2">{formatFecha(tarea.scheduled_date)}</Badge>
-                      <Badge bg={getBadgeColor(tarea.due_date)}>
-                        {formatFecha(tarea.due_date)}
-                      </Badge>
+                    <div className="mb-3">
+                      <div className="audit-field-label">Programada / límite</div>
+                      <div className="d-flex flex-wrap align-items-center gap-2">
+                        <Badge bg="info">{formatFecha(tarea.scheduled_date)}</Badge>
+                        <Badge bg={getBadgeColor(tarea.due_date)}>
+                          {formatFecha(tarea.due_date)}
+                        </Badge>
+                      </div>
                     </div>
                     {formatTaskTimeDhm(tarea) !== "—" && (
                       <div className="mt-2">
@@ -1341,26 +1550,100 @@ const ResponderTareaAuditoriaModal = ({
                 )}
                 
                 {tarea.response_note && (
-                  <div className="mt-3">
-                    <div className="d-flex align-items-center gap-2 mb-2">
-                      <i className="fas fa-sticky-note text-success"></i>
-                      <strong>Nota Inicial:</strong>
-                    </div>
-                    <div 
-                      className="text-content"
-                      style={{ 
-                        marginTop: 4,
-                        wordBreak: 'break-word'
+                  <div className="audit-note-readonly rounded-3 p-3 mt-2">
+                    <div className="audit-field-label mb-2">Nota inicial / instrucción</div>
+                    <div
+                      className="text-content small"
+                      style={{
+                        wordBreak: "break-word",
                       }}
-                      dangerouslySetInnerHTML={{ __html: tarea.response_note || 'Sin nota' }}
+                      dangerouslySetInnerHTML={{ __html: tarea.response_note || "Sin nota" }}
                     />
                   </div>
                 )}
               </div>
-              
-              <hr />
-              
-              <h6 className="mb-3">Comentarios:</h6>
+            </Col>
+
+            <Col lg={5}>
+              <div className="audit-side-card h-100 d-flex flex-column">
+                <h6
+                  className="text-uppercase text-muted small fw-bold mb-3 pb-2 border-bottom"
+                  style={{ letterSpacing: "0.05em" }}
+                >
+                  Contexto de auditoría
+                </h6>
+                {tarea.cliente && (
+                  <div className="mb-3 pb-3 border-bottom border-light">
+                    <div className="audit-field-label">Cliente</div>
+                    <div className="fw-medium mb-0">
+                      {tarea.cliente.nombre_completo || tarea.cliente.name || "N/A"}
+                    </div>
+                  </div>
+                )}
+                {tarea.cobertura && (
+                  <div className="mb-3 pb-3 border-bottom border-light">
+                    <div className="audit-field-label">Cobertura</div>
+                    <div className="fw-medium mb-0">
+                      {tarea.cobertura.codigo_poliza || tarea.cobertura.poliza || "N/A"}
+                    </div>
+                    {(tarea.cobertura.policy_number || tarea.cobertura.numero_poliza) && (
+                      <div className="text-muted small mt-1">
+                        N.º póliza: {tarea.cobertura.policy_number || tarea.cobertura.numero_poliza}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {tarea.auditoria && (
+                  <div className="mb-3 pb-3 border-bottom border-light">
+                    <div className="audit-field-label">Auditoría</div>
+                    <div className="fw-medium">
+                      {tarea.auditoria.run_nombre ||
+                        (tarea.auditoria.run_id != null ? `Run #${tarea.auditoria.run_id}` : "—")}
+                    </div>
+                    {tarea.auditoria.run_periodo && (
+                      <div className="text-muted small mt-1">
+                        Periodo: {tarea.auditoria.run_periodo}
+                      </div>
+                    )}
+                    {tarea.auditoria.tipo_auditoria && (
+                      <div className="text-muted small mt-1">
+                        Tipo:{" "}
+                        {typeof tarea.auditoria.tipo_auditoria === "object"
+                          ? tarea.auditoria.tipo_auditoria.nombre ||
+                            tarea.auditoria.tipo_auditoria.codigo ||
+                            ""
+                          : String(tarea.auditoria.tipo_auditoria)}
+                      </div>
+                    )}
+                  </div>
+                )}
+                {tarea.created_at && (
+                  <div className="mb-3 pb-3 border-bottom border-light">
+                    <div className="audit-field-label">Creada</div>
+                    <div className="small text-body mb-0">
+                      {formatDateTimeForDisplay(tarea.created_at)}
+                    </div>
+                  </div>
+                )}
+                {tarea.updated_at && (
+                  <div className="mb-0 mt-auto">
+                    <div className="audit-field-label">Última actualización</div>
+                    <div className="small text-body mb-0">
+                      {formatDateTimeForDisplay(tarea.updated_at)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Col>
+          </Row>
+
+          <Row className="g-4 mt-1">
+            <Col xs={12}>
+              <div className="audit-thread-card">
+                <h6 className="fw-semibold mb-3 pb-2 border-bottom d-flex align-items-center gap-2">
+                  <i className="fas fa-comments text-secondary"></i>
+                  Historial de comentarios
+                </h6>
               {cargandoComentarios ? (
                 <div className="text-center py-4">
                   <Spinner animation="border" variant="primary" />
@@ -1479,17 +1762,17 @@ const ResponderTareaAuditoriaModal = ({
                   })}
                 </ListGroup>
               )}
-              
-              <hr />
-              
+              </div>
+
               {tarea.status !== "completed" && (
+                <div className="audit-compose-card mt-3">
                 <>
-                  <Form.Group className="mt-4">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                      <Form.Label className="mb-0 d-flex align-items-center gap-2">
-                        <i className="fas fa-comment-dots text-primary"></i>
-                        <strong>Mi respuesta:</strong>
-                      </Form.Label>
+                  <Form.Group className="mt-0">
+                    <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                      <h6 className="mb-0 fw-semibold d-flex align-items-center gap-2">
+                        <i className="fas fa-edit text-secondary"></i>
+                        Tu respuesta
+                      </h6>
                       {reconocimientoDisponible && (
                         <Button
                           type="button"
@@ -1630,8 +1913,10 @@ const ResponderTareaAuditoriaModal = ({
                     </div>
                   </Form.Group>
                   
-                  <Form.Group className="mb-3">
-                    <Form.Label>Archivos adjuntos (opcional)</Form.Label>
+                  <Form.Group className="mb-0">
+                    <Form.Label className="audit-field-label d-block text-uppercase">
+                      Archivos adjuntos (opcional)
+                    </Form.Label>
                     <div
                       className="border rounded p-3 text-center"
                       style={{
@@ -1733,61 +2018,6 @@ const ResponderTareaAuditoriaModal = ({
                     )}
                   </Form.Group>
                 </>
-              )}
-            </Col>
-            
-            {/* Columna derecha: Información adicional */}
-            <Col md={6} style={{ overflowY: "auto", maxHeight: "calc(100vh - 250px)" }}>
-              <div className="d-flex align-items-center gap-2 mb-3">
-                <i className="fas fa-info-circle text-info"></i>
-                <h5 className="mb-0">Información Adicional</h5>
-              </div>
-              
-              {tarea.cliente && (
-                <div className="info-card">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-user-circle text-primary"></i>
-                    <strong>Cliente:</strong>
-                  </div>
-                  <p className="mb-0">
-                    {tarea.cliente.nombre_completo || tarea.cliente.name || "N/A"}
-                  </p>
-                </div>
-              )}
-              
-              {tarea.cobertura && (
-                <div className="info-card">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-file-contract text-success"></i>
-                    <strong>Cobertura:</strong>
-                  </div>
-                  <p className="mb-0">
-                    {tarea.cobertura.codigo_poliza || tarea.cobertura.poliza || "N/A"}
-                  </p>
-                </div>
-              )}
-              
-              {tarea.created_at && (
-                <div className="info-card">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-calendar-plus text-info"></i>
-                    <strong>Creada:</strong>
-                  </div>
-                  <p className="mb-0">
-                    {formatDateTimeForDisplay(tarea.created_at)}
-                  </p>
-                </div>
-              )}
-              
-              {tarea.updated_at && (
-                <div className="info-card">
-                  <div className="d-flex align-items-center gap-2 mb-2">
-                    <i className="fas fa-edit text-warning"></i>
-                    <strong>Última actualización:</strong>
-                  </div>
-                  <p className="mb-0">
-                    {formatDateTimeForDisplay(tarea.updated_at)}
-                  </p>
                 </div>
               )}
             </Col>
@@ -1800,15 +2030,25 @@ const ResponderTareaAuditoriaModal = ({
           </Button>
           {tarea.status !== "completed" && (
             <>
-              <Button variant="primary" onClick={handleActualizarFechas} disabled={loading}>
+              <Button
+                variant="primary"
+                onClick={handleActualizarFechas}
+                disabled={loading || fechasInvalidas}
+              >
                 Actualizar Fechas
               </Button>
               <Button variant="info" onClick={handleAgregarComentario} disabled={loading}>
                 Agregar Comentario
               </Button>
-              <Button variant="success" onClick={handleCompletar} disabled={loading || esTareaVencida}>
-                Marcar completada
-              </Button>
+              {puedeMarcarCompletada && (
+                <Button
+                  variant="success"
+                  onClick={handleCompletar}
+                  disabled={loading || esTareaVencida}
+                >
+                  Marcar completada
+                </Button>
+              )}
             </>
           )}
         </Modal.Footer>
@@ -1820,6 +2060,7 @@ const ResponderTareaAuditoriaModal = ({
         onHide={() => {
           setShowDueDatePasswordModal(false);
           setAdminPasswordInput("");
+          setDueDatePasswordError("");
         }}
         centered
         size="sm"
@@ -1827,31 +2068,48 @@ const ResponderTareaAuditoriaModal = ({
         <Modal.Header closeButton>
           <Modal.Title>
             <i className="fas fa-lock text-warning me-2"></i>
-            Autorización requerida
+            Clave del super administrador
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
           <p className="text-muted small mb-3">
-            Para modificar la fecha límite después de creada la tarea debe ingresar la contraseña del usuario administrador.
+            Para modificar la fecha de vencimiento debe ingresar la clave del super administrador.
           </p>
           <Form.Group>
-            <Form.Label>Contraseña del administrador</Form.Label>
+            <Form.Label>Contraseña</Form.Label>
             <Form.Control
               type="password"
               value={adminPasswordInput}
-              onChange={(e) => setAdminPasswordInput(e.target.value)}
-              placeholder="Ingrese la contraseña"
+              onChange={(e) => {
+                setAdminPasswordInput(e.target.value);
+                setDueDatePasswordError("");
+              }}
+              placeholder="Ingrese la clave"
               onKeyDown={(e) => e.key === "Enter" && handleVerificarPasswordDueDate()}
               autoComplete="off"
             />
+            {dueDatePasswordError ? (
+              <div className="text-danger small mt-2">{dueDatePasswordError}</div>
+            ) : null}
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDueDatePasswordModal(false)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setShowDueDatePasswordModal(false);
+              setDueDatePasswordError("");
+            }}
+            disabled={verifyingDueDatePassword}
+          >
             Cancelar
           </Button>
-          <Button variant="primary" onClick={handleVerificarPasswordDueDate}>
-            Verificar
+          <Button
+            variant="primary"
+            onClick={handleVerificarPasswordDueDate}
+            disabled={verifyingDueDatePassword}
+          >
+            {verifyingDueDatePassword ? "Verificando..." : "Verificar"}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -2038,7 +2296,7 @@ const ResponderTareaAuditoriaModal = ({
           <Button 
             variant="success" 
             onClick={confirmarYCompletarTarea}
-            disabled={loading || esTareaVencida}
+            disabled={loading || esTareaVencida || !puedeMarcarCompletada}
           >
             {loading ? (
               <>

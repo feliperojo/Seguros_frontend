@@ -16,6 +16,7 @@ const buildQueryParams = (params) => {
   if (params.grupo_familiar_id) queryParams.append("grupo_familiar_id", params.grupo_familiar_id);
   if (params.status) queryParams.append("status", params.status);
   if (params.assigned_user_id) queryParams.append("assigned_user_id", params.assigned_user_id);
+  if (params.mentioned_user_id) queryParams.append("mentioned_user_id", params.mentioned_user_id);
   if (params.page) queryParams.append("page", params.page);
   if (params.per_page) queryParams.append("per_page", params.per_page);
   

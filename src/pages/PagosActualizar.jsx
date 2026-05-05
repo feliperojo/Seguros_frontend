@@ -18,6 +18,40 @@ import apiRequest from "../services/api";
 import ModalMediosPago from "../components/ModalMediosPago"; // Ajusta la ruta según tu estructura
 import { renderClienteLink } from "./ListaClientes";
 
+const clampDay = (n) => {
+  const num = Number(n);
+  if (!Number.isFinite(num)) return null;
+  const int = Math.trunc(num);
+  if (int < 1) return 1;
+  if (int > 31) return 31;
+  return int;
+};
+
+/**
+ * Soporta:
+ * - "10" -> { mode: "single", day: 10 }
+ * - "10-20" -> { mode: "range", from: 10, to: 20 }
+ * - "20-10" -> se normaliza a 10-20
+ */
+const parseDiaPagoFilter = (raw) => {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+
+  // Permite "10 - 20"
+  const normalized = s.replace(/\s+/g, "");
+  if (normalized.includes("-")) {
+    const [a, b] = normalized.split("-").slice(0, 2);
+    const from = clampDay(a);
+    const to = clampDay(b);
+    if (from == null || to == null) return null;
+    return from <= to ? { mode: "range", from, to } : { mode: "range", from: to, to: from };
+  }
+
+  const day = clampDay(normalized);
+  if (day == null) return null;
+  return { mode: "single", day };
+};
+
 
 const PagosActualizar = () => {
   const [loading, setLoading] = useState(false);
@@ -92,18 +126,25 @@ const PagosActualizar = () => {
     setPaginaActual(1);
   };
 
+  const diaPagoFilter = parseDiaPagoFilter(filtros.dia_pago);
+
   const pagosFiltrados = pagos.filter((p) => {
     const cliente = p.cliente?.nombre_completo?.toLowerCase() || "";
     const compania = p.cobertura?.compania?.nombre?.toLowerCase() || "";
     const estado = p.estado?.toLowerCase() || "";
     const fecha = p.fecha_pago || "";
     const dia = fecha.split("-")[2] || "";
+    const diaNum = Number(dia);
 
     return (
       cliente.includes(filtros.cliente.toLowerCase()) &&
       compania.includes(filtros.compania.toLowerCase()) &&
       (filtros.estado ? estado === filtros.estado.toLowerCase() : true) &&
-      (filtros.dia_pago ? dia === filtros.dia_pago.padStart(2, "0") : true) &&
+      (diaPagoFilter
+        ? diaPagoFilter.mode === "single"
+          ? diaNum === diaPagoFilter.day
+          : diaNum >= diaPagoFilter.from && diaNum <= diaPagoFilter.to
+        : true) &&
       fecha.includes(`-${mesActual}-`)
     );
   });
@@ -152,13 +193,11 @@ const PagosActualizar = () => {
 
         <Col md={2}>
           <Form.Control
-            placeholder="Día de pago (01-31)"
+            placeholder="Día de pago (01-31 o 10-20)"
             name="dia_pago"
             value={filtros.dia_pago}
             onChange={handleFiltroChange}
-            type="number"
-            min="1"
-            max="31"
+            type="text"
           />
         </Col>
         <Col md={2}>
@@ -252,11 +291,13 @@ const PagosActualizar = () => {
                     <Form.Select
                       value={p.estado}
                       onChange={(e) => handleEstadoChange(p.id, e.target.value)}
-                      className={`text-white text-center fw-bold ${
+                      className={`text-center fw-bold ${
                         p.estado === "pagado"
-                          ? "bg-success"
+                          ? "bg-success text-white"
                           : p.estado === "pendiente"
-                          ? "bg-warning"
+                          ? "bg-secondary text-white"
+                          : p.estado === "procesando"
+                          ? "bg-warning text-dark"
                           : "bg-secondary"
                       }`}
                     >

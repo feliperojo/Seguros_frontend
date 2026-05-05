@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
@@ -6,9 +6,9 @@ import apiRequest from "../../services/api";
 import MdyDashDateInput from "../common/MdyDashDateInput";
 import { createTaskFromRun, addComment } from "../../services/auditoriasTasksService";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
-import { extractMentionedUserIds } from "../../utils/mentions";
 import useToast from "../../hooks/useToast";
 import { parseApiDateToLocalDate } from "../../utils/formatters";
+import { getQuillInstance } from "../../utils/quillEditorUtils";
 
 // Configuración de módulos para ReactQuill
 const quillModules = {
@@ -16,17 +16,25 @@ const quillModules = {
     [{ 'header': [1, 2, 3, false] }],
     ['bold', 'italic', 'underline', 'strike'],
     [{ 'color': [] }, { 'background': [] }],
+    [{ 'font': [] }],
+    [{ 'size': ['small', false, 'large', 'huge'] }],
+    [{ 'script': 'sub'}, { 'script': 'super' }],
     [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+    [{ 'align': [] }],
+    ['blockquote', 'code-block'],
     ['link'],
     ['clean']
   ],
 };
 
 const quillFormats = [
-  'header',
+  'header', 'font', 'size',
   'bold', 'italic', 'underline', 'strike',
   'color', 'background',
+  'script',
   'list', 'bullet',
+  'align',
+  'blockquote', 'code-block',
   'link'
 ];
 
@@ -50,6 +58,15 @@ const NuevaTareaAuditoriaModal = ({
   runId = null // ID del run de auditoría (nuevo método)
 }) => {
   const toast = useToast();
+  const toastRef = useRef(toast);
+  const dropAreaRef = useRef(null);
+  const [grabando, setGrabando] = useState(false);
+  const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
+  const reconocimientoVozRef = useRef(null);
+  const grabandoRef = useRef(false);
+  const quillEditorRef = useRef(null);
+  const lastSelectionRef = useRef(null);
+  const quillSelectionBoundToRef = useRef(null);
   
   const [formData, setFormData] = useState({
     assigned_user_id: "",
@@ -81,6 +98,168 @@ const NuevaTareaAuditoriaModal = ({
   } = useMentionableQuill(usuarios, (ids) => {
     setMentionedUserIds(ids);
   });
+
+  // Sincronizar ref con estado
+  useEffect(() => {
+    grabandoRef.current = grabando;
+  }, [grabando]);
+
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
+  // Resetear referencias del editor al abrir/cerrar
+  useEffect(() => {
+    if (show) {
+      quillEditorRef.current = null;
+      lastSelectionRef.current = null;
+      quillSelectionBoundToRef.current = null;
+    }
+  }, [show]);
+
+  // Verificar disponibilidad del reconocimiento de voz (dictado)
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      setReconocimientoDisponible(true);
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = false;
+      recognition.lang = "es-ES";
+
+      recognition.onresult = (event) => {
+        let textoTranscrito = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          if (event.results[i].isFinal) {
+            textoTranscrito += event.results[i][0].transcript;
+          }
+        }
+
+        if (!textoTranscrito) return;
+
+        const quill =
+          getQuillInstance(mentionQuillRef.current) ||
+          getQuillInstance(quillEditorRef.current);
+
+        if (quill) {
+          try { quill.focus(); } catch (e) {}
+          const length = quill.getLength();
+          const range = quill.getSelection(true) || lastSelectionRef.current;
+          const insertPosition = range ? range.index : Math.max(length - 1, 0);
+          const prevChar = insertPosition > 0 ? quill.getText(insertPosition - 1, 1) : "";
+          const prefix = prevChar && !prevChar.endsWith(" ") ? " " : "";
+          quill.insertText(insertPosition, `${prefix}${textoTranscrito} `, "user");
+          quill.setSelection(insertPosition + prefix.length + textoTranscrito.length + 1);
+        } else {
+          // Fallback: concatenar en HTML
+          setFormData((prev) => {
+            const currentHtml = prev.response_note || "";
+            const tempDiv = document.createElement("div");
+            tempDiv.innerHTML = currentHtml;
+            const currentText = tempDiv.textContent || tempDiv.innerText || "";
+            const prefix = currentText && !currentText.endsWith(" ") ? " " : "";
+            return { ...prev, response_note: currentHtml + prefix + textoTranscrito + " " };
+          });
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Error en reconocimiento de voz:", event.error);
+        if (event.error === "no-speech") return;
+        if (event.error === "audio-capture") {
+          toastRef.current?.showWarning?.("No se pudo acceder al micrófono. Verifica los permisos.");
+          grabandoRef.current = false;
+          setGrabando(false);
+        } else if (event.error === "not-allowed") {
+          toastRef.current?.showWarning?.("Permiso de micrófono denegado. Permite el acceso al micrófono.");
+          grabandoRef.current = false;
+          setGrabando(false);
+        } else if (event.error !== "aborted") {
+          grabandoRef.current = false;
+          setGrabando(false);
+        }
+      };
+
+      recognition.onend = () => {
+        if (!grabandoRef.current) return;
+        setTimeout(() => {
+          if (!grabandoRef.current) return;
+          try {
+            recognition.start();
+          } catch {
+            grabandoRef.current = false;
+            setGrabando(false);
+          }
+        }, 150);
+      };
+
+      reconocimientoVozRef.current = recognition;
+
+      return () => {
+        try { recognition.stop(); } catch (err) {}
+        setGrabando(false);
+      };
+    }
+
+    setReconocimientoDisponible(false);
+  }, []);
+
+  // Detener dictado cuando se cierra el modal
+  useEffect(() => {
+    const recognition = reconocimientoVozRef.current;
+    if (!show && recognition && grabando) {
+      try {
+        recognition.stop();
+        setGrabando(false);
+      } catch (err) {}
+    }
+  }, [show, grabando]);
+
+  const iniciarDictado = () => {
+    const recognition = reconocimientoVozRef.current;
+    if (!recognition) {
+      toastRef.current?.showWarning?.("El reconocimiento de voz no está disponible en tu navegador.");
+      return;
+    }
+    try {
+      const q =
+        getQuillInstance(mentionQuillRef.current) ||
+        getQuillInstance(quillEditorRef.current);
+      if (q) {
+        try { q.focus(); } catch (e) {}
+        try {
+          const r = q.getSelection(true) || lastSelectionRef.current;
+          if (r) q.setSelection(r.index, r.length || 0);
+        } catch (e) {}
+      }
+      grabandoRef.current = true;
+      recognition.start();
+      setGrabando(true);
+    } catch (err) {
+      console.error("Error al iniciar reconocimiento:", err);
+      toastRef.current?.showWarning?.("Error al iniciar el reconocimiento de voz. Intenta nuevamente.");
+      grabandoRef.current = false;
+      setGrabando(false);
+    }
+  };
+
+  const detenerDictado = () => {
+    grabandoRef.current = false;
+    const recognition = reconocimientoVozRef.current;
+    if (recognition) {
+      try {
+        recognition.stop();
+      } catch (err) {
+        console.error("Error al detener reconocimiento:", err);
+      }
+    }
+    setGrabando(false);
+  };
+
+  const toggleDictado = () => {
+    if (grabando) detenerDictado();
+    else iniciarDictado();
+  };
 
   // Cargar usuarios al abrir el modal (igual que en NuevaTareaModal)
   useEffect(() => {
@@ -397,8 +576,12 @@ const NuevaTareaAuditoriaModal = ({
       });
       return;
     }
-    
-    console.log("✅ Creando tarea con runId:", currentRunId, "cobertura_id:", coberturaId, "cliente_id:", clienteId, "grupo_familiar_id:", grupoFamiliarId);
+
+    // Pausa opcional en DevTools: localStorage.setItem('DEBUG_AUDIT_TASK','1') y recargar
+    if (import.meta.env.DEV && typeof window !== "undefined" && window.localStorage?.getItem("DEBUG_AUDIT_TASK") === "1") {
+      // eslint-disable-next-line no-debugger
+      debugger;
+    }
     
     setLoading(true);
     
@@ -430,10 +613,40 @@ const NuevaTareaAuditoriaModal = ({
       if (mentionedUserIds.length > 0) {
         payload.mentioned_user_ids = mentionedUserIds;
       }
+
+      if (import.meta.env.DEV) {
+        const notePreview =
+          typeof formData.response_note === "string"
+            ? `${formData.response_note.slice(0, 200)}${formData.response_note.length > 200 ? "…" : ""}`
+            : "";
+        console.groupCollapsed(
+          `%c[Auditoría] Crear tarea%c POST auditorias/runs/${currentRunId}/tasks`,
+          "color:#1976d2;font-weight:bold;",
+          "color:inherit;"
+        );
+        console.log("Contexto", {
+          currentRunId,
+          coberturaId,
+          clienteId,
+          grupoFamiliarId,
+          adjuntos: archivos.length,
+          mentionedUserIds,
+        });
+        console.log("Payload JSON", payload);
+        console.log("Nota (preview)", notePreview || "(vacía / no enviada)");
+        console.groupEnd();
+      }
       
       // Crear la tarea usando el nuevo endpoint
       const response = await createTaskFromRun(currentRunId, payload);
       const taskId = response?.id || response?.data?.id || response?.task?.id;
+
+      if (import.meta.env.DEV) {
+        console.log("[Auditoría] Respuesta crear tarea", {
+          taskId,
+          raw: response,
+        });
+      }
       
       // Si hay archivos y se creó la tarea, subirlos como comentario inicial
       if (taskId && archivos.length > 0) {
@@ -455,9 +668,39 @@ const NuevaTareaAuditoriaModal = ({
           archivos.forEach((archivo) => {
             formDataComentario.append('archivos[]', archivo.file);
           });
+
+          if (import.meta.env.DEV) {
+            const fdSummary = [];
+            try {
+              for (const [k, v] of formDataComentario.entries()) {
+                fdSummary.push({
+                  key: k,
+                  value:
+                    typeof v === "string"
+                      ? v.length > 120
+                        ? `${v.slice(0, 120)}…`
+                        : v
+                      : v instanceof File
+                        ? `File(${v.name}, ${v.size}b, ${v.type})`
+                        : String(v),
+                });
+              }
+            } catch (e) {
+              fdSummary.push({ error: "No se pudo inspeccionar FormData" });
+            }
+            console.log("[Auditoría] Subiendo adjuntos vía comentario inicial", {
+              taskId,
+              endpoint: `POST auditorias/tasks/${taskId}/comments`,
+              formData: fdSummary,
+            });
+          }
           
           // Subir archivos como comentario inicial
           await addComment(taskId, formDataComentario);
+
+          if (import.meta.env.DEV) {
+            console.log("[Auditoría] Adjuntos enviados OK para taskId:", taskId);
+          }
           
         } catch (err) {
           console.error("Error al subir archivos:", err);
@@ -515,9 +758,9 @@ const NuevaTareaAuditoriaModal = ({
 
   return (
     <>
-      <Modal show={show} onHide={onHide} size="lg" backdrop="static">
-        <Modal.Header closeButton>
-          <Modal.Title>Crear Tarea de Auditoría</Modal.Title>
+      <Modal show={show} onHide={onHide} size="lg" centered backdrop="static">
+        <Modal.Header closeButton className="border-bottom">
+          <Modal.Title className="fw-normal">Crear Tarea de Auditoría</Modal.Title>
         </Modal.Header>
         <Form onSubmit={handleSubmit}>
           <Modal.Body>
@@ -537,16 +780,18 @@ const NuevaTareaAuditoriaModal = ({
                 onChange={(e) => setFormData(prev => ({ ...prev, assigned_user_id: e.target.value }))}
                 isInvalid={!!errors.assigned_user_id}
               >
-                <option value="">Selecciona un usuario</option>
+                <option value="">
+                  {usuarios.length === 0 ? "Cargando usuarios..." : "Selecciona un usuario"}
+                </option>
                 {usuarios.map((user) => (
                   <option key={user.id} value={user.id}>
                     {user.name || user.nombre || `Usuario ${user.id}`}
                   </option>
                 ))}
               </Form.Select>
-              {errors.assigned_user_id && (
-                <Form.Text className="text-danger">{errors.assigned_user_id}</Form.Text>
-              )}
+              <Form.Control.Feedback type="invalid">
+                {errors.assigned_user_id}
+              </Form.Control.Feedback>
             </Form.Group>
             
             <div className="row">
@@ -558,9 +803,9 @@ const NuevaTareaAuditoriaModal = ({
                   valueIso={formData.scheduled_date}
                   onChangeIso={(iso) => setFormData((prev) => ({ ...prev, scheduled_date: iso }))}
                 />
-                {errors.scheduled_date && (
-                  <Form.Text className="text-danger">{errors.scheduled_date}</Form.Text>
-                )}
+                <Form.Control.Feedback type="invalid">
+                  {errors.scheduled_date}
+                </Form.Control.Feedback>
               </Form.Group>
               
               <Form.Group className="mb-3 col-md-6">
@@ -570,29 +815,130 @@ const NuevaTareaAuditoriaModal = ({
                 <MdyDashDateInput
                   valueIso={formData.due_date}
                   onChangeIso={(iso) => setFormData((prev) => ({ ...prev, due_date: iso }))}
+                  minIso={formData.scheduled_date}
                 />
-                {errors.due_date && (
-                  <Form.Text className="text-danger">{errors.due_date}</Form.Text>
-                )}
+                <Form.Control.Feedback type="invalid">
+                  {errors.due_date}
+                </Form.Control.Feedback>
               </Form.Group>
             </div>
             
             <Form.Group className="mb-3">
-              <Form.Label>Nota de Respuesta (Opcional)</Form.Label>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <Form.Label className="mb-0">Nota de Respuesta (Opcional)</Form.Label>
+                {reconocimientoDisponible && (
+                  <>
+                    <style>{`
+                      @keyframes microphone-pulse {
+                        0%, 100% { transform: scale(1); opacity: 1; }
+                        50% { transform: scale(1.15); opacity: 0.85; }
+                      }
+                      .microphone-recording {
+                        animation: microphone-pulse 1s ease-in-out infinite;
+                        display: inline-block;
+                      }
+                      .recording-waves {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 2px;
+                        margin-left: 4px;
+                      }
+                      .recording-waves span {
+                        width: 3px;
+                        height: 12px;
+                        background-color: currentColor;
+                        border-radius: 2px;
+                        animation: wave 1.2s ease-in-out infinite;
+                      }
+                      .recording-waves span:nth-child(1) { animation-delay: 0s; }
+                      .recording-waves span:nth-child(2) { animation-delay: 0.2s; }
+                      .recording-waves span:nth-child(3) { animation-delay: 0.4s; }
+                      @keyframes wave {
+                        0%, 100% { transform: scaleY(0.5); opacity: 0.7; }
+                        50% { transform: scaleY(1); opacity: 1; }
+                      }
+                    `}</style>
+                    <Button
+                      type="button"
+                      variant={grabando ? "danger" : "outline-primary"}
+                      size="sm"
+                      onClick={toggleDictado}
+                      className="d-flex align-items-center gap-2"
+                    >
+                      {grabando ? (
+                        <>
+                          <span className="d-flex align-items-center">
+                            <i className="fas fa-microphone microphone-recording"></i>
+                            <span className="recording-waves">
+                              <span></span>
+                              <span></span>
+                              <span></span>
+                            </span>
+                          </span>
+                          <span>Detener dictado</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="fas fa-microphone"></i>
+                          <span>Dictar</span>
+                        </>
+                      )}
+                    </Button>
+                  </>
+                )}
+              </div>
+              {grabando && (
+                <div className="alert alert-info d-flex align-items-center gap-2 mb-2 py-2" role="alert">
+                  <span className="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></span>
+                  <small className="mb-0">
+                    <strong>Escuchando...</strong> Habla ahora. El texto se agregará automáticamente a la nota.
+                  </small>
+                </div>
+              )}
               <div style={{ position: "relative" }}>
+                <style>{`
+                  .ql-editor {
+                    min-height: 280px;
+                    font-size: 16px;
+                    line-height: 1.6;
+                  }
+                  .ql-container {
+                    font-size: 16px;
+                    font-family: inherit;
+                  }
+                  .ql-editor.ql-blank::before {
+                    font-size: 16px;
+                    font-style: normal;
+                    color: #6c757d;
+                  }
+                `}</style>
                 <ReactQuill
                   ref={mentionQuillRef}
                   theme="snow"
                   value={formData.response_note}
                   onChange={(content, delta, source, editor) => {
                     setFormData(prev => ({ ...prev, response_note: content }));
+                    const quill =
+                      getQuillInstance(editor) ??
+                      getQuillInstance(mentionQuillRef.current);
+                    if (quill) {
+                      quillEditorRef.current = quill;
+                      if (quillSelectionBoundToRef.current !== quill) {
+                        quillSelectionBoundToRef.current = quill;
+                        try {
+                          quill.on("selection-change", (range) => {
+                            if (range) lastSelectionRef.current = range;
+                          });
+                        } catch (e) {}
+                      }
+                    }
                     handleQuillChange(content, delta, source, editor);
                   }}
                   onKeyDown={handleQuillKeyDown}
                   modules={quillModules}
                   formats={quillFormats}
-                  placeholder="Escribe una nota inicial para la tarea. Escribe @ para mencionar usuarios..."
-                  style={{ minHeight: "150px" }}
+                  placeholder="Escribe una nota inicial para la tarea. Use la barra de herramientas para formatear el texto, o escriba @ para mencionar usuarios..."
+                  style={{ backgroundColor: "#fff" }}
                 />
                 {/* Dropdown de menciones - mejorado como en ResponderTareaModal */}
                 {showMentionList && (
@@ -682,17 +1028,28 @@ const NuevaTareaAuditoriaModal = ({
               <Form.Text className="text-muted">
                 Puedes mencionar usuarios escribiendo @ seguido del nombre
               </Form.Text>
+              {!reconocimientoDisponible && (
+                <Form.Text className="text-muted mt-2 d-block">
+                  <small>
+                    <i className="fas fa-info-circle me-1"></i>
+                    El dictado por voz no está disponible en tu navegador. Usa Chrome, Edge o Safari para esta función.
+                  </small>
+                </Form.Text>
+              )}
             </Form.Group>
             
             {/* Sección de archivos adjuntos */}
             <Form.Group className="mb-3">
               <Form.Label>Archivos Adjuntos (Opcional)</Form.Label>
               <div
-                className={`border rounded p-3 text-center ${isDragging ? 'border-primary bg-light' : ''}`}
+                ref={dropAreaRef}
+                className="border rounded p-3 text-center"
                 style={{
                   borderStyle: "dashed",
                   cursor: "pointer",
                   backgroundColor: isDragging ? "#e3f2fd" : "#f8f9fa",
+                  borderColor: isDragging ? "#2196f3" : undefined,
+                  borderWidth: isDragging ? "2px" : undefined,
                   transition: "all 0.2s ease"
                 }}
                 onDragEnter={handleDragEnter}
@@ -710,12 +1067,20 @@ const NuevaTareaAuditoriaModal = ({
                   style={{ display: "none" }}
                 />
                 <div>
-                  <i className="fas fa-cloud-upload-alt fa-2x text-primary mb-2"></i>
                   <p className="mb-1">
-                    {isDragging ? "Suelta los archivos aquí" : "Haz clic para seleccionar archivos o arrastra y suelta"}
+                    {isDragging ? (
+                      <strong style={{ color: "#2196f3" }}>Suelte los archivos aquí</strong>
+                    ) : (
+                      "Haga clic para seleccionar archivos o arrastre y suelte aquí"
+                    )}
                   </p>
                   <small className="text-muted">
                     Formatos: JPG, PNG, GIF, WEBP, PDF (máx. 5MB cada uno)
+                    {!isDragging && (
+                      <span className="d-block mt-1">
+                        También puede usar Ctrl+V (Cmd+V en Mac) para pegar imágenes
+                      </span>
+                    )}
                   </small>
                 </div>
               </div>
@@ -789,15 +1154,15 @@ const NuevaTareaAuditoriaModal = ({
               )}
             </Form.Group>
           </Modal.Body>
-          <Modal.Footer>
-            <Button variant="secondary" onClick={onHide} disabled={loading}>
+          <Modal.Footer className="border-top">
+            <Button variant="outline-secondary" onClick={onHide} disabled={loading}>
               Cancelar
             </Button>
             <Button variant="primary" type="submit" disabled={loading}>
               {loading ? (
                 <>
                   <Spinner animation="border" size="sm" className="me-2" />
-                  Creando...
+                  Guardando...
                 </>
               ) : (
                 "Crear Tarea"

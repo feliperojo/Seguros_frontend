@@ -12,6 +12,7 @@ import { isUserMentioned } from "../../utils/mentions";
 import { listTasks as listAuditoriaTasks, getTask as getAuditoriaTask } from "../../services/auditoriasTasksService";
 import { parseApiDateToLocalDate, formatDateToYmd } from "../../utils/formatters";
 
+/** Lista de filas: array directo o paginación Laravel { data: [...], current_page, ... } (GET /api/auditorias/tasks). */
 function getListFromApi(res) {
   if (res == null) return [];
   if (Array.isArray(res)) return res;
@@ -54,6 +55,53 @@ function normalizeOperativaLite(raw) {
     };
   }
 
+  return t;
+}
+
+/** Normaliza filas de GET /auditorias/tasks para fechas/IDs anidados en `task`. */
+function normalizeAuditoriaLite(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const nested = raw.task && typeof raw.task === "object" ? raw.task : {};
+  const t = { ...nested, ...raw };
+
+  t.id = t.id ?? t.task_id ?? t.tarea_id ?? t.task?.id ?? nested?.id ?? null;
+  t.status =
+    t.status ??
+    t.estado ??
+    t.state ??
+    t.task?.status ??
+    t.task?.estado ??
+    "pending";
+
+  t.scheduled_date =
+    t.scheduled_date ??
+    t.scheduled_at ??
+    t.scheduled_for ??
+    t.fecha_programada ??
+    t.fechaProgramada ??
+    t.task?.scheduled_date ??
+    t.task?.scheduled_at ??
+    null;
+  t.due_date =
+    t.due_date ??
+    t.due_at ??
+    t.due_on ??
+    t.fecha_limite ??
+    t.fechaLimite ??
+    t.task?.due_date ??
+    t.task?.due_at ??
+    null;
+
+  t.created_at = t.created_at ?? t.createdAt ?? t.task?.created_at ?? t.task?.createdAt ?? null;
+
+  t.cliente =
+    t.cliente ??
+    t.item?.cliente ??
+    t.cobertura?.cliente ??
+    t.task?.cliente ??
+    null;
+
+  t.tipo = t.tipo || "auditoria";
   return t;
 }
 
@@ -171,7 +219,11 @@ function isTaskCompleted(taskLike) {
   return s === "completed" || s === "completada" || s === "completado";
 }
 
-const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
+const CalendarioTareas = ({
+  tareas: tareasIniciales,
+  currentUser,
+  grupoFamiliarId: grupoFamiliarIdProp = null,
+}) => {
 
   const hoy = new Date();
   const [mesActual, setMesActual] = useState(hoy.getMonth());
@@ -1350,19 +1402,44 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
         // ✅ Marcar tareas operativas con tipo
         tareasOperativas = tareasOperativas.map(t => ({ ...t, tipo: 'operativa' }));
 
-        // ✅ Cargar tareas de auditoría
+        // ✅ Tareas de auditoría: mismas reglas que operativas (asignado / menciones) +
+        //    opcionalmente por grupo familiar en ficha cliente (como FichaClienteAuditorias).
         let tareasAuditoria = [];
         try {
           const auditoriaParams = filtroMenciones
             ? { mentioned_user_id: usuarioSeleccionado, per_page: 100 }
             : { assigned_user_id: usuarioSeleccionado, per_page: 100 };
-          
-          const auditoriaResponse = await listAuditoriaTasks(auditoriaParams);
-          
-          tareasAuditoria = getListFromApi(auditoriaResponse);
 
-          // ✅ Marcar tareas de auditoría con tipo
-          tareasAuditoria = tareasAuditoria.map(t => ({ ...t, tipo: 'auditoria' }));
+          const auditChunks = [];
+          const auditoriaResponse = await listAuditoriaTasks(auditoriaParams);
+          auditChunks.push(getListFromApi(auditoriaResponse));
+
+          const gfId =
+            grupoFamiliarIdProp != null ? Number(grupoFamiliarIdProp) : null;
+          if (gfId != null && Number.isFinite(gfId) && gfId > 0) {
+            const gfResponse = await listAuditoriaTasks({
+              grupo_familiar_id: gfId,
+              per_page: 100,
+            });
+            auditChunks.push(getListFromApi(gfResponse));
+          }
+
+          const seen = new Map();
+          for (const chunk of auditChunks) {
+            for (const raw of chunk) {
+              const norm = normalizeAuditoriaLite(raw);
+              const id = norm?.id ?? norm?.task_id ?? norm?.tarea_id;
+              if (id == null || id === "") continue;
+              const num = Number(id);
+              const key =
+                Number.isFinite(num) && num > 0 ? num : `s:${String(id)}`;
+              if (!seen.has(key)) seen.set(key, norm);
+            }
+          }
+          tareasAuditoria = [...seen.values()].map((t) => ({
+            ...t,
+            tipo: "auditoria",
+          }));
         } catch (error) {
           console.warn("Error al cargar tareas de auditoría:", error);
           // No mostrar error al usuario, solo continuar con tareas operativas
@@ -1411,7 +1488,7 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
     }, 30000);
 
     return () => clearInterval(interval);
-  }, [usuarioSeleccionado, filtroMenciones]);
+  }, [usuarioSeleccionado, filtroMenciones, grupoFamiliarIdProp]);
   
   
 
@@ -1439,8 +1516,18 @@ const CalendarioTareas = ({ tareas: tareasIniciales, currentUser }) => {
 
   // ✅ Función helper para obtener el nombre del cliente según el tipo de tarea
   const getClienteNombre = (tarea) => {
-    if (tarea.tipo === 'auditoria') {
-      return tarea.cliente?.nombre_completo || tarea.cliente?.nombre || "Sin Cliente";
+    if (tarea.tipo === "auditoria") {
+      const cli =
+        tarea.cliente ||
+        tarea.item?.cliente ||
+        tarea.cobertura?.cliente ||
+        null;
+      return (
+        cli?.nombre_completo ||
+        cli?.nombre ||
+        tarea.cliente_nombre ||
+        "Sin Cliente"
+      );
     }
     return tarea.log?.cliente?.nombre_completo || "Sin Cliente";
   };

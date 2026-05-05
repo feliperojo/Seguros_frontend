@@ -3,13 +3,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Table, Button, Badge, Alert, Spinner, Form, Modal } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
-import { FaSort, FaSortUp, FaSortDown, FaFileAlt, FaComment, FaTasks } from "react-icons/fa";
+import { FaSort, FaSortUp, FaSortDown, FaFileAlt, FaComment, FaTasks, FaHistory } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
 import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaModal";
 import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
 import NuevaTareaAuditoriaModal from "../components/Tareas/NuevaTareaAuditoriaModal";
+import HistorialTareasAuditoriaModal from "../components/Tareas/HistorialTareasAuditoriaModal";
 import { getItemTasks } from "../services/auditoriasTasksService";
 
 /**
@@ -173,6 +174,8 @@ const AuditoriaRunDetallePage = () => {
     comment: "",
   });
   const [savingStatus, setSavingStatus] = useState(false);
+  /** entityId (cobertura_id | cliente_id) mientras se aplica marcar OK desde la tabla */
+  const [quickOkEntityId, setQuickOkEntityId] = useState(null);
   
   // Estado para tareas de auditoría
   const [showNuevaTareaModal, setShowNuevaTareaModal] = useState(false);
@@ -180,6 +183,7 @@ const AuditoriaRunDetallePage = () => {
   const [tareasPorItem, setTareasPorItem] = useState({}); // { itemId: [tareas] }
   const [loadingTareas, setLoadingTareas] = useState({}); // { itemId: boolean }
   const [itemsConTareasExpandidos, setItemsConTareasExpandidos] = useState({}); // { itemId: boolean }
+  const [coberturaHistorial, setCoberturaHistorial] = useState(null);
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
@@ -422,6 +426,62 @@ const AuditoriaRunDetallePage = () => {
     setStatusForm({ status: "", comment: "" });
   };
   
+  /** Refresca la tabla del reporte con los filtros actuales (misma lógica que tras guardar en el modal). */
+  const refreshReporteCoberturas = async () => {
+    const params = buildQueryParams(filters);
+    const response = await getRunReporte(runId, params);
+    if (Array.isArray(response)) {
+      setCoberturas(response);
+      setMeta({ page: 1, per_page: response.length, total: response.length, last_page: 1 });
+    } else {
+      setCoberturas(response?.data || []);
+      setMeta(response?.meta || { page: 1, per_page: 25, total: 0, last_page: 1 });
+    }
+  };
+
+  /**
+   * Atajo: marcar OK sin abrir el modal (mismo endpoint que "Guardar" con estado OK).
+   * Solo aplica cuando el estado actual es PENDIENTE; otros estados siguen usando el modal.
+   */
+  const handleQuickOkFromTable = async (cobertura, checkboxEl) => {
+    const entityId = cobertura.cobertura_id || cobertura.cliente_id;
+    if (!entityId) {
+      toast.showError("No se pudo identificar el ID de la entidad");
+      if (checkboxEl) checkboxEl.checked = false;
+      return;
+    }
+    setQuickOkEntityId(entityId);
+    try {
+      await updateItem(runId, entityId, { status: "OK" });
+      toast.showSuccess("Estado actualizado exitosamente");
+      try {
+        await refreshReporteCoberturas();
+      } catch (refreshError) {
+        console.error("Error al refrescar datos después de marcar OK:", refreshError);
+        setCoberturas((prev) =>
+          prev.map((item) => {
+            const itemId = item.cobertura_id || item.cliente_id;
+            return itemId === entityId
+              ? {
+                  ...item,
+                  audit_status: "OK",
+                  audit_comment: item.audit_comment ?? null,
+                  reviewed_at: new Date().toISOString(),
+                }
+              : item;
+          })
+        );
+      }
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || "Error al actualizar el estado";
+      toast.showError(errorMessage);
+      console.error("Error al marcar OK desde tabla:", err);
+      if (checkboxEl) checkboxEl.checked = false;
+    } finally {
+      setQuickOkEntityId(null);
+    }
+  };
+
   // Guardar cambio de status
   const handleSaveStatus = async () => {
     if (!editingItem) return;
@@ -460,22 +520,10 @@ const AuditoriaRunDetallePage = () => {
       
       toast.showSuccess("Estado actualizado exitosamente");
       
-      // Refrescar los datos para obtener la información actualizada del servidor
-      // Esto asegura que las métricas y estados estén sincronizados
       try {
-        const params = buildQueryParams(filters);
-        const response = await getRunReporte(runId, params);
-        
-        if (Array.isArray(response)) {
-          setCoberturas(response);
-          setMeta({ page: 1, per_page: response.length, total: response.length, last_page: 1 });
-        } else {
-          setCoberturas(response?.data || []);
-          setMeta(response?.meta || { page: 1, per_page: 25, total: 0, last_page: 1 });
-        }
+        await refreshReporteCoberturas();
       } catch (refreshError) {
         console.error("Error al refrescar datos después de actualizar:", refreshError);
-        // Si falla el refresh, al menos actualizar el item local
         const currentEntityId = editingItem.cobertura_id || editingItem.cliente_id;
         setCoberturas((prev) =>
           prev.map((item) => {
@@ -803,9 +851,36 @@ const AuditoriaRunDetallePage = () => {
                           )}
                         </td>
                         <td>
-                          <Badge bg={getStatusBadgeVariant(cobertura.audit_status || "PENDIENTE")}>
-                            {cobertura.audit_status || "PENDIENTE"}
-                          </Badge>
+                          {(() => {
+                            const rawStatus = cobertura.audit_status || "PENDIENTE";
+                            const normalizedStatus = String(rawStatus).toUpperCase();
+                            const showQuickOk = normalizedStatus === "PENDIENTE";
+                            const isQuickOkSaving = quickOkEntityId === entityId;
+                            return (
+                              <div className="d-flex align-items-center gap-2 flex-wrap">
+                                <Badge bg={getStatusBadgeVariant(normalizedStatus)}>
+                                  {normalizedStatus}
+                                </Badge>
+                                {showQuickOk && (
+                                  <Form.Check
+                                    type="checkbox"
+                                    id={`audit-quick-ok-${entityId}`}
+                                    className="mb-0 small"
+                                    title="Marcar como OK (atajo; otros estados desde el botón de comentario)"
+                                    disabled={isQuickOkSaving}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        void handleQuickOkFromTable(cobertura, e.target);
+                                      }
+                                    }}
+                                  />
+                                )}
+                                {isQuickOkSaving && (
+                                  <Spinner animation="border" size="sm" className="text-primary" />
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td>{formatDateTime(cobertura.reviewed_at)}</td>
                         <td>
@@ -826,6 +901,14 @@ const AuditoriaRunDetallePage = () => {
                               title="Editar estado"
                             >
                               <FaComment />
+                            </Button>
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              onClick={() => setCoberturaHistorial(cobertura)}
+                              title="Historial de tareas y comentarios"
+                            >
+                              <FaHistory />
                             </Button>
                             <Button
                               variant="outline-success"
@@ -1080,6 +1163,13 @@ const AuditoriaRunDetallePage = () => {
         />
       )}
       
+      <HistorialTareasAuditoriaModal
+        show={Boolean(coberturaHistorial)}
+        onHide={() => setCoberturaHistorial(null)}
+        runId={runId}
+        cobertura={coberturaHistorial}
+      />
+
       {/* Modal de Edición de Status */}
       <Modal show={showStatusModal} onHide={handleCloseStatusModal} backdrop="static">
         <Modal.Header closeButton>
