@@ -1,5 +1,5 @@
 // pages/AuditoriaRunDetallePage.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Table, Button, Badge, Alert, Spinner, Form, Modal } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
@@ -567,6 +567,56 @@ const AuditoriaRunDetallePage = () => {
       <FaSortDown className="ms-1" />
     );
   };
+
+  const getGrupoFamiliarId = useCallback((cobertura) => {
+    const raw =
+      cobertura?.grupo_familiar_id ??
+      cobertura?.grupo_familiar?.id ??
+      cobertura?.gf_id ??
+      cobertura?.grupoFamiliarId ??
+      cobertura?.grupoFamiliar?.id;
+    if (raw === null || raw === undefined || raw === "") return null;
+    return raw;
+  }, []);
+
+  // Agrupamiento estable por GF (sin alterar el orden dentro de cada grupo).
+  // Esto evita que integrantes del mismo grupo queden "regados" cuando el backend ordena por otras columnas.
+  const coberturasAgrupadas = useMemo(() => {
+    if (!Array.isArray(coberturas) || coberturas.length === 0) return [];
+
+    const withIndex = coberturas.map((c, index) => ({
+      c,
+      index,
+      gf: getGrupoFamiliarId(c),
+    }));
+
+    const compareGf = (a, b) => {
+      const aMissing = a.gf === null;
+      const bMissing = b.gf === null;
+      if (aMissing && bMissing) return a.index - b.index;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+
+      const aNum = typeof a.gf === "number" ? a.gf : Number(a.gf);
+      const bNum = typeof b.gf === "number" ? b.gf : Number(b.gf);
+      const aIsNum = Number.isFinite(aNum);
+      const bIsNum = Number.isFinite(bNum);
+
+      if (aIsNum && bIsNum) return aNum - bNum;
+
+      const aStr = String(a.gf);
+      const bStr = String(b.gf);
+      return aStr.localeCompare(bStr, "es");
+    };
+
+    withIndex.sort((a, b) => {
+      const gfCmp = compareGf(a, b);
+      if (gfCmp !== 0) return gfCmp;
+      return a.index - b.index;
+    });
+
+    return withIndex.map((x) => x.c);
+  }, [coberturas, getGrupoFamiliarId]);
   
   return (
     <div className="container-fluid py-4">
@@ -799,7 +849,7 @@ const AuditoriaRunDetallePage = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {coberturas.map((cobertura) => {
+                    {coberturasAgrupadas.map((cobertura) => {
                       const entityId = cobertura.cobertura_id || cobertura.cliente_id;
                       // El item_id puede venir como item_id, id, o podemos usar entityId + runId para buscarlo
                       // Intentar múltiples campos posibles donde puede venir el item_id
