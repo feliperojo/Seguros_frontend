@@ -3,7 +3,16 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom";
 import { Table, Button, Badge, Alert, Spinner, Form, Modal } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
-import { FaSort, FaSortUp, FaSortDown, FaFileAlt, FaComment, FaTasks, FaHistory } from "react-icons/fa";
+import {
+  FaSort,
+  FaSortUp,
+  FaSortDown,
+  FaFileAlt,
+  FaComment,
+  FaTasks,
+  FaHistory,
+  FaExclamationTriangle,
+} from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
 import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaModal";
@@ -50,6 +59,20 @@ const compareDate = (a, b, getv) => {
 };
 
 const PAGO_ESTADO_ORDEN = { pendiente: 0, procesando: 1, pagado: 2 };
+
+/** Run anterior (mismo tipo): API envía prev_no_ok, prev_audit_status, prev_periodo, prev_run_id */
+const filaPendienteAuditoriaAnterior = (row) => {
+  const periodo = row?.prev_periodo;
+  const tienePeriodo = periodo != null && String(periodo).trim() !== "";
+  return row?.prev_no_ok === true && tienePeriodo;
+};
+
+const tituloPendienteAuditoriaAnterior = (row) => {
+  if (!filaPendienteAuditoriaAnterior(row)) return undefined;
+  const st = row.prev_audit_status ?? "—";
+  const per = row.prev_periodo ?? "";
+  return `Pendiente de auditoría anterior: ${st} (${per})`;
+};
 
 const buildPagoRowResolver = (includePagosEnabled, pagosPorEntidad) => (c) => {
   if (!includePagosEnabled) return null;
@@ -1366,10 +1389,33 @@ const AuditoriaRunDetallePage = () => {
                         }
                         return null;
                       })();
-                      
+
+                      const pendienteAuditoriaAnterior = filaPendienteAuditoriaAnterior(cobertura);
+                      const tituloPendienteAudAnt = tituloPendienteAuditoriaAnterior(cobertura);
+
                       return (
-                        <tr key={entityId}>
-                        <td>{cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id || "-"}</td>
+                        <tr
+                          key={entityId}
+                          className={pendienteAuditoriaAnterior ? "bg-danger-subtle" : undefined}
+                          title={tituloPendienteAudAnt}
+                        >
+                        <td>
+                          <span className="d-inline-flex align-items-center gap-2 flex-wrap">
+                            {pendienteAuditoriaAnterior && (
+                              <FaExclamationTriangle
+                                className="text-danger flex-shrink-0"
+                                title={tituloPendienteAudAnt}
+                                aria-hidden
+                              />
+                            )}
+                            <span>
+                              {cobertura.grupo_familiar_id ||
+                                cobertura.grupo_familiar?.id ||
+                                cobertura.gf_id ||
+                                "-"}
+                            </span>
+                          </span>
+                        </td>
                         <td>{formatDate(cobertura.fecha_activacion)}</td>
                         <td>{cobertura.codigo_poliza || "-"}</td>
                         <td>{cobertura.cliente || "-"}</td>
