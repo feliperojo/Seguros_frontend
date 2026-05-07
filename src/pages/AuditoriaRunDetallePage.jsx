@@ -12,6 +12,7 @@ import {
   FaTasks,
   FaHistory,
   FaExclamationTriangle,
+  FaCalendarAlt,
 } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
@@ -144,6 +145,26 @@ const formatDateTime = (dateString) => {
     });
   } catch {
     return dateString;
+  }
+};
+
+/**
+ * Periodo del run (YYYY-MM) → etiqueta en español, p. ej. "julio de 2026".
+ */
+const formatPeriodoRunEtiqueta = (yyyyMm) => {
+  if (!yyyyMm || typeof yyyyMm !== "string") return null;
+  const s = yyyyMm.trim();
+  if (!/^\d{4}-\d{2}$/.test(s)) return null;
+  const [ys, ms] = s.split("-");
+  const y = Number(ys, 10);
+  const mo = Number(ms, 10);
+  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) return null;
+  try {
+    const d = new Date(y, mo - 1, 1);
+    const raw = d.toLocaleDateString("es-ES", { month: "long", year: "numeric" });
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  } catch {
+    return s;
   }
 };
 
@@ -341,7 +362,7 @@ const AuditoriaRunDetallePage = () => {
   const [tareasPorItem, setTareasPorItem] = useState({}); // { itemId: [tareas] }
   const [loadingTareas, setLoadingTareas] = useState({}); // { itemId: boolean }
   const [itemsConTareasExpandidos, setItemsConTareasExpandidos] = useState({}); // { itemId: boolean }
-  const [coberturaHistorial, setCoberturaHistorial] = useState(null);
+  const [historialModalPayload, setHistorialModalPayload] = useState(null);
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
@@ -405,6 +426,10 @@ const AuditoriaRunDetallePage = () => {
     typeof periodoRunRaw === "string" && /^\d{4}-\d{2}$/.test(periodoRunRaw.trim())
       ? periodoRunRaw.trim()
       : null; // "YYYY-MM"
+
+  const periodoRunEtiqueta = periodoRun
+    ? formatPeriodoRunEtiqueta(periodoRun) || periodoRun
+    : null;
 
   const loadPagosDelRun = useCallback(async () => {
     if (!includePagosEnabled) return;
@@ -1107,37 +1132,62 @@ const AuditoriaRunDetallePage = () => {
     <div className="container-fluid py-4">
       <Helmet>
         <title>
-          {runInfo?.nombre 
-            ? `${runInfo.nombre} - Detalle` 
-            : `Detalle de Auditoría #${runId}`}
+          {(runInfo?.nombre || `Auditoría #${runId}`) +
+            (runInfo?.audit_type ? ` · ${runInfo.audit_type}` : "") +
+            (periodoRunEtiqueta ? ` · ${periodoRunEtiqueta}` : "") +
+            " - Detalle"}
         </title>
       </Helmet>
       
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+        <div className="min-w-0 flex-grow-1">
           {loadingRunInfo ? (
-            <h2>
-              <Spinner animation="border" size="sm" className="me-2" />
-              Cargando...
+            <h2 className="mb-0 d-flex align-items-center flex-wrap gap-2">
+              <Spinner animation="border" size="sm" />
+              <span>Cargando...</span>
             </h2>
           ) : runInfo ? (
-            <h2>
-              {runInfo.nombre || `Auditoría #${runId}`}
+            <h2 className="mb-0 d-flex flex-wrap align-items-center column-gap-2 row-gap-1">
+              <span className="text-break">{runInfo.nombre || `Auditoría #${runId}`}</span>
               {runInfo.audit_type && (
-                <Badge 
-                  bg={runInfo.audit_type === "SHERPA" ? "primary" : "info"} 
-                  className="ms-2"
-                  title={`Tipo: ${runInfo.audit_type}`}
+                <Badge
+                  bg={runInfo.audit_type === "SHERPA" ? "primary" : "info"}
+                  className="flex-shrink-0"
+                  title="Tipo de auditoría"
                 >
                   {runInfo.audit_type}
                 </Badge>
               )}
+              {periodoRunEtiqueta && (
+                <Badge
+                  bg="secondary"
+                  className="flex-shrink-0"
+                  title={periodoRun ? `Periodo de trabajo: ${periodoRun}` : "Periodo de trabajo"}
+                >
+                  {periodoRunEtiqueta}
+                </Badge>
+              )}
             </h2>
           ) : (
-            <h2>Auditoría #{runId}</h2>
+            <h2 className="mb-0 d-flex flex-wrap align-items-center column-gap-2 row-gap-1">
+              <span>{`Auditoría #${runId}`}</span>
+              {periodoRunEtiqueta && (
+                <Badge
+                  bg="secondary"
+                  className="flex-shrink-0"
+                  title={periodoRun ? `Periodo de trabajo: ${periodoRun}` : "Periodo de trabajo"}
+                >
+                  {periodoRunEtiqueta}
+                </Badge>
+              )}
+            </h2>
           )}
         </div>
-        <Button variant="secondary" onClick={() => navigate("/auditorias")}>
+        <Button
+          variant="secondary"
+          className="flex-shrink-0"
+          onClick={() => navigate("/auditorias")}
+        >
           Volver a Auditorías
         </Button>
       </div>
@@ -1553,11 +1603,48 @@ const AuditoriaRunDetallePage = () => {
                             <Button
                               variant="outline-secondary"
                               size="sm"
-                              onClick={() => setCoberturaHistorial(cobertura)}
+                              onClick={() =>
+                                setHistorialModalPayload({
+                                  cobertura,
+                                  tasksRunId: runId,
+                                  skipItemTasksLookup: false,
+                                  titleSuffix: "",
+                                })
+                              }
                               title="Historial de tareas y comentarios"
                             >
                               <FaHistory />
                             </Button>
+                            {filaPendienteAuditoriaAnterior(cobertura) &&
+                              cobertura.prev_run_id != null &&
+                              cobertura.prev_run_id !== "" && (
+                                <Button
+                                  variant="outline-warning"
+                                  size="sm"
+                                  onClick={() =>
+                                    setHistorialModalPayload({
+                                      cobertura: {
+                                        ...cobertura,
+                                        audit_status:
+                                          cobertura.prev_audit_status ?? cobertura.audit_status,
+                                        audit_comment: cobertura.prev_audit_comment ?? null,
+                                        reviewed_at: cobertura.prev_reviewed_at ?? null,
+                                      },
+                                      tasksRunId: cobertura.prev_run_id,
+                                      skipItemTasksLookup: true,
+                                      titleSuffix: cobertura.prev_periodo
+                                        ? ` · Auditoría anterior (${cobertura.prev_periodo})`
+                                        : " · Auditoría anterior",
+                                    })
+                                  }
+                                  title={
+                                    tituloPendienteAuditoriaAnterior(cobertura) ||
+                                    "Ver tareas y comentarios de la auditoría anterior"
+                                  }
+                                >
+                                  <FaCalendarAlt />
+                                </Button>
+                              )}
                             <Button
                               variant="outline-success"
                               size="sm"
@@ -1768,10 +1855,12 @@ const AuditoriaRunDetallePage = () => {
       )}
       
       <HistorialTareasAuditoriaModal
-        show={Boolean(coberturaHistorial)}
-        onHide={() => setCoberturaHistorial(null)}
-        runId={runId}
-        cobertura={coberturaHistorial}
+        show={Boolean(historialModalPayload)}
+        onHide={() => setHistorialModalPayload(null)}
+        runId={historialModalPayload?.tasksRunId ?? runId}
+        cobertura={historialModalPayload?.cobertura ?? null}
+        skipItemTasksLookup={historialModalPayload?.skipItemTasksLookup ?? false}
+        titleSuffix={historialModalPayload?.titleSuffix ?? ""}
       />
 
       {/* Modal de Edición de Status */}

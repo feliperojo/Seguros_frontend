@@ -26,7 +26,14 @@ const taskStatusVariant = (status) => {
  * Modal de solo lectura: tareas del ítem de auditoría y comentarios de cada tarea,
  * más el comentario asociado al estado de auditoría del registro (si existe).
  */
-const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
+const HistorialTareasAuditoriaModal = ({
+  show,
+  onHide,
+  runId,
+  cobertura,
+  skipItemTasksLookup = false,
+  titleSuffix = "",
+}) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -40,7 +47,7 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
     setTasks([]);
     setCommentsByTaskId({});
 
-    const itemId = resolveItemId(cobertura);
+    const itemId = skipItemTasksLookup ? null : resolveItemId(cobertura);
     let taskList = [];
 
     try {
@@ -116,7 +123,7 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
     );
     setCommentsByTaskId(byId);
     setLoading(false);
-  }, [cobertura, runId]);
+  }, [cobertura, runId, skipItemTasksLookup]);
 
   useEffect(() => {
     if (show && cobertura && runId) {
@@ -131,7 +138,10 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
   return (
     <Modal show={show} onHide={onHide} size="lg" scrollable centered>
       <Modal.Header closeButton>
-        <Modal.Title>Historial — tareas y comentarios</Modal.Title>
+        <Modal.Title>
+          Historial — tareas y comentarios
+          {titleSuffix}
+        </Modal.Title>
       </Modal.Header>
       <Modal.Body>
         {cobertura && (
