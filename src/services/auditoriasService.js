@@ -27,6 +27,7 @@ const buildQueryParams = (params) => {
   if (params.per_page) queryParams.append("per_page", params.per_page);
   if (params.compania_id) queryParams.append("compania_id", params.compania_id);
   if (params.zip_code) queryParams.append("zip_code", params.zip_code);
+  if (params.grupo_familiar_id) queryParams.append("grupo_familiar_id", params.grupo_familiar_id);
   if (params.only_pending === true) {
     queryParams.append("only_pending", "true");
   }

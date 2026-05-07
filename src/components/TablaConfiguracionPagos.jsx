@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container } from "react-bootstrap";
 import apiRequest from "../services/api";
+import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
 import { renderClienteLink } from "../pages/ListaClientes";
 
 const TablaConfiguracionPagos = () => {
@@ -11,6 +12,16 @@ const TablaConfiguracionPagos = () => {
   const [mesSeleccionado, setMesSeleccionado] = useState("");
   const [alerta, setAlerta] = useState({ show: false, variant: "", mensaje: "" });
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [validandoPagosMes, setValidandoPagosMes] = useState(false);
+  /** Vista previa GET /pagos/existe para el mes+año actual */
+  const [infoPagosMes, setInfoPagosMes] = useState({
+    loading: false,
+    periodo: null,
+    exists: null,
+    count: null,
+  });
+  const [showPagosYaExistenModal, setShowPagosYaExistenModal] = useState(false);
+  const [pagosYaExistenDetalle, setPagosYaExistenDetalle] = useState({ periodo: "", count: null });
 
   const mostrarAlerta = (mensaje, tipo = "success", duracion = 5000) => {
     setAlerta({ show: true, variant: tipo, mensaje });
@@ -41,12 +52,55 @@ const TablaConfiguracionPagos = () => {
     fetchPolizas();
   }, []);
 
+  const periodoParaMes = (mesDosDigitos) => {
+    if (!mesDosDigitos) return null;
+    return `${new Date().getFullYear()}-${mesDosDigitos}`;
+  };
+
+  useEffect(() => {
+    const periodo = periodoParaMes(mesSeleccionado);
+    if (!periodo) {
+      setInfoPagosMes({ loading: false, periodo: null, exists: null, count: null });
+      return;
+    }
+
+    let cancel = false;
+    setInfoPagosMes((prev) => ({ ...prev, loading: true, periodo }));
+
+    (async () => {
+      try {
+        const r = await fetchPagosExistForPeriodo(periodo);
+        if (!cancel) {
+          setInfoPagosMes({
+            loading: false,
+            periodo: r.periodo,
+            exists: r.exists,
+            count: r.count,
+          });
+        }
+      } catch (e) {
+        if (!cancel) {
+          setInfoPagosMes({
+            loading: false,
+            periodo,
+            exists: null,
+            count: null,
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [mesSeleccionado]);
+
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
     setFiltros({ ...filtros, [name]: value });
   };
 
-  const confirmarGenerarCobros = () => {
+  const confirmarGenerarCobros = async () => {
     if (!mesSeleccionado) {
       mostrarAlerta("Seleccione un mes para generar los cobros", "warning");
       return;
@@ -55,7 +109,31 @@ const TablaConfiguracionPagos = () => {
       mostrarAlerta("No hay pólizas válidas para generar cobros", "warning");
       return;
     }
-    setShowConfirmModal(true);
+
+    const periodo = periodoParaMes(mesSeleccionado);
+    if (!periodo) {
+      mostrarAlerta("Mes no válido", "warning");
+      return;
+    }
+
+    setValidandoPagosMes(true);
+    try {
+      const { exists, count } = await fetchPagosExistForPeriodo(periodo);
+      if (exists) {
+        setPagosYaExistenDetalle({ periodo, count });
+        setShowPagosYaExistenModal(true);
+        return;
+      }
+      setShowConfirmModal(true);
+    } catch (e) {
+      console.error("No se pudo validar pagos del mes:", e);
+      mostrarAlerta(
+        "No se pudo comprobar si ya hay pagos para este mes. Intente de nuevo o contacte soporte.",
+        "warning"
+      );
+    } finally {
+      setValidandoPagosMes(false);
+    }
   };
 
   const handleGenerarCobros = async () => {
@@ -67,9 +145,47 @@ const TablaConfiguracionPagos = () => {
         cobertura_ids: polizasFiltradas.map((p) => p.id),
       });
       mostrarAlerta("Cobros generados correctamente", "success");
+      const periodo = periodoParaMes(mesSeleccionado);
+      if (periodo) {
+        try {
+          const r = await fetchPagosExistForPeriodo(periodo);
+          setInfoPagosMes({
+            loading: false,
+            periodo: r.periodo,
+            exists: r.exists,
+            count: r.count,
+          });
+        } catch {
+          /* ignore */
+        }
+      }
     } catch (err) {
       console.error("Error al generar cobros:", err);
-      mostrarAlerta("Ocurrió un error al generar los cobros", "danger");
+      if (err.response?.status === 409) {
+        const msg =
+          err.response?.data?.message ||
+          "Ya existen pagos generados para este mes. No se puede repetir la generación.";
+        mostrarAlerta(msg, "warning");
+        const periodo = periodoParaMes(mesSeleccionado);
+        if (periodo) {
+          try {
+            const r = await fetchPagosExistForPeriodo(periodo);
+            setInfoPagosMes({
+              loading: false,
+              periodo: r.periodo,
+              exists: r.exists,
+              count: r.count,
+            });
+          } catch {
+            /* ignore */
+          }
+        }
+      } else {
+        mostrarAlerta(
+          err.response?.data?.message || "Ocurrió un error al generar los cobros",
+          "danger"
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -139,19 +255,78 @@ const TablaConfiguracionPagos = () => {
         <Col md={2} lg={2} xl={2} xxl={2} className="text-end">
           <Button
             variant="primary"
-            onClick={confirmarGenerarCobros}
-            disabled={loading || !mesSeleccionado || polizasFiltradas.length === 0}
+            onClick={() => void confirmarGenerarCobros()}
+            disabled={loading || validandoPagosMes || !mesSeleccionado || polizasFiltradas.length === 0}
           >
-            Generar pagos
+            {validandoPagosMes ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Validando…
+              </>
+            ) : (
+              "Generar pagos"
+            )}
           </Button>
         </Col>
       </Row>
+
+      {mesSeleccionado && (
+        <Row className="mb-2">
+          <Col md={12}>
+            {infoPagosMes.loading ? (
+              <small className="text-muted">Comprobando pagos del mes…</small>
+            ) : infoPagosMes.exists === true ? (
+              <Alert variant="warning" className="py-2 mb-0 small">
+                Ya existen pagos generados para el periodo{" "}
+                <strong>{infoPagosMes.periodo}</strong>
+                {infoPagosMes.count != null ? (
+                  <>
+                    {" "}
+                    ({infoPagosMes.count} registro{infoPagosMes.count !== 1 ? "s" : ""})
+                  </>
+                ) : null}
+                . No podrá generar de nuevo hasta usar otro mes (según reglas del sistema).
+              </Alert>
+            ) : infoPagosMes.exists === false ? (
+              <small className="text-muted">
+                Periodo <strong>{infoPagosMes.periodo}</strong>: no hay pagos generados aún; puede
+                continuar con la generación.
+              </small>
+            ) : null}
+          </Col>
+        </Row>
+      )}
 
       {alerta.show && (
         <Alert variant={alerta.variant} className="text-center">
           {alerta.mensaje}
         </Alert>
       )}
+
+      <Modal show={showPagosYaExistenModal} onHide={() => setShowPagosYaExistenModal(false)} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Pagos ya generados</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-0">
+            Ya existen pagos generados para el mes{" "}
+            <strong>{pagosYaExistenDetalle.periodo}</strong>
+            {pagosYaExistenDetalle.count != null ? (
+              <>
+                {" "}
+                ({pagosYaExistenDetalle.count} registro
+                {pagosYaExistenDetalle.count !== 1 ? "s" : ""})
+              </>
+            ) : null}
+            . No es posible generar cobros duplicados para este periodo.
+          </p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={() => setShowPagosYaExistenModal(false)}>
+            Entendido
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal show={showConfirmModal} onHide={() => setShowConfirmModal(false)} centered>
         <Modal.Header closeButton>

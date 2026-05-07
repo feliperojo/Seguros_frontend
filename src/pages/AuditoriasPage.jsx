@@ -8,6 +8,7 @@ import { listRuns, createRun, closeRun, listAuditTypes } from "../services/audit
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
 import apiRequest from "../services/api";
+import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
 
 /**
  * Formatea una fecha para mostrar
@@ -228,12 +229,22 @@ const AuditoriasPage = () => {
   };
 
   const validarPagosGeneradosDelPeriodo = async (yyyyMm) => {
-    // Endpoint actual usado por PagosActualizar / PagosInforme
-    const pagos = await apiRequest("cobertura/pagos/listado", "GET");
-    const list = Array.isArray(pagos) ? pagos : (pagos?.data || []);
-    const prefix = `${yyyyMm}-`;
-    const existe = list.some((p) => typeof p?.fecha_pago === "string" && p.fecha_pago.startsWith(prefix));
-    return existe;
+    try {
+      const { exists } = await fetchPagosExistForPeriodo(yyyyMm);
+      return exists;
+    } catch (e) {
+      // Fallback si el endpoint nuevo no está disponible: listado completo (comportamiento anterior)
+      console.warn("fetchPagosExistForPeriodo no disponible, usando listado:", e);
+      try {
+        const pagos = await apiRequest("cobertura/pagos/listado", "GET");
+        const list = Array.isArray(pagos) ? pagos : (pagos?.data || []);
+        const prefix = `${yyyyMm}-`;
+        return list.some((p) => typeof p?.fecha_pago === "string" && p.fecha_pago.startsWith(prefix));
+      } catch (e2) {
+        console.error(e2);
+        return false;
+      }
+    }
   };
 
   /**

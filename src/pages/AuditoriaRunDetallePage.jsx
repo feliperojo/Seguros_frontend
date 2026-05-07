@@ -31,6 +31,44 @@ const AUDIT_STATUSES = [
 const STATUSES_REQUIRING_COMMENT = ["NOVEDAD", "PERDIDA"];
 
 /**
+ * Orden del reporte en el cliente: el API suele devolver 422 para varios `sort_by`.
+ * `filters.sort_by` / `sort_dir` solo afectan el orden en pantalla (página actual).
+ */
+const parseDateMs = (v) => {
+  if (v == null || v === "") return null;
+  const t = new Date(v).getTime();
+  return Number.isNaN(t) ? null : t;
+};
+
+const compareDate = (a, b, getv) => {
+  const ta = parseDateMs(getv(a));
+  const tb = parseDateMs(getv(b));
+  if (ta == null && tb == null) return 0;
+  if (ta == null) return 1;
+  if (tb == null) return -1;
+  return ta - tb;
+};
+
+const PAGO_ESTADO_ORDEN = { pendiente: 0, procesando: 1, pagado: 2 };
+
+const buildPagoRowResolver = (includePagosEnabled, pagosPorEntidad) => (c) => {
+  if (!includePagosEnabled) return null;
+  const coberturaId = c?.cobertura_id ?? c?.id ?? null;
+  const clienteId = c?.cliente_id ?? null;
+  const codigoPoliza = c?.codigo_poliza ? String(c.codigo_poliza).trim() : "";
+  if (coberturaId != null && pagosPorEntidad[`cobertura:${coberturaId}`]) {
+    return pagosPorEntidad[`cobertura:${coberturaId}`];
+  }
+  if (clienteId != null && pagosPorEntidad[`cliente:${clienteId}`]) {
+    return pagosPorEntidad[`cliente:${clienteId}`];
+  }
+  if (codigoPoliza && pagosPorEntidad[`poliza:${codigoPoliza}`]) {
+    return pagosPorEntidad[`poliza:${codigoPoliza}`];
+  }
+  return null;
+};
+
+/**
  * Construye los query params desde el estado de filtros
  */
 const buildQueryParams = (filters) => {
@@ -39,18 +77,13 @@ const buildQueryParams = (filters) => {
   if (filters.page) params.page = filters.page;
   if (filters.per_page) params.per_page = filters.per_page;
   if (filters.compania_id) params.compania_id = filters.compania_id;
-  if (filters.zip_code) params.zip_code = filters.zip_code;
+  if (filters.grupo_familiar_id) params.grupo_familiar_id = filters.grupo_familiar_id;
   if (filters.audit_status) params.audit_status = filters.audit_status;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
   if (filters.search) params.search = filters.search;
-  if (filters.sort_by) {
-    params.sort_by = filters.sort_by;
-    if (filters.sort_dir) {
-      params.sort_dir = filters.sort_dir;
-    }
-  }
-  
+  // sort_by / sort_dir: ordenación solo en cliente (ver coberturasOrdenCliente)
+
   return params;
 };
 
@@ -145,7 +178,7 @@ const SORTABLE_COLUMNS = {
   cliente: "cliente",
   codigo_poliza: "codigo_poliza",
   grupo_familiar_id: "grupo_familiar_id",
-  /** Pagos generados asociados al ítem (el backend debe soportar estos sort_by o ignorarlos) */
+  /** Pagos asociados al ítem (ordenación solo en cliente; ver coberturasOrdenCliente) */
   fecha_pago: "fecha_pago",
   pago_estado: "pago_estado",
   precio: "precio",
@@ -240,7 +273,7 @@ const AuditoriaRunDetallePage = () => {
     page: 1,
     per_page: 25,
     compania_id: "",
-    zip_code: "",
+    grupo_familiar_id: "",
     audit_status: "",
     date_from: "",
     date_to: "",
@@ -252,7 +285,7 @@ const AuditoriaRunDetallePage = () => {
   // Estado de filtros temporales
   const [tempFilters, setTempFilters] = useState({
     compania_id: "",
-    zip_code: "",
+    grupo_familiar_id: "",
     audit_status: "",
     date_from: "",
     date_to: "",
@@ -592,26 +625,23 @@ const AuditoriaRunDetallePage = () => {
         currentAbortController.abort();
       }
     };
-    // Usar dependencias específicas en lugar del objeto completo para evitar re-renders innecesarios
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Dependencias: sin sort_by/sort_dir (orden solo en cliente).
   }, [
     runId,
     filters.page,
     filters.per_page,
     filters.compania_id,
-    filters.zip_code,
+    filters.grupo_familiar_id,
     filters.audit_status,
     filters.date_from,
     filters.date_to,
     filters.search,
-    filters.sort_by,
-    filters.sort_dir,
   ]);
   
   // Sincronizar filtros temporales con filtros activos (solo cuando cambian los filtros de búsqueda, no paginación)
   const prevFiltersRef = useRef({
     compania_id: "",
-    zip_code: "",
+    grupo_familiar_id: "",
     audit_status: "",
     date_from: "",
     date_to: "",
@@ -621,7 +651,7 @@ const AuditoriaRunDetallePage = () => {
   useEffect(() => {
     const currentFilterValues = {
       compania_id: filters.compania_id,
-      zip_code: filters.zip_code,
+      grupo_familiar_id: filters.grupo_familiar_id,
       audit_status: filters.audit_status,
       date_from: filters.date_from,
       date_to: filters.date_to,
@@ -630,7 +660,7 @@ const AuditoriaRunDetallePage = () => {
     
     const filtersChanged = 
       prevFiltersRef.current.compania_id !== currentFilterValues.compania_id ||
-      prevFiltersRef.current.zip_code !== currentFilterValues.zip_code ||
+      prevFiltersRef.current.grupo_familiar_id !== currentFilterValues.grupo_familiar_id ||
       prevFiltersRef.current.audit_status !== currentFilterValues.audit_status ||
       prevFiltersRef.current.date_from !== currentFilterValues.date_from ||
       prevFiltersRef.current.date_to !== currentFilterValues.date_to ||
@@ -641,7 +671,7 @@ const AuditoriaRunDetallePage = () => {
       prevFiltersRef.current = currentFilterValues;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.compania_id, filters.zip_code, filters.audit_status, filters.date_from, filters.date_to, filters.search]);
+  }, [filters.compania_id, filters.grupo_familiar_id, filters.audit_status, filters.date_from, filters.date_to, filters.search]);
   
   // Manejar cambio de filtros temporales
   const handleTempFilterChange = (key, value) => {
@@ -661,7 +691,7 @@ const AuditoriaRunDetallePage = () => {
   const handleClearFilters = () => {
     const clearedFilters = {
       compania_id: "",
-      zip_code: "",
+      grupo_familiar_id: "",
       audit_status: "",
       date_from: "",
       date_to: "",
@@ -892,13 +922,97 @@ const AuditoriaRunDetallePage = () => {
     return raw;
   }, []);
 
+  const coberturasOrdenCliente = useMemo(() => {
+    if (!Array.isArray(coberturas) || coberturas.length === 0) return coberturas;
+    const sortBy = filters.sort_by || "";
+    if (!sortBy) return coberturas;
+
+    const dir = filters.sort_dir === "asc" ? 1 : -1;
+    const getPago = buildPagoRowResolver(includePagosEnabled, pagosPorEntidad);
+
+    const compareGrupoFamiliar = (a, b) => {
+      const ga = getGrupoFamiliarId(a);
+      const gb = getGrupoFamiliarId(b);
+      const na = Number(ga);
+      const nb = Number(gb);
+      if (Number.isFinite(na) && Number.isFinite(nb)) return na - nb;
+      return String(ga ?? "").localeCompare(String(gb ?? ""), "es", { numeric: true, sensitivity: "base" });
+    };
+
+    const arr = [...coberturas];
+    arr.sort((a, b) => {
+      switch (sortBy) {
+        case "grupo_familiar_id":
+          return compareGrupoFamiliar(a, b) * dir;
+        case "fecha_activacion":
+          return compareDate(a, b, (c) => c?.fecha_activacion) * dir;
+        case "codigo_poliza":
+          return (
+            String(a?.codigo_poliza ?? "").localeCompare(String(b?.codigo_poliza ?? ""), "es", {
+              numeric: true,
+              sensitivity: "base",
+            }) * dir
+          );
+        case "cliente":
+          return (
+            String(a?.cliente ?? "").localeCompare(String(b?.cliente ?? ""), "es", {
+              numeric: true,
+              sensitivity: "base",
+            }) * dir
+          );
+        case "precio": {
+          const pa = Number(a?.precio ?? 0);
+          const pb = Number(b?.precio ?? 0);
+          return (pa - pb) * dir;
+        }
+        case "req_pendientes": {
+          const pa = Number(a?.req_pendientes ?? a?.req_pendiente ?? 0);
+          const pb = Number(b?.req_pendientes ?? b?.req_pendiente ?? 0);
+          const aOk = Number.isFinite(pa);
+          const bOk = Number.isFinite(pb);
+          if (!aOk && !bOk) return 0;
+          if (!aOk) return 1 * dir;
+          if (!bOk) return -1 * dir;
+          return (pa - pb) * dir;
+        }
+        case "fecha_pago": {
+          const pa = getPago(a);
+          const pb = getPago(b);
+          const ta = parseDateMs(pa?.fecha_pago);
+          const tb = parseDateMs(pb?.fecha_pago);
+          if (ta == null && tb == null) return 0;
+          if (ta == null) return 1 * dir;
+          if (tb == null) return -1 * dir;
+          return (ta - tb) * dir;
+        }
+        case "pago_estado": {
+          const pa = getPago(a);
+          const pb = getPago(b);
+          const oa = PAGO_ESTADO_ORDEN[String(pa?.estado ?? "").toLowerCase()] ?? 99;
+          const ob = PAGO_ESTADO_ORDEN[String(pb?.estado ?? "").toLowerCase()] ?? 99;
+          return (oa - ob) * dir;
+        }
+        default:
+          return 0;
+      }
+    });
+    return arr;
+  }, [
+    coberturas,
+    filters.sort_by,
+    filters.sort_dir,
+    getGrupoFamiliarId,
+    includePagosEnabled,
+    pagosPorEntidad,
+  ]);
+
   // Agrupamiento estable por GF (sin alterar el orden dentro de cada grupo).
   // Esto evita que integrantes del mismo grupo queden "regados" cuando el backend ordena por otras columnas.
   const coberturasAgrupadas = useMemo(() => {
-    if (!Array.isArray(coberturas) || coberturas.length === 0) return [];
+    if (!Array.isArray(coberturasOrdenCliente) || coberturasOrdenCliente.length === 0) return [];
 
-    // Si el usuario ordena por columnas que deben respetar el orden del backend (ej. pagos),
-    // NO re-agrupamos por GF en cliente: rompería el orden global devuelto por el servidor.
+    // Si el usuario ordena por columnas distintas de GF, NO re-agrupamos por GF en cliente:
+    // rompería el orden elegido para la página actual.
     const sortBy = filters.sort_by || "";
     if (
       sortBy &&
@@ -906,10 +1020,10 @@ const AuditoriaRunDetallePage = () => {
       sortBy !== "gf" &&
       sortBy !== "grupoFamiliarId"
     ) {
-      return coberturas;
+      return coberturasOrdenCliente;
     }
 
-    const withIndex = coberturas.map((c, index) => ({
+    const withIndex = coberturasOrdenCliente.map((c, index) => ({
       c,
       index,
       gf: getGrupoFamiliarId(c),
@@ -941,7 +1055,7 @@ const AuditoriaRunDetallePage = () => {
     });
 
     return withIndex.map((x) => x.c);
-  }, [coberturas, getGrupoFamiliarId, filters.sort_by]);
+  }, [coberturasOrdenCliente, getGrupoFamiliarId, filters.sort_by]);
   
   return (
     <div className="container-fluid py-4">
@@ -1017,15 +1131,17 @@ const AuditoriaRunDetallePage = () => {
               </Form.Select>
             </div>
             
-            {/* Código Postal */}
+            {/* Grupo familiar (GF) */}
             <div className="col-md-2">
-              <Form.Label>Código Postal</Form.Label>
+              <Form.Label>Grupo familiar (GF)</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="Ej: 33101"
-                value={tempFilters.zip_code}
-                onChange={(e) => handleTempFilterChange("zip_code", e.target.value)}
+                inputMode="numeric"
+                placeholder="Ej: 71"
+                value={tempFilters.grupo_familiar_id}
+                onChange={(e) => handleTempFilterChange("grupo_familiar_id", e.target.value.replace(/\D/g, ""))}
               />
+              <Form.Text className="text-muted">Filtra por el mismo ID que la columna GF.</Form.Text>
             </div>
             
             {/* Estado de Auditoría */}
