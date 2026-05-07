@@ -27,7 +27,12 @@ const buildQueryParams = (params) => {
   if (params.per_page) queryParams.append("per_page", params.per_page);
   if (params.compania_id) queryParams.append("compania_id", params.compania_id);
   if (params.zip_code) queryParams.append("zip_code", params.zip_code);
-  if (params.grupo_familiar_id) queryParams.append("grupo_familiar_id", params.grupo_familiar_id);
+  const gfRaw = params.grupo_familiar_id ?? params.gf_id;
+  if (gfRaw !== undefined && gfRaw !== null && String(gfRaw).trim() !== "") {
+    const gfv = String(gfRaw).trim();
+    queryParams.append("grupo_familiar_id", gfv);
+  }
+  if (params.audit_status) queryParams.append("audit_status", params.audit_status);
   if (params.only_pending === true) {
     queryParams.append("only_pending", "true");
   }

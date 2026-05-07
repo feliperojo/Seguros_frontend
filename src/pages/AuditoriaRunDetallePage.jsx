@@ -77,7 +77,8 @@ const buildQueryParams = (filters) => {
   if (filters.page) params.page = filters.page;
   if (filters.per_page) params.per_page = filters.per_page;
   if (filters.compania_id) params.compania_id = filters.compania_id;
-  if (filters.grupo_familiar_id) params.grupo_familiar_id = filters.grupo_familiar_id;
+  const gfFilter = filters.grupo_familiar_id != null ? String(filters.grupo_familiar_id).trim() : "";
+  if (gfFilter) params.grupo_familiar_id = gfFilter;
   if (filters.audit_status) params.audit_status = filters.audit_status;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
@@ -922,10 +923,32 @@ const AuditoriaRunDetallePage = () => {
     return raw;
   }, []);
 
+  /**
+   * Refuerzo en cliente: si el endpoint del reporte no aplica `grupo_familiar_id`, aquí se ocultan
+   * filas que no coinciden (solo dentro del lote paginado actual).
+   */
+  const coberturasTrasFiltroGf = useMemo(() => {
+    if (!Array.isArray(coberturas)) return coberturas;
+    const want = String(filters.grupo_familiar_id ?? "").trim();
+    if (!want) return coberturas;
+    return coberturas.filter((c) => {
+      const gf = getGrupoFamiliarId(c);
+      if (gf === null || gf === undefined || gf === "") return false;
+      const nw = Number(want);
+      const ng = Number(gf);
+      if (Number.isFinite(nw) && Number.isFinite(ng)) return nw === ng;
+      return String(gf).trim() === want;
+    });
+  }, [coberturas, filters.grupo_familiar_id, getGrupoFamiliarId]);
+
+  const gfFiltroActivo = String(filters.grupo_familiar_id ?? "").trim().length > 0;
+
   const coberturasOrdenCliente = useMemo(() => {
-    if (!Array.isArray(coberturas) || coberturas.length === 0) return coberturas;
+    if (!Array.isArray(coberturasTrasFiltroGf) || coberturasTrasFiltroGf.length === 0) {
+      return coberturasTrasFiltroGf;
+    }
     const sortBy = filters.sort_by || "";
-    if (!sortBy) return coberturas;
+    if (!sortBy) return coberturasTrasFiltroGf;
 
     const dir = filters.sort_dir === "asc" ? 1 : -1;
     const getPago = buildPagoRowResolver(includePagosEnabled, pagosPorEntidad);
@@ -939,7 +962,7 @@ const AuditoriaRunDetallePage = () => {
       return String(ga ?? "").localeCompare(String(gb ?? ""), "es", { numeric: true, sensitivity: "base" });
     };
 
-    const arr = [...coberturas];
+    const arr = [...coberturasTrasFiltroGf];
     arr.sort((a, b) => {
       switch (sortBy) {
         case "grupo_familiar_id":
@@ -998,7 +1021,7 @@ const AuditoriaRunDetallePage = () => {
     });
     return arr;
   }, [
-    coberturas,
+    coberturasTrasFiltroGf,
     filters.sort_by,
     filters.sort_dir,
     getGrupoFamiliarId,
@@ -1217,7 +1240,14 @@ const AuditoriaRunDetallePage = () => {
           <h5 className="mb-0">Coberturas</h5>
           {meta.total > 0 && (
             <span className="text-muted">
-              Total: {meta.total} | Página {meta.page} de {meta.last_page}
+              Total reporte: {meta.total} | Página {meta.page} de {meta.last_page}
+              {gfFiltroActivo && coberturas.length > 0 && (
+                <>
+                  {" "}
+                  · GF {String(filters.grupo_familiar_id).trim()}:{" "}
+                  {coberturasTrasFiltroGf.length}/{coberturas.length} filas en esta página
+                </>
+              )}
             </span>
           )}
         </div>
@@ -1232,6 +1262,12 @@ const AuditoriaRunDetallePage = () => {
           ) : coberturas.length === 0 ? (
             <Alert variant="info">
               No se encontraron coberturas con los filtros aplicados.
+            </Alert>
+          ) : coberturasTrasFiltroGf.length === 0 ? (
+            <Alert variant="warning">
+              No hay coberturas de este grupo familiar en la página actual del reporte. Si el total global
+              sigue alto, es probable que el servidor no esté aplicando el filtro por GF; revisa también las
+              demás páginas.
             </Alert>
           ) : (
             <>
