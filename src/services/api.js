@@ -86,7 +86,15 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
     };
     
     // Log para debugging en desarrollo
-    if (import.meta.env.DEV) {
+    // 409 en creación de runs de auditoría es un caso esperado (duplicado) y genera ruido en consola.
+    const isAuditoriaRunDuplicate =
+      response.status === 409 &&
+      method === "POST" &&
+      typeof url === "string" &&
+      url.includes("/auditorias/runs") &&
+      !url.includes("/close");
+
+    if (import.meta.env.DEV && !isAuditoriaRunDuplicate) {
       console.error("❌ API Error:", {
         url,
         method,

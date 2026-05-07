@@ -1,12 +1,13 @@
 // pages/AuditoriasPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Button, Form, Alert, Spinner, Table, Badge } from "react-bootstrap";
+import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
 import { FaEdit } from "react-icons/fa";
 import { Helmet } from "react-helmet-async";
 import { listRuns, createRun, closeRun, listAuditTypes } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
+import apiRequest from "../services/api";
 
 /**
  * Formatea una fecha para mostrar
@@ -56,6 +57,11 @@ const AuditoriasPage = () => {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [includePagos, setIncludePagos] = useState(false);
+  const [validatingPagos, setValidatingPagos] = useState(false);
+  const [showPagosModal, setShowPagosModal] = useState(false);
+  const [pagosModalMessage, setPagosModalMessage] = useState("");
+  const [pendingCreatePayload, setPendingCreatePayload] = useState(null);
   const [closingRunId, setClosingRunId] = useState(null);
   const [error, setError] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
@@ -214,6 +220,61 @@ const AuditoriasPage = () => {
     };
   }, [loading, runs.length, loadRunsData]);
   
+  const periodoToLabel = (yyyyMm) => {
+    if (!yyyyMm || typeof yyyyMm !== "string") return String(yyyyMm ?? "");
+    const [y, m] = yyyyMm.split("-").slice(0, 2);
+    if (!y || !m) return yyyyMm;
+    return `${y}-${m}`;
+  };
+
+  const validarPagosGeneradosDelPeriodo = async (yyyyMm) => {
+    // Endpoint actual usado por PagosActualizar / PagosInforme
+    const pagos = await apiRequest("cobertura/pagos/listado", "GET");
+    const list = Array.isArray(pagos) ? pagos : (pagos?.data || []);
+    const prefix = `${yyyyMm}-`;
+    const existe = list.some((p) => typeof p?.fecha_pago === "string" && p.fecha_pago.startsWith(prefix));
+    return existe;
+  };
+
+  /**
+   * Crea el run y refresca la lista. Si ya existe (409), muestra aviso y refresca sin tratarlo como error rojo.
+   * @returns {{ ok: true, response }} | {{ ok: false, duplicate: true }} | throws
+   */
+  const createRunAndRefresh = async (payload) => {
+    try {
+      const response = await createRun(payload);
+      const tipoNombre = auditTypes.find((t) => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
+      toast.showSuccess(`Auditoría ${tipoNombre} del periodo ${periodo} creada exitosamente`);
+
+      const data = await loadRunsData();
+      setRuns(Array.isArray(data) ? data : []);
+      return { ok: true, response };
+    } catch (err) {
+      if (err.response?.status === 409) {
+        const tipoNombre = auditTypes.find((t) => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
+        const targetTypeLabel = targetType === "coberturas" ? "Coberturas" : "Clientes";
+        const mensaje = `Ya existe una auditoría de tipo "${tipoNombre}" para ${targetTypeLabel} en el periodo ${periodo}. Solo se permite una auditoría por tipo, objeto y periodo. Puedes abrir la auditoría existente desde la lista.`;
+        setInfoMessage(mensaje);
+        toast.showWarning("No se puede crear: ya existe una auditoría con estos parámetros");
+
+        try {
+          const data = await loadRunsData();
+          setRuns(Array.isArray(data) ? data : []);
+        } catch (reloadErr) {
+          console.error("Error al recargar runs tras 409:", reloadErr);
+        }
+        return { ok: false, duplicate: true };
+      }
+      throw err;
+    }
+  };
+
+  const closePagosModal = () => {
+    setShowPagosModal(false);
+    setPagosModalMessage("");
+    setPendingCreatePayload(null);
+  };
+
   // Manejar creación de run
   const handleCreateRun = async () => {
     if (!periodo) {
@@ -243,28 +304,37 @@ const AuditoriasPage = () => {
         // Compatibilidad con sistema legacy
         payload.audit_type = auditTypeLegacy;
       }
-      
-      const response = await createRun(payload);
-      
-      const tipoNombre = auditTypes.find(t => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
-      toast.showSuccess(`Auditoría ${tipoNombre} del periodo ${periodo} creada exitosamente`);
-      
-      // Recargar la lista
-      const data = await loadRunsData();
-      setRuns(Array.isArray(data) ? data : []);
-    } catch (err) {
-      // Manejar error 409 (duplicado) como información, no como error
-      if (err.response?.status === 409) {
-        const tipoNombre = auditTypes.find(t => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
-        const targetTypeLabel = targetType === "coberturas" ? "Coberturas" : "Clientes";
-        const mensaje = `Ya existe una auditoría de tipo "${tipoNombre}" para ${targetTypeLabel} en el periodo ${periodo}. Solo se permite una auditoría por tipo, objeto y periodo. Puedes abrir la auditoría existente desde la lista.`;
-        setInfoMessage(mensaje);
-        toast.showWarning("No se puede crear: ya existe una auditoría con estos parámetros");
-      } else {
-        const errorMessage = err.response?.data?.message || err.message || "Error al crear la auditoría";
-        setError(errorMessage);
-        toast.showError(errorMessage);
+
+      // Opcional: incluir pagos del mes. Primero validamos si existen pagos generados para ese periodo.
+      if (includePagos) {
+        setValidatingPagos(true);
+        let existenPagos = false;
+        try {
+          existenPagos = await validarPagosGeneradosDelPeriodo(periodo);
+        } finally {
+          setValidatingPagos(false);
+        }
+
+        if (!existenPagos) {
+          const periodoLabel = periodoToLabel(periodo);
+          setPagosModalMessage(
+            `No se ha generado pagos para el mes ${periodoLabel}, por lo tanto no puedes relacionar pagos a esta auditoría.\n\n` +
+              `¿Deseas continuar sin pagos (solo la auditoría)? Se recomienda generar los pagos y volver a crear la auditoría con la opción de incluir pagos.`
+          );
+          setPendingCreatePayload(payload);
+          setShowPagosModal(true);
+          return;
+        }
+
+        // Si existen pagos, intentamos enviar una marca al backend para incluirlos (si el backend lo soporta).
+        payload.include_pagos = true;
       }
+
+      await createRunAndRefresh(payload);
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || "Error al crear la auditoría";
+      setError(errorMessage);
+      toast.showError(errorMessage);
       console.error("Error al crear run:", err);
     } finally {
       setCreating(false);
@@ -390,18 +460,33 @@ const AuditoriasPage = () => {
                 onChange={(e) => setPeriodo(e.target.value)}
               />
             </div>
+
+            <div className="col-md-3">
+              <Form.Label className="d-block">Opciones</Form.Label>
+              <Form.Check
+                type="switch"
+                id="include-pagos-switch"
+                label="Incluir pagos del mes de la auditoría"
+                checked={includePagos}
+                onChange={(e) => setIncludePagos(e.target.checked)}
+                disabled={creating || validatingPagos}
+              />
+              <Form.Text className="text-muted">
+                Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
+              </Form.Text>
+            </div>
             
             <div className="col-md-3">
               <Button
                 variant="primary"
                 onClick={handleCreateRun}
-                disabled={creating || (!auditTypeId && !auditTypeLegacy) || !periodo}
+                disabled={creating || validatingPagos || (!auditTypeId && !auditTypeLegacy) || !periodo}
                 className="w-100"
               >
-                {creating ? (
+                {creating || validatingPagos ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
-                    Creando...
+                    {validatingPagos ? "Validando pagos..." : "Creando..."}
                   </>
                 ) : (
                   "Crear Auditoría del Periodo"
@@ -411,6 +496,43 @@ const AuditoriasPage = () => {
           </div>
         </Card.Body>
       </Card>
+
+      <Modal show={showPagosModal} onHide={closePagosModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Pagos del periodo</Modal.Title>
+        </Modal.Header>
+        <Modal.Body style={{ whiteSpace: "pre-line" }}>{pagosModalMessage}</Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={closePagosModal}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            onClick={async () => {
+              if (!pendingCreatePayload) {
+                closePagosModal();
+                return;
+              }
+              try {
+                setCreating(true);
+                // Continuar sin pagos
+                await createRunAndRefresh(pendingCreatePayload);
+              } catch (err) {
+                const errorMessage =
+                  err.response?.data?.message || err.message || "Error al crear la auditoría";
+                setError(errorMessage);
+                toast.showError(errorMessage);
+                console.error("Error al crear run (sin pagos):", err);
+              } finally {
+                setCreating(false);
+                closePagosModal();
+              }
+            }}
+          >
+            Continuar sin pagos
+          </Button>
+        </Modal.Footer>
+      </Modal>
       
       {/* Mensaje informativo */}
       {infoMessage && (

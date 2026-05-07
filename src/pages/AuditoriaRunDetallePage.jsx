@@ -11,7 +11,8 @@ import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
 import NuevaTareaAuditoriaModal from "../components/Tareas/NuevaTareaAuditoriaModal";
 import HistorialTareasAuditoriaModal from "../components/Tareas/HistorialTareasAuditoriaModal";
-import { getItemTasks } from "../services/auditoriasTasksService";
+import { getItemTasks, listTasks } from "../services/auditoriasTasksService";
+import apiRequest from "../services/api";
 
 /**
  * Estados de auditoría permitidos
@@ -90,6 +91,37 @@ const formatDateTime = (dateString) => {
 };
 
 /**
+ * Texto legible para fecha de pago de un pago generado (evita desfaces TZ en "YYYY-MM-DD").
+ */
+const formatPagoFechaMostrar = (fechaPagoRaw) => {
+  if (fechaPagoRaw == null || fechaPagoRaw === "") return null;
+  const s = String(fechaPagoRaw).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) {
+    const [, y, mo, d] = m;
+    return `${d}/${mo}/${y}`;
+  }
+  return formatDate(s);
+};
+
+const diaDelMesDesdeFechaPago = (fechaPagoRaw) => {
+  if (fechaPagoRaw == null || fechaPagoRaw === "") return null;
+  const s = String(fechaPagoRaw).trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (m) {
+    const day = parseInt(m[3], 10);
+    return Number.isFinite(day) ? day : null;
+  }
+  try {
+    const date = new Date(s);
+    if (!Number.isNaN(date.getTime())) return date.getDate();
+  } catch {
+    /* ignore */
+  }
+  return null;
+};
+
+/**
  * Formatea un valor monetario
  */
 const formatCurrency = (value) => {
@@ -113,10 +145,74 @@ const SORTABLE_COLUMNS = {
   cliente: "cliente",
   codigo_poliza: "codigo_poliza",
   grupo_familiar_id: "grupo_familiar_id",
-  fecha_nacimiento: "fecha_nacimiento",
+  /** Pagos generados asociados al ítem (el backend debe soportar estos sort_by o ignorarlos) */
+  fecha_pago: "fecha_pago",
+  pago_estado: "pago_estado",
   precio: "precio",
   req_pendientes: "req_pendientes",
   req_total: "req_total",
+};
+
+/** Convierte valores típicos de API a boolean (evita Boolean("false") === true). */
+const toBool = (v) => {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0 || v === null || v === undefined || v === "") return false;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "true" || s === "1" || s === "yes" || s === "si" || s === "sí") return true;
+    if (s === "false" || s === "0" || s === "no") return false;
+  }
+  return Boolean(v);
+};
+
+/**
+ * Normaliza respuestas tipo { data: run } o { run } que algunos backends envían.
+ */
+const normalizeRunPayload = (raw) => {
+  if (!raw || typeof raw !== "object") return raw;
+  if (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)) return raw.data;
+  if (raw.run && typeof raw.run === "object") return raw.run;
+  return raw;
+};
+
+const resolveItemIdFromRow = (c) =>
+  c?.item_id || c?.auditoria_item_id || c?.audit_item_id || c?.id || null;
+
+/** Clave estable para UI de tareas cuando no hay item_id (usa cobertura/cliente). */
+const taskRowStorageKey = (c) => {
+  if (c?.cobertura_id != null) return `cobertura:${c.cobertura_id}`;
+  if (c?.cliente_id != null) return `cliente:${c.cliente_id}`;
+  return null;
+};
+
+const inferItemIdFromTask = (t) =>
+  t?.item_id ??
+  t?.auditoria_item_id ??
+  t?.audit_item_id ??
+  t?.item?.id ??
+  t?.audit_item?.id ??
+  null;
+
+const taskMatchesCoberturaRow = (t, cobertura) => {
+  const cid = cobertura?.cobertura_id;
+  const clid = cobertura?.cliente_id;
+  if (cid != null) {
+    const tc =
+      t?.cobertura_id ??
+      t?.cobertura?.id ??
+      t?.item?.cobertura_id ??
+      t?.item?.cobertura?.id;
+    if (tc != null && Number(tc) === Number(cid)) return true;
+  }
+  if (clid != null) {
+    const tcl =
+      t?.cliente_id ??
+      t?.cliente?.id ??
+      t?.item?.cliente_id ??
+      t?.item?.cliente?.id;
+    if (tcl != null && Number(tcl) === Number(clid)) return true;
+  }
+  return false;
 };
 
 const AuditoriaRunDetallePage = () => {
@@ -133,6 +229,11 @@ const AuditoriaRunDetallePage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [meta, setMeta] = useState({ page: 1, per_page: 25, total: 0, last_page: 1 });
+
+  // Pagos relacionados (cuando el run fue creado con include_pagos)
+  const [pagosPorEntidad, setPagosPorEntidad] = useState({}); // { entityKey: pago }
+  const [loadingPagos, setLoadingPagos] = useState(false);
+  const [savingPagoId, setSavingPagoId] = useState(null);
   
   // Estado de filtros
   const [filters, setFilters] = useState({
@@ -187,6 +288,8 @@ const AuditoriaRunDetallePage = () => {
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
+  /** Cache: `${runId}:${taskRowStorageKey}` -> audit item id */
+  const auditItemIdByRowKeyRef = useRef(new Map());
   
   // Cargar información del run al montar
   useEffect(() => {
@@ -196,7 +299,7 @@ const AuditoriaRunDetallePage = () => {
       setLoadingRunInfo(true);
       try {
         const runData = await getRun(runId);
-        setRunInfo(runData);
+        setRunInfo(normalizeRunPayload(runData));
       } catch (err) {
         console.error("Error al cargar información del run:", err);
         // Si falla, al menos establecer un objeto básico
@@ -208,6 +311,204 @@ const AuditoriaRunDetallePage = () => {
     
     loadRunInfo();
   }, [runId]);
+
+  const includePagosFromRun = toBool(
+    runInfo?.include_pagos ??
+      runInfo?.includePagos ??
+      runInfo?.pagos_incluidos ??
+      runInfo?.pagosIncluidos ??
+      runInfo?.with_pagos ??
+      runInfo?.withPagos
+  );
+  const includePagosFromMeta = toBool(
+    meta?.include_pagos ??
+      meta?.includePagos ??
+      meta?.pagos_incluidos ??
+      meta?.pagosIncluidos ??
+      meta?.with_pagos ??
+      meta?.withPagos
+  );
+  const includePagosEnabled = includePagosFromRun || includePagosFromMeta;
+
+  const periodoRunRaw =
+    runInfo?.periodo ??
+    runInfo?.period ??
+    runInfo?.periodo_run ??
+    runInfo?.periodoRun ??
+    runInfo?.mes ??
+    runInfo?.month ??
+    meta?.periodo ??
+    meta?.period ??
+    meta?.periodo_run ??
+    meta?.periodoRun ??
+    meta?.mes ??
+    meta?.month ??
+    null;
+  const periodoRun =
+    typeof periodoRunRaw === "string" && /^\d{4}-\d{2}$/.test(periodoRunRaw.trim())
+      ? periodoRunRaw.trim()
+      : null; // "YYYY-MM"
+
+  const loadPagosDelRun = useCallback(async () => {
+    if (!includePagosEnabled) return;
+
+    setLoadingPagos(true);
+    try {
+      const pagos = await apiRequest("cobertura/pagos/listado", "GET");
+      const list = Array.isArray(pagos) ? pagos : (pagos?.data || []);
+      let candidatos = list;
+      if (periodoRun) {
+        const prefix = `${periodoRun}-`;
+        candidatos = list.filter(
+          (p) => typeof p?.fecha_pago === "string" && p.fecha_pago.startsWith(prefix)
+        );
+      }
+
+      // Mapear por entidad: prioridad cobertura_id, luego cliente_id, luego código póliza.
+      const map = {};
+      for (const p of candidatos) {
+        const coberturaId = p?.cobertura?.id || p?.cobertura_id || null;
+        const clienteId = p?.cliente?.id || p?.cliente_id || null;
+        const codigoPoliza = p?.cobertura?.codigo_poliza || p?.codigo_poliza || null;
+        if (coberturaId != null) map[`cobertura:${coberturaId}`] = p;
+        if (clienteId != null) map[`cliente:${clienteId}`] = map[`cliente:${clienteId}`] || p;
+        if (codigoPoliza) {
+          const key = `poliza:${String(codigoPoliza).trim()}`;
+          map[key] = map[key] || p;
+        }
+      }
+      setPagosPorEntidad(map);
+    } catch (err) {
+      console.error("Error al cargar pagos del mes para auditoría:", err);
+    } finally {
+      setLoadingPagos(false);
+    }
+  }, [includePagosEnabled, periodoRun]);
+
+  useEffect(() => {
+    void loadPagosDelRun();
+  }, [loadPagosDelRun]);
+
+  const handlePagoEstadoChange = async (pago, nuevoEstado) => {
+    if (!pago?.id) return;
+    setSavingPagoId(pago.id);
+    try {
+      const payload = {
+        estado: nuevoEstado,
+        portal: pago?.portal ?? false,
+      };
+      await apiRequest(`cobertura/pagos/${pago.id}`, "PUT", payload);
+      setPagosPorEntidad((prev) => {
+        const next = { ...prev };
+        // Actualizar en todos los keys que apunten al mismo pago
+        Object.keys(next).forEach((k) => {
+          if (next[k]?.id === pago.id) next[k] = { ...next[k], ...payload };
+        });
+        return next;
+      });
+      if (toast && typeof toast.showSuccess === "function") toast.showSuccess("Pago actualizado correctamente");
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || "Error al actualizar el pago";
+      if (toast && typeof toast.showError === "function") toast.showError(msg);
+      console.error("Error al actualizar pago desde auditoría:", err);
+    } finally {
+      setSavingPagoId(null);
+    }
+  };
+
+  useEffect(() => {
+    auditItemIdByRowKeyRef.current = new Map();
+  }, [runId]);
+
+  const resolveAuditItemIdWithFallback = useCallback(
+    async (cobertura) => {
+      const direct = resolveItemIdFromRow(cobertura);
+      if (direct) return direct;
+
+      const rowKey = taskRowStorageKey(cobertura);
+      if (!runId || !rowKey) return null;
+
+      const cacheKey = `${runId}:${rowKey}`;
+      const cached = auditItemIdByRowKeyRef.current.get(cacheKey);
+      if (cached) return cached;
+
+      const params = { run_id: runId, per_page: 100 };
+      if (cobertura?.cobertura_id != null) params.cobertura_id = cobertura.cobertura_id;
+      else if (cobertura?.cliente_id != null) params.cliente_id = cobertura.cliente_id;
+      else return null;
+
+      const response = await listTasks(params);
+      const raw = response?.data ?? response ?? [];
+      const arr = Array.isArray(raw) ? raw : [];
+      const matched = arr.filter((t) => taskMatchesCoberturaRow(t, cobertura));
+      for (const t of matched) {
+        const inferred = inferItemIdFromTask(t);
+        if (inferred) {
+          auditItemIdByRowKeyRef.current.set(cacheKey, inferred);
+          return inferred;
+        }
+      }
+      return null;
+    },
+    [runId]
+  );
+
+  const loadTasksForCoberturaRow = useCallback(
+    async (cobertura) => {
+      const rowKey = taskRowStorageKey(cobertura);
+      const directItemId = resolveItemIdFromRow(cobertura);
+      const taskKey = directItemId || rowKey;
+      if (!taskKey) return [];
+
+      setLoadingTareas((prev) => ({ ...prev, [taskKey]: true }));
+      try {
+        let tareas = [];
+
+        if (directItemId) {
+          try {
+            tareas = await getItemTasks(directItemId);
+          } catch (e) {
+            console.warn("getItemTasks falló, se intentará listTasks:", e);
+            tareas = [];
+          }
+        }
+
+        if (!Array.isArray(tareas) || tareas.length === 0) {
+          const params = { run_id: runId, per_page: 100 };
+          if (cobertura?.cobertura_id != null) params.cobertura_id = cobertura.cobertura_id;
+          else if (cobertura?.cliente_id != null) params.cliente_id = cobertura.cliente_id;
+          else {
+            setTareasPorItem((prev) => ({ ...prev, [taskKey]: [] }));
+            return [];
+          }
+
+          const response = await listTasks(params);
+          const raw = response?.data ?? response ?? [];
+          const arr = Array.isArray(raw) ? raw : [];
+          tareas = arr.filter((t) => taskMatchesCoberturaRow(t, cobertura));
+        }
+
+        setTareasPorItem((prev) => ({ ...prev, [taskKey]: tareas }));
+
+        // Si encontramos item_id en las tareas, cachearlo para endpoints legacy
+        if (rowKey) {
+          const cacheKey = `${runId}:${rowKey}`;
+          for (const t of tareas) {
+            const inferred = inferItemIdFromTask(t);
+            if (inferred) {
+              auditItemIdByRowKeyRef.current.set(cacheKey, inferred);
+              break;
+            }
+          }
+        }
+
+        return tareas;
+      } finally {
+        setLoadingTareas((prev) => ({ ...prev, [taskKey]: false }));
+      }
+    },
+    [runId]
+  );
   
   // Cargar compañías al montar
   useEffect(() => {
@@ -378,12 +679,24 @@ const AuditoriaRunDetallePage = () => {
   const handleSort = (column) => {
     if (!SORTABLE_COLUMNS[column]) return;
     
-    setFilters((prev) => ({
-      ...prev,
-      sort_by: column,
-      sort_dir: prev.sort_by === column && prev.sort_dir === "asc" ? "desc" : "asc",
-      page: 1,
-    }));
+    setFilters((prev) => {
+      const isSameColumn = prev.sort_by === column;
+      // Pagos: primer clic suele buscar "más reciente / mayor" → empezar en desc
+      const preferDescFirst = column === "fecha_pago" || column === "pago_estado";
+      let nextDir = "asc";
+      if (preferDescFirst) {
+        if (!isSameColumn) nextDir = "desc";
+        else nextDir = prev.sort_dir === "desc" ? "asc" : "desc";
+      } else {
+        nextDir = isSameColumn && prev.sort_dir === "asc" ? "desc" : "asc";
+      }
+      return {
+        ...prev,
+        sort_by: column,
+        sort_dir: nextDir,
+        page: 1,
+      };
+    });
   };
   
   // Manejar cambio de página
@@ -584,6 +897,18 @@ const AuditoriaRunDetallePage = () => {
   const coberturasAgrupadas = useMemo(() => {
     if (!Array.isArray(coberturas) || coberturas.length === 0) return [];
 
+    // Si el usuario ordena por columnas que deben respetar el orden del backend (ej. pagos),
+    // NO re-agrupamos por GF en cliente: rompería el orden global devuelto por el servidor.
+    const sortBy = filters.sort_by || "";
+    if (
+      sortBy &&
+      sortBy !== "grupo_familiar_id" &&
+      sortBy !== "gf" &&
+      sortBy !== "grupoFamiliarId"
+    ) {
+      return coberturas;
+    }
+
     const withIndex = coberturas.map((c, index) => ({
       c,
       index,
@@ -616,7 +941,7 @@ const AuditoriaRunDetallePage = () => {
     });
 
     return withIndex.map((x) => x.c);
-  }, [coberturas, getGrupoFamiliarId]);
+  }, [coberturas, getGrupoFamiliarId, filters.sort_by]);
   
   return (
     <div className="container-fluid py-4">
@@ -823,14 +1148,7 @@ const AuditoriaRunDetallePage = () => {
                       >
                         Cliente {renderSortIcon("cliente")}
                       </th>
-                      <th
-                        style={{ cursor: "pointer" }}
-                        onClick={() => handleSort("fecha_nacimiento")}
-                      >
-                        Fecha Nacimiento {renderSortIcon("fecha_nacimiento")}
-                      </th>
                       <th>Compañía</th>
-                      <th>Responsable</th>
                       <th
                         style={{ cursor: "pointer" }}
                         onClick={() => handleSort("precio")}
@@ -845,34 +1163,57 @@ const AuditoriaRunDetallePage = () => {
                       </th>
                       <th>Estado Auditoría</th>
                       <th>Revisado En</th>
+                      {includePagosEnabled && (
+                        <th
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleSort("fecha_pago")}
+                          title="Ordenar por fecha de pago generado"
+                        >
+                          Fecha de pago {renderSortIcon("fecha_pago")}
+                        </th>
+                      )}
+                      {includePagosEnabled && (
+                        <th
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleSort("pago_estado")}
+                          title="Ordenar por estado del pago (pendiente / procesando / pagado)"
+                        >
+                          Pago {renderSortIcon("pago_estado")}
+                        </th>
+                      )}
                       <th>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {coberturasAgrupadas.map((cobertura) => {
                       const entityId = cobertura.cobertura_id || cobertura.cliente_id;
-                      // El item_id puede venir como item_id, id, o podemos usar entityId + runId para buscarlo
-                      // Intentar múltiples campos posibles donde puede venir el item_id
-                      const itemId = cobertura.item_id || 
-                                    cobertura.auditoria_item_id || 
-                                    cobertura.audit_item_id ||
-                                    cobertura.id;
-                      
-                      // Debug: solo en desarrollo
-                      if (import.meta.env.DEV && !itemId) {
-                        console.log("⚠️ No se encontró item_id en cobertura:", {
-                          cobertura_id: cobertura.cobertura_id,
-                          cliente_id: cobertura.cliente_id,
-                          id: cobertura.id,
-                          item_id: cobertura.item_id,
-                          keys: Object.keys(cobertura)
-                        });
-                      }
-                      
-                      const tareasDelItem = itemId ? (tareasPorItem[itemId] || []) : [];
+                      const rowItemId = resolveItemIdFromRow(cobertura);
+                      const rowTaskKey = taskRowStorageKey(cobertura);
+                      const taskUiKey = rowItemId || rowTaskKey;
+
+                      const tareasDelItem = taskUiKey ? (tareasPorItem[taskUiKey] || []) : [];
                       const tieneTareas = tareasDelItem.length > 0;
-                      const estaExpandido = itemsConTareasExpandidos[itemId];
-                      const estaCargandoTareas = loadingTareas[itemId];
+                      const estaExpandido = taskUiKey ? itemsConTareasExpandidos[taskUiKey] : false;
+                      const estaCargandoTareas = taskUiKey ? loadingTareas[taskUiKey] : false;
+
+                      const pagoRelacionado = (() => {
+                        if (!includePagosEnabled) return null;
+                        const coberturaId = cobertura?.cobertura_id ?? cobertura?.id ?? null;
+                        const clienteId = cobertura?.cliente_id ?? null;
+                        const codigoPoliza = cobertura?.codigo_poliza
+                          ? String(cobertura.codigo_poliza).trim()
+                          : "";
+                        if (coberturaId != null && pagosPorEntidad[`cobertura:${coberturaId}`]) {
+                          return pagosPorEntidad[`cobertura:${coberturaId}`];
+                        }
+                        if (clienteId != null && pagosPorEntidad[`cliente:${clienteId}`]) {
+                          return pagosPorEntidad[`cliente:${clienteId}`];
+                        }
+                        if (codigoPoliza && pagosPorEntidad[`poliza:${codigoPoliza}`]) {
+                          return pagosPorEntidad[`poliza:${codigoPoliza}`];
+                        }
+                        return null;
+                      })();
                       
                       return (
                         <tr key={entityId}>
@@ -880,9 +1221,7 @@ const AuditoriaRunDetallePage = () => {
                         <td>{formatDate(cobertura.fecha_activacion)}</td>
                         <td>{cobertura.codigo_poliza || "-"}</td>
                         <td>{cobertura.cliente || "-"}</td>
-                        <td>{formatDate(cobertura.fecha_nacimiento || cobertura.cliente?.fecha_nacimiento || cobertura.fechaNacimiento)}</td>
                         <td>{cobertura.compania || "-"}</td>
-                        <td>{cobertura.responsable || "-"}</td>
                         <td>{formatCurrency(cobertura.precio)}</td>
                         <td>
                           {cobertura.req_total === 0 ? (
@@ -933,6 +1272,67 @@ const AuditoriaRunDetallePage = () => {
                           })()}
                         </td>
                         <td>{formatDateTime(cobertura.reviewed_at)}</td>
+                        {includePagosEnabled && (
+                          <td style={{ minWidth: 120 }}>
+                            {loadingPagos ? (
+                              <div className="d-flex align-items-center gap-2">
+                                <Spinner animation="border" size="sm" />
+                                <span className="text-muted small">Cargando...</span>
+                              </div>
+                            ) : pagoRelacionado ? (
+                              pagoRelacionado.fecha_pago ? (
+                                <div className="small">
+                                  <div className="fw-semibold">
+                                    {formatPagoFechaMostrar(pagoRelacionado.fecha_pago) || "-"}
+                                  </div>
+                                  {(() => {
+                                    const dia = diaDelMesDesdeFechaPago(pagoRelacionado.fecha_pago);
+                                    return dia != null ? (
+                                      <div className="text-muted">Día {String(dia).padStart(2, "0")}</div>
+                                    ) : null;
+                                  })()}
+                                </div>
+                              ) : (
+                                <span className="text-muted">-</span>
+                              )
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
+                          </td>
+                        )}
+                        {includePagosEnabled && (
+                          <td style={{ minWidth: 160 }}>
+                            {loadingPagos ? (
+                              <span className="text-muted small">…</span>
+                            ) : pagoRelacionado ? (
+                              <div className="d-flex align-items-center gap-2">
+                                <Form.Select
+                                  value={pagoRelacionado.estado}
+                                  onChange={(e) => void handlePagoEstadoChange(pagoRelacionado, e.target.value)}
+                                  disabled={savingPagoId === pagoRelacionado.id}
+                                  className={`text-center fw-bold ${
+                                    pagoRelacionado.estado === "pagado"
+                                      ? "bg-success text-white"
+                                      : pagoRelacionado.estado === "pendiente"
+                                      ? "bg-secondary text-white"
+                                      : pagoRelacionado.estado === "procesando"
+                                      ? "bg-warning text-dark"
+                                      : "bg-secondary"
+                                  }`}
+                                >
+                                  <option value="pendiente">Pendiente</option>
+                                  <option value="pagado">Pagado</option>
+                                  <option value="procesando">Procesando</option>
+                                </Form.Select>
+                                {savingPagoId === pagoRelacionado.id && (
+                                  <Spinner animation="border" size="sm" className="text-primary" />
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted">-</span>
+                            )}
+                          </td>
+                        )}
                         <td>
                           <div className="d-flex gap-1">
                             <Button
@@ -964,90 +1364,42 @@ const AuditoriaRunDetallePage = () => {
                               variant="outline-success"
                               size="sm"
                               onClick={async () => {
-                                // Determinar el itemId - puede venir del objeto o necesitamos buscarlo
-                                let currentItemId = cobertura.item_id || 
-                                                   cobertura.auditoria_item_id || 
-                                                   cobertura.audit_item_id ||
-                                                   cobertura.id;
-                                
-                                // Si no tenemos itemId directo, intentar obtenerlo usando entityId
-                                // El backend puede requerir que busquemos el item_id usando entityId + runId
-                                if (!currentItemId && entityId) {
-                                  // Intentar buscar el item_id usando el endpoint del backend
-                                  // Por ahora, abrimos el modal y dejamos que el backend resuelva
-                                  // pasando entityId y runId
-                                  // IMPORTANTE: Intentar obtener el item_id desde cobertura
-                                  const fallbackItemId = cobertura.item_id || 
-                                                        cobertura.auditoria_item_id || 
-                                                        cobertura.audit_item_id ||
-                                                        cobertura.id;
-                                  
-                                  setSelectedItemForTask({ 
-                                    id: fallbackItemId, // Intentar usar cualquier ID disponible
-                                    entityId, 
-                                    runId, 
-                                    cobertura_id: cobertura.cobertura_id,
-                                    cliente_id: cobertura.cliente_id,
-                                    grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
-                                    item_id: fallbackItemId, // También como item_id
-                                    ...cobertura 
-                                  });
-                                  setShowNuevaTareaModal(true);
+                                if (!taskUiKey) {
+                                  toast.showWarning(
+                                    "No se pudo identificar la cobertura/cliente para cargar tareas de auditoría."
+                                  );
                                   return;
                                 }
-                                
-                                if (!currentItemId) {
-                                  toast.showWarning("No se pudo identificar el item de auditoría. Intente nuevamente.");
-                                  console.error("No se pudo obtener itemId:", { cobertura, entityId, runId });
-                                  return;
-                                }
-                                
-                                // Si no hay tareas cargadas, cargarlas primero
+
                                 if (!tieneTareas && !estaCargandoTareas) {
-                                  setLoadingTareas(prev => ({ ...prev, [currentItemId]: true }));
-                                  try {
-                                    const tareas = await getItemTasks(currentItemId);
-                                    setTareasPorItem(prev => ({ ...prev, [currentItemId]: tareas }));
-                                    if (tareas.length > 0) {
-                                      // Si hay tareas, expandirlas
-                                      setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: true }));
-                                    } else {
-                                      // Si no hay tareas, abrir modal para crear una nueva
-                                      setSelectedItemForTask({ 
-                                        id: currentItemId, 
-                                        entityId, 
-                                        runId, 
-                                        cobertura_id: cobertura.cobertura_id,
-                                        cliente_id: cobertura.cliente_id,
-                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
-                                        ...cobertura 
-                                      });
-                                      setShowNuevaTareaModal(true);
-                                    }
-                                  } catch (err) {
-                                    console.error("Error al cargar tareas:", err);
-                                    // Si falla (por ejemplo, 404), puede ser que el item_id no sea correcto
-                                    // Intentar crear tarea directamente usando entityId
-                                      setSelectedItemForTask({ 
-                                        id: currentItemId, 
-                                        entityId, 
-                                        runId, 
-                                        cobertura_id: cobertura.cobertura_id,
-                                        cliente_id: cobertura.cliente_id,
-                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
-                                        ...cobertura 
-                                      });
-                                    setShowNuevaTareaModal(true);
-                                  } finally {
-                                    setLoadingTareas(prev => ({ ...prev, [currentItemId]: false }));
-                                  }
-                                } else if (tieneTareas) {
-                                  // Si hay tareas, toggle expandir/colapsar
-                                  if (estaExpandido) {
-                                    setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: false }));
+                                  const tareas = await loadTasksForCoberturaRow(cobertura);
+                                  if (tareas.length > 0) {
+                                    setItemsConTareasExpandidos((prev) => ({ ...prev, [taskUiKey]: true }));
                                   } else {
-                                    setItemsConTareasExpandidos(prev => ({ ...prev, [currentItemId]: true }));
+                                    const inferredItemId = await resolveAuditItemIdWithFallback(cobertura);
+                                    setSelectedItemForTask({
+                                      id: inferredItemId,
+                                      item_id: inferredItemId,
+                                      entityId,
+                                      runId,
+                                      cobertura_id: cobertura.cobertura_id,
+                                      cliente_id: cobertura.cliente_id,
+                                      grupo_familiar_id:
+                                        cobertura.grupo_familiar_id ||
+                                        cobertura.grupo_familiar?.id ||
+                                        cobertura.gf_id,
+                                      ...cobertura,
+                                    });
+                                    setShowNuevaTareaModal(true);
                                   }
+                                  return;
+                                }
+
+                                if (tieneTareas) {
+                                  setItemsConTareasExpandidos((prev) => ({
+                                    ...prev,
+                                    [taskUiKey]: !estaExpandido,
+                                  }));
                                 }
                               }}
                               title={tieneTareas ? (estaExpandido ? "Ocultar tareas" : "Ver tareas") : "Crear tarea de auditoría"}
@@ -1061,7 +1413,7 @@ const AuditoriaRunDetallePage = () => {
                             </Button>
                           </div>
                           {/* Mostrar tareas expandidas debajo de la fila */}
-                          {(cobertura.item_id || cobertura.id || entityId) && estaExpandido && tieneTareas && (
+                          {taskUiKey && estaExpandido && tieneTareas && (
                             <div className="mt-2 p-2 bg-light rounded border">
                               <div className="d-flex justify-content-between align-items-center mb-2">
                                 <strong className="small">Tareas de Auditoría ({tareasDelItem.length})</strong>
@@ -1070,14 +1422,9 @@ const AuditoriaRunDetallePage = () => {
                                   size="sm"
                                   className="p-0 text-decoration-none"
                                   onClick={() => {
-                                    const currentItemId = cobertura.item_id || 
-                                                         cobertura.auditoria_item_id || 
-                                                         cobertura.audit_item_id ||
-                                                         cobertura.id ||
-                                                         entityId;
                                     setItemsConTareasExpandidos(prev => ({
                                       ...prev,
-                                      [currentItemId]: false
+                                      [taskUiKey]: false
                                     }));
                                   }}
                                 >
@@ -1122,16 +1469,20 @@ const AuditoriaRunDetallePage = () => {
                                     variant="outline-success"
                                     size="sm"
                                     className="mt-1"
-                                    onClick={() => {
-                                      const currentItemId = cobertura.item_id || cobertura.id || entityId;
-                                      setSelectedItemForTask({ 
-                                        id: currentItemId, 
-                                        entityId, 
-                                        runId, 
+                                    onClick={async () => {
+                                      const inferredItemId = await resolveAuditItemIdWithFallback(cobertura);
+                                      setSelectedItemForTask({
+                                        id: inferredItemId,
+                                        item_id: inferredItemId,
+                                        entityId,
+                                        runId,
                                         cobertura_id: cobertura.cobertura_id,
                                         cliente_id: cobertura.cliente_id,
-                                        grupo_familiar_id: cobertura.grupo_familiar_id || cobertura.grupo_familiar?.id || cobertura.gf_id,
-                                        ...cobertura 
+                                        grupo_familiar_id:
+                                          cobertura.grupo_familiar_id ||
+                                          cobertura.grupo_familiar?.id ||
+                                          cobertura.gf_id,
+                                        ...cobertura,
                                       });
                                       setShowNuevaTareaModal(true);
                                     }}
@@ -1185,27 +1536,32 @@ const AuditoriaRunDetallePage = () => {
             setSelectedItemForTask(null);
           }}
           onCreated={async () => {
-            // Recargar tareas del item después de crear
-            // Usar cobertura_id o cliente_id para identificar el item
-            const itemIdentifier = selectedItemForTask?.cobertura_id || 
-                                  selectedItemForTask?.cliente_id ||
-                                  selectedItemForTask?.id;
-            
-            if (itemIdentifier) {
-              try {
-                // Intentar obtener tareas usando el identificador
-                // Nota: Puede que necesitemos ajustar getItemTasks para usar cobertura_id/cliente_id
-                const tareas = await getItemTasks(itemIdentifier);
-                setTareasPorItem(prev => ({ ...prev, [itemIdentifier]: tareas }));
-                // Expandir automáticamente para mostrar la nueva tarea
-                setItemsConTareasExpandidos(prev => ({ ...prev, [itemIdentifier]: true }));
-              } catch (err) {
-                console.error("Error al recargar tareas:", err);
-                // Si falla, recargar la página después de un breve delay
-                setTimeout(() => {
-                  window.location.reload();
-                }, 1000);
+            const ctx = selectedItemForTask;
+            if (!ctx) return;
+
+            const coberturaLike = {
+              cobertura_id: ctx.cobertura_id,
+              cliente_id: ctx.cliente_id,
+              item_id: ctx.item_id,
+              auditoria_item_id: ctx.auditoria_item_id,
+              audit_item_id: ctx.audit_item_id,
+              id: ctx.id,
+            };
+
+            try {
+              const tareas = await loadTasksForCoberturaRow(coberturaLike);
+              const taskUiKey =
+                resolveItemIdFromRow(coberturaLike) || taskRowStorageKey(coberturaLike);
+              if (taskUiKey) {
+                setItemsConTareasExpandidos((prev) => ({ ...prev, [taskUiKey]: true }));
               }
+              if (!Array.isArray(tareas) || tareas.length === 0) {
+                // Fallback conservador si el listado no devolvió nada aún
+                setTimeout(() => window.location.reload(), 500);
+              }
+            } catch (err) {
+              console.error("Error al recargar tareas:", err);
+              setTimeout(() => window.location.reload(), 1000);
             }
           }}
           runId={runId} // Pasar runId directamente
