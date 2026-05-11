@@ -253,6 +253,36 @@ const normalizeRunPayload = (raw) => {
   return raw;
 };
 
+/**
+ * Nombre legible del tipo / fuente (p. ej. tipo de póliza o nombre del tipo de auditoría configurado).
+ * No usa solo el código legacy string en audit_type para evitar duplicar el badge "SHERPA", etc.
+ */
+const resolveTipoPolizaTitulo = (run) => {
+  if (!run || typeof run !== "object") return null;
+  const at = run.audit_type;
+  if (at && typeof at === "object") {
+    const n = at.nombre || at.name || at.label;
+    if (n != null && String(n).trim()) return String(n).trim();
+  }
+  const tipoRaw = run.tipo_poliza;
+  if (tipoRaw && typeof tipoRaw === "object") {
+    const tn = tipoRaw.nombre || tipoRaw.name || tipoRaw.label;
+    if (tn != null && String(tn).trim()) return String(tn).trim();
+  }
+  const direct = [
+    run.tipo_poliza_nombre,
+    typeof tipoRaw === "string" ? tipoRaw : null,
+    run.audit_type_nombre,
+    run.audit_type_name,
+    run.nombre_tipo_auditoria,
+    run.audit_type_label,
+  ];
+  for (const d of direct) {
+    if (d != null && String(d).trim()) return String(d).trim();
+  }
+  return null;
+};
+
 const resolveItemIdFromRow = (c) =>
   c?.item_id || c?.auditoria_item_id || c?.audit_item_id || c?.id || null;
 
@@ -430,6 +460,8 @@ const AuditoriaRunDetallePage = () => {
   const periodoRunEtiqueta = periodoRun
     ? formatPeriodoRunEtiqueta(periodoRun) || periodoRun
     : null;
+
+  const tipoPolizaTitulo = useMemo(() => resolveTipoPolizaTitulo(runInfo), [runInfo]);
 
   const loadPagosDelRun = useCallback(async () => {
     if (!includePagosEnabled) return;
@@ -1133,63 +1165,144 @@ const AuditoriaRunDetallePage = () => {
       <Helmet>
         <title>
           {(runInfo?.nombre || `Auditoría #${runId}`) +
-            (runInfo?.audit_type ? ` · ${runInfo.audit_type}` : "") +
+            (tipoPolizaTitulo ? ` · ${tipoPolizaTitulo}` : "") +
+            (typeof runInfo?.audit_type === "string" ? ` · ${runInfo.audit_type}` : "") +
             (periodoRunEtiqueta ? ` · ${periodoRunEtiqueta}` : "") +
             " - Detalle"}
         </title>
       </Helmet>
       
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
-        <div className="min-w-0 flex-grow-1">
-          {loadingRunInfo ? (
-            <h2 className="mb-0 d-flex align-items-center flex-wrap gap-2">
-              <Spinner animation="border" size="sm" />
-              <span>Cargando...</span>
-            </h2>
-          ) : runInfo ? (
-            <h2 className="mb-0 d-flex flex-wrap align-items-center column-gap-2 row-gap-1">
-              <span className="text-break">{runInfo.nombre || `Auditoría #${runId}`}</span>
-              {runInfo.audit_type && (
-                <Badge
-                  bg={runInfo.audit_type === "SHERPA" ? "primary" : "info"}
-                  className="flex-shrink-0"
-                  title="Tipo de auditoría"
-                >
-                  {runInfo.audit_type}
-                </Badge>
-              )}
-              {periodoRunEtiqueta && (
-                <Badge
-                  bg="secondary"
-                  className="flex-shrink-0"
-                  title={periodoRun ? `Periodo de trabajo: ${periodoRun}` : "Periodo de trabajo"}
-                >
-                  {periodoRunEtiqueta}
-                </Badge>
-              )}
-            </h2>
-          ) : (
-            <h2 className="mb-0 d-flex flex-wrap align-items-center column-gap-2 row-gap-1">
-              <span>{`Auditoría #${runId}`}</span>
-              {periodoRunEtiqueta && (
-                <Badge
-                  bg="secondary"
-                  className="flex-shrink-0"
-                  title={periodoRun ? `Periodo de trabajo: ${periodoRun}` : "Periodo de trabajo"}
-                >
-                  {periodoRunEtiqueta}
-                </Badge>
-              )}
-            </h2>
-          )}
+      <div className="card border-0 shadow-sm mb-4 overflow-hidden">
+        <div className="border-start border-primary border-4 bg-white">
+          <div className="px-4 py-4">
+            {loadingRunInfo ? (
+              <div className="d-flex align-items-center gap-3 py-2">
+                <Spinner animation="border" size="sm" role="status" />
+                <span className="text-muted">Cargando información del proceso…</span>
+              </div>
+            ) : runInfo ? (
+              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-4">
+                <div className="min-w-0 flex-grow-1">
+                  <p
+                    className="text-uppercase text-muted mb-2 mb-xl-1 fw-semibold"
+                    style={{ fontSize: "0.72rem", letterSpacing: "0.12em" }}
+                  >
+                    Auditoría de cumplimiento
+                  </p>
+                  <h1 className="h4 text-dark fw-semibold mb-3 text-break lh-sm">
+                    <span>{runInfo.nombre || `Auditoría #${runId}`}</span>
+                    {tipoPolizaTitulo ? (
+                      <>
+                        <span className="text-muted fw-normal">{" — "}</span>
+                        <span className="fw-semibold text-body">{tipoPolizaTitulo}</span>
+                      </>
+                    ) : null}
+                  </h1>
+                  <div className="d-flex flex-wrap align-items-end gap-0 column-gap-5 row-gap-4 pt-2 mt-1 border-top border-light-subtle">
+                    {runInfo.audit_type && (
+                      <div className="d-flex flex-column gap-2">
+                        <span
+                          className="text-uppercase text-muted fw-semibold"
+                          style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                        >
+                          Tipo de auditoría
+                        </span>
+                        <Badge
+                          bg={
+                            (typeof runInfo.audit_type === "object"
+                              ? runInfo.audit_type?.codigo
+                              : runInfo.audit_type) === "SHERPA"
+                              ? "primary"
+                              : "info"
+                          }
+                          className="px-3 py-2 fw-semibold rounded-pill align-self-start"
+                          style={{ fontSize: "0.8rem" }}
+                        >
+                          {typeof runInfo.audit_type === "object"
+                            ? runInfo.audit_type?.nombre || runInfo.audit_type?.codigo || "—"
+                            : runInfo.audit_type}
+                        </Badge>
+                      </div>
+                    )}
+                    {runInfo.audit_type && periodoRunEtiqueta && (
+                      <div className="align-self-stretch d-none d-md-flex pb-2">
+                        <div className="vr opacity-25 align-self-stretch" />
+                      </div>
+                    )}
+                    {periodoRunEtiqueta && (
+                      <div className="d-flex flex-column gap-2">
+                        <span
+                          className="text-uppercase text-muted fw-semibold"
+                          style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                        >
+                          Periodo de trabajo
+                        </span>
+                        <div className="d-flex flex-wrap align-items-baseline gap-2">
+                          <span className="fw-semibold text-body fs-5 lh-sm">
+                            {periodoRunEtiqueta}
+                          </span>
+                          {periodoRun && (
+                            <span className="text-muted small font-monospace">{periodoRun}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 pt-xl-1">
+                  <Button
+                    variant="outline-secondary"
+                    className="px-3 fw-semibold"
+                    onClick={() => navigate("/auditorias")}
+                  >
+                    Volver a Auditorías
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-4">
+                <div className="min-w-0">
+                  <p
+                    className="text-uppercase text-muted mb-2 fw-semibold"
+                    style={{ fontSize: "0.72rem", letterSpacing: "0.12em" }}
+                  >
+                    Auditoría de cumplimiento
+                  </p>
+                  <h1 className="h4 text-dark fw-semibold mb-2 mb-xl-0 text-break lh-sm">
+                    {`Auditoría #${runId}`}
+                  </h1>
+                  {periodoRunEtiqueta && (
+                    <div className="mt-3 pt-3 border-top border-light">
+                      <div
+                        className="text-uppercase text-muted fw-semibold mb-1"
+                        style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                      >
+                        Periodo de trabajo
+                      </div>
+                      <div className="d-flex flex-wrap align-items-baseline gap-2">
+                        <span className="fw-semibold text-body fs-5 lh-sm">
+                          {periodoRunEtiqueta}
+                        </span>
+                        {periodoRun && (
+                          <span className="text-muted small font-monospace">{periodoRun}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  <Button
+                    variant="outline-secondary"
+                    className="px-3 fw-semibold"
+                    onClick={() => navigate("/auditorias")}
+                  >
+                    Volver a Auditorías
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-        <Button
-          variant="secondary"
-          className="flex-shrink-0"
-          onClick={() => navigate("/auditorias")}
-        >
-          Volver a Auditorías
-        </Button>
       </div>
       
       {/* Filtros */}

@@ -1,5 +1,5 @@
 // pages/AuditoriasPage.jsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
 import { FaEdit } from "react-icons/fa";
@@ -66,6 +66,16 @@ const AuditoriasPage = () => {
   const [closingRunId, setClosingRunId] = useState(null);
   const [error, setError] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
+
+  const selectedAuditType = useMemo(
+    () => auditTypes.find((t) => String(t.id) === String(auditTypeId)),
+    [auditTypes, auditTypeId]
+  );
+  const tipoTieneFiltrosCobertura = useMemo(() => {
+    if (targetType !== "coberturas" || !selectedAuditType?.filtros_cobertura) return false;
+    const f = selectedAuditType.filtros_cobertura;
+    return typeof f === "object" && Object.keys(f).length > 0;
+  }, [targetType, selectedAuditType]);
   
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
@@ -446,6 +456,12 @@ const AuditoriasPage = () => {
                   <Form.Text className="text-muted">
                     {auditTypes.length} fuente{auditTypes.length !== 1 ? "s" : ""} disponible{auditTypes.length !== 1 ? "s" : ""}
                   </Form.Text>
+                  {tipoTieneFiltrosCobertura && (
+                    <Alert variant="light" className="mt-2 mb-0 py-2 small border">
+                      Este tipo tiene <strong>filtros de cobertura</strong> configurados en su definición; el servidor los
+                      aplica al crear el run sobre el universo base.
+                    </Alert>
+                  )}
                 </>
               ) : (
                 <>

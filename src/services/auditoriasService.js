@@ -263,6 +263,25 @@ export const updateItem = async (runId, entityId, payload) => {
 };
 
 /**
+ * Obtiene un tipo de auditoría por ID (incluye filtros_cobertura si existe)
+ * @param {number|string} typeId
+ * @returns {Promise<Object>}
+ */
+export const getAuditType = async (typeId) => {
+  if (!typeId) {
+    throw new Error("typeId es requerido");
+  }
+  const endpoint = `auditorias/types/${typeId}`;
+  try {
+    const response = await apiRequest(endpoint, "GET");
+    if (response?.data && typeof response.data === "object") return response.data;
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Lista los tipos de auditoría disponibles
  * @param {Object} params - { target_type?: "coberturas"|"clientes", is_active?: boolean }
  * @returns {Promise<Array>} Lista de tipos de auditoría
@@ -344,6 +363,7 @@ export default {
   getRunReporte,
   updateItem,
   listAuditTypes,
+  getAuditType,
   createAuditType,
   updateAuditType,
   deleteAuditType,
