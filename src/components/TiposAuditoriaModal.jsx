@@ -16,7 +16,7 @@ const ESTADO_COBERTURA_OPTIONS = [
   { uiKey: "estado_si", apiValue: "si", label: "Si" },
   { uiKey: "estado_no", apiValue: "no", label: "No" },
   { uiKey: "estado_medicare", apiValue: "medicare", label: "Medicare" },
-  { uiKey: "estado_medicai", apiValue: "medicai", label: "Medicai" },
+  { uiKey: "estado_medicai", apiValue: "medicai", label: "Medicaid" },
 ];
 
 const emptyFiltrosCoberturaUi = () => ({
