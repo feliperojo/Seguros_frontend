@@ -116,6 +116,20 @@ export const listRuns = async (params = {}, signal = null) => {
 };
 
 /**
+ * Previsualiza la creación de un run (no persiste). Mismo body que POST auditorias/runs.
+ * @param {Object} payload
+ */
+export const previewRun = async (payload) => {
+  const endpoint = "auditorias/runs/preview";
+  try {
+    const response = await apiRequest(endpoint, "POST", payload);
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Crea un nuevo run de auditoría
  * @param {Object} payload - { audit_type: "SHERPA"|"DOCUMENTACION", periodo: "YYYY-MM" }
  * @returns {Promise<Object>} Run creado
@@ -358,6 +372,7 @@ export const deleteAuditType = async (typeId) => {
 export default {
   listRuns,
   createRun,
+  previewRun,
   getRun,
   closeRun,
   getRunReporte,

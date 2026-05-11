@@ -4,9 +4,10 @@ import { useNavigate } from "react-router-dom";
 import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
 import { FaEdit } from "react-icons/fa";
 import { Helmet } from "react-helmet-async";
-import { listRuns, createRun, closeRun, listAuditTypes } from "../services/auditoriasService";
+import { listRuns, createRun, closeRun, listAuditTypes, previewRun } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
+import AuditRunPreviewModal from "../components/AuditRunPreviewModal";
 import apiRequest from "../services/api";
 import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
 
@@ -63,6 +64,11 @@ const AuditoriasPage = () => {
   const [showPagosModal, setShowPagosModal] = useState(false);
   const [pagosModalMessage, setPagosModalMessage] = useState("");
   const [pendingCreatePayload, setPendingCreatePayload] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewData, setPreviewData] = useState(null);
+  const [previewPagosNote, setPreviewPagosNote] = useState(null);
+  const [pendingPreviewPayload, setPendingPreviewPayload] = useState(null);
   const [closingRunId, setClosingRunId] = useState(null);
   const [error, setError] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
@@ -238,6 +244,19 @@ const AuditoriasPage = () => {
     return `${y}-${m}`;
   };
 
+  const buildBasePayload = useCallback(() => {
+    const payload = {
+      target_type: targetType,
+      periodo: periodo,
+    };
+    if (auditTypeId) {
+      payload.audit_type_id = parseInt(auditTypeId, 10);
+    } else {
+      payload.audit_type = auditTypeLegacy;
+    }
+    return payload;
+  }, [targetType, periodo, auditTypeId, auditTypeLegacy]);
+
   const validarPagosGeneradosDelPeriodo = async (yyyyMm) => {
     try {
       const { exists } = await fetchPagosExistForPeriodo(yyyyMm);
@@ -259,16 +278,30 @@ const AuditoriasPage = () => {
 
   /**
    * Crea el run y refresca la lista. Si ya existe (409), muestra aviso y refresca sin tratarlo como error rojo.
+   * @param {object} payload
+   * @param {{ navigateToDetail?: boolean }} [options]
    * @returns {{ ok: true, response }} | {{ ok: false, duplicate: true }} | throws
    */
-  const createRunAndRefresh = async (payload) => {
+  const createRunAndRefresh = async (payload, options = {}) => {
+    const { navigateToDetail = false } = options;
     try {
       const response = await createRun(payload);
       const tipoNombre = auditTypes.find((t) => t.id.toString() === auditTypeId)?.nombre || auditTypeLegacy;
       toast.showSuccess(`Auditoría ${tipoNombre} del periodo ${periodo} creada exitosamente`);
 
+      const runId =
+        response?.data?.id ??
+        response?.id ??
+        response?.data?.run?.id ??
+        response?.run?.id;
+
       const data = await loadRunsData();
       setRuns(Array.isArray(data) ? data : []);
+
+      if (navigateToDetail && runId != null) {
+        navigate(`/auditorias/${runId}`);
+      }
+
       return { ok: true, response };
     } catch (err) {
       if (err.response?.status === 409) {
@@ -296,6 +329,15 @@ const AuditoriasPage = () => {
     setPendingCreatePayload(null);
   };
 
+  const closePreviewModal = () => {
+    if (creating) return;
+    setShowPreviewModal(false);
+    setPreviewLoading(false);
+    setPreviewData(null);
+    setPreviewPagosNote(null);
+    setPendingPreviewPayload(null);
+  };
+
   // Manejar creación de run
   const handleCreateRun = async () => {
     if (!periodo) {
@@ -313,18 +355,7 @@ const AuditoriasPage = () => {
     setInfoMessage(null);
     
     try {
-      const payload = {
-        target_type: targetType,
-        periodo: periodo,
-      };
-      
-      // Usar audit_type_id si está disponible (nuevo sistema)
-      if (auditTypeId) {
-        payload.audit_type_id = parseInt(auditTypeId);
-      } else {
-        // Compatibilidad con sistema legacy
-        payload.audit_type = auditTypeLegacy;
-      }
+      const payload = buildBasePayload();
 
       // Opcional: incluir pagos del mes. Primero validamos si existen pagos generados para ese periodo.
       if (includePagos) {
@@ -357,6 +388,93 @@ const AuditoriasPage = () => {
       setError(errorMessage);
       toast.showError(errorMessage);
       console.error("Error al crear run:", err);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handlePreviewRun = async () => {
+    if (!periodo) {
+      toast.showWarning("Por favor selecciona el periodo");
+      return;
+    }
+    if (!auditTypeId && !auditTypeLegacy) {
+      toast.showWarning("Por favor selecciona la fuente de auditoría");
+      return;
+    }
+
+    setError(null);
+    setPreviewData(null);
+    setPreviewPagosNote(null);
+    setPendingPreviewPayload(null);
+    setShowPreviewModal(true);
+    setPreviewLoading(true);
+
+    try {
+      const payload = buildBasePayload();
+      let pagosNote = null;
+
+      if (includePagos) {
+        setValidatingPagos(true);
+        let existenPagos = false;
+        try {
+          existenPagos = await validarPagosGeneradosDelPeriodo(periodo);
+        } finally {
+          setValidatingPagos(false);
+        }
+
+        if (!existenPagos) {
+          pagosNote = "sin_pagos";
+        } else {
+          payload.include_pagos = true;
+        }
+      }
+
+      const response = await previewRun(payload);
+      const raw = response?.data !== undefined ? response.data : response;
+      const normalized = raw && typeof raw === "object" ? raw : null;
+
+      setPendingPreviewPayload(payload);
+      setPreviewPagosNote(pagosNote);
+      setPreviewData(normalized);
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message || err.message || "Error al previsualizar la auditoría";
+      setError(errorMessage);
+      toast.showError(errorMessage);
+      console.error("Error al previsualizar run:", err);
+      setShowPreviewModal(false);
+      setPendingPreviewPayload(null);
+      setPreviewPagosNote(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const handleConfirmPreviewCreate = async () => {
+    if (!pendingPreviewPayload) {
+      toast.showWarning("No hay datos para crear. Vuelve a previsualizar.");
+      return;
+    }
+
+    setCreating(true);
+    setError(null);
+    setInfoMessage(null);
+
+    try {
+      const result = await createRunAndRefresh(pendingPreviewPayload, { navigateToDetail: true });
+      if (result?.ok) {
+        setShowPreviewModal(false);
+        setPreviewData(null);
+        setPreviewPagosNote(null);
+        setPendingPreviewPayload(null);
+      }
+    } catch (err) {
+      const errorMessage =
+        err.response?.data?.message || err.message || "Error al crear la auditoría";
+      setError(errorMessage);
+      toast.showError(errorMessage);
+      console.error("Error al crear run desde previsualización:", err);
     } finally {
       setCreating(false);
     }
@@ -496,18 +614,45 @@ const AuditoriasPage = () => {
                 label="Incluir pagos del mes de la auditoría"
                 checked={includePagos}
                 onChange={(e) => setIncludePagos(e.target.checked)}
-                disabled={creating || validatingPagos}
+                disabled={creating || validatingPagos || previewLoading}
               />
               <Form.Text className="text-muted">
                 Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
               </Form.Text>
             </div>
             
-            <div className="col-md-3">
+            <div className="col-md-3 d-flex flex-column gap-2">
+              <Button
+                variant="outline-primary"
+                onClick={handlePreviewRun}
+                disabled={
+                  creating ||
+                  validatingPagos ||
+                  previewLoading ||
+                  (!auditTypeId && !auditTypeLegacy) ||
+                  !periodo
+                }
+                className="w-100"
+              >
+                {previewLoading || validatingPagos ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    {validatingPagos ? "Validando pagos…" : "Previsualizando…"}
+                  </>
+                ) : (
+                  "Previsualizar"
+                )}
+              </Button>
               <Button
                 variant="primary"
                 onClick={handleCreateRun}
-                disabled={creating || validatingPagos || (!auditTypeId && !auditTypeLegacy) || !periodo}
+                disabled={
+                  creating ||
+                  validatingPagos ||
+                  previewLoading ||
+                  (!auditTypeId && !auditTypeLegacy) ||
+                  !periodo
+                }
                 className="w-100"
               >
                 {creating || validatingPagos ? (
@@ -560,6 +705,17 @@ const AuditoriasPage = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <AuditRunPreviewModal
+        show={showPreviewModal}
+        onHide={closePreviewModal}
+        loading={previewLoading}
+        confirming={creating}
+        data={previewData}
+        pagosNote={previewPagosNote}
+        includePagosRequested={includePagos}
+        onConfirm={handleConfirmPreviewCreate}
+      />
       
       {/* Mensaje informativo */}
       {infoMessage && (
