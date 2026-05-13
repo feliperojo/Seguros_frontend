@@ -15,13 +15,31 @@ const parseDateMs = (v) => {
   return Number.isNaN(t) ? null : t;
 };
 
+/** Fecha de última modificación del estado del pago (API puede usar varios nombres). */
+export function pickEstadoFechaActualizacionPago(pago) {
+  if (!pago || typeof pago !== "object") return null;
+  const candidates = [
+    pago.estado_actualizado_at,
+    pago.estadoActualizadoAt,
+    pago.fecha_actualizacion_estado,
+    pago.fecha_modificacion_estado,
+    pago.estado_updated_at,
+    pago.updated_at,
+    pago.updatedAt,
+  ];
+  for (const v of candidates) {
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+}
+
 /**
  * Lista de pagos de API → 12 celdas (ene–dic) para un año.
  * Prioriza el año del periodo del run (YYYY-MM); si no hay datos, usa el año más reciente en la lista.
  *
  * @param {Array<Object>} items - Filas de `cobertura/pagos/listado` ya filtradas por póliza/cliente/cobertura
  * @param {string|null} periodoRunPreferido - "YYYY-MM" opcional
- * @returns {{ year: number, porMes: Array<null|{estado: string, monto: number}>, itemsInYear: Array }}
+ * @returns {{ year: number, porMes: Array<null|{estado: string, monto: number, estadoActualizadoEn?: string|null}>, itemsInYear: Array }}
  */
 export function agruparPagosPorMesEnAnio(items, periodoRunPreferido) {
   const porMes = Array(12).fill(null);
@@ -73,7 +91,11 @@ export function agruparPagosPorMesEnAnio(items, periodoRunPreferido) {
     const mesIdx = parseInt(fp.split("-")[1], 10) - 1;
     if (mesIdx < 0 || mesIdx > 11) continue;
     if (!porMes[mesIdx]) {
-      porMes[mesIdx] = { estado: p.estado, monto: p.monto };
+      porMes[mesIdx] = {
+        estado: p.estado,
+        monto: p.monto,
+        estadoActualizadoEn: pickEstadoFechaActualizacionPago(p),
+      };
     }
   }
 

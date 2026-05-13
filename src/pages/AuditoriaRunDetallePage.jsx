@@ -28,6 +28,7 @@ import {
   indicadorMorosidadPagosPorMes,
   PAGOS_INFORME_MONTH_ABBR,
 } from "../utils/pagosMorosidad";
+import { formatDateForDisplay } from "../utils/formatters";
 
 /**
  * Estados de auditoría permitidos
@@ -2207,6 +2208,18 @@ const AuditoriaRunDetallePage = () => {
                                   <small className="text-muted">
                                     ${Number(pago.monto ?? 0).toFixed(2)}
                                   </small>
+                                  {pago.estadoActualizadoEn ? (
+                                    <>
+                                      <br />
+                                      <span
+                                        className="text-muted d-block lh-sm"
+                                        style={{ fontSize: "0.65rem" }}
+                                        title="Última actualización del estado"
+                                      >
+                                        {formatDateForDisplay(pago.estadoActualizadoEn)}
+                                      </span>
+                                    </>
+                                  ) : null}
                                 </>
                               ) : (
                                 "-"

@@ -3,31 +3,13 @@ import { Link } from "react-router-dom";
 import { Table, Spinner, Alert, Form, Container, Row, Col, Pagination } from "react-bootstrap";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
-import { indicadorMorosidadPagosPorMes } from "../utils/pagosMorosidad";
+import { indicadorMorosidadPagosPorMes, pickEstadoFechaActualizacionPago } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
 
 const MONTHS = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
 ];
-
-/** Fecha de última modificación del estado del pago (el API puede usar distintos nombres). */
-const pickEstadoFechaActualizacion = (pago) => {
-  if (!pago || typeof pago !== "object") return null;
-  const candidates = [
-    pago.estado_actualizado_at,
-    pago.estadoActualizadoAt,
-    pago.fecha_actualizacion_estado,
-    pago.fecha_modificacion_estado,
-    pago.estado_updated_at,
-    pago.updated_at,
-    pago.updatedAt,
-  ];
-  for (const v of candidates) {
-    if (v != null && String(v).trim() !== "") return String(v).trim();
-  }
-  return null;
-};
 
 const PagosInforme = () => {
   const [loading, setLoading] = useState(false);
@@ -101,7 +83,7 @@ const PagosInforme = () => {
       acc[key].pagos[mesIndex] = {
         estado: pago.estado,
         monto: pago.monto,
-        estadoActualizadoEn: pickEstadoFechaActualizacion(pago),
+        estadoActualizadoEn: pickEstadoFechaActualizacionPago(pago),
       };
 
       return acc;
