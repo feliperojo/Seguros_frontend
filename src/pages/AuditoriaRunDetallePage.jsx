@@ -12,7 +12,7 @@ import {
   FaTasks,
   FaHistory,
   FaExclamationTriangle,
-  FaCalendarAlt,
+  FaDollarSign,
 } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
@@ -23,6 +23,11 @@ import NuevaTareaAuditoriaModal from "../components/Tareas/NuevaTareaAuditoriaMo
 import HistorialTareasAuditoriaModal from "../components/Tareas/HistorialTareasAuditoriaModal";
 import { getItemTasks, listTasks } from "../services/auditoriasTasksService";
 import apiRequest from "../services/api";
+import {
+  agruparPagosPorMesEnAnio,
+  indicadorMorosidadPagosPorMes,
+  PAGOS_INFORME_MONTH_ABBR,
+} from "../utils/pagosMorosidad";
 
 /**
  * Estados de auditoría permitidos
@@ -90,6 +95,34 @@ const buildPagoRowResolver = (includePagosEnabled, pagosPorEntidad) => (c) => {
     return pagosPorEntidad[`poliza:${codigoPoliza}`];
   }
   return null;
+};
+
+/** Pagos del GET listado que corresponden a la misma cobertura/cliente/póliza que la fila del reporte. */
+const filterPagosListForCoberturaRow = (list, cobertura) => {
+  if (!Array.isArray(list) || !cobertura) return [];
+  const cid = cobertura.cobertura_id ?? cobertura.id ?? null;
+  const clid = cobertura.cliente_id ?? null;
+  const codigoPoliza = cobertura.codigo_poliza ? String(cobertura.codigo_poliza).trim() : "";
+  return list.filter((p) => {
+    const pCob = p?.cobertura?.id ?? p?.cobertura_id ?? null;
+    const pCli = p?.cliente?.id ?? p?.cliente_id ?? null;
+    const pCodRaw = p?.cobertura?.codigo_poliza ?? p?.codigo_poliza ?? null;
+    const pCod = pCodRaw != null ? String(pCodRaw).trim() : "";
+    if (cid != null && pCob != null && Number(pCob) === Number(cid)) return true;
+    if (clid != null && pCli != null && Number(pCli) === Number(clid)) return true;
+    if (codigoPoliza && pCod && pCod === codigoPoliza) return true;
+    return false;
+  });
+};
+
+/** Meses abreviados (misma convención que `PagosInforme` / cartera). */
+const pagoEstadoBadgeTonePagosInforme = (estado) => {
+  const e = (estado || "").toLowerCase();
+  if (e === "pagado") return "success";
+  if (e === "pendiente") return "warning";
+  if (e === "cancelado") return "danger";
+  if (e === "procesando") return "warning";
+  return "secondary";
 };
 
 /**
@@ -244,13 +277,19 @@ const toBool = (v) => {
 };
 
 /**
- * Normaliza respuestas tipo { data: run } o { run } que algunos backends envían.
+ * Normaliza respuestas del GET run: { data: { run, metrics, … } }, { data: run }, { run } o el run plano.
  */
 const normalizeRunPayload = (raw) => {
   if (!raw || typeof raw !== "object") return raw;
-  if (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)) return raw.data;
+  let node = raw;
+  if (raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)) {
+    node = raw.data;
+  }
+  if (node.run && typeof node.run === "object") {
+    return node.run;
+  }
   if (raw.run && typeof raw.run === "object") return raw.run;
-  return raw;
+  return node;
 };
 
 /**
@@ -340,6 +379,8 @@ const AuditoriaRunDetallePage = () => {
 
   // Pagos relacionados (cuando el run fue creado con include_pagos)
   const [pagosPorEntidad, setPagosPorEntidad] = useState({}); // { entityKey: pago }
+  /** Listado completo GET pagos (solo si el run incluye pagos); sirve para mora/riesgo y modal. */
+  const [pagosListadoCompleto, setPagosListadoCompleto] = useState([]);
   const [loadingPagos, setLoadingPagos] = useState(false);
   const [savingPagoId, setSavingPagoId] = useState(null);
   
@@ -393,7 +434,9 @@ const AuditoriaRunDetallePage = () => {
   const [loadingTareas, setLoadingTareas] = useState({}); // { itemId: boolean }
   const [itemsConTareasExpandidos, setItemsConTareasExpandidos] = useState({}); // { itemId: boolean }
   const [historialModalPayload, setHistorialModalPayload] = useState(null);
-  
+  /** Modal listado de pagos del cliente: { cobertura, items, loading, error } | null */
+  const [pagosClienteVista, setPagosClienteVista] = useState(null);
+
   // AbortController para cancelar peticiones
   const abortControllerRef = useRef(null);
   /** Cache: `${runId}:${taskRowStorageKey}` -> audit item id */
@@ -464,12 +507,18 @@ const AuditoriaRunDetallePage = () => {
   const tipoPolizaTitulo = useMemo(() => resolveTipoPolizaTitulo(runInfo), [runInfo]);
 
   const loadPagosDelRun = useCallback(async () => {
-    if (!includePagosEnabled) return;
+    if (!includePagosEnabled) {
+      setPagosListadoCompleto([]);
+      setPagosPorEntidad({});
+      return;
+    }
 
     setLoadingPagos(true);
     try {
       const pagos = await apiRequest("cobertura/pagos/listado", "GET");
-      const list = Array.isArray(pagos) ? pagos : (pagos?.data || []);
+      const list = Array.isArray(pagos) ? pagos : pagos?.data || [];
+      setPagosListadoCompleto(Array.isArray(list) ? list : []);
+
       let candidatos = list;
       if (periodoRun) {
         const prefix = `${periodoRun}-`;
@@ -494,6 +543,8 @@ const AuditoriaRunDetallePage = () => {
       setPagosPorEntidad(map);
     } catch (err) {
       console.error("Error al cargar pagos del mes para auditoría:", err);
+      setPagosListadoCompleto([]);
+      setPagosPorEntidad({});
     } finally {
       setLoadingPagos(false);
     }
@@ -520,6 +571,11 @@ const AuditoriaRunDetallePage = () => {
         });
         return next;
       });
+      setPagosListadoCompleto((prev) =>
+        Array.isArray(prev)
+          ? prev.map((row) => (row?.id === pago.id ? { ...row, ...payload } : row))
+          : prev
+      );
       if (toast && typeof toast.showSuccess === "function") toast.showSuccess("Pago actualizado correctamente");
     } catch (err) {
       const msg = err.response?.data?.message || err.message || "Error al actualizar el pago";
@@ -529,6 +585,29 @@ const AuditoriaRunDetallePage = () => {
       setSavingPagoId(null);
     }
   };
+
+  const handleOpenPagosCliente = useCallback(
+    async (cobertura) => {
+      setPagosClienteVista({ cobertura, items: [], loading: true, error: null });
+      try {
+        const pagos = await apiRequest("cobertura/pagos/listado", "GET");
+        const list = Array.isArray(pagos) ? pagos : pagos?.data || [];
+        const arr = Array.isArray(list) ? list : [];
+        const items = filterPagosListForCoberturaRow(arr, cobertura).sort((a, b) => {
+          const ta = parseDateMs(a?.fecha_pago) ?? 0;
+          const tb = parseDateMs(b?.fecha_pago) ?? 0;
+          return tb - ta;
+        });
+        setPagosClienteVista({ cobertura, items, loading: false, error: null });
+      } catch (err) {
+        const msg = err.response?.data?.message || err.message || "Error al cargar los pagos";
+        setPagosClienteVista({ cobertura, items: [], loading: false, error: msg });
+        if (toast && typeof toast.showError === "function") toast.showError(msg);
+        console.error("Error al cargar pagos del cliente:", err);
+      }
+    },
+    [toast]
+  );
 
   useEffect(() => {
     auditItemIdByRowKeyRef.current = new Map();
@@ -1004,22 +1083,41 @@ const AuditoriaRunDetallePage = () => {
   }, []);
 
   /**
-   * Refuerzo en cliente: si el endpoint del reporte no aplica `grupo_familiar_id`, aquí se ocultan
-   * filas que no coinciden (solo dentro del lote paginado actual).
+   * Refuerzo en cliente: si el endpoint del reporte no aplica `grupo_familiar_id` o `audit_status`,
+   * aquí se ocultan filas que no coinciden (solo dentro del lote paginado actual).
    */
   const coberturasTrasFiltroGf = useMemo(() => {
     if (!Array.isArray(coberturas)) return coberturas;
-    const want = String(filters.grupo_familiar_id ?? "").trim();
-    if (!want) return coberturas;
-    return coberturas.filter((c) => {
-      const gf = getGrupoFamiliarId(c);
-      if (gf === null || gf === undefined || gf === "") return false;
-      const nw = Number(want);
-      const ng = Number(gf);
-      if (Number.isFinite(nw) && Number.isFinite(ng)) return nw === ng;
-      return String(gf).trim() === want;
-    });
-  }, [coberturas, filters.grupo_familiar_id, getGrupoFamiliarId]);
+    let rows = coberturas;
+
+    const wantGf = String(filters.grupo_familiar_id ?? "").trim();
+    if (wantGf) {
+      rows = rows.filter((c) => {
+        const gf = getGrupoFamiliarId(c);
+        if (gf === null || gf === undefined || gf === "") return false;
+        const nw = Number(wantGf);
+        const ng = Number(gf);
+        if (Number.isFinite(nw) && Number.isFinite(ng)) return nw === ng;
+        return String(gf).trim() === wantGf;
+      });
+    }
+
+    const wantAudit = String(filters.audit_status ?? "").trim();
+    if (wantAudit) {
+      const w = wantAudit.toUpperCase();
+      rows = rows.filter((c) => {
+        const raw =
+          c?.audit_status ??
+          c?.estado_auditoria ??
+          c?.auditStatus ??
+          c?.status_auditoria ??
+          "PENDIENTE";
+        return String(raw).trim().toUpperCase() === w;
+      });
+    }
+
+    return rows;
+  }, [coberturas, filters.grupo_familiar_id, filters.audit_status, getGrupoFamiliarId]);
 
   const gfFiltroActivo = String(filters.grupo_familiar_id ?? "").trim().length > 0;
 
@@ -1159,16 +1257,42 @@ const AuditoriaRunDetallePage = () => {
 
     return withIndex.map((x) => x.c);
   }, [coberturasOrdenCliente, getGrupoFamiliarId, filters.sort_by]);
+
+  const indicadorMoraPorCoberturaKey = useMemo(() => {
+    const map = new Map();
+    if (!includePagosEnabled || !Array.isArray(pagosListadoCompleto) || pagosListadoCompleto.length === 0) {
+      return map;
+    }
+    const seen = new Set();
+    const filasReporte = Array.isArray(coberturasTrasFiltroGf) ? coberturasTrasFiltroGf : [];
+    for (const c of filasReporte) {
+      const entityId = c?.cobertura_id || c?.cliente_id;
+      const k =
+        entityId != null
+          ? `id:${entityId}`
+          : `pol:${String(c?.codigo_poliza ?? "").trim()}`;
+      if (k === "pol:" || seen.has(k)) continue;
+      seen.add(k);
+      const filtered = filterPagosListForCoberturaRow(pagosListadoCompleto, c);
+      const { porMes } = agruparPagosPorMesEnAnio(filtered, periodoRun);
+      map.set(k, indicadorMorosidadPagosPorMes(porMes));
+    }
+    return map;
+  }, [includePagosEnabled, pagosListadoCompleto, coberturasTrasFiltroGf, periodoRun]);
   
   return (
     <div className="container-fluid py-4">
       <Helmet>
         <title>
-          {(runInfo?.nombre || `Auditoría #${runId}`) +
-            (tipoPolizaTitulo ? ` · ${tipoPolizaTitulo}` : "") +
-            (typeof runInfo?.audit_type === "string" ? ` · ${runInfo.audit_type}` : "") +
-            (periodoRunEtiqueta ? ` · ${periodoRunEtiqueta}` : "") +
-            " - Detalle"}
+          {[
+            tipoPolizaTitulo ||
+              (typeof runInfo?.audit_type === "string" ? runInfo.audit_type : null) ||
+              "Auditoría",
+            periodoRunEtiqueta,
+            runId != null ? `#${runId}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ") + " - Detalle"}
         </title>
       </Helmet>
       
@@ -1181,29 +1305,17 @@ const AuditoriaRunDetallePage = () => {
                 <span className="text-muted">Cargando información del proceso…</span>
               </div>
             ) : runInfo ? (
-              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-4">
+              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-stretch align-items-xl-center gap-4">
                 <div className="min-w-0 flex-grow-1">
-                  <p
-                    className="text-uppercase text-muted mb-2 mb-xl-1 fw-semibold"
-                    style={{ fontSize: "0.72rem", letterSpacing: "0.12em" }}
-                  >
-                    Auditoría de cumplimiento
-                  </p>
-                  <h1 className="h4 text-dark fw-semibold mb-3 text-break lh-sm">
-                    <span>{runInfo.nombre || `Auditoría #${runId}`}</span>
-                    {tipoPolizaTitulo ? (
-                      <>
-                        <span className="text-muted fw-normal">{" — "}</span>
-                        <span className="fw-semibold text-body">{tipoPolizaTitulo}</span>
-                      </>
-                    ) : null}
-                  </h1>
-                  <div className="d-flex flex-wrap align-items-end gap-0 column-gap-5 row-gap-4 pt-2 mt-1 border-top border-light-subtle">
+                  <div className="d-flex flex-column flex-md-row align-items-stretch gap-3 gap-md-4">
                     {runInfo.audit_type && (
-                      <div className="d-flex flex-column gap-2">
+                      <div
+                        className="d-flex flex-column rounded-3 border border-light-subtle bg-light px-3 py-3 flex-grow-1 flex-md-grow-0"
+                        style={{ minWidth: 0, flexBasis: "clamp(10rem, 32vw, 18rem)" }}
+                      >
                         <span
-                          className="text-uppercase text-muted fw-semibold"
-                          style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                          className="text-uppercase text-muted fw-semibold mb-2 d-block"
+                          style={{ fontSize: "0.68rem", letterSpacing: "0.12em" }}
                         >
                           Tipo de auditoría
                         </span>
@@ -1215,7 +1327,7 @@ const AuditoriaRunDetallePage = () => {
                               ? "primary"
                               : "info"
                           }
-                          className="px-3 py-2 fw-semibold rounded-pill align-self-start"
+                          className="px-3 py-2 fw-semibold rounded-pill align-self-start mt-auto"
                           style={{ fontSize: "0.8rem" }}
                         >
                           {typeof runInfo.audit_type === "object"
@@ -1224,20 +1336,18 @@ const AuditoriaRunDetallePage = () => {
                         </Badge>
                       </div>
                     )}
-                    {runInfo.audit_type && periodoRunEtiqueta && (
-                      <div className="align-self-stretch d-none d-md-flex pb-2">
-                        <div className="vr opacity-25 align-self-stretch" />
-                      </div>
-                    )}
                     {periodoRunEtiqueta && (
-                      <div className="d-flex flex-column gap-2">
+                      <div
+                        className="d-flex flex-column rounded-3 border border-light-subtle bg-light px-3 py-3 flex-grow-1"
+                        style={{ minWidth: 0, flex: "1 1 clamp(10rem, 40vw, 22rem)" }}
+                      >
                         <span
-                          className="text-uppercase text-muted fw-semibold"
-                          style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                          className="text-uppercase text-muted fw-semibold mb-2 d-block"
+                          style={{ fontSize: "0.68rem", letterSpacing: "0.12em" }}
                         >
                           Periodo de trabajo
                         </span>
-                        <div className="d-flex flex-wrap align-items-baseline gap-2">
+                        <div className="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-1 mt-auto">
                           <span className="fw-semibold text-body fs-5 lh-sm">
                             {periodoRunEtiqueta}
                           </span>
@@ -1249,7 +1359,7 @@ const AuditoriaRunDetallePage = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex-shrink-0 pt-xl-1">
+                <div className="flex-shrink-0 align-self-start align-self-xl-center">
                   <Button
                     variant="outline-secondary"
                     className="px-3 fw-semibold"
@@ -1260,26 +1370,20 @@ const AuditoriaRunDetallePage = () => {
                 </div>
               </div>
             ) : (
-              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-xl-start gap-4">
-                <div className="min-w-0">
-                  <p
-                    className="text-uppercase text-muted mb-2 fw-semibold"
-                    style={{ fontSize: "0.72rem", letterSpacing: "0.12em" }}
-                  >
-                    Auditoría de cumplimiento
-                  </p>
-                  <h1 className="h4 text-dark fw-semibold mb-2 mb-xl-0 text-break lh-sm">
-                    {`Auditoría #${runId}`}
-                  </h1>
+              <div className="d-flex flex-column flex-xl-row justify-content-between align-items-stretch align-items-xl-center gap-4">
+                <div className="min-w-0 flex-grow-1">
                   {periodoRunEtiqueta && (
-                    <div className="mt-3 pt-3 border-top border-light">
-                      <div
-                        className="text-uppercase text-muted fw-semibold mb-1"
-                        style={{ fontSize: "0.68rem", letterSpacing: "0.1em" }}
+                    <div
+                      className="d-flex flex-column rounded-3 border border-light-subtle bg-light px-3 py-3"
+                      style={{ minWidth: 0, maxWidth: "22rem" }}
+                    >
+                      <span
+                        className="text-uppercase text-muted fw-semibold mb-2 d-block"
+                        style={{ fontSize: "0.68rem", letterSpacing: "0.12em" }}
                       >
                         Periodo de trabajo
-                      </div>
-                      <div className="d-flex flex-wrap align-items-baseline gap-2">
+                      </span>
+                      <div className="d-flex flex-wrap align-items-baseline column-gap-2 row-gap-1">
                         <span className="fw-semibold text-body fs-5 lh-sm">
                           {periodoRunEtiqueta}
                         </span>
@@ -1290,7 +1394,7 @@ const AuditoriaRunDetallePage = () => {
                     </div>
                   )}
                 </div>
-                <div className="flex-shrink-0">
+                <div className="flex-shrink-0 align-self-start align-self-xl-center">
                   <Button
                     variant="outline-secondary"
                     className="px-3 fw-semibold"
@@ -1519,6 +1623,14 @@ const AuditoriaRunDetallePage = () => {
                           Pago {renderSortIcon("pago_estado")}
                         </th>
                       )}
+                      {includePagosEnabled && (
+                        <th
+                          title="Mora: 1–2 meses con generación distinta de pagado. Riesgo: 3 o más. Solo meses con pago generado en el año."
+                          className="text-nowrap"
+                        >
+                          Situación pago
+                        </th>
+                      )}
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -1694,6 +1806,46 @@ const AuditoriaRunDetallePage = () => {
                             )}
                           </td>
                         )}
+                        {includePagosEnabled && (
+                          <td className="text-center">
+                            {loadingPagos ? (
+                              <span className="text-muted small">…</span>
+                            ) : (() => {
+                              const eid = cobertura.cobertura_id || cobertura.cliente_id;
+                              const moraKey =
+                                eid != null
+                                  ? `id:${eid}`
+                                  : `pol:${String(cobertura.codigo_poliza || "").trim()}`;
+                              const ind = indicadorMoraPorCoberturaKey.get(moraKey);
+                              if (!ind || ind.nivel === "sin_datos" || ind.nivel === "sin_generacion") {
+                                return (
+                                  <span className="text-muted small" title={ind?.titulo}>
+                                    —
+                                  </span>
+                                );
+                              }
+                              if (ind.nivel === "riesgo") {
+                                return (
+                                  <Badge bg="danger" title={ind.titulo}>
+                                    {ind.etiqueta}
+                                  </Badge>
+                                );
+                              }
+                              if (ind.nivel === "mora") {
+                                return (
+                                  <Badge bg="warning" text="dark" title={ind.titulo}>
+                                    {ind.etiqueta}
+                                  </Badge>
+                                );
+                              }
+                              return (
+                                <Badge bg="success" title={ind.titulo}>
+                                  {ind.etiqueta}
+                                </Badge>
+                              );
+                            })()}
+                          </td>
+                        )}
                         <td>
                           <div className="d-flex gap-1">
                             <Button
@@ -1714,50 +1866,27 @@ const AuditoriaRunDetallePage = () => {
                               <FaComment />
                             </Button>
                             <Button
+                              variant="outline-info"
+                              size="sm"
+                              onClick={() => void handleOpenPagosCliente(cobertura)}
+                              title="Ver pagos generados para este cliente / póliza"
+                            >
+                              <FaDollarSign />
+                            </Button>
+                            <Button
                               variant="outline-secondary"
                               size="sm"
-                              onClick={() =>
-                                setHistorialModalPayload({
-                                  cobertura,
-                                  tasksRunId: runId,
-                                  skipItemTasksLookup: false,
-                                  titleSuffix: "",
-                                })
+                              onClick={() => setHistorialModalPayload({ cobertura })}
+                              title={
+                                filaPendienteAuditoriaAnterior(cobertura) &&
+                                cobertura.prev_run_id != null &&
+                                cobertura.prev_run_id !== ""
+                                  ? "Historial de tareas y comentarios (este periodo y pestaña de auditoría anterior)"
+                                  : "Historial de tareas y comentarios"
                               }
-                              title="Historial de tareas y comentarios"
                             >
                               <FaHistory />
                             </Button>
-                            {filaPendienteAuditoriaAnterior(cobertura) &&
-                              cobertura.prev_run_id != null &&
-                              cobertura.prev_run_id !== "" && (
-                                <Button
-                                  variant="outline-warning"
-                                  size="sm"
-                                  onClick={() =>
-                                    setHistorialModalPayload({
-                                      cobertura: {
-                                        ...cobertura,
-                                        audit_status:
-                                          cobertura.prev_audit_status ?? cobertura.audit_status,
-                                        audit_comment: cobertura.prev_audit_comment ?? null,
-                                        reviewed_at: cobertura.prev_reviewed_at ?? null,
-                                      },
-                                      tasksRunId: cobertura.prev_run_id,
-                                      skipItemTasksLookup: true,
-                                      titleSuffix: cobertura.prev_periodo
-                                        ? ` · Auditoría anterior (${cobertura.prev_periodo})`
-                                        : " · Auditoría anterior",
-                                    })
-                                  }
-                                  title={
-                                    tituloPendienteAuditoriaAnterior(cobertura) ||
-                                    "Ver tareas y comentarios de la auditoría anterior"
-                                  }
-                                >
-                                  <FaCalendarAlt />
-                                </Button>
-                              )}
                             <Button
                               variant="outline-success"
                               size="sm"
@@ -1769,45 +1898,33 @@ const AuditoriaRunDetallePage = () => {
                                   return;
                                 }
 
-                                if (!tieneTareas && !estaCargandoTareas) {
-                                  const tareas = await loadTasksForCoberturaRow(cobertura);
-                                  if (tareas.length > 0) {
-                                    setItemsConTareasExpandidos((prev) => ({ ...prev, [taskUiKey]: true }));
-                                  } else {
-                                    const inferredItemId = await resolveAuditItemIdWithFallback(cobertura);
-                                    setSelectedItemForTask({
-                                      id: inferredItemId,
-                                      item_id: inferredItemId,
-                                      entityId,
-                                      runId,
-                                      cobertura_id: cobertura.cobertura_id,
-                                      cliente_id: cobertura.cliente_id,
-                                      grupo_familiar_id:
-                                        cobertura.grupo_familiar_id ||
-                                        cobertura.grupo_familiar?.id ||
-                                        cobertura.gf_id,
-                                      ...cobertura,
-                                    });
-                                    setShowNuevaTareaModal(true);
+                                if (!estaCargandoTareas) {
+                                  try {
+                                    await loadTasksForCoberturaRow(cobertura);
+                                  } catch (e) {
+                                    console.warn("Auditoría: no se pudo refrescar tareas antes del modal:", e);
                                   }
-                                  return;
                                 }
 
-                                if (tieneTareas) {
-                                  setItemsConTareasExpandidos((prev) => ({
-                                    ...prev,
-                                    [taskUiKey]: !estaExpandido,
-                                  }));
-                                }
+                                const inferredItemId = await resolveAuditItemIdWithFallback(cobertura);
+                                setSelectedItemForTask({
+                                  id: inferredItemId,
+                                  item_id: inferredItemId,
+                                  entityId,
+                                  runId,
+                                  cobertura_id: cobertura.cobertura_id,
+                                  cliente_id: cobertura.cliente_id,
+                                  grupo_familiar_id:
+                                    cobertura.grupo_familiar_id ||
+                                    cobertura.grupo_familiar?.id ||
+                                    cobertura.gf_id,
+                                  ...cobertura,
+                                });
+                                setShowNuevaTareaModal(true);
                               }}
-                              title={tieneTareas ? (estaExpandido ? "Ocultar tareas" : "Ver tareas") : "Crear tarea de auditoría"}
+                              title="Nueva tarea de auditoría"
                             >
                               <FaTasks />
-                              {tieneTareas && (
-                                <Badge bg="info" className="ms-1" style={{ fontSize: "0.65rem" }}>
-                                  {tareasDelItem.length}
-                                </Badge>
-                              )}
                             </Button>
                           </div>
                           {/* Mostrar tareas expandidas debajo de la fila */}
@@ -1970,11 +2087,147 @@ const AuditoriaRunDetallePage = () => {
       <HistorialTareasAuditoriaModal
         show={Boolean(historialModalPayload)}
         onHide={() => setHistorialModalPayload(null)}
-        runId={historialModalPayload?.tasksRunId ?? runId}
+        runId={runId}
         cobertura={historialModalPayload?.cobertura ?? null}
-        skipItemTasksLookup={historialModalPayload?.skipItemTasksLookup ?? false}
-        titleSuffix={historialModalPayload?.titleSuffix ?? ""}
       />
+
+      <Modal
+        show={pagosClienteVista != null}
+        onHide={() => setPagosClienteVista(null)}
+        size="xl"
+        scrollable
+        centered
+        dialogClassName="modal-pagos-cliente-auditoria"
+      >
+        <style>{`
+          .modal-pagos-cliente-auditoria {
+            max-width: min(1320px, 98vw);
+          }
+        `}</style>
+        <Modal.Header closeButton>
+          <Modal.Title>Pagos del cliente</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="pt-3">
+          {pagosClienteVista?.cobertura && (
+            <div className="border rounded bg-light px-3 py-2 mb-2 small text-start">
+              <strong>Cliente:</strong> {pagosClienteVista.cobertura.cliente || "—"} ·{" "}
+              <strong>Numero ID:</strong> {pagosClienteVista.cobertura.codigo_poliza || "—"}
+              {pagosClienteVista.cobertura.compania ? (
+                <>
+                  {" "}
+                  · <strong>Compañía:</strong> {pagosClienteVista.cobertura.compania}
+                </>
+              ) : null}
+            </div>
+          )}
+          {pagosClienteVista?.loading ? (
+            <div className="text-center py-4">
+              <Spinner animation="border" size="sm" className="me-2" />
+              <span className="text-muted">Cargando pagos…</span>
+            </div>
+          ) : pagosClienteVista?.error ? (
+            <Alert variant="danger">{pagosClienteVista.error}</Alert>
+          ) : !pagosClienteVista?.items?.length ? (
+            <Alert variant="info" className="mb-0">
+              El cliente no presenta generación de pagos actualmente.
+            </Alert>
+          ) : (
+            (() => {
+              const c = pagosClienteVista.cobertura;
+              const { year, porMes } = agruparPagosPorMesEnAnio(pagosClienteVista.items, periodoRun);
+              const indModal = includePagosEnabled ? indicadorMorosidadPagosPorMes(porMes) : null;
+              const pagador =
+                c?.pagador ??
+                c?.pagador_nombre ??
+                c?.nombre_pagador ??
+                c?.cobertura?.pagador?.nombre_completo ??
+                "—";
+
+              return (
+                <>
+                  <p className="text-muted small mb-2 mb-md-3 d-flex flex-wrap align-items-center gap-2">
+                    <span>
+                      Vista alineada al informe de cartera · <strong>Año {year}</strong>
+                    </span>
+                    {includePagosEnabled && indModal && indModal.nivel !== "sin_datos" && (
+                      <>
+                        <span className="text-muted">·</span>
+                        <span className="text-muted">Situación pago:</span>
+                        {indModal.nivel === "sin_generacion" ? (
+                          <span className="text-muted small" title={indModal.titulo}>
+                            —
+                          </span>
+                        ) : indModal.nivel === "riesgo" ? (
+                          <Badge bg="danger" title={indModal.titulo}>
+                            {indModal.etiqueta}
+                          </Badge>
+                        ) : indModal.nivel === "mora" ? (
+                          <Badge bg="warning" text="dark" title={indModal.titulo}>
+                            {indModal.etiqueta}
+                          </Badge>
+                        ) : (
+                          <Badge bg="success" title={indModal.titulo}>
+                            {indModal.etiqueta}
+                          </Badge>
+                        )}
+                      </>
+                    )}
+                  </p>
+                  <div className="table-responsive rounded border overflow-hidden shadow-sm">
+                    <Table
+                      striped
+                      bordered
+                      hover
+                      responsive
+                      className="w-100 text-center align-middle mb-0"
+                    >
+                      <thead className="table-light">
+                        <tr>
+                          <th className="text-start">Pagador</th>
+                          {PAGOS_INFORME_MONTH_ABBR.map((m, idx) => (
+                            <th key={idx} className="text-uppercase small">
+                              {m}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="text-start fw-medium">{pagador}</td>
+                          {porMes.map((pago, idx) => (
+                            <td key={idx}>
+                              {pago ? (
+                                <>
+                                  <span
+                                    className={`badge text-bg-${pagoEstadoBadgeTonePagosInforme(pago.estado)}`}
+                                  >
+                                    {pago.estado}
+                                  </span>
+                                  <br />
+                                  <small className="text-muted">
+                                    ${Number(pago.monto ?? 0).toFixed(2)}
+                                  </small>
+                                </>
+                              ) : (
+                                "-"
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </Table>
+                  </div>
+                </>
+              );
+            })()
+          )}
+        </Modal.Body>
+        <Modal.Footer className="border-top">
+          <Button variant="secondary" onClick={() => setPagosClienteVista(null)}>
+            Cerrar
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* Modal de Edición de Status */}
       <Modal show={showStatusModal} onHide={handleCloseStatusModal} backdrop="static">

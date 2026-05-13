@@ -3,11 +3,31 @@ import { Link } from "react-router-dom";
 import { Table, Spinner, Alert, Form, Container, Row, Col, Pagination } from "react-bootstrap";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
+import { indicadorMorosidadPagosPorMes } from "../utils/pagosMorosidad";
+import { formatDateForDisplay } from "../utils/formatters";
 
 const MONTHS = [
   "Ene", "Feb", "Mar", "Abr", "May", "Jun",
   "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"
 ];
+
+/** Fecha de última modificación del estado del pago (el API puede usar distintos nombres). */
+const pickEstadoFechaActualizacion = (pago) => {
+  if (!pago || typeof pago !== "object") return null;
+  const candidates = [
+    pago.estado_actualizado_at,
+    pago.estadoActualizadoAt,
+    pago.fecha_actualizacion_estado,
+    pago.fecha_modificacion_estado,
+    pago.estado_updated_at,
+    pago.updated_at,
+    pago.updatedAt,
+  ];
+  for (const v of candidates) {
+    if (v != null && String(v).trim() !== "") return String(v).trim();
+  }
+  return null;
+};
 
 const PagosInforme = () => {
   const [loading, setLoading] = useState(false);
@@ -26,7 +46,8 @@ const PagosInforme = () => {
     try {
       setLoading(true);
       const response = await apiRequest("cobertura/pagos/listado", "GET");
-      setPagos(response);
+      const raw = response?.data != null ? response.data : response;
+      setPagos(Array.isArray(raw) ? raw : []);
       
     } catch (err) {
       console.error("Error al cargar pagos:", err);
@@ -46,7 +67,8 @@ const PagosInforme = () => {
     setCurrentPage(1);
   };
 
-  const pagosAgrupados = pagos
+  const listaPagos = Array.isArray(pagos) ? pagos : [];
+  const pagosAgrupados = listaPagos
     .filter((p) => {
       const cliente = p.cliente?.nombre_completo?.toLowerCase() || "";
       const compania = p.cobertura?.compania?.nombre?.toLowerCase() || "";
@@ -78,7 +100,8 @@ const PagosInforme = () => {
       const mesIndex = parseInt(pago.fecha_pago.split("-")[1], 10) - 1;
       acc[key].pagos[mesIndex] = {
         estado: pago.estado,
-        monto: pago.monto
+        monto: pago.monto,
+        estadoActualizadoEn: pickEstadoFechaActualizacion(pago),
       };
 
       return acc;
@@ -149,6 +172,12 @@ const PagosInforme = () => {
                   <th>Cliente</th>
                   <th>Pagador</th>
                   <th>Compañía</th>
+                  <th
+                    title="Mora: 1–2 meses con generación distinta de pagado. Riesgo: 3 o más. Solo meses con pago generado en el año filtrado."
+                    className="text-nowrap"
+                  >
+                    Situación
+                  </th>
                   {MONTHS.map((m, idx) => (
                     <th key={idx}>{m}</th>
                   ))}
@@ -182,6 +211,37 @@ const PagosInforme = () => {
                     </td>
                     <td>{fila.pagador || "-"}</td>
                     <td>{fila.compania || "-"}</td>
+                    <td>
+                      {(() => {
+                        const ind = indicadorMorosidadPagosPorMes(fila.pagos);
+                        if (!ind || ind.nivel === "sin_datos" || ind.nivel === "sin_generacion") {
+                          return (
+                            <span className="text-muted small" title={ind?.titulo}>
+                              —
+                            </span>
+                          );
+                        }
+                        if (ind.nivel === "riesgo") {
+                          return (
+                            <span className="badge text-bg-danger" title={ind.titulo}>
+                              {ind.etiqueta}
+                            </span>
+                          );
+                        }
+                        if (ind.nivel === "mora") {
+                          return (
+                            <span className="badge text-bg-warning text-dark" title={ind.titulo}>
+                              {ind.etiqueta}
+                            </span>
+                          );
+                        }
+                        return (
+                          <span className="badge text-bg-success" title={ind.titulo}>
+                            {ind.etiqueta}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     {fila.pagos.map((pago, idx) => (
                       <td key={idx}>
                         {pago ? (
@@ -198,6 +258,18 @@ const PagosInforme = () => {
                             </span>
                             <br />
                             <small className="text-muted">${Number(pago.monto).toFixed(2)}</small>
+                            {pago.estadoActualizadoEn ? (
+                              <>
+                                <br />
+                                <span
+                                  className="text-muted d-block lh-sm"
+                                  style={{ fontSize: "0.65rem" }}
+                                  title="Última actualización del estado"
+                                >
+                                  {formatDateForDisplay(pago.estadoActualizadoEn)}
+                                </span>
+                              </>
+                            ) : null}
                           </>
                         ) : (
                           "-"
