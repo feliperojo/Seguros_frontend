@@ -40,6 +40,27 @@ const getCurrentPeriod = () => {
   return `${year}-${month}`;
 };
 
+/** Misma idea que en `AuditoriaRunDetallePage`: API puede mandar 1/0/"true"/etc. */
+const toBool = (v) => {
+  if (v === true || v === 1) return true;
+  if (v === false || v === 0 || v === null || v === undefined || v === "") return false;
+  if (typeof v === "string") {
+    const s = v.trim().toLowerCase();
+    if (s === "true" || s === "1" || s === "yes" || s === "si" || s === "sí") return true;
+    if (s === "false" || s === "0" || s === "no") return false;
+  }
+  return Boolean(v);
+};
+
+/** Si el run incorpora pagos al crearse (GET listado de runs). */
+const resolveRunIncludePagos = (run) => {
+  if (!run || typeof run !== "object") return "unknown";
+  const v = run.include_pagos ?? run.includePagos ?? run.with_pagos ?? run.withPayments;
+  if (v === undefined || v === null) return "unknown";
+  if (typeof v === "string" && v.trim() === "") return "unknown";
+  return toBool(v) ? "yes" : "no";
+};
+
 const AuditoriasPage = () => {
   const navigate = useNavigate();
   const toast = useToast();
@@ -760,6 +781,12 @@ const AuditoriasPage = () => {
                     <th title="Identificador único de la auditoría">ID</th>
                     <th title="Fuente de auditoría: SHERPA (auditoría de procesos) o DOCUMENTACIÓN (revisión de documentos)">Tipo</th>
                     <th title="Periodo de la auditoría en formato Año-Mes (YYYY-MM)">Periodo</th>
+                    <th
+                      className="text-nowrap"
+                      title="Indica si esta auditoría se creó incorporando pagos del periodo (columnas de pago y situación en el detalle)."
+                    >
+                      Pagos
+                    </th>
                     <th title="Fecha y hora en que se creó la auditoría">Fecha Creación</th>
                     <th title="Estado actual: Abierto (en proceso) o Cerrado (finalizada)">Estado</th>
                     <th title="Número total de coberturas incluidas en esta auditoría">Total Items</th>
@@ -804,6 +831,39 @@ const AuditoriasPage = () => {
                         )}
                       </td>
                       <td title={`Periodo auditado: ${run.periodo}`}>{run.periodo}</td>
+                      <td className="text-center align-middle">
+                        {(() => {
+                          const p = resolveRunIncludePagos(run);
+                          if (p === "unknown") {
+                            return (
+                              <span
+                                className="text-muted small"
+                                title="El listado no indica si este run incluye pagos. Si debería, revisa que el API devuelva include_pagos en cada auditoría."
+                              >
+                                —
+                              </span>
+                            );
+                          }
+                          if (p === "yes") {
+                            return (
+                              <Badge
+                                bg="info"
+                                title="Esta auditoría incorpora pagos: en el detalle verás columnas de pago y situación (si aplica)."
+                              >
+                                Sí
+                              </Badge>
+                            );
+                          }
+                          return (
+                            <Badge
+                              bg="secondary"
+                              title="Esta auditoría no se creó con pagos vinculados (solo ítems de auditoría)."
+                            >
+                              No
+                            </Badge>
+                          );
+                        })()}
+                      </td>
                       <td title={`Creada el ${formatDate(run.created_at)}`}>{formatDate(run.created_at)}</td>
                       <td>
                         {run.is_closed ? (
