@@ -25,7 +25,7 @@ const InformeCliente = () => {
   const buscarClientes = async (nombre) => {
     try {
       const res = await apiRequest(`cliente/buscar?nombre=${nombre}`, "GET");
-      setClientes(res || []);
+      setClientes(Array.isArray(res?.data) ? res.data : []);
     } catch (err) {
       console.error("Error al buscar clientes:", err);
     }

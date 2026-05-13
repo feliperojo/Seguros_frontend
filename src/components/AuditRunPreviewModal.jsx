@@ -149,7 +149,7 @@ const AuditRunPreviewModal = ({
 
             {duplicate && (
               <Alert variant="warning" className="py-2">
-                <strong>Ya existe un run</strong> para esta combinación en este periodo.
+                <strong>Ya existe una auditoría</strong> para esta combinación en este periodo.
                 {existingId != null && (
                   <>
                     {" "}
@@ -162,7 +162,7 @@ const AuditRunPreviewModal = ({
                         navigate(`/auditorias/${existingId}`);
                       }}
                     >
-                      Ir al run #{existingId}
+                      Ir a la auditoría #{existingId}
                     </Button>
                   </>
                 )}

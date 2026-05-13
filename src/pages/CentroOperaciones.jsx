@@ -101,7 +101,7 @@ const CentroOperaciones = () => {
     if (searchTerm.length >= 2) {
       try {
         const result = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(searchTerm)}`, "GET");
-        setClientesBusqueda(result || []);
+        setClientesBusqueda(Array.isArray(result?.data) ? result.data : []);
       } catch (error) {
         setClientesBusqueda([]);
       }

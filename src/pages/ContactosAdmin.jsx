@@ -168,11 +168,7 @@ export default function ContactosAdmin() {
         console.log("res.data:", res?.data);
         console.log("res (directo):", res);
         
-        const list = Array.isArray(res?.data)
-          ? res.data
-          : Array.isArray(res)
-          ? res
-          : [];
+        const list = Array.isArray(res?.data) ? res.data : [];
         console.log("Lista procesada que se guarda en rows:", list);
         console.log("Primer elemento de la lista (ejemplo):", list[0]);
         if (list[0]) {

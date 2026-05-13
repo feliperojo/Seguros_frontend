@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
+import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
@@ -137,22 +138,20 @@ export default function ClienteExistenteModal({
       }
 
       setSaving(true);
-    // 1) Traer el cliente completo por id (para hidratar la card)
-     //    Si en tu API existe un parámetro tipo hydrate=full, úsalo aquí.
-     //    Ej: apiRequest(`cliente/${cliente.id}?hydrate=full`, "GET")
-     let clienteFull = null;
-     try {
-       const res = await apiRequest(`cliente/${cliente.id}`, "GET");
-       // Asegura forma objeto
-       clienteFull = (res && typeof res === "object") ? res : cliente;
-     } catch {
-       // fallback: si falla, usa lo que venía del buscador
-       clienteFull = cliente;
-     }
+      // 1) Cliente del listado (puede venir envuelto en { data }) + GET completo
+      let clienteFull = unwrapClienteFromApi(cliente) ?? cliente;
+      try {
+        const res = await apiRequest(`cliente/${cliente.id}`, "GET");
+        if (res && typeof res === "object") {
+          const u = unwrapClienteFromApi(res);
+          if (u && typeof u === "object") clienteFull = u;
+        }
+      } catch {
+        // Mantener clienteFull desde buscador ya normalizado arriba
+      }
 
-
-     // 2) Entregar al padre SIEMPRE el cliente completo
-     await onCreateCoberturaDeClienteExistente?.(payload, clienteFull);
+      // 2) Entregar al padre el objeto plano con campos en raíz
+      await onCreateCoberturaDeClienteExistente?.(payload, clienteFull);
       onClose?.();
     } finally {
       setSaving(false);

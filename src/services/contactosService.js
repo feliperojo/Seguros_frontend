@@ -3,8 +3,13 @@ import { splitFullName } from "../utils/names";
 
 
 
-export const searchClientes = (nombre) =>
-  apiRequest(`/cliente/buscar?nombre=${encodeURIComponent(nombre)}`, 'GET');
+export const searchClientes = async (nombre) => {
+  const body = await apiRequest(
+    `/cliente/buscar?nombre=${encodeURIComponent(nombre)}`,
+    "GET"
+  );
+  return Array.isArray(body?.data) ? body.data : [];
+};
 /** ----------------------------------------------------------------
  *  LISTAR VÍNCULOS (cliente ↔ contacto) POR CLIENTE/GRUPO
  *  GET /cliente-contacto?cliente_id=&grupo_familiar_id=

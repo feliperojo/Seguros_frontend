@@ -14,6 +14,7 @@ import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
 import { normalizeDateForInput } from "../../utils/formatters";
+import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import TelefonosPro from "./TelefonosPro";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
@@ -750,7 +751,14 @@ const ProspectoDatos = ({
 
   // Crear cobertura para CLIENTE EXISTENTE (cuando hay grupoFamiliarId) o agregar localmente (cuando no hay)
   const handleCreateCoberturaExistente = async (payload, clienteSeleccionado) => {
-    if (!payload?.cliente_id || !clienteSeleccionado?.id) return;
+    if (!payload?.cliente_id) return;
+    const clienteSelRaw =
+      unwrapClienteFromApi(clienteSeleccionado) ?? clienteSeleccionado ?? {};
+    const clienteSel = {
+      ...clienteSelRaw,
+      id: clienteSelRaw.id ?? payload.cliente_id,
+    };
+    if (!clienteSel.id) return;
     if (yaEstaEnElGrupo(payload.cliente_id, familyMembers)) return;
 
     // 🔍 Validación centralizada: evitar duplicar coberturas activas/vigentes
@@ -765,7 +773,7 @@ const ProspectoDatos = ({
         if (conflicto) {
           const nombreCliente =
             conflicto.cliente?.nombre_completo ??
-            clienteSeleccionado?.nombre_completo ??
+            clienteSel?.nombre_completo ??
             "Este cliente";
 
           const descripcionCobertura = [
@@ -816,12 +824,12 @@ const ProspectoDatos = ({
     if (!grupoFamiliarId) {
       // Si hay un handler externo, usarlo
       if (onCreateCoberturaDeClienteExistente) {
-        await onCreateCoberturaDeClienteExistente(payload, clienteSeleccionado);
+        await onCreateCoberturaDeClienteExistente(payload, clienteSel);
         return;
       }
       // Si no, agregar localmente
       const mLocal = mapClienteToMember(
-        clienteSeleccionado,
+        clienteSel,
         payload.tipo,
         payload.cobertura_tipo || defaultCoberturaTipo,
         payload.estado_cobertura || "Sí"
@@ -840,7 +848,10 @@ const ProspectoDatos = ({
 
     if (res?.miembro?.cliente || res?.miembro) {
       const mSrv = res.miembro;
-      const cli = mSrv.cliente || clienteSeleccionado || {};
+      const cli = mergeClientePreferNonEmpty(
+        clienteSel,
+        mSrv.cliente && typeof mSrv.cliente === "object" ? mSrv.cliente : {}
+      );
    // Intenta extraer el ID real de la cobertura de distintas formas
    const coberturaId =
      mSrv.cobertura_id ??
@@ -892,7 +903,7 @@ const ProspectoDatos = ({
     } else {
       // Si no viene del servidor, usar el cliente seleccionado directamente
       const mLocal = mapClienteToMember(
-        clienteSeleccionado,
+        clienteSel,
         payload.tipo,
         payload.cobertura_tipo,
         payload.estado_cobertura

@@ -314,7 +314,7 @@ const closeModal = () => setShowModal(false);
         "GET"
       );
 
-      const candidatos = Array.isArray(posibles) ? posibles : [];
+      const candidatos = Array.isArray(posibles?.data) ? posibles.data : [];
 
       const yaExiste = candidatos.find((c) => {
         const nombreBD = (

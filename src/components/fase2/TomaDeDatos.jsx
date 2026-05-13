@@ -30,6 +30,10 @@ import {
   formatPhone334,
   normalizeDateForInput,
 } from "../../utils/formatters";
+import {
+  mergeClientePreferNonEmpty,
+  unwrapClienteFromApi,
+} from "../../utils/mergeClientePreferNonEmpty";
 import { toLegacyFields } from "../../utils/phones";
 import { inflatePhones } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
@@ -245,8 +249,17 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
 };
 
 /* =================== NORMALIZACIÓN =================== */
+const clienteTieneNombreVisible = (c) => {
+  if (!c || typeof c !== "object") return false;
+  return !!(
+    String(c.nombre_completo || "").trim() ||
+    String(c.primer_nombre || c.nombre || "").trim() ||
+    String(c.apellidos || c.apellido || "").trim()
+  );
+};
+
 const normalizeMember = (m, idx) => {
-  if (m?.cliente && typeof m.cliente === "object") return m;
+  if (m?.cliente && typeof m.cliente === "object" && clienteTieneNombreVisible(m.cliente)) return m;
 
   const primerRaw = m.primer_nombre || "";
   const segundoRaw = m.segundo_nombre || "";
@@ -1027,6 +1040,13 @@ const activeNormalized = useMemo(
       if (!grupoFamiliarId || !payload?.cliente_id) return;
       if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
 
+      const clienteSelRaw =
+        unwrapClienteFromApi(clienteSeleccionado) ?? clienteSeleccionado ?? {};
+      const clienteSel = {
+        ...clienteSelRaw,
+        id: clienteSelRaw.id ?? payload.cliente_id,
+      };
+
       // 🔍 Validar si el cliente ya tiene una cobertura activa/vigente
       // para el mismo tipo de producto en OTRO grupo familiar (lógica centralizada en el service)
       try {
@@ -1039,7 +1059,7 @@ const activeNormalized = useMemo(
         if (conflicto) {
           const nombreCliente =
             conflicto.cliente?.nombre_completo ??
-            clienteSeleccionado?.nombre_completo ??
+            clienteSel?.nombre_completo ??
             "Este cliente";
 
           const descripcionCobertura = [
@@ -1097,9 +1117,15 @@ const activeNormalized = useMemo(
         const mSrv = res.miembro;
         const coberturaId = mSrv.cobertura_id ?? mSrv?.cobertura?.id ?? res?.cobertura?.id ?? res?.id ?? null;
 
+        const cliMerged = mergeClientePreferNonEmpty(
+          clienteSel,
+          mSrv.cliente && typeof mSrv.cliente === "object" ? mSrv.cliente : {}
+        );
+
         const merged = normalizeMember(
           {
             ...mSrv,
+            cliente: cliMerged,
             tipo: mSrv.tipo || payload.tipo,
             parentesco: mSrv.parentesco || payload.tipo,
             estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
@@ -1111,7 +1137,7 @@ const activeNormalized = useMemo(
         );
         setFamilyMembers(prev => [...(prev ?? []), merged]);
       } else {
-        const c = clienteSeleccionado || {};
+        const c = clienteSel;
         const nombreCompleto = c.nombre_completo ||
           [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" ");
         const local = normalizeMember(

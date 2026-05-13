@@ -212,7 +212,7 @@ export default function MemberModalCreate({
         "GET"
       );
 
-      const candidatos = Array.isArray(posibles) ? posibles : [];
+      const candidatos = Array.isArray(posibles?.data) ? posibles.data : [];
 
       const matches = candidatos.filter((c) => {
         const nombreBD = (

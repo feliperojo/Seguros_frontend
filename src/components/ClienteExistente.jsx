@@ -35,7 +35,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
         "GET"
       );
       
-      let clientes = Array.isArray(response) ? response : [];
+      let clientes = Array.isArray(response?.data) ? response.data : [];
       
       // Si no hay resultados y el término tiene múltiples palabras, intentar estrategias alternativas
       if (clientes.length === 0 && termino.includes(' ')) {
@@ -74,7 +74,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
               `cliente/buscar?nombre=${encodeURIComponent(palabras[0])}&incluir_prospectos=false`,
               "GET"
             );
-            const clientes1 = Array.isArray(res1) ? res1 : [];
+            const clientes1 = Array.isArray(res1?.data) ? res1.data : [];
             if (clientes1.length > 0) {
               const filtrados = filtrarPorPalabras(clientes1);
               if (filtrados.length > 0) {
@@ -97,7 +97,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
               `cliente/buscar?nombre=${encodeURIComponent(ultimaPalabra)}&incluir_prospectos=false`,
               "GET"
             );
-            const clientes2 = Array.isArray(res2) ? res2 : [];
+            const clientes2 = Array.isArray(res2?.data) ? res2.data : [];
             if (clientes2.length > 0) {
               const filtrados = filtrarPorPalabras(clientes2);
               if (filtrados.length > 0) {

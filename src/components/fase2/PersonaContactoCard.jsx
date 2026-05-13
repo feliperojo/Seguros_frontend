@@ -152,7 +152,7 @@ export default function PersonaContactoCard({
       setLoadingPicker(true);
       try {
         const res = await searchClientes(q);
-        const list = Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : [];
+        const list = Array.isArray(res) ? res : [];
         // evita seleccionarse a sí mismo
         setCandidatos(list.filter((x) => x.id !== clienteId));
       } catch {
