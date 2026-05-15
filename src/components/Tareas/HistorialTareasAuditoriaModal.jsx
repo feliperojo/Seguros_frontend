@@ -93,12 +93,29 @@ const taskMatchesCobertura = (t, cobertura) => {
   return false;
 };
 
+const pickFirstNonEmptyComment = (...values) => {
+  for (const v of values) {
+    if (v != null && String(v).trim()) return String(v).trim();
+  }
+  return null;
+};
+
 /** Comentario / nota del estado de auditoría (API puede usar varios nombres). */
 const resolveAuditStateComment = (c) => {
   if (!c || typeof c !== "object") return null;
-  const candidates = [
+  const auditItem =
+    c.audit_item && typeof c.audit_item === "object" ? c.audit_item : null;
+  const item = c.item && typeof c.item === "object" ? c.item : null;
+  return pickFirstNonEmptyComment(
     c.audit_comment,
     c.auditComment,
+    c.comment,
+    auditItem?.comment,
+    auditItem?.audit_comment,
+    auditItem?.comentario_auditoria,
+    item?.comment,
+    item?.audit_comment,
+    item?.comentario_auditoria,
     c.comentario_auditoria,
     c.comentario_estado,
     c.prev_audit_comment,
@@ -106,12 +123,37 @@ const resolveAuditStateComment = (c) => {
     c.prev_audit_note,
     c.previous_audit_comment,
     c.notas,
-    c.notes,
-  ];
-  for (const v of candidates) {
-    if (v != null && String(v).trim()) return String(v).trim();
+    c.notes
+  );
+};
+
+/** Comentario del ítem de auditoría anidado en filas de tareas (p. ej. GET /auditorias/tasks). */
+const resolveAuditStateCommentFromTasks = (tasks) => {
+  if (!Array.isArray(tasks) || tasks.length === 0) return null;
+  for (const raw of tasks) {
+    const t = normalizeAuditoriaTaskRow(raw);
+    const found = pickFirstNonEmptyComment(
+      t?.audit_item?.comment,
+      t?.audit_item?.audit_comment,
+      t?.audit_item?.comentario_auditoria,
+      t?.item?.comment,
+      t?.item?.audit_comment,
+      t?.item?.comentario_auditoria
+    );
+    if (found) return found;
   }
   return null;
+};
+
+const extractAuditItemFromTasksResponse = (res) => {
+  if (!res || typeof res !== "object") return null;
+  const nested =
+    res.audit_item ??
+    res.auditItem ??
+    (typeof res.data === "object" && !Array.isArray(res.data)
+      ? res.data.audit_item ?? res.data.auditItem
+      : null);
+  return nested && typeof nested === "object" ? nested : null;
 };
 
 /**
@@ -119,6 +161,7 @@ const resolveAuditStateComment = (c) => {
  */
 const listTasksAllPagesForRun = async (runId, cobertura) => {
   const aggregated = [];
+  let auditItem = null;
   let page = 1;
   let lastPage = 1;
   const maxPages = 40;
@@ -129,17 +172,18 @@ const listTasksAllPagesForRun = async (runId, cobertura) => {
     else if (cobertura?.cliente_id != null) params.cliente_id = cobertura.cliente_id;
 
     const response = await listTasks(params);
+    if (!auditItem) auditItem = extractAuditItemFromTasksResponse(response);
     const chunk = extractTasksListFromResponse(response).map(normalizeAuditoriaTaskRow);
     lastPage = Math.max(1, Number(getTasksLastPage(response)) || 1);
     aggregated.push(...chunk);
     page += 1;
   } while (page <= lastPage && page <= maxPages);
 
-  return aggregated;
+  return { tasks: aggregated, auditItem };
 };
 
-/** Busca el ítem de auditoría del mismo cliente/cobertura en el reporte de un run (p. ej. mes anterior). */
-const findAuditItemIdFromRunReport = async (reportRunId, cobertura) => {
+/** Busca fila del ítem de auditoría en el reporte de un run (p. ej. mes anterior). */
+const findAuditContextFromRunReport = async (reportRunId, cobertura) => {
   if (!reportRunId || !cobertura) return null;
   const search =
     cobertura.codigo_poliza != null && String(cobertura.codigo_poliza).trim()
@@ -161,7 +205,7 @@ const findAuditItemIdFromRunReport = async (reportRunId, cobertura) => {
     for (const row of rows) {
       if (taskMatchesCobertura(row, cobertura)) {
         const iid = resolveItemId(row);
-        if (iid) return iid;
+        if (iid) return { itemId: iid, row };
       }
     }
 
@@ -201,6 +245,10 @@ const filaPendienteAuditoriaAnterior = (row) => {
 
 const buildCoberturaVistaAnterior = (row) => {
   if (!row || typeof row !== "object") return row;
+  const prevAuditItem =
+    row.prev_audit_item && typeof row.prev_audit_item === "object"
+      ? row.prev_audit_item
+      : null;
   return {
     ...row,
     audit_status: row.prev_audit_status ?? row.audit_status,
@@ -210,7 +258,10 @@ const buildCoberturaVistaAnterior = (row) => {
       row.prev_audit_notes ??
       row.prev_comentario ??
       row.comentario_auditoria_anterior ??
+      prevAuditItem?.comment ??
+      prevAuditItem?.audit_comment ??
       null,
+    audit_item: prevAuditItem ?? row.audit_item ?? null,
     reviewed_at: row.prev_reviewed_at ?? null,
   };
 };
@@ -228,6 +279,8 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
   const [error, setError] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [commentsByTaskId, setCommentsByTaskId] = useState({});
+  /** Comentario de estado resuelto desde API de tareas o reporte del run (fallback). */
+  const [loadedAuditComment, setLoadedAuditComment] = useState(null);
 
   const prevRunId = useMemo(() => {
     const r = cobertura?.prev_run_id;
@@ -271,6 +324,7 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
     setError(null);
     setTasks([]);
     setCommentsByTaskId({});
+    setLoadedAuditComment(null);
 
     const prevDedicatedItemId =
       effectiveCobertura?.prev_item_id ??
@@ -286,6 +340,7 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
     }
 
     let taskList = [];
+    let extraAuditComment = null;
 
     try {
       if (primaryItemId) {
@@ -299,17 +354,26 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
 
       if (!Array.isArray(taskList) || taskList.length === 0) {
         if (effectiveCobertura.cobertura_id != null || effectiveCobertura.cliente_id != null) {
-          const all = await listTasksAllPagesForRun(effectiveRunId, effectiveCobertura);
+          const { tasks: all, auditItem } = await listTasksAllPagesForRun(
+            effectiveRunId,
+            effectiveCobertura
+          );
+          if (!extraAuditComment && auditItem) {
+            extraAuditComment = resolveAuditStateComment(auditItem);
+          }
           const filtered = all.filter((t) => taskMatchesCobertura(t, effectiveCobertura));
           taskList = filtered.length > 0 ? filtered : all;
         }
       }
 
       if ((!Array.isArray(taskList) || taskList.length === 0) && effectiveRunId) {
-        const reportItemId = await findAuditItemIdFromRunReport(effectiveRunId, effectiveCobertura);
-        if (reportItemId) {
+        const reportCtx = await findAuditContextFromRunReport(effectiveRunId, effectiveCobertura);
+        if (reportCtx?.row && !extraAuditComment) {
+          extraAuditComment = resolveAuditStateComment(reportCtx.row);
+        }
+        if (reportCtx?.itemId) {
           try {
-            const fromReport = await getItemTasks(reportItemId);
+            const fromReport = await getItemTasks(reportCtx.itemId);
             if (Array.isArray(fromReport) && fromReport.length > 0) {
               taskList = fromReport;
             }
@@ -320,6 +384,39 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
       }
 
       taskList = (Array.isArray(taskList) ? taskList : []).map(normalizeAuditoriaTaskRow);
+
+      if (
+        !extraAuditComment &&
+        !resolveAuditStateComment(effectiveCobertura) &&
+        (effectiveCobertura.cobertura_id != null || effectiveCobertura.cliente_id != null)
+      ) {
+        const params = { run_id: effectiveRunId, per_page: 100, page: 1 };
+        if (effectiveCobertura.cobertura_id != null) {
+          params.cobertura_id = effectiveCobertura.cobertura_id;
+        } else {
+          params.cliente_id = effectiveCobertura.cliente_id;
+        }
+        try {
+          const tasksMetaResponse = await listTasks(params);
+          const auditItemMeta = extractAuditItemFromTasksResponse(tasksMetaResponse);
+          if (auditItemMeta) {
+            extraAuditComment = resolveAuditStateComment(auditItemMeta);
+          }
+          if (!extraAuditComment) {
+            const listed = extractTasksListFromResponse(tasksMetaResponse).map(normalizeAuditoriaTaskRow);
+            extraAuditComment = resolveAuditStateCommentFromTasks(listed);
+          }
+        } catch (e) {
+          console.warn("Historial: listTasks (comentario de estado) falló:", e);
+        }
+      }
+
+      if (!extraAuditComment) {
+        extraAuditComment = resolveAuditStateCommentFromTasks(taskList);
+      }
+      if (extraAuditComment) {
+        setLoadedAuditComment(extraAuditComment);
+      }
     } catch (err) {
       const msg = err.response?.data?.message || err.message || "Error al cargar el historial";
       setError(msg);
@@ -366,7 +463,14 @@ const HistorialTareasAuditoriaModal = ({ show, onHide, runId, cobertura }) => {
   const auditStatus = effectiveCobertura?.audit_status
     ? String(effectiveCobertura.audit_status).toUpperCase()
     : "PENDIENTE";
-  const auditComment = resolveAuditStateComment(effectiveCobertura);
+  const auditComment = useMemo(
+    () =>
+      resolveAuditStateComment(effectiveCobertura) ||
+      loadedAuditComment ||
+      resolveAuditStateCommentFromTasks(tasks) ||
+      null,
+    [effectiveCobertura, loadedAuditComment, tasks]
+  );
   const reviewedAt = effectiveCobertura?.reviewed_at;
 
   return (
