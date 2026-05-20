@@ -116,10 +116,6 @@ const PagosActualizar = () => {
     await updatePago(pagoId, { estado: nuevoEstado });
   };
 
-  const handlePortalChange = async (pagoId, portal) => {
-    await updatePago(pagoId, { portal });
-  };
-
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
     setFiltros((prev) => ({ ...prev, [name]: value }));
@@ -233,7 +229,6 @@ const PagosActualizar = () => {
                 <th>Compañía</th>
                 <th>Monto</th>
                 <th>Medios</th>
-                <th>Portal</th>
                 <th>Estado</th>
               </tr>
             </thead>
@@ -277,15 +272,6 @@ const PagosActualizar = () => {
                           <FaEye />
                         </Button>
                       </td>
-
-                  <td className="text-center align-middle">
-                    <Form.Check
-                      type="checkbox"
-                      checked={!!p.portal}
-                      onChange={(e) => handlePortalChange(p.id, e.target.checked)}
-                      aria-label="Portal"
-                    />
-                  </td>
 
                   <td>
                     <Form.Select

@@ -4,7 +4,7 @@ import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
 import MdyDashDateInput from "../common/MdyDashDateInput";
-import { createTaskFromRun, addComment } from "../../services/auditoriasTasksService";
+import { createTaskFromRun } from "../../services/auditoriasTasksService";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import useToast from "../../hooks/useToast";
 import { parseApiDateToLocalDate } from "../../utils/formatters";
@@ -586,128 +586,49 @@ const NuevaTareaAuditoriaModal = ({
     setLoading(true);
     
     try {
-      const payload = {
-        assigned_user_id: parseInt(formData.assigned_user_id),
-        scheduled_date: formData.scheduled_date,
-        due_date: formData.due_date,
-      };
-      
-      // Agregar cobertura_id o cliente_id (no ambos)
-      if (coberturaId) {
-        payload.cobertura_id = coberturaId;
-      } else if (clienteId) {
-        payload.cliente_id = clienteId;
-      }
-      
-      // Agregar grupo_familiar_id si está disponible
-      if (grupoFamiliarId) {
-        payload.grupo_familiar_id = parseInt(grupoFamiliarId);
-      }
-      
-      // Incluir nota si no está vacía
-      if (!isNoteEmpty(formData.response_note)) {
-        payload.response_note = formData.response_note;
-      }
-      
-      // Incluir menciones si hay
-      if (mentionedUserIds.length > 0) {
-        payload.mentioned_user_ids = mentionedUserIds;
+      let response;
+      if (archivos.length > 0) {
+        const fd = new FormData();
+        fd.append("assigned_user_id", String(parseInt(formData.assigned_user_id, 10)));
+        fd.append("scheduled_date", formData.scheduled_date);
+        fd.append("due_date", formData.due_date);
+        if (coberturaId) fd.append("cobertura_id", String(coberturaId));
+        else if (clienteId) fd.append("cliente_id", String(clienteId));
+        if (grupoFamiliarId) fd.append("grupo_familiar_id", String(parseInt(grupoFamiliarId, 10)));
+        if (!isNoteEmpty(formData.response_note)) {
+          fd.append("response_note", formData.response_note);
+        }
+        if (mentionedUserIds.length > 0) {
+          fd.append("mentioned_user_ids", JSON.stringify(mentionedUserIds));
+        }
+        archivos.forEach((archivo) => {
+          fd.append("archivos[]", archivo.file);
+        });
+        setSubiendoArchivos(true);
+        response = await createTaskFromRun(currentRunId, fd);
+        setSubiendoArchivos(false);
+      } else {
+        const payload = {
+          assigned_user_id: parseInt(formData.assigned_user_id, 10),
+          scheduled_date: formData.scheduled_date,
+          due_date: formData.due_date,
+        };
+        if (coberturaId) payload.cobertura_id = coberturaId;
+        else if (clienteId) payload.cliente_id = clienteId;
+        if (grupoFamiliarId) payload.grupo_familiar_id = parseInt(grupoFamiliarId, 10);
+        if (!isNoteEmpty(formData.response_note)) {
+          payload.response_note = formData.response_note;
+        }
+        if (mentionedUserIds.length > 0) {
+          payload.mentioned_user_ids = mentionedUserIds;
+        }
+        response = await createTaskFromRun(currentRunId, payload);
       }
 
-      if (import.meta.env.DEV) {
-        const notePreview =
-          typeof formData.response_note === "string"
-            ? `${formData.response_note.slice(0, 200)}${formData.response_note.length > 200 ? "…" : ""}`
-            : "";
-        console.groupCollapsed(
-          `%c[Auditoría] Crear tarea%c POST auditorias/runs/${currentRunId}/tasks`,
-          "color:#1976d2;font-weight:bold;",
-          "color:inherit;"
-        );
-        console.log("Contexto", {
-          currentRunId,
-          coberturaId,
-          clienteId,
-          grupoFamiliarId,
-          adjuntos: archivos.length,
-          mentionedUserIds,
-        });
-        console.log("Payload JSON", payload);
-        console.log("Nota (preview)", notePreview || "(vacía / no enviada)");
-        console.groupEnd();
-      }
-      
-      // Crear la tarea usando el nuevo endpoint
-      const response = await createTaskFromRun(currentRunId, payload);
       const taskId = response?.id || response?.data?.id || response?.task?.id;
 
       if (import.meta.env.DEV) {
-        console.log("[Auditoría] Respuesta crear tarea", {
-          taskId,
-          raw: response,
-        });
-      }
-      
-      // Si hay archivos y se creó la tarea, subirlos como comentario inicial
-      if (taskId && archivos.length > 0) {
-        try {
-          setSubiendoArchivos(true);
-          
-          // Crear un comentario inicial con los archivos
-          const formDataComentario = new FormData();
-          const comentarioTexto = formData.response_note && !isNoteEmpty(formData.response_note) 
-            ? formData.response_note 
-            : "Archivos adjuntos";
-          formDataComentario.append('comment', comentarioTexto);
-          
-          if (mentionedUserIds.length > 0) {
-            formDataComentario.append('mentioned_user_ids', JSON.stringify(mentionedUserIds));
-          }
-          
-          // Agregar archivos
-          archivos.forEach((archivo) => {
-            formDataComentario.append('archivos[]', archivo.file);
-          });
-
-          if (import.meta.env.DEV) {
-            const fdSummary = [];
-            try {
-              for (const [k, v] of formDataComentario.entries()) {
-                fdSummary.push({
-                  key: k,
-                  value:
-                    typeof v === "string"
-                      ? v.length > 120
-                        ? `${v.slice(0, 120)}…`
-                        : v
-                      : v instanceof File
-                        ? `File(${v.name}, ${v.size}b, ${v.type})`
-                        : String(v),
-                });
-              }
-            } catch (e) {
-              fdSummary.push({ error: "No se pudo inspeccionar FormData" });
-            }
-            console.log("[Auditoría] Subiendo adjuntos vía comentario inicial", {
-              taskId,
-              endpoint: `POST auditorias/tasks/${taskId}/comments`,
-              formData: fdSummary,
-            });
-          }
-          
-          // Subir archivos como comentario inicial
-          await addComment(taskId, formDataComentario);
-
-          if (import.meta.env.DEV) {
-            console.log("[Auditoría] Adjuntos enviados OK para taskId:", taskId);
-          }
-          
-        } catch (err) {
-          console.error("Error al subir archivos:", err);
-          toast.showWarning("Tarea creada pero hubo un error al subir algunos archivos");
-        } finally {
-          setSubiendoArchivos(false);
-        }
+        console.log("[Auditoría] Tarea creada", { taskId, raw: response, conArchivos: archivos.length > 0 });
       }
       
       toast.showSuccess("Tarea creada exitosamente");

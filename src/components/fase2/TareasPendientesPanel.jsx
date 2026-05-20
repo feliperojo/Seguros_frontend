@@ -9,10 +9,12 @@ import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
 import { formatDateForDisplay } from "../../utils/formatters";
 import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClienteGrupo";
+import {
+  resolveAttachmentPublicUrl,
+  descargarArchivoAdjunto,
+} from "../../utils/attachmentUtils";
 
 const PENDING_STATES = new Set(["pending", "processing", "in_progress"]);
-
-const API_PUBLIC_BASE = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "") || "/api";
 
 /** El listado de tareas a veces omite el id de bitácora; misma jerarquía que en modales de respuesta. */
 function pickBitacoraIdFromRaw(raw) {
@@ -47,17 +49,6 @@ function pickBitacoraIdFromRaw(raw) {
     pick(taskNested?.bitacora_operativa_id) ||
     null
   );
-}
-
-/** URL absoluta para `<img>` / fetch: el API a veces devuelve rutas relativas (`/storage/...`). */
-function resolveAttachmentPublicUrl(url) {
-  if (url == null || typeof url !== "string") return url;
-  const trimmed = url.trim();
-  if (!trimmed) return url;
-  if (/^https?:\/\//i.test(trimmed)) return trimmed;
-  if (trimmed.startsWith("//")) return trimmed;
-  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return `${API_PUBLIC_BASE}${path}`;
 }
 
 export default function TareasPendientesPanel({
@@ -436,43 +427,8 @@ export default function TareasPendientesPanel({
     setShowPreviewModal(true);
   }, [esImagen, esPDF, esWord]);
 
-  // Función para descargar archivo
   const descargarArchivo = useCallback(async (adjunto) => {
-    try {
-      // Intentar usar el endpoint de descarga si existe
-      if (adjunto.id) {
-        try {
-          const res = await apiRequest(`adjuntos/bitacora/${adjunto.id}/descargar`, "GET");
-          if (res?.url) {
-            const link = document.createElement("a");
-            link.href = resolveAttachmentPublicUrl(res.url);
-            link.download = adjunto.nombre_original || "archivo";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            return;
-          }
-        } catch (err) {
-          console.log("Endpoint de descarga no disponible, usando URL directa");
-        }
-      }
-      
-      // Fallback: usar la URL directa con fetch para forzar descarga
-      const response = await fetch(resolveAttachmentPublicUrl(adjunto.url));
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = adjunto.nombre_original || "archivo";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error("Error al descargar archivo:", error);
-      // Fallback final: abrir en nueva pestaña
-      window.open(resolveAttachmentPublicUrl(adjunto.url), "_blank");
-    }
+    await descargarArchivoAdjunto(adjunto);
   }, []);
 
   const normalizeTask = (t) => {

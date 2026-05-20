@@ -31,14 +31,25 @@ import {
   getTaskComments, 
   addComment, 
   updateComment,
+  updateTask,
   completeTask, 
   rescheduleTask, 
   assignTask,
+  unwrapAuditoriaCommentResponse,
 } from "../../services/auditoriasTasksService";
 import useToast from "../../hooks/useToast";
 import { useAuth } from "../../context/AuthContext";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import systemConfigService from "../../services/SystemConfigService";
+import {
+  getAdjuntoDisplayUrl,
+  isAdjuntoAuditoriaDisponible,
+  descargarAdjuntoAuditoria,
+  abrirAdjuntoAuditoriaEnNuevaPestana,
+  esImagenAdjunto as esImagenAdjuntoUtil,
+  esPDFAdjunto,
+  esWordAdjunto,
+} from "../../utils/attachmentUtils";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -145,6 +156,38 @@ const coincideAsignacionPorNombre = (u, t) => {
   return nombres.some((n) => n && n === mine);
 };
 
+const unwrapAuditoriaTaskResponse = (raw) => {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.data != null && typeof raw.data === "object" && !Array.isArray(raw.data)) {
+    return raw.data;
+  }
+  return raw;
+};
+
+const getComentarioAdjuntos = (comentario) => {
+  const list = comentario?.adjuntos ?? comentario?.attachments ?? [];
+  return Array.isArray(list) ? list : [];
+};
+
+const getTareaAdjuntosList = (t) => {
+  const list = t?.adjuntos ?? t?.attachments ?? [];
+  return Array.isArray(list) ? list : [];
+};
+
+const getCreadorNombre = (t) => {
+  if (!t) return "";
+  return (
+    t.created_by_user?.name ||
+    t.created_by_user?.nombre ||
+    (typeof t.creado_por === "string" ? t.creado_por : t.creado_por?.name) ||
+    t.created_by?.name ||
+    t.createdBy?.name ||
+    t.log?.user?.name ||
+    t.user?.name ||
+    ""
+  );
+};
+
 const ResponderTareaAuditoriaModal = ({
   show,
   onHide,
@@ -157,6 +200,7 @@ const ResponderTareaAuditoriaModal = ({
 
   const [responseNote, setResponseNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [tareaDetalle, setTareaDetalle] = useState(null);
   const [comentarios, setComentarios] = useState([]);
   const [cargandoComentarios, setCargandoComentarios] = useState(false);
   
@@ -164,10 +208,12 @@ const ResponderTareaAuditoriaModal = ({
   const [comentariosEnEdicion, setComentariosEnEdicion] = useState({});
   const [comentariosActualizados, setComentariosActualizados] = useState({});
   
-  // Estados para adjuntos de comentarios
+  // Adjuntos: GET /api/auditorias/tasks/{id} → data.adjuntos[] y comments[].adjuntos[]
+  const [adjuntosTarea, setAdjuntosTarea] = useState([]);
   const [adjuntosComentarios, setAdjuntosComentarios] = useState({});
   const [loadingAdjuntos, setLoadingAdjuntos] = useState({});
-  const [archivosExpandidos, setArchivosExpandidos] = useState({});
+  const reemplazoInputRef = useRef(null);
+  const [reemplazoContext, setReemplazoContext] = useState(null);
   const [archivoPreview, setArchivoPreview] = useState(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [errorCargaArchivo, setErrorCargaArchivo] = useState(false);
@@ -201,11 +247,17 @@ const ResponderTareaAuditoriaModal = ({
   const [assignPreview, setAssignPreview] = useState(null);
   const [showReassign, setShowReassign] = useState(false);
 
+  const tareaParaUI = useMemo(() => {
+    if (!tarea) return null;
+    return { ...tarea, ...(tareaDetalle || {}) };
+  }, [tarea, tareaDetalle]);
+
   const tareaEfectiva = useMemo(() => {
-    if (!assignPreview || !tarea?.id) return tarea;
-    if (String(assignPreview.id) !== String(tarea.id)) return tarea;
-    return { ...tarea, ...assignPreview };
-  }, [tarea, assignPreview]);
+    const base = tareaParaUI || tarea;
+    if (!assignPreview || !base?.id) return base;
+    if (String(assignPreview.id) !== String(base.id)) return base;
+    return { ...base, ...assignPreview };
+  }, [tarea, tareaParaUI, assignPreview]);
 
   const puedeMarcarCompletada = useMemo(() => {
     const uid = getAuthUserId(user);
@@ -285,24 +337,98 @@ const ResponderTareaAuditoriaModal = ({
     return () => window.cancelAnimationFrame(frame);
   }, [show, comentarios, highlightedCommentId]);
   
+  const aplicarAdjuntosDesdeComentarios = (lista) => {
+    if (!Array.isArray(lista)) return;
+    const next = {};
+    lista.forEach((comentario) => {
+      if (!comentario?.id) return;
+      const adj = getComentarioAdjuntos(comentario);
+      if (adj.length > 0) next[comentario.id] = adj;
+    });
+    if (Object.keys(next).length > 0) {
+      setAdjuntosComentarios((prev) => ({ ...prev, ...next }));
+    }
+  };
+
+  const aplicarAdjuntosDesdeTarea = (detalle) => {
+    setAdjuntosTarea(getTareaAdjuntosList(detalle));
+  };
+
+  const recargarDetalleCompleto = async () => {
+    const taskId = tarea?.id;
+    if (!taskId) return null;
+    const raw = await getTask(taskId);
+    const detalle = unwrapAuditoriaTaskResponse(raw) || raw;
+    if (detalle) {
+      setTareaDetalle(detalle);
+      aplicarAdjuntosDesdeTarea(detalle);
+      if (Array.isArray(detalle.comments)) {
+        setComentarios(detalle.comments);
+        aplicarAdjuntosDesdeComentarios(detalle.comments);
+      }
+      if (onUpdated) onUpdated(detalle);
+    }
+    return detalle;
+  };
+
+  const cargarDetalleTarea = async () => {
+    if (!tarea?.id) return null;
+    try {
+      const raw = await getTask(tarea.id);
+      const detalle = unwrapAuditoriaTaskResponse(raw);
+      if (detalle) {
+        setTareaDetalle(detalle);
+        aplicarAdjuntosDesdeTarea(detalle);
+        return detalle;
+      }
+    } catch (err) {
+      console.warn("Error al cargar detalle de tarea de auditoría:", err);
+    }
+    return null;
+  };
+
   // Cargar datos de la tarea cuando se abre el modal
   useEffect(() => {
     if (show && tarea?.id) {
       setScheduledDate(normalizeDateForInput(tarea.scheduled_date) || "");
       setDueDate(normalizeDateForInput(tarea.due_date) || "");
-      setSelectedAssignUserId(tarea.assigned_user_id ? String(tarea.assigned_user_id) : "");
+      setSelectedAssignUserId(
+        tarea.assigned_user_id
+          ? String(tarea.assigned_user_id)
+          : tarea.assigned_user?.id
+            ? String(tarea.assigned_user.id)
+            : ""
+      );
       setShowReassign(false);
       setAssignPreview(null);
+      setTareaDetalle(null);
+      setAdjuntosComentarios({});
+      setAdjuntosTarea([]);
       setDueDateUnlocked(false);
       setShowDueDatePasswordModal(false);
       setAdminPasswordForDueDate("");
       setAdminPasswordInput("");
       setDueDatePasswordError("");
       setVerifyingDueDatePassword(false);
-      cargarComentarios();
+
+      let cancelled = false;
+      const init = async () => {
+        const detalle = await cargarDetalleTarea();
+        if (cancelled) return;
+        const commentsFromDetail = Array.isArray(detalle?.comments) ? detalle.comments : null;
+        await cargarComentarios(commentsFromDetail);
+      };
+      init();
+
+      return () => {
+        cancelled = true;
+      };
     } else {
       setResponseNote("");
       setComentarios([]);
+      setTareaDetalle(null);
+      setAdjuntosComentarios({});
+      setAdjuntosTarea([]);
       setArchivos([]);
       setMentionedUserIds([]);
     }
@@ -487,29 +613,75 @@ const ResponderTareaAuditoriaModal = ({
     }
   };
   
-  // Cargar comentarios de la tarea
-  const cargarComentarios = async () => {
+  // Cargar comentarios de la tarea (opcionalmente desde GET /auditorias/tasks/{id})
+  const cargarComentarios = async (comentariosPrecargados = null) => {
     if (!tarea?.id) return;
-    
+
     setCargandoComentarios(true);
     try {
-      const comentariosData = await getTaskComments(tarea.id);
-      setComentarios(Array.isArray(comentariosData) ? comentariosData : []);
-      
-      // Cargar adjuntos de cada comentario
-      comentariosData.forEach((comentario) => {
-        if (comentario.id && comentario.attachments && Array.isArray(comentario.attachments)) {
-          setAdjuntosComentarios((prev) => ({
-            ...prev,
-            [comentario.id]: comentario.attachments,
-          }));
-        }
-      });
+      let lista = comentariosPrecargados;
+      if (!Array.isArray(lista)) {
+        const comentariosData = await getTaskComments(tarea.id);
+        lista = Array.isArray(comentariosData)
+          ? comentariosData
+          : comentariosData?.data || [];
+      }
+      setComentarios(lista);
+      aplicarAdjuntosDesdeComentarios(lista);
     } catch (err) {
       console.error("Error al cargar comentarios:", err);
       toast.showError("Error al cargar comentarios");
     } finally {
       setCargandoComentarios(false);
+    }
+  };
+
+  const sincronizarAdjuntosComentario = (comentarioId, comentarioData) => {
+    if (!comentarioId || adjuntosComentarios[comentarioId]) return;
+    const data = getComentarioAdjuntos(comentarioData || {});
+    if (data.length > 0) {
+      setAdjuntosComentarios((prev) => ({ ...prev, [comentarioId]: data }));
+    }
+  };
+
+  const iniciarReemplazoAdjunto = (adjunto, commentId = null) => {
+    if (!adjunto?.id) return;
+    setReemplazoContext({
+      adjuntoId: adjunto.id,
+      commentId: commentId ?? null,
+      scope: commentId != null ? "comment" : "task",
+    });
+    reemplazoInputRef.current?.click();
+  };
+
+  const handleReemplazoArchivo = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !reemplazoContext || !tarea?.id) return;
+    if (!validarArchivo(file)) return;
+
+    const fd = new FormData();
+    fd.append("archivos[]", file);
+    fd.append("eliminar_adjuntos[]", String(reemplazoContext.adjuntoId));
+
+    setLoading(true);
+    try {
+      if (reemplazoContext.scope === "comment" && reemplazoContext.commentId) {
+        await updateComment(tarea.id, reemplazoContext.commentId, fd);
+      } else if (puedeMarcarCompletada) {
+        await updateTask(tarea.id, fd);
+      } else {
+        toast.showWarning("Solo el usuario asignado puede reemplazar archivos de la tarea.");
+        return;
+      }
+      await recargarDetalleCompleto();
+      toast.showSuccess("Archivo reemplazado correctamente");
+    } catch (err) {
+      console.error("Error al reemplazar adjunto:", err);
+      toast.showError(err.response?.data?.message || err.message || "Error al reemplazar archivo");
+    } finally {
+      setLoading(false);
+      setReemplazoContext(null);
     }
   };
   
@@ -674,18 +846,26 @@ const ResponderTareaAuditoriaModal = ({
       
       // Crear FormData para enviar comentario con archivos
       const formData = new FormData();
-      formData.append('comment', responseNote || " ");
-      
-      if (mentionedIds.length > 0) {
-        formData.append('mentioned_user_ids', JSON.stringify(mentionedIds));
+      if (!isNoteEmpty(responseNote) || archivos.length === 0) {
+        formData.append("comment", responseNote || " ");
       }
       
-      // Agregar archivos
+      if (mentionedIds.length > 0) {
+        formData.append("mentioned_user_ids", JSON.stringify(mentionedIds));
+      }
+      
       archivos.forEach((archivo) => {
-        formData.append('archivos[]', archivo.file);
+        formData.append("archivos[]", archivo.file);
       });
       
-      await addComment(taskId, formData);
+      const commentResponse = await addComment(taskId, formData);
+      const nuevoComentario = unwrapAuditoriaCommentResponse(commentResponse);
+      if (nuevoComentario?.id && Array.isArray(nuevoComentario.adjuntos)) {
+        setAdjuntosComentarios((prev) => ({
+          ...prev,
+          [nuevoComentario.id]: nuevoComentario.adjuntos,
+        }));
+      }
       
       // Limpiar formulario
       setResponseNote("");
@@ -695,32 +875,15 @@ const ResponderTareaAuditoriaModal = ({
       setArchivos([]);
       setMentionedUserIds([]);
       
-      // Recargar comentarios
-      await cargarComentarios();
-      
-      // ✅ IMPORTANTE: Recargar la tarea completa desde el backend para preservar todos los datos
-      // Esto evita que se pierda el response_note original u otros campos
       try {
-        const tareaCompleta = await getTask(taskId);
-        
-        // Preservar el response_note original si el backend lo está modificando incorrectamente
-        // Si el backend está reemplazando response_note con el comentario, esto lo previene
+        const tareaCompleta = await recargarDetalleCompleto();
         if (tareaCompleta && tarea.response_note && !tareaCompleta.response_note) {
-          // Si el backend perdió el response_note, restaurarlo desde la tarea original
           tareaCompleta.response_note = tarea.response_note;
-        }
-        
-        if (onUpdated) {
-          onUpdated(tareaCompleta);
         }
       } catch (err) {
         console.error("Error al recargar tarea después de agregar comentario:", err);
-        // Fallback: solo actualizar el status si estaba pendiente
-        if (tarea.status === "pending") {
-          const tareaActualizada = { ...tarea, status: "in_progress" };
-          if (onUpdated) {
-            onUpdated(tareaActualizada);
-          }
+        if (tarea.status === "pending" && onUpdated) {
+          onUpdated({ ...tareaParaUI, status: "in_progress" });
         }
       }
       
@@ -759,16 +922,15 @@ const ResponderTareaAuditoriaModal = ({
       if (!isNoteEmpty(responseNote) || archivos.length > 0) {
         const mentionedIds = extractMentionedUserIds(responseNote || "", usuarios);
         const formData = new FormData();
-        formData.append('comment', responseNote || " ");
-        
-        if (mentionedIds.length > 0) {
-          formData.append('mentioned_user_ids', JSON.stringify(mentionedIds));
+        if (!isNoteEmpty(responseNote) || archivos.length === 0) {
+          formData.append("comment", responseNote || " ");
         }
-        
+        if (mentionedIds.length > 0) {
+          formData.append("mentioned_user_ids", JSON.stringify(mentionedIds));
+        }
         archivos.forEach((archivo) => {
-          formData.append('archivos[]', archivo.file);
+          formData.append("archivos[]", archivo.file);
         });
-        
         await addComment(taskId, formData);
       }
       
@@ -1017,61 +1179,152 @@ const ResponderTareaAuditoriaModal = ({
     }
   };
   
-  // Funciones helper para adjuntos
-  const esImagenAdjunto = (adj) => {
-    return adj.tipo_mime?.startsWith("image/") || 
-           adj.mime_type?.startsWith("image/") ||
-           /\.(jpg|jpeg|png|gif|webp)$/i.test(adj.nombre_original || adj.filename || "");
-  };
-  
-  const esPDF = (adj) => {
-    return adj.tipo_mime === "application/pdf" || 
-           adj.mime_type === "application/pdf" ||
-           /\.pdf$/i.test(adj.nombre_original || adj.filename || "");
-  };
-  
-  // Función para abrir preview
+  const esImagenAdjunto = esImagenAdjuntoUtil;
+  const esPDF = esPDFAdjunto;
+
+  const esWord = esWordAdjunto;
+
   const abrirPreview = (adjunto) => {
+    if (!isAdjuntoAuditoriaDisponible(adjunto)) {
+      toast.showWarning("Este archivo no está disponible. Puede volver a subirlo.");
+      return;
+    }
     const esImg = esImagenAdjunto(adjunto);
     const esPdf = esPDF(adjunto);
-    
+    const esDoc = esWord(adjunto);
+
     setArchivoPreview({
       adjunto,
-      tipo: esImg ? "imagen" : esPdf ? "pdf" : "otro"
+      tipo: esImg ? "imagen" : esPdf ? "pdf" : esDoc ? "word" : "otro",
     });
     setErrorCargaArchivo(false);
     setShowPreviewModal(true);
   };
-  
-  // Función para descargar archivo
+
   const descargarArchivo = async (adjunto) => {
-    try {
-      if (adjunto.url) {
-        const response = await fetch(adjunto.url);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = adjunto.nombre_original || adjunto.filename || "archivo";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } else {
-        window.open(adjunto.url, "_blank");
-      }
-    } catch (error) {
-      console.error("Error al descargar archivo:", error);
-      window.open(adjunto.url, "_blank");
-    }
+    await descargarAdjuntoAuditoria(adjunto);
   };
-  
-  // Componente para mostrar adjuntos de un comentario
+
+  const renderTarjetaAdjunto = (adjunto, commentId = null) => {
+    const esImg = esImagenAdjunto(adjunto);
+    const esPdf = esPDF(adjunto);
+    const esDoc = esWord(adjunto);
+    const disponible = isAdjuntoAuditoriaDisponible(adjunto);
+    const imgSrc = disponible ? getAdjuntoDisplayUrl(adjunto) : null;
+
+    return (
+      <div
+        key={adjunto.id || adjunto.url}
+        className="position-relative border rounded"
+        style={{
+          width: "120px",
+          height: "120px",
+          cursor: disponible ? "pointer" : "default",
+          overflow: "hidden",
+          backgroundColor: disponible ? "#f8f9fa" : "#fff3cd",
+        }}
+        onClick={() => disponible && abrirPreview(adjunto)}
+        title={
+          disponible
+            ? "Haz clic para previsualizar"
+            : "Archivo no disponible (ruta antigua en S3)"
+        }
+      >
+        {esImg ? (
+          disponible && imgSrc ? (
+            <>
+              <img
+                src={imgSrc}
+                alt={adjunto.nombre_original || adjunto.filename || "Imagen"}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={(e) => {
+                  e.target.style.display = "none";
+                }}
+              />
+              <div className="position-absolute top-0 start-0 end-0 bottom-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all d-flex align-items-center justify-content-center">
+                <i className="fas fa-eye text-white opacity-0 hover:opacity-100"></i>
+              </div>
+            </>
+          ) : (
+            <div className="d-flex flex-column align-items-center justify-content-center h-100 p-1 text-center">
+              <i className="fas fa-image text-warning" style={{ fontSize: "1.5rem" }}></i>
+              <small className="text-muted mt-1" style={{ fontSize: "0.65rem" }}>
+                No disponible
+              </small>
+              <Button
+                variant="link"
+                size="sm"
+                className="p-0 mt-1"
+                style={{ fontSize: "0.65rem" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  iniciarReemplazoAdjunto(adjunto, commentId);
+                }}
+              >
+                Volver a subir
+              </Button>
+            </div>
+          )
+        ) : esPdf ? (
+          <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-danger bg-opacity-10">
+            <i className="fas fa-file-pdf text-danger" style={{ fontSize: "2rem" }}></i>
+            <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+              {adjunto.nombre_original || adjunto.filename || "PDF"}
+            </small>
+            {!disponible && (
+              <Button
+                variant="link"
+                size="sm"
+                className="p-0"
+                style={{ fontSize: "0.65rem" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  iniciarReemplazoAdjunto(adjunto, commentId);
+                }}
+              >
+                Volver a subir
+              </Button>
+            )}
+          </div>
+        ) : esDoc ? (
+          <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-primary bg-opacity-10">
+            <i className="fas fa-file-word text-primary" style={{ fontSize: "2rem" }}></i>
+            <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+              {adjunto.nombre_original || adjunto.filename || "Word"}
+            </small>
+          </div>
+        ) : (
+          <div className="d-flex flex-column align-items-center justify-content-center h-100">
+            <i className="fas fa-file text-secondary" style={{ fontSize: "2rem" }}></i>
+            <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
+              {adjunto.nombre_original || adjunto.filename || "Archivo"}
+            </small>
+          </div>
+        )}
+        {disponible && (
+          <div className="position-absolute top-1 end-1 opacity-0 hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                descargarArchivo(adjunto);
+              }}
+              className="btn btn-sm btn-primary rounded-circle p-1 shadow"
+              title="Descargar archivo"
+            >
+              <i className="fas fa-download" style={{ fontSize: "0.7rem" }}></i>
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Componente para mostrar adjuntos (mismo patrón que ResponderTareaModal)
   const MostrarAdjuntosComentario = ({ comentarioId }) => {
     const adjuntos = adjuntosComentarios[comentarioId] || [];
     const cargando = loadingAdjuntos[comentarioId];
-    const estaExpandido = archivosExpandidos[comentarioId];
-    
+
     if (cargando) {
       return (
         <div className="d-flex align-items-center gap-2 mt-2">
@@ -1080,101 +1333,52 @@ const ResponderTareaAuditoriaModal = ({
         </div>
       );
     }
-    
+
     if (adjuntos.length === 0) return null;
-    
+
+    const imagenesCount = adjuntos.filter(esImagenAdjunto).length;
+    const pdfsCount = adjuntos.filter(esPDF).length;
+    const wordsCount = adjuntos.filter(esWord).length;
+    const otrosCount = adjuntos.length - imagenesCount - pdfsCount - wordsCount;
+
     return (
       <div className="mt-2">
-        <button
-          type="button"
-          onClick={() => {
-            setArchivosExpandidos((prev) => ({
-              ...prev,
-              [comentarioId]: !prev[comentarioId],
-            }));
-          }}
-          className="w-100 d-flex align-items-center justify-content-between p-2 bg-light rounded border mb-2"
-          style={{ cursor: "pointer" }}
-        >
-          <div className="d-flex align-items-center gap-2">
-            <i className="fas fa-paperclip text-primary"></i>
-            <span className="fw-semibold">Archivos adjuntos</span>
-            <Badge bg="primary">{adjuntos.length}</Badge>
+        <div className="d-flex align-items-center gap-2 mb-2">
+          <i className="fas fa-paperclip text-primary"></i>
+          <small className="fw-semibold">Archivos adjuntos:</small>
+          <span className="badge bg-primary">
+            {adjuntos.length} {adjuntos.length === 1 ? "archivo" : "archivos"}
+          </span>
+          <div className="d-flex align-items-center gap-2 ms-2">
+            {imagenesCount > 0 && (
+              <small className="text-muted">
+                <i className="fas fa-image text-primary"></i> {imagenesCount}
+              </small>
+            )}
+            {pdfsCount > 0 && (
+              <small className="text-muted">
+                <i className="fas fa-file-pdf text-danger"></i> {pdfsCount}
+              </small>
+            )}
+            {wordsCount > 0 && (
+              <small className="text-muted">
+                <i className="fas fa-file-word text-primary"></i> {wordsCount}
+              </small>
+            )}
+            {otrosCount > 0 && (
+              <small className="text-muted">
+                <i className="fas fa-file text-secondary"></i> {otrosCount}
+              </small>
+            )}
           </div>
-          <i className={`fas ${estaExpandido ? "fa-chevron-up" : "fa-chevron-down"} text-muted`}></i>
-        </button>
-        
-        {estaExpandido && (
-          <div className="d-flex flex-wrap gap-2">
-            {adjuntos.map((adjunto) => {
-              const esImg = esImagenAdjunto(adjunto);
-              const esPdf = esPDF(adjunto);
-              
-              return (
-                <div
-                  key={adjunto.id || adjunto.url}
-                  className="position-relative border rounded"
-                  style={{
-                    width: "120px",
-                    height: "120px",
-                    cursor: "pointer",
-                    overflow: "hidden",
-                    backgroundColor: "#f8f9fa"
-                  }}
-                  onClick={() => abrirPreview(adjunto)}
-                  title="Haz clic para previsualizar"
-                >
-                  {esImg ? (
-                    <img
-                      src={adjunto.url}
-                      alt={adjunto.nombre_original || adjunto.filename || "Imagen"}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover"
-                      }}
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                        e.target.parentElement.innerHTML = '<i class="fas fa-image text-muted" style="font-size: 2rem; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);"></i>';
-                      }}
-                    />
-                  ) : esPdf ? (
-                    <div className="d-flex flex-column align-items-center justify-content-center h-100 bg-danger bg-opacity-10">
-                      <i className="fas fa-file-pdf text-danger" style={{ fontSize: "2rem" }}></i>
-                      <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
-                        {adjunto.nombre_original || adjunto.filename || "PDF"}
-                      </small>
-                    </div>
-                  ) : (
-                    <div className="d-flex flex-column align-items-center justify-content-center h-100">
-                      <i className="fas fa-file text-secondary" style={{ fontSize: "2rem" }}></i>
-                      <small className="text-muted text-center px-1" style={{ fontSize: "0.7rem" }}>
-                        {adjunto.nombre_original || adjunto.filename || "Archivo"}
-                      </small>
-                    </div>
-                  )}
-                  <div className="position-absolute top-1 end-1 opacity-0 hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        descargarArchivo(adjunto);
-                      }}
-                      className="btn btn-sm btn-primary rounded-circle p-1 shadow"
-                      title="Descargar archivo"
-                    >
-                      <i className="fas fa-download" style={{ fontSize: "0.7rem" }}></i>
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        </div>
+        <div className="d-flex flex-wrap gap-2">
+          {adjuntos.map((adjunto) => renderTarjetaAdjunto(adjunto, comentarioId))}
+        </div>
       </div>
     );
   };
-  
+
   const formatFecha = (fecha) => {
     if (!fecha) return "N/A";
     const d = formatDateForDisplay(fecha);
@@ -1317,6 +1521,14 @@ const ResponderTareaAuditoriaModal = ({
             animation: highlighted-comment-pulse 1.4s ease-in-out infinite;
           }
         `}</style>
+
+        <input
+          ref={reemplazoInputRef}
+          type="file"
+          accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
+          className="d-none"
+          onChange={handleReemplazoArchivo}
+        />
         
         <Modal.Header closeButton>
           <Modal.Title className="d-flex align-items-center gap-2">
@@ -1355,12 +1567,7 @@ const ResponderTareaAuditoriaModal = ({
                   <Col xs={12} sm={6}>
                     <div className="audit-field-label">Creado por</div>
                     <div className="fw-medium text-body">
-                        {tarea?.creado_por ||
-                          tarea?.created_by?.name ||
-                          tarea?.createdBy?.name ||
-                          tarea?.log?.user?.name ||
-                          tarea?.user?.name ||
-                          "N/A"}
+                        {getCreadorNombre(tareaParaUI) || "N/A"}
                     </div>
                   </Col>
                   <Col xs={12} sm={6}>
@@ -1561,6 +1768,14 @@ const ResponderTareaAuditoriaModal = ({
                     />
                   </div>
                 )}
+                {adjuntosTarea.length > 0 && (
+                  <div className="mt-3">
+                    <div className="audit-field-label mb-2">Archivos de la tarea</div>
+                    <div className="d-flex flex-wrap gap-2">
+                      {adjuntosTarea.map((adj) => renderTarjetaAdjunto(adj, null))}
+                    </div>
+                  </div>
+                )}
               </div>
             </Col>
 
@@ -1728,15 +1943,9 @@ const ResponderTareaAuditoriaModal = ({
                               }}
                               dangerouslySetInnerHTML={{ __html: highlightMentions(c.comment || 'Sin contenido') }}
                             />
-                            {/* Mostrar adjuntos del comentario */}
                             {(() => {
-                              if (c.attachments && Array.isArray(c.attachments) && c.attachments.length > 0) {
-                                if (!adjuntosComentarios[c.id]) {
-                                  setAdjuntosComentarios((prev) => ({
-                                    ...prev,
-                                    [c.id]: c.attachments,
-                                  }));
-                                }
+                              if (!adjuntosComentarios[c.id]) {
+                                setTimeout(() => sincronizarAdjuntosComentario(c.id, c), 0);
                               }
                               return <MostrarAdjuntosComentario comentarioId={c.id} />;
                             })()}
@@ -2148,13 +2357,11 @@ const ResponderTareaAuditoriaModal = ({
                   </div>
                 ) : (
                   <img
-                    src={archivoPreview.adjunto.url}
+                    src={getAdjuntoDisplayUrl(archivoPreview.adjunto)}
                     alt={archivoPreview.adjunto.nombre_original || "Imagen"}
                     className="img-fluid"
                     style={{ maxHeight: "80vh", maxWidth: "100%", objectFit: "contain" }}
-                    onError={() => {
-                      setErrorCargaArchivo(true);
-                    }}
+                    onError={() => setErrorCargaArchivo(true)}
                   />
                 )}
               </div>
@@ -2168,7 +2375,7 @@ const ResponderTareaAuditoriaModal = ({
                   </div>
                 ) : (
                   <iframe
-                    src={`${archivoPreview.adjunto.url}#toolbar=0`}
+                    src={`${getAdjuntoDisplayUrl(archivoPreview.adjunto)}#toolbar=0`}
                     title={archivoPreview.adjunto.nombre_original || "PDF"}
                     style={{
                       width: "100%",
@@ -2199,15 +2406,24 @@ const ResponderTareaAuditoriaModal = ({
               Cerrar
             </Button>
             {archivoPreview?.adjunto && (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  descargarArchivo(archivoPreview.adjunto);
-                }}
-              >
-                <i className="fas fa-download me-2"></i>
-                Descargar
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    descargarArchivo(archivoPreview.adjunto);
+                  }}
+                >
+                  <i className="fas fa-download me-2"></i>
+                  Descargar
+                </Button>
+                <Button
+                  variant="outline-primary"
+                  onClick={() => abrirAdjuntoAuditoriaEnNuevaPestana(archivoPreview.adjunto)}
+                >
+                  <i className="fas fa-external-link-alt me-2"></i>
+                  Abrir en nueva pestaña
+                </Button>
+              </>
             )}
           </Modal.Footer>
         </Modal>

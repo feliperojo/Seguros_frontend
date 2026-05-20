@@ -1,6 +1,62 @@
 // services/auditoriasTasksService.js
 import apiRequest from "./api";
 
+const getApiBaseUrl = () =>
+  (import.meta.env.VITE_API_BASE_URL || "/api").replace(/\/+$/, "");
+
+const getAuthToken = () => localStorage.getItem("auth_token");
+
+/**
+ * Petición multipart (FormData) para auditoría.
+ */
+export const auditoriaMultipartRequest = async (endpoint, method, formData) => {
+  const API_BASE_URL = getApiBaseUrl();
+  const token = getAuthToken();
+  const headers = { Accept: "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const path = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE_URL}${path}`;
+
+  const response = await fetch(url, { method, headers, body: formData });
+
+  let data = {};
+  try {
+    const text = await response.text();
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { message: "Error al procesar la respuesta del servidor" };
+  }
+
+  if (!response.ok) {
+    const error = new Error(data?.message || "Error en la petición");
+    error.response = { status: response.status, data };
+    throw error;
+  }
+
+  return data;
+};
+
+export const unwrapAuditoriaCommentResponse = (response) => {
+  if (!response || typeof response !== "object") return null;
+  return response.comment ?? response.data ?? response;
+};
+
+export const downloadAuditoriaAdjunto = async (adjuntoId) => {
+  if (!adjuntoId) throw new Error("adjuntoId es requerido");
+  return apiRequest(`auditorias/adjuntos/${adjuntoId}/descargar`, "GET");
+};
+
+/** Lee un campo de payload JSON o FormData. */
+const getPayloadField = (payload, key) => {
+  if (payload instanceof FormData) {
+    const value = payload.get(key);
+    return value != null && String(value).trim() !== "" ? value : null;
+  }
+  const value = payload?.[key];
+  return value != null && value !== "" ? value : null;
+};
+
 /**
  * Construye los query params para los endpoints de tareas de auditoría
  * @param {Object} params - Parámetros de filtro
@@ -104,17 +160,20 @@ export const createTaskFromRun = async (runId, payload) => {
     throw new Error("runId es requerido");
   }
   
-  if (!payload.assigned_user_id) {
+  if (!getPayloadField(payload, "assigned_user_id")) {
     throw new Error("assigned_user_id es requerido");
   }
-  
-  if (!payload.cobertura_id && !payload.cliente_id) {
+
+  if (!getPayloadField(payload, "cobertura_id") && !getPayloadField(payload, "cliente_id")) {
     throw new Error("cobertura_id o cliente_id es requerido");
   }
-  
+
   const endpoint = `auditorias/runs/${runId}/tasks`;
   
   try {
+    if (payload instanceof FormData) {
+      return await auditoriaMultipartRequest(endpoint, "POST", payload);
+    }
     const response = await apiRequest(endpoint, "POST", payload);
     return response;
   } catch (error) {
@@ -136,6 +195,9 @@ export const updateTask = async (taskId, payload) => {
   const endpoint = `auditorias/tasks/${taskId}`;
   
   try {
+    if (payload instanceof FormData) {
+      return await auditoriaMultipartRequest(endpoint, "PUT", payload);
+    }
     const response = await apiRequest(endpoint, "PUT", payload);
     return response;
   } catch (error) {
@@ -270,44 +332,8 @@ export const addComment = async (taskId, formData) => {
   
   const endpoint = `auditorias/tasks/${taskId}/comments`;
   
-  // Para FormData, no usar apiRequest (que envía JSON), usar fetch directamente
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, "") || "/api";
-  const token = localStorage.getItem("auth_token");
-  
-  const headers = {
-    Accept: "application/json",
-  };
-  
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  // NO incluir Content-Type para FormData, el navegador lo hará automáticamente
-  
-  const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
-  
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
-    
-    let data = {};
-    try {
-      const text = await response.text();
-      data = text ? JSON.parse(text) : {};
-    } catch (parseError) {
-      data = { message: "Error al procesar la respuesta del servidor" };
-    }
-    
-    if (!response.ok) {
-      const error = new Error(data?.message || "Error en la petición");
-      error.response = {
-        status: response.status,
-        data: data,
-      };
-      throw error;
-    }
-    
-    return data;
+    return await auditoriaMultipartRequest(endpoint, "POST", formData);
   } catch (error) {
     throw error;
   }
@@ -350,6 +376,9 @@ export const updateComment = async (taskId, commentId, payload) => {
   }
   const endpoint = `auditorias/tasks/${taskId}/comments/${commentId}`;
   try {
+    if (payload instanceof FormData) {
+      return await auditoriaMultipartRequest(endpoint, "PUT", payload);
+    }
     const response = await apiRequest(endpoint, "PUT", payload);
     return response;
   } catch (error) {
@@ -371,5 +400,8 @@ export default {
   addComment,
   getTaskComments,
   updateComment,
+  auditoriaMultipartRequest,
+  unwrapAuditoriaCommentResponse,
+  downloadAuditoriaAdjunto,
 };
 

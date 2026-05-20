@@ -292,7 +292,11 @@ export default function FichaClienteAuditorias() {
   const handleVerTarea = async (tarea) => {
     try {
       const tareaCompleta = await getTask(tarea.id);
-      setSelectedTarea(tareaCompleta);
+      const detalle =
+        tareaCompleta?.data && typeof tareaCompleta.data === "object" && !Array.isArray(tareaCompleta.data)
+          ? tareaCompleta.data
+          : tareaCompleta;
+      setSelectedTarea(detalle || tarea);
       setShowModal(true);
     } catch (err) {
       console.error("Error al cargar detalles de la tarea:", err);

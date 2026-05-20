@@ -211,7 +211,8 @@ const UsersList = () => {
 
     try {
       setActionLoading(user.id);
-      await usersService.toggleStatus(user.id);
+      const newIsActive = user.status !== "active";
+      await usersService.toggleStatus(user.id, newIsActive);
       toast.success(
         `Usuario ${user.status === "active" ? "desactivado" : "activado"} correctamente`
       );

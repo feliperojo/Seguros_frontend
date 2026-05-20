@@ -32,8 +32,8 @@ export const usersService = {
     return apiRequest(`/v1/users/${id}`, "DELETE");
   },
 
-  toggleStatus: async (id) => {
-    return apiRequest(`/v1/users/${id}/status`, "PATCH");
+  toggleStatus: async (id, isActive) => {
+    return apiRequest(`/v1/users/${id}/status`, "PATCH", { is_active: !!isActive });
   },
 
   assignRoles: async (id, roleIds) => {
