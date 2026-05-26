@@ -406,6 +406,29 @@ export const durationFromStartToEnd = (startDate, endDate = new Date()) => {
 /**
  * Formatea dias/horas/minutos a "Xd Xh Xm" (solo lectura / liquidación).
  */
+/** Hora actual en formato HH:mm (input type="time") */
+export const getCurrentTimeHm = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+/** Hora de inicio programada desde payload de tarea (HH:mm) */
+export const parseScheduledTimeFromTask = (tarea) => {
+  if (!tarea) return getCurrentTimeHm();
+  if (tarea.scheduled_time) {
+    const raw = String(tarea.scheduled_time);
+    return raw.length >= 5 ? raw.slice(0, 5) : raw;
+  }
+  const iso = tarea.scheduled_datetime_iso || tarea.fecha_raw || tarea.created_at;
+  if (iso) {
+    const d = new Date(iso);
+    if (!Number.isNaN(d.getTime())) {
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+  }
+  return getCurrentTimeHm();
+};
+
 export const formatDhmString = ({ dias = 0, horas = 0, minutos = 0 }) => {
   const d = Number(dias) || 0;
   const h = Number(horas) || 0;

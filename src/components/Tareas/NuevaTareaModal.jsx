@@ -7,6 +7,7 @@ import MdyDashDateInput from "../common/MdyDashDateInput";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import { extractMentionedUserIds } from "../../utils/mentions";
+import { getCurrentTimeHm } from "../../utils/formatters";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -60,6 +61,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     grupo_familiar_id: "",
     assign_to_user_id: "",
     scheduled_date: getHoy(),
+    scheduled_time: getCurrentTimeHm(),
     due_date: getHoy(),
   });
 
@@ -317,6 +319,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       grupo_familiar_id: grupoIdValido,
       assign_to_user_id: "",
       scheduled_date: hoy,
+      scheduled_time: getCurrentTimeHm(),
       due_date: hoy,
     });
     setErrors({});
@@ -1210,7 +1213,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         </Form.Group>
 
         <div className="row mb-3">
-          <Form.Group className="col-md-6">
+          <Form.Group className="col-md-4">
             <Form.Label>Fecha Programada</Form.Label>
             <MdyDashDateInput
               valueIso={formData.scheduled_date}
@@ -1221,6 +1224,20 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
             <Form.Control.Feedback type="invalid">
               {errors.scheduled_date}
             </Form.Control.Feedback>
+          </Form.Group>
+
+          <Form.Group className="col-md-2">
+            <Form.Label>Hora inicio</Form.Label>
+            <Form.Control
+              type="time"
+              name="scheduled_time"
+              value={formData.scheduled_time || ""}
+              onChange={handleChange}
+              title="Hora desde la cual se contabiliza el tiempo de gestión"
+            />
+            <Form.Text className="text-muted" style={{ fontSize: "0.7rem" }}>
+              Inicio del conteo
+            </Form.Text>
           </Form.Group>
 
           <Form.Group className="col-md-6">

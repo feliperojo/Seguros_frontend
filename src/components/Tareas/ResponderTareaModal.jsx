@@ -32,6 +32,7 @@ import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
+import TramosAsignacionBar from "./TramosAsignacionBar";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -249,6 +250,18 @@ const ResponderTareaModal = ({
       tareaLogRef.current = null;
     }
   }, [show, tarea?.id]);
+
+  const numericTareaIdForTramos = useMemo(() => {
+    const raw = tarea?.id || tarea?.task_id || tarea?.tarea_id;
+    const n = typeof raw === "string" ? parseInt(raw, 10) : Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }, [tarea?.id, tarea?.task_id, tarea?.tarea_id]);
+
+  useEffect(() => {
+    if (show && numericTareaIdForTramos) {
+      setTramosRefreshKey((k) => k + 1);
+    }
+  }, [show, numericTareaIdForTramos]);
  
   // ✅ Inicializar siempre vacío - no cargar response_note de la tarea
   const [responseNote, setResponseNote] = useState("");
@@ -308,6 +321,7 @@ const ResponderTareaModal = ({
   const [assignLoading, setAssignLoading] = useState(false);
   const [assignPreview, setAssignPreview] = useState(null); // para render inmediato sin depender del padre
   const [showReassign, setShowReassign] = useState(false);
+  const [tramosRefreshKey, setTramosRefreshKey] = useState(0);
 
   // ✅ Estados para menciones
   const [usuarios, setUsuarios] = useState([]); // Lista de usuarios para menciones
@@ -1419,6 +1433,7 @@ const ResponderTareaModal = ({
           new Date().toISOString(),
       };
       if (onUpdated) onUpdated(tareaActualizada);
+      setTramosRefreshKey((k) => k + 1);
       
       // Limpiar archivos después de subirlos
       archivos.forEach((arch) => {
@@ -1660,6 +1675,7 @@ const ResponderTareaModal = ({
       if (onUpdated) onUpdated(tareaActualizada);
       setScheduledDate(schedYmd);
       setDueDate(dueYmd);
+      setTramosRefreshKey((k) => k + 1);
       setDueDateUnlocked(false);
       setAdminPasswordForDueDate("");
       setToastVariant("success");
@@ -1711,21 +1727,17 @@ const ResponderTareaModal = ({
 
     setAssignLoading(true);
     try {
+      // PUT /asignar: cierra tramo actual (reasigned) y crea tramo nuevo en operational_task_assignments
       const payload = {
         assigned_user_id: nuevaAsignacionId,
-        assign_to_user_id: nuevaAsignacionId,
       };
 
-      // Intento 1: endpoint con convención similar a auditoría (si existe)
-      let updatedTask = null;
-      try {
-        const res = await apiRequest(`tareas_operativas/${numericTareaId}/asignar`, "PUT", payload);
-        updatedTask = res?.data || res || null;
-      } catch (e1) {
-        // Fallback 2: intentar actualizar la tarea directamente
-        const res = await apiRequest(`tareas_operativas/${numericTareaId}`, "PUT", payload);
-        updatedTask = res?.data || res || null;
-      }
+      const res = await apiRequest(
+        `tareas_operativas/${numericTareaId}/asignar`,
+        "PUT",
+        payload
+      );
+      let updatedTask = res?.data || res || null;
 
       // Recargar para traer la estructura completa (cliente/historial/usuarios) si el backend lo retorna diferente
       try {
@@ -1753,9 +1765,16 @@ const ResponderTareaModal = ({
 
       setAssignPreview(tareaActualizada);
       if (onUpdated) onUpdated(tareaActualizada);
+      setTramosRefreshKey((k) => k + 1);
+      setShowReassign(false);
 
+      const totalTramos = res?.tramos?.total_tramos;
       setToastVariant("success");
-      setToastMessage("Asignación actualizada exitosamente");
+      setToastMessage(
+        totalTramos != null
+          ? `Asignación actualizada. ${totalTramos} tramo(s) registrado(s).`
+          : "Asignación actualizada exitosamente"
+      );
       setShowToast(true);
     } catch (error) {
       console.error("Error al reasignar tarea:", error);
@@ -2161,16 +2180,51 @@ const ResponderTareaModal = ({
           flex-direction: column;
         }
         .responder-tarea-modal .modal-header {
-          background: transparent;
-          border-bottom: 1px solid #e9ecef;
-          padding: 1rem 1.5rem;
+          background: #fff;
+          border-bottom: none;
+          padding: 0;
+          border-radius: 12px 12px 0 0;
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .responder-tarea-modal .modal-header-corporate {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+          padding: 0.65rem 1.25rem;
+          background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%);
           border-radius: 12px 12px 0 0;
         }
-        .responder-tarea-modal .modal-header .btn-close {
-          opacity: 0.6;
+        .responder-tarea-modal .modal-header-corporate .modal-title {
+          font-size: 1.05rem;
+          font-weight: 600;
+          color: #fff;
+          margin: 0;
+          letter-spacing: 0.01em;
         }
-        .responder-tarea-modal .modal-header .btn-close:hover {
+        .responder-tarea-modal .modal-header-corporate .modal-title i {
+          color: rgba(255, 255, 255, 0.9);
+          font-size: 1rem;
+        }
+        .responder-tarea-modal .modal-header-corporate .badge {
+          background: rgba(255, 255, 255, 0.2) !important;
+          color: #fff !important;
+          border: 1px solid rgba(255, 255, 255, 0.25);
+          font-weight: 500;
+        }
+        .responder-tarea-modal .modal-header-corporate .btn-close {
+          flex-shrink: 0;
+          margin: 0;
+          padding: 0.5rem;
+          opacity: 0.85;
+          filter: invert(1) grayscale(1) brightness(2);
+          border-radius: 6px;
+          background-color: rgba(255, 255, 255, 0.08);
+        }
+        .responder-tarea-modal .modal-header-corporate .btn-close:hover {
           opacity: 1;
+          background-color: rgba(255, 255, 255, 0.18);
         }
         .responder-tarea-modal .modal-title {
           font-size: 1.35rem;
@@ -2179,9 +2233,6 @@ const ResponderTareaModal = ({
           display: flex;
           align-items: center;
           gap: 0.5rem;
-        }
-        .responder-tarea-modal .modal-title i {
-          color: #667eea;
         }
         .responder-tarea-modal .modal-body {
           padding: 2rem;
@@ -2239,17 +2290,36 @@ const ResponderTareaModal = ({
           background: #fff5f5;
           animation: highlighted-comment-pulse 1.4s ease-in-out infinite;
         }
+        .responder-tarea-modal .modal-header-tramos {
+          background: #f8fafc;
+          border-bottom: 1px solid #e2e8f0;
+          padding: 0.4rem 1.25rem 0.5rem;
+        }
       `}</style>
-      <Modal.Header closeButton>
-        <Modal.Title className="d-flex align-items-center gap-2">
-          <i className="fas fa-tasks"></i>
-          <span>{tarea.status === "completed" ? "Detalle de Tarea" : "Responder Tarea"}</span>
-          {tarea?.id && (
-            <Badge bg="secondary" className="ms-2" style={{ fontSize: "0.75rem", fontWeight: "normal" }}>
-              ID: {tarea.id || tarea.task_id || tarea.tarea_id}
-            </Badge>
-          )}
-        </Modal.Title>
+      <Modal.Header closeButton={false} className="pb-0">
+        <div className="modal-header-corporate w-100">
+          <Modal.Title className="d-flex align-items-center gap-2 flex-wrap">
+            <i className="fas fa-tasks" aria-hidden />
+            <span>{tarea.status === "completed" ? "Detalle de Tarea" : "Responder Tarea"}</span>
+            {tarea?.id && (
+              <Badge className="ms-1" style={{ fontSize: "0.7rem" }}>
+                ID {tarea.id || tarea.task_id || tarea.tarea_id}
+              </Badge>
+            )}
+          </Modal.Title>
+          <button
+            type="button"
+            className="btn-close"
+            aria-label="Cerrar"
+            onClick={() => onHide(false)}
+          />
+        </div>
+        <div className="modal-header-tramos w-100">
+          <TramosAsignacionBar
+            tareaId={numericTareaIdForTramos}
+            refreshKey={tramosRefreshKey}
+          />
+        </div>
       </Modal.Header>
         <Modal.Body>
           <Row className="g-4" style={{ height: "100%" }}>
@@ -2589,6 +2659,7 @@ const ResponderTareaModal = ({
                       </div>
                     </Col>
                   </Row>
+
                   <div className="mt-3">
                     <div className="d-flex align-items-center gap-2 mb-2">
                       <i className="fas fa-sticky-note text-success"></i>

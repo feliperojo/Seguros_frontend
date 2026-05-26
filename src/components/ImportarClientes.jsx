@@ -306,6 +306,7 @@ const ImportarClientes = () => {
     { key: "estado", label: "Estado", tipo: "string", required: false, maxLength: 20 },
     { key: "codigo_postal", label: "Código postal", tipo: "string", required: false, maxLength: 10 },
     { key: "idioma", label: "Idioma", tipo: "string", required: false, maxLength: 50 },
+    { key: "pais_origen", label: "País de origen", tipo: "string", required: false, maxLength: 255 },
   ];
 
   // 🔹 Aplica el mapeo seleccionado para construir los objetos de cliente que ya esperaba el flujo anterior

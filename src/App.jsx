@@ -39,6 +39,9 @@ import AuditoriasPage from "./pages/AuditoriasPage";
 import AuditoriaRunDetallePage from "./pages/AuditoriaRunDetallePage";
 import SignaturePortalPage from "./pages/SignaturePortalPage";
 import DictadoPlayground from "./pages/dev/DictadoPlayground";
+import ActasReunionPage from "./pages/recursos/ActasReunionPage";
+import ActaEditorPage from "./pages/recursos/ActaEditorPage";
+import MiTableroPage from "./pages/recursos/MiTableroPage";
 
 import FichaClienteLayout from "./pages/FichaClienteLayout";
 import FichaClienteGeneral from "./pages/tabs/FichaClienteGeneral";
@@ -127,6 +130,12 @@ const App = () => {
         {/* Rutas de Auditorías */}
         <Route path="/auditorias" element={<AuditoriasPage />} />
         <Route path="/auditorias/:runId" element={<AuditoriaRunDetallePage />} />
+
+        {/* Recursos: actas de reunión y tablero personal */}
+        <Route path="/recursos/actas" element={<ActasReunionPage />} />
+        <Route path="/recursos/actas/nueva" element={<ActaEditorPage />} />
+        <Route path="/recursos/actas/:id" element={<ActaEditorPage />} />
+        <Route path="/recursos/mi-tablero" element={<MiTableroPage />} />
         
         {/* Rutas del Módulo de Administración - Protegidas por permisos */}
         <Route

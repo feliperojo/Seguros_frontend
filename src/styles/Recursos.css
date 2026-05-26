@@ -1,0 +1,275 @@
+.recursos-page {
+  padding: 1.25rem 1.5rem 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.recursos-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.recursos-page-header h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: #1e293b;
+  letter-spacing: -0.02em;
+}
+
+.recursos-page-header .text-muted {
+  font-size: 0.9rem;
+  color: #64748b !important;
+}
+
+/* —— Tablero personal (vista corporativa) —— */
+.tablero-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.tablero-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tablero-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tablero-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+}
+
+.tablero-stat-chip strong {
+  color: #1e293b;
+  font-weight: 600;
+}
+
+.tablero-stat-chip .stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--stat-color, #94a3b8);
+}
+
+.tablero-view-tabs .nav-link {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  border: none;
+  padding: 0.5rem 1rem;
+}
+
+.tablero-view-tabs .nav-link.active {
+  color: #1e40af;
+  background: #eff6ff;
+  border-radius: 6px;
+}
+
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(260px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 992px) {
+  .kanban-board {
+    grid-template-columns: 1fr;
+  }
+}
+
+.kanban-column {
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.kanban-column-header {
+  padding: 0.85rem 1rem;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #334155;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  border-top: 3px solid var(--kanban-accent, #94a3b8);
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kanban-column-header .column-hint {
+  font-size: 0.7rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #94a3b8;
+}
+
+.kanban-column-header .badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #e2e8f0;
+}
+
+.kanban-column-body {
+  padding: 0.65rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 140px;
+}
+
+.kanban-column-body.drag-over {
+  background: #eff6ff;
+  outline: 1px dashed #93c5fd;
+  outline-offset: -4px;
+  border-radius: 0 0 8px 8px;
+}
+
+.kanban-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid var(--kanban-accent, #cbd5e1);
+  border-radius: 6px;
+  padding: 0.75rem 0.85rem;
+  cursor: grab;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.kanban-card:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.kanban-card:active {
+  cursor: grabbing;
+}
+
+.kanban-card-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #1e293b;
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+}
+
+.kanban-card-meta {
+  font-size: 0.78rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.kanban-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.kanban-card-acta-badge {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #1e40af;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.kanban-card-actions {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.kanban-card-actions .btn {
+  padding: 0.2rem 0.45rem;
+  color: #64748b;
+  border-color: transparent;
+  background: transparent;
+}
+
+.kanban-card-actions .btn:hover {
+  color: #1e293b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.kanban-add-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #64748b !important;
+  text-decoration: none !important;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+}
+
+.kanban-add-link:hover {
+  color: #1e40af !important;
+  background: #f8fafc;
+}
+
+.tablero-historial-table {
+  font-size: 0.875rem;
+}
+
+.tablero-historial-table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.acta-contenido-preview {
+  max-height: 120px;
+  overflow: hidden;
+}
+
+.acta-editor-card {
+  background: #fff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 1.25rem;
+}

@@ -4,7 +4,8 @@ import {
   FaHome, FaUsers, FaProjectDiagram, FaFolder, FaSignOutAlt, FaChevronLeft, FaUserFriends,
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
-  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock
+  FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock,
+  FaBook, FaColumns
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -124,6 +125,8 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
       setExpandedMenu('herramientas');
     } else if (location.pathname.includes('/admin')) {
       setExpandedMenu('administracion');
+    } else if (location.pathname.toLowerCase().includes('/recursos')) {
+      setExpandedMenu('recursos');
     }
   }, [location]);
 
@@ -293,6 +296,36 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         </div>
 
 
+
+        {/* Recursos - Actas y tablero personal */}
+        <div className="nav-item">
+          <div
+            className={`nav-link ${location.pathname.toLowerCase().includes('/recursos') ? 'active' : ''}`}
+            onClick={(e) => isOpen && toggleSubmenu('recursos', e)}
+          >
+            <FaBook />
+            {isOpen && (
+              <>
+                <span>Recursos</span>
+                {expandedMenu === 'recursos' ?
+                  <FaChevronDown className="submenu-icon" /> :
+                  <FaChevronRight className="submenu-icon" />
+                }
+              </>
+            )}
+          </div>
+
+          {isOpen && expandedMenu === 'recursos' && (
+            <div className="submenu">
+              <Link to="/recursos/actas" className={`submenu-link ${location.pathname.startsWith('/recursos/actas') ? 'active' : ''}`}>
+                <FaFileAlt /> Actas de reunión
+              </Link>
+              <Link to="/recursos/mi-tablero" className={`submenu-link ${isActive('/recursos/mi-tablero') ? 'active' : ''}`}>
+                <FaColumns /> Tablero de seguimiento
+              </Link>
+            </div>
+          )}
+        </div>
 
         {/* Informes - Con submenú */}
         <div className="nav-item">
