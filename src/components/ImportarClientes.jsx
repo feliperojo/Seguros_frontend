@@ -10,6 +10,7 @@ const ImportarClientes = () => {
   const [errores, setErrores] = useState([]);
   const [archivo, setArchivo] = useState(null);
   const [procesando, setProcesando] = useState(false);
+  const [progresoLotes, setProgresoLotes] = useState(null);
   const [resumenImportacion, setResumenImportacion] = useState(null);
   // 🔹 Paso del flujo: subir -> mapeo -> revisión/envío
   const [paso, setPaso] = useState("subir"); // "subir" | "mapeo" | "revision"
@@ -534,50 +535,68 @@ const ImportarClientes = () => {
       return payload;
     });
 
-    console.log("🚀 Enviando clientes a la API:", clientesPayload);
+    const TAMANO_LOTE = 100;
+    const totalLotes = Math.ceil(clientesPayload.length / TAMANO_LOTE);
+    let totalCreados = 0;
+    let lotesFallidos = [];
+
+    console.log(`🚀 Enviando ${clientesPayload.length} clientes en ${totalLotes} lotes de hasta ${TAMANO_LOTE}`);
+    setProgresoLotes({ actual: 0, total: totalLotes, creados: 0 });
 
     try {
-      const data = await ClienteService.createMany(clientesPayload);
-      console.log("✅ Respuesta de la API:", data);
-      alert(
-        data.message ||
-          `Se importaron ${data.cantidad ?? clientesNuevos.length} clientes correctamente. Se omitieron ${
-            clientes.length - clientesNuevos.length
-          } clientes duplicados.`
-      );
+      for (let i = 0; i < totalLotes; i++) {
+        const lote = clientesPayload.slice(i * TAMANO_LOTE, (i + 1) * TAMANO_LOTE);
+        setProgresoLotes({ actual: i + 1, total: totalLotes, creados: totalCreados });
 
-      // Descargar reporte resumido (creados vs duplicados)
-      descargarReporteImportacion(resumenImportacion);
+        try {
+          const data = await ClienteService.createMany(lote);
+          totalCreados += data.cantidad ?? lote.length;
+          console.log(`✅ Lote ${i + 1}/${totalLotes} completado: ${data.cantidad ?? lote.length} creados`);
+        } catch (error) {
+          console.error(`❌ Error en lote ${i + 1}/${totalLotes}:`, error);
 
-      // Actualizar la lista de clientes existentes después de la importación
-      obtenerClientesExistentes();
+          if (error?.response?.status === 401) {
+            alert("No autenticado. Por favor, inicia sesión nuevamente e intenta de nuevo la importación.");
+            return;
+          }
 
-      setClientes([]);
-      setArchivo(null);
-      setErrores([]);
-      setResumenImportacion(null);
-    } catch (error) {
-      console.error("❌ Error al importar clientes:", error);
-      if (error?.response) {
-        console.error("❌ Detalle error de validación al importar clientes:", {
-          status: error.response.status,
-          url: error.response.url,
-          data: error.response.data,
-          errors: error.response.errors,
-          code: error.response.code,
-        });
+          lotesFallidos.push({
+            lote: i + 1,
+            desde: i * TAMANO_LOTE + 1,
+            hasta: Math.min((i + 1) * TAMANO_LOTE, clientesPayload.length),
+            error: error?.response?.data?.message || error?.message || "Error desconocido",
+          });
+        }
       }
-      const apiMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Error de conexión";
-      alert(
-        error?.response?.status === 401
-          ? "No autenticado. Por favor, inicia sesión nuevamente e intenta de nuevo la importación."
-          : `Error al importar los clientes: ${apiMessage}`
-      );
+
+      setProgresoLotes({ actual: totalLotes, total: totalLotes, creados: totalCreados });
+
+      const omitidos = clientes.length - clientesNuevos.length;
+      let mensaje = `Se importaron ${totalCreados} clientes correctamente.`;
+      if (omitidos > 0) mensaje += ` Se omitieron ${omitidos} duplicados.`;
+      if (lotesFallidos.length > 0) {
+        mensaje += `\n\n⚠️ ${lotesFallidos.length} lote(s) fallaron:\n` +
+          lotesFallidos.map(l => `  - Lote ${l.lote} (registros ${l.desde}-${l.hasta}): ${l.error}`).join("\n");
+      }
+      alert(mensaje);
+
+      if (totalCreados > 0) {
+        descargarReporteImportacion(resumenImportacion);
+        obtenerClientesExistentes();
+      }
+
+      if (lotesFallidos.length === 0) {
+        setClientes([]);
+        setArchivo(null);
+        setErrores([]);
+        setResumenImportacion(null);
+      }
+    } catch (error) {
+      console.error("❌ Error crítico en importación por lotes:", error);
+      alert(`Error crítico al importar: ${error?.message || "Error de conexión"}`);
     } finally {
       setProcesando(false);
+      setProgresoLotes(null);
     }
   };
 
@@ -739,12 +758,34 @@ const ImportarClientes = () => {
         </div>
       )}
       
+      {progresoLotes && (
+        <div className="mt-3 mb-2">
+          <div className="d-flex justify-content-between align-items-center mb-1">
+            <small className="text-muted">
+              Enviando lote {progresoLotes.actual} de {progresoLotes.total}...
+            </small>
+            <small className="text-muted fw-bold">
+              {progresoLotes.creados} creados
+            </small>
+          </div>
+          <div className="progress" style={{ height: "20px" }}>
+            <div
+              className="progress-bar progress-bar-striped progress-bar-animated bg-success"
+              role="progressbar"
+              style={{ width: `${Math.round((progresoLotes.actual / progresoLotes.total) * 100)}%` }}
+            >
+              {Math.round((progresoLotes.actual / progresoLotes.total) * 100)}%
+            </div>
+          </div>
+        </div>
+      )}
+
       <button 
         className="btn btn-success mt-3" 
         onClick={enviarDatos} 
         disabled={errores.length > 0 || clientes.length === 0 || procesando || (resumenImportacion && resumenImportacion.nuevos === 0)}
       >
-        {procesando ? "Procesando..." : `Crear ${resumenImportacion ? resumenImportacion.nuevos : 0} Clientes`}
+        {procesando ? "Importando..." : `Crear ${resumenImportacion ? resumenImportacion.nuevos : 0} Clientes`}
       </button>
     </div>
   );
