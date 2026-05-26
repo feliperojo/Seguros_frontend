@@ -99,16 +99,6 @@ export default function FichaClienteInfoCompleta() {
                     <dd className="col-sm-8">
                       {cliente.nombre_completo || <NotAvailable />}
                     </dd>
-
-                    <dt className="col-sm-4">Tipo Documento</dt>
-                    <dd className="col-sm-8">
-                      {cliente.tipo_documento || <NotAvailable />}
-                    </dd>
-
-                    <dt className="col-sm-4">Número Documento</dt>
-                    <dd className="col-sm-8">
-                      {cliente.numero_documento || <NotAvailable />}
-                    </dd>
                   </dl>
                 </Col>
                 <Col md={6}>
@@ -135,10 +125,7 @@ export default function FichaClienteInfoCompleta() {
                       )}
                     </dd>
 
-                    <dt className="col-sm-4">Categoría</dt>
-                    <dd className="col-sm-8">
-                      {cliente.categoria || <NotAvailable />}
-                    </dd>
+                    
 
                     <dt className="col-sm-4">Estado Civil</dt>
                     <dd className="col-sm-8">
@@ -200,6 +187,10 @@ export default function FichaClienteInfoCompleta() {
                         ? formatDate?.(cliente.fecha_expiracion) ??
                           cliente.fecha_expiracion
                         : <NotAvailable />}
+                    </dd>
+                    <dt className="col-sm-4">Categoría</dt>
+                    <dd className="col-sm-8">
+                      {cliente.categoria || <NotAvailable />}
                     </dd>
                   </dl>
                 </Col>
