@@ -148,9 +148,18 @@ export const toISODate = (v) => {
     
     const m = v.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
     if (m) {
-      const [, M, D, Y] = m;
-      const yyyy = (Y.length === 2 ? (Number(Y) + 2000) : Number(Y)).toString().padStart(4,'0');
-      return `${yyyy}-${String(M).padStart(2,'0')}-${String(D).padStart(2,'0')}`;
+      const p0 = Number(m[1]);
+      const p1 = Number(m[2]);
+      const yyyy = (m[3].length === 2 ? (Number(m[3]) + 2000) : Number(m[3])).toString().padStart(4,'0');
+      let mm, dd;
+      if (p0 > 12) {
+        dd = p0; mm = p1;
+      } else if (p1 > 12) {
+        mm = p0; dd = p1;
+      } else {
+        dd = p0; mm = p1;
+      }
+      return `${yyyy}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
     }
     // Último recurso: intentar parsear como Date
     const d = new Date(v);

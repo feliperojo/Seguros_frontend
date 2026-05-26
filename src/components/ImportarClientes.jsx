@@ -168,9 +168,25 @@ const ImportarClientes = () => {
     if (partes[0].length === 4) {
         [año, mes, dia] = partes;
     }
-    // 🔹 Caso 2: Formato MM/DD/YYYY
-    else if (partes[2].length === 4) {
-        [mes, dia, año] = partes;
+    // 🔹 Caso 2: Formato DD/MM/YYYY o MM/DD/YYYY (año al final)
+    else if (partes[2].length === 4 || partes[2].length === 2) {
+        const p0 = parseInt(partes[0], 10);
+        const p1 = parseInt(partes[1], 10);
+        año = partes[2];
+        if (partes[2].length === 2) {
+            año = String(2000 + parseInt(año, 10));
+        }
+
+        if (p0 > 12) {
+            dia = partes[0];
+            mes = partes[1];
+        } else if (p1 > 12) {
+            mes = partes[0];
+            dia = partes[1];
+        } else {
+            dia = partes[0];
+            mes = partes[1];
+        }
     }
     // 🔹 Caso 3: Formato inválido
     else {
@@ -183,7 +199,7 @@ const ImportarClientes = () => {
     dia = parseInt(dia, 10);
 
     if (isNaN(dia) || isNaN(mes) || isNaN(año) || dia < 1 || dia > 31 || mes < 1 || mes > 12) {
-        return null; // Si alguno es inválido
+        return null;
     }
 
     // 🔹 Formatear correctamente (YYYY-MM-DD)
