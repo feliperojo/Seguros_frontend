@@ -194,11 +194,11 @@ export default function FichaClienteInfoCompleta() {
                         : <NotAvailable />}
                     </dd>
 
-                    <dt className="col-sm-4">Fecha Expedición</dt>
+                    <dt className="col-sm-4">Fecha Expiración</dt>
                     <dd className="col-sm-8">
-                      {cliente.fecha_expedicion
-                        ? formatDate?.(cliente.fecha_expedicion) ??
-                          cliente.fecha_expedicion
+                      {cliente.fecha_expiracion
+                        ? formatDate?.(cliente.fecha_expiracion) ??
+                          cliente.fecha_expiracion
                         : <NotAvailable />}
                     </dd>
                   </dl>
