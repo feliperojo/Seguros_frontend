@@ -116,7 +116,7 @@ export default function FichaClienteInfoCompleta() {
                       {edad != null ? `${edad} años` : <NotAvailable />}
                     </dd>
 
-                    <dt className="col-sm-4">Estado Cliente</dt>
+                    <dt className="col-sm-4">Tipo Cliente</dt>
                     <dd className="col-sm-8">
                       {cliente.estado_cliente ? (
                         <Badge bg="success">{cliente.estado_cliente}</Badge>
