@@ -56,8 +56,27 @@ const ImportarClientes = () => {
     }
 
     if (tipo === "number") {
-      const cleaned = valor.toString().replace(/[^0-9.\-,]/g, "").replace(",", ".");
-      const num = parseFloat(cleaned);
+      let s = valor.toString().replace(/[^0-9.\-,]/g, "");
+      if (s.includes(",") && s.includes(".")) {
+        if (s.lastIndexOf(",") > s.lastIndexOf(".")) {
+          s = s.replace(/\./g, "").replace(",", ".");
+        } else {
+          s = s.replace(/,/g, "");
+        }
+      } else if (s.includes(",")) {
+        const parts = s.split(",");
+        if (parts.length === 2 && parts[1].length === 3) {
+          s = s.replace(/,/g, "");
+        } else {
+          s = s.replace(",", ".");
+        }
+      } else if (s.includes(".")) {
+        const parts = s.split(".");
+        if (parts.length === 2 && parts[1].length === 3) {
+          s = s.replace(/\./g, "");
+        }
+      }
+      const num = parseFloat(s);
       return Number.isFinite(num) ? num : null;
     }
 
