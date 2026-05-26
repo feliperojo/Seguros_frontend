@@ -108,7 +108,7 @@ export default function FichaClienteHistorial() {
               <div><strong>Cliente</strong></div>
               <div>{cliente.nombre_completo ?? "—"}</div>
               <div><strong>ID Cliente:</strong> {clienteId ?? "—"}</div>
-              <div><strong>Estado:</strong> {cliente.estado ?? cliente.estado_cliente ?? "—"}</div>
+              <div><strong>Estado:</strong> {cliente.estado_cliente ?? "—"}</div>
             </div>
             <div className="col-md-6">
               <div><strong>Teléfono:</strong> {cliente.telefono ?? "—"}</div>

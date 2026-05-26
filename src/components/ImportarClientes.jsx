@@ -55,6 +55,12 @@ const ImportarClientes = () => {
       return isNaN(parseInt(valor)) ? null : parseInt(valor);
     }
 
+    if (tipo === "number") {
+      const cleaned = valor.toString().replace(/[^0-9.\-,]/g, "").replace(",", ".");
+      const num = parseFloat(cleaned);
+      return Number.isFinite(num) ? num : null;
+    }
+
     if (tipo === "string" && maxLength) {
       return valor.trim().length > maxLength ? valor.trim().substring(0, maxLength) : valor.trim();
     }
@@ -250,6 +256,18 @@ const ImportarClientes = () => {
           { key: "estado", aliases: ["estado", "state"] },
           { key: "codigo_postal", aliases: ["codigo_postal", "zip", "postal_code"] },
           { key: "idioma", aliases: ["idioma", "language"] },
+          { key: "pais_origen", aliases: ["pais_origen", "pais", "country", "country_of_origin"] },
+          { key: "tipo_ingreso", aliases: ["tipo_ingreso", "tipo_de_ingreso", "income_type"] },
+          { key: "actividad_economica", aliases: ["actividad_economica", "actividad", "economic_activity"] },
+          { key: "empleador", aliases: ["empleador", "employer"] },
+          { key: "telefono_empleador", aliases: ["telefono_empleador", "employer_phone"] },
+          { key: "periodo_ingreso", aliases: ["periodo_ingreso", "periodo_de_ingreso", "income_period"] },
+          { key: "ingreso_por_periodo", aliases: ["ingreso_por_periodo", "income_per_period"] },
+          { key: "ingreso_anual", aliases: ["ingreso_anual", "annual_income", "ingreso"] },
+          { key: "nota_ingreso_ocasional", aliases: ["nota_ingreso_ocasional"] },
+          { key: "periodo_ingreso_ocasional", aliases: ["periodo_ingreso_ocasional"] },
+          { key: "ingreso_por_periodo_ocasional", aliases: ["ingreso_por_periodo_ocasional"] },
+          { key: "ingreso_ocasional_anual", aliases: ["ingreso_ocasional_anual"] },
         ];
 
         const autoMap = {};
@@ -308,6 +326,17 @@ const ImportarClientes = () => {
     { key: "codigo_postal", label: "Código postal", tipo: "string", required: false, maxLength: 10 },
     { key: "idioma", label: "Idioma", tipo: "string", required: false, maxLength: 50 },
     { key: "pais_origen", label: "País de origen", tipo: "string", required: false, maxLength: 255 },
+    { key: "tipo_ingreso", label: "Tipo de ingreso", tipo: "string", required: false, maxLength: 100 },
+    { key: "actividad_economica", label: "Actividad económica", tipo: "string", required: false, maxLength: 255 },
+    { key: "empleador", label: "Empleador", tipo: "string", required: false, maxLength: 255 },
+    { key: "telefono_empleador", label: "Teléfono empleador", tipo: "string", required: false, maxLength: 20 },
+    { key: "periodo_ingreso", label: "Período de ingreso", tipo: "string", required: false, maxLength: 50 },
+    { key: "ingreso_por_periodo", label: "Ingreso por período", tipo: "number", required: false },
+    { key: "ingreso_anual", label: "Ingreso anual", tipo: "number", required: false },
+    { key: "nota_ingreso_ocasional", label: "Nota ingreso ocasional", tipo: "string", required: false, maxLength: 255 },
+    { key: "periodo_ingreso_ocasional", label: "Período ingreso ocasional", tipo: "string", required: false, maxLength: 50 },
+    { key: "ingreso_por_periodo_ocasional", label: "Ingreso por período ocasional", tipo: "number", required: false },
+    { key: "ingreso_ocasional_anual", label: "Ingreso ocasional anual", tipo: "number", required: false },
   ];
 
   // 🔹 Aplica el mapeo seleccionado para construir los objetos de cliente que ya esperaba el flujo anterior
@@ -354,6 +383,11 @@ const ImportarClientes = () => {
 
         if (campo.tipo === "integer") {
           cliente[campo.key] = limpiarValor(raw, "integer");
+          return;
+        }
+
+        if (campo.tipo === "number") {
+          cliente[campo.key] = limpiarValor(raw, "number");
           return;
         }
 

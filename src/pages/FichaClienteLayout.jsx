@@ -60,7 +60,7 @@ const normalizeCliente = (raw) => {
     merged.tel1 ??
     (merged.cod_tel_1 ? `${merged.cod_tel_1} ${merged.tel_1 || ""}`.trim() : null);
 
-  const estado = merged.estado_cliente ?? merged.estado_Cliente ?? merged.estado ?? merged.status ?? null;
+  const estado_cliente = merged.estado_cliente ?? merged.estado_Cliente ?? merged.status ?? null;
   const fecha_nacimiento = merged.fecha_nacimiento ?? merged.fechaNacimiento ?? merged.fecha_nac ?? null;
 
   const whatsapp = merged?.whatsapp ?? merged?.telefonos?.whatsapp ?? raw?.telefonos?.whatsapp ?? null;
@@ -85,7 +85,8 @@ const normalizeCliente = (raw) => {
     ...merged,
     nombre_completo: normalizeNombre(merged),
     telefono,
-    estado,
+    estado_cliente,
+    estado: merged.estado ?? null,
     fecha_nacimiento,
     edad: merged.edad ?? calcEdad(fecha_nacimiento),
     grupo_familiar_id: gfId,

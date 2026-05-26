@@ -128,11 +128,16 @@ export default function FichaClienteInfoCompleta() {
 
                     <dt className="col-sm-4">Estado Cliente</dt>
                     <dd className="col-sm-8">
-                      {cliente.estado ? (
-                        <Badge bg="success">{cliente.estado}</Badge>
+                      {cliente.estado_cliente ? (
+                        <Badge bg="success">{cliente.estado_cliente}</Badge>
                       ) : (
                         <NotAvailable />
                       )}
+                    </dd>
+
+                    <dt className="col-sm-4">Categoría</dt>
+                    <dd className="col-sm-8">
+                      {cliente.categoria || <NotAvailable />}
                     </dd>
 
                     <dt className="col-sm-4">Estado Civil</dt>
@@ -283,7 +288,7 @@ export default function FichaClienteInfoCompleta() {
 
                     <dt className="col-sm-4">Estado / Provincia</dt>
                     <dd className="col-sm-8">
-                      {cliente.estado_residencia || cliente.estado || <NotAvailable />}
+                      {cliente.estado || <NotAvailable />}
                     </dd>
                   </dl>
                 </Col>
