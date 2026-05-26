@@ -238,6 +238,7 @@ export const mapClienteFromMember = (m = {}) => {
     genero: pick("genero"),
     idioma: pick("idioma"),
     pais_origen: capitalizeWords(pick("pais_origen") || ""),
+    edad: toNumberOrZero(pick("edad")) || null,
     fecha_nacimiento,
     ingreso_anual: Number.isFinite(ingreso_num) ? ingreso_num : 0,
     nota: pick("nota"),
