@@ -11,6 +11,7 @@ import {
   Table,
 } from "react-bootstrap";
 import apiRequest from "../services/api";
+import { getListFromApi } from "../utils/apiResponse";
 
 const InformeCliente = () => {
   const [busqueda, setBusqueda] = useState("");
@@ -25,7 +26,7 @@ const InformeCliente = () => {
   const buscarClientes = async (nombre) => {
     try {
       const res = await apiRequest(`cliente/buscar?nombre=${nombre}`, "GET");
-      setClientes(Array.isArray(res?.data) ? res.data : []);
+      setClientes(getListFromApi(res));
     } catch (err) {
       console.error("Error al buscar clientes:", err);
     }

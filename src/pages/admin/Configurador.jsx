@@ -111,6 +111,10 @@ const Configurador = () => {
 
   const canEdit = useHasPermission("users.edit");
   const canView = useHasPermission("users.view");
+  const canEditSettings =
+    useHasPermission("settings.edit") || useHasPermission("settings.update");
+  const canViewSettings =
+    useHasPermission("settings.view") || useHasPermission("settings.read");
 
   // === RingCentral → Suscripción Webhook ===
   const [rcStatus, setRcStatus] = useState(null);
@@ -1135,6 +1139,8 @@ const Configurador = () => {
         users={users}
         loadingUsers={loadingUsers}
         loadingConfig={loadingConfig}
+        canEditSettings={canEditSettings}
+        canViewSettings={canViewSettings}
       />
     </div>
   );

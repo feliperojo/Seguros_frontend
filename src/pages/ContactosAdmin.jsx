@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import apiRequest from "../services/api";
 import { formatPhone334 } from "../utils/formatters";
 import useToast from "../hooks/useToast";
+import { getListFromApi } from "../utils/apiResponse";
 
 // ⬇️ componentes ya existentes en tu proyecto
 import LanguageSelect from "../components/selects/LanguageSelect";
@@ -168,7 +169,7 @@ export default function ContactosAdmin() {
         console.log("res.data:", res?.data);
         console.log("res (directo):", res);
         
-        const list = Array.isArray(res?.data) ? res.data : [];
+        const list = getListFromApi(res);
         console.log("Lista procesada que se guarda en rows:", list);
         console.log("Primer elemento de la lista (ejemplo):", list[0]);
         if (list[0]) {

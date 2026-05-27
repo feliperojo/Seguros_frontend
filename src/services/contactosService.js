@@ -1,5 +1,6 @@
 import apiRequest from "../services/api";
 import { splitFullName } from "../utils/names";
+import { getListFromApi } from "../utils/apiResponse";
 
 
 
@@ -8,7 +9,7 @@ export const searchClientes = async (nombre) => {
     `/cliente/buscar?nombre=${encodeURIComponent(nombre)}`,
     "GET"
   );
-  return Array.isArray(body?.data) ? body.data : [];
+  return getListFromApi(body);
 };
 /** ----------------------------------------------------------------
  *  LISTAR VÍNCULOS (cliente ↔ contacto) POR CLIENTE/GRUPO

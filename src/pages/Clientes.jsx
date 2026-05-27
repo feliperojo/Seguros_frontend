@@ -16,6 +16,7 @@ import { normalizeDateForInput } from "../utils/formatters";
 import TelefonosPro from "../components/fase2/TelefonosPro";
 import { toApiPhones } from "../utils/phone-mappers";
 import { computeAnnual } from "../services/ingresos";
+import { getListFromApi } from "../utils/apiResponse";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -314,7 +315,7 @@ const closeModal = () => setShowModal(false);
         "GET"
       );
 
-      const candidatos = Array.isArray(posibles?.data) ? posibles.data : [];
+      const candidatos = getListFromApi(posibles);
 
       const yaExiste = candidatos.find((c) => {
         const nombreBD = (

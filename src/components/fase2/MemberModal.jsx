@@ -4,6 +4,7 @@ import LanguageSelect from "../selects/LanguageSelect";
 import { normalizeDateForInput } from "../../utils/formatters";
 import MdyDashDateInput from "../common/MdyDashDateInput";
 import apiRequest from "../../services/api";
+import { getListFromApi } from "../../utils/apiResponse";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -212,7 +213,7 @@ export default function MemberModalCreate({
         "GET"
       );
 
-      const candidatos = Array.isArray(posibles?.data) ? posibles.data : [];
+      const candidatos = getListFromApi(posibles);
 
       const matches = candidatos.filter((c) => {
         const nombreBD = (

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import { Form, Button, Table, InputGroup, Alert, Spinner } from "react-bootstrap";
 import apiRequest from "../services/api";
 import { formatPhone334, formatDateForDisplay } from "../utils/formatters";
+import { getListFromApi } from "../utils/apiResponse";
 
 const ClienteExistente = ({ onClienteSeleccionado }) => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -35,7 +36,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
         "GET"
       );
       
-      let clientes = Array.isArray(response?.data) ? response.data : [];
+      let clientes = getListFromApi(response);
       
       // Si no hay resultados y el término tiene múltiples palabras, intentar estrategias alternativas
       if (clientes.length === 0 && termino.includes(' ')) {
@@ -74,7 +75,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
               `cliente/buscar?nombre=${encodeURIComponent(palabras[0])}&incluir_prospectos=false`,
               "GET"
             );
-            const clientes1 = Array.isArray(res1?.data) ? res1.data : [];
+            const clientes1 = getListFromApi(res1);
             if (clientes1.length > 0) {
               const filtrados = filtrarPorPalabras(clientes1);
               if (filtrados.length > 0) {
@@ -97,7 +98,7 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
               `cliente/buscar?nombre=${encodeURIComponent(ultimaPalabra)}&incluir_prospectos=false`,
               "GET"
             );
-            const clientes2 = Array.isArray(res2?.data) ? res2.data : [];
+            const clientes2 = getListFromApi(res2);
             if (clientes2.length > 0) {
               const filtrados = filtrarPorPalabras(clientes2);
               if (filtrados.length > 0) {

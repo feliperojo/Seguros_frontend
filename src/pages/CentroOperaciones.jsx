@@ -7,6 +7,7 @@ import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import DetalleBitacoraModal from "../components/Tareas/DetalleBitacoraModal";
 import HistorialClienteModal from "../components/Tareas/HistorialClienteModal";
 import { formatDateTimeForDisplay } from "../utils/formatters";
+import { getListFromApi } from "../utils/apiResponse";
 
 
 const CentroOperaciones = () => {
@@ -101,7 +102,7 @@ const CentroOperaciones = () => {
     if (searchTerm.length >= 2) {
       try {
         const result = await apiRequest(`cliente/buscar?nombre=${encodeURIComponent(searchTerm)}`, "GET");
-        setClientesBusqueda(Array.isArray(result?.data) ? result.data : []);
+        setClientesBusqueda(getListFromApi(result));
       } catch (error) {
         setClientesBusqueda([]);
       }
