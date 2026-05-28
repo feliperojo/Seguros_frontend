@@ -18,6 +18,8 @@ import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
 import countryCodes from "../services/countryCodes";
 import { normalizeDateForInput } from "../utils/formatters";
 import MdyDashDateInput from "./common/MdyDashDateInput";
+import { STATUS_MIGRATORIO_OPTIONS } from "../constants/statusMigratorio";
+import { normalizeStatusMigratorioForSelect } from "../utils/clienteFieldNormalize";
 
 // Dentro del render del tab de mediosPago en EditClienteModal.js
 const renderMediosPagoTab = () => (
@@ -348,7 +350,7 @@ const mapClienteDataToForm = (data) => {
     },
     statusMigratorio: {
       social: data.social || "",
-      status: data.status || "",
+      status: normalizeStatusMigratorioForSelect(data.status || ""),
       auscis: data.auscis || "",
       tarjeta_numero: data.tarjeta_numero || "",
       fecha_emision: data.fecha_emision || "",
@@ -866,24 +868,17 @@ useEffect(() => {
           <Form.Group>
             <Form.Label>Status</Form.Label>
             <Form.Select
-                  value={formData.statusMigratorio.status}
+                  value={normalizeStatusMigratorioForSelect(formData.statusMigratorio.status)}
                   onChange={(e) => handleInputChange("statusMigratorio", "status", e.target.value)}
                 >
 
 
               <option value="">Seleccione</option>
-              <option value="P. TRABAJO">P. TRABAJO</option>
-                  <option value="RESIDENTE">RESIDENTE</option>
-                  <option value="CIUDADANO">CIUDADANO</option>
-                  <option value="I-862">I-862</option>
-                  <option value="I-797">I-797</option>
-                  <option value="I-589 ASILUM">I-589 ASILUM</option>
-                  <option value="ESTUDIANTE">ESTUDIANTE</option>
-                  <option value="VISA E2">VISA E2</option>
-                  <option value="VISA K1">VISA K1</option>
-                  <option value="VISA J">VISA J</option>
-                  <option value="I-94">I-94</option>
-                  <option value="TPS">TPS</option>
+              {STATUS_MIGRATORIO_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
             </Form.Select>
           </Form.Group>
         </Col>

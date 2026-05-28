@@ -17,6 +17,8 @@ import TelefonosPro from "../components/fase2/TelefonosPro";
 import { toApiPhones } from "../utils/phone-mappers";
 import { computeAnnual } from "../services/ingresos";
 import { getListFromApi } from "../utils/apiResponse";
+import { STATUS_MIGRATORIO_OPTIONS } from "../constants/statusMigratorio";
+import { normalizeStatusMigratorioForSelect } from "../utils/clienteFieldNormalize";
 
 
 const Clientes = ({ onClienteCreado, isModal = false }) => {
@@ -581,20 +583,18 @@ const closeModal = () => setShowModal(false);
               </div>
               <div className="col-md-3">
                 <label>Status</label>
-                <select name="status" className="form-select" value={formData.status} onChange={handleChange}>
+                <select
+                  name="status"
+                  className="form-select"
+                  value={normalizeStatusMigratorioForSelect(formData.status)}
+                  onChange={handleChange}
+                >
                   <option value="">Seleccione</option>
-                  <option value="P. TRABAJO">P. TRABAJO</option>
-                  <option value="RESIDENTE">RESIDENTE</option>
-                  <option value="CIUDADANO">CIUDADANO</option>
-                  <option value="I-862">I-862</option>
-                  <option value="I-797">I-797</option>
-                  <option value="I-589 ASILUM">I-589 ASILUM</option>
-                  <option value="ESTUDIANTE">ESTUDIANTE</option>
-                  <option value="VISA E2">VISA E2</option>
-                  <option value="VISA K1">VISA K1</option>
-                  <option value="VISA J">VISA J</option>
-                  <option value="I-94">I-94</option>
-                  <option value="TPS">TPS</option>
+                  {STATUS_MIGRATORIO_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
                 </select>
               </div>
               <div className="col-md-3">

@@ -15,6 +15,7 @@ import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
 import { normalizeDateForInput } from "../../utils/formatters";
 import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
+import { normalizeGeneroForSelect } from "../../utils/clienteFieldNormalize";
 import TelefonosPro from "./TelefonosPro";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
@@ -117,7 +118,8 @@ const PARENTESCO_OPTIONS = [
 const getMemberEdad = (m = {}) =>
   m.edad ?? calcAge(m.fecha_nacimiento || m.cliente?.fecha_nacimiento);
 
-const getMemberGenero = (m = {}) => m.genero || m.cliente?.genero || "";
+const getMemberGenero = (m = {}) =>
+  normalizeGeneroForSelect(m.genero || m.cliente?.genero || "");
 
 const yaEstaEnElGrupo = (clienteId, members = []) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
@@ -136,7 +138,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
   const nombreCompleto =
     c.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
   const edad = calcAge(fecha);
-  const genero = c.genero || "Masculino";
+  const genero = normalizeGeneroForSelect(c.genero || "") || "Masculino";
 
   return {
     id: c.id || `temp-${Date.now()}-${Math.random()}`, // Asegurar ID único
@@ -479,7 +481,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
               </label>
               <select
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
-                value={member.genero || member?.cliente?.genero || ""}
+                value={normalizeGeneroForSelect(member.genero || member?.cliente?.genero || "")}
                 disabled={readOnly}
                 onChange={handle("genero")}
               >

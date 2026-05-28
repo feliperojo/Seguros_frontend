@@ -35,9 +35,14 @@ import {
   unwrapClienteFromApi,
 } from "../../utils/mergeClientePreferNonEmpty";
 import { toLegacyFields } from "../../utils/phones";
-import { inflatePhones } from "../../utils/phone-mappers";
+import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
 import { buildPayerOptions } from "../../utils/payers";
+import {
+  normalizeGeneroForSelect,
+  normalizeStatusMigratorioForSelect,
+} from "../../utils/clienteFieldNormalize";
+import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
@@ -258,8 +263,40 @@ const clienteTieneNombreVisible = (c) => {
   );
 };
 
+/** Hidrata cliente anidado (teléfonos, status, género) para TelefonosPro y selects */
+const hydrateClienteForMember = (cli = {}, m = {}) => {
+  const merged = { ...m, ...cli, telefonos: cli.telefonos ?? m.telefonos };
+  const telefonos = resolveClienteTelefonos(merged, "co");
+  const legacy = toLegacyFields(telefonos);
+
+  return {
+    ...cli,
+    ...legacy,
+    genero: normalizeGeneroForSelect(cli.genero ?? m.genero ?? ""),
+    status: normalizeStatusMigratorioForSelect(cli.status ?? m.status ?? ""),
+    telefonos,
+    whatsapp: cli.whatsapp ?? m.whatsapp ?? false,
+    telegram: cli.telegram ?? m.telegram ?? false,
+    texto_sms: cli.texto_sms ?? m.texto_sms ?? false,
+  };
+};
+
 const normalizeMember = (m, idx) => {
-  if (m?.cliente && typeof m.cliente === "object" && clienteTieneNombreVisible(m.cliente)) return m;
+  if (m?.cliente && typeof m.cliente === "object" && clienteTieneNombreVisible(m.cliente)) {
+    const cliente = hydrateClienteForMember(m.cliente, m);
+    return {
+      ...m,
+      telefono: m.telefono || cliente.telefono,
+      secundario: m.secundario || cliente.secundario,
+      whatsapp_num: m.whatsapp_num || cliente.whatsapp_num,
+      genero: normalizeGeneroForSelect(m.genero || cliente.genero),
+      status: normalizeStatusMigratorioForSelect(m.status || cliente.status),
+      whatsapp: m.whatsapp ?? cliente.whatsapp,
+      telegram: m.telegram ?? cliente.telegram,
+      texto_sms: m.texto_sms ?? cliente.texto_sms,
+      cliente,
+    };
+  }
 
   const primerRaw = m.primer_nombre || "";
   const segundoRaw = m.segundo_nombre || "";
@@ -293,11 +330,12 @@ const normalizeMember = (m, idx) => {
     primer_nombre: primer,
     segundo_nombre: segundo,
     apellidos: apell,
-    genero: m.genero || "",
+    genero: normalizeGeneroForSelect(m.genero || m?.cliente?.genero || ""),
     fecha_nacimiento: fecha,
     edad,
     idioma: m.idioma || "",
     pais_origen: m.pais_origen || "",
+    status: normalizeStatusMigratorioForSelect(m.status || m?.cliente?.status || ""),
     peso: m.peso || m?.cliente?.peso || "",
     altura: m.altura || m?.cliente?.altura || "",
     pulgadas: m.pulgadas || m?.cliente?.pulgadas || "",
@@ -313,7 +351,7 @@ const normalizeMember = (m, idx) => {
       segundo_nombre: segundo,
       apellidos: apell,
       nombre_completo: nombre,
-      genero: m.genero || "",
+      genero: normalizeGeneroForSelect(m.genero || m?.cliente?.genero || ""),
       fecha_nacimiento: fecha,
       edad,
       idioma: m.idioma || "",
@@ -335,7 +373,7 @@ const normalizeMember = (m, idx) => {
       condado: m.condado || "",
       dir_correspondencia: m.dir_correspondencia || "",
       social: m.social || "",
-      status: m.status || "",
+      status: normalizeStatusMigratorioForSelect(m.status || m?.cliente?.status || ""),
       auscis: m.auscis || "",
       tarjeta_numero: m.tarjeta_numero || "",
       fecha_emision: m.fecha_emision || "",
@@ -355,7 +393,10 @@ const normalizeMember = (m, idx) => {
       whatsapp: !!m.whatsapp,
       telegram: !!m.telegram,
       texto_sms: !!m.texto_sms,
-      telefonos: inflatePhones(m?.cliente?.telefonos || [], "co")
+      telefonos: resolveClienteTelefonos(
+        { ...m, ...(m.cliente || {}) },
+        "co"
+      ),
     }
   };
 };
@@ -1349,7 +1390,7 @@ const activeNormalized = useMemo(
                       </span>
                     </div>
                     <div className="small text-muted">
-                      Género: {c.genero ?? m.genero ?? "—"}
+                      Género: {normalizeGeneroForSelect(c.genero ?? m.genero ?? "") || "—"}
                     </div>
                     <div className="small">
                       Grupo:{" "}
@@ -1450,7 +1491,7 @@ const activeNormalized = useMemo(
                                   <select
                                     className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="genero"
-                                    value={c.genero ?? ""}
+                                    value={normalizeGeneroForSelect(c.genero ?? m.genero ?? "")}
                                     onChange={onChange}
                                     disabled={isReadOnly}
                                   >
@@ -1554,23 +1595,16 @@ const activeNormalized = useMemo(
                                   <select
                                     className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                     name="status"
-                                    value={c.status ?? ""}
+                                    value={normalizeStatusMigratorioForSelect(c.status ?? m.status ?? "")}
                                     onChange={onChange}
                                     disabled={isReadOnly}
                                   >
                                     <option value="">Seleccione</option>
-                                    <option value="P. TRABAJO">P. TRABAJO</option>
-                                    <option value="RESIDENTE">RESIDENTE</option>
-                                    <option value="CIUDADANO">CIUDADANO</option>
-                                    <option value="I-862">I-862</option>
-                                    <option value="I-797">I-797</option>
-                                    <option value="I-589 ASILUM">I-589 ASILUM</option>
-                                    <option value="ESTUDIANTE">ESTUDIANTE</option>
-                                    <option value="VISA E2">VISA E2</option>
-                                    <option value="VISA K1">VISA K1</option>
-                                    <option value="VISA J">VISA J</option>
-                                    <option value="I-94">I-94</option>
-                                    <option value="TPS">TPS</option>
+                                    {STATUS_MIGRATORIO_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt}>
+                                        {opt}
+                                      </option>
+                                    ))}
                                   </select>
                                 </Field>
 
@@ -1658,7 +1692,7 @@ const activeNormalized = useMemo(
                               <div className="row g-3">
                                 <Field label="Teléfonos" className="col-12">
                                   <TelefonosPro
-                                    value={Array.isArray(c.telefonos) ? c.telefonos : []}
+                                    value={resolveClienteTelefonos(c, "co")}
                                     onChange={(arr) => patchCliente(idx, { telefonos: arr })}
                                     readOnly={isReadOnly}
                                   />

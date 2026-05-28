@@ -1,5 +1,6 @@
 // src/utils/phone-mappers.js
 import countryCodes from "../services/countryCodes";
+import { toStructuredPhones } from "./phones";
 
 const codeToIso = new Map(countryCodes.map(c => [String(c.code).replace(/\D+/g, ""), c.iso]));
 const isoToCode = new Map(countryCodes.map(c => [String(c.iso).toLowerCase(), String(c.code).replace(/\D+/g, "")]));
@@ -67,6 +68,32 @@ export function inflatePhones(raw, fallbackIso = "co") {
     if (!indicativo && iso) indicativo = (isoToCode.get(iso) || "");
     return { ...p, iso, indicativo };
   });
+}
+
+/**
+ * Resuelve teléfonos para UI: array JSON/BD → formato TelefonosPro;
+ * si el arreglo está vacío, reconstruye desde telefono/secundario/whatsapp_num legacy.
+ *
+ * @param {Record<string, unknown>} source
+ * @param {string} fallbackIso
+ * @returns {Array<{id:string,tipo:string,numero:string,principal:boolean,iso:string,indicativo:string}>}
+ */
+export function resolveClienteTelefonos(source = {}, fallbackIso = "co") {
+  const raw = source?.telefonos ?? source?.phones ?? null;
+  let list = inflatePhones(raw, fallbackIso);
+
+  if (!list.length) {
+    list = inflatePhones(
+      toStructuredPhones({
+        telefono: source?.telefono,
+        secundario: source?.secundario,
+        whatsapp_num: source?.whatsapp_num,
+      }),
+      fallbackIso
+    );
+  }
+
+  return list;
 }
 
 // ✅ nuevo: para enviar al backend

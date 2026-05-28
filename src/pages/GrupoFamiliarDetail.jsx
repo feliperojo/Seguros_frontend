@@ -13,7 +13,7 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
 
 
- import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
+ import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
 
 // ================== Helpers ==================
 
@@ -461,7 +461,7 @@ const mapFullToMembers = (fullRaw) => {
      // si no trae, lo reconstruimos desde legacy para que el componente funcione ya.
              // ✅ Hidratar con ISO + indicativo cuando ya vienen en arreglo (tu BD actual)
        // ✅ soporta string JSON o array; si sigue vacío, cae a legacy
-       telefonos: inflatePhones(cli.telefonos || [], "co"),
+       telefonos: resolveClienteTelefonos(cli, "co"),
 
         // dirección
         direccion: cli.direccion || "",
