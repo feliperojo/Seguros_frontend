@@ -9,6 +9,7 @@ import { getListFromApi } from "../utils/apiResponse";
 // ⬇️ componentes ya existentes en tu proyecto
 import LanguageSelect from "../components/selects/LanguageSelect";
 import TelefonosPro from "../components/fase2/TelefonosPro";
+import { resolveClienteTelefonos } from "../utils/phone-mappers";
 import FormDireccion from "../components/FormDireccion";
 
 // Rutas base de navegación (ajústalas a tu router real)
@@ -210,26 +211,7 @@ export default function ContactosAdmin() {
       console.log("telefono (legacy):", c.telefono);
       console.log("==========================================");
 
-      let telefonos = [];
-      if (Array.isArray(c.telefonos)) {
-        telefonos = c.telefonos;
-      } else if (typeof c.telefonos === "string" && c.telefonos.trim().startsWith("[")) {
-        try {
-          telefonos = JSON.parse(c.telefonos);
-        } catch (_) {}
-      }
-
-      // ✅ normalización para TelefonosPro
-      telefonos = (telefonos || [])
-        .filter((t) => (t?.numero || "").trim().length > 0)
-        .map((t, i) => ({
-          id: t?.id ?? `${i}-${t?.tipo ?? "Móvil"}`,
-          tipo: t?.tipo || "Móvil",
-          numero: t?.numero || "",
-          principal: !!t?.principal || i === 0,
-          iso: (t?.iso || "").toLowerCase() || undefined,
-          indicativo: t?.indicativo || "",
-        }));
+      const telefonos = resolveClienteTelefonos(c, "us");
 
       // Determinar tipo de contacto basado en estado_cliente
       // Si estado_cliente es "empresa", es una empresa

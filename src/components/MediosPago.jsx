@@ -132,23 +132,25 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     // Convertir forma_pago del backend a formato interno
     const formaPagoBackend = medioPago?.forma_pago ?? inferFormaPago(medioPago);
     let formaPagoInterna = formaPagoBackend;
-    let tipoTarjetaPago = medioPago.tipo_tarjeta_pago || 'credito';
-    
-    // Si viene del backend como 'tarjeta', determinar si es crédito o débito
-    if (formaPagoInterna === 'tarjeta') {
-      formaPagoInterna = tipoTarjetaPago === 'debito' ? 'tarjeta_debito' : 'tarjeta_credito';
-    }
 
     // Normalizar valores legacy/variantes
-    if (formaPagoInterna === 'tarjeta_credito' || formaPagoInterna === 'tarjeta_debito') {
+    if (formaPagoInterna === 'tarjeta') {
+      const esDebito = medioPago.tipo_tarjeta_pago === 'debito';
+      formaPagoInterna = esDebito ? 'tarjeta_debito' : 'tarjeta_credito';
+    } else if (formaPagoInterna === 'tarjeta_debito' || formaPagoInterna === 'tarjeta_credito') {
       // ok
     } else if (formaPagoInterna === 'cuenta_bancaria') {
       // ok
     } else if (formaPagoInterna == null) {
-      // fallback seguro: si no logramos inferir, asumimos tarjeta crédito para mostrar campos y permitir edición
       formaPagoInterna = 'tarjeta_credito';
-      tipoTarjetaPago = tipoTarjetaPago || 'credito';
     }
+
+    const tipoTarjetaPago =
+      formaPagoInterna === 'tarjeta_debito'
+        ? 'debito'
+        : formaPagoInterna === 'tarjeta_credito'
+          ? 'credito'
+          : medioPago.tipo_tarjeta_pago || 'credito';
     
     setCurrentMedioPago({
       ...medioPago,
@@ -414,10 +416,9 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     try {
       let response;
       // Preparar datos para el backend.
-      // El backend/DB no siempre tiene la columna "forma_pago"; se infiere por los campos
-      // (tarjeta vs cuenta) y/o se calcula en la respuesta. Para evitar errores SQL,
-      // no enviamos "forma_pago" en el payload.
-      const { forma_pago: _formaPago, ...rest } = currentMedioPago;
+      // forma_pago sí existe en DB (tarjeta_credito | tarjeta_debito | cuenta_bancaria).
+      // tipo_tarjeta_pago es solo estado de UI y no se persiste.
+      const { tipo_tarjeta_pago: _tipoTarjetaPago, ...rest } = currentMedioPago;
       const payloadData = {
         ...rest,
         cliente_id: clienteId,

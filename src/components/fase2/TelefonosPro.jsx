@@ -20,12 +20,14 @@ function ensureOnePrimary(arr = []) {
 const norm = (s) => String(s ?? "").trim();
 const cleanNumber = (s) => String(s ?? "").replace(/[^\d-]/g, "");
 
-const codeToIso = new Map(
-  (countryCodes || []).map((c) => [
-    String(c.code || "").replace(/\D+/g, ""),
-    String(c.iso || "").toLowerCase(),
-  ])
-);
+const codeToIso = new Map();
+(countryCodes || []).forEach((c) => {
+  const code = String(c.code || "").replace(/\D+/g, "");
+  const iso = String(c.iso || "").toLowerCase();
+  if (!codeToIso.has(code) || iso === "us") {
+    codeToIso.set(code, iso);
+  }
+});
 const isoToCode = new Map(
   (countryCodes || []).map((c) => [
     String(c.iso || "").toLowerCase(),
@@ -95,11 +97,15 @@ const COUNTRY_OPTIONS = (countryCodes || []).map((c) => {
   return { value: iso, label, iso, code, flag, name: c.name || iso.toUpperCase() };
 });
 
-function completeIsoIndic({ iso, indicativo }, fallbackIso = "co") {
+function completeIsoIndic({ iso, indicativo }, fallbackIso = "us", applyFallback = false) {
   let outIso = String(iso || "").toLowerCase();
   let outInd = String(indicativo || "").replace(/\D+/g, "");
-  if (!outIso && outInd) outIso = codeToIso.get(outInd) || fallbackIso;
+  if (!outIso && outInd) outIso = codeToIso.get(outInd) || "";
   if (!outInd && outIso) outInd = isoToCode.get(outIso) || "";
+  if (applyFallback && !outIso && !outInd) {
+    outIso = fallbackIso;
+    outInd = isoToCode.get(outIso) || "";
+  }
   return { iso: outIso, indicativo: outInd };
 }
 
@@ -347,7 +353,7 @@ export default function TelefonosPro({
   value = [],
   onChange = () => {},
   readOnly = false,
-  fallbackIso = "co",
+  fallbackIso = "us",
   addLabel = "Agregar teléfono",
 }) {
   const data = useMemo(() => {
@@ -355,7 +361,7 @@ export default function TelefonosPro({
     const mapped = base.map((p, i) => {
       const iso = String(p?.iso || "").toLowerCase();
       const indicativo = String(p?.indicativo || "").replace(/\D+/g, "");
-      const completed = completeIsoIndic({ iso, indicativo }, fallbackIso);
+      const completed = completeIsoIndic({ iso, indicativo }, fallbackIso, !iso && !indicativo);
       const numeroFormatted = formatPhone334(String(p?.numero ?? "")); // mostrar formateado
       return {
         id: p.id ?? `ph-${i}`,
@@ -385,14 +391,17 @@ export default function TelefonosPro({
   );
 
   const addPhone = () => {
-    const firstIso = data?.[0]?.iso || fallbackIso;
-    const firstIndic = isoToCode.get(firstIso) || "";
+    const { iso: newIso, indicativo: newIndic } = completeIsoIndic(
+      { iso: "", indicativo: "" },
+      fallbackIso,
+      true
+    );
     emit([
       ...data,
       {
         id: `ph-${Date.now().toString(36)}`,
-        iso: firstIso,
-        indicativo: firstIndic,
+        iso: newIso,
+        indicativo: newIndic,
         numero: "",
         tipo: "Móvil",
         principal: data.length === 0,

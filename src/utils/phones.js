@@ -1,4 +1,5 @@
 // utils/phones.js
+import countryCodes from "../services/countryCodes";
 
 export function ensureOnePrimary(arr = []) {
     let seen = false;
@@ -29,10 +30,31 @@ export function normalizePhones(arr = [], formatFn) {
   
   
   export function toStructuredPhones(legacy = {}) {
+    const codeToIsoMap = new Map(
+      countryCodes?.map?.((c) => [
+        String(c.code || "").replace(/\D+/g, ""),
+        String(c.iso || "").toLowerCase(),
+      ]) ?? []
+    );
+    const codFor = (n) => String(legacy[`cod_tel_${n}`] || "").replace(/\D+/g, "");
+    const isoForCod = (cod) => (cod ? codeToIsoMap.get(cod) || "" : "");
+
+    const push = (id, tipo, numero, cod, principal) => {
+      if (!numero) return;
+      out.push({
+        id,
+        tipo,
+        numero: String(numero),
+        principal,
+        iso: isoForCod(cod),
+        indicativo: cod,
+      });
+    };
+
     const out = [];
-    if (legacy.telefono) out.push({ id: "legacy-1", tipo: "Móvil", numero: String(legacy.telefono), principal: true });
-    if (legacy.secundario) out.push({ id:"legacy-2", tipo:"Trabajo", numero:String(legacy.secundario), principal: !out.length });
-    if (legacy.whatsapp_num) out.push({ id:"legacy-3", tipo:"Whatsapp", numero:String(legacy.whatsapp_num), principal: !out.length });
+    push("legacy-1", "Móvil", legacy.telefono, codFor(1), true);
+    push("legacy-2", "Trabajo", legacy.secundario, codFor(2), !out.length);
+    push("legacy-3", "Whatsapp", legacy.whatsapp_num, codFor(3), !out.length);
     return ensureOnePrimary(out);
   }
   

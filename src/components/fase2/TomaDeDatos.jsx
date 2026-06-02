@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaMapMarkerAlt } from "react-icons/fa";
+import { FaMapMarkerAlt, FaQuestionCircle } from "react-icons/fa";
+import { OverlayTrigger, Tooltip } from "react-bootstrap";
 
 // Services
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
@@ -266,7 +267,7 @@ const clienteTieneNombreVisible = (c) => {
 /** Hidrata cliente anidado (teléfonos, status, género) para TelefonosPro y selects */
 const hydrateClienteForMember = (cli = {}, m = {}) => {
   const merged = { ...m, ...cli, telefonos: cli.telefonos ?? m.telefonos };
-  const telefonos = resolveClienteTelefonos(merged, "co");
+  const telefonos = resolveClienteTelefonos(merged, "us");
   const legacy = toLegacyFields(telefonos);
 
   return {
@@ -395,7 +396,7 @@ const normalizeMember = (m, idx) => {
       texto_sms: !!m.texto_sms,
       telefonos: resolveClienteTelefonos(
         { ...m, ...(m.cliente || {}) },
-        "co"
+        "us"
       ),
     }
   };
@@ -460,9 +461,26 @@ const duplicateToRootFromCliente = (m, cliente) => {
 };
 
 /* =================== COMPONENTES AUXILIARES =================== */
-const Field = ({ label, children, className = "col-md-6" }) => (
+const Field = ({ label, labelHint, children, className = "col-md-6" }) => (
   <div className={className}>
-    <label className="form-label small fw-semibold text-muted">{label}</label>
+    <label className="form-label small fw-semibold text-muted d-flex align-items-center gap-1 mb-1">
+      <span>{label}</span>
+      {labelHint ? (
+        <OverlayTrigger
+          placement="top"
+          overlay={<Tooltip>{labelHint}</Tooltip>}
+        >
+          <span
+            className="text-primary"
+            style={{ cursor: "help", lineHeight: 1 }}
+            role="img"
+            aria-label="Ayuda"
+          >
+            <FaQuestionCircle size={12} />
+          </span>
+        </OverlayTrigger>
+      ) : null}
+    </label>
     {children}
   </div>
 );
@@ -1692,7 +1710,7 @@ const activeNormalized = useMemo(
                               <div className="row g-3">
                                 <Field label="Teléfonos" className="col-12">
                                   <TelefonosPro
-                                    value={resolveClienteTelefonos(c, "co")}
+                                    value={resolveClienteTelefonos(c, "us")}
                                     onChange={(arr) => patchCliente(idx, { telefonos: arr })}
                                     readOnly={isReadOnly}
                                   />
@@ -2021,7 +2039,11 @@ const activeNormalized = useMemo(
                           {/* Campos normales cuando NO es Medicare/Medicaid */}
                           <div className="row g-3">
                             {shouldShowCoverageField("codigo_poliza") && (
-                              <Field label="Numero ID" className="col-md-3">
+                              <Field
+                                label="Numero ID"
+                                labelHint="Se debe colocar el número de póliza + los 2 dígitos de miembro."
+                                className="col-md-3"
+                              >
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"
@@ -2104,7 +2126,11 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("policy_number") && (
-                              <Field label="Codigo de ID" className="col-md-3">
+                              <Field
+                                label="Codigo de ID"
+                                labelHint="Es el número de póliza principal sin dígitos finales."
+                                className="col-md-3"
+                              >
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"

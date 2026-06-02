@@ -2,16 +2,101 @@
 import countryCodes from "../services/countryCodes";
 import { toStructuredPhones } from "./phones";
 
-const codeToIso = new Map(countryCodes.map(c => [String(c.code).replace(/\D+/g, ""), c.iso]));
-const isoToCode = new Map(countryCodes.map(c => [String(c.iso).toLowerCase(), String(c.code).replace(/\D+/g, "")]));
+const codeToIso = new Map();
+countryCodes.forEach((c) => {
+  const code = String(c.code).replace(/\D+/g, "");
+  const iso = String(c.iso || "").toLowerCase();
+  if (!codeToIso.has(code) || iso === "us") {
+    codeToIso.set(code, iso);
+  }
+});
+const isoToCode = new Map(
+  countryCodes.map((c) => [
+    String(c.iso || "").toLowerCase(),
+    String(c.code || "").replace(/\D+/g, ""),
+  ])
+);
 
-const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+const uid = () =>
+  `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
-// --- ya la tienes ---
-export function fromApiPhones(arr = [], fallbackIso = "co") {
+const cleanIndicativo = (v) => String(v ?? "").replace(/\D+/g, "");
+
+/** Extrae indicativo desde campos posibles en BD/API */
+export function extractIndicativo(p = {}) {
+  return cleanIndicativo(
+    p.indicativo ?? p.cod_tel ?? p.country_code ?? p.codigo ?? ""
+  );
+}
+
+export function extractIso(p = {}) {
+  return String(p.iso || "").toLowerCase();
+}
+
+/**
+ * Sincroniza iso ↔ indicativo.
+ * El fallback solo aplica cuando applyFallback=true (teléfonos nuevos vacíos).
+ */
+export function resolveIsoIndic(
+  iso = "",
+  indicativo = "",
+  fallbackIso = "us",
+  applyFallback = false
+) {
+  let outIso = String(iso || "").toLowerCase();
+  let outInd = cleanIndicativo(indicativo);
+
+  if (!outIso && outInd) outIso = codeToIso.get(outInd) || "";
+  if (!outInd && outIso) outInd = isoToCode.get(outIso) || "";
+
+  if (applyFallback && !outIso && !outInd) {
+    outIso = fallbackIso;
+    outInd = isoToCode.get(outIso) || "";
+  }
+
+  return { iso: outIso, indicativo: outInd };
+}
+
+/** Completa indicativo faltante desde cod_tel_1/2/3 legacy del cliente */
+function mergeLegacyCodTelIntoPhones(phones = [], source = {}, fallbackIso = "us") {
+  const codBySlot = [
+    source.cod_tel_1,
+    source.cod_tel_2,
+    source.cod_tel_3,
+  ].map((c) => cleanIndicativo(c));
+
+  return phones.map((p, i) => {
+    const existingInd = extractIndicativo(p);
+    const existingIso = extractIso(p);
+
+    if (existingInd) {
+      const synced = resolveIsoIndic(existingIso, existingInd, "us", false);
+      return { ...p, iso: synced.iso, indicativo: synced.indicativo };
+    }
+
+    const tipo = String(p.tipo || "").toLowerCase();
+    let cod = "";
+    if (/whatsapp/.test(tipo)) cod = codBySlot[2];
+    else if (/trabajo/.test(tipo)) cod = codBySlot[1];
+    else if (p.principal || /móvil|movil/.test(tipo) || i === 0) cod = codBySlot[0];
+    else if (i < codBySlot.length) cod = codBySlot[i];
+
+    if (!cod) {
+      if (String(p.numero || "").trim() && !existingIso) {
+        const synced = resolveIsoIndic("", "", fallbackIso, true);
+        return { ...p, iso: synced.iso, indicativo: synced.indicativo };
+      }
+      return p;
+    }
+
+    const synced = resolveIsoIndic("", cod, "us", false);
+    return { ...p, iso: synced.iso, indicativo: synced.indicativo };
+  });
+}
+
+export function fromApiPhones(arr = [], fallbackIso = "us") {
   if (!Array.isArray(arr)) return [];
-  return arr.map((p, i) => {
-    // Validar que p no sea null o undefined
+  return arr.map((p) => {
     if (!p || typeof p !== "object") {
       return {
         id: uid(),
@@ -19,66 +104,65 @@ export function fromApiPhones(arr = [], fallbackIso = "co") {
         numero: "",
         principal: false,
         iso: fallbackIso,
-        indicativo: ""
+        indicativo: isoToCode.get(fallbackIso) || "",
       };
     }
-    const iso = String(p.iso || "").toLowerCase();
-    const cc  = String(p.indicativo || "").replace(/\D+/g, "") || (isoToCode.get(iso) || "");
+
+    const numero = String(p.numero || "");
+    const isoRaw = extractIso(p);
+    const ccRaw = extractIndicativo(p);
+    const hasCountryInfo = !!ccRaw || !!isoRaw;
+
+    const { iso, indicativo } = resolveIsoIndic(
+      isoRaw,
+      ccRaw,
+      fallbackIso,
+      !hasCountryInfo
+    );
+
     return {
       id: p.id || uid(),
       tipo: p.tipo || "Móvil",
-      numero: String(p.numero || ""),
+      numero,
       principal: !!p.principal,
-      iso: iso || (codeToIso.get(cc) || fallbackIso),
-      indicativo: cc
+      iso,
+      indicativo,
     };
   });
 }
 
-// ✅ nuevo: acepta array o string JSON y rellena iso/indicativo
-export function inflatePhones(raw, fallbackIso = "co") {
+export function inflatePhones(raw, fallbackIso = "us") {
   let base = [];
   if (Array.isArray(raw)) {
-    // Filtrar valores null/undefined antes de procesar
-    base = raw.filter(p => p != null);
+    base = raw.filter((p) => p != null);
   } else if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        base = parsed.filter(p => p != null);
+        base = parsed.filter((p) => p != null);
       }
-    } catch (_) { /* ignore */ }
+    } catch (_) {
+      /* ignore */
+    }
   }
 
-  const arr = fromApiPhones(base, fallbackIso);
-  return arr.map(p => {
-    if (!p || typeof p !== "object") {
-      return {
-        id: uid(),
-        tipo: "Móvil",
-        numero: "",
-        principal: false,
-        iso: fallbackIso,
-        indicativo: ""
-      };
-    }
-    let iso = (p.iso || "").toLowerCase();
-    let indicativo = String(p.indicativo || "").replace(/\D+/g, "");
-    if (!iso && indicativo) iso = (codeToIso.get(indicativo) || fallbackIso);
-    if (!indicativo && iso) indicativo = (isoToCode.get(iso) || "");
-    return { ...p, iso, indicativo };
+  return fromApiPhones(base, fallbackIso).map((p) => {
+    if (!p || typeof p !== "object") return p;
+    const synced = resolveIsoIndic(
+      extractIso(p),
+      extractIndicativo(p),
+      fallbackIso,
+      !extractIndicativo(p) && !extractIso(p)
+    );
+    return { ...p, iso: synced.iso, indicativo: synced.indicativo };
   });
 }
 
 /**
  * Resuelve teléfonos para UI: array JSON/BD → formato TelefonosPro;
  * si el arreglo está vacío, reconstruye desde telefono/secundario/whatsapp_num legacy.
- *
- * @param {Record<string, unknown>} source
- * @param {string} fallbackIso
- * @returns {Array<{id:string,tipo:string,numero:string,principal:boolean,iso:string,indicativo:string}>}
  */
-export function resolveClienteTelefonos(source = {}, fallbackIso = "co") {
+export function resolveClienteTelefonos(source = {}, fallbackIso = "us") {
   const raw = source?.telefonos ?? source?.phones ?? null;
   let list = inflatePhones(raw, fallbackIso);
 
@@ -88,23 +172,27 @@ export function resolveClienteTelefonos(source = {}, fallbackIso = "co") {
         telefono: source?.telefono,
         secundario: source?.secundario,
         whatsapp_num: source?.whatsapp_num,
+        cod_tel_1: source?.cod_tel_1,
+        cod_tel_2: source?.cod_tel_2,
+        cod_tel_3: source?.cod_tel_3,
       }),
       fallbackIso
     );
+  } else {
+    list = mergeLegacyCodTelIntoPhones(list, source, fallbackIso);
   }
 
   return list;
 }
 
-// ✅ nuevo: para enviar al backend
 export function toApiPhones(phones = []) {
   const list = Array.isArray(phones) ? phones : [];
-  return list.map(p => ({
+  return list.map((p) => ({
     id: p.id,
     tipo: p.tipo || "Móvil",
     numero: String(p.numero || ""),
     principal: !!p.principal,
     iso: String(p.iso || "").toLowerCase(),
-    indicativo: String(p.indicativo || "").replace(/\D+/g, "")
+    indicativo: cleanIndicativo(p.indicativo),
   }));
 }

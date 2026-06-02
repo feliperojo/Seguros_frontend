@@ -222,8 +222,8 @@ export default function PersonaContactoCard({
           tipo: t?.tipo || "Móvil",
           numero: (t?.numero || "").trim(),
           principal: t?.principal ?? i === 0,
-          iso: (t?.iso || "co").toLowerCase(),
-          indicativo: t?.indicativo || "57",
+          iso: (t?.iso || "us").toLowerCase(),
+          indicativo: t?.indicativo || "1",
         }))
         .filter((t) => (t.numero || "").trim().length > 0);
     }
@@ -237,8 +237,8 @@ export default function PersonaContactoCard({
           tipo: "Móvil",
           numero: numeroPlano.trim(),
           principal: true,
-          iso: "co",
-          indicativo: "57",
+          iso: "us",
+          indicativo: "1",
         },
       ];
     }

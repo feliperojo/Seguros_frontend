@@ -461,7 +461,7 @@ const mapFullToMembers = (fullRaw) => {
      // si no trae, lo reconstruimos desde legacy para que el componente funcione ya.
              // ✅ Hidratar con ISO + indicativo cuando ya vienen en arreglo (tu BD actual)
        // ✅ soporta string JSON o array; si sigue vacío, cae a legacy
-       telefonos: resolveClienteTelefonos(cli, "co"),
+       telefonos: resolveClienteTelefonos(cli, "us"),
 
         // dirección
         direccion: cli.direccion || "",

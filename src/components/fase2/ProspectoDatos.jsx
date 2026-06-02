@@ -17,6 +17,7 @@ import { normalizeDateForInput } from "../../utils/formatters";
 import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import { normalizeGeneroForSelect } from "../../utils/clienteFieldNormalize";
 import TelefonosPro from "./TelefonosPro";
+import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 import MdyDashDateInput from "../common/MdyDashDateInput";
@@ -277,36 +278,17 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
   );
 
   // Normaliza teléfonos desde distintas fuentes del miembro/cliente
-  const telefonosValue = (() => {
-    // 1) Si el miembro ya tiene arreglo de teléfonos, úsalo
-    if (Array.isArray(member.telefonos) && member.telefonos.length > 0) {
-      return member.telefonos;
-    }
-
-    const c = member.cliente || {};
-
-    // 2) Si el cliente trae arreglo de teléfonos desde BD, úsalo
-    if (Array.isArray(c.telefonos) && c.telefonos.length > 0) {
-      return c.telefonos;
-    }
-
-    // 3) Fallback: si solo hay un string plano `telefono`, conviértelo
-    const numeroPlano = c.telefono || member.telefono || "";
-    if ((numeroPlano || "").toString().trim()) {
-      return [
-        {
-          id: `tel-${c.id || member.id || "local"}`,
-          tipo: "Móvil",
-          numero: numeroPlano.toString().trim(),
-          principal: true,
-          iso: "us",
-          indicativo: "1",
-        },
-      ];
-    }
-
-    return [];
-  })();
+  const telefonosValue = resolveClienteTelefonos(
+    {
+      ...(member.cliente || {}),
+      ...member,
+      telefonos:
+        (Array.isArray(member.telefonos) && member.telefonos.length > 0
+          ? member.telefonos
+          : member.cliente?.telefonos) ?? null,
+    },
+    "us"
+  );
 
   const { languages = [] } = useLanguages();
   const resolveIdiomaName = (v) => {
