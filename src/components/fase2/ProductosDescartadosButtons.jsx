@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
 
 const normalizarNombreEstado = (c) => {
   const raw = c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre;
@@ -25,7 +26,7 @@ export default function ProductosDescartadosButtons({
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState(null);
 
-  const Btn = ({ left, right, onClick, loading }) => (
+  const Btn = ({ left, cobertura, gfId, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
@@ -36,9 +37,7 @@ export default function ProductosDescartadosButtons({
       <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3">
         {left}
       </span>
-      <span className="badge bg-white border text-secondary rounded-pill">
-        {loading ? "…" : `GF ${right}`}
-      </span>
+      <CoberturaEstadoGfBadges cobertura={cobertura} gfId={gfId} loading={loading} />
     </button>
   );
 
@@ -77,7 +76,8 @@ export default function ProductosDescartadosButtons({
                 <div className="col-md-12" key={c.id}>
                   <Btn
                     left={c.cobertura_tipo || "Sin tipo"}
-                    right={gfId}
+                    cobertura={c}
+                    gfId={gfId}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}
                   />

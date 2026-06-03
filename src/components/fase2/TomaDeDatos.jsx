@@ -1289,31 +1289,31 @@ const activeNormalized = useMemo(
       m.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
 
     // Config visual de campos de cobertura por tipo (system_config.coverage_fields_by_tipo).
-    // enabledFields = lista de campos a OCULTAR para ese tipo (los que están en la lista no se muestran).
+    // enabledFields = lista de campos a MOSTRAR para ese tipo.
     const cfgCoberturaPorTipo =
       coverageFieldConfig && coverageFieldConfig[coberturaTipo];
-    const hiddenCoverageFields =
+    const visibleCoverageFields =
       cfgCoberturaPorTipo && Array.isArray(cfgCoberturaPorTipo.enabledFields)
         ? cfgCoberturaPorTipo.enabledFields
         : null; // null → sin config: mostrar todos los campos de cobertura
 
     const shouldShowCoverageField = (fieldKey) => {
-      if (!hiddenCoverageFields) return true;
-      return !hiddenCoverageFields.includes(fieldKey);
+      if (!visibleCoverageFields) return true;
+      return visibleCoverageFields.includes(fieldKey);
     };
 
     // Config visual de campos del cliente por tipo (system_config.client_fields_by_tipo).
-    // enabledFields = lista de campos a OCULTAR para ese tipo (los que están en la lista no se muestran).
+    // enabledFields = lista de campos a MOSTRAR para ese tipo.
     const cfgClientePorTipo =
       clientFieldConfig && clientFieldConfig[coberturaTipo];
-    const hiddenClientFields =
+    const visibleClientFields =
       cfgClientePorTipo && Array.isArray(cfgClientePorTipo.enabledFields)
         ? cfgClientePorTipo.enabledFields
         : null; // null → sin config: mostrar todos los campos de cliente
 
     const shouldShowClientField = (fieldKey) => {
-      if (!hiddenClientFields) return true;
-      return !hiddenClientFields.includes(fieldKey);
+      if (!visibleClientFields) return true;
+      return visibleClientFields.includes(fieldKey);
     };
 
         return (

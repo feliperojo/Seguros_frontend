@@ -12,6 +12,7 @@ import React, { useState } from "react";
 const PRODUCTOS = [
   { key: "SALUD",      label: "Plan de salud",     descripcion: "Cobertura médica",          icon: "fa-heart-pulse", color: "primary" },
   { key: "DENTAL",     label: "Plan Dental",       descripcion: "Odontología",               icon: "fa-tooth",       color: "info"    },
+  { key: "VISION",     label: "Vision",            descripcion: "Cobertura de visión",       icon: "fa-eye",         color: "success" },
   { key: "VIDA",       label: "Plan de vida",      descripcion: "Protección de vida",        icon: "fa-heart",       color: "danger"  },
   { key: "DESCUENTOS", label: "Plan de Descuentos",descripcion: "Ahorros en servicios",      icon: "fa-tags",        color: "warning" },
 ];

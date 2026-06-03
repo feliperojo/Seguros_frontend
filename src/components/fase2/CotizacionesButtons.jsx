@@ -2,6 +2,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
 
 /** CotizacionesButtons
  *  Muestra coberturas en estados de cotización y abre la ficha al hacer click.
@@ -24,7 +25,7 @@ export default function CotizacionesButtons({
     "Inscripción Inicial",
   ];
 
-  const Btn = ({ title, subtitle, right, onClick, loading }) => (
+  const Btn = ({ title, subtitle, cobertura, gfId, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
@@ -38,9 +39,7 @@ export default function CotizacionesButtons({
           <div className="small text-muted text-truncate">{subtitle}</div>
         ) : null}
       </span>
-      <span className="badge bg-white border text-secondary rounded-pill">
-        {loading ? "…" : `GF ${right}`}
-      </span>
+      <CoberturaEstadoGfBadges cobertura={cobertura} gfId={gfId} loading={loading} />
     </button>
   );
 
@@ -82,7 +81,8 @@ export default function CotizacionesButtons({
                   <Btn
                     title={estado}
                     subtitle={c.cobertura_tipo || ""}
-                    right={gfId}
+                    cobertura={c}
+                    gfId={gfId}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}
                   />

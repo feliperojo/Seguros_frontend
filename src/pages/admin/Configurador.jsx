@@ -32,12 +32,13 @@ const COVERAGE_PRODUCT_TYPES = [
   "Plan Dental",
   "Plan de vida",
   "Plan de Descuentos",
+  "Vision",
 ];
 
-// Campos de la sección "Datos Cobertura" que se pueden mostrar/ocultar por tipo de producto
+// Campos de la sección "Datos Cobertura" configurables por tipo de producto (marcados = visibles)
 const COVERAGE_FIELD_DEFINITIONS = [
   { key: "codigo_poliza", label: "Código de ID" },
-  { key: "policy_number", label: "Número de póliza" },
+  { key: "policy_number", label: "Numero ID" },
   { key: "fecha_activacion", label: "Fecha de Activación" },
   { key: "ano_cobertura", label: "Año de Cobertura" },
   { key: "elegibilidad", label: "Elegibilidad" },
@@ -56,7 +57,7 @@ const COVERAGE_FIELD_DEFINITIONS = [
 
 const ALL_COVERAGE_FIELD_KEYS = COVERAGE_FIELD_DEFINITIONS.map((f) => f.key);
 
-// Campos extra del cliente (datos antropométricos) que se pueden mostrar/ocultar por tipo de producto
+// Campos extra del cliente (datos antropométricos) configurables por tipo de producto (marcados = visibles)
 const CLIENT_FIELD_DEFINITIONS = [
   { key: "peso", label: "Peso (lb)" },
   { key: "altura", label: "Altura (pies)" },
@@ -280,7 +281,7 @@ const Configurador = () => {
     if (!entry || !Array.isArray(entry.enabledFields)) {
       return ALL_COVERAGE_FIELD_KEYS;
     }
-    // Si existe configuración, incluso si es [], respetarla (permite ocultar todos)
+    // Si existe configuración, incluso si es [], respetarla (permite no mostrar ninguno)
     return entry.enabledFields;
   };
 
@@ -342,7 +343,7 @@ const Configurador = () => {
     if (!entry || !Array.isArray(entry.enabledFields)) {
       return ALL_CLIENT_FIELD_KEYS;
     }
-    // Si existe configuración, incluso si es [], respetarla (permite ocultar todos)
+    // Si existe configuración, incluso si es [], respetarla (permite no mostrar ninguno)
     return entry.enabledFields;
   };
 
@@ -639,7 +640,7 @@ const Configurador = () => {
         </Card.Header>
         <Card.Body>
           <p className="text-muted small mb-3">
-            Marca qué campos <strong>se deben ocultar</strong> en la sección{" "}
+            Marca qué campos <strong>se mostrarán</strong> en la sección{" "}
             <strong>Datos Cobertura</strong> del Grupo Familiar, según el tipo de
             producto (cobertura_tipo). Solo afecta a la visualización.
           </p>
@@ -666,11 +667,11 @@ const Configurador = () => {
           {/* Checkboxes de campos visibles para el tipo seleccionado */}
           <Form.Group className="mb-3">
             <Form.Label className="small fw-semibold text-muted">
-              Campos a ocultar para \"{selectedCoverageTipo}\"
+              Campos a mostrar para &quot;{selectedCoverageTipo}&quot;
             </Form.Label>
             <div className="row">
               {COVERAGE_FIELD_DEFINITIONS.map((field) => {
-                const hidden = getEnabledCoverageFields(
+                const isShown = getEnabledCoverageFields(
                   selectedCoverageTipo
                 ).includes(field.key);
                 return (
@@ -679,7 +680,7 @@ const Configurador = () => {
                       type="checkbox"
                       id={`cov-field-${selectedCoverageTipo}-${field.key}`}
                       label={field.label}
-                      checked={hidden}
+                      checked={isShown}
                       onChange={() =>
                         toggleCoverageField(selectedCoverageTipo, field.key)
                       }
@@ -716,7 +717,7 @@ const Configurador = () => {
         </Card.Header>
         <Card.Body>
           <p className="text-muted small mb-3">
-            Marca qué campos <strong>se deben ocultar</strong> en la sección{" "}
+            Marca qué campos <strong>se mostrarán</strong> en la sección{" "}
             <strong>Datos Principales</strong> del cliente, según el tipo de
             producto (cobertura_tipo). Solo afecta a la interfaz visual.
           </p>
@@ -742,12 +743,12 @@ const Configurador = () => {
 
           <Form.Group className="mb-3">
             <Form.Label className="small fw-semibold text-muted">
-              Campos a ocultar de datos del cliente para "
-              {selectedCoverageTipo}"
+              Campos a mostrar de datos del cliente para &quot;
+              {selectedCoverageTipo}&quot;
             </Form.Label>
             <div className="row">
               {CLIENT_FIELD_DEFINITIONS.map((field) => {
-                const disabled = getEnabledClientFields(
+                const isShown = getEnabledClientFields(
                   selectedCoverageTipo
                 ).includes(field.key);
                 return (
@@ -756,7 +757,7 @@ const Configurador = () => {
                       type="checkbox"
                       id={`client-field-${selectedCoverageTipo}-${field.key}`}
                       label={field.label}
-                      checked={disabled}
+                      checked={isShown}
                       onChange={() =>
                         toggleClientField(selectedCoverageTipo, field.key)
                       }

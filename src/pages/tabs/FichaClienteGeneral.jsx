@@ -10,6 +10,7 @@ import GroupTags from "../../components/GroupTags";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { FaBirthdayCake } from "react-icons/fa";
 import { Badge } from "react-bootstrap";
+import { derivarEstadoPoliza, estadoPolizaBadgeVariant } from "../../utils/estadoPoliza";
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
@@ -18,94 +19,6 @@ export default function FichaClienteGeneral() {
   const toValidId = (v) => {
     const n = Number(v);
     return Number.isFinite(n) && n > 0 ? n : null;
-  };
-
-  // Deriva el estado de la póliza basándose en los campos "vigente" y "activo"
-  // y retorna también la fecha relevante (retiro / cancelación) y su tipo.
-  const derivarEstadoPoliza = (c) => {
-    try {
-      if (!c || typeof c !== "object") {
-        return { estado: "Vigente", fecha: null, tipoFecha: null };
-      }
-
-      const estadoCoberturaRaw =
-        c?.estado_cobertura != null ? String(c.estado_cobertura).trim() : "";
-      const estadoCoberturaNormalizado = estadoCoberturaRaw.toLowerCase();
-      const estadoCoberturaMostrar =
-        estadoCoberturaNormalizado === "no"
-          ? "Sin cobertura"
-          : estadoCoberturaRaw;
-      const mostrarEstadoCoberturaDirecto =
-        estadoCoberturaNormalizado === "no" ||
-        estadoCoberturaNormalizado === "medicare" ||
-        estadoCoberturaNormalizado === "medicaid" ||
-        estadoCoberturaNormalizado === "medicai";
-
-      const activo =
-        c?.activo !== undefined && c?.activo !== null
-          ? c.activo === true || c.activo === "true" || c.activo === 1
-          : true;
-      const vigente =
-        c?.vigente !== undefined && c?.vigente !== null
-          ? c.vigente === true || c.vigente === "true" || c.vigente === 1
-          : true;
-
-      const fechaRetiroValida =
-        c?.fecha_retiro &&
-        String(c.fecha_retiro).trim() &&
-        String(c.fecha_retiro) !== "null"
-          ? String(c.fecha_retiro)
-          : null;
-
-      const fechaCancelacionValida =
-        c?.fecha_cancelacion &&
-        String(c.fecha_cancelacion).trim() &&
-        String(c.fecha_cancelacion) !== "null"
-          ? String(c.fecha_cancelacion)
-          : null;
-
-      // 1) Si está retirada, ese estado tiene prioridad
-      // Regla solicitada: si "vigente" y "activo" son false, se considera retirada (aun si existe fecha_cancelacion).
-      if (fechaRetiroValida || !activo) {
-        return {
-          estado: "Retirada",
-          fecha: fechaRetiroValida,
-          tipoFecha: fechaRetiroValida ? "retiro" : null,
-        };
-      }
-
-      // 2) Si está cancelada, ese estado tiene prioridad sobre el estado_cobertura
-      if (fechaCancelacionValida) {
-        return {
-          estado: "Póliza Cancelada",
-          fecha: fechaCancelacionValida,
-          tipoFecha: "cancelacion",
-        };
-      }
-
-      // 3) Si no está cancelada ni retirada, mostrar el estado real de cobertura
-      if (mostrarEstadoCoberturaDirecto) {
-        return {
-          estado: estadoCoberturaMostrar,
-          fecha: null,
-          tipoFecha: null,
-        };
-      }
-
-      // 4) Si la póliza está vigente, ese es el estado principal
-      if (vigente) {
-        return { estado: "Vigente", fecha: null, tipoFecha: null };
-      }
-
-      // 5) No vigente y activa, sin fecha de cancelación => Póliza Cancelada (sin fecha)
-      return {
-        estado: "Póliza Cancelada",
-        fecha: null,
-        tipoFecha: null,
-      };
-    } catch (_) {
-      return { estado: "Vigente", fecha: null, tipoFecha: null };
-    }
   };
 
   // Formatea el valor de la póliza para mostrarlo como monto legible
@@ -163,6 +76,10 @@ export default function FichaClienteGeneral() {
 
       arr.push({
         id: toValidId(id),
+        coberturaTipo:
+          c?.cobertura_tipo ||
+          coberturaPrincipal?.cobertura_tipo ||
+          "Sin producto",
         responsable: c?.grupo_familiar?.responsable ?? c?.responsable ?? "—",
         estado: c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? c?.estado_gf ?? c?.estado ?? "—",
         anoCobertura: c?.ano_cobertura ?? c?.anio ?? c?.year ?? "—",
@@ -190,6 +107,10 @@ export default function FichaClienteGeneral() {
 
       arr.push({
         id: toValidId(cliente?.grupo_familiar_id),
+        coberturaTipo:
+          coberturaPrincipal?.cobertura_tipo ||
+          cliente?.cobertura_tipo ||
+          "Sin producto",
         responsable: cliente?.grupo_familiar?.responsable ?? "—",
         estado: cliente?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? cliente?.estado ?? "—",
         anoCobertura: coberturaPrincipal?.ano_cobertura ?? "—",
@@ -314,6 +235,12 @@ export default function FichaClienteGeneral() {
   }, [coberturaSeleccionada]);
 
   // ===== datos derivados visibles según grupo seleccionado =====
+  const labelGrupoSelector = (g) => {
+    const producto = (g?.coberturaTipo || "Sin producto").trim();
+    const id = g?.id ?? "—";
+    return `${producto} · GF ${id}`;
+  };
+
   const gfId          = currentGrupo?.id ?? null;
   const gfResponsable = currentGrupo?.responsable ?? "—";
   const gfEstado      = currentGrupo?.estado ?? "—";
@@ -527,7 +454,7 @@ export default function FichaClienteGeneral() {
                   </Badge>
                 )}
               </h6>
-              <div style={{ minWidth: "180px" }}>
+              <div style={{ minWidth: "220px" }}>
                 {grupos.length > 1 ? (
                   <select
                     className="form-select form-select-sm border-secondary"
@@ -536,13 +463,17 @@ export default function FichaClienteGeneral() {
                   >
                     {grupos.map((g) => (
                       <option key={g.id} value={g.id}>
-                        Grupo Familiar {g.id}
+                        {labelGrupoSelector(g)}
                       </option>
                     ))}
                   </select>
                 ) : (
                   <div className="text-end">
-                    <span className="text-dark fw-normal">GF {gfId ?? "—"}</span>
+                    <span className="text-dark fw-normal">
+                      {currentGrupo
+                        ? labelGrupoSelector(currentGrupo)
+                        : `GF ${gfId ?? "—"}`}
+                    </span>
                   </div>
                 )}
               </div>
@@ -662,19 +593,7 @@ export default function FichaClienteGeneral() {
                       <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
                       <div className="text-dark small">
                         <Badge
-                          bg={
-                            estadoPoliza === "Vigente"
-                              ? "success"
-                              : estadoPoliza === "Póliza Cancelada"
-                              ? "warning"
-                              : estadoPoliza === "Sin cobertura" ||
-                                estadoPoliza === "No" ||
-                                estadoPoliza === "Medicare" ||
-                                estadoPoliza === "Medicaid" ||
-                                estadoPoliza === "Medicai"
-                              ? "danger"
-                              : "secondary"
-                          }
+                          bg={estadoPolizaBadgeVariant(estadoPoliza)}
                           className="text-uppercase"
                           style={{ fontSize: "0.7rem" }}
                         >

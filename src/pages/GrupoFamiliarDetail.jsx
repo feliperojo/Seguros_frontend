@@ -241,10 +241,13 @@ const getProductoFromCoberturas = (coberturas = []) => {
   // Ajusta estos mapeos según tus productos reales
   const productosMap = {
     "Plan de salud": { label: "Plan de salud", color: "primary" },
+    "Plan Dental": { label: "Plan Dental", color: "info" },
+    "Plan de vida": { label: "Plan de vida", color: "danger" },
+    "Plan de Descuentos": { label: "Plan de Descuentos", color: "warning" },
+    "Vision": { label: "Vision", color: "success" },
     "Seguro de vida": { label: "Seguro de vida", color: "success" },
     "Seguro dental": { label: "Seguro dental", color: "info" },
     "Seguro de accidentes": { label: "Seguro de accidentes", color: "warning" },
-    // Agrega más mapeos según tus productos
   };
   
   return productosMap[coberturaTipo] || { 
@@ -1504,6 +1507,7 @@ const clientesPayload = existentes
                               productoCotizacion?.color === 'success' ? 'bg-green-600 text-white' :
                               productoCotizacion?.color === 'info' ? 'bg-cyan-600 text-white' :
                               productoCotizacion?.color === 'warning' ? 'bg-yellow-600 text-white' :
+                              productoCotizacion?.color === 'danger' ? 'bg-red-600 text-white' :
                               'bg-gray-600 text-white'
                             }`}>
                               {productoCotizacion?.label || 'Sin plan'}
