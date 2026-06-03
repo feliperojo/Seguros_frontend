@@ -10,6 +10,7 @@ import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
 export default function ProductosButtons({
   className = "",
   coberturas = [],
+  resolveCobertura,
   onSelectCobertura = () => {},
   prefetch = true,                          // 👈 hace GET del grupo antes de navegar
   toFichaPath = (gfId) => `/grupo_familiar/${gfId}`, // 👈 ruta por defecto
@@ -65,11 +66,12 @@ export default function ProductosButtons({
             {filtradas.map((c) => {
               const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
               const loading = loadingId === gfId;
+              const coberturaEstado = resolveCobertura?.(c) ?? c;
               return (
                 <div className="col-md-12" key={c.id}>
                   <Btn
                     left={c.cobertura_tipo || "Sin tipo"}
-                    cobertura={c}
+                    cobertura={coberturaEstado}
                     gfId={gfId}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}

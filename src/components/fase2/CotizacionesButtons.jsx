@@ -10,6 +10,7 @@ import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
 export default function CotizacionesButtons({
   className = "",
   coberturas = [],
+  resolveCobertura,
   onSelectCobertura = () => {},
   prefetch = true,                              // 👈 GET antes de navegar (opcional)
   toFichaPath = (gfId) => `/grupo_familiar/${gfId}`, // 👈 ruta destino
@@ -76,12 +77,13 @@ export default function CotizacionesButtons({
               const estado = c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? "-";
               const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
               const loading = loadingId === gfId;
+              const coberturaEstado = resolveCobertura?.(c) ?? c;
               return (
                 <div className="col-md-6" key={c.id}>
                   <Btn
                     title={estado}
                     subtitle={c.cobertura_tipo || ""}
-                    cobertura={c}
+                    cobertura={coberturaEstado}
                     gfId={gfId}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}

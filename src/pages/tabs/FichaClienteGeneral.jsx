@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import ProductosButtons from "../../components/fase2/ProductosButtons";
 import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
@@ -10,7 +10,12 @@ import GroupTags from "../../components/GroupTags";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { FaBirthdayCake } from "react-icons/fa";
 import { Badge } from "react-bootstrap";
-import { derivarEstadoPoliza, estadoPolizaBadgeVariant } from "../../utils/estadoPoliza";
+import {
+  derivarEstadoPoliza,
+  estadoPolizaBadgeVariant,
+  getCoberturasFromGrupoFull,
+  resolverCoberturaClienteEnGrupo,
+} from "../../utils/estadoPoliza";
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
@@ -162,73 +167,105 @@ export default function FichaClienteGeneral() {
     );
   }, [grupos, selectedGrupoId]);
 
-  // ===== Estado para grupo full (fuente de verdad del endpoint de grupo) y etiquetas =====
-  const [grupoFull, setGrupoFull] = useState(null);
-  const [etiquetasGrupo, setEtiquetasGrupo] = useState([]);
+  // ===== Estado para grupos full (fuente de verdad del endpoint) y etiquetas =====
+  const [gruposFullCache, setGruposFullCache] = useState({});
   const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
+
+  const uniqueGrupoIds = useMemo(() => {
+    const ids = new Set();
+    for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
+      const id = toValidId(c?.grupo_familiar_id ?? c?.grupo_familiar?.id);
+      if (id) ids.add(id);
+    }
+    if (ids.size === 0 && toValidId(cliente?.grupo_familiar_id)) {
+      ids.add(toValidId(cliente.grupo_familiar_id));
+    }
+    return [...ids].sort((a, b) => a - b);
+  }, [cliente?.coberturas, cliente?.grupo_familiar_id]);
+
+  const grupoFull = useMemo(() => {
+    const selectedId = toValidId(selectedGrupoId) ?? toValidId(currentGrupo?.id);
+    return selectedId ? gruposFullCache[selectedId] ?? null : null;
+  }, [gruposFullCache, selectedGrupoId, currentGrupo?.id]);
+
+  const etiquetasGrupo = useMemo(() => {
+    const base = grupoFull ?? {};
+    const tagsRaw = base?.tags || base?.etiquetas || [];
+    let tagsArray = [];
+
+    if (Array.isArray(tagsRaw)) {
+      tagsArray = tagsRaw;
+    } else if (typeof tagsRaw === "string" && tagsRaw.trim().startsWith("[")) {
+      try {
+        tagsArray = JSON.parse(tagsRaw);
+        if (!Array.isArray(tagsArray)) tagsArray = [];
+      } catch {
+        tagsArray = [];
+      }
+    }
+
+    return tagsArray.filter(
+      (tag) =>
+        tag &&
+        typeof tag === "object" &&
+        tag.key &&
+        tag.label &&
+        tag.color
+    );
+  }, [grupoFull]);
 
   // ===== cobertura seleccionada por grupo (fuente de verdad para estado/fechas) =====
   const coberturaSeleccionada = useMemo(() => {
     const selectedId = toValidId(selectedGrupoId) ?? toValidId(currentGrupo?.id);
-    const coberturasFuente =
-      Array.isArray(grupoFull?.coberturas)
-        ? grupoFull.coberturas
-        : Array.isArray(grupoFull?.data?.coberturas)
-        ? grupoFull.data.coberturas
+    if (!selectedId) return coberturaPrincipal ?? null;
+
+    const coberturasFuente = getCoberturasFromGrupoFull(grupoFull);
+    const coberturas =
+      coberturasFuente.length > 0
+        ? coberturasFuente
         : Array.isArray(cliente?.coberturas)
         ? cliente.coberturas
         : [];
 
-    const coberturas = coberturasFuente;
-    if (!selectedId || coberturas.length === 0) return coberturaPrincipal ?? null;
+    if (coberturas.length === 0) return coberturaPrincipal ?? null;
 
-    const delGrupo = coberturas.filter(
-      (c) => toValidId(c?.grupo_familiar_id) === selectedId
+    return (
+      resolverCoberturaClienteEnGrupo(
+        coberturas,
+        selectedId,
+        cliente?.id
+      ) ??
+      coberturaPrincipal ??
+      null
     );
-    if (delGrupo.length === 0) return coberturaPrincipal ?? null;
-
-    const toBool = (v, dflt = false) => {
-      if (v === undefined || v === null) return dflt;
-      return v === true || v === "true" || v === 1;
-    };
-    const toTime = (s) => {
-      if (!s || String(s).trim() === "" || String(s) === "null") return null;
-      const t = new Date(String(s)).getTime();
-      return Number.isFinite(t) ? t : null;
-    };
-
-    // 1) Preferir siempre la cobertura del cliente actual dentro del grupo seleccionado
-    const clienteIdLocal = toValidId(cliente?.id);
-    const delCliente = clienteIdLocal
-      ? delGrupo.filter((c) => toValidId(c?.cliente?.id) === clienteIdLocal)
-      : [];
-
-    const pool = delCliente.length > 0 ? delCliente : delGrupo;
-
-    // 2) Preferir una cobertura vigente si existe; si no, la más reciente cancelada; si no, la más reciente retirada; si no, la primera.
-    const vigente = pool.find((c) => toBool(c?.vigente, false));
-    if (vigente) return vigente;
-
-    const conCancel = pool
-      .map((c) => ({ c, t: toTime(c?.fecha_cancelacion) }))
-      .filter((x) => x.t != null)
-      .sort((a, b) => b.t - a.t)[0]?.c;
-    if (conCancel) return conCancel;
-
-    const conRetiro = pool
-      .map((c) => ({ c, t: toTime(c?.fecha_retiro) }))
-      .filter((x) => x.t != null)
-      .sort((a, b) => b.t - a.t)[0]?.c;
-    if (conRetiro) return conRetiro;
-
-    return pool[0];
   }, [
     grupoFull,
     cliente?.coberturas,
+    cliente?.id,
     selectedGrupoId,
     currentGrupo?.id,
     coberturaPrincipal,
   ]);
+
+  const resolveCoberturaParaEstado = useCallback(
+    (c) => {
+      const gf = toValidId(c?.grupo_familiar_id ?? c?.grupo_familiar?.id);
+      if (!gf) return c;
+
+      const fuenteGrupo = getCoberturasFromGrupoFull(gruposFullCache[gf]);
+      const fuente =
+        fuenteGrupo.length > 0
+          ? fuenteGrupo
+          : Array.isArray(cliente?.coberturas)
+          ? cliente.coberturas
+          : [];
+
+      return (
+        resolverCoberturaClienteEnGrupo(fuente, gf, cliente?.id) ?? c
+      );
+    },
+    [gruposFullCache, cliente?.coberturas, cliente?.id]
+  );
 
   const estadoPolizaDerivado = useMemo(() => {
     return derivarEstadoPoliza(coberturaSeleccionada);
@@ -294,57 +331,42 @@ export default function FichaClienteGeneral() {
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
-  // ===== Cargar etiquetas del grupo familiar cuando cambia el grupoId =====
+  // ===== Cargar datos completos de todos los grupos familiares del cliente =====
   useEffect(() => {
-    const cargarEtiquetasGrupo = async () => {
-      if (!grupoId) {
-        setEtiquetasGrupo([]);
-        setGrupoFull(null);
-        return;
-      }
+    if (!uniqueGrupoIds.length) {
+      setGruposFullCache({});
+      return;
+    }
 
-      setLoadingEtiquetas(true);
+    let cancelled = false;
+    setLoadingEtiquetas(true);
+
+    (async () => {
       try {
-        const grupoData = await GrupoFamiliarService.getFullById(grupoId);
-        setGrupoFull(grupoData?.data ?? grupoData ?? null);
-        
-        // Normalizar etiquetas: pueden venir como "tags" o "etiquetas"
-        const base = grupoData?.data ?? grupoData ?? {};
-        const tagsRaw = base?.tags || base?.etiquetas || [];
-        let tagsArray = [];
-        
-        if (Array.isArray(tagsRaw)) {
-          tagsArray = tagsRaw;
-        } else if (typeof tagsRaw === "string" && tagsRaw.trim().startsWith("[")) {
-          try {
-            tagsArray = JSON.parse(tagsRaw);
-            if (!Array.isArray(tagsArray)) tagsArray = [];
-          } catch {
-            tagsArray = [];
-          }
-        }
-        
-        // Validar formato de cada etiqueta
-        const etiquetasValidas = tagsArray.filter(tag => 
-          tag &&
-          typeof tag === "object" &&
-          tag.key &&
-          tag.label &&
-          tag.color
+        const results = await Promise.all(
+          uniqueGrupoIds.map((id) => GrupoFamiliarService.getFullById(id))
         );
-        
-        setEtiquetasGrupo(etiquetasValidas);
-      } catch (error) {
-        console.error("Error al cargar etiquetas del grupo familiar:", error);
-        setEtiquetasGrupo([]);
-        setGrupoFull(null);
-      } finally {
-        setLoadingEtiquetas(false);
-      }
-    };
+        if (cancelled) return;
 
-    cargarEtiquetasGrupo();
-  }, [grupoId]);
+        const cache = {};
+        uniqueGrupoIds.forEach((id, i) => {
+          cache[id] = results[i]?.data ?? results[i] ?? null;
+        });
+        setGruposFullCache(cache);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error al cargar grupos familiares:", error);
+          setGruposFullCache({});
+        }
+      } finally {
+        if (!cancelled) setLoadingEtiquetas(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [uniqueGrupoIds.join(",")]);
 
   // ===== helper para formatear número con distribución 3-3-4 =====
   const formatearNumeroTelefono = (numero) => {
@@ -665,18 +687,21 @@ export default function FichaClienteGeneral() {
             <ProductosButtons
               className="mb-3"
               coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
               onSelectCobertura={(c) => console.log("Producto (GF):", c)}
             />
 
             <CotizacionesButtons
               className="mb-3"
               coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
               onSelectCobertura={(c) => console.log("Cotización:", c)}
             />
 
             <ProductosDescartadosButtons
               className="mb-3"
               coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
               onSelectCobertura={(c) => console.log("Producto descartado (GF):", c)}
             />
           </div>

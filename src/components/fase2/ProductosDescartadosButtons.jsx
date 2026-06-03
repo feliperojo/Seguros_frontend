@@ -19,6 +19,7 @@ const normalizarNombreEstado = (c) => {
 export default function ProductosDescartadosButtons({
   className = "",
   coberturas = [],
+  resolveCobertura,
   onSelectCobertura = () => {},
   prefetch = true,
   toFichaPath = (gfId) => `/grupo_familiar/${gfId}`,
@@ -72,11 +73,12 @@ export default function ProductosDescartadosButtons({
             {filtradas.map((c) => {
               const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
               const loading = loadingId === gfId;
+              const coberturaEstado = resolveCobertura?.(c) ?? c;
               return (
                 <div className="col-md-12" key={c.id}>
                   <Btn
                     left={c.cobertura_tipo || "Sin tipo"}
-                    cobertura={c}
+                    cobertura={coberturaEstado}
                     gfId={gfId}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}
