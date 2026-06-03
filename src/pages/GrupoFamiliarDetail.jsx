@@ -654,7 +654,11 @@ const [grupoVersion, setGrupoVersion] = useState(null);
       }
       
       if (name === "nombre" || name === "apellidos") v = capitalizeWords(value);
-      else if ((type === "text" || type === "textarea") && !name.toLowerCase().includes("telefono"))
+      else if (
+        (type === "text" || type === "textarea") &&
+        !name.toLowerCase().includes("telefono") &&
+        name !== "nota"
+      )
         v = capitalizeFirst(value);
       return { ...prev, [name]: type === "checkbox" ? checked : v };
     });

@@ -471,6 +471,21 @@ const Prospectogrupo = ({
                 Se calcula con el número de miembros (cards).
               </small>
             </div>
+            <div className="col-12">
+              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                Nota
+              </label>
+              <textarea
+                className="form-control"
+                name="nota"
+                rows={3}
+                value={formData.nota || ""}
+                onChange={onChange}
+                disabled={readOnly}
+                placeholder="Notas del grupo familiar..."
+                style={{ fontSize: '0.9rem', resize: 'vertical' }}
+              />
+            </div>
           </div>
         </div>
       </div>
