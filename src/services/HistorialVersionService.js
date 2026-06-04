@@ -104,6 +104,8 @@ class HistorialVersionService {
         telegram: formData?.telegram,
         sms: formData?.sms,
         zipCode: formData?.zipCode,
+        fechaAutorizacion: formData?.fechaAutorizacion,
+        nombreAutorizado: formData?.nombreAutorizado,
         ingresoFamiliar: formData?.ingresoFamiliar,
         personasCobertura: formData?.personasCobertura,
         personasTaxes: formData?.personasTaxes,

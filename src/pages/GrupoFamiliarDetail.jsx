@@ -286,7 +286,11 @@ const mapFullToForm = (fullRaw) => {
     sms: !!tels.mensaje_sms,
 
     // Económicos
-    zipCode: g.zip_code ?? "", // no viene en tu JSON; queda vacío
+    zipCode: g.zip_code ?? "",
+    fechaAutorizacion: g.fecha_autorizacion
+      ? String(g.fecha_autorizacion).slice(0, 10)
+      : "",
+    nombreAutorizado: g.nombre_autorizado ?? "",
     ingresoFamiliar: g.ingreso_familiar_anual ?? "",
     personasCobertura: g.personas_cobertura ?? "",
     personasTaxes: g.personas_taxes ?? "",

@@ -236,6 +236,46 @@ export const formatDateForDisplay = (dateString, locale = "es-ES") => {
 };
 
 /**
+ * Formatea una fecha para mostrar en formato MM/DD/YYYY (mes/día/año).
+ *
+ * @param {string|Date|null|undefined} dateString
+ * @returns {string} MM/DD/YYYY o cadena vacía si no es válida
+ */
+export const formatDateMMDDYYYY = (dateString) => {
+  const parts = extractDateParts(dateString);
+  if (!parts) return "";
+
+  const monthStr = String(parts.month).padStart(2, "0");
+  const dayStr = String(parts.day).padStart(2, "0");
+  return `${monthStr}/${dayStr}/${parts.year}`;
+};
+
+/**
+ * Parsea MM/DD/YYYY a YYYY-MM-DD para el API y almacenamiento interno.
+ *
+ * @param {string} value
+ * @returns {string} YYYY-MM-DD o cadena vacía
+ */
+export const parseMMDDYYYYToYmd = (value) => {
+  if (!value || typeof value !== "string") return "";
+  const s = value.trim();
+  if (!s) return "";
+
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) {
+    const month = Number(m[1]);
+    const day = Number(m[2]);
+    const year = Number(m[3]);
+    if (isValidCalendarYmd(year, month, day)) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+    return "";
+  }
+
+  return normalizeDateForInput(s);
+};
+
+/**
  * Formatea una fecha con hora para mostrar en formato mm-dd-yyyy hh:mm AM/PM
  * 
  * @param {string|Date|null|undefined} dateString - Fecha en cualquier formato

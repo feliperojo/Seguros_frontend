@@ -11,6 +11,7 @@ import { computeAnnual, sanitizeMoneyInput, formatMoney2, parseMoney } from "../
 // Components
 import UserCoverageIcon from "../fase2/UserCoverageIcon";
 import MdyDashDateInput from "../common/MdyDashDateInput";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import MemberModal from "./MemberModal";
 import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
@@ -2061,7 +2062,7 @@ const activeNormalized = useMemo(
                                 label="Fecha de Activación"
                                 className="col-md-3"
                               >
-                                <MdyDashDateInput
+                                <DateInputWithCalendar
                                   size="sm"
                                   valueIso={(m.fecha_activacion || "").slice(0, 10)}
                                   minIso="1900-01-01"

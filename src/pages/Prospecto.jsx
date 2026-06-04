@@ -42,6 +42,8 @@ const EMPTY_FORM = {
   sms: false,
   // Económicos
   zipCode: '',
+  fechaAutorizacion: '',
+  nombreAutorizado: '',
   ingresoFamiliar: '',
  personasCobertura: 0,
  personasTaxes: 0
@@ -63,6 +65,10 @@ const mapGrupoApiToForm = (g) => ({
   telegram: !!g?.telegram,
   sms: !!g?.mensaje_sms,
   zipCode: g?.zip_code || '',
+  fechaAutorizacion: g?.fecha_autorizacion
+    ? String(g.fecha_autorizacion).slice(0, 10)
+    : '',
+  nombreAutorizado: g?.nombre_autorizado || '',
   ingresoFamiliar: g?.ingreso_familiar_anual ?? '',
   personasCobertura: g?.personas_cobertura ?? '',
   personasTaxes: g?.personas_taxes ?? ''

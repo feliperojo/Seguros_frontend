@@ -103,6 +103,8 @@ export const mapGrupoFromForm = (f = {}) => {
     relacion: toNullIfEmpty(f.relacion),
     nota: toNullIfEmpty(f.nota),
     zip_code: toNullIfEmpty(f.zipCode),
+    fecha_autorizacion: cleanDate(f.fechaAutorizacion),
+    nombre_autorizado: toNullIfEmpty(f.nombreAutorizado),
 
     pertenece_grupo_familiar: boolFromSiNo(f.perteneceFamilia),
     whatsapp: !!f.whatsapp,

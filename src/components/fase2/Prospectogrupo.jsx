@@ -1,6 +1,7 @@
 // src/components/fase2/Prospectogrupo.jsx
 import React, { useState, useEffect } from "react";
 import { formatMoneyDisplay } from "../../services/ingresos";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import { FaFilePdf } from "react-icons/fa";
 import { generarPDFConfirmacion } from "../../services/generarPDFConfirmacion";
 import { generarPDFAutorizacion } from "../../services/formatoAutorizacion";
@@ -45,7 +46,7 @@ const Prospectogrupo = ({
   const [showPDFAutorizacionModal, setShowPDFAutorizacionModal] = useState(false);
   const [pdfAutorizacionData, setPdfAutorizacionData] = useState(null);
   const [autorizacionLanguage, setAutorizacionLanguage] = useState("es");
-
+  const [notasAutorizacionOpen, setNotasAutorizacionOpen] = useState(false);
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
 
@@ -472,19 +473,82 @@ const Prospectogrupo = ({
               </small>
             </div>
             <div className="col-12">
-              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                Nota
-              </label>
-              <textarea
-                className="form-control"
-                name="nota"
-                rows={3}
-                value={formData.nota || ""}
-                onChange={onChange}
-                disabled={readOnly}
-                placeholder="Notas del grupo familiar..."
-                style={{ fontSize: '0.9rem', resize: 'vertical' }}
-              />
+              <div className="accordion mt-1" id="accordionNotasAutorizacion">
+                <div className="accordion-item border rounded">
+                  <h2 className="accordion-header" id="headingNotasAutorizacion">
+                    <button
+                      type="button"
+                      className={`accordion-button ${notasAutorizacionOpen ? "" : "collapsed"}`}
+                      onClick={() => setNotasAutorizacionOpen((prev) => !prev)}
+                      aria-expanded={notasAutorizacionOpen}
+                      aria-controls="collapseNotasAutorizacion"
+                      style={{ fontSize: "0.9rem", fontWeight: 500 }}
+                    >
+                      <i className="fas fa-sticky-note text-secondary me-2"></i>
+                      Notas y autorización
+                    </button>
+                  </h2>
+                  {notasAutorizacionOpen && (
+                    <div
+                      id="collapseNotasAutorizacion"
+                      className="accordion-collapse collapse show contacto-accordion-open"
+                      aria-labelledby="headingNotasAutorizacion"
+                    >
+                      <div className="accordion-body">
+                        <div className="row g-3 mb-3">
+                          <div className="col-md-6">
+                            <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                              Fecha autorización
+                            </label>
+                            <DateInputWithCalendar
+                              inputName="fechaAutorizacion"
+                              valueIso={formData?.fechaAutorizacion}
+                              disabled={readOnly}
+                              onChangeIso={(iso) =>
+                                onChange?.({
+                                  target: {
+                                    name: "fechaAutorizacion",
+                                    value: iso,
+                                    type: "text",
+                                  },
+                                })
+                              }
+                            />
+                          </div>
+                          <div className="col-md-6">
+                            <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                              Nombre autorizado
+                            </label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              name="nombreAutorizado"
+                              value={formData.nombreAutorizado || ""}
+                              onChange={onChange}
+                              disabled={readOnly}
+                              placeholder="Persona autorizada"
+                              style={{ fontSize: '0.9rem' }}
+                            />
+                          </div>
+                        </div>
+                        <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                          Nota
+                        </label>
+                        <textarea
+                          className="form-control"
+                          name="nota"
+                          rows={3}
+                          value={formData.nota || ""}
+                          onChange={onChange}
+                          disabled={readOnly}
+                          placeholder="Notas del grupo familiar..."
+                          style={{ fontSize: '0.9rem', resize: 'vertical' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
