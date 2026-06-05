@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Modal, Button, Form, Table, Badge, Alert } from "react-bootstrap";
 import apiRequest from "../services/api"; // Asumiendo que usas este servicio para tus requests
+import { getListFromApi } from "../utils/apiResponse";
 import { formatDateForDisplay } from "../utils/formatters";
 import MdyDashDateInput from "./common/MdyDashDateInput";
 
@@ -102,10 +103,8 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
   const fetchCoberturas = async (grupoFamiliarId) => {
     try {
       const response = await apiRequest(`cobertura/grupo_familiar/${grupoFamiliarId}/coberturas`, "GET");
-      console.log("coberturas con requerimientos", response);
-      
-      // Filtrar solo coberturas activas
-      const activeCoberturas = response.filter(cobertura => cobertura.activo); // Asegurarse de que solo se trabajen con coberturas activas
+      const lista = getListFromApi(response);
+      const activeCoberturas = lista.filter((cobertura) => cobertura.activo);
       setCoberturas(activeCoberturas);
     } catch (error) {
       setError("Error al cargar coberturas: " + error.message);
@@ -275,7 +274,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                   <Form.Check
                     key={cobertura.id}
                     type="checkbox"
-                    label={`${cobertura.codigo_poliza} - ${cobertura.cliente?.nombre_completo || "Cliente sin nombre"} - ${cobertura.compania?.nombre || "Sin compañía"}`}
+                    label={`${cobertura.codigo_poliza || "Sin póliza"} - ${cobertura.cliente?.nombre_completo || "Cliente sin nombre"} - ${cobertura.compania?.nombre || cobertura.compania_nombre || "Sin compañía"}`}
                     checked={nuevo.cobertura_id.includes(cobertura.id)}
                     onChange={(e) => {
                       const id = cobertura.id;

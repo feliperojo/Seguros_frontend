@@ -6,11 +6,11 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
   const formatDate = (dateString) => {
     if (!dateString) return "—";
     const date = new Date(dateString);
-    return date.toLocaleString("es-ES");
+    return Number.isNaN(date.getTime()) ? dateString : date.toLocaleString("es-ES");
   };
 
-  const getActionVariant = (action) => {
-    switch (action?.toLowerCase()) {
+  const getActionVariant = (actionKey) => {
+    switch (actionKey?.toLowerCase()) {
       case "create":
         return "success";
       case "update":
@@ -32,16 +32,25 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
         </pre>
       );
     } catch {
-      return <span>{data}</span>;
+      return <span>{String(data)}</span>;
     }
   };
+
+  const actionKey = log.action?.key ?? log.action;
+  const actionLabel = log.action?.label ?? log.action;
+  const entityLabel = log.entity?.label ?? log.model;
+  const entityId = log.entity?.id ?? log.model_id;
+  const user = log.user;
+  const details = log.details ?? {};
+  const occurredAt =
+    log.occurred_at_formatted || log.occurred_at || log.created_at;
 
   return (
     <Modal show={show} onHide={onHide} size="lg" centered>
       <Modal.Header closeButton>
         <Modal.Title>
           <FaInfoCircle className="me-2" />
-          Detalle del Log de Auditoría
+          Detalle de Actividad
         </Modal.Title>
       </Modal.Header>
       <Modal.Body>
@@ -51,16 +60,16 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
           </div>
           <div className="col-md-6">
             <strong>Acción:</strong>{" "}
-            <Badge bg={getActionVariant(log.action)}>{log.action}</Badge>
+            <Badge bg={getActionVariant(actionKey)}>{actionLabel}</Badge>
           </div>
         </div>
 
         <div className="row mb-3">
           <div className="col-md-6">
-            <strong>Modelo:</strong> <Badge bg="info">{log.model}</Badge>
+            <strong>Entidad:</strong> <Badge bg="info">{entityLabel}</Badge>
           </div>
           <div className="col-md-6">
-            <strong>ID Modelo:</strong> {log.model_id || "—"}
+            <strong>ID Entidad:</strong> {entityId || "—"}
           </div>
         </div>
 
@@ -69,17 +78,19 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
             <FaUser className="me-2" />
             Usuario:
           </strong>
-          {log.user ? (
+          {user ? (
             <div className="mt-2">
               <div>
-                <strong>Nombre:</strong> {log.user.name}
+                <strong>Nombre:</strong> {user.name}
               </div>
-              <div>
-                <strong>Email:</strong> {log.user.email}
-              </div>
-              {log.user.id && (
+              {user.email && (
                 <div>
-                  <strong>ID:</strong> {log.user.id}
+                  <strong>Email:</strong> {user.email}
+                </div>
+              )}
+              {user.id && (
+                <div>
+                  <strong>ID:</strong> {user.id}
                 </div>
               )}
             </div>
@@ -93,7 +104,7 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
             <FaCalendarAlt className="me-2" />
             Fecha:
           </strong>
-          <div className="mt-2">{formatDate(log.created_at)}</div>
+          <div className="mt-2">{formatDate(occurredAt)}</div>
         </div>
 
         {log.description && (
@@ -103,45 +114,38 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
           </div>
         )}
 
-        {log.before && (
+        {details.before && (
           <div className="mb-3">
             <strong>Estado Anterior:</strong>
-            <div className="mt-2">{renderJson(log.before)}</div>
+            <div className="mt-2">{renderJson(details.before)}</div>
           </div>
         )}
 
-        {log.after && (
+        {details.after && (
           <div className="mb-3">
             <strong>Estado Posterior:</strong>
-            <div className="mt-2">{renderJson(log.after)}</div>
+            <div className="mt-2">{renderJson(details.after)}</div>
           </div>
         )}
 
-        {log.changes && (
+        {details.ip && (
           <div className="mb-3">
-            <strong>Cambios:</strong>
-            <div className="mt-2">{renderJson(log.changes)}</div>
+            <strong>IP:</strong> {details.ip}
           </div>
         )}
 
-        {log.ip_address && (
-          <div className="mb-3">
-            <strong>IP:</strong> {log.ip_address}
-          </div>
-        )}
-
-        {log.user_agent && (
+        {details.user_agent && (
           <div className="mb-3">
             <strong>User Agent:</strong>
             <div className="mt-2">
-              <small className="text-muted">{log.user_agent}</small>
+              <small className="text-muted">{details.user_agent}</small>
             </div>
           </div>
         )}
 
-        {!log.before && !log.after && !log.changes && (
+        {!details.before && !details.after && (
           <Alert variant="info">
-            No hay información adicional disponible para este log.
+            No hay información adicional disponible para este registro.
           </Alert>
         )}
       </Modal.Body>

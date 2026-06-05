@@ -8,7 +8,6 @@ import {
   Badge,
   Spinner,
   Pagination,
-  Modal,
   Alert,
 } from "react-bootstrap";
 import {
@@ -18,19 +17,30 @@ import {
   FaCalendarAlt,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
-import { auditLogsService } from "../../services/adminApi";
+import userActivityService from "../../services/userActivityService";
 import AuditLogDetailModal from "../../components/admin/AuditLogDetailModal";
 import MdyDashDateInput from "../../components/common/MdyDashDateInput";
+
+const ACTION_VARIANTS = {
+  create: "success",
+  update: "warning",
+  delete: "danger",
+  login: "primary",
+  logout: "secondary",
+  disable: "danger",
+  enable: "success",
+};
 
 const AuditLogsList = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [filterOptions, setFilterOptions] = useState({ actions: [], entities: [] });
   const [filters, setFilters] = useState({
     search: "",
     user_id: "",
     action: "",
-    model: "",
+    entity: "",
     start_date: "",
     end_date: "",
   });
@@ -48,33 +58,34 @@ const AuditLogsList = () => {
     try {
       setLoading(true);
       setError(null);
+
       const params = {
         page: currentPage,
         per_page: perPage,
         ...(filters.search && { search: filters.search }),
         ...(filters.user_id && { user_id: filters.user_id }),
         ...(filters.action && { action: filters.action }),
-        ...(filters.model && { model: filters.model }),
+        ...(filters.entity && { entity: filters.entity }),
         ...(filters.start_date && { start_date: filters.start_date }),
         ...(filters.end_date && { end_date: filters.end_date }),
       };
 
-      const response = await auditLogsService.list(params);
-      setLogs(response.data || []);
-      setTotal(response.meta?.total || 0);
+      const response = await userActivityService.list(params);
+      setLogs(response.data);
+      setTotal(response.meta?.total ?? 0);
+      if (response.filters) {
+        setFilterOptions(response.filters);
+      }
     } catch (err) {
-      setError(err.message || "Error al cargar logs de auditoría");
-      toast.error("Error al cargar logs de auditoría");
+      setError(err.message || "Error al cargar la actividad de usuarios");
+      toast.error("Error al cargar la actividad de usuarios");
     } finally {
       setLoading(false);
     }
   };
 
   const handleFilterChange = (field, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFilters((prev) => ({ ...prev, [field]: value }));
     setCurrentPage(1);
   };
 
@@ -86,34 +97,24 @@ const AuditLogsList = () => {
 
   const handleViewDetail = async (log) => {
     try {
-      const detail = await auditLogsService.get(log.id);
+      const detail = await userActivityService.get(log.id);
       setSelectedLog(detail);
       setShowDetail(true);
-    } catch (err) {
-      toast.error("Error al cargar detalles del log");
+    } catch {
+      toast.error("Error al cargar detalles del registro");
     }
   };
 
-  const getActionVariant = (action) => {
-    switch (action?.toLowerCase()) {
-      case "create":
-        return "success";
-      case "update":
-        return "warning";
-      case "delete":
-        return "danger";
-      default:
-        return "secondary";
-    }
-  };
+  const getActionVariant = (actionKey) =>
+    ACTION_VARIANTS[actionKey?.toLowerCase()] ?? "secondary";
 
   const formatDate = (dateString) => {
     if (!dateString) return "—";
     const date = new Date(dateString);
-    return date.toLocaleString("es-ES");
+    return Number.isNaN(date.getTime()) ? dateString : date.toLocaleString("es-ES");
   };
 
-  const totalPages = Math.ceil(total / perPage);
+  const totalPages = Math.ceil(total / perPage) || 1;
 
   return (
     <div className="container-fluid py-4">
@@ -121,7 +122,7 @@ const AuditLogsList = () => {
         <Card.Header>
           <h4 className="mb-0">
             <FaCalendarAlt className="me-2" />
-            Logs de Auditoría
+            Actividad de Usuarios
           </h4>
         </Card.Header>
         <Card.Body>
@@ -136,9 +137,7 @@ const AuditLogsList = () => {
                     type="text"
                     placeholder="Buscar..."
                     value={filters.search}
-                    onChange={(e) =>
-                      handleFilterChange("search", e.target.value)
-                    }
+                    onChange={(e) => handleFilterChange("search", e.target.value)}
                   />
                 </InputGroup>
               </div>
@@ -148,18 +147,25 @@ const AuditLogsList = () => {
                   onChange={(e) => handleFilterChange("action", e.target.value)}
                 >
                   <option value="">Todas las acciones</option>
-                  <option value="create">Crear</option>
-                  <option value="update">Actualizar</option>
-                  <option value="delete">Eliminar</option>
+                  {filterOptions.actions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </Form.Select>
               </div>
               <div className="col-md-2">
-                <Form.Control
-                  type="text"
-                  placeholder="Modelo/Entidad"
-                  value={filters.model}
-                  onChange={(e) => handleFilterChange("model", e.target.value)}
-                />
+                <Form.Select
+                  value={filters.entity}
+                  onChange={(e) => handleFilterChange("entity", e.target.value)}
+                >
+                  <option value="">Todas las entidades</option>
+                  {filterOptions.entities.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Form.Select>
               </div>
               <div className="col-md-2">
                 <MdyDashDateInput
@@ -195,7 +201,7 @@ const AuditLogsList = () => {
             </div>
           ) : logs.length === 0 ? (
             <Alert variant="info" className="text-center">
-              No se encontraron logs de auditoría
+              No se encontró actividad registrada
             </Alert>
           ) : (
             <>
@@ -203,11 +209,10 @@ const AuditLogsList = () => {
                 <Table striped bordered hover>
                   <thead>
                     <tr>
-                      <th>ID</th>
                       <th>Usuario</th>
                       <th>Acción</th>
-                      <th>Modelo</th>
-                      <th>ID Modelo</th>
+                      <th>Descripción</th>
+                      <th>Entidad</th>
                       <th>Fecha</th>
                       <th>Acciones</th>
                     </tr>
@@ -215,30 +220,36 @@ const AuditLogsList = () => {
                   <tbody>
                     {logs.map((log) => (
                       <tr key={log.id}>
-                        <td>{log.id}</td>
                         <td>
                           {log.user ? (
                             <>
                               <strong>{log.user.name}</strong>
-                              <br />
-                              <small className="text-muted">
-                                {log.user.email}
-                              </small>
+                              {log.user.email && (
+                                <>
+                                  <br />
+                                  <small className="text-muted">{log.user.email}</small>
+                                </>
+                              )}
                             </>
                           ) : (
                             <span className="text-muted">Sistema</span>
                           )}
                         </td>
                         <td>
-                          <Badge bg={getActionVariant(log.action)}>
-                            {log.action}
+                          <Badge bg={getActionVariant(log.action?.key)}>
+                            {log.action?.label ?? log.action}
                           </Badge>
                         </td>
+                        <td>{log.description || "—"}</td>
                         <td>
-                          <Badge bg="info">{log.model}</Badge>
+                          <Badge bg="info">{log.entity?.label ?? log.model ?? "—"}</Badge>
+                          {log.entity?.id ? (
+                            <small className="text-muted ms-1">#{log.entity.id}</small>
+                          ) : null}
                         </td>
-                        <td>{log.model_id || "—"}</td>
-                        <td>{formatDate(log.created_at)}</td>
+                        <td>
+                          {log.occurred_at_formatted || formatDate(log.occurred_at || log.created_at)}
+                        </td>
                         <td>
                           <Button
                             variant="info"
