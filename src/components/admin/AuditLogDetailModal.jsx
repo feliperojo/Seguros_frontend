@@ -1,6 +1,7 @@
 import React from "react";
 import { Modal, Badge, Alert } from "react-bootstrap";
 import { FaUser, FaCalendarAlt, FaInfoCircle } from "react-icons/fa";
+import EntityIdLink from "./EntityIdLink";
 
 const AuditLogDetailModal = ({ show, onHide, log }) => {
   const formatDate = (dateString) => {
@@ -69,7 +70,12 @@ const AuditLogDetailModal = ({ show, onHide, log }) => {
             <strong>Entidad:</strong> <Badge bg="info">{entityLabel}</Badge>
           </div>
           <div className="col-md-6">
-            <strong>ID Entidad:</strong> {entityId || "—"}
+            <strong>ID Entidad:</strong>{" "}
+            {entityId ? (
+              <EntityIdLink entityType={log.entity?.type} entityId={entityId} />
+            ) : (
+              "—"
+            )}
           </div>
         </div>
 

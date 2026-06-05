@@ -3,7 +3,14 @@ import { Button } from 'react-bootstrap';
 import { FaEdit, FaTrashAlt, FaLock, FaUnlock } from 'react-icons/fa';
 import PasswordUnlockModal from './PasswordUnlockModal';
 
-const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = true }) => {
+const MediosPagoTablas = ({
+  mediosPago,
+  onView,
+  onEdit,
+  onDelete,
+  showActions = true,
+  showPaymentMethodsData = false,
+}) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [unlockExpiry, setUnlockExpiry] = useState(null);
@@ -78,8 +85,11 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
   });
   const cuentasBancarias = mediosPago.filter((m) => inferFormaPago(m) === "cuenta_bancaria");
   
+  const datosVisibles = showPaymentMethodsData || isUnlocked;
+
   // Verificar si hay datos sensibles que necesiten protección
-  const hasSensitiveData = tarjetas.length > 0 || cuentasBancarias.length > 0;
+  const hasSensitiveData =
+    !showPaymentMethodsData && (tarjetas.length > 0 || cuentasBancarias.length > 0);
   
   // Función auxiliar para determinar el tipo de pago (Crédito/Débito)
   const getTipoPago = (medio) => {
@@ -193,11 +203,11 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         <td>{medio.titular}</td>
                         <td>{medio.direccion}</td>
                         <td>
-                          {isUnlocked ? medio.numero_tarjeta : maskCardNumber(medio.numero_tarjeta)}
+                          {datosVisibles ? medio.numero_tarjeta : maskCardNumber(medio.numero_tarjeta)}
                         </td>
                         <td>{formatVencimiento(medio.fecha_expiracion)}</td>
                         <td>
-                          {isUnlocked ? (medio.cvv || '-') : maskCVV()}
+                          {datosVisibles ? (medio.cvv || '-') : maskCVV()}
                         </td>
                         {showActions && (
                         <td>
@@ -206,7 +216,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                               className="btn btn-sm btn-outline-success"
                               onClick={() => {
                                 if (typeof onEdit !== "function") return;
-                                if (isUnlocked) return onEdit(medio, index);
+                                if (datosVisibles) return onEdit(medio, index);
                                 requestUnlockThen({ type: "edit", medio, index });
                               }}
                             >
@@ -257,7 +267,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                         <td>{medio.direccion}</td>
                         <td>{medio.ruta}</td>
                         <td>
-                          {isUnlocked ? medio.cuenta_numero : maskCardNumber(medio.cuenta_numero)}
+                          {datosVisibles ? medio.cuenta_numero : maskCardNumber(medio.cuenta_numero)}
                         </td>
                         {showActions && (
                         <td>
@@ -266,7 +276,7 @@ const MediosPagoTablas = ({ mediosPago, onView, onEdit, onDelete, showActions = 
                               className="btn btn-sm btn-outline-success"
                               onClick={() => {
                                 if (typeof onEdit !== "function") return;
-                                if (isUnlocked) return onEdit(medio, index);
+                                if (datosVisibles) return onEdit(medio, index);
                                 requestUnlockThen({ type: "edit", medio, index });
                               }}
                             >

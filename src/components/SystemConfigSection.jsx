@@ -2,10 +2,12 @@ import React, { useState } from "react";
 import { Card, Form, Button, Spinner, Alert, Table, Badge } from "react-bootstrap";
 import { toast } from "react-toastify";
 import systemConfigService from "../services/SystemConfigService";
+import { useAuth } from "../context/AuthContext";
 
 const CONFIG_KEYS = {
   SUPER_USER_ID: "super_user_id",
   WORK_SCHEDULE: "work_schedule",
+  SHOW_PAYMENT_METHODS_DATA: "show_payment_methods_data",
 };
 
 const DAY_LABELS = {
@@ -96,7 +98,11 @@ function isValidDateYYYYMMDD(s) {
  * value en BD es text; type es int|bool|json|string. Casteamos según type para el formulario.
  */
 function configFromApiResponse(items) {
-  const result = { [CONFIG_KEYS.SUPER_USER_ID]: null, [CONFIG_KEYS.WORK_SCHEDULE]: defaultWorkSchedule() };
+  const result = {
+    [CONFIG_KEYS.SUPER_USER_ID]: null,
+    [CONFIG_KEYS.WORK_SCHEDULE]: defaultWorkSchedule(),
+    [CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA]: false,
+  };
   if (!Array.isArray(items)) return result;
   for (const item of items) {
     if (!item || typeof item.key !== "string") continue;
@@ -142,8 +148,10 @@ const SystemConfigSection = ({
   canEditSettings = true,
   canViewSettings = true,
 }) => {
+  const { setAppSettings } = useAuth();
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
 
   const update = (key, value) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -246,6 +254,38 @@ const SystemConfigSection = ({
     return null;
   };
 
+  const handleSaveShowPaymentMethodsData = async () => {
+    if (!canEditSettings) return;
+    setSavingPaymentMethods(true);
+    try {
+      const value = !!config[CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA];
+      await systemConfigService.put(CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA, value, "bool");
+      try {
+        const runtime = await systemConfigService.getRuntime();
+        const next = {
+          show_payment_methods_data: !!runtime?.show_payment_methods_data,
+          require_super_password: !!runtime?.require_super_password,
+        };
+        if (typeof setAppSettings === "function") {
+          setAppSettings(next);
+        }
+        localStorage.setItem("app_settings", JSON.stringify(next));
+      } catch {
+        // no bloquear guardado si falla runtime
+      }
+      toast.success(
+        value
+          ? "Los datos de medios de pago se mostrarán sin enmascarar."
+          : "Los datos de medios de pago volverán a enmascararse (comportamiento habitual)."
+      );
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Error al guardar.";
+      toast.error(msg);
+    } finally {
+      setSavingPaymentMethods(false);
+    }
+  };
+
   const handleSaveWorkSchedule = async () => {
     if (!canEditSettings) return;
     const err = validateSchedule();
@@ -313,6 +353,43 @@ const SystemConfigSection = ({
                 "Guardar super usuario"
               )}
             </Button>
+
+            <hr className="my-4" />
+
+            <div className="mb-4 p-3 rounded border bg-light">
+              <div className="fw-semibold mb-1">Medios de pago</div>
+              <p className="text-muted small mb-3">
+                Durante migraciones o configuración inicial puede activar la visualización completa
+                de números de tarjeta, CVV y cuentas bancarias. Si está desactivado, se mantiene el
+                enmascarado con el botón &quot;Desbloquear datos sensibles&quot;.
+              </p>
+              <Form.Check
+                type="checkbox"
+                id="show_payment_methods_data"
+                label="Mostrar datos de medios de pago (sin enmascarar)"
+                checked={!!config[CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA]}
+                onChange={(e) =>
+                  update(CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA, e.target.checked)
+                }
+                disabled={!canEditSettings}
+                className="mb-3"
+              />
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveShowPaymentMethodsData}
+                disabled={savingPaymentMethods || !canEditSettings}
+              >
+                {savingPaymentMethods ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar configuración de medios de pago"
+                )}
+              </Button>
+            </div>
 
             <hr className="my-4" />
 

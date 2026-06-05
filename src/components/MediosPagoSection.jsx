@@ -2,8 +2,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { MediosPagoService } from "../services/MediosPagoService";
 import MediosPagoTablas from "./MediosPagoTablas";
+import useAppSettings from "../hooks/useAppSettings";
 
 export default function MediosPagoSection({ clienteId, isOpen }) {
+  const { showPaymentMethodsData } = useAppSettings();
   const [medios, setMedios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
@@ -75,6 +77,7 @@ export default function MediosPagoSection({ clienteId, isOpen }) {
       {!loading && !err && (medios?.length ?? 0) > 0 && (
         <MediosPagoTablas
           mediosPago={medios}
+          showPaymentMethodsData={showPaymentMethodsData}
           onView={(medio) =>
             alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`)
           }

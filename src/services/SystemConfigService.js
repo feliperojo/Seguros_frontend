@@ -52,5 +52,14 @@ export async function verifySuperAdminPassword(password) {
   await apiRequest(`${BASE}/verify-super-admin-password`, "POST", { password });
 }
 
-const systemConfigService = { getAll, get, put, verifySuperAdminPassword };
+/**
+ * Configuración de runtime (flags públicos para la UI, sin permiso settings).
+ * @returns {Promise<{ show_payment_methods_data?: boolean, require_super_password?: boolean }>}
+ */
+export async function getRuntime() {
+  const response = await apiRequest(`${BASE}/runtime`, "GET");
+  return response?.data ?? response ?? {};
+}
+
+const systemConfigService = { getAll, get, put, verifySuperAdminPassword, getRuntime };
 export default systemConfigService;

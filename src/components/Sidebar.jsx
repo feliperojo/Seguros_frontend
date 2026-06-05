@@ -5,7 +5,7 @@ import {
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
   FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock,
-  FaBook, FaColumns
+  FaBook, FaColumns, FaCreditCard
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -362,6 +362,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
               <Link to="/informes/cumpleanos" className={`submenu-link ${isActive('/informes/cumpleanos') ? 'active' : ''}`}>
                 <FaBirthdayCake /> Cumpleaños de Clientes
+              </Link>
+              <Link to="/informes/medios-pago" className={`submenu-link ${isActive('/informes/medios-pago') ? 'active' : ''}`}>
+                <FaCreditCard /> Clientes y medios de pago
               </Link>
               <Link to="/informes/documentos" className={`submenu-link ${isActive('/informes/documentos') ? 'active' : ''}`}>
                 <FaFileAlt /> Documentos Enviados

@@ -19,6 +19,7 @@ import {
 import { toast } from "react-toastify";
 import userActivityService from "../../services/userActivityService";
 import AuditLogDetailModal from "../../components/admin/AuditLogDetailModal";
+import EntityIdLink from "../../components/admin/EntityIdLink";
 import MdyDashDateInput from "../../components/common/MdyDashDateInput";
 
 const ACTION_VARIANTS = {
@@ -243,9 +244,10 @@ const AuditLogsList = () => {
                         <td>{log.description || "—"}</td>
                         <td>
                           <Badge bg="info">{log.entity?.label ?? log.model ?? "—"}</Badge>
-                          {log.entity?.id ? (
-                            <small className="text-muted ms-1">#{log.entity.id}</small>
-                          ) : null}
+                          <EntityIdLink
+                            entityType={log.entity?.type}
+                            entityId={log.entity?.id ?? log.model_id}
+                          />
                         </td>
                         <td>
                           {log.occurred_at_formatted || formatDate(log.occurred_at || log.created_at)}

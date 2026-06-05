@@ -195,5 +195,62 @@ export const getReporteCumpleanos = async (params = {}, signal = null) => {
   }
 };
 
+/**
+ * Construye query params para el reporte de medios de pago por cliente
+ */
+const buildMediosPagoQueryParams = (params) => {
+  const queryParams = new URLSearchParams();
+
+  if (params.page) queryParams.append("page", params.page);
+  if (params.per_page) queryParams.append("per_page", params.per_page);
+  if (params.search) queryParams.append("search", params.search);
+  if (params.tipo_medio) queryParams.append("tipo_medio", params.tipo_medio);
+  if (params.forma_pago) queryParams.append("forma_pago", params.forma_pago);
+  if (params.tipo_tarjeta) queryParams.append("tipo_tarjeta", params.tipo_tarjeta);
+  if (params.activo === true) queryParams.append("activo", "true");
+  if (params.activo === false) queryParams.append("activo", "false");
+  if (params.solo_con_medios === false) queryParams.append("solo_con_medios", "false");
+  if (params.sort_by) {
+    queryParams.append("sort_by", params.sort_by);
+    if (params.sort_dir) queryParams.append("sort_dir", params.sort_dir);
+  }
+
+  return queryParams.toString();
+};
+
+/**
+ * Reporte tipo lista: clientes con medios de pago anidados.
+ */
+export const getReporteMediosPago = async (params = {}, signal = null) => {
+  const queryString = buildMediosPagoQueryParams(params);
+  const endpoint = `reportes/medios-pago${queryString ? `?${queryString}` : ""}`;
+
+  if (signal) {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const response = await fetch(url, { method: "GET", headers, signal });
+    const text = await response.text();
+    const data = text ? JSON.parse(text) : {};
+
+    if (!response.ok) {
+      const error = new Error(data?.message || "Error en la petición");
+      error.response = { status: response.status, data };
+      throw error;
+    }
+
+    return data;
+  }
+
+  return apiRequest(endpoint, "GET");
+};
+
 export default getReporteCoberturas;
 

@@ -25,6 +25,14 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
+  const [appSettings, setAppSettings] = useState(() => {
+    try {
+      const raw = localStorage.getItem("app_settings");
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
@@ -77,9 +85,18 @@ export const AuthProvider = ({ children }) => {
         });
       }
       
+      const settingsData =
+        response.data?.app_settings ||
+        response.app_settings ||
+        null;
+
       setUser(userData);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
       setPermissions(normalizedPermissions); // Guardar como array de strings normalizados
+      if (settingsData && typeof settingsData === "object") {
+        setAppSettings(settingsData);
+        localStorage.setItem("app_settings", JSON.stringify(settingsData));
+      }
       setIsAuthenticated(true);
       
       // Guardar en localStorage
@@ -100,9 +117,11 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem("user");
         localStorage.removeItem("roles");
         localStorage.removeItem("permissions");
+        localStorage.removeItem("app_settings");
         setUser(null);
         setRoles([]);
         setPermissions([]);
+        setAppSettings(null);
         setIsAuthenticated(false);
         const currentPath = window.location.pathname;
         if (currentPath !== "/login") {
@@ -240,9 +259,11 @@ export const AuthProvider = ({ children }) => {
       localStorage.removeItem("user");
       localStorage.removeItem("roles");
       localStorage.removeItem("permissions");
+      localStorage.removeItem("app_settings");
       setUser(null);
       setRoles([]);
       setPermissions([]);
+      setAppSettings(null);
       setIsAuthenticated(false);
       navigate("/login");
     }
@@ -320,6 +341,8 @@ export const AuthProvider = ({ children }) => {
     user,
     roles,
     permissions,
+    appSettings,
+    setAppSettings,
     isAuthenticated,
     loading,
     login,

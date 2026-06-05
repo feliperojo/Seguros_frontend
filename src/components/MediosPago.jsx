@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import apiRequest from "../services/api";
 import MediosPagoTablas from "./MediosPagoTablas";
+import useAppSettings from "../hooks/useAppSettings";
 
 
 const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
+  const { showPaymentMethodsData } = useAppSettings();
 
   // Inicialización de estados
   const [mediosPago, setMediosPago] = useState([]);
@@ -687,6 +689,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       <div className="medios-pago-list">
       <MediosPagoTablas
             mediosPago={mediosPago}
+            showPaymentMethodsData={showPaymentMethodsData}
             onView={(medio) => alert(`Ver medio de pago: ${medio.titular} (${medio.forma_pago})`)}
             onEdit={(medio) => {
               const index = mediosPago.findIndex(m => m.id === medio.id);
