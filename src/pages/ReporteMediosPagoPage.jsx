@@ -148,15 +148,21 @@ export default function ReporteMediosPagoPage() {
     setError("");
     try {
       const response = await getReporteMediosPago(params, controller.signal);
+      if (controller.signal.aborted || abortRef.current !== controller) return;
+
       setData(Array.isArray(response?.data) ? response.data : []);
       setMeta(response?.meta ?? { page: 1, per_page: 25, total: 0, last_page: 1 });
       setResumen(response?.resumen ?? { total_clientes: 0, total_medios_pago: 0 });
     } catch (err) {
-      if (err?.message === "Petición cancelada") return;
+      if (err?.name === "AbortError" || err?.message === "Petición cancelada") return;
+      if (abortRef.current !== controller) return;
+
       setError(err?.message || "Error al cargar el informe");
       setData([]);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted && abortRef.current === controller) {
+        setLoading(false);
+      }
     }
   }, []);
 

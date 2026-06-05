@@ -236,17 +236,26 @@ export const getReporteMediosPago = async (params = {}, signal = null) => {
 
     if (token) headers["Authorization"] = `Bearer ${token}`;
 
-    const response = await fetch(url, { method: "GET", headers, signal });
-    const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
+    try {
+      const response = await fetch(url, { method: "GET", headers, signal });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
 
-    if (!response.ok) {
-      const error = new Error(data?.message || "Error en la petición");
-      error.response = { status: response.status, data };
-      throw error;
+      if (!response.ok) {
+        const error = new Error(data?.message || "Error en la petición");
+        error.response = { status: response.status, data };
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const cancelled = new Error("Petición cancelada");
+        cancelled.name = "AbortError";
+        throw cancelled;
+      }
+      throw err;
     }
-
-    return data;
   }
 
   return apiRequest(endpoint, "GET");
