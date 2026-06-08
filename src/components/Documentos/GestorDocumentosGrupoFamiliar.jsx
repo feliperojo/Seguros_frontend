@@ -8,6 +8,11 @@ import {
   obtenerRutasCarpetasUnicas,
   obtenerSegmentosCarpeta,
 } from "./folderUploadUtils";
+import {
+  formatearErrorApi,
+  formatearResumenErroresSubida,
+  validarArchivoAntesDeSubir,
+} from "./uploadErrorUtils";
 
 /**
  * Componente principal para gestionar documentos y carpetas de un Grupo Familiar
@@ -21,6 +26,8 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   const [archivos, setArchivos] = useState([]);
   const [loadingCarpetas, setLoadingCarpetas] = useState(false);
   const [loadingArchivos, setLoadingArchivos] = useState(false);
+  const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  const [progresoSubida, setProgresoSubida] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -35,6 +42,8 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setArchivos([]);
       setError("");
       setSuccess("");
+      setSubiendoArchivos(false);
+      setProgresoSubida(null);
     }
   }, [show, grupoFamiliarId]);
 
@@ -330,48 +339,57 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   /**
    * Crea la jerarquía de subcarpetas bajo la carpeta seleccionada.
    */
-  const asegurarJerarquiaCarpetas = async (files, carpetaBaseId) => {
+  const asegurarJerarquiaCarpetas = async (files, carpetaBaseId, onProgreso) => {
     const rutas = obtenerRutasCarpetasUnicas(files);
     const mapaRutas = {};
+    const errores = [];
 
-    for (const ruta of rutas) {
+    for (let i = 0; i < rutas.length; i++) {
+      const ruta = rutas[i];
       const segmentos = ruta.split("/").filter(Boolean);
-      const response = await apiRequest("document-folders/resolve-path", "POST", {
-        grupo_familiar_id: Number(grupoFamiliarId),
-        parent_id: Number(carpetaBaseId),
-        segmentos,
+
+      onProgreso?.({
+        fase: "preparando_carpetas",
+        carpetaActual: ruta,
+        completados: i,
+        total: rutas.length,
+        porcentaje: Math.round((i / Math.max(rutas.length, 1)) * 100),
       });
 
-      const carpetaId = response?.carpeta_id || response?.carpeta?.id || response?.data?.carpeta_id;
-      if (carpetaId) {
-        mapaRutas[ruta] = carpetaId;
+      try {
+        const response = await apiRequest("document-folders/resolve-path", "POST", {
+          grupo_familiar_id: Number(grupoFamiliarId),
+          parent_id: Number(carpetaBaseId),
+          segmentos,
+        });
+
+        const carpetaId =
+          response?.carpeta_id || response?.carpeta?.id || response?.data?.carpeta_id;
+
+        if (carpetaId) {
+          mapaRutas[ruta] = carpetaId;
+        } else {
+          errores.push({
+            ruta,
+            mensaje: `No se pudo crear la subcarpeta "${ruta}".`,
+          });
+        }
+      } catch (err) {
+        errores.push({
+          ruta,
+          mensaje: formatearErrorApi(err),
+        });
       }
     }
 
-    return mapaRutas;
+    return { mapaRutas, errores };
   };
 
-  /**
-   * Sube archivos respetando la estructura de carpetas anidadas.
-   */
-  const subirArchivosConJerarquia = async (files, carpetaBaseId) => {
-    const mapaRutas = await asegurarJerarquiaCarpetas(files, carpetaBaseId);
-    let subidos = 0;
-
-    for (const file of files) {
-      const segmentos = obtenerSegmentosCarpeta(file.webkitRelativePath || "");
-      const ruta = segmentos.join("/");
-      const carpetaDestino = ruta ? mapaRutas[ruta] : carpetaBaseId;
-
-      if (!carpetaDestino) {
-        throw new Error(`No se pudo resolver la carpeta destino para "${file.name}"`);
-      }
-
-      await subirArchivoACarpeta(file, carpetaDestino);
-      subidos += 1;
-    }
-
-    return subidos;
+  const actualizarProgresoSubida = (datos) => {
+    setProgresoSubida((prev) => ({
+      ...prev,
+      ...datos,
+    }));
   };
 
   /**
@@ -380,45 +398,165 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
    */
   const handleSubirArchivos = async (files) => {
     if (!carpetaSeleccionada || !grupoFamiliarId || !files || files.length === 0) {
-      setError("Selecciona una carpeta y al menos un archivo");
+      setError("Selecciona una carpeta del panel izquierdo y al menos un archivo o carpeta para subir.");
       return;
     }
 
     setError("");
     setSuccess("");
+    setSubiendoArchivos(true);
+
+    const { conEstructura, planos } = clasificarArchivosSubida(files);
+    const esCarpetaCompleta = conEstructura.length > 0;
+    const colaSubida = [
+      ...planos.map((file) => ({
+        file,
+        carpetaId: carpetaSeleccionada.id,
+        ruta: file.name,
+      })),
+      ...conEstructura.map((file) => {
+        const segmentos = obtenerSegmentosCarpeta(file.webkitRelativePath || "");
+        return {
+          file,
+          carpetaId: null,
+          ruta: file.webkitRelativePath || file.name,
+          segmentos,
+        };
+      }),
+    ];
+
+    setProgresoSubida({
+      fase: esCarpetaCompleta ? "preparando_carpetas" : "subiendo",
+      total: colaSubida.length,
+      completados: 0,
+      porcentaje: 0,
+      archivoActual: "",
+      carpetaActual: "",
+      esCarpetaCompleta,
+    });
+
+    const errores = [];
+    let totalSubidos = 0;
 
     try {
-      const { conEstructura, planos } = clasificarArchivosSubida(files);
-      let totalSubidos = 0;
-
-      if (planos.length > 0) {
-        for (const file of planos) {
-          await subirArchivoACarpeta(file, carpetaSeleccionada.id);
-          totalSubidos += 1;
-        }
-      }
+      let mapaRutas = {};
 
       if (conEstructura.length > 0) {
-        const subidosJerarquia = await subirArchivosConJerarquia(
+        const resultadoJerarquia = await asegurarJerarquiaCarpetas(
           conEstructura,
-          carpetaSeleccionada.id
+          carpetaSeleccionada.id,
+          actualizarProgresoSubida
         );
-        totalSubidos += subidosJerarquia;
-        await cargarCarpetas();
+        mapaRutas = resultadoJerarquia.mapaRutas;
+        errores.push(...resultadoJerarquia.errores);
       }
 
-      setTimeout(async () => {
-        await cargarArchivos();
-      }, 500);
+      for (let i = 0; i < colaSubida.length; i++) {
+        const item = colaSubida[i];
+        const { file } = item;
 
-      const mensajeCarpetas = conEstructura.length > 0 ? " con su estructura de carpetas" : "";
-      setSuccess(`${totalSubidos} archivo(s) subido(s) exitosamente${mensajeCarpetas}`);
-      setTimeout(() => setSuccess(""), 3000);
+        let carpetaDestino = item.carpetaId;
+        if (item.segmentos) {
+          const rutaCarpeta = item.segmentos.join("/");
+          carpetaDestino = rutaCarpeta ? mapaRutas[rutaCarpeta] : carpetaSeleccionada.id;
+        }
+
+        const errorValidacion = validarArchivoAntesDeSubir(file);
+        if (errorValidacion) {
+          errores.push({
+            archivo: file.name,
+            ruta: item.ruta,
+            mensaje: errorValidacion,
+          });
+          actualizarProgresoSubida({
+            fase: "subiendo",
+            total: colaSubida.length,
+            completados: i + 1,
+            porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
+            archivoActual: file.name,
+            carpetaActual: item.ruta !== file.name ? item.ruta : "",
+          });
+          continue;
+        }
+
+        if (!carpetaDestino) {
+          errores.push({
+            archivo: file.name,
+            ruta: item.ruta,
+            mensaje: `No se encontró la carpeta destino para "${file.name}".`,
+          });
+          actualizarProgresoSubida({
+            fase: "subiendo",
+            total: colaSubida.length,
+            completados: i + 1,
+            porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
+            archivoActual: file.name,
+            carpetaActual: item.ruta !== file.name ? item.ruta : "",
+          });
+          continue;
+        }
+
+        actualizarProgresoSubida({
+          fase: "subiendo",
+          total: colaSubida.length,
+          completados: i,
+          porcentaje: Math.round((i / Math.max(colaSubida.length, 1)) * 100),
+          archivoActual: file.name,
+          carpetaActual: item.ruta !== file.name ? item.ruta : "",
+        });
+
+        try {
+          await subirArchivoACarpeta(file, carpetaDestino);
+          totalSubidos += 1;
+        } catch (err) {
+          errores.push({
+            archivo: file.name,
+            ruta: item.ruta,
+            mensaje: formatearErrorApi(err, file),
+          });
+        }
+
+        actualizarProgresoSubida({
+          fase: "subiendo",
+          total: colaSubida.length,
+          completados: i + 1,
+          porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
+          archivoActual: file.name,
+          carpetaActual: item.ruta !== file.name ? item.ruta : "",
+        });
+      }
+
+      actualizarProgresoSubida({
+        fase: "finalizando",
+        completados: colaSubida.length,
+        porcentaje: 100,
+      });
+
+      if (conEstructura.length > 0) {
+        await cargarCarpetas();
+      }
+      await cargarArchivos();
+
+      if (errores.length > 0 && totalSubidos > 0) {
+        setError(formatearResumenErroresSubida(errores, totalSubidos));
+        const mensajeCarpetas = esCarpetaCompleta ? " (carpeta con estructura)" : "";
+        setSuccess(`${totalSubidos} archivo(s) subido(s) correctamente${mensajeCarpetas}. Revisa los errores indicados.`);
+        setTimeout(() => setSuccess(""), 5000);
+      } else if (errores.length > 0) {
+        setError(formatearResumenErroresSubida(errores, 0));
+      } else {
+        const mensajeCarpetas = esCarpetaCompleta ? " con su estructura de carpetas" : "";
+        setSuccess(`${totalSubidos} archivo(s) subido(s) exitosamente${mensajeCarpetas}`);
+        setTimeout(() => setSuccess(""), 4000);
+      }
     } catch (err) {
       console.error("Error al subir archivos:", err);
-      const errorMessage = err?.message || "No se pudieron subir los archivos";
-      setError(errorMessage);
-      setTimeout(() => setError(""), 5000);
+      setError(
+        `Error inesperado durante la subida: ${formatearErrorApi(err)}`
+      );
+    } finally {
+      setSubiendoArchivos(false);
+      setProgresoSubida(null);
     }
   };
 
@@ -503,7 +641,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         {/* Mensajes de error y éxito */}
         {error && (
           <Alert variant="danger" dismissible onClose={() => setError("")}>
-            {error}
+            <div style={{ whiteSpace: "pre-wrap" }}>{error}</div>
           </Alert>
         )}
         {success && (
@@ -534,6 +672,8 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
               <FilesList
                 archivos={archivos}
                 loading={loadingArchivos}
+                subiendo={subiendoArchivos}
+                progresoSubida={progresoSubida}
                 carpetaSeleccionada={carpetaSeleccionada}
                 onSubirArchivos={handleSubirArchivos}
                 onDescargarArchivo={handleDescargarArchivo}

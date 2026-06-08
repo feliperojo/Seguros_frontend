@@ -1,13 +1,38 @@
 import React, { useRef, useState } from "react";
-import { Button, Table, Spinner } from "react-bootstrap";
+import { Button, Table, Spinner, ProgressBar } from "react-bootstrap";
 import { getFilesFromDataTransfer } from "./folderUploadUtils";
 
 /**
  * Componente para listar y gestionar archivos de una carpeta con drag and drop
  */
+const obtenerTextoProgreso = (progresoSubida) => {
+  if (!progresoSubida) return "Subiendo archivos...";
+
+  const { fase, archivoActual, carpetaActual, completados, total, esCarpetaCompleta } =
+    progresoSubida;
+
+  if (fase === "preparando_carpetas") {
+    return esCarpetaCompleta
+      ? `Preparando estructura de carpetas${carpetaActual ? `: ${carpetaActual}` : ""}...`
+      : "Preparando carpetas...";
+  }
+
+  if (fase === "finalizando") {
+    return "Finalizando subida...";
+  }
+
+  const contador = total > 0 ? ` (${completados + 1} de ${total})` : "";
+  const nombre = archivoActual ? `: ${archivoActual}` : "";
+  const ruta = carpetaActual ? ` → ${carpetaActual}` : "";
+
+  return `Subiendo archivo${nombre}${ruta}${contador}`;
+};
+
 const FilesList = ({
   archivos = [],
   loading,
+  subiendo = false,
+  progresoSubida = null,
   carpetaSeleccionada,
   onSubirArchivos,
   onDescargarArchivo,
@@ -35,6 +60,7 @@ const FilesList = ({
    * Maneja el drag over (arrastrar sobre)
    */
   const handleDragOver = (e) => {
+    if (subiendo) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
@@ -53,6 +79,7 @@ const FilesList = ({
    * Maneja el drop (soltar archivos o carpetas completas)
    */
   const handleDrop = async (e) => {
+    if (subiendo) return;
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
@@ -135,8 +162,49 @@ const FilesList = ({
         minHeight: "400px"
       }}
     >
+      {/* Overlay de subida en progreso */}
+      {subiendo && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(255, 255, 255, 0.88)",
+            borderRadius: "8px",
+            zIndex: 1001,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+          }}
+        >
+          <div className="w-100" style={{ maxWidth: "480px" }}>
+            <div className="text-center mb-3">
+              <Spinner animation="border" variant="primary" className="mb-2" />
+              <p className="mb-1 fw-semibold text-primary">
+                {obtenerTextoProgreso(progresoSubida)}
+              </p>
+              {progresoSubida?.total > 0 && (
+                <small className="text-muted">
+                  {progresoSubida.completados} de {progresoSubida.total} elementos procesados
+                </small>
+              )}
+            </div>
+            <ProgressBar
+              now={progresoSubida?.porcentaje ?? 0}
+              label={`${progresoSubida?.porcentaje ?? 0}%`}
+              animated
+              striped
+              variant="primary"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Overlay de drag and drop */}
-      {isDragging && (
+      {isDragging && !subiendo && (
         <div
           style={{
             position: "absolute",
@@ -182,15 +250,44 @@ const FilesList = ({
             variant="primary"
             size="sm"
             onClick={() => fileInputRef.current?.click()}
+            disabled={subiendo}
           >
-            <i className="fas fa-upload me-1"></i>
-            Subir archivo
+            {subiendo ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-1" />
+                Subiendo...
+              </>
+            ) : (
+              <>
+                <i className="fas fa-upload me-1"></i>
+                Subir archivo
+              </>
+            )}
           </Button>
         </div>
       </div>
 
+      {subiendo && (
+        <div className="mb-3 p-3 border rounded bg-light">
+          <div className="d-flex justify-content-between align-items-center mb-2">
+            <small className="fw-semibold text-primary">
+              <i className="fas fa-cloud-upload-alt me-1"></i>
+              {obtenerTextoProgreso(progresoSubida)}
+            </small>
+            <small className="text-muted">{progresoSubida?.porcentaje ?? 0}%</small>
+          </div>
+          <ProgressBar
+            now={progresoSubida?.porcentaje ?? 0}
+            animated
+            striped
+            variant="primary"
+            style={{ height: "8px" }}
+          />
+        </div>
+      )}
+
       {/* Mensaje de ayuda para drag and drop */}
-      {!isDragging && archivos.length === 0 && !loading && (
+      {!isDragging && !subiendo && archivos.length === 0 && !loading && (
         <div className="text-center py-3 mb-3 border rounded bg-light">
           <i className="fas fa-hand-pointer fa-2x text-muted mb-2"></i>
           <p className="small text-muted mb-0">
@@ -199,7 +296,7 @@ const FilesList = ({
         </div>
       )}
 
-      {loading ? (
+      {loading && !subiendo ? (
         <div className="text-center py-5">
           <Spinner animation="border" />
           <p className="text-muted small mt-2">Cargando archivos...</p>

@@ -71,7 +71,10 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
     } else if (response.status === 404) {
       errorMessage = data?.message || "Recurso no encontrado";
     } else if (response.status === 422) {
-      errorMessage = data?.message || "Error de validación";
+      const detallesValidacion = data?.errors
+        ? Object.values(data.errors).flat().join(" ")
+        : "";
+      errorMessage = detallesValidacion || data?.message || "Error de validación";
     } else if (response.status >= 500) {
       errorMessage = data?.message || "Error del servidor. Por favor, intenta más tarde.";
     }
@@ -158,7 +161,10 @@ const apiRequestFormData = async (endpoint, method = "POST", formData = null) =>
     } else if (response.status === 404) {
       errorMessage = data?.message || "Recurso no encontrado";
     } else if (response.status === 422) {
-      errorMessage = data?.message || "Error de validación";
+      const detallesValidacion = data?.errors
+        ? Object.values(data.errors).flat().join(" ")
+        : "";
+      errorMessage = detallesValidacion || data?.message || "Error de validación";
     } else if (response.status >= 500) {
       errorMessage = data?.message || "Error del servidor. Por favor, intenta más tarde.";
     }
