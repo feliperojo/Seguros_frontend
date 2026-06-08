@@ -80,11 +80,71 @@ export const formatearErrorApi = (err, archivo = null) => {
     return "Error interno del servidor al subir el archivo. Intenta de nuevo en unos minutos.";
   }
 
-  if (err?.message?.toLowerCase().includes("failed to fetch")) {
-    return "No hay conexión con el servidor. Verifica tu internet e intenta de nuevo.";
+  if (err?.isTimeout) {
+    return "El servidor tardó demasiado en responder al subir este archivo. Suele ocurrir con archivos pesados o al subir muchos archivos seguidos.";
+  }
+
+  const msgRed = (err?.message || "").toLowerCase();
+  const esErrorRed =
+    err?.isNetworkError ||
+    msgRed.includes("failed to fetch") ||
+    msgRed.includes("networkerror") ||
+    msgRed.includes("load failed") ||
+    msgRed.includes("network request failed");
+
+  if (esErrorRed) {
+    return "El servidor no respondió al subir este archivo (conexión interrumpida o tiempo de espera agotado tras varios intentos).";
   }
 
   return traducirMensaje(err?.message) || "No se pudo subir el archivo por un error inesperado.";
+};
+
+/**
+ * Determina si un error de subida puede reintentarse.
+ */
+export const esErrorReintentable = (err) => {
+  if (!err) return false;
+  if (err.isNetworkError || err.isTimeout) return true;
+
+  const msg = (err.message || "").toLowerCase();
+  if (
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("load failed") ||
+    msg.includes("network request failed")
+  ) {
+    return true;
+  }
+
+  const status = err?.response?.status;
+  if (!status) return true;
+  if (status >= 500) return true;
+  if (status === 408 || status === 429) return true;
+
+  return false;
+};
+
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Ejecuta una subida con reintentos automáticos ante fallos de red.
+ */
+export const ejecutarConReintentos = async (fn, { maxIntentos = 3, pausaMs = 1500 } = {}) => {
+  let ultimoError;
+
+  for (let intento = 1; intento <= maxIntentos; intento += 1) {
+    try {
+      return await fn(intento);
+    } catch (err) {
+      ultimoError = err;
+      if (!esErrorReintentable(err) || intento === maxIntentos) {
+        throw err;
+      }
+      await esperar(pausaMs * intento);
+    }
+  }
+
+  throw ultimoError;
 };
 
 /**

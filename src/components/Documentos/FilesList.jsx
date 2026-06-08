@@ -41,6 +41,7 @@ const FilesList = ({
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const dropZoneRef = useRef(null);
+  const dragCounterRef = useRef(0);
 
   /**
    * Maneja la selección de archivos para subir
@@ -56,6 +57,22 @@ const FilesList = ({
     }
   };
 
+  const resetDragState = () => {
+    dragCounterRef.current = 0;
+    setIsDragging(false);
+  };
+
+  /**
+   * Maneja el drag enter (entrar al área de soltado)
+   */
+  const handleDragEnter = (e) => {
+    if (subiendo) return;
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    setIsDragging(true);
+  };
+
   /**
    * Maneja el drag over (arrastrar sobre)
    */
@@ -63,16 +80,28 @@ const FilesList = ({
     if (subiendo) return;
     e.preventDefault();
     e.stopPropagation();
+    e.dataTransfer.dropEffect = "copy";
     setIsDragging(true);
   };
 
   /**
-   * Maneja el drag leave (soltar fuera)
+   * Maneja el drag leave (salir del área de soltado).
+   * Evita parpadeo: no ocultar si el cursor pasó a un elemento hijo.
    */
   const handleDragLeave = (e) => {
+    if (subiendo) return;
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+
+    const { currentTarget, relatedTarget } = e;
+    if (relatedTarget instanceof Node && currentTarget.contains(relatedTarget)) {
+      return;
+    }
+
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) {
+      setIsDragging(false);
+    }
   };
 
   /**
@@ -82,7 +111,7 @@ const FilesList = ({
     if (subiendo) return;
     e.preventDefault();
     e.stopPropagation();
-    setIsDragging(false);
+    resetDragState();
 
     try {
       const files = await getFilesFromDataTransfer(e.dataTransfer);
@@ -151,15 +180,16 @@ const FilesList = ({
   };
 
   return (
-    <div 
+    <div
       className="h-100"
       ref={dropZoneRef}
+      onDragEnter={handleDragEnter}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       style={{
         position: "relative",
-        minHeight: "400px"
+        minHeight: "400px",
       }}
     >
       {/* Overlay de subida en progreso */}
@@ -224,12 +254,15 @@ const FilesList = ({
         >
           <div className="text-center">
             <i className="fas fa-cloud-upload-alt fa-4x text-primary mb-3"></i>
-            <h5 className="text-primary">Suelta los archivos aquí</h5>
-            <p className="text-muted">Los archivos se subirán a esta carpeta</p>
+            <h5 className="text-primary">Suelta archivos o carpetas aquí</h5>
+            <p className="text-muted">Se subirán a esta carpeta respetando su estructura</p>
           </div>
         </div>
       )}
 
+      <div
+        style={{ pointerEvents: isDragging ? "none" : "auto" }}
+      >
       <div className="d-flex justify-content-between align-items-center mb-3">
         <h6 className="mb-0">
           <i className="fas fa-file me-2"></i>
@@ -376,6 +409,7 @@ const FilesList = ({
           </Table>
         </div>
       )}
+      </div>
     </div>
   );
 };

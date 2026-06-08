@@ -118,9 +118,16 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
  * @param {string} endpoint - Ruta del endpoint
  * @param {string} method - Método HTTP (POST, PUT)
  * @param {FormData} formData - FormData con los archivos y campos
+ * @param {object} optionsExtra - Opciones adicionales (timeoutMs)
  */
-const apiRequestFormData = async (endpoint, method = "POST", formData = null) => {
+const apiRequestFormData = async (
+  endpoint,
+  method = "POST",
+  formData = null,
+  optionsExtra = {}
+) => {
   const token = getAuthToken();
+  const timeoutMs = optionsExtra.timeoutMs ?? 120000;
 
   const headers = {
     Accept: "application/json",
@@ -134,7 +141,22 @@ const apiRequestFormData = async (endpoint, method = "POST", formData = null) =>
   // Construye la URL final garantizando una sola barra
   const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-  const response = await fetch(url, options);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  options.signal = controller.signal;
+
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (fetchError) {
+    clearTimeout(timeoutId);
+    const error = new Error(fetchError?.message || "Error de red");
+    error.isNetworkError = true;
+    error.isTimeout = fetchError?.name === "AbortError";
+    error.cause = fetchError;
+    throw error;
+  }
+  clearTimeout(timeoutId);
   
   let data = {};
   try {

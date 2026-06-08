@@ -9,10 +9,14 @@ import {
   obtenerSegmentosCarpeta,
 } from "./folderUploadUtils";
 import {
+  ejecutarConReintentos,
   formatearErrorApi,
   formatearResumenErroresSubida,
   validarArchivoAntesDeSubir,
 } from "./uploadErrorUtils";
+
+const PAUSA_ENTRE_SUBIDAS_MS = 350;
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Componente principal para gestionar documentos y carpetas de un Grupo Familiar
@@ -322,18 +326,25 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   };
 
   /**
-   * Sube un archivo a una carpeta específica.
+   * Sube un archivo a una carpeta específica (con reintentos ante fallos de red).
    */
   const subirArchivoACarpeta = async (file, carpetaId) => {
-    const formData = new FormData();
-    formData.append("archivo", file);
-    formData.append("entidad_tipo", "grupo_familiar");
-    formData.append("entidad_id", String(grupoFamiliarId));
-    formData.append("grupo_familiar_id", String(grupoFamiliarId));
-    formData.append("carpeta_id", String(carpetaId));
-    formData.append("categoria", "general");
+    return ejecutarConReintentos(async () => {
+      const formData = new FormData();
+      formData.append("archivo", file, file.name);
+      formData.append("entidad_tipo", "grupo_familiar");
+      formData.append("entidad_id", String(grupoFamiliarId));
+      formData.append("grupo_familiar_id", String(grupoFamiliarId));
+      formData.append("carpeta_id", String(carpetaId));
+      formData.append("categoria", "general");
 
-    return apiRequestFormData("documentos-adjuntos/entity-upload", "POST", formData);
+      return apiRequestFormData(
+        "documentos-adjuntos/entity-upload",
+        "POST",
+        formData,
+        { timeoutMs: 120000 }
+      );
+    });
   };
 
   /**
@@ -357,11 +368,13 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       });
 
       try {
-        const response = await apiRequest("document-folders/resolve-path", "POST", {
-          grupo_familiar_id: Number(grupoFamiliarId),
-          parent_id: Number(carpetaBaseId),
-          segmentos,
-        });
+        const response = await ejecutarConReintentos(() =>
+          apiRequest("document-folders/resolve-path", "POST", {
+            grupo_familiar_id: Number(grupoFamiliarId),
+            parent_id: Number(carpetaBaseId),
+            segmentos,
+          })
+        );
 
         const carpetaId =
           response?.carpeta_id || response?.carpeta?.id || response?.data?.carpeta_id;
@@ -423,7 +436,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
           segmentos,
         };
       }),
-    ];
+    ].sort((a, b) => (a.file?.size || 0) - (b.file?.size || 0));
 
     setProgresoSubida({
       fase: esCarpetaCompleta ? "preparando_carpetas" : "subiendo",
@@ -508,6 +521,9 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         try {
           await subirArchivoACarpeta(file, carpetaDestino);
           totalSubidos += 1;
+          if (i < colaSubida.length - 1) {
+            await esperar(PAUSA_ENTRE_SUBIDAS_MS);
+          }
         } catch (err) {
           errores.push({
             archivo: file.name,
