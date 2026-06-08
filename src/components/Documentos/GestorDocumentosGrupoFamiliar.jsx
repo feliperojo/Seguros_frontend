@@ -243,9 +243,24 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   };
 
   /**
-   * Elimina una carpeta (solo si está vacía)
-   * Backend: DELETE /api/document-folders/{id}
-   * Regla: si tiene archivos asociados -> 422
+   * Verifica si una carpeta es descendiente de otra.
+   */
+  const esDescendienteDe = (carpetaId, posibleAncestroId, listaCarpetas) => {
+    let actual = listaCarpetas.find((c) => c.id === carpetaId);
+
+    while (actual) {
+      const parentId = actual.parent_id ?? actual.parentId ?? null;
+      if (parentId === posibleAncestroId) return true;
+      if (!parentId) return false;
+      actual = listaCarpetas.find((c) => c.id === parentId);
+    }
+
+    return false;
+  };
+
+  /**
+   * Elimina una carpeta con todo su contenido (archivos y subcarpetas).
+   * Backend: DELETE /api/document-folders/{id}?recursive=true
    */
   const handleEliminarCarpeta = async (carpeta) => {
     const carpetaId = carpeta?.id ?? carpeta;
@@ -254,8 +269,11 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     if (!carpetaId) return;
 
     const confirmar = window.confirm(
-      `¿Estás seguro de que deseas eliminar la carpeta${nombre ? ` "${nombre}"` : ""}?\n\n` +
-        "Solo se puede eliminar si está vacía. Esta acción no se puede deshacer."
+      `¿Eliminar la carpeta${nombre ? ` "${nombre}"` : ""} y TODO su contenido?\n\n` +
+        "Se eliminarán permanentemente:\n" +
+        "• Todos los archivos de la carpeta\n" +
+        "• Todas las subcarpetas y sus archivos\n\n" +
+        "Esta acción no se puede deshacer."
     );
     if (!confirmar) return;
 
@@ -263,27 +281,33 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     setSuccess("");
 
     try {
-      await apiRequest(`document-folders/${carpetaId}`, "DELETE");
+      const response = await apiRequest(
+        `document-folders/${carpetaId}?recursive=true`,
+        "DELETE"
+      );
 
-      // Si estaba seleccionada, limpiar selección
-      if (carpetaSeleccionada?.id === carpetaId) {
+      if (
+        carpetaSeleccionada &&
+        (carpetaSeleccionada.id === carpetaId ||
+          esDescendienteDe(carpetaSeleccionada.id, carpetaId, carpetas))
+      ) {
         setCarpetaSeleccionada(null);
         setArchivos([]);
       }
 
       await cargarCarpetas();
 
-      setSuccess("Carpeta eliminada exitosamente");
-      setTimeout(() => setSuccess(""), 3000);
+      const archivosEliminados = response?.archivos_eliminados ?? 0;
+      const carpetasEliminadas = response?.carpetas_eliminadas ?? 1;
+      const detalle =
+        archivosEliminados > 0
+          ? ` (${archivosEliminados} archivo(s) y ${carpetasEliminadas} carpeta(s))`
+          : "";
+
+      setSuccess(`Carpeta eliminada exitosamente${detalle}`);
+      setTimeout(() => setSuccess(""), 4000);
     } catch (err) {
       console.error("Error al eliminar carpeta:", err);
-      if (err?.response?.status === 422) {
-        setError(
-          err?.message ||
-            "No se puede eliminar la carpeta porque tiene archivos asociados."
-        );
-        return;
-      }
       setError(err?.message || "No se pudo eliminar la carpeta");
     }
   };
