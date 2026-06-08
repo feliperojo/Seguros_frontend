@@ -3,6 +3,11 @@ import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import apiRequest, { apiRequestFormData } from "../../services/api";
 import FolderList from "./FolderList";
 import FilesList from "./FilesList";
+import {
+  clasificarArchivosSubida,
+  obtenerRutasCarpetasUnicas,
+  obtenerSegmentosCarpeta,
+} from "./folderUploadUtils";
 
 /**
  * Componente principal para gestionar documentos y carpetas de un Grupo Familiar
@@ -284,9 +289,70 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   };
 
   /**
-   * Sube uno o más archivos a la carpeta seleccionada
-   * Usa el endpoint: POST /api/documentos-adjuntos/entity-upload
-   * FormData debe incluir: archivo, entidad_tipo, entidad_id, grupo_familiar_id, carpeta_id, categoria
+   * Sube un archivo a una carpeta específica.
+   */
+  const subirArchivoACarpeta = async (file, carpetaId) => {
+    const formData = new FormData();
+    formData.append("archivo", file);
+    formData.append("entidad_tipo", "grupo_familiar");
+    formData.append("entidad_id", String(grupoFamiliarId));
+    formData.append("grupo_familiar_id", String(grupoFamiliarId));
+    formData.append("carpeta_id", String(carpetaId));
+    formData.append("categoria", "general");
+
+    return apiRequestFormData("documentos-adjuntos/entity-upload", "POST", formData);
+  };
+
+  /**
+   * Crea la jerarquía de subcarpetas bajo la carpeta seleccionada.
+   */
+  const asegurarJerarquiaCarpetas = async (files, carpetaBaseId) => {
+    const rutas = obtenerRutasCarpetasUnicas(files);
+    const mapaRutas = {};
+
+    for (const ruta of rutas) {
+      const segmentos = ruta.split("/").filter(Boolean);
+      const response = await apiRequest("document-folders/resolve-path", "POST", {
+        grupo_familiar_id: Number(grupoFamiliarId),
+        parent_id: Number(carpetaBaseId),
+        segmentos,
+      });
+
+      const carpetaId = response?.carpeta_id || response?.carpeta?.id || response?.data?.carpeta_id;
+      if (carpetaId) {
+        mapaRutas[ruta] = carpetaId;
+      }
+    }
+
+    return mapaRutas;
+  };
+
+  /**
+   * Sube archivos respetando la estructura de carpetas anidadas.
+   */
+  const subirArchivosConJerarquia = async (files, carpetaBaseId) => {
+    const mapaRutas = await asegurarJerarquiaCarpetas(files, carpetaBaseId);
+    let subidos = 0;
+
+    for (const file of files) {
+      const segmentos = obtenerSegmentosCarpeta(file.webkitRelativePath || "");
+      const ruta = segmentos.join("/");
+      const carpetaDestino = ruta ? mapaRutas[ruta] : carpetaBaseId;
+
+      if (!carpetaDestino) {
+        throw new Error(`No se pudo resolver la carpeta destino para "${file.name}"`);
+      }
+
+      await subirArchivoACarpeta(file, carpetaDestino);
+      subidos += 1;
+    }
+
+    return subidos;
+  };
+
+  /**
+   * Sube uno o más archivos a la carpeta seleccionada.
+   * Soporta carpetas completas con subcarpetas (drag & drop o adjuntar).
    */
   const handleSubirArchivos = async (files) => {
     if (!carpetaSeleccionada || !grupoFamiliarId || !files || files.length === 0) {
@@ -298,34 +364,36 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     setSuccess("");
 
     try {
-      // Subir cada archivo individualmente
-      const promesas = Array.from(files).map(async (file) => {
-        const formData = new FormData();
-        formData.append("archivo", file);
-        formData.append("entidad_tipo", "grupo_familiar");
-        formData.append("entidad_id", String(grupoFamiliarId));
-        formData.append("grupo_familiar_id", String(grupoFamiliarId));
-        formData.append("carpeta_id", String(carpetaSeleccionada.id));
-        formData.append("categoria", "general");
+      const { conEstructura, planos } = clasificarArchivosSubida(files);
+      let totalSubidos = 0;
 
-        return apiRequestFormData("documentos-adjuntos/entity-upload", "POST", formData);
-      });
+      if (planos.length > 0) {
+        for (const file of planos) {
+          await subirArchivoACarpeta(file, carpetaSeleccionada.id);
+          totalSubidos += 1;
+        }
+      }
 
-      const resultados = await Promise.all(promesas);
-      console.log("Archivos subidos exitosamente:", resultados);
+      if (conEstructura.length > 0) {
+        const subidosJerarquia = await subirArchivosConJerarquia(
+          conEstructura,
+          carpetaSeleccionada.id
+        );
+        totalSubidos += subidosJerarquia;
+        await cargarCarpetas();
+      }
 
-      // Refrescar lista de archivos después de un breve delay para asegurar que el backend procesó
       setTimeout(async () => {
         await cargarArchivos();
       }, 500);
 
-      setSuccess(`${files.length} archivo(s) subido(s) exitosamente`);
+      const mensajeCarpetas = conEstructura.length > 0 ? " con su estructura de carpetas" : "";
+      setSuccess(`${totalSubidos} archivo(s) subido(s) exitosamente${mensajeCarpetas}`);
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       console.error("Error al subir archivos:", err);
       const errorMessage = err?.message || "No se pudieron subir los archivos";
       setError(errorMessage);
-      // Limpiar el mensaje de error después de 5 segundos
       setTimeout(() => setError(""), 5000);
     }
   };

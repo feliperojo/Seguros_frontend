@@ -1,5 +1,6 @@
 import React, { useRef, useState } from "react";
-import { Button, Table, Spinner, InputGroup, Form } from "react-bootstrap";
+import { Button, Table, Spinner } from "react-bootstrap";
+import { getFilesFromDataTransfer } from "./folderUploadUtils";
 
 /**
  * Componente para listar y gestionar archivos de una carpeta con drag and drop
@@ -49,16 +50,24 @@ const FilesList = ({
   };
 
   /**
-   * Maneja el drop (soltar archivos)
+   * Maneja el drop (soltar archivos o carpetas completas)
    */
-  const handleDrop = (e) => {
+  const handleDrop = async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (files && files.length > 0) {
-      onSubirArchivos(files);
+    try {
+      const files = await getFilesFromDataTransfer(e.dataTransfer);
+      if (files && files.length > 0) {
+        onSubirArchivos(files);
+      }
+    } catch (err) {
+      console.error("Error al leer archivos arrastrados:", err);
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        onSubirArchivos(files);
+      }
     }
   };
 
@@ -163,6 +172,8 @@ const FilesList = ({
             ref={fileInputRef}
             type="file"
             multiple
+            webkitdirectory=""
+            directory=""
             style={{ display: "none" }}
             onChange={handleFileSelect}
             accept="*/*"
