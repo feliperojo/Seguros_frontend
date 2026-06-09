@@ -164,27 +164,31 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
 
     // Guardar en segundo plano; no bloquea la UI
     const saveCustomTags = async () => {
-      try {
-        await systemConfigService.put(CONFIG_KEY, hasCustom ? customTags : [], "json");
-      } catch (error) {
-        console.error("Error al guardar etiquetas personalizadas globales:", error);
-        if (toast && typeof toast.showError === "function") {
-          toast.showError("No se pudieron guardar las etiquetas globales de grupos familiares.");
+      if (hasCustom) {
+        try {
+          await systemConfigService.put(CONFIG_KEY, customTags, "json");
+        } catch (error) {
+          console.error("Error al guardar etiquetas personalizadas globales:", error);
+          if (toast && typeof toast.showError === "function") {
+            toast.showError("No se pudieron guardar las etiquetas globales de grupos familiares.");
+          }
+        }
+      }
+
+      if (hasDeleted) {
+        try {
+          await systemConfigService.put(DELETED_KEY, deletedTagKeys, "json");
+        } catch (error) {
+          console.error("Error al guardar etiquetas eliminadas globales:", error);
+          if (toast && typeof toast.showError === "function") {
+            toast.showError("No se pudo guardar el historial de etiquetas eliminadas.");
+          }
         }
       }
 
       try {
-        await systemConfigService.put(DELETED_KEY, hasDeleted ? deletedTagKeys : [], "json");
-      } catch (error) {
-        console.error("Error al guardar etiquetas eliminadas globales:", error);
-        if (toast && typeof toast.showError === "function") {
-          toast.showError("No se pudo guardar el historial de etiquetas eliminadas.");
-        }
-      }
-
-      try {
-        localStorage.setItem("groupTags_custom", JSON.stringify(hasCustom ? customTags : []));
-        localStorage.setItem("groupTags_deleted", JSON.stringify(hasDeleted ? deletedTagKeys : []));
+        localStorage.setItem("groupTags_custom", JSON.stringify(customTags));
+        localStorage.setItem("groupTags_deleted", JSON.stringify(deletedTagKeys));
       } catch (error) {
         console.error("Error al guardar etiquetas de grupos familiares en localStorage:", error);
       }
