@@ -9,13 +9,14 @@ import {
   obtenerSegmentosCarpeta,
 } from "./folderUploadUtils";
 import {
+  calcularPausaTrasSubida,
+  calcularTimeoutSubida,
   ejecutarConReintentos,
   formatearErrorApi,
   formatearResumenErroresSubida,
   validarArchivoAntesDeSubir,
 } from "./uploadErrorUtils";
 
-const PAUSA_ENTRE_SUBIDAS_MS = 350;
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -328,23 +329,30 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   /**
    * Sube un archivo a una carpeta específica (con reintentos ante fallos de red).
    */
-  const subirArchivoACarpeta = async (file, carpetaId) => {
-    return ejecutarConReintentos(async () => {
-      const formData = new FormData();
-      formData.append("archivo", file, file.name);
-      formData.append("entidad_tipo", "grupo_familiar");
-      formData.append("entidad_id", String(grupoFamiliarId));
-      formData.append("grupo_familiar_id", String(grupoFamiliarId));
-      formData.append("carpeta_id", String(carpetaId));
-      formData.append("categoria", "general");
+  const subirArchivoACarpeta = async (file, carpetaId, opciones = {}) => {
+    const maxIntentos = opciones.maxIntentos ?? 5;
+    const pausaMs = opciones.pausaMs ?? 2000;
+    const timeoutMs = opciones.timeoutMs ?? calcularTimeoutSubida(file?.size);
 
-      return apiRequestFormData(
-        "documentos-adjuntos/entity-upload",
-        "POST",
-        formData,
-        { timeoutMs: 120000 }
-      );
-    });
+    return ejecutarConReintentos(
+      async () => {
+        const formData = new FormData();
+        formData.append("archivo", file, file.name);
+        formData.append("entidad_tipo", "grupo_familiar");
+        formData.append("entidad_id", String(grupoFamiliarId));
+        formData.append("grupo_familiar_id", String(grupoFamiliarId));
+        formData.append("carpeta_id", String(carpetaId));
+        formData.append("categoria", "general");
+
+        return apiRequestFormData(
+          "documentos-adjuntos/entity-upload",
+          "POST",
+          formData,
+          { timeoutMs }
+        );
+      },
+      { maxIntentos, pausaMs }
+    );
   };
 
   /**
@@ -449,23 +457,14 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     });
 
     const errores = [];
+    const fallidosRecuperables = [];
     let totalSubidos = 0;
 
-    try {
-      let mapaRutas = {};
+    const procesarColaSubida = async (cola, opciones = {}) => {
+      const esRecuperacion = opciones.esRecuperacion ?? false;
 
-      if (conEstructura.length > 0) {
-        const resultadoJerarquia = await asegurarJerarquiaCarpetas(
-          conEstructura,
-          carpetaSeleccionada.id,
-          actualizarProgresoSubida
-        );
-        mapaRutas = resultadoJerarquia.mapaRutas;
-        errores.push(...resultadoJerarquia.errores);
-      }
-
-      for (let i = 0; i < colaSubida.length; i++) {
-        const item = colaSubida[i];
+      for (let i = 0; i < cola.length; i++) {
+        const item = cola[i];
         const { file } = item;
 
         let carpetaDestino = item.carpetaId;
@@ -481,14 +480,6 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
             ruta: item.ruta,
             mensaje: errorValidacion,
           });
-          actualizarProgresoSubida({
-            fase: "subiendo",
-            total: colaSubida.length,
-            completados: i + 1,
-            porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
-            archivoActual: file.name,
-            carpetaActual: item.ruta !== file.name ? item.ruta : "",
-          });
           continue;
         }
 
@@ -498,48 +489,111 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
             ruta: item.ruta,
             mensaje: `No se encontró la carpeta destino para "${file.name}".`,
           });
-          actualizarProgresoSubida({
-            fase: "subiendo",
-            total: colaSubida.length,
-            completados: i + 1,
-            porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
-            archivoActual: file.name,
-            carpetaActual: item.ruta !== file.name ? item.ruta : "",
-          });
           continue;
         }
 
         actualizarProgresoSubida({
-          fase: "subiendo",
+          fase: esRecuperacion ? "reintentando" : "subiendo",
           total: colaSubida.length,
           completados: i,
-          porcentaje: Math.round((i / Math.max(colaSubida.length, 1)) * 100),
+          porcentaje: Math.round((i / Math.max(cola.length, 1)) * 100),
           archivoActual: file.name,
           carpetaActual: item.ruta !== file.name ? item.ruta : "",
+          esCarpetaCompleta,
         });
 
         try {
-          await subirArchivoACarpeta(file, carpetaDestino);
+          await subirArchivoACarpeta(file, carpetaDestino, {
+            maxIntentos: opciones.maxIntentos,
+            pausaMs: opciones.pausaMs,
+            timeoutMs: opciones.timeoutMs ?? calcularTimeoutSubida(file?.size),
+          });
           totalSubidos += 1;
-          if (i < colaSubida.length - 1) {
-            await esperar(PAUSA_ENTRE_SUBIDAS_MS);
+
+          const errorIdx = errores.findIndex(
+            (e) => e.archivo === file.name && e.ruta === item.ruta
+          );
+          if (errorIdx >= 0) {
+            errores.splice(errorIdx, 1);
+          }
+
+          if (!esRecuperacion) {
+            const indiceGlobal = colaSubida.findIndex(
+              (c) => c.file === file && c.ruta === item.ruta
+            );
+            if (i < cola.length - 1) {
+              await esperar(calcularPausaTrasSubida(file.size, indiceGlobal));
+            }
           }
         } catch (err) {
-          errores.push({
+          const detalleError = {
             archivo: file.name,
             ruta: item.ruta,
             mensaje: formatearErrorApi(err, file),
-          });
-        }
+          };
 
+          if (!esRecuperacion) {
+            fallidosRecuperables.push({
+              file,
+              carpetaId: carpetaDestino,
+              ruta: item.ruta,
+              segmentos: item.segmentos,
+            });
+          }
+
+          const existente = errores.findIndex(
+            (e) => e.archivo === file.name && e.ruta === item.ruta
+          );
+          if (existente >= 0) {
+            errores[existente] = detalleError;
+          } else {
+            errores.push(detalleError);
+          }
+        }
+      }
+    };
+
+    let mapaRutas = {};
+
+    try {
+      if (conEstructura.length > 0) {
+        const resultadoJerarquia = await asegurarJerarquiaCarpetas(
+          conEstructura,
+          carpetaSeleccionada.id,
+          actualizarProgresoSubida
+        );
+        mapaRutas = resultadoJerarquia.mapaRutas;
+        errores.push(...resultadoJerarquia.errores);
+      }
+
+      await procesarColaSubida(colaSubida);
+
+      if (fallidosRecuperables.length > 0) {
         actualizarProgresoSubida({
-          fase: "subiendo",
-          total: colaSubida.length,
-          completados: i + 1,
-          porcentaje: Math.round(((i + 1) / Math.max(colaSubida.length, 1)) * 100),
-          archivoActual: file.name,
-          carpetaActual: item.ruta !== file.name ? item.ruta : "",
+          fase: "reintentando",
+          total: fallidosRecuperables.length,
+          completados: 0,
+          porcentaje: 0,
+          archivoActual: "",
+          esCarpetaCompleta,
         });
+
+        await esperar(4000);
+
+        await procesarColaSubida(
+          fallidosRecuperables.map((item) => ({
+            file: item.file,
+            carpetaId: item.carpetaId,
+            ruta: item.ruta,
+            segmentos: item.segmentos,
+          })),
+          {
+            esRecuperacion: true,
+            maxIntentos: 4,
+            pausaMs: 3000,
+            timeoutMs: 300000,
+          }
+        );
       }
 
       actualizarProgresoSubida({

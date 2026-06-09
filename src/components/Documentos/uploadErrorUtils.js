@@ -1,4 +1,18 @@
 const MAX_BYTES = 50 * 1024 * 1024;
+const TIMEOUT_BASE_MS = 120000;
+const TIMEOUT_MAX_MS = 300000;
+
+export const calcularTimeoutSubida = (bytes = 0) => {
+  const mb = bytes / (1024 * 1024);
+  return Math.min(TIMEOUT_MAX_MS, Math.max(TIMEOUT_BASE_MS, TIMEOUT_BASE_MS + mb * 4000));
+};
+
+export const calcularPausaTrasSubida = (bytes = 0, indice = 0) => {
+  const base = 700;
+  const porTamano = Math.min(2500, Math.floor(bytes / (512 * 1024)) * 250);
+  const pausaPorLote = indice > 0 && indice % 5 === 0 ? 2500 : 0;
+  return base + porTamano + pausaPorLote;
+};
 
 const TRADUCCIONES = {
   "The archivo field is required.": "No se recibió ningún archivo.",
@@ -80,8 +94,12 @@ export const formatearErrorApi = (err, archivo = null) => {
     return "Error interno del servidor al subir el archivo. Intenta de nuevo en unos minutos.";
   }
 
+  const detalleTamano = archivo?.size
+    ? ` (${formatearTamaño(archivo.size)})`
+    : "";
+
   if (err?.isTimeout) {
-    return "El servidor tardó demasiado en responder al subir este archivo. Suele ocurrir con archivos pesados o al subir muchos archivos seguidos.";
+    return `Tiempo de espera agotado al subir este archivo${detalleTamano}. En producción el servidor o el proxy pueden cortar peticiones largas; se reintentó automáticamente sin éxito.`;
   }
 
   const msgRed = (err?.message || "").toLowerCase();
@@ -93,7 +111,7 @@ export const formatearErrorApi = (err, archivo = null) => {
     msgRed.includes("network request failed");
 
   if (esErrorRed) {
-    return "El servidor no respondió al subir este archivo (conexión interrumpida o tiempo de espera agotado tras varios intentos).";
+    return `El servidor de producción no completó la subida de este archivo${detalleTamano} (conexión cortada o tiempo de espera del proxy/servidor). No es un problema de tu internet si otros archivos de la misma carpeta sí subieron.`;
   }
 
   return traducirMensaje(err?.message) || "No se pudo subir el archivo por un error inesperado.";
@@ -129,7 +147,7 @@ const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Ejecuta una subida con reintentos automáticos ante fallos de red.
  */
-export const ejecutarConReintentos = async (fn, { maxIntentos = 3, pausaMs = 1500 } = {}) => {
+export const ejecutarConReintentos = async (fn, { maxIntentos = 5, pausaMs = 2000 } = {}) => {
   let ultimoError;
 
   for (let intento = 1; intento <= maxIntentos; intento += 1) {

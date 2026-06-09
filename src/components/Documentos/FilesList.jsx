@@ -17,6 +17,10 @@ const obtenerTextoProgreso = (progresoSubida) => {
       : "Preparando carpetas...";
   }
 
+  if (fase === "reintentando") {
+    return `Reintentando archivos que fallaron${archivoActual ? `: ${archivoActual}` : ""}...`;
+  }
+
   if (fase === "finalizando") {
     return "Finalizando subida...";
   }
