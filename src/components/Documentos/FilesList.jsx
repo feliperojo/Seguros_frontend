@@ -1,6 +1,14 @@
-import React, { useRef, useState } from "react";
-import { Button, Table, Spinner, ProgressBar } from "react-bootstrap";
+import React, { useRef, useState, useCallback, useEffect } from "react";
+import { Alert, Button, Table, Spinner, ProgressBar } from "react-bootstrap";
 import { getFilesFromDataTransfer } from "./folderUploadUtils";
+import { TEXTO_LIMITE_SUBIDA, TEXTO_ARRASTRE_EXTERNO, TEXTO_ARRASTRE_CRUCE_NAVEGADORES } from "./uploadErrorUtils";
+import {
+  obtenerArchivoParaArrastre,
+  configurarArrastreExterno,
+  guardarArchivoEnDescargas,
+  esSafari,
+} from "./fileDragUtils";
+import { puedeVisualizarseEnNavegador } from "./archivoPreviewUtils";
 
 /**
  * Componente para listar y gestionar archivos de una carpeta con drag and drop
@@ -40,12 +48,160 @@ const FilesList = ({
   carpetaSeleccionada,
   onSubirArchivos,
   onDescargarArchivo,
+  onVisualizarArchivo,
   onEliminarArchivo,
+  onArrastreError,
+  onMensajeInfo,
 }) => {
   const fileInputRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const dropZoneRef = useRef(null);
   const dragCounterRef = useRef(0);
+  const archivosArrastreCache = useRef(new Map());
+  const archivosArrastreCargando = useRef(new Set());
+  const blobUrlsArrastre = useRef(new Map());
+  const [archivosListosArrastre, setArchivosListosArrastre] = useState(() => new Set());
+  const [preparandoArrastreId, setPreparandoArrastreId] = useState(null);
+
+  const liberarBlobUrls = useCallback(() => {
+    blobUrlsArrastre.current.forEach((url) => URL.revokeObjectURL(url));
+    blobUrlsArrastre.current.clear();
+    archivosArrastreCache.current.clear();
+    setArchivosListosArrastre(new Set());
+  }, []);
+
+  const prepararArchivoParaArrastre = useCallback(async (archivo) => {
+    if (!archivo?.id) return;
+    if (archivosArrastreCache.current.has(archivo.id)) return;
+    if (archivosArrastreCargando.current.has(archivo.id)) return;
+
+    archivosArrastreCargando.current.add(archivo.id);
+    setPreparandoArrastreId(archivo.id);
+
+    try {
+      const { file, blobUrl } = await obtenerArchivoParaArrastre(archivo.id, archivo);
+      archivosArrastreCache.current.set(archivo.id, { file, blobUrl });
+      blobUrlsArrastre.current.set(archivo.id, blobUrl);
+      setArchivosListosArrastre((prev) => new Set(prev).add(archivo.id));
+    } catch (err) {
+      console.error("Error al preparar archivo para arrastre:", err);
+      onArrastreError?.(
+        `No se pudo preparar "${archivo.nombre_original || "el archivo"}" para arrastrar. Intente de nuevo.`
+      );
+    } finally {
+      archivosArrastreCargando.current.delete(archivo.id);
+      setPreparandoArrastreId((actual) => (actual === archivo.id ? null : actual));
+    }
+  }, [onArrastreError]);
+
+  useEffect(() => {
+    liberarBlobUrls();
+    if (archivos.length > 0) {
+      archivos.forEach((archivo) => prepararArchivoParaArrastre(archivo));
+    }
+    return () => liberarBlobUrls();
+  }, [archivos, prepararArchivoParaArrastre, liberarBlobUrls]);
+
+  const handleMouseDownFila = (e, archivo) => {
+    if (e.target.closest("button")) return;
+    prepararArchivoParaArrastre(archivo);
+  };
+
+  const handleDragStartFila = (e, archivo) => {
+    if (e.target.closest("button")) {
+      e.preventDefault();
+      return;
+    }
+
+    const cached = archivosArrastreCache.current.get(archivo.id);
+
+    if (!cached?.file) {
+      e.preventDefault();
+      onArrastreError?.(
+        "El archivo aún se está preparando. Espere el icono ⋮⋮ junto al nombre e intente de nuevo."
+      );
+      prepararArchivoParaArrastre(archivo);
+      return;
+    }
+
+    const ok = configurarArrastreExterno(e.dataTransfer, cached);
+    if (!ok) {
+      e.preventDefault();
+      onArrastreError?.("No se pudo iniciar el arrastre del archivo.");
+    }
+  };
+
+  const handleDragEndFila = () => {
+    document.body.style.cursor = "";
+  };
+
+  const handleGuardarParaWhatsApp = async (archivo) => {
+    let cached = archivosArrastreCache.current.get(archivo.id);
+
+    if (!cached?.file) {
+      await prepararArchivoParaArrastre(archivo);
+      cached = archivosArrastreCache.current.get(archivo.id);
+    }
+
+    if (!cached?.file) {
+      onArrastreError?.("No se pudo preparar el archivo. Intente de nuevo.");
+      return;
+    }
+
+    guardarArchivoEnDescargas(cached, archivo.nombre_original);
+    onMensajeInfo?.(
+      `"${archivo.nombre_original || "Archivo"}" guardado en Descargas. Ábralo en Finder y arrástrelo al chat de WhatsApp en Safari.`
+    );
+  };
+
+  const renderNombreArrastrable = (archivo, listoArrastre, cargandoArrastre) => {
+    const cached = archivosArrastreCache.current.get(archivo.id);
+    const estiloComun = {
+      maxWidth: "300px",
+      cursor: listoArrastre ? "grab" : cargandoArrastre ? "wait" : "default",
+    };
+
+    const contenido = (
+      <>
+        {archivo.nombre_original || "Sin nombre"}
+        {listoArrastre && (
+          <i className="fas fa-grip-vertical ms-2 text-muted small flex-shrink-0" aria-hidden="true" />
+        )}
+      </>
+    );
+
+    if (esSafari() && listoArrastre && cached?.blobUrl) {
+      return (
+        <a
+          href={cached.blobUrl}
+          download={archivo.nombre_original || "archivo"}
+          className="text-truncate d-inline-flex align-items-center text-decoration-none text-body"
+          style={estiloComun}
+          draggable
+          onMouseDown={(e) => handleMouseDownFila(e, archivo)}
+          onDragStart={(e) => handleDragStartFila(e, archivo)}
+          onDragEnd={handleDragEndFila}
+          title={archivo.nombre_original}
+        >
+          {contenido}
+        </a>
+      );
+    }
+
+    return (
+      <span
+        className="text-truncate d-inline-flex align-items-center"
+        style={estiloComun}
+        draggable={listoArrastre}
+        onMouseDown={(e) => handleMouseDownFila(e, archivo)}
+        onDragStart={(e) => handleDragStartFila(e, archivo)}
+        onDragEnd={handleDragEndFila}
+        title={archivo.nombre_original}
+      >
+        {contenido}
+      </span>
+    );
+  };
 
   /**
    * Maneja la selección de archivos para subir
@@ -304,6 +460,21 @@ const FilesList = ({
         </div>
       </div>
 
+      <Alert variant="info" className="py-2 px-3 mb-3 small">
+        <div>
+          <i className="fas fa-info-circle me-2" />
+          {TEXTO_LIMITE_SUBIDA}
+        </div>
+        <div className="mt-1 ms-4 text-muted">
+          <i className="fas fa-paper-plane me-1" />
+          {TEXTO_ARRASTRE_EXTERNO}
+        </div>
+        <div className="mt-1 ms-4 text-muted">
+          <i className="fab fa-whatsapp me-1" />
+          {TEXTO_ARRASTRE_CRUCE_NAVEGADORES}
+        </div>
+      </Alert>
+
       {subiendo && (
         <div className="mb-3 p-3 border rounded bg-light">
           <div className="d-flex justify-content-between align-items-center mb-2">
@@ -328,7 +499,7 @@ const FilesList = ({
         <div className="text-center py-3 mb-3 border rounded bg-light">
           <i className="fas fa-hand-pointer fa-2x text-muted mb-2"></i>
           <p className="small text-muted mb-0">
-            Arrastra y suelta archivos aquí o usa el botón "Subir archivo"
+            Arrastra archivos o carpetas aquí, o usa el botón "Subir archivo"
           </p>
         </div>
       )}
@@ -353,24 +524,37 @@ const FilesList = ({
                 <th>Nombre</th>
                 <th>Categoría</th>
                 <th>Fecha</th>
-                <th style={{ width: "120px" }}>Acciones</th>
+                <th style={{ width: "210px" }}>Acciones</th>
               </tr>
             </thead>
             <tbody>
-              {archivos.map((archivo) => (
-                <tr key={archivo.id}>
+              {archivos.map((archivo) => {
+                const listoArrastre = archivosListosArrastre.has(archivo.id);
+                const cargandoArrastre = preparandoArrastreId === archivo.id;
+
+                return (
+                <tr
+                  key={archivo.id}
+                  title={
+                    listoArrastre
+                      ? "Arrastre el nombre hacia el cuadro de mensaje de WhatsApp Web"
+                      : "Preparando archivo para arrastrar..."
+                  }
+                >
                   <td className="text-center">
+                    {cargandoArrastre ? (
+                      <Spinner animation="border" size="sm" />
+                    ) : (
                     <i
                       className={`fas ${obtenerIcono(
                         archivo.tipo_mime,
                         archivo.nombre_original
                       )}`}
                     ></i>
+                    )}
                   </td>
                   <td>
-                    <div className="text-truncate" style={{ maxWidth: "300px" }} title={archivo.nombre_original}>
-                      {archivo.nombre_original || "Sin nombre"}
-                    </div>
+                    {renderNombreArrastrable(archivo, listoArrastre, cargandoArrastre)}
                   </td>
                   <td>
                     <span className="badge bg-secondary">
@@ -383,10 +567,38 @@ const FilesList = ({
                     </small>
                   </td>
                   <td>
-                    <div className="d-flex gap-1">
+                    <div
+                      className="d-flex gap-1"
+                      draggable={false}
+                      onMouseDown={(e) => e.stopPropagation()}
+                    >
+                      {puedeVisualizarseEnNavegador(
+                        archivo.tipo_mime,
+                        archivo.nombre_original
+                      ) && (
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          draggable={false}
+                          onClick={() => onVisualizarArchivo(archivo.id, archivo)}
+                          title="Visualizar"
+                        >
+                          <i className="fas fa-eye"></i>
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline-success"
+                        size="sm"
+                        draggable={false}
+                        onClick={() => handleGuardarParaWhatsApp(archivo)}
+                        title="Guardar en Descargas para WhatsApp (Safari u otro navegador)"
+                      >
+                        <i className="fab fa-whatsapp"></i>
+                      </Button>
                       <Button
                         variant="outline-primary"
                         size="sm"
+                        draggable={false}
                         onClick={() => onDescargarArchivo(archivo.id, archivo)}
                         title="Descargar"
                       >
@@ -395,6 +607,7 @@ const FilesList = ({
                       <Button
                         variant="outline-danger"
                         size="sm"
+                        draggable={false}
                         onClick={() =>
                           onEliminarArchivo(
                             archivo.id,
@@ -408,7 +621,8 @@ const FilesList = ({
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </Table>
         </div>

@@ -70,6 +70,9 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
     } else if (response.status === 404) {
       errorMessage = data?.message || "Recurso no encontrado";
+    } else if (response.status === 413) {
+      errorMessage =
+        "El archivo no se subió porque pesa más de lo permitido. El límite máximo es 50 MB por archivo.";
     } else if (response.status === 422) {
       const detallesValidacion = data?.errors
         ? Object.values(data.errors).flat().join(" ")
@@ -182,6 +185,9 @@ const apiRequestFormData = async (
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
     } else if (response.status === 404) {
       errorMessage = data?.message || "Recurso no encontrado";
+    } else if (response.status === 413) {
+      errorMessage =
+        "El archivo no se subió porque pesa más de lo permitido. El límite máximo es 50 MB por archivo.";
     } else if (response.status === 422) {
       const detallesValidacion = data?.errors
         ? Object.values(data.errors).flat().join(" ")

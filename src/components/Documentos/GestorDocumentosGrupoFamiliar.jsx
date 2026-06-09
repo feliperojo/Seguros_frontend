@@ -3,6 +3,7 @@ import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import apiRequest, { apiRequestFormData } from "../../services/api";
 import FolderList from "./FolderList";
 import FilesList from "./FilesList";
+import DocumentoPreviewModal from "./DocumentoPreviewModal";
 import {
   clasificarArchivosSubida,
   obtenerRutasCarpetasUnicas,
@@ -35,6 +36,12 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   const [progresoSubida, setProgresoSubida] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [preview, setPreview] = useState({
+    show: false,
+    archivo: null,
+    url: "",
+    loading: false,
+  });
 
   // Cargar carpetas al montar el componente o cuando cambia el grupo familiar
   useEffect(() => {
@@ -49,6 +56,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setSuccess("");
       setSubiendoArchivos(false);
       setProgresoSubida(null);
+      setPreview({ show: false, archivo: null, url: "", loading: false });
     }
   }, [show, grupoFamiliarId]);
 
@@ -630,26 +638,50 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     }
   };
 
+  const obtenerUrlArchivo = async (archivoId, archivo = null) => {
+    if (archivo?.url) {
+      return archivo.url;
+    }
+
+    const response = await apiRequest(`documentos-adjuntos/${archivoId}/descargar`, "GET");
+    return response?.url || response?.data?.url || response?.ruta_archivo || "";
+  };
+
+  /**
+   * Abre el visualizador del documento (PDF, imágenes, etc.)
+   */
+  const handleVisualizarArchivo = async (archivoId, archivo = null) => {
+    setPreview({
+      show: true,
+      archivo,
+      url: "",
+      loading: true,
+    });
+
+    try {
+      const url = await obtenerUrlArchivo(archivoId, archivo);
+      setPreview({
+        show: true,
+        archivo,
+        url,
+        loading: false,
+      });
+    } catch (err) {
+      console.error("Error al visualizar archivo:", err);
+      setPreview({ show: false, archivo: null, url: "", loading: false });
+      setError("No se pudo abrir la vista previa del documento.");
+    }
+  };
+
   /**
    * Descarga un archivo usando el endpoint: GET api/documentos-adjuntos/{id}/descargar
    * El backend devuelve la URL del archivo en S3 (usando el accessor 'url')
    */
   const handleDescargarArchivo = async (archivoId, archivo = null) => {
     try {
-      // Si ya tenemos el objeto archivo con la URL, usarla directamente
-      if (archivo?.url) {
-        window.open(archivo.url, "_blank");
-        return;
-      }
+      const url = await obtenerUrlArchivo(archivoId, archivo);
 
-      // Si no, obtener la URL desde el endpoint de descarga
-      const response = await apiRequest(`documentos-adjuntos/${archivoId}/descargar`, "GET");
-      
-      // El backend devuelve la URL del archivo en S3
-      const url = response?.url || response?.data?.url || response?.ruta_archivo;
-      
       if (url) {
-        // La URL ya viene completa desde S3 (Storage::disk('s3')->url(...))
         window.open(url, "_blank");
       } else {
         // Fallback: construir la URL del endpoint directamente
@@ -747,7 +779,10 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
                 carpetaSeleccionada={carpetaSeleccionada}
                 onSubirArchivos={handleSubirArchivos}
                 onDescargarArchivo={handleDescargarArchivo}
+                onVisualizarArchivo={handleVisualizarArchivo}
                 onEliminarArchivo={handleEliminarArchivo}
+                onArrastreError={(msg) => setError(msg)}
+                onMensajeInfo={(msg) => setSuccess(msg)}
               />
             ) : (
               <div className="text-center text-muted py-5">
@@ -763,6 +798,15 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
           Cerrar
         </Button>
       </Modal.Footer>
+
+      <DocumentoPreviewModal
+        key={preview.archivo?.id || "documento-preview"}
+        show={preview.show}
+        archivo={preview.archivo}
+        url={preview.url}
+        loading={preview.loading}
+        onHide={() => setPreview({ show: false, archivo: null, url: "", loading: false })}
+      />
     </Modal>
   );
 };

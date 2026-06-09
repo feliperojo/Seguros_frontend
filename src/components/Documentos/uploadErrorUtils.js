@@ -1,4 +1,14 @@
-const MAX_BYTES = 50 * 1024 * 1024;
+export const LIMITE_TAMANO_MB = 50;
+export const MAX_BYTES = LIMITE_TAMANO_MB * 1024 * 1024;
+
+export const TEXTO_LIMITE_SUBIDA =
+  `Puede arrastrar archivos o carpetas completas (con subcarpetas). Cada archivo puede pesar hasta ${LIMITE_TAMANO_MB} MB.`;
+
+export const TEXTO_ARRASTRE_EXTERNO =
+  "Arrastre el nombre del archivo (icono ⋮⋮) al cuadro de mensaje de WhatsApp en el mismo navegador.";
+
+export const TEXTO_ARRASTRE_CRUCE_NAVEGADORES =
+  "Si WhatsApp está en Safari y esta ventana en Chrome (o al revés), el arrastre entre ventanas no funciona en Mac. Use el botón verde de WhatsApp: guarda el archivo en Descargas y arrástrelo desde ahí al chat.";
 const TIMEOUT_BASE_MS = 120000;
 const TIMEOUT_MAX_MS = 300000;
 
@@ -23,7 +33,7 @@ const TRADUCCIONES = {
   "El archivo supera el tamaño máximo permitido de 50 MB.": "El archivo supera el tamaño máximo permitido de 50 MB.",
 };
 
-const formatearTamaño = (bytes) => {
+export const formatearTamaño = (bytes) => {
   if (!bytes) return "0 Bytes";
   const k = 1024;
   const sizes = ["Bytes", "KB", "MB", "GB"];
@@ -45,6 +55,24 @@ const traducirMensaje = (mensaje = "") => {
   return mensaje;
 };
 
+const mensajeRechazoPorTamano = (nombreArchivo, tamanoBytes) => {
+  const nombre = nombreArchivo ? `"${nombreArchivo}"` : "El archivo";
+  const peso = tamanoBytes ? ` (${formatearTamaño(tamanoBytes)})` : "";
+  return `${nombre} no se subió porque pesa más de lo permitido${peso}. El límite máximo es ${LIMITE_TAMANO_MB} MB por archivo.`;
+};
+
+const esErrorValidacionTamano = (mensaje = "") => {
+  const m = mensaje.toLowerCase();
+  return (
+    m.includes("supera el tamaño") ||
+    m.includes("too large") ||
+    m.includes("entity too large") ||
+    m.includes("post too large") ||
+    m.includes("greater than") ||
+    m.includes("kilobytes")
+  );
+};
+
 const extraerErroresValidacion = (err) => {
   const errors = err?.response?.errors || err?.response?.data?.errors;
   if (!errors || typeof errors !== "object") return [];
@@ -63,11 +91,19 @@ export const formatearErrorApi = (err, archivo = null) => {
   const validaciones = extraerErroresValidacion(err);
 
   if (validaciones.length > 0) {
-    return validaciones.join(" ");
+    const texto = validaciones.join(" ");
+    if (esErrorValidacionTamano(texto)) {
+      return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
+    }
+    return texto;
   }
 
   if (archivo?.size > MAX_BYTES) {
-    return `El archivo pesa ${formatearTamaño(archivo.size)} y el máximo permitido es 50 MB.`;
+    return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
+  }
+
+  if (esErrorValidacionTamano(err?.message || "")) {
+    return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
   }
 
   if (status === 401) {
@@ -83,14 +119,21 @@ export const formatearErrorApi = (err, archivo = null) => {
   }
 
   if (status === 413) {
-    return "El archivo es demasiado grande para el servidor. El máximo permitido es 50 MB.";
+    return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
   }
 
   if (status === 422) {
-    return traducirMensaje(err?.message) || "El archivo no cumple los requisitos de validación.";
+    const msg = traducirMensaje(err?.message) || "El archivo no cumple los requisitos de validación.";
+    if (esErrorValidacionTamano(msg)) {
+      return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
+    }
+    return msg;
   }
 
   if (status >= 500) {
+    if (archivo?.size > MAX_BYTES) {
+      return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
+    }
     return "Error interno del servidor al subir el archivo. Intenta de nuevo en unos minutos.";
   }
 
@@ -111,6 +154,9 @@ export const formatearErrorApi = (err, archivo = null) => {
     msgRed.includes("network request failed");
 
   if (esErrorRed) {
+    if (archivo?.size > MAX_BYTES) {
+      return mensajeRechazoPorTamano(archivo?.name, archivo?.size);
+    }
     return `El servidor de producción no completó la subida de este archivo${detalleTamano} (conexión cortada o tiempo de espera del proxy/servidor). No es un problema de tu internet si otros archivos de la misma carpeta sí subieron.`;
   }
 
@@ -195,7 +241,7 @@ export const validarArchivoAntesDeSubir = (archivo) => {
   }
 
   if (archivo.size > MAX_BYTES) {
-    return `El archivo "${archivo.name}" pesa ${formatearTamaño(archivo.size)} y el máximo permitido es 50 MB.`;
+    return mensajeRechazoPorTamano(archivo.name, archivo.size);
   }
 
   return null;

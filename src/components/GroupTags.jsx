@@ -57,55 +57,55 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
   useEffect(() => {
     let isMounted = true;
 
+    const extractConfigArray = (response) => {
+      if (Array.isArray(response?.value)) return response.value;
+      if (Array.isArray(response)) return response;
+      if (Array.isArray(response?.data)) return response.data;
+      return null;
+    };
+
     const loadCustomTags = async () => {
-      // 1. Intentar desde system-config (global para todas las personas usuarias)
+      let loadedCustom = false;
+      let loadedDeleted = false;
+
+      // 1. Catálogo global de etiquetas personalizadas
       try {
         const response = await systemConfigService.get(CONFIG_KEY);
-        const data = Array.isArray(response?.value)
-          ? response.value
-          : Array.isArray(response)
-          ? response
-          : Array.isArray(response?.data)
-          ? response.data
-          : null;
+        const data = extractConfigArray(response);
 
         if (isMounted && Array.isArray(data)) {
           const valid = data.filter(validateTag);
-          if (valid.length > 0) {
-            setCustomTags(valid);
-            // Guardar también en localStorage como caché local
-            try {
-              localStorage.setItem("groupTags_custom", JSON.stringify(valid));
-            } catch {
-              // Ignorar errores de localStorage
-            }
-            return;
+          setCustomTags(valid);
+          loadedCustom = true;
+          try {
+            localStorage.setItem("groupTags_custom", JSON.stringify(valid));
+          } catch {
+            // Ignorar errores de localStorage
           }
         }
       } catch (error) {
         const status = error?.response?.status ?? error?.status;
-        // Si es 404, la clave aún no existe: no mostrar error.
         if (status && status !== 404) {
           console.error("Error al cargar etiquetas personalizadas globales:", error);
         }
       }
 
-      // 1.b. Cargar lista de etiquetas eliminadas (para ocultar sugeridas o personalizadas)
+      // 2. Lista global de etiquetas eliminadas
       try {
         const deletedResponse = await systemConfigService.get(DELETED_KEY);
-        const rawDeleted =
-          Array.isArray(deletedResponse?.value) ? deletedResponse.value : Array.isArray(deletedResponse)
-          ? deletedResponse
-          : Array.isArray(deletedResponse?.data)
-          ? deletedResponse.data
-          : null;
+        const rawDeleted = extractConfigArray(deletedResponse);
 
         if (isMounted && Array.isArray(rawDeleted)) {
-          setDeletedTagKeys(
-            rawDeleted
-              .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
-              .filter((k) => k)
-          );
+          const normalizedDeleted = rawDeleted
+            .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
+            .filter((k) => k);
+          setDeletedTagKeys(normalizedDeleted);
+          loadedDeleted = true;
+          try {
+            localStorage.setItem("groupTags_deleted", JSON.stringify(normalizedDeleted));
+          } catch {
+            // Ignorar errores de localStorage
+          }
         }
       } catch (error) {
         const status = error?.response?.status ?? error?.status;
@@ -114,33 +114,37 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
         }
       }
 
-      // 2. Fallback: intentar cargar desde localStorage (solo navegador actual)
-      try {
-        const saved = localStorage.getItem("groupTags_custom");
-        if (isMounted && saved) {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setCustomTags(parsed.filter(validateTag));
+      // 3. Fallback local solo si el backend no respondió
+      if (!loadedCustom) {
+        try {
+          const saved = localStorage.getItem("groupTags_custom");
+          if (isMounted && saved) {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              setCustomTags(parsed.filter(validateTag));
+            }
           }
+        } catch (error) {
+          console.error("Error al cargar etiquetas personalizadas desde localStorage:", error);
         }
-      } catch (error) {
-        console.error("Error al cargar etiquetas personalizadas desde localStorage:", error);
       }
 
-      try {
-        const deletedSaved = localStorage.getItem("groupTags_deleted");
-        if (isMounted && deletedSaved) {
-          const parsedDeleted = JSON.parse(deletedSaved);
-          if (Array.isArray(parsedDeleted)) {
-            setDeletedTagKeys(
-              parsedDeleted
-                .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
-                .filter((k) => k)
-            );
+      if (!loadedDeleted) {
+        try {
+          const deletedSaved = localStorage.getItem("groupTags_deleted");
+          if (isMounted && deletedSaved) {
+            const parsedDeleted = JSON.parse(deletedSaved);
+            if (Array.isArray(parsedDeleted)) {
+              setDeletedTagKeys(
+                parsedDeleted
+                  .map((k) => (typeof k === "string" ? k : String(k || "").trim()))
+                  .filter((k) => k)
+              );
+            }
           }
+        } catch (error) {
+          console.error("Error al cargar etiquetas eliminadas desde localStorage:", error);
         }
-      } catch (error) {
-        console.error("Error al cargar etiquetas eliminadas desde localStorage:", error);
       }
     };
 
@@ -161,16 +165,23 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     // Guardar en segundo plano; no bloquea la UI
     const saveCustomTags = async () => {
       try {
-        // Guardar en system-config como JSON para que se comparta entre usuarios
         await systemConfigService.put(CONFIG_KEY, hasCustom ? customTags : [], "json");
       } catch (error) {
         console.error("Error al guardar etiquetas personalizadas globales:", error);
         if (toast && typeof toast.showError === "function") {
-          toast.showError("No se pudieron guardar las etiquetas de grupo familiares globales.");
+          toast.showError("No se pudieron guardar las etiquetas globales de grupos familiares.");
         }
       }
 
-      // Siempre intentar mantener una copia local como respaldo
+      try {
+        await systemConfigService.put(DELETED_KEY, hasDeleted ? deletedTagKeys : [], "json");
+      } catch (error) {
+        console.error("Error al guardar etiquetas eliminadas globales:", error);
+        if (toast && typeof toast.showError === "function") {
+          toast.showError("No se pudo guardar el historial de etiquetas eliminadas.");
+        }
+      }
+
       try {
         localStorage.setItem("groupTags_custom", JSON.stringify(hasCustom ? customTags : []));
         localStorage.setItem("groupTags_deleted", JSON.stringify(hasDeleted ? deletedTagKeys : []));
