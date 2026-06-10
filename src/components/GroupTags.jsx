@@ -31,9 +31,19 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
   const [newTagColor, setNewTagColor] = useState(AVAILABLE_COLORS[0]);
   const [customTags, setCustomTags] = useState([]);
   const [deletedTagKeys, setDeletedTagKeys] = useState([]);
-  const catalogReadyRef = useRef(false);
+  const [catalogReady, setCatalogReady] = useState(false);
   const userModifiedCatalogRef = useRef(false);
   const lastSavedCatalogRef = useRef(null);
+
+  const mergeTagCatalog = (primary = [], secondary = []) => {
+    const byKey = new Map();
+    [...primary, ...secondary].forEach((tag) => {
+      if (validateTag(tag)) {
+        byKey.set(tag.key, tag);
+      }
+    });
+    return Array.from(byKey.values());
+  };
 
   // Normalizar y validar el valor recibido desde el padre
   const normalizedValue = useMemo(() => {
@@ -78,7 +88,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
 
         if (isMounted && Array.isArray(data)) {
           const valid = data.filter(validateTag);
-          setCustomTags(valid);
+          setCustomTags((prev) => mergeTagCatalog(valid, prev));
           loadedCustom = true;
           try {
             localStorage.setItem("groupTags_custom", JSON.stringify(valid));
@@ -124,7 +134,8 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
           if (isMounted && saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-              setCustomTags(parsed.filter(validateTag));
+              const valid = parsed.filter(validateTag);
+              setCustomTags((prev) => mergeTagCatalog(valid, prev));
             }
           }
         } catch (error) {
@@ -150,7 +161,9 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
         }
       }
 
-      catalogReadyRef.current = true;
+      if (isMounted) {
+        setCatalogReady(true);
+      }
     };
 
     loadCustomTags();
@@ -162,7 +175,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
 
   // Guardar catálogo global solo tras cambios explícitos del usuario (no al cargar ni en solo lectura)
   useEffect(() => {
-    if (readOnly || !catalogReadyRef.current || !userModifiedCatalogRef.current) return;
+    if (readOnly || !catalogReady || !userModifiedCatalogRef.current) return;
 
     const catalogSnapshot = JSON.stringify({ customTags, deletedTagKeys });
     if (lastSavedCatalogRef.current === catalogSnapshot) return;
@@ -203,16 +216,15 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
 
     saveCustomTags();
     // toast omitido en deps: useToast() devuelve un objeto nuevo en cada render y re-disparaba este efecto
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customTags, deletedTagKeys, readOnly, CONFIG_KEY, DELETED_KEY]);
+  }, [customTags, deletedTagKeys, readOnly, catalogReady, CONFIG_KEY, DELETED_KEY]);
 
-  // Combinar etiquetas sugeridas y personalizadas, excluyendo las eliminadas globalmente
+  // Combinar sugeridas, personalizadas y las ya usadas en el grupo actual
   const allAvailableTags = useMemo(() => {
     const deletedSet = new Set(deletedTagKeys || []);
-    const base = [...SUGGESTED_TAGS, ...customTags];
+    const base = mergeTagCatalog(SUGGESTED_TAGS, mergeTagCatalog(customTags, normalizedValue));
     if (!deletedSet.size) return base;
     return base.filter((tag) => !deletedSet.has(tag.key));
-  }, [customTags, deletedTagKeys]);
+  }, [customTags, deletedTagKeys, normalizedValue]);
 
   // Filtrar etiquetas según búsqueda
   const filteredTags = useMemo(() => {
@@ -310,16 +322,18 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     }
     
     userModifiedCatalogRef.current = true;
-    // Agregar a personalizadas
-    setCustomTags((prev) => [...prev, newTag]);
+    // Agregar al banco global de etiquetas personalizadas
+    setCustomTags((prev) => mergeTagCatalog(prev, [newTag]));
     
-    // Agregar a activas
+    // Agregar a activas en el grupo
     const newValue = [...normalizedValue, newTag];
     onChange?.(newValue);
     
-    // Limpiar formulario
+    // Limpiar formulario y búsqueda para que la nueva etiqueta sea visible en el listado
     setNewTagLabel("");
     setNewTagColor(AVAILABLE_COLORS[0]);
+    setSearchTerm("");
+    setShowMoreTags(true);
   };
 
   // Editar etiqueta (cualquier etiqueta, sugerida o personalizada)
