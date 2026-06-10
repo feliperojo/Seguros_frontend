@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Modal, Button } from "react-bootstrap";
 import {
   SUGGESTED_TAGS,
@@ -31,6 +31,9 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
   const [newTagColor, setNewTagColor] = useState(AVAILABLE_COLORS[0]);
   const [customTags, setCustomTags] = useState([]);
   const [deletedTagKeys, setDeletedTagKeys] = useState([]);
+  const catalogReadyRef = useRef(false);
+  const userModifiedCatalogRef = useRef(false);
+  const lastSavedCatalogRef = useRef(null);
 
   // Normalizar y validar el valor recibido desde el padre
   const normalizedValue = useMemo(() => {
@@ -146,6 +149,8 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
           console.error("Error al cargar etiquetas eliminadas desde localStorage:", error);
         }
       }
+
+      catalogReadyRef.current = true;
     };
 
     loadCustomTags();
@@ -155,47 +160,51 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     };
   }, []);
 
-  // Guardar etiquetas personalizadas y lista de eliminadas en configuración global cuando cambian
+  // Guardar catálogo global solo tras cambios explícitos del usuario (no al cargar ni en solo lectura)
   useEffect(() => {
-    // Si no hay ningún dato que guardar, evitar llamar al backend
-    const hasCustom = Array.isArray(customTags) && customTags.length > 0;
-    const hasDeleted = Array.isArray(deletedTagKeys) && deletedTagKeys.length > 0;
-    if (!hasCustom && !hasDeleted) return;
+    if (readOnly || !catalogReadyRef.current || !userModifiedCatalogRef.current) return;
 
-    // Guardar en segundo plano; no bloquea la UI
+    const catalogSnapshot = JSON.stringify({ customTags, deletedTagKeys });
+    if (lastSavedCatalogRef.current === catalogSnapshot) return;
+
     const saveCustomTags = async () => {
-      if (hasCustom) {
-        try {
-          await systemConfigService.put(CONFIG_KEY, customTags, "json");
-        } catch (error) {
-          console.error("Error al guardar etiquetas personalizadas globales:", error);
-          if (toast && typeof toast.showError === "function") {
-            toast.showError("No se pudieron guardar las etiquetas globales de grupos familiares.");
-          }
-        }
+      let customSaveFailed = false;
+      let deletedSaveFailed = false;
+
+      try {
+        await systemConfigService.put(CONFIG_KEY, customTags, "json");
+      } catch (error) {
+        customSaveFailed = true;
+        console.error("Error al guardar etiquetas personalizadas globales:", error);
       }
 
-      if (hasDeleted) {
-        try {
-          await systemConfigService.put(DELETED_KEY, deletedTagKeys, "json");
-        } catch (error) {
-          console.error("Error al guardar etiquetas eliminadas globales:", error);
-          if (toast && typeof toast.showError === "function") {
-            toast.showError("No se pudo guardar el historial de etiquetas eliminadas.");
-          }
-        }
+      try {
+        await systemConfigService.put(DELETED_KEY, deletedTagKeys, "json");
+      } catch (error) {
+        deletedSaveFailed = true;
+        console.error("Error al guardar etiquetas eliminadas globales:", error);
       }
 
       try {
         localStorage.setItem("groupTags_custom", JSON.stringify(customTags));
         localStorage.setItem("groupTags_deleted", JSON.stringify(deletedTagKeys));
+        lastSavedCatalogRef.current = catalogSnapshot;
       } catch (error) {
         console.error("Error al guardar etiquetas de grupos familiares en localStorage:", error);
+      }
+
+      if (customSaveFailed) {
+        toast.showError("No se pudieron guardar las etiquetas globales de grupos familiares.");
+      }
+      if (deletedSaveFailed) {
+        toast.showError("No se pudo guardar el historial de etiquetas eliminadas.");
       }
     };
 
     saveCustomTags();
-  }, [customTags, deletedTagKeys, toast, CONFIG_KEY, DELETED_KEY]);
+    // toast omitido en deps: useToast() devuelve un objeto nuevo en cada render y re-disparaba este efecto
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customTags, deletedTagKeys, readOnly, CONFIG_KEY, DELETED_KEY]);
 
   // Combinar etiquetas sugeridas y personalizadas, excluyendo las eliminadas globalmente
   const allAvailableTags = useMemo(() => {
@@ -300,6 +309,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
       return;
     }
     
+    userModifiedCatalogRef.current = true;
     // Agregar a personalizadas
     setCustomTags((prev) => [...prev, newTag]);
     
@@ -331,6 +341,7 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     };
     
     // Si es una etiqueta personalizada, actualizarla
+    userModifiedCatalogRef.current = true;
     const isCustom = customTags.some((t) => t.key === editingTag.key);
     if (isCustom) {
       // Actualizar en personalizadas
@@ -372,6 +383,8 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
       `¿Eliminar la etiqueta "${tag.label}" para todos los usuarios?`
     );
     if (!confirmDelete) return;
+
+    userModifiedCatalogRef.current = true;
 
     // 1. Si es personalizada, quitarla del listado de customTags
     const isCustom = customTags.some((t) => t.key === tag.key);

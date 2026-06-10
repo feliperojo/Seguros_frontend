@@ -2,8 +2,8 @@ import React, { useEffect, useState } from "react";
 import { Modal, Button, Form, Table, Badge, Alert } from "react-bootstrap";
 import apiRequest from "../services/api"; // Asumiendo que usas este servicio para tus requests
 import { getListFromApi } from "../utils/apiResponse";
-import { formatDateForDisplay } from "../utils/formatters";
-import MdyDashDateInput from "./common/MdyDashDateInput";
+import { formatDateMMDDYYYY } from "../utils/formatters";
+import DateInputWithCalendar from "./common/DateInputWithCalendar";
 
 const estados = {
   Pendiente: "warning",
@@ -44,11 +44,11 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
   };
 
-  /** Tabla / solo lectura: MM-DD-YYYY consistente con el resto de la app */
+  /** Tabla / solo lectura: MM/DD/YYYY consistente con el resto de la app */
   const formatReqDateCell = (valor) => {
     if (!valor) return "-";
-    const s = formatDateForDisplay(String(valor).split("T")[0]);
-    return s === "-" ? "-" : s;
+    const formatted = formatDateMMDDYYYY(String(valor).split("T")[0]);
+    return formatted || "-";
   };
 
   const [coberturas, setCoberturas] = useState([]);
@@ -312,7 +312,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
           <Form.Group className="d-flex gap-3 flex-wrap">
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <Form.Label>Fecha de solicitud</Form.Label>
-                  <MdyDashDateInput
+                  <DateInputWithCalendar
                     valueIso={nuevo.fecha_solicitud}
                     minIso="1900-01-01"
                     maxIso="2099-12-31"
@@ -324,7 +324,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
 
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <Form.Label>Fecha de vencimiento</Form.Label>
-                  <MdyDashDateInput
+                  <DateInputWithCalendar
                     valueIso={nuevo.fecha_vencimiento}
                     minIso={isoYmd(nuevo.fecha_solicitud) || undefined}
                     maxIso="2099-12-31"
@@ -385,7 +385,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                         <td>{r.documento_requerido}</td>
                         <td>
                           {editingId === r.id ? (
-                            <MdyDashDateInput
+                            <DateInputWithCalendar
                               size="sm"
                               valueIso={editableRequerimiento?.fecha_vencimiento}
                               minIso={isoYmd(r.fecha_solicitud) || "1900-01-01"}

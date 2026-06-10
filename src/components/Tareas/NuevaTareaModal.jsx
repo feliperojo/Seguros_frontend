@@ -3,7 +3,7 @@ import { Modal, Button, Form, Spinner } from "react-bootstrap";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import apiRequest from "../../services/api";
-import MdyDashDateInput from "../common/MdyDashDateInput";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import { extractMentionedUserIds } from "../../utils/mentions";
@@ -1215,11 +1215,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         <div className="row mb-3">
           <Form.Group className="col-md-4">
             <Form.Label>Fecha Programada</Form.Label>
-            <MdyDashDateInput
+            <DateInputWithCalendar
               valueIso={formData.scheduled_date}
               onChangeIso={(iso) => handleChange({ target: { name: "scheduled_date", value: iso } })}
               disabled={false}
-              required={false}
             />
             <Form.Control.Feedback type="invalid">
               {errors.scheduled_date}
@@ -1242,11 +1241,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
 
           <Form.Group className="col-md-6">
             <Form.Label>Fecha de Vencimiento</Form.Label>
-            <MdyDashDateInput
+            <DateInputWithCalendar
               valueIso={formData.due_date}
               onChangeIso={(iso) => handleChange({ target: { name: "due_date", value: iso } })}
               disabled={false}
-              required={false}
               minIso={formData.scheduled_date}
             />
             <Form.Control.Feedback type="invalid">
