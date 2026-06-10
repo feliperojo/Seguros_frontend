@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { sanitizeMoneyInput, formatMoney2 } from "../../services/ingresos";
 import LanguageSelect from "../selects/LanguageSelect";
 import { normalizeDateForInput } from "../../utils/formatters";
-import MdyDashDateInput from "../common/MdyDashDateInput";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import apiRequest from "../../services/api";
 import { getListFromApi } from "../../utils/apiResponse";
 
@@ -446,8 +446,7 @@ export default function MemberModalCreate({
                 </div>
                 <div className="col-md-3">
                   <label className="form-label">Fecha de Nacimiento</label>
-                  <MdyDashDateInput
-                    allowManualEntry
+                  <DateInputWithCalendar
                     valueIso={normalizeDateForInput(data.fechaNacimiento)}
                     minIso="1900-01-01"
                     maxIso="2099-12-31"
