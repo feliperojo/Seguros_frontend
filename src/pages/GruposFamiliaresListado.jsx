@@ -3,6 +3,7 @@ import {
   Container, Card, Table, Badge, Button,
   Form, InputGroup, Dropdown, Modal
 } from "react-bootstrap";
+import Pagination from "../components/Pagination";
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
@@ -19,6 +20,8 @@ import { Helmet } from "react-helmet-async";
 
 
 
+const ITEMS_PER_PAGE = 50;
+
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
 
@@ -28,6 +31,7 @@ const GruposFamiliaresListado = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
+  const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
  const [showModal, setShowModal] = useState(false);
@@ -73,6 +77,11 @@ useEffect(() => {
   useEffect(() => {
     fetchGrupos();
   }, [selectedStatus]);
+
+  // Volver a la primera página al cambiar búsqueda o filtro de estado
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedStatus]);
 
   // Función para mapear el código del estado al formato que espera el endpoint
   const mapearEstadoParaEndpoint = (codigoEstado) => {
@@ -318,6 +327,16 @@ useEffect(() => {
       clientesMatch;
   });
 
+  const totalFiltered = filteredGrupos.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedGrupos = filteredGrupos.slice(
+    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
+    safeCurrentPage * ITEMS_PER_PAGE
+  );
+  const rangeStart = totalFiltered === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
+  const rangeEnd = Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalFiltered);
+
   // Función para obtener el color de la insignia según el estado
   const getBadgeVariant = (estado) => {
     if (!estado) return "secondary";
@@ -412,6 +431,15 @@ useEffect(() => {
                   <p className="text-muted mb-0">No se encontraron grupos familiares</p>
                 </div>
               ) : (
+                <>
+                <div className="d-flex justify-content-between align-items-center mb-3 text-muted small">
+                  <span>
+                    Mostrando {rangeStart}–{rangeEnd} de {totalFiltered} grupo{totalFiltered !== 1 ? "s" : ""}
+                  </span>
+                  {totalPages > 1 && (
+                    <span>Página {safeCurrentPage} de {totalPages}</span>
+                  )}
+                </div>
                 <div className="table-responsive">
                   <Table hover className="align-middle">
                     <thead>
@@ -427,7 +455,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredGrupos.map((grupo) => (
+                      {paginatedGrupos.map((grupo) => (
                         <tr key={grupo.id}>
                   <td>
                           {grupo.id ? (
@@ -527,6 +555,15 @@ useEffect(() => {
                     </tbody>
                   </Table>
                 </div>
+                <div className="d-flex justify-content-center mt-4">
+                  <Pagination
+                    currentPage={safeCurrentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    disabled={loading}
+                  />
+                </div>
+                </>
               )}
             </>
           )}

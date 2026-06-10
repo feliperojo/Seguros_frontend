@@ -1,9 +1,9 @@
 // src/components/coberturas/CambioVidaCancelacionModal.jsx
 import React, { useState, useEffect } from "react";
-import { Modal, Button, Form, Table, Alert, Spinner, Badge, InputGroup } from "react-bootstrap";
+import { Modal, Button, Form, Table, Alert, Spinner, Badge } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import { formatDateForDisplay } from "../../utils/formatters";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 
 /**
  * CambioVidaCancelacionModal
@@ -47,94 +47,6 @@ const CambioVidaCancelacionModal = ({
   const [fechaCancelacion, setFechaCancelacion] = useState("");
   const [motivoCancelacion, setMotivoCancelacion] = useState("");
   const [notaCancel, setNotaCancel] = useState("");
-
-  // Input controlado MM-DD-YYYY que guarda YYYY-MM-DD (sin placeholder)
-  const pad2 = (n) => String(n).padStart(2, "0");
-  const mdyDashToIso = (display) => {
-    const t = String(display ?? "").trim();
-    if (!t) return "";
-    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
-    const digits = t.replace(/\D/g, "");
-    if (digits.length !== 8) return null;
-    const mm = parseInt(digits.slice(0, 2), 10);
-    const dd = parseInt(digits.slice(2, 4), 10);
-    const yyyy = parseInt(digits.slice(4, 8), 10);
-    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
-    const test = new Date(yyyy, mm - 1, dd);
-    if (test.getFullYear() !== yyyy || test.getMonth() !== mm - 1 || test.getDate() !== dd) return null;
-    return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
-  };
-  const formatMdyDashTyping = (raw) => {
-    const digits = String(raw ?? "").replace(/\D/g, "");
-    if (!digits) return "";
-    if (digits.length <= 2) return digits;
-    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
-  };
-  const DateInputMdyDash = ({ valueIso, onChangeIso, disabled, minIso, className, required }) => {
-    const toDisplay = (iso) => {
-      const s = String(iso ?? "").slice(0, 10);
-      const f = formatDateForDisplay(s);
-      return f === "-" ? "" : f;
-    };
-    const [display, setDisplay] = useState(() => toDisplay(valueIso));
-    const dateRef = React.useRef(null);
-    useEffect(() => {
-      setDisplay(toDisplay(valueIso));
-    }, [valueIso]);
-    return (
-      <div style={{ position: "relative" }}>
-        <InputGroup className={className}>
-          <Form.Control
-            type="text"
-            value={display}
-            disabled={disabled}
-            readOnly
-            title="Formato: MM-DD-YYYY"
-          />
-          <Button
-            variant="outline-secondary"
-            disabled={disabled}
-            onClick={() => {
-              const el = dateRef.current;
-              if (!el) return;
-              // Abre calendario si el browser soporta showPicker()
-              if (typeof el.showPicker === "function") {
-                el.showPicker();
-              } else {
-                el.click();
-              }
-            }}
-            title="Seleccionar fecha"
-          >
-            <i className="bi bi-calendar3" />
-          </Button>
-        </InputGroup>
-
-        {/* Input nativo para calendario (oculto visualmente) */}
-        <input
-          ref={dateRef}
-          type="date"
-          value={String(valueIso ?? "").slice(0, 10)}
-          onChange={(e) => {
-            const iso = e.target.value;
-            onChangeIso?.(iso);
-          }}
-          required={required}
-          min={minIso || undefined}
-          disabled={disabled}
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: 0,
-            pointerEvents: "none", // abrimos via botón
-          }}
-          aria-hidden="true"
-          tabIndex={-1}
-        />
-      </div>
-    );
-  };
 
   // Opciones predefinidas para motivo_cancelacion
   const motivosCancelacion = [
@@ -748,13 +660,11 @@ const CambioVidaCancelacionModal = ({
                           </td>
                           <td className="align-middle text-center">
                             {isSelected && datosRenovacion.renovar === false ? (
-                              <DateInputMdyDash
+                              <DateInputWithCalendar
                                 valueIso={datosRenovacion.fecha_retiro || ""}
                                 onChangeIso={(iso) => handleFechaRetiroChange(coberturaId, iso)}
                                 minIso={fechaCancelacion || ""}
                                 disabled={false}
-                                className="border-danger"
-                                required={true}
                               />
                             ) : (
                               <span className="text-muted small fst-italic">-</span>
@@ -792,12 +702,10 @@ const CambioVidaCancelacionModal = ({
                         <Form.Label className="fw-semibold mb-2">
                           Fecha de Cancelación <span className="text-danger">*</span>
                         </Form.Label>
-                        <DateInputMdyDash
+                        <DateInputWithCalendar
                           valueIso={fechaCancelacion || ""}
                           onChangeIso={(iso) => setFechaCancelacion(iso)}
                           disabled={false}
-                          className="border-primary"
-                          required={true}
                         />
                         <Form.Text className="text-muted small">
                           Fecha efectiva de cancelación de las coberturas seleccionadas
