@@ -13,6 +13,8 @@ const FolderList = ({
   onRenombrarCarpeta,
   onEliminarCarpeta,
   grupoFamiliarId,
+  modoTransicionAnios = false,
+  anioActual = new Date().getFullYear(),
 }) => {
   const [mostrarFormCrear, setMostrarFormCrear] = useState(false);
   const [nombreNuevaCarpeta, setNombreNuevaCarpeta] = useState("");
@@ -384,20 +386,41 @@ const FolderList = ({
       {mostrarFormCrear && (
         <div className="mb-3 p-3 border rounded bg-light">
           <Form onSubmit={handleSubmitCrear}>
-            {parentIdParaNuevaCarpeta && (
+            {parentIdParaNuevaCarpeta ? (
               <div className="mb-2">
                 <small className="text-muted">
                   <i className="fas fa-info-circle me-1"></i>
                   Creando subcarpeta dentro de "{carpetas.find(c => c.id === parentIdParaNuevaCarpeta)?.nombre || "carpeta"}"
                 </small>
               </div>
+            ) : (
+              <div className="mb-2">
+                <small className="text-muted">
+                  <i className="fas fa-calendar-alt me-1"></i>
+                  En la raíz solo puede crear carpetas por año (ej: {anioActual}).
+                  {!modoTransicionAnios && (
+                    <> Los años anteriores requieren clave del super administrador.</>
+                  )}
+                </small>
+              </div>
             )}
             <InputGroup>
               <Form.Control
-                type="text"
-                placeholder={parentIdParaNuevaCarpeta ? "Nombre de la subcarpeta" : "Nombre de la carpeta"}
+                type={parentIdParaNuevaCarpeta ? "text" : "text"}
+                inputMode={parentIdParaNuevaCarpeta ? "text" : "numeric"}
+                maxLength={parentIdParaNuevaCarpeta ? 255 : 4}
+                placeholder={
+                  parentIdParaNuevaCarpeta
+                    ? "Nombre de la subcarpeta"
+                    : `Año (ej: ${anioActual})`
+                }
                 value={nombreNuevaCarpeta}
-                onChange={(e) => setNombreNuevaCarpeta(e.target.value)}
+                onChange={(e) => {
+                  const valor = parentIdParaNuevaCarpeta
+                    ? e.target.value
+                    : e.target.value.replace(/\D/g, "").slice(0, 4);
+                  setNombreNuevaCarpeta(valor);
+                }}
                 autoFocus
               />
               <Button variant="success" type="submit" size="sm">
@@ -430,7 +453,7 @@ const FolderList = ({
         <div className="text-center py-4 text-muted">
           <i className="fas fa-folder-open fa-2x mb-2 opacity-50"></i>
           <p className="small mb-0">No hay carpetas</p>
-          <p className="small">Crea la primera carpeta</p>
+          <p className="small">Crea la primera carpeta de año</p>
         </div>
       ) : (
         <ListGroup variant="flush">

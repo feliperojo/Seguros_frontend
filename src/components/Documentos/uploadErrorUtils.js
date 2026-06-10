@@ -4,11 +4,6 @@ export const MAX_BYTES = LIMITE_TAMANO_MB * 1024 * 1024;
 export const TEXTO_LIMITE_SUBIDA =
   `Puede arrastrar archivos o carpetas completas (con subcarpetas). Cada archivo puede pesar hasta ${LIMITE_TAMANO_MB} MB.`;
 
-export const TEXTO_ARRASTRE_EXTERNO =
-  "Arrastre el nombre del archivo (icono ⋮⋮) al cuadro de mensaje de WhatsApp en el mismo navegador.";
-
-export const TEXTO_ARRASTRE_CRUCE_NAVEGADORES =
-  "Si WhatsApp está en Safari y esta ventana en Chrome (o al revés), el arrastre entre ventanas no funciona en Mac. Use el botón verde de WhatsApp: guarda el archivo en Descargas y arrástrelo desde ahí al chat.";
 const TIMEOUT_BASE_MS = 120000;
 const TIMEOUT_MAX_MS = 300000;
 

@@ -8,6 +8,7 @@ const CONFIG_KEYS = {
   SUPER_USER_ID: "super_user_id",
   WORK_SCHEDULE: "work_schedule",
   SHOW_PAYMENT_METHODS_DATA: "show_payment_methods_data",
+  ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS: "allow_family_document_archive_folders",
 };
 
 const DAY_LABELS = {
@@ -102,6 +103,7 @@ function configFromApiResponse(items) {
     [CONFIG_KEYS.SUPER_USER_ID]: null,
     [CONFIG_KEYS.WORK_SCHEDULE]: defaultWorkSchedule(),
     [CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA]: false,
+    [CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS]: false,
   };
   if (!Array.isArray(items)) return result;
   for (const item of items) {
@@ -152,6 +154,7 @@ const SystemConfigSection = ({
   const [saving, setSaving] = useState(false);
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
+  const [savingDocumentFolders, setSavingDocumentFolders] = useState(false);
 
   const update = (key, value) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -252,6 +255,30 @@ const SystemConfigSection = ({
     }
 
     return null;
+  };
+
+  const handleSaveDocumentArchiveFolders = async () => {
+    if (!canEditSettings) return;
+
+    setSavingDocumentFolders(true);
+    try {
+      await systemConfigService.put(
+        CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS,
+        !!config[CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS],
+        "bool"
+      );
+      setAppSettings((prev) => ({
+        ...prev,
+        allow_family_document_archive_folders:
+          !!config[CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS],
+      }));
+      toast.success("Configuración de carpetas documentales guardada correctamente.");
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Error al guardar.";
+      toast.error(msg);
+    } finally {
+      setSavingDocumentFolders(false);
+    }
   };
 
   const handleSaveShowPaymentMethodsData = async () => {
@@ -387,6 +414,44 @@ const SystemConfigSection = ({
                   </>
                 ) : (
                   "Guardar configuración de medios de pago"
+                )}
+              </Button>
+            </div>
+
+            <hr className="my-4" />
+
+            <div className="mb-4 p-3 rounded border bg-light">
+              <div className="fw-semibold mb-1">Carpetas documentales de grupos familiares</div>
+              <p className="text-muted small mb-3">
+                En modo normal, la raíz del gestor solo admite carpetas por año (actual o
+                posteriores) y los años anteriores requieren clave del super administrador.
+                Active esta opción al inicio de año para permitir trabajar en años anteriores sin
+                clave (modo transición).
+              </p>
+              <Form.Check
+                type="checkbox"
+                id="allow_family_document_archive_folders"
+                label="Modo transición: permitir años anteriores sin clave super admin"
+                checked={!!config[CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS]}
+                onChange={(e) =>
+                  update(CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS, e.target.checked)
+                }
+                disabled={!canEditSettings}
+                className="mb-3"
+              />
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveDocumentArchiveFolders}
+                disabled={savingDocumentFolders || !canEditSettings}
+              >
+                {savingDocumentFolders ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar configuración de carpetas"
                 )}
               </Button>
             </div>

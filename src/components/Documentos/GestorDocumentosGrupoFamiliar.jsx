@@ -1,9 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import apiRequest, { apiRequestFormData } from "../../services/api";
+import systemConfigService from "../../services/SystemConfigService";
 import FolderList from "./FolderList";
 import FilesList from "./FilesList";
 import DocumentoPreviewModal from "./DocumentoPreviewModal";
+import SuperAdminPasswordModal from "./SuperAdminPasswordModal";
+import {
+  getCurrentYear,
+  requiresSuperPasswordForFolder,
+  validarNombreCarpetaRaiz,
+} from "./documentFolderYearUtils";
 import {
   clasificarArchivosSubida,
   obtenerRutasCarpetasUnicas,
@@ -42,11 +49,63 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     url: "",
     loading: false,
   });
+  const [modoTransicionAnios, setModoTransicionAnios] = useState(false);
+  const [showSuperAdminModal, setShowSuperAdminModal] = useState(false);
+  const superPasswordRef = useRef(null);
+  const superModalResolverRef = useRef(null);
+
+  const solicitarSuperPassword = useCallback(() => {
+    return new Promise((resolve) => {
+      superModalResolverRef.current = resolve;
+      setShowSuperAdminModal(true);
+    });
+  }, []);
+
+  const handleSuperAdminSuccess = (password) => {
+    superPasswordRef.current = password;
+    if (superModalResolverRef.current) {
+      superModalResolverRef.current(password);
+      superModalResolverRef.current = null;
+    }
+    setShowSuperAdminModal(false);
+  };
+
+  const handleSuperAdminCancel = () => {
+    if (superModalResolverRef.current) {
+      superModalResolverRef.current(null);
+      superModalResolverRef.current = null;
+    }
+    setShowSuperAdminModal(false);
+  };
+
+  const obtenerSuperPasswordSiAplica = async (carpeta) => {
+    if (!requiresSuperPasswordForFolder(carpeta, carpetas, modoTransicionAnios)) {
+      return null;
+    }
+
+    if (superPasswordRef.current) {
+      return superPasswordRef.current;
+    }
+
+    const password = await solicitarSuperPassword();
+    if (!password) {
+      return null;
+    }
+
+    superPasswordRef.current = password;
+    return password;
+  };
 
   // Cargar carpetas al montar el componente o cuando cambia el grupo familiar
   useEffect(() => {
     if (show && grupoFamiliarId) {
       cargarCarpetas();
+      systemConfigService
+        .getRuntime()
+        .then((runtime) => {
+          setModoTransicionAnios(!!runtime?.allow_family_document_archive_folders);
+        })
+        .catch(() => setModoTransicionAnios(false));
     } else {
       // Limpiar estado al cerrar
       setCarpetas([]);
@@ -56,6 +115,8 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setSuccess("");
       setSubiendoArchivos(false);
       setProgresoSubida(null);
+      setModoTransicionAnios(false);
+      superPasswordRef.current = null;
       setPreview({ show: false, archivo: null, url: "", loading: false });
     }
   }, [show, grupoFamiliarId]);
@@ -187,6 +248,23 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
    * Usa el endpoint: POST /api/document-folders
    * Payload: { grupo_familiar_id, nombre, tipo, parent_id? }
    */
+  const handleSelectCarpeta = async (carpeta) => {
+    if (!carpeta) {
+      setCarpetaSeleccionada(null);
+      return;
+    }
+
+    const password = await obtenerSuperPasswordSiAplica(carpeta);
+    if (
+      requiresSuperPasswordForFolder(carpeta, carpetas, modoTransicionAnios) &&
+      !password
+    ) {
+      return;
+    }
+
+    setCarpetaSeleccionada(carpeta);
+  };
+
   const handleCrearCarpeta = async (nombre, tipo = "general", parentId = null) => {
     if (!grupoFamiliarId || !nombre?.trim()) {
       setError("El nombre de la carpeta es requerido");
@@ -196,16 +274,34 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     setError("");
     setSuccess("");
 
+    let superPassword = null;
+
+    if (!parentId) {
+      const validacion = validarNombreCarpetaRaiz(nombre, modoTransicionAnios);
+      if (typeof validacion === "string") {
+        setError(validacion);
+        return;
+      }
+      if (validacion?.needsSuperPassword) {
+        superPassword = await solicitarSuperPassword();
+        if (!superPassword) return;
+        superPasswordRef.current = superPassword;
+      }
+    }
+
     try {
       const payload = {
         grupo_familiar_id: Number(grupoFamiliarId),
         nombre: nombre.trim(),
-        tipo: tipo || "general",
+        tipo: !parentId ? "anio" : tipo || "general",
       };
 
-      // Si se proporciona parentId, agregarlo al payload
       if (parentId) {
         payload.parent_id = Number(parentId);
+      }
+
+      if (superPassword) {
+        payload.super_password = superPassword;
       }
 
       const response = await apiRequest("document-folders", "POST", payload);
@@ -341,6 +437,24 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     const maxIntentos = opciones.maxIntentos ?? 5;
     const pausaMs = opciones.pausaMs ?? 2000;
     const timeoutMs = opciones.timeoutMs ?? calcularTimeoutSubida(file?.size);
+    const carpetaDestino =
+      opciones.carpetaDestino ||
+      carpetas.find((c) => c.id === carpetaId) ||
+      carpetaSeleccionada;
+
+    const superPassword = carpetaDestino
+      ? await obtenerSuperPasswordSiAplica(carpetaDestino)
+      : null;
+
+    if (
+      carpetaDestino &&
+      requiresSuperPasswordForFolder(carpetaDestino, carpetas, modoTransicionAnios) &&
+      !superPassword
+    ) {
+      throw new Error(
+        "Se requiere la clave del super administrador para subir archivos a este año."
+      );
+    }
 
     return ejecutarConReintentos(
       async () => {
@@ -351,6 +465,10 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         formData.append("grupo_familiar_id", String(grupoFamiliarId));
         formData.append("carpeta_id", String(carpetaId));
         formData.append("categoria", "general");
+
+        if (superPassword) {
+          formData.append("super_password", superPassword);
+        }
 
         return apiRequestFormData(
           "documentos-adjuntos/entity-upload",
@@ -760,11 +878,13 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
               carpetas={carpetas}
               carpetaSeleccionada={carpetaSeleccionada}
               loading={loadingCarpetas}
-              onSelectCarpeta={setCarpetaSeleccionada}
+              onSelectCarpeta={handleSelectCarpeta}
               onCrearCarpeta={handleCrearCarpeta}
               onRenombrarCarpeta={handleRenombrarCarpeta}
               onEliminarCarpeta={handleEliminarCarpeta}
               grupoFamiliarId={grupoFamiliarId}
+              modoTransicionAnios={modoTransicionAnios}
+              anioActual={getCurrentYear()}
             />
           </div>
 
@@ -781,8 +901,6 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
                 onDescargarArchivo={handleDescargarArchivo}
                 onVisualizarArchivo={handleVisualizarArchivo}
                 onEliminarArchivo={handleEliminarArchivo}
-                onArrastreError={(msg) => setError(msg)}
-                onMensajeInfo={(msg) => setSuccess(msg)}
               />
             ) : (
               <div className="text-center text-muted py-5">
@@ -806,6 +924,13 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         url={preview.url}
         loading={preview.loading}
         onHide={() => setPreview({ show: false, archivo: null, url: "", loading: false })}
+      />
+
+      <SuperAdminPasswordModal
+        show={showSuperAdminModal}
+        onHide={handleSuperAdminCancel}
+        onSuccess={handleSuperAdminSuccess}
+        message="Para crear o acceder a carpetas de años anteriores debe ingresar la contraseña del super administrador configurado en el sistema."
       />
     </Modal>
   );
