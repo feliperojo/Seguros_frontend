@@ -110,14 +110,14 @@ export const clasificarArchivosSubida = (files) => {
 };
 
 /**
- * Obtiene los segmentos de subcarpetas dentro de la carpeta destino.
- * Omite el nombre de la carpeta raíz arrastrada/adjunta.
+ * Obtiene los segmentos de carpetas de una ruta relativa (sin el nombre del archivo).
+ * Incluye la carpeta raíz arrastrada (ej: "imagenes/foto.jpg" → ["imagenes"]).
  */
 export const obtenerSegmentosCarpeta = (webkitRelativePath = "") => {
   const partes = webkitRelativePath.split("/").filter(Boolean);
   if (partes.length <= 1) return [];
   partes.pop();
-  return partes.slice(1);
+  return partes;
 };
 
 /**
