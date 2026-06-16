@@ -15,6 +15,7 @@ import DetalleClienteModal from "../components/DetalleClienteModal";
 import CalendarioTareas from "../components/Tareas/CalendarioTareas";
 import VerTareaModal from "../components/Tareas/VerTareaModal";
 import { Helmet } from "react-helmet-async";
+import DashboardKpiDetalleModal from "../components/Dashboard/DashboardKpiDetalleModal";
 import { getTaskOverdueDays } from "../utils/taskDueDate";
 
 /** Evita errores al usar .slice cuando el backend devuelve { data: [] } u otras formas. */
@@ -24,6 +25,25 @@ function normalizeDashboardList(res) {
   if (Array.isArray(res.data)) return res.data;
   if (Array.isArray(res?.data?.data)) return res.data.data;
   return [];
+}
+
+const DEFAULT_POLIZAS_ACTIVAS = {
+  si: 0,
+  no: 0,
+  medicare: 0,
+  medicaid: 0,
+  cotizacion: 0,
+  total: 0,
+};
+
+function normalizePolizasActivas(value) {
+  if (typeof value === "number") {
+    return { ...DEFAULT_POLIZAS_ACTIVAS, total: value, si: value };
+  }
+  if (value && typeof value === "object") {
+    return { ...DEFAULT_POLIZAS_ACTIVAS, ...value };
+  }
+  return DEFAULT_POLIZAS_ACTIVAS;
 }
 
 /** Nombre legible del cliente para filas de requerimientos/documentos (API puede variar forma y profundidad). */
@@ -113,10 +133,12 @@ const Dashboard = () => {
   const [estadisticas, setEstadisticas] = useState({
     totalClientes: 0,
     totalGruposFamiliares: 0,
-    polizasActivas: 0,
+    detalleClientes: { clientes: 0, contactos: 0, empresas: 0, prospectos: 0, total: 0 },
+    polizasActivas: { ...DEFAULT_POLIZAS_ACTIVAS },
     polizasCanceladas: 0,
     polizasRetiradas: 0
   });
+  const [kpiModalTipo, setKpiModalTipo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
 
@@ -641,6 +663,14 @@ const Dashboard = () => {
 
       setEstadisticas({
         ...(resEstadisticas || {}),
+        polizasActivas: normalizePolizasActivas(resEstadisticas?.polizasActivas),
+        detalleClientes: resEstadisticas?.detalleClientes || {
+          clientes: totalClientesEstadoCliente ?? resEstadisticas?.totalClientes ?? 0,
+          contactos: 0,
+          empresas: 0,
+          prospectos: 0,
+          total: totalClientesEstadoCliente ?? resEstadisticas?.totalClientes ?? 0,
+        },
         totalClientes:
           typeof totalClientesEstadoCliente === "number"
             ? totalClientesEstadoCliente
@@ -816,6 +846,17 @@ const handleOpenViewModal = (cliente) => {
     return { cancelados, retiros, total: cancelados + retiros };
   }, [eventosCoberturaFiltrados]);
 
+  const abrirKpiModal = useCallback((tipo) => {
+    setKpiModalTipo(tipo);
+  }, []);
+
+  const manejarTeclaKpiCard = useCallback((event, tipo) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      abrirKpiModal(tipo);
+    }
+  }, [abrirKpiModal]);
+
   return (
     <div className="dashboard-wrapper">
  <Helmet>
@@ -833,42 +874,58 @@ const handleOpenViewModal = (cliente) => {
       )}
 
       <div className="section-container">
-        <Row className="stats-cards g-3 row-cols-1 row-cols-md-2 row-cols-xl-5">
+        <Row className="stats-cards g-3 align-items-stretch row-cols-1 row-cols-sm-2 row-cols-xl-5">
           <Col>
-            <Card className="dashboard-card h-100">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
+            <Card
+              className="dashboard-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("clientes")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "clientes")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
                   <div>
                     <h6 className="stats-title">Total Clientes</h6>
                     <h3 className="stats-value">{estadisticas.totalClientes}</h3>
                   </div>
                   <div className="stats-icon"><FaUsers /></div>
                 </div>
-                <Link to="/clientes/lista" className="stretched-link"></Link>
               </Card.Body>
             </Card>
           </Col>
           <Col>
-            <Card className="dashboard-card h-100">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
+            <Card
+              className="dashboard-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("grupos")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "grupos")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
                   <div>
                     <h6 className="stats-title">Grupos Familiares</h6>
                     <h3 className="stats-value">{estadisticas.totalGruposFamiliares}</h3>
                   </div>
                   <div className="stats-icon"><FaProjectDiagram /></div>
                 </div>
-                <Link to="/Grupofamiliar/lista" className="stretched-link"></Link>
               </Card.Body>
             </Card>
           </Col>
           <Col>
-            <Card className="dashboard-card h-100">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
+            <Card
+              className="dashboard-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("coberturas")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
                   <div>
-                    <h6 className="stats-title">Coberturas Activas</h6>
-                    <h3 className="stats-value">{estadisticas.polizasActivas}</h3>
+                    <h6 className="stats-title">Estado de Coberturas</h6>
+                    <h3 className="stats-value">{estadisticas.polizasActivas.total}</h3>
                   </div>
                   <div className="stats-icon"><FaFileInvoiceDollar /></div>
                 </div>
@@ -876,24 +933,34 @@ const handleOpenViewModal = (cliente) => {
             </Card>
           </Col>
           <Col>
-            <Card className="dashboard-card alert-card h-100">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
+            <Card
+              className="dashboard-card alert-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("canceladas")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
                   <div>
                     <h6 className="stats-title">Coberturas Canceladas</h6>
                     <h3 className="stats-value">{estadisticas.polizasCanceladas}</h3>
                   </div>
                   <div className="stats-icon"><FaCalendarAlt /></div>
                 </div>
-                
               </Card.Body>
             </Card>
           </Col>
-
           <Col>
-            <Card className="dashboard-card alert-card h-100">
-              <Card.Body>
-                <div className="d-flex justify-content-between align-items-center">
+            <Card
+              className="dashboard-card alert-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("retiradas")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "retiradas")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
                   <div>
                     <h6 className="stats-title">Coberturas Retiradas</h6>
                     <h3 className="stats-value">{estadisticas.polizasRetiradas}</h3>
@@ -903,7 +970,6 @@ const handleOpenViewModal = (cliente) => {
               </Card.Body>
             </Card>
           </Col>
-          
         </Row>
       </div>
 
@@ -1724,6 +1790,13 @@ const handleOpenViewModal = (cliente) => {
           setTareaIdVer(null);
         }}
         taskId={tareaIdVer}
+      />
+
+      <DashboardKpiDetalleModal
+        show={Boolean(kpiModalTipo)}
+        tipo={kpiModalTipo}
+        onHide={() => setKpiModalTipo(null)}
+        estadisticas={estadisticas}
       />
     </div>
   );

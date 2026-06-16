@@ -19,11 +19,7 @@ const buildQueryParams = (params) => {
   if (params.page) queryParams.append("page", params.page);
   if (params.per_page) queryParams.append("per_page", params.per_page);
   if (params.compania_id) queryParams.append("compania_id", params.compania_id);
-  if (params.zip_code) queryParams.append("zip_code", params.zip_code);
-  // Solo enviar only_pending si es true
-  if (params.only_pending === true) {
-    queryParams.append("only_pending", "true");
-  }
+  if (params.estado_cobertura) queryParams.append("estado_cobertura", params.estado_cobertura);
   if (params.date_from) queryParams.append("date_from", params.date_from);
   if (params.date_to) queryParams.append("date_to", params.date_to);
   if (params.search) queryParams.append("search", params.search);
@@ -218,12 +214,71 @@ const buildMediosPagoQueryParams = (params) => {
   return queryParams.toString();
 };
 
-/**
- * Reporte tipo lista: clientes con medios de pago anidados.
- */
 export const getReporteMediosPago = async (params = {}, signal = null) => {
   const queryString = buildMediosPagoQueryParams(params);
   const endpoint = `reportes/medios-pago${queryString ? `?${queryString}` : ""}`;
+
+  if (signal) {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    try {
+      const response = await fetch(url, { method: "GET", headers, signal });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        const error = new Error(data?.message || "Error en la petición");
+        error.response = { status: response.status, data };
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const cancelled = new Error("Petición cancelada");
+        cancelled.name = "AbortError";
+        throw cancelled;
+      }
+      throw err;
+    }
+  }
+
+  return apiRequest(endpoint, "GET");
+};
+
+const buildCoberturasCanceladasRetiradasQueryParams = (params) => {
+  const queryParams = new URLSearchParams();
+
+  if (params.page) queryParams.append("page", params.page);
+  if (params.per_page) queryParams.append("per_page", params.per_page);
+  if (params.tipo) queryParams.append("tipo", params.tipo);
+  if (params.search) queryParams.append("search", params.search);
+  if (params.date_from) queryParams.append("date_from", params.date_from);
+  if (params.date_to) queryParams.append("date_to", params.date_to);
+  if (params.mes) queryParams.append("mes", params.mes);
+  if (params.anio) queryParams.append("anio", params.anio);
+  if (params.sort_by) {
+    queryParams.append("sort_by", params.sort_by);
+    if (params.sort_dir) queryParams.append("sort_dir", params.sort_dir);
+  }
+
+  return queryParams.toString();
+};
+
+/**
+ * Informe completo de coberturas canceladas y retiradas.
+ */
+export const getReporteCoberturasCanceladasRetiradas = async (params = {}, signal = null) => {
+  const queryString = buildCoberturasCanceladasRetiradasQueryParams(params);
+  const endpoint = `reportes/coberturas-canceladas-retiradas${queryString ? `?${queryString}` : ""}`;
 
   if (signal) {
     const token = getAuthToken();

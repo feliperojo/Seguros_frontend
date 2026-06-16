@@ -184,7 +184,7 @@ const calcAge = (iso) => {
 const getC = (m) => (m?.cliente ? m.cliente : m);
 
 const buildDireccion = (src) =>
-  [src.calle, src.apto, src.ciudad, src.estado, src.codigo_postal]
+  [src.calle, src.apto, src.ciudad, src.condado, src.estado, src.codigo_postal]
     .filter(Boolean)
     .join(" ")
     .replace(/\s+/g, " ")

@@ -366,6 +366,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/informes/medios-pago" className={`submenu-link ${isActive('/informes/medios-pago') ? 'active' : ''}`}>
                 <FaCreditCard /> Clientes y medios de pago
               </Link>
+              <Link to="/informes/coberturas-canceladas-retiradas" className={`submenu-link ${isActive('/informes/coberturas-canceladas-retiradas') ? 'active' : ''}`}>
+                <FaFileInvoiceDollar /> Canceladas y retiradas
+              </Link>
               <Link to="/informes/documentos" className={`submenu-link ${isActive('/informes/documentos') ? 'active' : ''}`}>
                 <FaFileAlt /> Documentos Enviados
               </Link>

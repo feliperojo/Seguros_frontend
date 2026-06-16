@@ -57,8 +57,11 @@ const CLIENTE_FIELD_LABELS = {
   direccion: "Dirección",
   direccion_completa: "Dirección completa",
   calle: "Calle",
+  apto: "APT",
   ciudad: "Ciudad",
+  condado: "Condado",
   estado_direccion: "Estado (dirección)",
+  dir_correspondencia: "Dir. correspondencia",
   codigo_postal: "Código postal",
   zip_code: "ZIP Code",
 };

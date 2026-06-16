@@ -19,11 +19,7 @@ const buildQueryParams = (filters) => {
   if (filters.page) params.page = filters.page;
   if (filters.per_page) params.per_page = filters.per_page;
   if (filters.compania_id) params.compania_id = filters.compania_id;
-  if (filters.zip_code) params.zip_code = filters.zip_code;
-  // Solo enviar only_pending si es true
-  if (filters.only_pending === true) {
-    params.only_pending = true;
-  }
+  if (filters.estado_cobertura) params.estado_cobertura = filters.estado_cobertura;
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
   if (filters.search) params.search = filters.search;
@@ -108,6 +104,7 @@ const SORTABLE_COLUMNS = {
   codigo_poliza: "codigo_poliza",
   req_pendientes: "req_pendientes",
   req_total: "req_total",
+  estado_cobertura: "estado_cobertura",
 };
 
 /**
@@ -135,6 +132,7 @@ const FALLBACK_REPORT_COLUMNS = [
   { key: "zip_code", label: "Código Postal" },
   { key: "condado", label: "Condado" },
   { key: "estado", label: "Estado" },
+  { key: "estado_cobertura", label: "Estado Cobertura" },
   { key: "precio", label: "Precio" },
   { key: "dia_pago", label: "Día Pago" },
   { key: "tipo_pago", label: "Tipo Pago" },
@@ -145,6 +143,14 @@ const FALLBACK_REPORT_COLUMNS = [
 ];
 
 const REPORT_COLUMNS_CONFIG_KEY = "reporte_coberturas_columns";
+
+const ESTADO_COBERTURA_OPTIONS = [
+  { value: "", label: "Todos" },
+  { value: "Sí", label: "Sí" },
+  { value: "No", label: "No" },
+  { value: "Medicare", label: "Medicare" },
+  { value: "Medicaid", label: "Medicaid" },
+];
 
 /**
  * Normaliza la definición de columnas que puede venir del reporting (Postgres):
@@ -202,8 +208,7 @@ const ReporteCoberturasPage = () => {
     page: 1,
     per_page: 25,
     compania_id: "",
-    zip_code: "",
-    only_pending: false,
+    estado_cobertura: "",
     date_from: "",
     date_to: "",
     search: "",
@@ -214,8 +219,7 @@ const ReporteCoberturasPage = () => {
   // Estado de filtros temporales (antes de aplicar)
   const [tempFilters, setTempFilters] = useState({
     compania_id: "",
-    zip_code: "",
-    only_pending: false,
+    estado_cobertura: "",
     date_from: "",
     date_to: "",
     search: "",
@@ -396,8 +400,7 @@ const ReporteCoberturasPage = () => {
     // Solo actualizar si realmente cambiaron los filtros relevantes
     const filtersChanged = 
       prevFiltersRef.current.compania_id !== filters.compania_id ||
-      prevFiltersRef.current.zip_code !== filters.zip_code ||
-      prevFiltersRef.current.only_pending !== filters.only_pending ||
+      prevFiltersRef.current.estado_cobertura !== filters.estado_cobertura ||
       prevFiltersRef.current.date_from !== filters.date_from ||
       prevFiltersRef.current.date_to !== filters.date_to ||
       prevFiltersRef.current.search !== filters.search;
@@ -405,8 +408,7 @@ const ReporteCoberturasPage = () => {
     if (filtersChanged) {
       setTempFilters({
         compania_id: filters.compania_id,
-        zip_code: filters.zip_code,
-        only_pending: filters.only_pending,
+        estado_cobertura: filters.estado_cobertura,
         date_from: filters.date_from,
         date_to: filters.date_to,
         search: filters.search,
@@ -473,8 +475,7 @@ const ReporteCoberturasPage = () => {
   const handleClearFilters = () => {
     const clearedFilters = {
       compania_id: "",
-      zip_code: "",
-      only_pending: false,
+      estado_cobertura: "",
       date_from: "",
       date_to: "",
       search: "",
@@ -564,6 +565,8 @@ const ReporteCoberturasPage = () => {
         return cobertura.condado || "-";
       case "estado":
         return cobertura.estado || "-";
+      case "estado_cobertura":
+        return cobertura.estado_cobertura || "-";
       case "precio":
         return formatCurrency(cobertura.precio);
       case "dia_pago":
@@ -649,27 +652,19 @@ const ReporteCoberturasPage = () => {
               </Form.Select>
             </div>
             
-            {/* Código Postal */}
+            {/* Estado Cobertura */}
             <div className="col-md-2">
-              <Form.Label>Código Postal</Form.Label>
-              <Form.Control
-                type="text"
-                placeholder="Ej: 33101"
-                value={tempFilters.zip_code}
-                onChange={(e) => handleTempFilterChange("zip_code", e.target.value)}
-              />
-            </div>
-            
-            {/* Solo Pendientes */}
-            <div className="col-md-2">
-              <Form.Label>&nbsp;</Form.Label>
-              <Form.Check
-                type="checkbox"
-                label="Solo pendientes"
-                checked={tempFilters.only_pending}
-                onChange={(e) => handleTempFilterChange("only_pending", e.target.checked)}
-                className="mt-2"
-              />
+              <Form.Label>Estado Cobertura</Form.Label>
+              <Form.Select
+                value={tempFilters.estado_cobertura}
+                onChange={(e) => handleTempFilterChange("estado_cobertura", e.target.value)}
+              >
+                {ESTADO_COBERTURA_OPTIONS.map((opt) => (
+                  <option key={opt.value || "all"} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </Form.Select>
             </div>
             
             {/* Fecha Desde */}

@@ -50,6 +50,111 @@
   box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
 }
 
+.dashboard-card--clickable {
+  cursor: pointer;
+}
+
+.dashboard-card--clickable:focus-visible {
+  outline: 2px solid rgba(26, 57, 100, 0.35);
+  outline-offset: 2px;
+}
+
+.dashboard-kpi-detalle-intro {
+  font-size: 13px;
+  color: #6c757d;
+  margin-bottom: 16px;
+}
+
+.dashboard-kpi-detalle-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dashboard-kpi-detalle-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+  border-left: 4px solid #1a3964;
+}
+
+.dashboard-kpi-detalle-item__info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dashboard-kpi-detalle-item__icon {
+  display: flex;
+  align-items: center;
+  font-size: 16px;
+}
+
+.dashboard-kpi-detalle-item__label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a3964;
+}
+
+.dashboard-kpi-detalle-item__desc {
+  display: block;
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 2px;
+}
+
+.dashboard-kpi-detalle-item__criterios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #495057;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.dashboard-kpi-detalle-item__criterios strong {
+  color: #1a3964;
+  font-weight: 700;
+}
+
+.dashboard-kpi-detalle-item__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a3964;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.dashboard-kpi-detalle-total {
+  font-size: 14px;
+  color: #495057;
+}
+
+.dashboard-kpi-detalle-hero {
+  font-size: 48px;
+  font-weight: 700;
+  text-align: center;
+  color: #1a3964;
+  padding: 20px 0 8px;
+}
+
+.dashboard-kpi-detalle-hero--alert {
+  color: #dc3545;
+}
+
+.dashboard-kpi-modal .modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a3964;
+}
+
 .stats-title {
   color: #6c757d;
   font-size: 14px;
@@ -392,6 +497,10 @@
 }
 
 .stats-cards .dashboard-card:nth-child(4) {
+  border-left-color: #ea4335;
+}
+
+.stats-cards .dashboard-card:nth-child(5) {
   border-left-color: #ea4335;
 }
 
