@@ -45,6 +45,7 @@ import {
   normalizeStatusMigratorioForSelect,
 } from "../../utils/clienteFieldNormalize";
 import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
+import { vigenteDesdeEstadoCobertura } from "../../utils/estadoPoliza";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
@@ -927,6 +928,13 @@ const activeNormalized = useMemo(
 
     const current = getC(normalized[idx] || {});
     const patch = { [name]: v };
+
+    if (name === "estado_cobertura") {
+      const vigente = vigenteDesdeEstadoCobertura(v);
+      if (vigente !== null) {
+        patch.vigente = vigente;
+      }
+    }
 
     // ⚠️ NO limpiar campos protegidos automáticamente cuando cambia estado_cobertura
     // Estos campos (fecha_cancelacion, fecha_retiro, nota_cancel, nota_retiro, activo, vigente)

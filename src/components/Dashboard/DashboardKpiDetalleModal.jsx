@@ -244,10 +244,18 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>activo = true</strong> y <strong>vigente = false</strong>.
+            Pólizas con <strong>estado_cobertura = No</strong>,{" "}
+            <strong>activo = true</strong>, <strong>vigente = false</strong> y{" "}
+            <strong>fecha de cancelación</strong> registrada.
           </p>
-          <div className="dashboard-kpi-detalle-hero dashboard-kpi-detalle-hero--alert">
-            {estadisticas?.polizasCanceladas ?? 0}
+          <div className="dashboard-kpi-detalle-list">
+            <DetalleFila
+              label="Canceladas"
+              valor={estadisticas?.polizasCanceladas ?? 0}
+              color="#ea4335"
+              criterios={{ activo: true, vigente: false }}
+              descripcion="estado_cobertura = No + fecha_cancelacion"
+            />
           </div>
         </>
       );
@@ -257,10 +265,17 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>activo = false</strong> y <strong>vigente = false</strong>.
+            Pólizas con <strong>activo = false</strong>, <strong>vigente = false</strong>,{" "}
+            <strong>fecha de cancelación</strong> y <strong>fecha de retiro</strong> registradas.
           </p>
-          <div className="dashboard-kpi-detalle-hero dashboard-kpi-detalle-hero--alert">
-            {estadisticas?.polizasRetiradas ?? 0}
+          <div className="dashboard-kpi-detalle-list">
+            <DetalleFila
+              label="Retiradas"
+              valor={estadisticas?.polizasRetiradas ?? 0}
+              color="#ea4335"
+              criterios={{ activo: false, vigente: false }}
+              descripcion="fecha_cancelacion + fecha_retiro"
+            />
           </div>
         </>
       );

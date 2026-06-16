@@ -19,6 +19,7 @@ import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta l
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
 import { parseMoney, computeAnnual } from "../services/ingresos";
+import { vigenteDesdeEstadoCobertura } from "../utils/estadoPoliza";
 
 // Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
 const formatDateMdyDash = (value) => {
@@ -2336,9 +2337,11 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                       value={currentEditMember.estado_cobertura || ""}
                       onChange={(e) => {
                         const valor = e.target.value;
+                        const vigente = vigenteDesdeEstadoCobertura(valor);
                         setCurrentEditMember(prev => ({
                           ...prev,
-                          estado_cobertura: valor
+                          estado_cobertura: valor,
+                          ...(vigente !== null ? { vigente } : {}),
                         }));
                       }}
                     >

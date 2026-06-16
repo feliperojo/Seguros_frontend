@@ -141,6 +141,14 @@ export function derivarEstadoPoliza(c) {
   }
 }
 
+export function vigenteDesdeEstadoCobertura(estado) {
+  const s = (estado ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (["yes", "sí", "si"].includes(s)) return true;
+  if (["no", "medicare", "medicaid", "medicai"].includes(s)) return false;
+  return null;
+}
+
 /** Variante de Badge de Bootstrap alineada con la ficha del cliente */
 export function estadoPolizaBadgeVariant(estado) {
   if (estado === "Vigente") return "success";
