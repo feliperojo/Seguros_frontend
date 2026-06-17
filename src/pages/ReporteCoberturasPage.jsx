@@ -40,7 +40,13 @@ const buildQueryParams = (filters) => {
 const formatDate = (dateString) => {
   if (!dateString) return "-";
   try {
-    const date = new Date(dateString);
+    const raw = String(dateString).trim();
+    const dateOnly = raw.includes("T") ? raw.split("T")[0] : raw;
+    const ymd = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    const date = ymd
+      ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
+      : new Date(!raw.includes("T") ? `${raw}T00:00:00` : raw);
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleDateString("es-ES", {
       year: "numeric",
       month: "2-digit",
