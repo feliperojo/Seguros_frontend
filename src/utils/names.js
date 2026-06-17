@@ -5,6 +5,15 @@ function toTitleCase(str = "") {
       .replace(/\b\w/g, (char) => char.toUpperCase())
       .trim();
   }
+
+/** Nombre para mostrar: primera letra en mayúscula, resto en minúscula (soporta acentos). */
+export function formatDisplayName(str = "") {
+  const t = String(str || "").trim();
+  if (!t) return "";
+  return t
+    .toLowerCase()
+    .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
+}
   
   // Une nombres y apellidos en un solo string bien formateado
   export function joinNameParts(nombres = "", apellidos = "") {

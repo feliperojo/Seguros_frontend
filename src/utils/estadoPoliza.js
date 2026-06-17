@@ -149,6 +149,34 @@ export function vigenteDesdeEstadoCobertura(estado) {
   return null;
 }
 
+export function isMedicareOrMedicaidEstado(estado) {
+  const s = (estado ?? "").trim().toLowerCase();
+  return s === "medicare" || s === "medicaid";
+}
+
+/**
+ * Campos de cobertura que no aplican en Medicare/Medicaid.
+ * Se conservan: estado_cobertura, elegibilidad, grupo y campos de retiro/cancelación.
+ */
+export function clearedCoverageFieldsForMedicareMedicaid() {
+  return {
+    codigo_poliza: "",
+    policy_number: "",
+    vigencia: "",
+    fecha_activacion: "",
+    ano_cobertura: "",
+    compania_id: null,
+    agente: "",
+    plan: "",
+    metal: "",
+    red: "",
+    pagador_id: null,
+    tipo_pago: "",
+    dia_pago: null,
+    precio: null,
+  };
+}
+
 /** Variante de Badge de Bootstrap alineada con la ficha del cliente */
 export function estadoPolizaBadgeVariant(estado) {
   if (estado === "Vigente") return "success";

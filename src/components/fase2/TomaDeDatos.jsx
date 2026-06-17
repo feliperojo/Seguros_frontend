@@ -14,6 +14,7 @@ import MdyDashDateInput from "../common/MdyDashDateInput";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import MemberModal from "./MemberModal";
 import CopiarDatosModal, { ADDRESS_FIELDS } from "./CopiarDatosModal";
+import { formatDisplayName } from "../../utils/names";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CompanySelect from "../selects/CompanySelect";
 import PayerSelect from "../selects/PayerSelect";
@@ -23,6 +24,7 @@ import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
 
 // Hooks
+import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
 
 // Utils
@@ -45,7 +47,11 @@ import {
   normalizeStatusMigratorioForSelect,
 } from "../../utils/clienteFieldNormalize";
 import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
-import { vigenteDesdeEstadoCobertura } from "../../utils/estadoPoliza";
+import {
+  vigenteDesdeEstadoCobertura,
+  isMedicareOrMedicaidEstado,
+  clearedCoverageFieldsForMedicareMedicaid,
+} from "../../utils/estadoPoliza";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
@@ -164,11 +170,13 @@ const toTitle = (s = "") =>
     .replace(/(^|\s|['-])(\p{L})/gu, (_, pre, c) => pre + c.toUpperCase());
 
 const fullName = (m) => {
-  const c = m?.cliente ?? m ?? {};
+  const c = m?.cliente ? m.cliente : m;
   const composed = [c.primer_nombre?.trim(), c.segundo_nombre?.trim(), c.apellidos?.trim()]
     .filter(Boolean)
     .join(" ");
-  return composed || c.nombre_completo || m?.nombreCompleto || "Sin nombre";
+  const raw = composed || c.nombre_completo || m?.nombreCompleto || m?.nombre_completo || "";
+  if (!raw) return "Sin nombre";
+  return formatDisplayName(raw);
 };
 
 const calcAge = (iso) => {
@@ -287,17 +295,40 @@ const hydrateClienteForMember = (cli = {}, m = {}) => {
 const normalizeMember = (m, idx) => {
   if (m?.cliente && typeof m.cliente === "object" && clienteTieneNombreVisible(m.cliente)) {
     const cliente = hydrateClienteForMember(m.cliente, m);
+    const primer = formatDisplayName(cliente.primer_nombre || m.primer_nombre || "");
+    const segundo = formatDisplayName(cliente.segundo_nombre || m.segundo_nombre || "");
+    const apell = formatDisplayName(cliente.apellidos || m.apellidos || "");
+    const nombreCompleto = formatDisplayName(
+      cliente.nombre_completo ||
+        m.nombre_completo ||
+        m.nombreCompleto ||
+        [primer, segundo, apell].filter(Boolean).join(" ")
+    );
+    const clienteFormateado = {
+      ...cliente,
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombre_completo: nombreCompleto,
+    };
     return {
       ...m,
-      telefono: m.telefono || cliente.telefono,
-      secundario: m.secundario || cliente.secundario,
-      whatsapp_num: m.whatsapp_num || cliente.whatsapp_num,
-      genero: normalizeGeneroForSelect(m.genero || cliente.genero),
-      status: normalizeStatusMigratorioForSelect(m.status || cliente.status),
-      whatsapp: m.whatsapp ?? cliente.whatsapp,
-      telegram: m.telegram ?? cliente.telegram,
-      texto_sms: m.texto_sms ?? cliente.texto_sms,
-      cliente,
+      primer_nombre: primer,
+      segundo_nombre: segundo,
+      apellidos: apell,
+      nombreCompleto,
+      nombre_completo: nombreCompleto,
+      activo: m.activo !== undefined && m.activo !== null ? m.activo : true,
+      fecha_retiro: m.fecha_retiro ?? null,
+      telefono: m.telefono || clienteFormateado.telefono,
+      secundario: m.secundario || clienteFormateado.secundario,
+      whatsapp_num: m.whatsapp_num || clienteFormateado.whatsapp_num,
+      genero: normalizeGeneroForSelect(m.genero || clienteFormateado.genero),
+      status: normalizeStatusMigratorioForSelect(m.status || clienteFormateado.status),
+      whatsapp: m.whatsapp ?? clienteFormateado.whatsapp,
+      telegram: m.telegram ?? clienteFormateado.telegram,
+      texto_sms: m.texto_sms ?? clienteFormateado.texto_sms,
+      cliente: clienteFormateado,
     };
   }
 
@@ -309,7 +340,9 @@ const normalizeMember = (m, idx) => {
   const primer = toTitle(primerRaw);
   const segundo = toTitle(segundoRaw);
   const apell = toTitle(apellRaw);
-  const nombre = m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim();
+  const nombre = formatDisplayName(
+    m.nombre_completo || `${primer} ${segundo} ${apell}`.replace(/\s+/g, " ").trim()
+  );
 
   return {
     id: m.id ?? idx + 1,
@@ -318,6 +351,8 @@ const normalizeMember = (m, idx) => {
     parentesco: m.parentesco || m.tipo || "Tomador",
     tipo: m.tipo || m.parentesco || "Tomador",
     estado_cobertura: m.estado_cobertura || "Sí",
+    activo: m.activo !== undefined && m.activo !== null ? m.activo : true,
+    fecha_retiro: m.fecha_retiro ?? null,
     codigo_poliza: m.codigo_poliza || "",
     policy_number: m.policy_number || "",
     fecha_activacion: m.fecha_activacion || "",
@@ -647,7 +682,8 @@ const TomaDeDatos = ({
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote,
   onBlockedAddClick,
-  grupoFamiliarId
+  grupoFamiliarId,
+  onDerivedCounts,
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -665,6 +701,11 @@ const TomaDeDatos = ({
     useState(false);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!Array.isArray(familyMembers)) return;
+    onDerivedCounts?.(deriveCounts(familyMembers));
+  }, [familyMembers, onDerivedCounts]);
 
   // Cargar configuración de campos de cobertura y datos de cliente (solo visual) desde system_config
   useEffect(() => {
@@ -786,6 +827,7 @@ const activeNormalized = useMemo(
 
       const base = {
         fecha_retiro: null,
+        activo: true,
         ...payload,
         id: newId,
         ingreso_anual: ingreso,
@@ -933,6 +975,17 @@ const activeNormalized = useMemo(
       const vigente = vigenteDesdeEstadoCobertura(v);
       if (vigente !== null) {
         patch.vigente = vigente;
+      }
+
+      if (isMedicareOrMedicaidEstado(v)) {
+        Object.assign(patch, clearedCoverageFieldsForMedicareMedicaid());
+        const precioKey = `${idx}-precio`;
+        setMoneyDisplay((prev) => {
+          if (prev[precioKey] === undefined) return prev;
+          const next = { ...prev };
+          delete next[precioKey];
+          return next;
+        });
       }
     }
 
@@ -1181,9 +1234,11 @@ const activeNormalized = useMemo(
         estado_cobertura: payload.estado_cobertura
       });
 
+      const coberturaCreada = res?.data ?? res?.cobertura ?? res;
+
       if (res?.miembro?.cliente || res?.miembro) {
         const mSrv = res.miembro;
-        const coberturaId = mSrv.cobertura_id ?? mSrv?.cobertura?.id ?? res?.cobertura?.id ?? res?.id ?? null;
+        const coberturaId = mSrv.cobertura_id ?? mSrv?.cobertura?.id ?? coberturaCreada?.id ?? res?.id ?? null;
 
         const cliMerged = mergeClientePreferNonEmpty(
           clienteSel,
@@ -1199,11 +1254,17 @@ const activeNormalized = useMemo(
             estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
             cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
             cobertura_id: coberturaId,
+            activo: coberturaCreada?.activo ?? true,
+            fecha_retiro: coberturaCreada?.fecha_retiro ?? null,
             _remote_created: true
           },
           (familyMembers?.length ?? 0)
         );
-        setFamilyMembers(prev => [...(prev ?? []), merged]);
+        setFamilyMembers((prev) => {
+          const next = [...(prev ?? []), merged];
+          onDerivedCounts?.(deriveCounts(next));
+          return next;
+        });
       } else {
         const c = clienteSel;
         const nombreCompleto = c.nombre_completo ||
@@ -1211,11 +1272,13 @@ const activeNormalized = useMemo(
         const local = normalizeMember(
           {
             cliente_id: c.id,
-            cobertura_id: null,
+            cobertura_id: coberturaCreada?.id ?? null,
             tipo: payload.tipo,
             parentesco: payload.tipo,
             estado_cobertura: payload.estado_cobertura,
             cobertura_tipo: payload.cobertura_tipo,
+            activo: coberturaCreada?.activo ?? true,
+            fecha_retiro: coberturaCreada?.fecha_retiro ?? null,
             cliente: {
               id: c.id,
               primer_nombre: c.primer_nombre,
@@ -1231,12 +1294,23 @@ const activeNormalized = useMemo(
           },
           (familyMembers?.length ?? 0)
         );
-        setFamilyMembers(prev => [...(prev ?? []), local]);
+        setFamilyMembers((prev) => {
+          const next = [...(prev ?? []), local];
+          onDerivedCounts?.(deriveCounts(next));
+          return next;
+        });
+      }
+
+      if (res?.personas_taxes != null || res?.personas_cobertura != null) {
+        onDerivedCounts?.({
+          taxes: res.personas_taxes,
+          cobertura: res.personas_cobertura,
+        });
       }
 
       return res;
     },
-    [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length]
+    [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length, onDerivedCounts]
   );
 
   /* =================== RENDER =================== */
@@ -1290,8 +1364,7 @@ const activeNormalized = useMemo(
       currentState !== "GRUPO_FAMILIAR";
     
     // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
-    const isMedicareOrMedicaid =
-      m.estado_cobertura === "Medicare" || m.estado_cobertura === "Medicaid";
+    const isMedicareOrMedicaid = isMedicareOrMedicaidEstado(m.estado_cobertura);
 
     // Tipo de producto (cobertura_tipo) para controlar visibilidad de campos
     const coberturaTipo =

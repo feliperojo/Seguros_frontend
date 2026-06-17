@@ -11,6 +11,7 @@ import { calcIngresoFamiliar, parseMoney, computeAnnual, formatMoney2 } from '..
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
+import { formatDisplayName } from "../utils/names";
 
 
  import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
@@ -86,21 +87,28 @@ const hydrateIngresoOcasionalAnual = (cli = {}) => {
 // IMPORTANTE: Para clientes existentes, solo envía los campos del acordeón
 // para evitar borrar datos que no están en el formulario (ej: teléfono)
 const mapClienteForSave = (m) => {
-  // Validación de entrada
-  if (!m) {
-    console.error("❌ mapClienteForSave: miembro es undefined o null");
-    return null;
-  }
+    // Validación de entrada
+    if (!m) {
+      console.error("❌ mapClienteForSave: miembro es undefined o null");
+      return null;
+    }
 
   const c = m?.cliente || {};
   const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
-  
-  const nombre_completo = buildNombreCompleto({
-    primer_nombre: pick("primer_nombre"),
-    segundo_nombre: pick("segundo_nombre"),
-    apellidos: pick("apellidos"),
-  });
+  const formatName = (v) => {
+    const s = (v ?? "").toString().trim();
+    return s ? formatDisplayName(s) : "";
+  };
+
+  const primer_nombre = formatName(pick("primer_nombre"));
+  const segundo_nombre = formatName(pick("segundo_nombre"));
+  const apellidos = formatName(pick("apellidos"));
+  const nombre_completo = formatDisplayName(
+    buildNombreCompleto({ primer_nombre, segundo_nombre, apellidos }) ||
+      pick("nombre_completo") ||
+      ""
+  );
 
   const clienteIdReal = m.cliente_id ?? c.id ?? null;
   const esClienteReal = !!clienteIdReal;  // cualquier id válido cuenta
@@ -120,9 +128,9 @@ const mapClienteForSave = (m) => {
   if (esClienteReal) {
     const payload = {
       id: Number(clienteIdReal),
-      primer_nombre: pick("primer_nombre"),
-      segundo_nombre: pick("segundo_nombre"),
-      apellidos: pick("apellidos"),
+      primer_nombre,
+      segundo_nombre: segundo_nombre || null,
+      apellidos,
       nombre_completo,
       fecha_nacimiento: date10(pick("fecha_nacimiento")),
       genero: pick("genero"),
@@ -178,9 +186,9 @@ const mapClienteForSave = (m) => {
 
   // Si es un cliente NUEVO, incluir todos los campos necesarios
   const payload = {
-    primer_nombre: pick("primer_nombre"),
-    segundo_nombre: pick("segundo_nombre"),
-    apellidos: pick("apellidos"),
+    primer_nombre,
+    segundo_nombre: segundo_nombre || null,
+    apellidos,
     nombre_completo,
     fecha_nacimiento: date10(pick("fecha_nacimiento")),
     genero: pick("genero"),
@@ -367,13 +375,14 @@ const mapFullToMembers = (fullRaw) => {
   
   return coberturas.map((cov, idx) => {
     const cli = cov?.cliente || {};
-    const primer  = (cli.primer_nombre  || "").trim();
-    const segundo = (cli.segundo_nombre || "").trim();
-    const apell   = (cli.apellidos      || "").trim();
+    const primer  = formatDisplayName((cli.primer_nombre  || "").trim());
+    const segundo = formatDisplayName((cli.segundo_nombre || "").trim());
+    const apell   = formatDisplayName((cli.apellidos      || "").trim());
     const fecha   = cli.fecha_nacimiento || "";
     const edad    = calcAge(fecha);
-    const nombreCompleto =
-      cli.nombre_completo || [primer, segundo, apell].filter(Boolean).join(" ");
+    const nombreCompleto = formatDisplayName(
+      cli.nombre_completo || [primer, segundo, apell].filter(Boolean).join(" ")
+    );
 
     return {
       // -------- raíz (lo que usa el acordeón) --------
@@ -768,17 +777,18 @@ useEffect(() => {
 const mapMemberFromAppendResponse = (res) => {
   const cli = res?.cliente || {};
   const cov = res?.cobertura || {};
-  const nombreCompleto = [cli.primer_nombre, cli.segundo_nombre, cli.apellidos]
-    .filter(Boolean).join(" ");
+  const nombreCompleto = formatDisplayName(
+    [cli.primer_nombre, cli.segundo_nombre, cli.apellidos].filter(Boolean).join(" ")
+  );
 
   return {
     id: cli.id,
     cliente_id: cli.id,
     cobertura_id: cov.id,
     cobertura_tipo: cov.cobertura_tipo || res?.cobertura_tipo || "Plan de salud",
-    primer_nombre: cli.primer_nombre || "",
-    segundo_nombre: cli.segundo_nombre || "",
-    apellidos: cli.apellidos || "",
+    primer_nombre: formatDisplayName(cli.primer_nombre || ""),
+    segundo_nombre: formatDisplayName(cli.segundo_nombre || ""),
+    apellidos: formatDisplayName(cli.apellidos || ""),
     genero: cli.genero || "",
     idioma: cli.idioma || "",
     nombreCompleto,
@@ -808,11 +818,17 @@ const mapMemberFromAppendResponse = (res) => {
     nota_retiro: cov.nota_retiro || "",
     codigo_poliza: cov.codigo_poliza || "",
     estado_cobertura: cov.estado_cobertura || "Sí",
+    activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
+    vigente: cov.vigente !== undefined && cov.vigente !== null ? cov.vigente : true,
     whatsapp: !!cli.whatsapp,
     telegram: !!cli.telegram,
     texto_sms: !!cli.texto_sms,
     cliente: {
       ...cli,
+      primer_nombre: formatDisplayName(cli.primer_nombre || ""),
+      segundo_nombre: formatDisplayName(cli.segundo_nombre || ""),
+      apellidos: formatDisplayName(cli.apellidos || ""),
+      nombre_completo: nombreCompleto,
       whatsapp: !!cli.whatsapp,
       telegram: !!cli.telegram,
       texto_sms: !!cli.texto_sms,
@@ -843,10 +859,14 @@ const handleCreateMemberRemote = async (memberData) => {
   };
 
   // Priorizar: nombre ya construido > construir desde campos
-  const nombreCompleto = 
+  const nombreCompleto = formatDisplayName(
     memberData?.nombre_completo?.trim() ||
     memberData?.nombreCompleto?.trim() ||
-    construirNombre(memberData);
+    construirNombre(memberData)
+  );
+  const primerNombre = formatDisplayName((memberData.primer_nombre || "").toString().trim());
+  const segundoNombre = formatDisplayName((memberData.segundo_nombre || "").toString().trim());
+  const apellidosFmt = formatDisplayName((memberData.apellidos || "").toString().trim());
 
   console.log("📝 Creando miembro con nombre_completo:", nombreCompleto);
   console.log("📋 Datos originales:", {
@@ -893,10 +913,10 @@ const handleCreateMemberRemote = async (memberData) => {
     request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
     grupo_version: grupoVersion,
     cliente_nuevo: {
-      primer_nombre: (memberData.primer_nombre || "").toString().trim(),
-      segundo_nombre: (memberData.segundo_nombre || "").toString().trim(),
-      apellidos: (memberData.apellidos || "").toString().trim(),
-      nombre_completo: nombreCompleto,  // 🎯 Nombre completo garantizado
+      primer_nombre: primerNombre,
+      segundo_nombre: segundoNombre,
+      apellidos: apellidosFmt,
+      nombre_completo: nombreCompleto,
       fecha_nacimiento: memberData.fecha_nacimiento || null,
       genero: memberData.genero || null,
       idioma: memberData.idioma || null,
@@ -965,15 +985,25 @@ const handleCreateMemberRemote = async (memberData) => {
     const res = await GrupoFamiliarService.appendMiembro(id, payload);
     const data = unwrapFull(res)?.data || unwrapFull(res);
     const nuevo = mapMemberFromAppendResponse(data?.miembro || {});
-    
-    // Hidratar lista
-    setFamilyMembers((prev) => [...prev, nuevo]);
 
-    // Actualiza versión si el backend te devuelve la nueva
+    setFamilyMembers((prev) => {
+      const next = [...(prev ?? []), nuevo];
+      handleDerivedCounts(deriveCounts(next));
+      return next;
+    });
+
+    if (data?.personas_taxes != null || data?.personas_cobertura != null) {
+      handleDerivedCounts({
+        taxes: data.personas_taxes,
+        cobertura: data.personas_cobertura,
+      });
+    }
+
     if (data?.grupo_version) setGrupoVersion(data.grupo_version);
-    
-    await reload(); // Asegura que la siguiente "Actualizar" ya tiene IDs reales
+
+    await reload();
     showToast("success", "Miembro agregado", `${nombreCompleto} fue creado exitosamente.`);
+    return nuevo;
   } catch (error) {
     console.error("❌ Error al crear miembro:", error);
     showToast("danger", "Error al crear miembro", error?.message || "No se pudo crear el miembro");
@@ -1031,8 +1061,10 @@ const handleCreateMemberRemote = async (memberData) => {
   const handleDerivedCounts = useCallback(({ taxes, cobertura }) => {
     setFormData(prev => {
       if (!prev) return prev;
-      if (prev.personasTaxes === taxes && prev.personasCobertura === cobertura) return prev;
-      return { ...prev, personasTaxes: taxes, personasCobertura: cobertura };
+      const nextTaxes = taxes ?? prev.personasTaxes;
+      const nextCobertura = cobertura ?? prev.personasCobertura;
+      if (prev.personasTaxes === nextTaxes && prev.personasCobertura === nextCobertura) return prev;
+      return { ...prev, personasTaxes: nextTaxes, personasCobertura: nextCobertura };
     });
   }, []);
   useEffect(() => {

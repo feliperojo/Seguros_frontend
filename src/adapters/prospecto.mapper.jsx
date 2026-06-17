@@ -1,6 +1,10 @@
 
 import { parseMoney } from "../services/ingresos"; // 👈 importa el normalizador
-import { splitFullName } from "../utils/names";
+import { splitFullName, formatDisplayName } from "../utils/names";
+import {
+  isMedicareOrMedicaidEstado,
+  clearedCoverageFieldsForMedicareMedicaid,
+} from "../utils/estadoPoliza";
 
 export const buildPersonaContacto = (nombre = "", apellidos = "") =>
   [nombre?.trim(), apellidos?.trim()].filter(Boolean).join(" ");
@@ -200,11 +204,15 @@ export const mapClienteFromMember = (m = {}) => {
   const c = m?.cliente || {};
   const pick = (k) => (m[k] ?? c[k] ?? null);
   const date10 = (v) => (v ? String(v).slice(0, 10) : null);
+  const formatName = (v) => {
+    const s = (v ?? "").toString().trim();
+    return s ? formatDisplayName(s) : "";
+  };
 
   // nombres
-  let primer_nombre  = (pick("primer_nombre") || "").toString().trim();
-  let segundo_nombre = toNullIfEmpty((pick("segundo_nombre") || "").toString().trim());
-  let apellidos      = (pick("apellidos") || "").toString().trim();
+  let primer_nombre  = formatName(pick("primer_nombre"));
+  let segundo_nombre = toNullIfEmpty(formatName(pick("segundo_nombre")));
+  let apellidos      = formatName(pick("apellidos"));
 
   // 🔹 Fallback seguro: si no hay partes de nombre pero sí viene nombre_completo,
   // úsalo para derivar nombres/apellidos (útil para importaciones CSV).
@@ -222,10 +230,11 @@ export const mapClienteFromMember = (m = {}) => {
     }
   }
 
-  const nombre_completo =
+  const nombre_completo = formatDisplayName(
     (pick("nombre_completo") ||
       [primer_nombre, segundo_nombre, apellidos].filter(Boolean).join(" ")
-    ).toString().trim();
+    ).toString().trim()
+  );
 
   // fecha: acepta snake_case o camelCase
   const fecha_nacimiento =
@@ -410,6 +419,10 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     // Valor por defecto: false si hay fecha_cancelacion, true si no
     const tieneFechaCancelacion = m.fecha_cancelacion || m?.cobertura?.fecha_cancelacion;
     payload.vigente = !tieneFechaCancelacion;
+  }
+
+  if (isMedicareOrMedicaidEstado(payload.estado_cobertura)) {
+    Object.assign(payload, clearedCoverageFieldsForMedicareMedicaid());
   }
   
   return stripNulls(payload);
