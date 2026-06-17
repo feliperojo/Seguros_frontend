@@ -9,6 +9,7 @@ import systemConfigService from "../services/SystemConfigService";
 import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaModal";
 import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
+import { formatDateMMDDYYYY } from "../utils/formatters";
 
 /**
  * Construye los query params desde el estado de filtros
@@ -39,22 +40,8 @@ const buildQueryParams = (filters) => {
  */
 const formatDate = (dateString) => {
   if (!dateString) return "-";
-  try {
-    const raw = String(dateString).trim();
-    const dateOnly = raw.includes("T") ? raw.split("T")[0] : raw;
-    const ymd = dateOnly.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    const date = ymd
-      ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]))
-      : new Date(!raw.includes("T") ? `${raw}T00:00:00` : raw);
-    if (isNaN(date.getTime())) return dateString;
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  } catch {
-    return dateString;
-  }
+  const formatted = formatDateMMDDYYYY(dateString);
+  return formatted || "-";
 };
 
 /**
@@ -556,7 +543,8 @@ const ReporteCoberturasPage = () => {
   const renderCell = (cobertura, columnKey) => {
     switch (columnKey) {
       case "fecha_activacion":
-        return formatDate(cobertura.fecha_activacion);
+      case "fecha_nacimiento":
+        return formatDate(cobertura[columnKey]);
       case "codigo_poliza":
         return cobertura.codigo_poliza || "-";
       case "cliente":
