@@ -18,7 +18,7 @@ import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
 import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
 import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
-import { parseMoney, computeAnnual } from "../services/ingresos";
+import { parseMoney, computeAnnual, calcIngresoFamiliar } from "../services/ingresos";
 import { vigenteDesdeEstadoCobertura } from "../utils/estadoPoliza";
 
 // Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
@@ -768,15 +768,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
 
   const recalculateTotalIncome = (groups) => {
-    const total = groups.reduce((sum, group) =>
-      sum + group.members.reduce((gSum, m) => {
-        const ingreso = parseFloat(m.ingreso_anual) || 0;
-        const ingresoOcasional = getIngresoOcasionalAnual(m);
-        const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-        return gSum + (esValido ? ingreso + ingresoOcasional : 0);
-      }, 0)
-    , 0);
-  
+    const total = calcIngresoFamiliar((groups || []).flatMap((g) => g.members || []));
     setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
   };
   
@@ -784,14 +776,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
   useEffect(() => {
     if (currentStep === 2) {
-      const total = coverageGroups.reduce((sum, group) =>
-        sum + group.members.reduce((gSum, m) => {
-          const ingreso = parseFloat(m.ingreso_anual) || 0;
-          const ingresoOcasional = getIngresoOcasionalAnual(m);
-          const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-          return gSum + (esValido ? ingreso + ingresoOcasional : 0);
-        }, 0)
-      , 0);
+      const total = calcIngresoFamiliar(coverageGroups.flatMap((g) => g.members || []));
   
       if (mode === "edit" && total === 0 && initialData) {
         console.log("Manteniendo ingreso familiar original:", initialData.ingreso_familiar_anual);
@@ -976,14 +961,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
       );
 
       // Después de actualizar recalculamos el ingreso familiar
-      const total = updatedGroups.reduce((sum, group) =>
-        sum + group.members.reduce((gSum, m) => {
-          const ingreso = parseFloat(m.ingreso_anual) || 0;
-          const ingresoOcasional = getIngresoOcasionalAnual(m);
-          const esValido = m.estado_cobertura === "Yes" && m.vigente && m.activo;
-          return gSum + (esValido ? ingreso + ingresoOcasional : 0);
-        }, 0)
-      , 0);
+      const total = calcIngresoFamiliar(updatedGroups.flatMap((g) => g.members || []));
       
       setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
       
@@ -1134,13 +1112,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
 
       // Modo edición: recalcular ingreso familiar si cambia
       if (mode === "edit" && currentStep === 2) {
-        const calculatedIncome = coverageGroups.reduce((sum, group) =>
-          sum + group.members.reduce((gSum, m) => {
-            const ingreso = parseFloat(m.ingreso_anual) || 0;
-            const ingresoOcasional = getIngresoOcasionalAnual(m);
-            return gSum + ingreso + ingresoOcasional;
-          }, 0)
-          , 0);
+        const calculatedIncome = calcIngresoFamiliar(
+          coverageGroups.flatMap((g) => g.members || [])
+        );
 
         ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
       }

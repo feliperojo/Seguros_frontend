@@ -433,7 +433,7 @@ const Prospectogrupo = ({
               />
               <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
                 <i className="fas fa-info-circle me-1"></i>
-                Sumatoria de los ingresos de cada miembro.
+                Sumatoria de los ingresos de cada miembro sin fecha de retiro.
               </small>
             </div>
             <div className="col-md-6 col-lg-3">

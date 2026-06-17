@@ -109,21 +109,20 @@ export const PERIOD_FACTOR = {
     return Number.isFinite(annual) ? Math.round(annual * 100) / 100 : 0;
   };
   
-  // ¿Retirada?  -> vigente === false  OR  fecha_retiro != null/''/"null"/"undefined"
+  // ¿Retirada para ingreso familiar? → solo si tiene fecha_retiro
   const isCoberturaRetirada = (c = {}, fallback = {}) => {
-    const vigente = c?.vigente ?? fallback?.vigente;
     const fr = c?.fecha_retiro ?? fallback?.fecha_retiro;
-    const hayFechaRetiro =
-      fr !== null && fr !== undefined && String(fr).trim() !== "" && String(fr).toLowerCase() !== "null";
-    return vigente === false || hayFechaRetiro;
+    if (fr === null || fr === undefined) return false;
+    const s = String(fr).trim();
+    return s !== "" && s.toLowerCase() !== "null" && s.toLowerCase() !== "undefined";
   };
-  
-  // Contabilizable = existe al menos UNA cobertura NO retirada
+
+  // Contabilizable = al menos una cobertura sin fecha de retiro
   export const isMemberContabilizable = (m = {}) => {
     const lista = Array.isArray(m.coberturas)
       ? m.coberturas
-      : [{ vigente: m.vigente, fecha_retiro: m.fecha_retiro }];
-  
+      : [{ fecha_retiro: m.fecha_retiro }];
+
     return lista.some((c) => !isCoberturaRetirada(c, m));
   };
   
