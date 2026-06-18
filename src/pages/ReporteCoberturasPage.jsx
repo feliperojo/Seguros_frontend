@@ -24,6 +24,7 @@ const buildQueryParams = (filters) => {
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
   if (filters.search) params.search = filters.search;
+  if (filters.exclude_retiradas === true) params.exclude_retiradas = 1;
   // Solo enviar sort_by y sort_dir si sort_by tiene valor
   if (filters.sort_by) {
     params.sort_by = filters.sort_by;
@@ -205,6 +206,7 @@ const ReporteCoberturasPage = () => {
     date_from: "",
     date_to: "",
     search: "",
+    exclude_retiradas: false,
     sort_by: "",
     sort_dir: "",
   });
@@ -216,6 +218,7 @@ const ReporteCoberturasPage = () => {
     date_from: "",
     date_to: "",
     search: "",
+    exclude_retiradas: false,
   });
   
   // Estado para compañías
@@ -396,7 +399,8 @@ const ReporteCoberturasPage = () => {
       prevFiltersRef.current.estado_cobertura !== filters.estado_cobertura ||
       prevFiltersRef.current.date_from !== filters.date_from ||
       prevFiltersRef.current.date_to !== filters.date_to ||
-      prevFiltersRef.current.search !== filters.search;
+      prevFiltersRef.current.search !== filters.search ||
+      prevFiltersRef.current.exclude_retiradas !== filters.exclude_retiradas;
     
     if (filtersChanged) {
       setTempFilters({
@@ -405,6 +409,7 @@ const ReporteCoberturasPage = () => {
         date_from: filters.date_from,
         date_to: filters.date_to,
         search: filters.search,
+        exclude_retiradas: filters.exclude_retiradas,
       });
       prevFiltersRef.current = filters;
     }
@@ -472,6 +477,7 @@ const ReporteCoberturasPage = () => {
       date_from: "",
       date_to: "",
       search: "",
+      exclude_retiradas: false,
     };
     setTempFilters(clearedFilters);
     setFilters((prev) => ({
@@ -689,6 +695,16 @@ const ReporteCoberturasPage = () => {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </Form.Select>
+            </div>
+
+            <div className="col-md-12">
+              <Form.Check
+                type="checkbox"
+                id="exclude-retiradas"
+                label="Excluir coberturas retiradas (vigente = No y activo = No)"
+                checked={tempFilters.exclude_retiradas}
+                onChange={(e) => handleTempFilterChange("exclude_retiradas", e.target.checked)}
+              />
             </div>
             
             {/* Botones */}
