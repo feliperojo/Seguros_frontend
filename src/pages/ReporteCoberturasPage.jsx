@@ -701,7 +701,7 @@ const ReporteCoberturasPage = () => {
               <Form.Check
                 type="checkbox"
                 id="exclude-retiradas"
-                label="Excluir coberturas retiradas (vigente = No y activo = No)"
+                label="Excluir coberturas retiradas"
                 checked={tempFilters.exclude_retiradas}
                 onChange={(e) => handleTempFilterChange("exclude_retiradas", e.target.checked)}
               />
