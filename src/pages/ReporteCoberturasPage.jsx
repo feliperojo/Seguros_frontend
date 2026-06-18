@@ -24,7 +24,7 @@ const buildQueryParams = (filters) => {
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
   if (filters.search) params.search = filters.search;
-  if (filters.exclude_retiradas === true) params.exclude_retiradas = 1;
+  if (filters.exclude_retiradas) params.exclude_retiradas = true;
   // Solo enviar sort_by y sort_dir si sort_by tiene valor
   if (filters.sort_by) {
     params.sort_by = filters.sort_by;

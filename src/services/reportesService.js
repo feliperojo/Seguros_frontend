@@ -23,7 +23,7 @@ const buildQueryParams = (params) => {
   if (params.date_from) queryParams.append("date_from", params.date_from);
   if (params.date_to) queryParams.append("date_to", params.date_to);
   if (params.search) queryParams.append("search", params.search);
-  if (params.exclude_retiradas === true) queryParams.append("exclude_retiradas", "1");
+  if (params.exclude_retiradas) queryParams.append("exclude_retiradas", "1");
   // Solo enviar sort_by y sort_dir si sort_by tiene valor
   if (params.sort_by) {
     queryParams.append("sort_by", params.sort_by);
