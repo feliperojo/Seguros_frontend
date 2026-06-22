@@ -66,6 +66,23 @@ const CLIENTE_FIELD_LABELS = {
   zip_code: "ZIP Code",
 };
 
+const MEDIO_PAGO_FIELD_LABELS = {
+  forma_pago: "Forma de pago",
+  tipo_tarjeta: "Tipo de tarjeta",
+  titular: "Titular",
+  direccion: "Dirección",
+  numero_tarjeta: "Número de tarjeta",
+  fecha_expiracion: "Fecha de expiración",
+  fecha_expiracion_raw: "Fecha de expiración",
+  cvv: "CVV",
+  banco: "Banco",
+  ruta: "Ruta",
+  cuenta_numero: "Número de cuenta",
+  quien_paga: "Quién paga",
+  es_principal: "Es principal",
+  cliente_id: "ID Cliente",
+};
+
 const COB_FIELDS = [
   "plan", "metal", "red", "grupo", "estado_cobertura", "cobertura_tipo",
   "codigo_poliza", "precio", "ano_cobertura", "fecha_activacion",
@@ -104,10 +121,10 @@ const normalizeValue = (val) => {
 };
 
 const getFieldLabel = (fieldKey) => {
-  // Si el campo está directamente en FIELD_LABELS, retornarlo
   if (FIELD_LABELS[fieldKey]) return FIELD_LABELS[fieldKey];
+  if (CLIENTE_FIELD_LABELS[fieldKey]) return CLIENTE_FIELD_LABELS[fieldKey];
+  if (MEDIO_PAGO_FIELD_LABELS[fieldKey]) return MEDIO_PAGO_FIELD_LABELS[fieldKey];
   
-  // Si es un campo de cliente (cliente.*)
   if (fieldKey.startsWith("cliente.")) {
     const clienteField = fieldKey.replace("cliente.", "");
     return CLIENTE_FIELD_LABELS[clienteField] || clienteField;
@@ -119,6 +136,7 @@ const getFieldLabel = (fieldKey) => {
   if (lastDotIndex > 0) {
     const actualField = fieldKey.substring(lastDotIndex + 1);
     if (FIELD_LABELS[actualField]) return FIELD_LABELS[actualField];
+    if (MEDIO_PAGO_FIELD_LABELS[actualField]) return MEDIO_PAGO_FIELD_LABELS[actualField];
     if (actualField.startsWith("cliente.")) {
       const clienteField = actualField.replace("cliente.", "");
       return CLIENTE_FIELD_LABELS[clienteField] || clienteField;
@@ -129,6 +147,25 @@ const getFieldLabel = (fieldKey) => {
   return fieldKey
     .replace(/_/g, " ")
     .replace(/\b\w/g, (l) => l.toUpperCase());
+};
+
+const formatFormaPago = (value) => {
+  if (!value) return "—";
+  const labels = {
+    tarjeta_credito: "Tarjeta de crédito",
+    tarjeta_debito: "Tarjeta de débito",
+    cuenta_bancaria: "Cuenta bancaria",
+  };
+  return labels[value] || formatValue(value);
+};
+
+const formatValueForHistorial = (val, campo) => {
+  if (campo === "forma_pago") return formatFormaPago(val);
+  if (campo === "es_principal") {
+    if (val === true || val === "true" || val === 1) return "Sí";
+    if (val === false || val === "false" || val === 0) return "No";
+  }
+  return formatValue(val);
 };
 
 const normalizeCoberturas = (val) => {
@@ -326,6 +363,66 @@ export default function HistorialCambiosModal({
       return historialesCoberturas.flat();
     } catch (err) {
       console.warn("Error obteniendo historial de coberturas:", err);
+      return [];
+    }
+  };
+
+  const obtenerHistorialMediosPago = async (grupoId, clienteIdDirecto = null) => {
+    try {
+      let clienteIds = [];
+      const nombresPorCliente = {};
+
+      if (clienteIdDirecto) {
+        clienteIds = [clienteIdDirecto];
+      } else if (grupoId) {
+        const grupoData = await GrupoFamiliarService.getFullById(grupoId);
+        clienteIds = [
+          ...new Set(
+            (Array.isArray(grupoData?.coberturas) ? grupoData.coberturas : [])
+              .map((cob) => cob?.cliente?.id ?? cob?.cliente_id)
+              .filter(Boolean)
+          ),
+        ];
+        (grupoData?.coberturas || []).forEach((cob) => {
+          const id = cob?.cliente?.id ?? cob?.cliente_id;
+          if (id) {
+            nombresPorCliente[id] = obtenerNombreCliente(cob?.cliente) || nombresPorCliente[id];
+          }
+        });
+      }
+
+      const historialesMedios = await Promise.all(
+        clienteIds.map(async (clienteId) => {
+          try {
+            const res = await apiRequest(`/historial/cliente/${clienteId}/medios-pago`, "GET");
+            const historialMedios = Array.isArray(res.data) ? res.data : [];
+
+            return historialMedios.map((record) => ({
+              ...record,
+              _esMedioPago: true,
+              _medioPagoId: record.modelo_id,
+              _medioPagoInfo: {
+                cliente_id: clienteId,
+                cliente_nombre:
+                  record.clientes_afectados?.[0]
+                  || nombresPorCliente[clienteId]
+                  || `Cliente #${clienteId}`,
+                forma_pago:
+                  record.cambios?.forma_pago?.nuevo
+                  || record.cambios?.forma_pago?.anterior
+                  || null,
+              },
+            }));
+          } catch (err) {
+            console.warn(`Error obteniendo historial de medios de pago del cliente ${clienteId}:`, err);
+            return [];
+          }
+        })
+      );
+
+      return historialesMedios.flat();
+    } catch (err) {
+      console.warn("Error obteniendo historial de medios de pago:", err);
       return [];
     }
   };
@@ -539,10 +636,20 @@ export default function HistorialCambiosModal({
         
         // Si es GrupoFamiliar, obtener también historial de coberturas
         if (isGrupo && modeloId) {
-          const registrosCoberturas = await obtenerHistorialCoberturas(modeloId);
-          rows = [...rows, ...registrosCoberturas];
+          const [registrosCoberturas, registrosMediosPago] = await Promise.all([
+            obtenerHistorialCoberturas(modeloId),
+            obtenerHistorialMediosPago(modeloId),
+          ]);
+          rows = [...rows, ...registrosCoberturas, ...registrosMediosPago];
           
-          // Ordenar por fecha (más reciente primero)
+          rows.sort((a, b) => {
+            const fechaA = new Date(a.created_at || a.fecha || 0).getTime();
+            const fechaB = new Date(b.created_at || b.fecha || 0).getTime();
+            return fechaB - fechaA;
+          });
+        } else if (modelo === "Cliente" && modeloId) {
+          const registrosMediosPago = await obtenerHistorialMediosPago(null, modeloId);
+          rows = [...rows, ...registrosMediosPago];
           rows.sort((a, b) => {
             const fechaA = new Date(a.created_at || a.fecha || 0).getTime();
             const fechaB = new Date(b.created_at || b.fecha || 0).getTime();
@@ -618,7 +725,9 @@ export default function HistorialCambiosModal({
 
     const contadores = contarCambiosPorCategoria(cambios);
     const esCobertura = selected._esCobertura || false;
+    const esMedioPago = selected._esMedioPago || false;
     const coberturaInfo = selected._coberturaInfo || {};
+    const medioPagoInfo = selected._medioPagoInfo || {};
     
     const header = (
       <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa", marginBottom: "1rem" }}>
@@ -757,7 +866,7 @@ export default function HistorialCambiosModal({
       </div>
     );
 
-    if (!isGrupo) {
+    if (!isGrupo || esMedioPago) {
       return (
         <>
           <div className="card mb-3 border" style={{ backgroundColor: "#f8f9fa" }}>
@@ -808,6 +917,25 @@ export default function HistorialCambiosModal({
                   </div>
                 </div>
               </div>
+
+              {esMedioPago && medioPagoInfo && (
+                <div className="row g-2 mt-3 pt-3 border-top">
+                  <div className="col-12">
+                    <small className="text-muted d-block mb-2" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      Cliente / Medio de Pago
+                    </small>
+                    <div className="d-flex flex-wrap gap-2 align-items-center">
+                      {medioPagoInfo.cliente_nombre && (
+                        <span className="badge bg-success text-white">{medioPagoInfo.cliente_nombre}</span>
+                      )}
+                      <span className="badge bg-warning text-dark">Medio #{selected._medioPagoId}</span>
+                      {medioPagoInfo.forma_pago && (
+                        <span className="text-muted small">{formatFormaPago(medioPagoInfo.forma_pago)}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
     
@@ -835,12 +963,12 @@ export default function HistorialCambiosModal({
                       <td className="text-dark" style={{ padding: "0.75rem", verticalAlign: "top" }}>{label}</td>
                       <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
                         <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
-                          {formatValue(info.anterior)}
+                          {formatValueForHistorial(info.anterior, campo)}
                         </span>
                       </td>
                       <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
                         <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
-                          {formatValue(info.nuevo)}
+                          {formatValueForHistorial(info.nuevo, campo)}
                         </span>
                       </td>
                     </tr>
@@ -1267,14 +1395,16 @@ export default function HistorialCambiosModal({
                               campo => !debeIgnorarCampo(campo)
                             );
                             const totalCambios = cambiosFiltrados.length;
-                            const isActive = selected && selected.id === row.id;
+                            const isActive = selected && selected.id === row.id && (selected._esMedioPago || false) === (row._esMedioPago || false) && (selected._esCobertura || false) === (row._esCobertura || false);
                             const esCobertura = row._esCobertura || false;
+                            const esMedioPago = row._esMedioPago || false;
                             const coberturaInfo = row._coberturaInfo || {};
+                            const medioPagoInfo = row._medioPagoInfo || {};
                             const clientesAfectados = Array.isArray(row.clientes_afectados) ? row.clientes_afectados : [];
 
                             return (
                               <tr
-                                key={`${row.id}-${esCobertura ? row._coberturaId : ''}`}
+                                key={`${row.id}-${esCobertura ? row._coberturaId : ''}-${esMedioPago ? row._medioPagoId : ''}`}
                                 className={isActive ? "table-primary" : ""}
                                 style={{ cursor: "pointer" }}
                                 onClick={() => setSelected(row)}
@@ -1290,7 +1420,18 @@ export default function HistorialCambiosModal({
                                   <span className="badge bg-secondary">{row.accion}</span>
                                 </td>
                                 <td style={{ padding: "0.75rem 0.5rem" }}>
-                                  {esCobertura ? (
+                                  {esMedioPago ? (
+                                    <div className="small">
+                                      <span className="badge bg-warning text-dark" style={{ fontSize: "0.7rem" }}>
+                                        Medio de Pago
+                                      </span>
+                                      {medioPagoInfo.cliente_nombre && (
+                                        <div className="text-muted mt-1" style={{ fontSize: "0.75rem" }}>
+                                          {medioPagoInfo.cliente_nombre}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : esCobertura ? (
                                     <div className="small">
                                       <span className="badge bg-info text-dark" style={{ fontSize: "0.7rem" }}>
                                         Cobertura
@@ -1303,7 +1444,7 @@ export default function HistorialCambiosModal({
                                     </div>
                                   ) : (
                                     <span className="badge bg-dark" style={{ fontSize: "0.7rem" }}>
-                                      Grupo
+                                      {row.modelo_afectado === "Cliente" ? "Cliente" : "Grupo"}
                                     </span>
                                   )}
                                 </td>
