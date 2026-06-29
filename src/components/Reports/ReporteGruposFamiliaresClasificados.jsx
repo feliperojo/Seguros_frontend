@@ -109,6 +109,20 @@ const clasificarEstadoMiembro = (cobertura) => {
 };
 
 /**
+ * Obtener tipo(s) de producto únicos de un grupo (cobertura_tipo)
+ */
+const getCoberturaTiposGrupo = (grupo) => {
+  const tipos = [
+    ...new Set(
+      (grupo.coberturas || [])
+        .map((c) => (c.cobertura_tipo || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+  return tipos;
+};
+
+/**
  * Componente principal del reporte
  */
 const ReporteGruposFamiliaresClasificados = () => {
@@ -118,6 +132,7 @@ const ReporteGruposFamiliaresClasificados = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [gruposExpandidos, setGruposExpandidos] = useState(new Set());
   const [filtroEstado, setFiltroEstado] = useState("todos");
+  const [filtroCoberturaTipo, setFiltroCoberturaTipo] = useState("todos");
 
   // Cargar grupos familiares
   useEffect(() => {
@@ -200,7 +215,28 @@ const ReporteGruposFamiliaresClasificados = () => {
   }, [grupos]);
 
   /**
-   * Filtrar grupos según búsqueda y filtro de estado
+   * Tipos de producto disponibles para el filtro (derivados de los datos cargados)
+   */
+  const tiposCoberturaDisponibles = useMemo(() => {
+    const tipos = new Set();
+    let haySinProducto = false;
+
+    gruposClasificados.forEach((grupo) => {
+      const grupoTipos = getCoberturaTiposGrupo(grupo);
+      if (grupoTipos.length === 0) {
+        haySinProducto = true;
+      }
+      grupoTipos.forEach((tipo) => tipos.add(tipo));
+    });
+
+    return {
+      tipos: [...tipos].sort((a, b) => a.localeCompare(b, "es")),
+      haySinProducto,
+    };
+  }, [gruposClasificados]);
+
+  /**
+   * Filtrar grupos según búsqueda, estado y tipo de producto
    */
   const gruposFiltrados = useMemo(() => {
     let filtrados = gruposClasificados;
@@ -230,8 +266,21 @@ const ReporteGruposFamiliaresClasificados = () => {
       });
     }
 
+    // Filtro por tipo de producto (cobertura_tipo)
+    if (filtroCoberturaTipo !== "todos") {
+      if (filtroCoberturaTipo === "__sin_producto__") {
+        filtrados = filtrados.filter(
+          (grupo) => getCoberturaTiposGrupo(grupo).length === 0
+        );
+      } else {
+        filtrados = filtrados.filter((grupo) =>
+          getCoberturaTiposGrupo(grupo).includes(filtroCoberturaTipo)
+        );
+      }
+    }
+
     return filtrados;
-  }, [gruposClasificados, searchTerm, filtroEstado]);
+  }, [gruposClasificados, searchTerm, filtroEstado, filtroCoberturaTipo]);
 
   /**
    * Obtener nombre del tomador
@@ -474,6 +523,7 @@ const ReporteGruposFamiliaresClasificados = () => {
                 <th>Nombre</th>
                 <th>Parentesco</th>
                 <th>Estado Cobertura</th>
+                <th>Tipo Producto</th>
                 <th>Compañía</th>
                 <th>Plan</th>
                 <th>Precio</th>
@@ -502,6 +552,7 @@ const ReporteGruposFamiliaresClasificados = () => {
                       {miembro.estado_cobertura || "Sin definir"}
                     </Badge>
                   </td>
+                  <td>{miembro.cobertura_tipo || "-"}</td>
                   <td>{miembro.compania?.nombre || "-"}</td>
                   <td>{miembro.plan || "-"}</td>
                   <td>{formatCurrency(miembro.precio)}</td>
@@ -572,8 +623,8 @@ const ReporteGruposFamiliaresClasificados = () => {
         {/* Filtros */}
         <Card className="mb-4">
           <Card.Body>
-            <Row>
-              <Col md={6}>
+            <Row className="g-3">
+              <Col md={12} lg={5}>
                 <InputGroup>
                   <InputGroup.Text>
                     <FaSearch />
@@ -585,10 +636,11 @@ const ReporteGruposFamiliaresClasificados = () => {
                   />
                 </InputGroup>
               </Col>
-              <Col md={6}>
+              <Col md={6} lg={3}>
                 <Form.Select
                   value={filtroEstado}
                   onChange={(e) => setFiltroEstado(e.target.value)}
+                  aria-label="Filtrar por estado de cobertura"
                 >
                   <option value="todos">Todos los estados</option>
                   <option value="activos_con_cobertura">Activos con Cobertura</option>
@@ -596,6 +648,23 @@ const ReporteGruposFamiliaresClasificados = () => {
                   <option value="retirados">Retirados</option>
                   <option value="sin_cobertura">Sin Cobertura</option>
                   <option value="otros_estados">Otros Estados</option>
+                </Form.Select>
+              </Col>
+              <Col md={6} lg={4}>
+                <Form.Select
+                  value={filtroCoberturaTipo}
+                  onChange={(e) => setFiltroCoberturaTipo(e.target.value)}
+                  aria-label="Filtrar por tipo de producto"
+                >
+                  <option value="todos">Todos los productos</option>
+                  {tiposCoberturaDisponibles.tipos.map((tipo) => (
+                    <option key={tipo} value={tipo}>
+                      {tipo}
+                    </option>
+                  ))}
+                  {tiposCoberturaDisponibles.haySinProducto && (
+                    <option value="__sin_producto__">Sin producto</option>
+                  )}
                 </Form.Select>
               </Col>
             </Row>
@@ -649,6 +718,7 @@ const ReporteGruposFamiliaresClasificados = () => {
       ) : (
         gruposFiltrados.map((grupo) => {
           const estaExpandido = gruposExpandidos.has(grupo.id);
+          const coberturaTipos = getCoberturaTiposGrupo(grupo);
           return (
             <Card key={grupo.id} className="mb-3">
               <Card.Header
@@ -665,6 +735,15 @@ const ReporteGruposFamiliaresClasificados = () => {
                     Grupo ID: {grupo.id}
                   </Link>
                   <Badge bg="primary">{getTomadorNombre(grupo)}</Badge>
+                  {coberturaTipos.length > 0 ? (
+                    coberturaTipos.map((tipo) => (
+                      <Badge key={tipo} bg="dark">
+                        {tipo}
+                      </Badge>
+                    ))
+                  ) : (
+                    <Badge bg="dark">Sin producto</Badge>
+                  )}
                   <Badge bg="info">
                     {grupo.personas_cobertura || 0} en cobertura
                   </Badge>
