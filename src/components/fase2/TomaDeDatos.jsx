@@ -1731,9 +1731,8 @@ const activeNormalized = useMemo(
                                 </Field>
 
                                 <Field label="Fecha Emisión" className="col-md-3">
-                                  <MdyDashDateInput
+                                  <DateInputWithCalendar
                                     size="sm"
-                                    allowManualEntry
                                     valueIso={(c.fecha_emision || "").slice(0, 10)}
                                     minIso="1900-01-01"
                                     maxIso="2099-12-31"
@@ -1751,9 +1750,8 @@ const activeNormalized = useMemo(
                                 </Field>
 
                                 <Field label="Fecha Expiración" className="col-md-3">
-                                  <MdyDashDateInput
+                                  <DateInputWithCalendar
                                     size="sm"
-                                    allowManualEntry
                                     valueIso={(c.fecha_expiracion || "").slice(0, 10)}
                                     minIso="1900-01-01"
                                     maxIso="2099-12-31"
