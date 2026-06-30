@@ -408,6 +408,22 @@ const ListaClientes = () => {
     return "Sin parentesco";
   };
 
+  const getProductoNombre = (cliente) => {
+    if (!cliente.coberturas || !Array.isArray(cliente.coberturas) || cliente.coberturas.length === 0) {
+      return "—";
+    }
+
+    const tipos = [
+      ...new Set(
+        cliente.coberturas
+          .map((c) => (c.cobertura_tipo || "").trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    return tipos.length > 0 ? tipos.join(", ") : "—";
+  };
+
   /**
    * Obtiene el teléfono principal del cliente
    * @param {Object} cliente - Objeto cliente
@@ -808,6 +824,7 @@ const ListaClientes = () => {
                     <th className="fw-semibold">Parentesco</th>
                     <th className="fw-semibold">Teléfono</th>
                     <th className="fw-semibold">Proceso</th>
+                    <th className="fw-semibold">Producto</th>
                     <th className="text-center fw-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -831,6 +848,7 @@ const ListaClientes = () => {
                         <td>
                           <ProcesoCell grupos={grupos} />
                         </td>
+                        <td>{getProductoNombre(cliente)}</td>
                         <td className="text-center">
                           <div className="btn-group" role="group">
                             <Button

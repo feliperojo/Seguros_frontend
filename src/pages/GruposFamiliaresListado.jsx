@@ -242,6 +242,22 @@ useEffect(() => {
   };
 
 
+  const getProductoNombre = (grupo) => {
+    if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
+      return "-";
+    }
+
+    const tipos = [
+      ...new Set(
+        grupo.coberturas
+          .map((c) => (c.cobertura_tipo || "").trim())
+          .filter(Boolean)
+      ),
+    ];
+
+    return tipos.length > 0 ? tipos.join(", ") : "-";
+  };
+
   const getCompaniaNombre = (grupo) => {
     if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
       return "-";
@@ -451,6 +467,7 @@ useEffect(() => {
                         <th>ASEGURADORA</th>
                         <th>RESPONSABLE</th>
                         <th>PROCESO</th>
+                        <th>PRODUCTO</th>
                         <th className="text-center">ACCIONES</th>
                       </tr>
                     </thead>
@@ -507,6 +524,7 @@ useEffect(() => {
                                     </Badge>
                                   )}
                                 </td>
+                          <td>{getProductoNombre(grupo)}</td>
 
                           <td>
                             <div className="d-flex justify-content-center gap-2">

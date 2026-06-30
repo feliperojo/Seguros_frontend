@@ -69,6 +69,29 @@ const CambioVidaCancelacionModal = ({
     return s !== "" && s.toLowerCase() !== "null" && s.toLowerCase() !== "undefined";
   };
 
+  const esSinCobertura = (c = {}) => {
+    const raw = c?.estado_cobertura != null ? String(c.estado_cobertura).trim().toLowerCase() : "";
+    return raw === "no";
+  };
+
+  /** Póliza ya cancelada (fecha de cancelación, aún activo en el grupo). */
+  const esPolizaCancelada = (c = {}) => {
+    const activo = esTrue(c.activo);
+    const fueRetirada =
+      hasFechaValida(c.fecha_retiro || c.fechaRetiro) || !activo;
+    if (fueRetirada) return false;
+    return hasFechaValida(c.fecha_cancelacion || c.fechaCancelacion);
+  };
+
+  /**
+   * Agrupación visual del bloque inferior (sin cobertura + póliza cancelada).
+   */
+  const esBloqueSinCoberturaActiva = (c = {}) =>
+    esSinCobertura(c) || esPolizaCancelada(c);
+
+  /** Sin póliza activa: solo retiro del grupo (sin cobertura o ya cancelada). */
+  const esSoloRetiro = (c = {}) => esBloqueSinCoberturaActiva(c);
+
   const getEstadoActualInfo = (c = {}) => {
     const vigente = esTrue(c.vigente);
     const activo = esTrue(c.activo);
@@ -161,11 +184,13 @@ const CambioVidaCancelacionModal = ({
         });
       } else {
         nuevo.add(coberturaId);
-        // Inicializar con valor por defecto: continúa activo (renovar = true)
+        const cobertura = coberturas.find((c) => c.id === coberturaId);
+        const soloRetiro = esSoloRetiro(cobertura);
+        // Sin cobertura en póliza: solo retiro; con cobertura: por defecto cancelación (sigue activo)
         setRenovacionCoberturas((prevRenov) => {
           const nuevoRenov = new Map(prevRenov);
           nuevoRenov.set(coberturaId, {
-            renovar: true,
+            renovar: soloRetiro ? false : true,
             fecha_retiro: "",
           });
           return nuevoRenov;
@@ -179,6 +204,11 @@ const CambioVidaCancelacionModal = ({
   const handleRenovacionChange = (coberturaId, renovar) => {
     if (!coberturaId) {
       console.warn("handleRenovacionChange: coberturaId es undefined o null");
+      return;
+    }
+
+    const cobertura = coberturas.find((c) => c.id === coberturaId);
+    if (esSoloRetiro(cobertura) && renovar === true) {
       return;
     }
     
@@ -212,28 +242,48 @@ const CambioVidaCancelacionModal = ({
     });
   };
 
-  // Seleccionar todas / Deseleccionar todas
-  const toggleTodas = () => {
-    if (coberturasSeleccionadas.size === coberturas.length) {
-      setCoberturasSeleccionadas(new Set());
-      setRenovacionCoberturas(new Map());
-    } else {
-      const todasLasIds = coberturas.map((c) => c.id).filter(id => id);
-      setCoberturasSeleccionadas(new Set(todasLasIds));
-      // Inicializar todas con valor por defecto: continúa activo (renovar = true)
+  // Seleccionar / deseleccionar un bloque: con póliza o solo retiro
+  const toggleGrupo = (grupo) => {
+    const ids =
+      grupo === "soloRetiro"
+        ? coberturas.filter((c) => c?.id && esBloqueSinCoberturaActiva(c)).map((c) => c.id)
+        : coberturas.filter((c) => c?.id && !esBloqueSinCoberturaActiva(c)).map((c) => c.id);
+
+    if (ids.length === 0) return;
+
+    const todasSeleccionadas = ids.every((id) => coberturasSeleccionadas.has(id));
+
+    if (todasSeleccionadas) {
+      setCoberturasSeleccionadas((prev) => {
+        const nuevo = new Set(prev);
+        ids.forEach((id) => nuevo.delete(id));
+        return nuevo;
+      });
       setRenovacionCoberturas((prevRenov) => {
         const nuevoRenov = new Map(prevRenov);
-        todasLasIds.forEach((id) => {
-          if (!nuevoRenov.has(id)) {
-            nuevoRenov.set(id, {
-              renovar: true,
-              fecha_retiro: "",
-            });
-          }
-        });
+        ids.forEach((id) => nuevoRenov.delete(id));
         return nuevoRenov;
       });
+      return;
     }
+
+    setCoberturasSeleccionadas((prev) => {
+      const nuevo = new Set(prev);
+      ids.forEach((id) => nuevo.add(id));
+      return nuevo;
+    });
+    setRenovacionCoberturas((prevRenov) => {
+      const nuevoRenov = new Map(prevRenov);
+      ids.forEach((id) => {
+        const cobertura = coberturas.find((c) => c.id === id);
+        const soloRetiro = esSoloRetiro(cobertura);
+        nuevoRenov.set(id, {
+          renovar: soloRetiro ? false : true,
+          fecha_retiro: "",
+        });
+      });
+      return nuevoRenov;
+    });
   };
 
   // Validar formulario
@@ -262,10 +312,29 @@ const CambioVidaCancelacionModal = ({
       (id) => !renovacionCoberturas.has(id)
     );
     if (coberturasSinDecision.length > 0) {
-      setError("Por favor, indica para cada cobertura seleccionada si se renueva o no.");
+      setError("Por favor, indica para cada cobertura seleccionada si será cancelación o retiro.");
       return false;
     }
     
+    // Sin cobertura en póliza: no se permite cancelación, solo retiro
+    const cancelacionInvalidaSinCobertura = Array.from(coberturasSeleccionadas).filter((id) => {
+      const cobertura = coberturas.find((c) => c.id === id);
+      const datos = renovacionCoberturas.get(id);
+      return esSoloRetiro(cobertura) && datos?.renovar === true;
+    });
+    if (cancelacionInvalidaSinCobertura.length > 0) {
+      const nombres = cancelacionInvalidaSinCobertura
+        .map((id) => {
+          const cobertura = coberturas.find((c) => c.id === id);
+          return cobertura?.cliente?.nombre_completo || `ID ${id}`;
+        })
+        .join(", ");
+      setError(
+        `Las siguientes coberturas no tienen póliza activa y solo pueden retirarse del grupo: ${nombres}`
+      );
+      return false;
+    }
+
     // Validar que las coberturas que no continúan activas tengan fecha de retiro
     const coberturasSinFechaRetiro = Array.from(coberturasSeleccionadas).filter((id) => {
       const datos = renovacionCoberturas.get(id);
@@ -284,7 +353,7 @@ const CambioVidaCancelacionModal = ({
           return cobertura?.cliente?.nombre_completo || `ID ${id}`;
         })
         .join(", ");
-      setError(`Las siguientes coberturas requieren fecha de retiro porque no continuarán activas en el grupo: ${nombres}`);
+      setError(`Las siguientes coberturas requieren fecha de retiro: ${nombres}`);
       return false;
     }
     
@@ -355,9 +424,10 @@ const CambioVidaCancelacionModal = ({
       // Preparar datos de renovación por cobertura con todos los campos necesarios
       const datosRenovacion = Array.from(coberturasSeleccionadas).map((id) => {
         const datos = renovacionCoberturas.get(id);
-        const renovar = datos?.renovar ?? false;
-        const fechaRetiroIndividual = datos?.fecha_retiro || null;
         const cobertura = coberturas.find(c => c.id === id);
+        // Sin póliza: forzar retiro aunque se haya seleccionado por error
+        const renovar = esSoloRetiro(cobertura) ? false : (datos?.renovar ?? false);
+        const fechaRetiroIndividual = datos?.fecha_retiro || null;
         
         // FLUJO 1: Cancelación (continúa activo)
         if (renovar === true) {
@@ -475,14 +545,49 @@ const CambioVidaCancelacionModal = ({
     return formatearFecha(hoy);
   };
 
-  // Calcular estadísticas
+  // Calcular estadísticas (renovar=true → cancelación; renovar=false → retiro)
   const totalSeleccionadas = coberturasSeleccionadas.size;
-  const totalRenovar = Array.from(coberturasSeleccionadas).filter(id => {
-    if (!id) return false;
+  const idsSeleccionados = Array.from(coberturasSeleccionadas);
+  const totalCancelaciones = idsSeleccionados.filter((id) => {
     const datos = renovacionCoberturas.get(id);
-    return datos && datos.renovar === true;
+    const cobertura = coberturas.find((c) => c.id === id);
+    return datos?.renovar === true && !esBloqueSinCoberturaActiva(cobertura);
   }).length;
-  const totalNoRenovar = totalSeleccionadas - totalRenovar;
+  const totalRetiros = idsSeleccionados.filter((id) => {
+    const datos = renovacionCoberturas.get(id);
+    return datos?.renovar === false;
+  }).length;
+  const totalSoloRetiroEnSeleccion = idsSeleccionados.filter((id) => {
+    const cobertura = coberturas.find((c) => c.id === id);
+    return esBloqueSinCoberturaActiva(cobertura);
+  }).length;
+
+  const coberturasOrdenadas = [...coberturas]
+    .filter((c) => c && c.id)
+    .sort((a, b) => {
+      const aInferior = esBloqueSinCoberturaActiva(a) ? 1 : 0;
+      const bInferior = esBloqueSinCoberturaActiva(b) ? 1 : 0;
+      return aInferior - bInferior;
+    });
+
+  const hayConPoliza = coberturasOrdenadas.some((c) => !esBloqueSinCoberturaActiva(c));
+  const hayBloqueInferior = coberturasOrdenadas.some((c) => esBloqueSinCoberturaActiva(c));
+
+  const idsConPoliza = coberturasOrdenadas
+    .filter((c) => !esBloqueSinCoberturaActiva(c))
+    .map((c) => c.id);
+  const idsBloqueInferior = coberturasOrdenadas
+    .filter((c) => esBloqueSinCoberturaActiva(c))
+    .map((c) => c.id);
+
+  const todasConPolizaSeleccionadas =
+    idsConPoliza.length > 0 && idsConPoliza.every((id) => coberturasSeleccionadas.has(id));
+  const algunaConPolizaSeleccionada = idsConPoliza.some((id) =>
+    coberturasSeleccionadas.has(id)
+  );
+  const todasBloqueInferiorSeleccionadas =
+    idsBloqueInferior.length > 0 &&
+    idsBloqueInferior.every((id) => coberturasSeleccionadas.has(id));
 
   return (
     <Modal show={show} onHide={onClose} size="xl" centered>
@@ -490,10 +595,10 @@ const CambioVidaCancelacionModal = ({
         <div className="w-100">
           <Modal.Title className="mb-1">
             <i className="fas fa-file-contract me-2 text-primary"></i>
-            Gestión de Cancelación y Renovación de Coberturas
+            Gestión de Cancelaciones y Retiros de Coberturas
           </Modal.Title>
           <small className="text-muted">
-            Proceso administrativo para cambio de vida y gestión de coberturas
+            Cancelación de póliza o retiro del grupo familiar según el estado de cada miembro
           </small>
         </div>
       </Modal.Header>
@@ -515,23 +620,25 @@ const CambioVidaCancelacionModal = ({
               <div className="card border-0 shadow-sm mb-4" style={{ backgroundColor: "#f8f9fa" }}>
                 <div className="card-body py-3">
                   <div className="row text-center">
-                    <div className="col-md-3 border-end">
-                      <div className="text-muted small mb-1">Total Seleccionadas</div>
+                    <div className="col-md-4 border-end">
+                      <div className="text-muted small mb-1">Total seleccionadas</div>
                       <div className="h4 mb-0 text-primary fw-bold">{totalSeleccionadas}</div>
                     </div>
-                    <div className="col-md-3 border-end">
-                      <div className="text-muted small mb-1">Se Renuevan</div>
-                      <div className="h4 mb-0 text-success fw-bold">{totalRenovar}</div>
-                    </div>
-                    <div className="col-md-3 border-end">
-                      <div className="text-muted small mb-1">No Se Renuevan</div>
-                      <div className="h4 mb-0 text-secondary fw-bold">{totalNoRenovar}</div>
-                    </div>
-                    <div className="col-md-3">
-                      <div className="text-muted small mb-1">Pendientes</div>
-                      <div className="h4 mb-0 text-warning fw-bold">
-                        {totalSeleccionadas - (totalRenovar + totalNoRenovar)}
+                    <div className="col-md-4 border-end">
+                      <div className="text-muted small mb-1">Cancelaciones de póliza</div>
+                      <div className="h4 mb-0 text-warning fw-bold">{totalCancelaciones}</div>
+                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>
+                        Permanece en el grupo
                       </div>
+                    </div>
+                    <div className="col-md-4">
+                      <div className="text-muted small mb-1">Retiros del grupo</div>
+                      <div className="h4 mb-0 text-danger fw-bold">{totalRetiros}</div>
+                      {totalSoloRetiroEnSeleccion > 0 && (
+                        <div className="text-muted" style={{ fontSize: "0.7rem" }}>
+                          {totalSoloRetiroEnSeleccion} sin póliza activa
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -546,19 +653,27 @@ const CambioVidaCancelacionModal = ({
                     <span className="badge bg-primary me-2">1</span>
                     Selección de Coberturas
                   </h5>
-                  <small className="text-muted">Seleccione las coberturas que serán procesadas</small>
+                  <small className="text-muted">
+                    {hayConPoliza && hayBloqueInferior
+                      ? "Seleccione por bloque: póliza vigente o sin cobertura activa"
+                      : "Seleccione las coberturas que serán procesadas"}
+                  </small>
                 </div>
-                <Button
-                  variant="outline-secondary"
-                  size="sm"
-                  onClick={toggleTodas}
-                  className="d-flex align-items-center"
-                >
-                  <i className={`fas ${coberturasSeleccionadas.size === coberturas.length ? "fa-square-check" : "fa-square"} me-2`}></i>
-                  {coberturasSeleccionadas.size === coberturas.length
-                    ? "Deseleccionar todas"
-                    : "Seleccionar todas"}
-                </Button>
+                {hayConPoliza && (
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    onClick={() => toggleGrupo("conPoliza")}
+                    className="d-flex align-items-center"
+                  >
+                    <i
+                      className={`fas ${todasConPolizaSeleccionadas ? "fa-square-check" : "fa-square"} me-2`}
+                    ></i>
+                    {todasConPolizaSeleccionadas
+                      ? "Deseleccionar con póliza"
+                      : "Seleccionar con póliza"}
+                  </Button>
+                )}
               </div>
 
               <div className="table-responsive border rounded" style={{ maxHeight: "450px", overflowY: "auto" }}>
@@ -566,36 +681,94 @@ const CambioVidaCancelacionModal = ({
                   <thead className="table-dark sticky-top">
                     <tr>
                       <th width="50" className="text-center">
-                        <Form.Check
-                          type="checkbox"
-                          checked={coberturasSeleccionadas.size === coberturas.length && coberturas.length > 0}
-                          onChange={toggleTodas}
-                          className="text-white"
-                        />
+                        {hayConPoliza ? (
+                          <Form.Check
+                            type="checkbox"
+                            checked={todasConPolizaSeleccionadas}
+                            ref={(el) => {
+                              if (el) {
+                                el.indeterminate =
+                                  algunaConPolizaSeleccionada && !todasConPolizaSeleccionadas;
+                              }
+                            }}
+                            onChange={() => toggleGrupo("conPoliza")}
+                            className="text-white"
+                            title="Seleccionar miembros con póliza"
+                          />
+                        ) : null}
                       </th>
                       <th className="fw-semibold">Cliente / Parentesco</th>
                       <th className="fw-semibold">Numero ID</th>
                       <th className="fw-semibold">Plan / Cobertura</th>
-                      <th width="250" className="text-center fw-semibold">Decisión de Renovación</th>
+                      <th width="260" className="text-center fw-semibold">Acción</th>
                       <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
                       <th width="170" className="text-center fw-semibold">Estado Actual</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {coberturas.filter(c => c && c.id).map((cobertura) => {
+                    {coberturasOrdenadas.map((cobertura, index) => {
                       const coberturaId = cobertura.id;
                       const isSelected = coberturasSeleccionadas.has(coberturaId);
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
+                      const soloRetiro = esSoloRetiro(cobertura);
+                      const enBloqueInferior = esBloqueSinCoberturaActiva(cobertura);
                       const datosRenovacion = renovacionCoberturas.get(coberturaId) || {
-                        renovar: true,
+                        renovar: soloRetiro ? false : true,
                         fecha_retiro: "",
                       };
                       const estadoActual = getEstadoActualInfo(cobertura);
+                      const filaAnterior = index > 0 ? coberturasOrdenadas[index - 1] : null;
+                      const mostrarSeparadorBloqueInferior =
+                        enBloqueInferior &&
+                        ((index === 0 && hayConPoliza === false) ||
+                          (filaAnterior && !esBloqueSinCoberturaActiva(filaAnterior)));
                       
                       return (
+                        <React.Fragment key={coberturaId}>
+                          {mostrarSeparadorBloqueInferior && (
+                            <tr className="table-light">
+                              <td className="text-center align-middle">
+                                <Form.Check
+                                  type="checkbox"
+                                  checked={todasBloqueInferiorSeleccionadas}
+                                  onChange={() => toggleGrupo("soloRetiro")}
+                                  title="Seleccionar bloque sin cobertura activa"
+                                />
+                              </td>
+                              <td colSpan={6} className="py-2 px-3">
+                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                                  <span className="small fw-semibold text-muted text-uppercase">
+                                    <i className="fas fa-user-minus me-2"></i>
+                                    Sin cobertura activa — sin cobertura o póliza cancelada
+                                  </span>
+                                  <Button
+                                    variant="outline-secondary"
+                                    size="sm"
+                                    onClick={() => toggleGrupo("soloRetiro")}
+                                    className="d-flex align-items-center"
+                                  >
+                                    <i
+                                      className={`fas ${todasBloqueInferiorSeleccionadas ? "fa-square-check" : "fa-square"} me-2`}
+                                    ></i>
+                                    {todasBloqueInferiorSeleccionadas
+                                      ? "Deseleccionar bloque"
+                                      : "Seleccionar bloque"}
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
                         <tr
-                          key={coberturaId}
-                          className={isSelected ? "table-primary" : esTomador ? "table-warning" : ""}
+                          className={
+                            isSelected
+                              ? enBloqueInferior
+                                ? "table-secondary"
+                                : "table-primary"
+                              : esTomador
+                                ? "table-warning"
+                                : ""
+                          }
+                          style={enBloqueInferior && !isSelected ? { opacity: 0.92 } : undefined}
                         >
                           <td className="text-center align-middle">
                             <Form.Check
@@ -612,6 +785,16 @@ const CambioVidaCancelacionModal = ({
                                 {esTomador && (
                                   <Badge bg="warning" text="dark" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
                                     TOMADOR
+                                  </Badge>
+                                )}
+                                {soloRetiro && (
+                                  <Badge bg="secondary" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
+                                    SOLO RETIRO
+                                  </Badge>
+                                )}
+                                {!soloRetiro && esPolizaCancelada(cobertura) && (
+                                  <Badge bg="danger" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
+                                    PÓLIZA CANCELADA
                                   </Badge>
                                 )}
                               </div>
@@ -632,34 +815,51 @@ const CambioVidaCancelacionModal = ({
                           </td>
                           <td className="align-middle">
                             {isSelected ? (
-                              <div className="d-flex flex-column gap-2">
-                                <Form.Check
-                                  type="radio"
-                                  id={`renovar-si-${coberturaId}`}
-                                  name={`renovar-${coberturaId}`}
-                                  label={
-                                    <span className="small fw-semibold text-success">✓ Continuará activo en el grupo</span>
-                                  }
-                                  checked={datosRenovacion.renovar === true}
-                                  onChange={() => handleRenovacionChange(coberturaId, true)}
-                                />
-                                <Form.Check
-                                  type="radio"
-                                  id={`renovar-no-${coberturaId}`}
-                                  name={`renovar-${coberturaId}`}
-                                  label={
-                                    <span className="small fw-semibold text-danger">✗ No continuará activo en el grupo</span>
-                                  }
-                                  checked={datosRenovacion.renovar === false}
-                                  onChange={() => handleRenovacionChange(coberturaId, false)}
-                                />
-                              </div>
+                              soloRetiro ? (
+                                <div className="d-flex flex-column gap-1">
+                                  <Badge bg="danger" className="align-self-start">
+                                    Retiro del grupo
+                                  </Badge>
+                                  <span className="small text-muted">
+                                    Sin póliza activa — no aplica cancelación
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="d-flex flex-column gap-2">
+                                  <Form.Check
+                                    type="radio"
+                                    id={`renovar-si-${coberturaId}`}
+                                    name={`renovar-${coberturaId}`}
+                                    label={
+                                      <span className="small fw-semibold text-warning">
+                                        Cancelar póliza — permanece en el grupo
+                                      </span>
+                                    }
+                                    checked={datosRenovacion.renovar === true}
+                                    onChange={() => handleRenovacionChange(coberturaId, true)}
+                                  />
+                                  <Form.Check
+                                    type="radio"
+                                    id={`renovar-no-${coberturaId}`}
+                                    name={`renovar-${coberturaId}`}
+                                    label={
+                                      <span className="small fw-semibold text-danger">
+                                        Retiro del grupo familiar
+                                      </span>
+                                    }
+                                    checked={datosRenovacion.renovar === false}
+                                    onChange={() => handleRenovacionChange(coberturaId, false)}
+                                  />
+                                </div>
+                              )
                             ) : (
-                              <span className="text-muted small fst-italic">Seleccione para definir</span>
+                              <span className="text-muted small fst-italic">
+                                {soloRetiro ? "Solo retiro disponible" : "Seleccione para definir"}
+                              </span>
                             )}
                           </td>
                           <td className="align-middle text-center">
-                            {isSelected && datosRenovacion.renovar === false ? (
+                            {isSelected && (datosRenovacion.renovar === false || soloRetiro) ? (
                               <DateInputWithCalendar
                                 valueIso={datosRenovacion.fecha_retiro || ""}
                                 onChangeIso={(iso) => handleFechaRetiroChange(coberturaId, iso)}
@@ -680,6 +880,7 @@ const CambioVidaCancelacionModal = ({
                             </Badge>
                           </td>
                         </tr>
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -688,13 +889,39 @@ const CambioVidaCancelacionModal = ({
 
             </div>
 
-            {/* Paso 2: Información de cancelación */}
+            {/* Paso 2: Datos de la operación */}
             {coberturasSeleccionadas.size > 0 && (
               <div className="border-top pt-4 mt-4">
                 <h5 className="mb-3 fw-semibold">
                   <span className="badge bg-primary me-2">2</span>
-                  Información de Cancelación
+                  Datos de la operación
                 </h5>
+
+                {totalSoloRetiroEnSeleccion > 0 && (
+                  <Alert variant="info" className="mb-3 py-2">
+                    <div className="small">
+                      <strong>
+                        {totalSoloRetiroEnSeleccion === totalSeleccionadas
+                          ? "Todas las seleccionadas son retiros"
+                          : `${totalSoloRetiroEnSeleccion} miembro(s) sin póliza activa`}
+                      </strong>
+                      {" — "}
+                      {totalSoloRetiroEnSeleccion === totalSeleccionadas
+                        ? "No se procesará ninguna cancelación de póliza, solo retiros del grupo."
+                        : "Esos miembros se procesarán únicamente como retiro, no como cancelación de póliza."}
+                    </div>
+                  </Alert>
+                )}
+
+                {totalCancelaciones > 0 && (
+                  <Alert variant="light" className="border mb-3 py-2">
+                    <div className="small text-muted">
+                      <strong className="text-dark">{totalCancelaciones} cancelación(es):</strong>{" "}
+                      la póliza se cierra pero el miembro permanece activo en el grupo familiar.
+                    </div>
+                  </Alert>
+                )}
+
                 <Form onSubmit={handleSubmit}>
                   <div className="row g-3">
                     <div className="col-md-6">
@@ -708,7 +935,9 @@ const CambioVidaCancelacionModal = ({
                           disabled={false}
                         />
                         <Form.Text className="text-muted small">
-                          Fecha efectiva de cancelación de las coberturas seleccionadas
+                          {totalCancelaciones > 0
+                            ? "Fecha efectiva de cancelación de póliza para los miembros seleccionados"
+                            : "Fecha administrativa de cierre (requerida también para retiros)"}
                         </Form.Text>
                       </Form.Group>
                     </div>
@@ -759,42 +988,85 @@ const CambioVidaCancelacionModal = ({
                     </div>
                   </div>
 
-                  {/* Información sobre coberturas que no continuarán */}
-                  {Array.from(coberturasSeleccionadas).filter(id => {
-                    const datos = renovacionCoberturas.get(id);
-                    return datos && datos.renovar === false;
-                  }).length > 0 && (
+                  {/* Miembros con retiro del grupo */}
+                  {totalRetiros > 0 && (
                     <div className="mt-3 mb-3">
                       <Alert variant="warning" className="mb-0">
                         <div className="d-flex align-items-start">
-                          <i className="fas fa-exclamation-triangle me-2 mt-1 text-warning"></i>
+                          <i className="fas fa-user-minus me-2 mt-1 text-warning"></i>
                           <div className="flex-grow-1">
-                            <strong className="text-dark">Miembros que no continuarán activos en el grupo</strong>
+                            <strong className="text-dark">
+                              Retiros del grupo ({totalRetiros})
+                            </strong>
                             <div className="text-muted small mt-1 mb-2">
-                              Los siguientes miembros del grupo familiar no continuarán activos y pasarán al historial. 
-                              Estos miembros quedarán registrados pero ya no estarán activos en el grupo familiar.
+                              Estos miembros dejarán de estar activos en el grupo familiar.
+                              {totalSoloRetiroEnSeleccion > 0 && (
+                                <> Los marcados como <em>sin póliza</em> no generan cancelación de póliza.</>
+                              )}
                             </div>
                             <div className="small">
-                              <strong>Miembros afectados:</strong>
                               <ul className="mb-0 mt-1">
-                                {Array.from(coberturasSeleccionadas)
-                                  .filter(id => {
-                                    const datos = renovacionCoberturas.get(id);
-                                    return datos && datos.renovar === false;
-                                  })
-                                  .map(id => {
-                                    const cobertura = coberturas.find(c => c.id === id);
+                                {idsSeleccionados
+                                  .filter((id) => renovacionCoberturas.get(id)?.renovar === false)
+                                  .map((id) => {
+                                    const cobertura = coberturas.find((c) => c.id === id);
+                                    const sinPolizaActiva = esBloqueSinCoberturaActiva(cobertura);
                                     return (
                                       <li key={id}>
                                         <strong>{cobertura?.cliente?.nombre_completo || `ID ${id}`}</strong>
+                                        {sinPolizaActiva ? (
+                                          <Badge bg="secondary" className="ms-2" style={{ fontSize: "0.65rem" }}>
+                                            solo retiro
+                                          </Badge>
+                                        ) : (
+                                          <span className="text-muted ms-2">(cancelación + retiro)</span>
+                                        )}
                                         {cobertura?.codigo_poliza && (
-                                          <span className="text-muted ms-2">({cobertura.codigo_poliza})</span>
+                                          <span className="text-muted ms-1">— {cobertura.codigo_poliza}</span>
                                         )}
                                       </li>
                                     );
                                   })}
                               </ul>
                             </div>
+                          </div>
+                        </div>
+                      </Alert>
+                    </div>
+                  )}
+
+                  {/* Resumen cancelaciones de póliza */}
+                  {totalCancelaciones > 0 && (
+                    <div className="mt-3 mb-3">
+                      <Alert variant="light" className="border mb-0">
+                        <div className="d-flex align-items-start">
+                          <i className="fas fa-file-contract me-2 mt-1 text-warning"></i>
+                          <div className="flex-grow-1">
+                            <strong className="text-dark">
+                              Cancelaciones de póliza ({totalCancelaciones})
+                            </strong>
+                            <div className="text-muted small mt-1 mb-2">
+                              La póliza se cancela; el miembro sigue en el grupo sin cobertura activa.
+                            </div>
+                            <ul className="small mb-0">
+                              {idsSeleccionados
+                                .filter((id) => {
+                                  const datos = renovacionCoberturas.get(id);
+                                  const cobertura = coberturas.find((c) => c.id === id);
+                                  return datos?.renovar === true && !esBloqueSinCoberturaActiva(cobertura);
+                                })
+                                .map((id) => {
+                                  const cobertura = coberturas.find((c) => c.id === id);
+                                  return (
+                                    <li key={id}>
+                                      <strong>{cobertura?.cliente?.nombre_completo || `ID ${id}`}</strong>
+                                      {cobertura?.codigo_poliza && (
+                                        <span className="text-muted ms-2">({cobertura.codigo_poliza})</span>
+                                      )}
+                                    </li>
+                                  );
+                                })}
+                            </ul>
                           </div>
                         </div>
                       </Alert>
