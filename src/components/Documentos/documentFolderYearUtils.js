@@ -35,14 +35,25 @@ export const requiresSuperPasswordForFolder = (carpeta, carpetas = [], transitio
   return requiresSuperPasswordForYear(year, transitionMode);
 };
 
+export const isYearControlledRootName = (nombre = "") => isValidYearName(String(nombre).trim());
+
 export const validarNombreCarpetaRaiz = (nombre, transitionMode = false) => {
   const trimmed = String(nombre || "").trim();
 
-  if (!isValidYearName(trimmed)) {
-    return "En la raíz solo puede crear carpetas con el nombre de un año (ej: 2026).";
+  if (!trimmed) {
+    return "El nombre de la carpeta es requerido.";
+  }
+
+  if (trimmed.toLowerCase() === "eliminados") {
+    return 'El nombre "Eliminados" está reservado por el sistema.';
   }
 
   const year = parseYear(trimmed);
+
+  // Nombres libres (ej: soportes): sin restricción de año.
+  if (year === null) {
+    return null;
+  }
 
   if (requiresSuperPasswordForYear(year, transitionMode)) {
     return { needsSuperPassword: true, year };

@@ -10,6 +10,7 @@ import {
   getCurrentYear,
   requiresSuperPasswordForFolder,
   validarNombreCarpetaRaiz,
+  isValidYearName,
 } from "./documentFolderYearUtils";
 import {
   clasificarArchivosSubida,
@@ -290,10 +291,13 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     }
 
     try {
+      const nombreTrim = nombre.trim();
       const payload = {
         grupo_familiar_id: Number(grupoFamiliarId),
-        nombre: nombre.trim(),
-        tipo: !parentId ? "anio" : tipo || "general",
+        nombre: nombreTrim,
+        tipo: !parentId
+          ? (isValidYearName(nombreTrim) ? "anio" : "general")
+          : tipo || "general",
       };
 
       if (parentId) {

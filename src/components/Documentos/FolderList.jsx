@@ -396,31 +396,25 @@ const FolderList = ({
             ) : (
               <div className="mb-2">
                 <small className="text-muted">
-                  <i className="fas fa-calendar-alt me-1"></i>
-                  En la raíz solo puede crear carpetas por año (ej: {anioActual}).
+                  <i className="fas fa-folder me-1"></i>
+                  Puede crear carpetas con nombre libre (ej: soportes) o por año (ej: {anioActual}).
                   {!modoTransicionAnios && (
-                    <> Los años anteriores requieren clave del super administrador.</>
+                    <> Los años anteriores al actual requieren clave del super administrador.</>
                   )}
                 </small>
               </div>
             )}
             <InputGroup>
               <Form.Control
-                type={parentIdParaNuevaCarpeta ? "text" : "text"}
-                inputMode={parentIdParaNuevaCarpeta ? "text" : "numeric"}
-                maxLength={parentIdParaNuevaCarpeta ? 255 : 4}
+                type="text"
+                maxLength={255}
                 placeholder={
                   parentIdParaNuevaCarpeta
                     ? "Nombre de la subcarpeta"
-                    : `Año (ej: ${anioActual})`
+                    : `Nombre (ej: soportes o ${anioActual})`
                 }
                 value={nombreNuevaCarpeta}
-                onChange={(e) => {
-                  const valor = parentIdParaNuevaCarpeta
-                    ? e.target.value
-                    : e.target.value.replace(/\D/g, "").slice(0, 4);
-                  setNombreNuevaCarpeta(valor);
-                }}
+                onChange={(e) => setNombreNuevaCarpeta(e.target.value)}
                 autoFocus
               />
               <Button variant="success" type="submit" size="sm">
@@ -453,7 +447,7 @@ const FolderList = ({
         <div className="text-center py-4 text-muted">
           <i className="fas fa-folder-open fa-2x mb-2 opacity-50"></i>
           <p className="small mb-0">No hay carpetas</p>
-          <p className="small">Crea la primera carpeta de año</p>
+          <p className="small">Crea la primera carpeta</p>
         </div>
       ) : (
         <ListGroup variant="flush">
