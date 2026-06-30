@@ -30,6 +30,13 @@ const GruposFamiliaresListado = () => {
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [paginationMeta, setPaginationMeta] = useState({
+    total: 0,
+    last_page: 1,
+    per_page: ITEMS_PER_PAGE,
+    page: 1,
+  });
   const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
@@ -73,10 +80,15 @@ useEffect(() => {
   }
 }, [location.search]);
 
-  // Cargar grupos al montar el componente o cuando cambia el estado seleccionado
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Cargar grupos al cambiar filtros, búsqueda o página
   useEffect(() => {
     fetchGrupos();
-  }, [selectedStatus]);
+  }, [selectedStatus, debouncedSearch, currentPage]);
 
   // Volver a la primera página al cambiar búsqueda o filtro de estado
   useEffect(() => {
@@ -110,51 +122,42 @@ useEffect(() => {
   const fetchGrupos = async () => {
     setLoading(true);
     try {
-      // Endpoint para grupos familiares con coberturas y clientes
-      let endpoint = "grupo_familiar/grupos-familiares-full";
-      // Añadir parámetros de filtro por estado si es necesario
+      const params = new URLSearchParams();
+      params.set("page", String(currentPage));
+      params.set("per_page", String(ITEMS_PER_PAGE));
+
       if (selectedStatus !== "Todos los estados") {
-        // Mapear el estado al formato correcto (mayúsculas)
-        const estadoParam = mapearEstadoParaEndpoint(selectedStatus);
-        endpoint += `?estado=${estadoParam}`;
+        params.set("estado", mapearEstadoParaEndpoint(selectedStatus));
       }
-      
-      console.log("🔍 [GruposFamiliaresListado] Estado seleccionado:", selectedStatus);
-      console.log("🔍 [GruposFamiliaresListado] Estado mapeado para endpoint:", selectedStatus !== "Todos los estados" ? mapearEstadoParaEndpoint(selectedStatus) : "N/A");
-      console.log("🔍 [GruposFamiliaresListado] Endpoint a llamar:", endpoint);
-      
-      const response = await apiRequest(endpoint, "GET");
-      
-      console.log("📦 [GruposFamiliaresListado] Respuesta completa del API:", response);
-      console.log("📦 [GruposFamiliaresListado] Tipo de respuesta:", typeof response);
-      console.log("📦 [GruposFamiliaresListado] response.status:", response?.status);
-      console.log("📦 [GruposFamiliaresListado] response.data:", response?.data);
-      console.log("📦 [GruposFamiliaresListado] Es array?", Array.isArray(response?.data));
-      console.log("📦 [GruposFamiliaresListado] Cantidad de grupos:", response?.data?.length);
+
+      if (debouncedSearch.trim()) {
+        params.set("search", debouncedSearch.trim());
+      }
+
+      const response = await apiRequest(
+        `grupo_familiar/grupos-familiares-listado?${params.toString()}`,
+        "GET"
+      );
 
       if (response && response.status === "success" && Array.isArray(response.data)) {
-        console.log("✅ [GruposFamiliaresListado] Grupos cargados correctamente:", response.data);
-        console.log("✅ [GruposFamiliaresListado] Primer grupo (ejemplo):", response.data[0]);
-        
-        // Si hay un filtro aplicado, verificar que los grupos coincidan
-        if (selectedStatus !== "Todos los estados") {
-          const estadoEsperado = mapearEstadoParaEndpoint(selectedStatus);
-          const gruposFiltrados = response.data.filter(grupo => {
-            const estadoGrupo = grupo.estado_codigo || grupo.estado?.toUpperCase();
-            return estadoGrupo === estadoEsperado;
-          });
-          console.log("🔍 [GruposFamiliaresListado] Grupos filtrados por estado:", gruposFiltrados.length);
-          console.log("🔍 [GruposFamiliaresListado] Estados encontrados en grupos:", response.data.map(g => ({ id: g.id, estado: g.estado, estado_codigo: g.estado_codigo })));
-        }
-        
         setGrupos(response.data);
+        setPaginationMeta(response.meta || {
+          total: response.data.length,
+          last_page: 1,
+          per_page: ITEMS_PER_PAGE,
+          page: currentPage,
+        });
       } else {
-        console.error("❌ [GruposFamiliaresListado] Respuesta inesperada:", response);
         setGrupos([]);
+        setPaginationMeta({
+          total: 0,
+          last_page: 1,
+          per_page: ITEMS_PER_PAGE,
+          page: 1,
+        });
       }
     } catch (error) {
-      console.error("❌ [GruposFamiliaresListado] Error al cargar grupos familiares:", error);
-      // Mostrar alerta al usuario
+      console.error("Error al cargar grupos familiares:", error);
       alert("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
     } finally {
       setLoading(false);
@@ -227,8 +230,7 @@ useEffect(() => {
     try {
       const id = currentGrupo.id;
       await apiRequest(`grupo_familiar/${id}`, "DELETE");
-      // Actualizar la lista después de eliminar
-      setGrupos(grupos.filter(grupo => grupo.id !== id));
+      await fetchGrupos();
       setShowDeleteModal(false);
       setCurrentGrupo(null);
       // Mostrar mensaje de éxito
@@ -242,114 +244,15 @@ useEffect(() => {
   };
 
 
-  const getProductoNombre = (grupo) => {
-    if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
-      return "-";
-    }
+  const getProductoNombre = (grupo) => grupo.producto || "-";
 
-    const tipos = [
-      ...new Set(
-        grupo.coberturas
-          .map((c) => (c.cobertura_tipo || "").trim())
-          .filter(Boolean)
-      ),
-    ];
+  const getCompaniaNombre = (grupo) => grupo.compania_nombre || "-";
 
-    return tipos.length > 0 ? tipos.join(", ") : "-";
-  };
+  const getTomadorNombre = (grupo) => grupo.tomador_nombre || "Sin asignar";
 
-  const getCompaniaNombre = (grupo) => {
-    if (!grupo.coberturas || !Array.isArray(grupo.coberturas) || grupo.coberturas.length === 0) {
-      return "-";
-    }
-
-    // Buscar la cobertura donde el parentesco sea "TOMADOR"
-    const tomadorCobertura = grupo.coberturas.find(
-      cobertura => cobertura.parentesco &&
-        cobertura.parentesco.toUpperCase() === "TOMADOR" &&
-        cobertura.compania
-    );
-
-    if (tomadorCobertura && tomadorCobertura.compania) {
-      return tomadorCobertura.compania.nombre || "-";
-    }
-
-    // Si no hay tomador, usar la primera cobertura que tenga compañía
-    const primeraCobertura = grupo.coberturas.find(
-      cobertura => cobertura.compania
-    );
-
-    if (primeraCobertura && primeraCobertura.compania) {
-      return primeraCobertura.compania.nombre || "-";
-    }
-
-    return "-";
-  };
-
-  // Función para obtener el tomador (persona con parentesco TOMADOR)
-  const getTomadorNombre = (grupo) => {
-    if (!grupo.coberturas || grupo.coberturas.length === 0) {
-      return "Sin asignar";
-    }
-
-    // Buscar la cobertura donde el parentesco sea "TOMADOR"
-    const tomadorCobertura = grupo.coberturas.find(
-      cobertura => cobertura.parentesco &&
-        cobertura.parentesco.toUpperCase() === "TOMADOR" &&
-        cobertura.cliente
-    );
-
-    if (tomadorCobertura && tomadorCobertura.cliente) {
-      return tomadorCobertura.cliente.nombre_completo ||
-        (tomadorCobertura.cliente.primer_nombre + " " + tomadorCobertura.cliente.apellidos) ||
-        "Sin asignar";
-    }
-
-    // Si no hay tomador específico, devolvemos sin asignar
-    return "Sin asignar";
-  };
-
-  // Filtrar grupos según la búsqueda y el estado seleccionado
-  const filteredGrupos = grupos.filter(grupo => {
-    // Primero filtrar por estado si hay uno seleccionado
-    if (selectedStatus !== "Todos los estados") {
-      const estadoEsperado = mapearEstadoParaEndpoint(selectedStatus);
-      const estadoGrupo = grupo.estado_codigo || grupo.estado?.toUpperCase() || "";
-      
-      // Si el estado del grupo no coincide, excluirlo
-      if (estadoGrupo !== estadoEsperado) {
-        return false;
-      }
-    }
-
-    // Luego filtrar por búsqueda si hay término de búsqueda
-    if (searchTerm === "") return true;
-
-    // Buscar en persona de contacto
-    const contacto = grupo.persona_contacto || "";
-    const id = grupo.id ? grupo.id.toString() : "";
-    const tomador = getTomadorNombre(grupo);
-
-    // También buscar en los clientes de las coberturas
-    const clientesMatch = grupo.coberturas && grupo.coberturas.some(cobertura =>
-      cobertura.cliente &&
-      cobertura.cliente.nombre_completo &&
-      cobertura.cliente.nombre_completo.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    return contacto.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      id.includes(searchTerm) ||
-      tomador.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      clientesMatch;
-  });
-
-  const totalFiltered = filteredGrupos.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / ITEMS_PER_PAGE));
+  const totalFiltered = paginationMeta.total ?? 0;
+  const totalPages = Math.max(1, paginationMeta.last_page ?? 1);
   const safeCurrentPage = Math.min(currentPage, totalPages);
-  const paginatedGrupos = filteredGrupos.slice(
-    (safeCurrentPage - 1) * ITEMS_PER_PAGE,
-    safeCurrentPage * ITEMS_PER_PAGE
-  );
   const rangeStart = totalFiltered === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
   const rangeEnd = Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalFiltered);
 
@@ -442,7 +345,7 @@ useEffect(() => {
             </div>
           ) : (
             <>
-              {filteredGrupos.length === 0 ? (
+              {grupos.length === 0 ? (
                 <div className="text-center py-5">
                   <p className="text-muted mb-0">No se encontraron grupos familiares</p>
                 </div>
@@ -472,7 +375,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedGrupos.map((grupo) => (
+                      {grupos.map((grupo) => (
                         <tr key={grupo.id}>
                   <td>
                           {grupo.id ? (
@@ -620,12 +523,8 @@ useEffect(() => {
         show={showRetiroModal}
         onHide={() => setShowRetiroModal(false)}
         grupoFamiliar={grupoParaRetiro}
-        onSave={(updatedGrupo) => {
+        onSave={() => {
           fetchGrupos();
-          // Actualizar el grupo en la lista
-          setGrupos(prev =>
-            prev.map(g => g.id === updatedGrupo.id ? updatedGrupo : g)
-          );
           setShowRetiroModal(false);
         }}
       />
