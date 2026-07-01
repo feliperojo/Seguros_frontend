@@ -37,6 +37,18 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return res?.data ?? res;
   },
 
+  // Incluye meta (ej. meta.edicion para alerta de presencia)
+  fetchFullGrupo: async (id, { onlyActive = false } = {}) => {
+    const url = onlyActive
+      ? `${BASE_GF}/grupos-familiares-full/${id}?onlyActive=true`
+      : `${BASE_GF}/grupos-familiares-full/${id}`;
+    const response = await apiRequest(url, "GET");
+    return {
+      data: response?.data ?? response,
+      meta: response?.meta ?? {},
+    };
+  },
+
   // (Mantengo esta variante para compatibilidad; usa la misma ruta)
   getFullGrupoById: async (id, onlyActive = false) => {
     const url = onlyActive
@@ -44,6 +56,34 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
       : `${BASE_GF}/grupos-familiares-full/${id}`;
     const response = await apiRequest(url, "GET");
     return response?.data ?? response;
+  },
+
+  // ---- Presencia de edición (alerta colaborativa) ----
+  touchEdicionPresencia: async (id, sessionId = null) => {
+    const body = sessionId ? { session_id: sessionId } : null;
+    const headers = sessionId ? { "X-Edicion-Session": sessionId } : {};
+    return await apiRequest(
+      `${BASE_GF}/${id}/edicion/presencia`,
+      "POST",
+      body,
+      headers
+    );
+  },
+
+  getEdicionPresencia: async (id) => {
+    const res = await apiRequest(`${BASE_GF}/${id}/edicion/presencia`, "GET");
+    return res?.data ?? res;
+  },
+
+  releaseEdicionPresencia: async (id, sessionId = null) => {
+    const body = sessionId ? { session_id: sessionId } : null;
+    const headers = sessionId ? { "X-Edicion-Session": sessionId } : {};
+    return await apiRequest(
+      `${BASE_GF}/${id}/edicion/presencia`,
+      "DELETE",
+      body,
+      headers
+    );
   },
 
   getBasicGrupoById: async (id) => {

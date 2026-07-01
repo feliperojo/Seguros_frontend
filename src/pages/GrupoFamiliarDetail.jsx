@@ -12,6 +12,8 @@ import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNu
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
 import { formatDisplayName } from "../utils/names";
+import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPresencia";
+import GrupoFamiliarEdicionAlerta from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
 
 
  import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
@@ -546,6 +548,10 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
 
+  const { edicion, applyEdicionMeta } = useGrupoFamiliarEdicionPresencia(id, {
+    activo: isEditing,
+  });
+
   const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
   const showToast = (type, title, message) => {
     setToast({ show: true, type, title, message });
@@ -715,7 +721,8 @@ console.log("Ingreso Familiar:", total);
     setLoading(true);
     setLoadError("");
     try {
-      const full = await GrupoFamiliarService.getFullById(id);
+      const { data: full, meta } = await GrupoFamiliarService.fetchFullGrupo(id);
+      applyEdicionMeta(meta);
       const fullData = unwrapFull(full);
   
       setFormData(mapFullToForm(full));
@@ -1368,6 +1375,8 @@ const clientesPayload = existentes
             )}
           </div>
         </div>
+
+        <GrupoFamiliarEdicionAlerta edicion={edicion} />
 
         {/* 👈 Nuevo: Modal de selección de producto */}
         <ProductoCotizacionModal

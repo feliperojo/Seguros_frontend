@@ -4,19 +4,30 @@ import { useParams } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import Grupofamiliar from "../../pages/Grupofamiliar"; // Asegúrate que este es el componente base correcto
 import { Helmet } from "react-helmet-async";
+import useGrupoFamiliarEdicionPresencia from "../../hooks/useGrupoFamiliarEdicionPresencia";
+import GrupoFamiliarEdicionAlerta from "./GrupoFamiliarEdicionAlerta";
 
 
 const GrupofamiliarEdit = () => {
   const { id } = useParams();
   const [initialData, setInitialData] = useState(null);
+  const [initialEdicion, setInitialEdicion] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  const { edicion } = useGrupoFamiliarEdicionPresencia(id, {
+    activo: true,
+    initialEdicion,
+  });
 
   useEffect(() => {
     const fetchGrupo = async () => {
       try {
-        const response = await GrupoFamiliarService.getFullGrupoById(id, true); // ← solo activas
+        const { data, meta } = await GrupoFamiliarService.fetchFullGrupo(id, {
+          onlyActive: true,
+        });
       
-        setInitialData(response);
+        setInitialData(data);
+        setInitialEdicion(meta?.edicion ?? null);
       } catch (err) {
         console.error("❌ Error al cargar grupo familiar:", err);
       } finally {
@@ -36,11 +47,14 @@ const GrupofamiliarEdit = () => {
       <Helmet>
             <title>Vantun/Editar Grupo</title>
           </Helmet>
-    <Grupofamiliar
+    <div className="container-fluid py-2 px-3">
+      <GrupoFamiliarEdicionAlerta edicion={edicion} />
+      <Grupofamiliar
       mode="edit"
       id={id}
       initialData={initialData}
       />
+    </div>
       </>
   );
 };
