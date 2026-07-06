@@ -22,6 +22,7 @@ import LanguageSelect from "../selects/LanguageSelect";
 import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
+import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
 
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
@@ -737,6 +738,12 @@ const TomaDeDatos = ({
   const [editingMember, setEditingMember] = useState(null);
   const [openExistente, setOpenExistente] = useState(false);
   const [openCopy, setOpenCopy] = useState(false);
+  const [historialPlanModal, setHistorialPlanModal] = useState({
+    open: false,
+    coberturaId: null,
+    memberIdx: null,
+    memberName: "",
+  });
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
   // Estado para controlar la visualización de miembros retirados
@@ -1359,6 +1366,36 @@ const activeNormalized = useMemo(
       return res;
     },
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length, onDerivedCounts]
+  );
+
+  const PLAN_FIELDS_TO_CLEAR = [
+    "compania_id",
+    "plan",
+    "metal",
+    "red",
+    "policy_number",
+    "codigo_poliza",
+    "agente",
+    "elegibilidad",
+  ];
+
+  const handlePlanArchived = useCallback(
+    (memberIdx, coberturaActualizada) => {
+      if (memberIdx == null || !coberturaActualizada) return;
+
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((member, index) => {
+          if (index !== memberIdx) return member;
+
+          const updated = { ...member };
+          PLAN_FIELDS_TO_CLEAR.forEach((field) => {
+            updated[field] = coberturaActualizada[field] ?? null;
+          });
+          return updated;
+        })
+      );
+    },
+    [setFamilyMembers]
   );
 
   /* =================== RENDER =================== */
@@ -2119,6 +2156,29 @@ const activeNormalized = useMemo(
                   icon={<i className="fas fa-shield-alt" />}
                 >
                   <div>
+                      {m.cobertura_id && (
+                        <div className="d-flex justify-content-end mb-2">
+                          <button
+                            type="button"
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={() =>
+                              setHistorialPlanModal({
+                                open: true,
+                                coberturaId: m.cobertura_id,
+                                memberIdx: idx,
+                                memberName:
+                                  m.nombreCompleto ||
+                                  c.nombre_completo ||
+                                  m.nombre_completo ||
+                                  "",
+                              })
+                            }
+                          >
+                            <i className="fas fa-history me-1" />
+                            Historial de plan
+                          </button>
+                        </div>
+                      )}
                       {/* Si es Medicare o Medicaid, mostrar solo Elegibilidad, Cobertura y Grupo */}
                       {isMedicareOrMedicaid ? (
                         <ConfigurableFieldsGrid minWidth={200}>
@@ -2595,6 +2655,24 @@ const activeNormalized = useMemo(
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
         defaultCoberturaTipo={defaultCoberturaTipo}
+      />
+
+      <HistorialPlanCoberturaModal
+        show={historialPlanModal.open}
+        onClose={() =>
+          setHistorialPlanModal({
+            open: false,
+            coberturaId: null,
+            memberIdx: null,
+            memberName: "",
+          })
+        }
+        coberturaId={historialPlanModal.coberturaId}
+        memberName={historialPlanModal.memberName}
+        readOnly={readOnly}
+        onArchived={(coberturaActualizada) =>
+          handlePlanArchived(historialPlanModal.memberIdx, coberturaActualizada)
+        }
       />
     </div>
   );
