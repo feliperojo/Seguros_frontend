@@ -740,9 +740,9 @@ const TomaDeDatos = ({
   const [openCopy, setOpenCopy] = useState(false);
   const [historialPlanModal, setHistorialPlanModal] = useState({
     open: false,
-    coberturaId: null,
-    memberIdx: null,
-    memberName: "",
+    members: [],
+    initialCoberturaId: null,
+    allowBulkArchive: false,
   });
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
@@ -1368,34 +1368,46 @@ const activeNormalized = useMemo(
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length, onDerivedCounts]
   );
 
-  const PLAN_FIELDS_TO_CLEAR = [
-    "compania_id",
-    "plan",
-    "metal",
-    "red",
-    "policy_number",
-    "codigo_poliza",
-    "agente",
-    "elegibilidad",
-  ];
+  const memberHasPlanData = useCallback((member = {}) => {
+    return [member.compania_id, member.plan, member.codigo_poliza, member.policy_number].some(
+      (value) => value != null && String(value).trim() !== ""
+    );
+  }, []);
 
-  const handlePlanArchived = useCallback(
-    (memberIdx, coberturaActualizada) => {
-      if (memberIdx == null || !coberturaActualizada) return;
+  const buildHistorialPlanContext = useCallback(
+    (openedMember, openedIdx) => {
+      const fromTomador = isTomador(openedMember);
+      const sourceMembers = fromTomador
+        ? normalized.filter((member) => member.cobertura_id && member.activo !== false)
+        : [openedMember];
 
-      setFamilyMembers((prev) =>
-        (prev ?? []).map((member, index) => {
-          if (index !== memberIdx) return member;
+      const members = sourceMembers
+        .filter((member) => member.cobertura_id)
+        .map((member) => {
+          const memberIdx = normalized.findIndex(
+            (item) => item.cobertura_id === member.cobertura_id
+          );
 
-          const updated = { ...member };
-          PLAN_FIELDS_TO_CLEAR.forEach((field) => {
-            updated[field] = coberturaActualizada[field] ?? null;
-          });
-          return updated;
-        })
-      );
+          return {
+            coberturaId: member.cobertura_id,
+            memberIdx: memberIdx >= 0 ? memberIdx : openedIdx,
+            memberName:
+              member.nombreCompleto ||
+              member.nombre_completo ||
+              member?.cliente?.nombre_completo ||
+              "Miembro",
+            parentesco: member.parentesco || member.tipo || "",
+            hasPlanData: memberHasPlanData(member),
+          };
+        });
+
+      return {
+        members,
+        initialCoberturaId: openedMember.cobertura_id,
+        allowBulkArchive: fromTomador && members.length > 1,
+      };
     },
-    [setFamilyMembers]
+    [normalized, memberHasPlanData]
   );
 
   /* =================== RENDER =================== */
@@ -2164,13 +2176,7 @@ const activeNormalized = useMemo(
                             onClick={() =>
                               setHistorialPlanModal({
                                 open: true,
-                                coberturaId: m.cobertura_id,
-                                memberIdx: idx,
-                                memberName:
-                                  m.nombreCompleto ||
-                                  c.nombre_completo ||
-                                  m.nombre_completo ||
-                                  "",
+                                ...buildHistorialPlanContext(m, idx),
                               })
                             }
                           >
@@ -2662,17 +2668,15 @@ const activeNormalized = useMemo(
         onClose={() =>
           setHistorialPlanModal({
             open: false,
-            coberturaId: null,
-            memberIdx: null,
-            memberName: "",
+            members: [],
+            initialCoberturaId: null,
+            allowBulkArchive: false,
           })
         }
-        coberturaId={historialPlanModal.coberturaId}
-        memberName={historialPlanModal.memberName}
+        members={historialPlanModal.members}
+        initialCoberturaId={historialPlanModal.initialCoberturaId}
+        allowBulkArchive={historialPlanModal.allowBulkArchive}
         readOnly={readOnly}
-        onArchived={(coberturaActualizada) =>
-          handlePlanArchived(historialPlanModal.memberIdx, coberturaActualizada)
-        }
       />
     </div>
   );
