@@ -17,8 +17,12 @@ export default function useAppSettings() {
     try {
       const runtime = await systemConfigService.getRuntime();
       const next = {
+        ...(appSettings || {}),
         show_payment_methods_data: !!runtime?.show_payment_methods_data,
         require_super_password: !!runtime?.require_super_password,
+        allow_family_document_archive_folders: !!runtime?.allow_family_document_archive_folders,
+        is_super_user: !!runtime?.is_super_user,
+        can_manage_document_trash: !!runtime?.can_manage_document_trash,
       };
       if (typeof setAppSettings === "function") {
         setAppSettings(next);

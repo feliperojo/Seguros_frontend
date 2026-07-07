@@ -322,7 +322,15 @@ export const AuthProvider = ({ children }) => {
 
   const hasRole = (roleSlug) => {
     if (!roles || roles.length === 0) return false;
-    return roles.some((role) => role.slug === roleSlug || role === roleSlug);
+    const target = String(roleSlug || "").toLowerCase();
+    return roles.some((role) => {
+      if (typeof role === "string") {
+        return role.toLowerCase() === target;
+      }
+      const slug = String(role.slug || "").toLowerCase();
+      const name = String(role.name || "").toLowerCase();
+      return slug === target || name === target;
+    });
   };
 
   const hasAnyPermission = (permissionSlugs) => {

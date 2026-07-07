@@ -2,10 +2,13 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import apiRequest, { apiRequestFormData } from "../../services/api";
 import systemConfigService from "../../services/SystemConfigService";
+import useAppSettings from "../../hooks/useAppSettings";
 import FolderList from "./FolderList";
 import FilesList from "./FilesList";
+import TrashList from "./TrashList";
 import DocumentoPreviewModal from "./DocumentoPreviewModal";
 import SuperAdminPasswordModal from "./SuperAdminPasswordModal";
+import useCanManageDocumentTrash from "../../hooks/useCanManageDocumentTrash";
 import {
   getCurrentYear,
   requiresSuperPasswordForFolder,
@@ -35,9 +38,15 @@ const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * @param {number|string} grupoFamiliarId - ID del grupo familiar
  */
 const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
+  const canManageTrash = useCanManageDocumentTrash();
+  const { refreshAppSettings } = useAppSettings();
   const [carpetas, setCarpetas] = useState([]);
   const [carpetaSeleccionada, setCarpetaSeleccionada] = useState(null);
   const [archivos, setArchivos] = useState([]);
+  const [vistaPapelera, setVistaPapelera] = useState(false);
+  const [eliminados, setEliminados] = useState({ carpetas: [], archivos: [] });
+  const [loadingEliminados, setLoadingEliminados] = useState(false);
+  const [procesandoPapeleraId, setProcesandoPapeleraId] = useState(null);
   const [loadingCarpetas, setLoadingCarpetas] = useState(false);
   const [loadingArchivos, setLoadingArchivos] = useState(false);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
@@ -101,6 +110,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   useEffect(() => {
     if (show && grupoFamiliarId) {
       cargarCarpetas();
+      refreshAppSettings().catch(() => {});
       systemConfigService
         .getRuntime()
         .then((runtime) => {
@@ -117,10 +127,19 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setSubiendoArchivos(false);
       setProgresoSubida(null);
       setModoTransicionAnios(false);
+      setVistaPapelera(false);
+      setEliminados({ carpetas: [], archivos: [] });
+      setProcesandoPapeleraId(null);
       superPasswordRef.current = null;
       setPreview({ show: false, archivo: null, url: "", loading: false });
     }
   }, [show, grupoFamiliarId]);
+
+  useEffect(() => {
+    if (show && grupoFamiliarId && vistaPapelera && canManageTrash) {
+      cargarEliminados();
+    }
+  }, [show, grupoFamiliarId, vistaPapelera, canManageTrash]);
 
   // Cargar archivos cuando se selecciona una carpeta
   useEffect(() => {
@@ -162,6 +181,43 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setCarpetas([]);
     } finally {
       setLoadingCarpetas(false);
+    }
+  };
+
+  const cargarEliminados = async () => {
+    if (!grupoFamiliarId || !canManageTrash) return;
+
+    setLoadingEliminados(true);
+    setError("");
+
+    try {
+      const response = await apiRequest(
+        `document-folders/grupo-familiar/${grupoFamiliarId}/eliminados`,
+        "GET"
+      );
+
+      const data = response?.data || response || {};
+      setEliminados({
+        carpetas: Array.isArray(data.carpetas) ? data.carpetas : [],
+        archivos: Array.isArray(data.archivos) ? data.archivos : [],
+      });
+    } catch (err) {
+      console.error("Error al cargar papelera:", err);
+      setError(err?.message || "No se pudo cargar la papelera de documentos");
+      setEliminados({ carpetas: [], archivos: [] });
+    } finally {
+      setLoadingEliminados(false);
+    }
+  };
+
+  const cambiarVista = (mostrarPapelera) => {
+    setVistaPapelera(mostrarPapelera);
+    setError("");
+    setSuccess("");
+
+    if (!mostrarPapelera) {
+      setCarpetaSeleccionada(null);
+      setArchivos([]);
     }
   };
 
@@ -325,7 +381,16 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       console.error("Error al crear carpeta:", err);
-      setError(err?.message || "No se pudo crear la carpeta");
+      const mensaje = err?.message || "No se pudo crear la carpeta";
+      if (mensaje.toLowerCase().includes("eliminados") && mensaje.toLowerCase().includes("reservado")) {
+        setError(
+          canManageTrash
+            ? "La carpeta «Eliminados» la crea el sistema automáticamente. Use la pestaña «Eliminados» (arriba a la derecha) para ver la papelera."
+            : "El nombre «Eliminados» está reservado por el sistema. Solo el administrador o supervisor configurado en Vantun puede ver la papelera."
+        );
+      } else {
+        setError(mensaje);
+      }
     }
   };
 
@@ -391,11 +456,9 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     if (!carpetaId) return;
 
     const confirmar = window.confirm(
-      `¿Eliminar la carpeta${nombre ? ` "${nombre}"` : ""} y TODO su contenido?\n\n` +
-        "Se eliminarán permanentemente:\n" +
-        "• Todos los archivos de la carpeta\n" +
-        "• Todas las subcarpetas y sus archivos\n\n" +
-        "Esta acción no se puede deshacer."
+      `¿Eliminar la carpeta${nombre ? ` "${nombre}"` : ""} y su contenido?\n\n` +
+        "Se moverá a la papelera y podrá restaurarse después.\n" +
+        "Solo un administrador o supervisor podrá verla en Eliminados."
     );
     if (!confirmar) return;
 
@@ -426,7 +489,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
           ? ` (${archivosEliminados} archivo(s) y ${carpetasEliminadas} carpeta(s))`
           : "";
 
-      setSuccess(`Carpeta eliminada exitosamente${detalle}`);
+      setSuccess(`Carpeta movida a la papelera${detalle}`);
       setTimeout(() => setSuccess(""), 4000);
     } catch (err) {
       console.error("Error al eliminar carpeta:", err);
@@ -829,7 +892,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
    */
   const handleEliminarArchivo = async (archivoId, nombreArchivo) => {
     const confirmar = window.confirm(
-      `¿Estás seguro de que deseas eliminar "${nombreArchivo}"?`
+      `¿Mover "${nombreArchivo}" a la papelera?\n\nPodrá restaurarse desde la sección Eliminados.`
     );
 
     if (!confirmar) return;
@@ -845,11 +908,99 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         await cargarArchivos();
       }, 300);
 
-      setSuccess("Archivo eliminado exitosamente");
+      setSuccess("Archivo movido a la papelera");
       setTimeout(() => setSuccess(""), 3000);
     } catch (err) {
       console.error("Error al eliminar archivo:", err);
       setError(err?.message || "No se pudo eliminar el archivo");
+    }
+  };
+
+  const handleRestaurarArchivo = async (archivo) => {
+    if (!archivo?.id) return;
+
+    setError("");
+    setSuccess("");
+    setProcesandoPapeleraId(`archivo-${archivo.id}`);
+
+    try {
+      await apiRequest(`documentos-adjuntos/${archivo.id}/restaurar`, "POST");
+      await cargarEliminados();
+      await cargarCarpetas();
+      setSuccess(`"${archivo.nombre_original || "Archivo"}" restaurado correctamente`);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err?.message || "No se pudo restaurar el archivo");
+    } finally {
+      setProcesandoPapeleraId(null);
+    }
+  };
+
+  const handleRestaurarCarpeta = async (carpeta) => {
+    if (!carpeta?.id) return;
+
+    setError("");
+    setSuccess("");
+    setProcesandoPapeleraId(`carpeta-${carpeta.id}`);
+
+    try {
+      await apiRequest(`document-folders/${carpeta.id}/restaurar`, "POST");
+      await cargarEliminados();
+      await cargarCarpetas();
+      setSuccess(`Carpeta "${carpeta.nombre || ""}" restaurada correctamente`);
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err?.message || "No se pudo restaurar la carpeta");
+    } finally {
+      setProcesandoPapeleraId(null);
+    }
+  };
+
+  const handleEliminarArchivoPermanente = async (archivo) => {
+    if (!archivo?.id) return;
+
+    const confirmar = window.confirm(
+      `¿Eliminar definitivamente "${archivo.nombre_original || "este archivo"}"?\n\nEsta acción no se puede deshacer.`
+    );
+    if (!confirmar) return;
+
+    setError("");
+    setSuccess("");
+    setProcesandoPapeleraId(`archivo-${archivo.id}`);
+
+    try {
+      await apiRequest(`documentos-adjuntos/${archivo.id}/permanente`, "DELETE");
+      await cargarEliminados();
+      setSuccess("Archivo eliminado definitivamente");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err?.message || "No se pudo eliminar el archivo definitivamente");
+    } finally {
+      setProcesandoPapeleraId(null);
+    }
+  };
+
+  const handleEliminarCarpetaPermanente = async (carpeta) => {
+    if (!carpeta?.id) return;
+
+    const confirmar = window.confirm(
+      `¿Eliminar definitivamente la carpeta "${carpeta.nombre || ""}" y todo su contenido?\n\nEsta acción no se puede deshacer.`
+    );
+    if (!confirmar) return;
+
+    setError("");
+    setSuccess("");
+    setProcesandoPapeleraId(`carpeta-${carpeta.id}`);
+
+    try {
+      await apiRequest(`document-folders/${carpeta.id}/permanente?recursive=true`, "DELETE");
+      await cargarEliminados();
+      setSuccess("Carpeta eliminada definitivamente");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch (err) {
+      setError(err?.message || "No se pudo eliminar la carpeta definitivamente");
+    } finally {
+      setProcesandoPapeleraId(null);
     }
   };
 
@@ -862,6 +1013,27 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         </Modal.Title>
       </Modal.Header>
       <Modal.Body style={{ minHeight: "500px" }}>
+        {canManageTrash && (
+          <div className="d-flex justify-content-end mb-3">
+            <div className="btn-group">
+              <Button
+                variant={!vistaPapelera ? "primary" : "outline-primary"}
+                onClick={() => cambiarVista(false)}
+              >
+                <i className="fas fa-folder me-1"></i>
+                Documentos
+              </Button>
+              <Button
+                variant={vistaPapelera ? "warning" : "outline-warning"}
+                onClick={() => cambiarVista(true)}
+              >
+                <i className="fas fa-trash-restore me-1"></i>
+                Eliminados
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Mensajes de error y éxito */}
         {error && (
           <Alert variant="danger" dismissible onClose={() => setError("")}>
@@ -874,7 +1046,19 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
           </Alert>
         )}
 
-        {/* Layout de dos columnas */}
+        {/* Layout de dos columnas o papelera */}
+        {vistaPapelera ? (
+          <TrashList
+            carpetas={eliminados.carpetas}
+            archivos={eliminados.archivos}
+            loading={loadingEliminados}
+            procesandoId={procesandoPapeleraId}
+            onRestaurarArchivo={handleRestaurarArchivo}
+            onRestaurarCarpeta={handleRestaurarCarpeta}
+            onEliminarArchivoPermanente={handleEliminarArchivoPermanente}
+            onEliminarCarpetaPermanente={handleEliminarCarpetaPermanente}
+          />
+        ) : (
         <div className="row g-3">
           {/* Columna izquierda: Lista de carpetas */}
           <div className="col-md-4 border-end">
@@ -914,6 +1098,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
             )}
           </div>
         </div>
+        )}
       </Modal.Body>
       <Modal.Footer>
         <Button variant="secondary" onClick={onHide}>
