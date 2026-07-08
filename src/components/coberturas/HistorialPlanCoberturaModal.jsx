@@ -9,10 +9,27 @@ import {
   Nav,
 } from "react-bootstrap";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
+import CompanySelect from "../selects/CompanySelect";
+import useCompanies from "../../hooks/useCompanies";
 import {
   archivarPlanActual,
+  crearHistorialPlan,
   fetchHistorialPlan,
 } from "../../services/historialPlanCoberturaApi";
+
+const EMPTY_MANUAL_FORM = {
+  compania_id: "",
+  plan: "",
+  metal: "",
+  red: "",
+  policy_number: "",
+  codigo_poliza: "",
+  agente: "",
+  precio: "",
+  fecha_activacion: "",
+  fecha_expiracion: "",
+  nota: "",
+};
 
 const formatDate = (value) => {
   if (!value) return "—";
@@ -49,9 +66,13 @@ const HistorialPlanCoberturaModal = ({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [showArchivarForm, setShowArchivarForm] = useState(false);
+  const [showCrearForm, setShowCrearForm] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM);
   const [fechaExpiracion, setFechaExpiracion] = useState("");
   const [nota, setNota] = useState("");
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
+  const { companies } = useCompanies();
 
   const membersWithPlan = useMemo(
     () => members.filter((m) => m.hasPlanData !== false && m.coberturaId),
@@ -92,6 +113,8 @@ const HistorialPlanCoberturaModal = ({
       setError("");
       setSuccess("");
       setShowArchivarForm(false);
+      setShowCrearForm(false);
+      setManualForm(EMPTY_MANUAL_FORM);
       setSelectedCoberturaId(null);
       setSelectedForArchive(new Set());
       return;
@@ -104,6 +127,8 @@ const HistorialPlanCoberturaModal = ({
 
     setSelectedCoberturaId(defaultId);
     setShowArchivarForm(false);
+    setShowCrearForm(false);
+    setManualForm(EMPTY_MANUAL_FORM);
     setFechaExpiracion("");
     setNota("");
     setSuccess("");
@@ -199,6 +224,46 @@ const HistorialPlanCoberturaModal = ({
     }
   };
 
+  const updateManualField = (name, value) => {
+    setManualForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCrearManual = async (e) => {
+    e.preventDefault();
+    if (!selectedCoberturaId) return;
+
+    setCreating(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const payload = {
+        compania_id: manualForm.compania_id || null,
+        plan: manualForm.plan.trim() || null,
+        metal: manualForm.metal || null,
+        red: manualForm.red || null,
+        policy_number: manualForm.policy_number.trim() || null,
+        codigo_poliza: manualForm.codigo_poliza.trim() || null,
+        agente: manualForm.agente.trim() || null,
+        precio: manualForm.precio !== "" ? Number(manualForm.precio) : null,
+        fecha_activacion: manualForm.fecha_activacion || null,
+        fecha_expiracion: manualForm.fecha_expiracion || null,
+        nota: manualForm.nota.trim() || null,
+      };
+
+      await crearHistorialPlan(selectedCoberturaId, payload);
+
+      setSuccess("Registro de historial de plan creado correctamente.");
+      setShowCrearForm(false);
+      setManualForm(EMPTY_MANUAL_FORM);
+      await cargarHistorial(selectedCoberturaId);
+    } catch (err) {
+      setError(err?.message || "No se pudo crear el registro de historial.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleClose = () => {
     onClose();
   };
@@ -235,17 +300,42 @@ const HistorialPlanCoberturaModal = ({
         )}
 
         {!readOnly && (
-          <div className="d-flex justify-content-end mb-3">
-            {!showArchivarForm ? (
+          <div className="d-flex justify-content-end gap-2 mb-3 flex-wrap">
+            {!showArchivarForm && !showCrearForm ? (
+              <>
+                <Button
+                  variant="outline-success"
+                  size="sm"
+                  onClick={() => {
+                    setShowCrearForm(true);
+                    setShowArchivarForm(false);
+                  }}
+                >
+                  <i className="fas fa-plus me-1" />
+                  Crear historial de plan
+                </Button>
+                <Button
+                  variant="outline-primary"
+                  size="sm"
+                  onClick={() => {
+                    setShowArchivarForm(true);
+                    setShowCrearForm(false);
+                  }}
+                >
+                  <i className="fas fa-archive me-1" />
+                  {allowBulkArchive && members.length > 1
+                    ? "Archivar planes"
+                    : "Archivar plan actual"}
+                </Button>
+              </>
+            ) : showCrearForm ? (
               <Button
-                variant="outline-primary"
+                variant="link"
                 size="sm"
-                onClick={() => setShowArchivarForm(true)}
+                className="text-muted"
+                onClick={() => setShowCrearForm(false)}
               >
-                <i className="fas fa-archive me-1" />
-                {allowBulkArchive && members.length > 1
-                  ? "Archivar planes"
-                  : "Archivar plan actual"}
+                Cancelar creación
               </Button>
             ) : (
               <Button
@@ -258,6 +348,144 @@ const HistorialPlanCoberturaModal = ({
               </Button>
             )}
           </div>
+        )}
+
+        {showCrearForm && !readOnly && (
+          <Form onSubmit={handleCrearManual} className="border rounded p-3 mb-3 bg-light">
+            <h6 className="mb-3">
+              Crear registro manual de plan
+              {selectedMember?.memberName ? ` — ${selectedMember.memberName}` : ""}
+            </h6>
+            <p className="text-muted small mb-3">
+              Use esta opción para cargar planes anteriores que no se archivaron a tiempo.
+              No modifica los datos vigentes de la cobertura.
+            </p>
+            <div className="row g-3">
+              <div className="col-md-4">
+                <Form.Label className="small mb-1">Compañía</Form.Label>
+                <CompanySelect
+                  companies={companies}
+                  value={manualForm.compania_id}
+                  onChange={(e) => updateManualField("compania_id", e.target.value)}
+                />
+              </div>
+              <div className="col-md-4">
+                <Form.Label className="small mb-1">Plan</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={manualForm.plan}
+                  onChange={(e) => updateManualField("plan", e.target.value)}
+                  placeholder="Nombre del plan"
+                />
+              </div>
+              <div className="col-md-4">
+                <Form.Label className="small mb-1">Agente</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={manualForm.agente}
+                  onChange={(e) => updateManualField("agente", e.target.value)}
+                />
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Metal</Form.Label>
+                <Form.Select
+                  size="sm"
+                  value={manualForm.metal}
+                  onChange={(e) => updateManualField("metal", e.target.value)}
+                >
+                  <option value="">Seleccione…</option>
+                  <option value="BRONCE">BRONCE</option>
+                  <option value="SILVER">SILVER</option>
+                  <option value="GOLD">GOLD</option>
+                  <option value="PLATINUM">PLATINUM</option>
+                </Form.Select>
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Red</Form.Label>
+                <Form.Select
+                  size="sm"
+                  value={manualForm.red}
+                  onChange={(e) => updateManualField("red", e.target.value)}
+                >
+                  <option value="">Seleccione…</option>
+                  <option value="HMO">HMO</option>
+                  <option value="EPO">EPO</option>
+                  <option value="PPO">PPO</option>
+                  <option value="POS">POS</option>
+                </Form.Select>
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Número ID</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={manualForm.policy_number}
+                  onChange={(e) => updateManualField("policy_number", e.target.value)}
+                />
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Código ID</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={manualForm.codigo_poliza}
+                  onChange={(e) => updateManualField("codigo_poliza", e.target.value)}
+                />
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Precio ($)</Form.Label>
+                <Form.Control
+                  size="sm"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={manualForm.precio}
+                  onChange={(e) => updateManualField("precio", e.target.value)}
+                  placeholder="0.00"
+                />
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Fecha de activación</Form.Label>
+                <DateInputWithCalendar
+                  size="sm"
+                  valueIso={manualForm.fecha_activacion}
+                  onChangeIso={(value) => updateManualField("fecha_activacion", value)}
+                />
+              </div>
+              <div className="col-md-3">
+                <Form.Label className="small mb-1">Fecha de expiración</Form.Label>
+                <DateInputWithCalendar
+                  size="sm"
+                  valueIso={manualForm.fecha_expiracion}
+                  onChangeIso={(value) => updateManualField("fecha_expiracion", value)}
+                />
+              </div>
+              <div className="col-md-12">
+                <Form.Label className="small mb-1">Nota</Form.Label>
+                <Form.Control
+                  size="sm"
+                  value={manualForm.nota}
+                  onChange={(e) => updateManualField("nota", e.target.value)}
+                  placeholder="Ej. Plan anterior OSCAR"
+                />
+              </div>
+            </div>
+            <div className="mt-3 d-flex justify-content-end">
+              <Button
+                type="submit"
+                variant="success"
+                size="sm"
+                disabled={creating || !selectedCoberturaId}
+              >
+                {creating ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Guardando…
+                  </>
+                ) : (
+                  "Guardar en historial"
+                )}
+              </Button>
+            </div>
+          </Form>
         )}
 
         {showArchivarForm && !readOnly && (
