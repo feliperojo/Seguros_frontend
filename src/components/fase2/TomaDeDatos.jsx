@@ -39,6 +39,10 @@ import {
   mergeClientePreferNonEmpty,
   unwrapClienteFromApi,
 } from "../../utils/mergeClientePreferNonEmpty";
+import {
+  buildMemberFromClienteExistente,
+  extractCoberturaFromCreateResponse,
+} from "../../utils/buildMemberFromClienteExistente";
 import { toLegacyFields } from "../../utils/phones";
 import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
@@ -1289,72 +1293,28 @@ const activeNormalized = useMemo(
         estado_cobertura: payload.estado_cobertura
       });
 
-      const coberturaCreada = res?.data ?? res?.cobertura ?? res;
+      const coberturaCreada = extractCoberturaFromCreateResponse(res);
+      const cliOverlay =
+        res?.miembro?.cliente && typeof res.miembro.cliente === "object"
+          ? res.miembro.cliente
+          : {};
 
-      if (res?.miembro?.cliente || res?.miembro) {
-        const mSrv = res.miembro;
-        const coberturaId = mSrv.cobertura_id ?? mSrv?.cobertura?.id ?? coberturaCreada?.id ?? res?.id ?? null;
+      const base = buildMemberFromClienteExistente({
+        clienteRaw: mergeClientePreferNonEmpty(clienteSel, cliOverlay),
+        cobertura: coberturaCreada,
+        payload,
+      });
 
-        const cliMerged = mergeClientePreferNonEmpty(
-          clienteSel,
-          mSrv.cliente && typeof mSrv.cliente === "object" ? mSrv.cliente : {}
-        );
+      const merged = normalizeMember(
+        duplicateToRootFromCliente(base, base.cliente),
+        familyMembers?.length ?? 0
+      );
 
-        const merged = normalizeMember(
-          {
-            ...mSrv,
-            cliente: cliMerged,
-            tipo: mSrv.tipo || payload.tipo,
-            parentesco: mSrv.parentesco || payload.tipo,
-            estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
-            cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
-            cobertura_id: coberturaId,
-            activo: coberturaCreada?.activo ?? true,
-            fecha_retiro: coberturaCreada?.fecha_retiro ?? null,
-            _remote_created: true
-          },
-          (familyMembers?.length ?? 0)
-        );
-        setFamilyMembers((prev) => {
-          const next = [...(prev ?? []), merged];
-          onDerivedCounts?.(deriveCounts(next));
-          return next;
-        });
-      } else {
-        const c = clienteSel;
-        const nombreCompleto = c.nombre_completo ||
-          [c.primer_nombre, c.segundo_nombre, c.apellidos].filter(Boolean).join(" ");
-        const local = normalizeMember(
-          {
-            cliente_id: c.id,
-            cobertura_id: coberturaCreada?.id ?? null,
-            tipo: payload.tipo,
-            parentesco: payload.tipo,
-            estado_cobertura: payload.estado_cobertura,
-            cobertura_tipo: payload.cobertura_tipo,
-            activo: coberturaCreada?.activo ?? true,
-            fecha_retiro: coberturaCreada?.fecha_retiro ?? null,
-            cliente: {
-              id: c.id,
-              primer_nombre: c.primer_nombre,
-              segundo_nombre: c.segundo_nombre,
-              apellidos: c.apellidos,
-              nombre_completo: nombreCompleto,
-              genero: c.genero || "",
-              fecha_nacimiento: c.fecha_nacimiento || "",
-              idioma: c.idioma || "",
-              pais_origen: c.pais_origen || ""
-            },
-            _remote_created: true
-          },
-          (familyMembers?.length ?? 0)
-        );
-        setFamilyMembers((prev) => {
-          const next = [...(prev ?? []), local];
-          onDerivedCounts?.(deriveCounts(next));
-          return next;
-        });
-      }
+      setFamilyMembers((prev) => {
+        const next = [...(prev ?? []), merged];
+        onDerivedCounts?.(deriveCounts(next));
+        return next;
+      });
 
       if (res?.personas_taxes != null || res?.personas_cobertura != null) {
         onDerivedCounts?.({

@@ -15,6 +15,10 @@ import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
 import { normalizeDateForInput } from "../../utils/formatters";
 import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
+import {
+  buildMemberFromClienteExistente,
+  extractCoberturaFromCreateResponse,
+} from "../../utils/buildMemberFromClienteExistente";
 import { normalizeGeneroForSelect } from "../../utils/clienteFieldNormalize";
 import TelefonosPro from "./TelefonosPro";
 import { resolveClienteTelefonos } from "../../utils/phone-mappers";
@@ -830,70 +834,29 @@ const ProspectoDatos = ({
       estado_cobertura: payload.estado_cobertura,
     });
 
-    if (res?.miembro?.cliente || res?.miembro) {
-      const mSrv = res.miembro;
-      const cli = mergeClientePreferNonEmpty(
-        clienteSel,
-        mSrv.cliente && typeof mSrv.cliente === "object" ? mSrv.cliente : {}
-      );
-   // Intenta extraer el ID real de la cobertura de distintas formas
-   const coberturaId =
-     mSrv.cobertura_id ??
-     mSrv?.cobertura?.id ??
-     res?.cobertura?.id ??
-     res?.id ??
-     null;
-      // Asegurar que tenemos todos los datos del cliente
-      const merged = {
-        id: mSrv.id || cli.id || `temp-${Date.now()}-${Math.random()}`,
-        cliente_id: cli.id || payload.cliente_id,
-        cobertura_id: coberturaId,
-        primer_nombre: mSrv.primer_nombre || cli.primer_nombre || cli.nombre || "",
-        segundo_nombre: mSrv.segundo_nombre || cli.segundo_nombre || "",
-        apellidos: mSrv.apellidos || cli.apellidos || cli.apellido || "",
-        nombreCompleto: mSrv.nombreCompleto || mSrv.nombre_completo || cli.nombre_completo || 
-          `${cli.primer_nombre || cli.nombre || ""} ${cli.segundo_nombre || ""} ${cli.apellidos || cli.apellido || ""}`.trim(),
-        genero: mSrv.genero || cli.genero || "",
-        fecha_nacimiento: mSrv.fecha_nacimiento || cli.fecha_nacimiento || "",
-        edad: mSrv.edad || calcAge(mSrv.fecha_nacimiento || cli.fecha_nacimiento),
-        idioma: mSrv.idioma || cli.idioma || "",
-        pais_origen: mSrv.pais_origen || cli.pais_origen || "",
-        ingreso_anual: mSrv.ingreso_anual || cli.ingreso_anual || 0,
-        nota: mSrv.nota || cli.nota || "",
-        tipo: mSrv.tipo || payload.tipo,
-        parentesco: mSrv.parentesco || payload.tipo,
-        estado_cobertura: mSrv.estado_cobertura || payload.estado_cobertura,
-        cobertura_tipo: mSrv.cobertura_tipo || payload.cobertura_tipo,
-        _remote_created: true,    
-        origen: "existente",
-        cliente: {
-          id: cli.id || payload.cliente_id,
-          primer_nombre: cli.primer_nombre || cli.nombre || "",
-          segundo_nombre: cli.segundo_nombre || "",
-          apellidos: cli.apellidos || cli.apellido || "",
-          nombre_completo: cli.nombre_completo || 
-            `${cli.primer_nombre || cli.nombre || ""} ${cli.segundo_nombre || ""} ${cli.apellidos || cli.apellido || ""}`.trim(),
-          genero: cli.genero || "",
-          fecha_nacimiento: cli.fecha_nacimiento || "",
-          edad: calcAge(cli.fecha_nacimiento),
-          telefono: cli.telefono || "",
-          idioma: cli.idioma || "",
-          pais_origen: cli.pais_origen || "",
-          ingreso_anual: cli.ingreso_anual || 0,
-          nota: cli.nota || "",
-        },
-      };
-      setFamilyMembers((prev) => [...prev, recomputeDerived(merged)]);
-    } else {
-      // Si no viene del servidor, usar el cliente seleccionado directamente
-      const mLocal = mapClienteToMember(
-        clienteSel,
-        payload.tipo,
-        payload.cobertura_tipo,
-        payload.estado_cobertura
-      );
-      setFamilyMembers((prev) => [...prev, recomputeDerived(mLocal)]);
+    const coberturaCreada = extractCoberturaFromCreateResponse(res);
+    const cliOverlay =
+      res?.miembro?.cliente && typeof res.miembro.cliente === "object"
+        ? res.miembro.cliente
+        : {};
+
+    const merged = recomputeDerived(
+      buildMemberFromClienteExistente({
+        clienteRaw: mergeClientePreferNonEmpty(clienteSel, cliOverlay),
+        cobertura: coberturaCreada,
+        payload,
+      })
+    );
+
+    setFamilyMembers((prev) => [...prev, merged]);
+
+    if (res?.personas_taxes != null || res?.personas_cobertura != null) {
+      onDerivedCounts?.({
+        taxes: res.personas_taxes,
+        cobertura: res.personas_cobertura,
+      });
     }
+
     return res;
   };
   // Render: Tomador primero, resto en su orden original

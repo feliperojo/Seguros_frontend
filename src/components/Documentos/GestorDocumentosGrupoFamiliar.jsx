@@ -386,7 +386,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         setError(
           canManageTrash
             ? "La carpeta «Eliminados» la crea el sistema automáticamente. Use la pestaña «Eliminados» (arriba a la derecha) para ver la papelera."
-            : "El nombre «Eliminados» está reservado por el sistema. Solo el administrador o supervisor configurado en Vantun puede ver la papelera."
+            : "El nombre «Eliminados» está reservado por el sistema. Solo el super usuario configurado en Vantun puede ver la papelera."
         );
       } else {
         setError(mensaje);
@@ -458,7 +458,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
     const confirmar = window.confirm(
       `¿Eliminar la carpeta${nombre ? ` "${nombre}"` : ""} y su contenido?\n\n` +
         "Se moverá a la papelera y podrá restaurarse después.\n" +
-        "Solo un administrador o supervisor podrá verla en Eliminados."
+        "Solo el super usuario configurado en Vantun podrá verla en Eliminados."
     );
     if (!confirmar) return;
 
