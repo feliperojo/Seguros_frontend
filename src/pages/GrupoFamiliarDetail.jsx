@@ -14,6 +14,7 @@ import { deriveCounts } from "../utils/groupCounters";
 import { formatDisplayName } from "../utils/names";
 import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPresencia";
 import GrupoFamiliarEdicionAlerta from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
+import { buildDeltaCambiosFromPayloads } from "../utils/grupoFamiliarConcurrentSave";
 
 
  import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
@@ -238,6 +239,117 @@ const mapClienteForSave = (m) => {
   };
 
   return stripNulls(payload);
+};
+
+const COBERTURA_CAMPOS_PROTEGIDOS = [
+  "fecha_cancelacion",
+  "fecha_retiro",
+  "nota_cancel",
+  "nota_retiro",
+  "motivo_cancelacion",
+  "activo",
+  "vigente",
+];
+
+const memberTieneRetiroOCancelacion = (m = {}) =>
+  m.fecha_cancelacion !== undefined ||
+  m.fecha_retiro !== undefined ||
+  m.activo !== undefined ||
+  m.vigente !== undefined ||
+  m.nota_cancel !== undefined ||
+  m.nota_retiro !== undefined ||
+  m.motivo_cancelacion !== undefined;
+
+const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) =>
+  (members || [])
+    .filter((m) => m?.cliente_id && m?.cobertura_id)
+    .map((m) => {
+      const cobertura = mapCoberturaFromMember(m, grupoId);
+      cobertura.id = m.cobertura_id;
+      cobertura.cliente_id = m.cliente_id;
+
+      if (productoCotizacion?.label) {
+        cobertura.cobertura_tipo = productoCotizacion.label;
+      }
+
+      if (!memberTieneRetiroOCancelacion(m)) {
+        COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
+          delete cobertura[campo];
+        });
+        return stripNulls(cobertura);
+      }
+
+      if (m.fecha_cancelacion !== undefined) {
+        cobertura.fecha_cancelacion = cleanDate(m.fecha_cancelacion);
+        if (m.nota_cancel !== undefined) {
+          cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
+        } else if (m.fecha_cancelacion) {
+          cobertura.nota_cancel = null;
+        }
+        if (m.motivo_cancelacion !== undefined) {
+          cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
+        } else if (m.fecha_cancelacion) {
+          cobertura.motivo_cancelacion = null;
+        }
+      }
+
+      if (m.fecha_retiro !== undefined) {
+        cobertura.fecha_retiro = cleanDate(m.fecha_retiro);
+        if (m.nota_retiro !== undefined) {
+          cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
+        } else if (m.fecha_retiro) {
+          cobertura.nota_retiro = null;
+        }
+      }
+
+      const valoresProtegidos = {};
+      COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
+        if (cobertura[campo] !== undefined) {
+          valoresProtegidos[campo] = cobertura[campo];
+        } else {
+          if (campo === "nota_cancel" && cobertura.fecha_cancelacion) {
+            valoresProtegidos[campo] = null;
+          }
+          if (campo === "nota_retiro" && cobertura.fecha_retiro) {
+            valoresProtegidos[campo] = null;
+          }
+          if (campo === "motivo_cancelacion" && cobertura.fecha_cancelacion) {
+            valoresProtegidos[campo] = null;
+          }
+        }
+      });
+
+      if (valoresProtegidos.activo === undefined) {
+        valoresProtegidos.activo = true;
+      }
+      if (valoresProtegidos.vigente === undefined) {
+        valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
+      }
+
+      const coberturaLimpia = stripNulls(cobertura);
+      Object.keys(valoresProtegidos).forEach((campo) => {
+        coberturaLimpia[campo] = valoresProtegidos[campo];
+      });
+
+      return coberturaLimpia;
+    });
+
+const buildFullUpdatePayloadParts = (formData, members, grupoId, productoCotizacion) => {
+  const grupoPayload = stripNulls(mapGrupoFromForm(formData));
+  const clientesPayload = (members || [])
+    .filter((m) => m?.cliente_id)
+    .map(mapClienteForSave)
+    .filter(Boolean)
+    .map(stripNulls);
+  const coberturasPayload = buildCoberturasPayloadForMembers(members, grupoId, productoCotizacion);
+
+  return { grupoPayload, clientesPayload, coberturasPayload };
+};
+
+const cloneEditSnapshot = (value) => {
+  if (value == null) return value;
+  if (typeof structuredClone === "function") return structuredClone(value);
+  return JSON.parse(JSON.stringify(value));
 };
 
 // ================== Función para obtener el producto desde coberturas ==================
@@ -544,12 +656,14 @@ const GrupoFamiliarDetail = () => {
   const [grupoCompleto, setGrupoCompleto] = useState(null); // 👈 Grupo completo para generar PDF
 
 const [grupoVersion, setGrupoVersion] = useState(null);
+  const [editBaseline, setEditBaseline] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
 
-  const { edicion, applyEdicionMeta } = useGrupoFamiliarEdicionPresencia(id, {
-    activo: isEditing,
+  const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
+    registrarPresencia: !loading && Boolean(id),
+    activo: isEditing || saving,
   });
 
   const [toast, setToast] = useState({ show: false, type: "success", title: "", message: "" });
@@ -726,7 +840,7 @@ console.log("Ingreso Familiar:", total);
       const fullData = unwrapFull(full);
   
       setFormData(mapFullToForm(full));
-      setGrupoVersion(fullData?.updated_at || fullData?.updatedAt || null);
+      setGrupoVersion(meta?.grupo_version || fullData?.updated_at || fullData?.updatedAt || null);
       setFamilyMembers(mapFullToMembers(full));
       
       // 👈 Guardar grupo completo para generar PDF de confirmación
@@ -1087,20 +1201,7 @@ const handleCreateMemberRemote = async (memberData) => {
     try {
       setSaving(true);
 
-      const grupoPayload = stripNulls(mapGrupoFromForm(formData));
-      
-      console.log("💾 [handleSave] Payload del grupo familiar preparado:", {
-        ...grupoPayload,
-        tags: grupoPayload.tags ? 
-          (Array.isArray(grupoPayload.tags) ? 
-            `[Array con ${grupoPayload.tags.length} tags]` : 
-            grupoPayload.tags) : 
-          null
-      });
-
-
            // 1) Crear primero los miembros NUEVOS (sin cliente_id)
-    // 1) Crear primero los miembros NUEVOS (sin cliente_id)
     const nuevos = (familyMembers || []).filter(m => !m?.cliente_id);
     for (const m of nuevos) {
       const cliNuevo = mapClienteForSave(m);
@@ -1134,111 +1235,23 @@ const handleCreateMemberRemote = async (memberData) => {
 
    
 // 2) Actualizar los EXISTENTES
-const existentes = (familyMembers || []).filter(m => m?.cliente_id);
-const clientesPayload = existentes
-  .map(mapClienteForSave)
-  .filter(Boolean) // Eliminar nulls/undefined
-  .map(stripNulls);
-      
+const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayloadParts(
+  formData,
+  familyMembers,
+  id,
+  productoCotizacion
+);
 
-  const coberturasPayload = (familyMembers || [])
-     // 👇 Solo clientes reales y SOLO coberturas que ya tienen ID (UPDATE). 
-     // Si no hay cobertura_id, NO mandes nada (ya fue creada por el modal).
-     .filter(m => m?.cliente_id && m?.cobertura_id)
-   .map(m => {
-     const cobertura = mapCoberturaFromMember(m, id);
-          // 👇 Forzamos UPDATE explícito
-          cobertura.id = m.cobertura_id;
-          cobertura.cliente_id = m.cliente_id;
-
-     if (productoCotizacion?.label) {
-       cobertura.cobertura_tipo = productoCotizacion?.label;
-     }
-     
-     // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
-     // Estos campos pueden haber sido actualizados por el modal de retiro
-     // y deben enviarse al backend para mantener la sincronización y crear el registro retiro_cancelacion
-     if (m.fecha_cancelacion !== undefined) {
-       cobertura.fecha_cancelacion = cleanDate(m.fecha_cancelacion);
-       // Si hay fecha_cancelacion, asegurar que nota_cancel y motivo_cancelacion se envíen (incluso si son null)
-       if (m.nota_cancel !== undefined) {
-         cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
-       } else if (m.fecha_cancelacion) {
-         // Si hay fecha pero no nota definida, enviar null explícitamente
-         cobertura.nota_cancel = null;
-       }
-       if (m.motivo_cancelacion !== undefined) {
-         cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
-       } else if (m.fecha_cancelacion) {
-         // Si hay fecha pero no motivo definido, enviar null explícitamente
-         cobertura.motivo_cancelacion = null;
-       }
-     }
-     if (m.fecha_retiro !== undefined) {
-       cobertura.fecha_retiro = cleanDate(m.fecha_retiro);
-       // Si hay fecha_retiro, asegurar que nota_retiro se envíe (incluso si es null)
-       if (m.nota_retiro !== undefined) {
-         cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
-       } else if (m.fecha_retiro) {
-         // Si hay fecha pero no nota definida, enviar null explícitamente
-         cobertura.nota_retiro = null;
-       }
-     }
-     
-     // ✅ IMPORTANTE: Preservar campos de retiro/cancelación incluso si son null
-     // Estos campos pueden haber sido actualizados por el modal de retiro
-     // y deben enviarse al backend para mantener la sincronización
-     // No usar stripNulls directamente porque eliminaría estos campos cuando son null
-     // En su lugar, crear un objeto limpio preservando estos campos especiales
-     // ✅ Campos protegidos: incluyen campos de retiro/cancelación necesarios para crear registro retiro_cancelacion
-     const camposProtegidos = ['fecha_cancelacion', 'fecha_retiro', 'nota_cancel', 'nota_retiro', 'motivo_cancelacion', 'activo', 'vigente'];
-     const valoresProtegidos = {};
-     
-     // Guardar valores de campos protegidos antes de stripNulls
-     // ✅ IMPORTANTE: Incluir campos incluso si son null cuando hay fechas relacionadas
-     camposProtegidos.forEach(campo => {
-       if (cobertura[campo] !== undefined) {
-         valoresProtegidos[campo] = cobertura[campo];
-       } else {
-         // Si hay fecha_cancelacion o fecha_retiro, asegurar que los campos relacionados se incluyan
-         if (campo === 'nota_cancel' && cobertura.fecha_cancelacion) {
-           valoresProtegidos[campo] = null;
-         }
-         if (campo === 'nota_retiro' && cobertura.fecha_retiro) {
-           valoresProtegidos[campo] = null;
-         }
-         if (campo === 'motivo_cancelacion' && cobertura.fecha_cancelacion) {
-           valoresProtegidos[campo] = null;
-         }
-       }
-     });
-     
-     // ✅ Asegurar que activo y vigente SIEMPRE estén presentes (valores definidos por CambioVidaCancelacionModal)
-     // Si no están definidos, usar valores por defecto
-     if (valoresProtegidos.activo === undefined) {
-       valoresProtegidos.activo = true; // Por defecto: activo
-     }
-     if (valoresProtegidos.vigente === undefined) {
-       // Por defecto: false si hay fecha_cancelacion, true si no
-       valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
-     }
-     
-     // Limpiar otros campos null/undefined
-     const coberturaLimpia = stripNulls(cobertura);
-     
-     // Restaurar campos protegidos (incluso si son null para permitir limpiarlos en el backend)
-     // activo y vigente SIEMPRE se incluyen
-     Object.keys(valoresProtegidos).forEach(campo => {
-       coberturaLimpia[campo] = valoresProtegidos[campo];
-     });
-     
-     return coberturaLimpia;
-    });
-// quita los nulls del caso (1)
+      console.log("💾 [handleSave] Payload del grupo familiar preparado:", {
+        ...grupoPayload,
+        tags: grupoPayload.tags ?
+          (Array.isArray(grupoPayload.tags) ?
+            `[Array con ${grupoPayload.tags.length} tags]` :
+            grupoPayload.tags) :
+          null
+      });
 
                     // 🔎 DEBUG: verifica que cada cobertura lleve fecha_activacion
-     // Nota: fecha_cancelacion, fecha_retiro, activo, vigente, nota_cancel NO se envían en actualizaciones normales
-     // (solo se actualizan mediante modales de renovación/reactivación)
      try {
        console.table(
          coberturasPayload.map(c => ({
@@ -1246,19 +1259,66 @@ const clientesPayload = existentes
            cliente_id: c.cliente_id,
            fecha_activacion: c.fecha_activacion,
            estado_cobertura: c.estado_cobertura,
-           // Campos protegidos excluidos: fecha_cancelacion, fecha_retiro, activo, vigente, nota_cancel
          }))
        );
      } catch (_) {}
 
-      const finalPayload = {
+      let presenciaAlGuardar = edicion;
+      try {
+        await touchPresencia?.();
+        const presenciaActual = await GrupoFamiliarService.getEdicionPresencia(id);
+        if (presenciaActual && typeof presenciaActual.alerta === "boolean") {
+          presenciaAlGuardar = presenciaActual;
+        }
+      } catch (_) {
+        // Si falla el polling puntual, usar el estado local de presencia.
+      }
+
+      const baselinePayload = editBaseline
+        ? buildFullUpdatePayloadParts(
+            editBaseline.formData,
+            editBaseline.familyMembers,
+            id,
+            productoCotizacion
+          )
+        : null;
+
+      const cambios = baselinePayload
+        ? buildDeltaCambiosFromPayloads({
+            baselineGrupo: baselinePayload.grupoPayload,
+            currentGrupo: grupoPayload,
+            baselineClientes: baselinePayload.clientesPayload,
+            currentClientes: clientesPayload,
+            baselineCoberturas: baselinePayload.coberturasPayload,
+            currentCoberturas: coberturasPayload,
+          })
+        : {};
+
+      const hayCambiosDelta = Object.keys(cambios).length > 0;
+      const otrosEditores = (presenciaAlGuardar?.editores ?? []).length > 0;
+      const hayAlertaConcurrencia = Boolean(presenciaAlGuardar?.alerta || otrosEditores);
+      const useDeltaSave = Boolean(editBaseline && hayCambiosDelta && hayAlertaConcurrencia);
+
+      let finalPayload = {
         ...grupoPayload,
         clientes: clientesPayload,
         coberturas: coberturasPayload,
+        grupo_version: grupoVersion,
       };
+
+      if (editBaseline && hayCambiosDelta) {
+        finalPayload.cambios = cambios;
+      }
+
+      if (useDeltaSave) {
+        finalPayload.modo = "delta";
+      }
 
       console.log("🚀 [handleSave] Payload FINAL que se envía al backend (fullUpdate):", {
         grupoId: id,
+        modo: useDeltaSave ? "delta" : hayCambiosDelta ? "legacy+cambios" : "legacy",
+        hayAlertaConcurrencia,
+        incluyeCambiosDelta: hayCambiosDelta,
         grupoPayload: {
           ...grupoPayload,
           tags: grupoPayload.tags ? 
@@ -1273,7 +1333,10 @@ const clientesPayload = existentes
         tagsEnPayload: finalPayload.tags
       });
 
-      await GrupoFamiliarService.fullUpdate(id, finalPayload);
+      const saveResponse = await GrupoFamiliarService.fullUpdate(id, finalPayload);
+      if (saveResponse?.data?.grupo_version) {
+        setGrupoVersion(saveResponse.data.grupo_version);
+      }
 
       if (alsoAdvance) {
         const from = (estadoActual || "").toUpperCase();
@@ -1289,9 +1352,19 @@ const clientesPayload = existentes
       }
 
       setIsEditing(false);
+      setEditBaseline(null);
       await reload();
       showToast("success", alsoAdvance ? "Guardado y etapa actualizada" : "Actualización exitosa", "");
     } catch (e) {
+      if (e?.response?.code === "VERSION_CONFLICT") {
+        showToast(
+          "warning",
+          "Conflicto de versión",
+          e?.message || "Otro usuario guardó cambios. Recarga el formulario e intenta de nuevo."
+        );
+        await reload();
+        return;
+      }
       showToast("danger", "Error al actualizar", e?.message || "No se pudo guardar los cambios.");
     } finally {
       setSaving(false);
@@ -1407,7 +1480,15 @@ const clientesPayload = existentes
               <button 
                 type="button"
                 className="btn btn-primary" 
-                onClick={() => setIsEditing(true)}
+                onClick={async () => {
+                  setEditBaseline({
+                    formData: cloneEditSnapshot(formData),
+                    familyMembers: cloneEditSnapshot(familyMembers),
+                  });
+                  setIsEditing(true);
+                  await touchPresencia?.();
+                  await refreshEdicion?.();
+                }}
               >
                 <i className="fas fa-edit me-2"></i>
                 Editar
@@ -1460,7 +1541,7 @@ const clientesPayload = existentes
               <button
                 type="button"
                 className="btn btn-outline-secondary"
-                onClick={() => { setIsEditing(false); reload(); }}
+                onClick={() => { setEditBaseline(null); setIsEditing(false); reload(); }}
                 disabled={saving || advancing}
               >
                 <i className="fas fa-times me-2"></i>

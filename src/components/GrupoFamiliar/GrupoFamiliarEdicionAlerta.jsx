@@ -34,12 +34,12 @@ export const buildEdicionMensaje = (edicion) => {
     const hora = formatHoraDesde(editores[0]?.desde);
 
     if (hora && editores.length === 1) {
-      return `${sujeto} está editando este grupo familiar desde las ${hora}.`;
+      return `${sujeto} tiene abierto este grupo familiar desde las ${hora}.`;
     }
     if (hora) {
-      return `${sujeto} están editando este grupo familiar (desde las ${hora}).`;
+      return `${sujeto} tienen abierto este grupo familiar (desde las ${hora}).`;
     }
-    return `${sujeto} está editando este grupo familiar.`;
+    return `${sujeto} tiene abierto este grupo familiar.`;
   }
 
   return edicion.mensaje;
@@ -69,7 +69,7 @@ const GrupoFamiliarEdicionAlerta = ({ edicion }) => {
         <div>{mensaje}</div>
         {!inactivo && (
           <div className="text-muted mt-1" style={{ fontSize: "0.82rem" }}>
-            Puedes seguir consultando. Si editas al mismo tiempo, guarda con cuidado.
+            Solo se guardarán los campos que modifiques en este formulario.
           </div>
         )}
       </div>

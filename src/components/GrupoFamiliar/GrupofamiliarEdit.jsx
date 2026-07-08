@@ -15,6 +15,7 @@ const GrupofamiliarEdit = () => {
   const [loading, setLoading] = useState(true);
 
   const { edicion } = useGrupoFamiliarEdicionPresencia(id, {
+    registrarPresencia: true,
     activo: true,
     initialEdicion,
   });

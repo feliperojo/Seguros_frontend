@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 
-const HEARTBEAT_MS = 45_000;
-const POLL_MS = 60_000;
+/** Heartbeat: mantiene la sesión viva en el servidor (debe ser < TTL del backend). */
+const HEARTBEAT_MS = 12_000;
+/** Polling: detecta otros usuarios en el grupo lo antes posible. */
+const POLL_MS = 4_000;
 
 const EMPTY_EDICION = {
   alerta: false,
@@ -12,23 +14,57 @@ const EMPTY_EDICION = {
 };
 
 /**
- * Presencia de edición en grupo familiar.
- * - activo=true: registra heartbeat (usuario editando).
- * - Siempre hace polling para mostrar si otro usuario está editando.
+ * Presencia en grupo familiar.
+ * - registrarPresencia / activo: heartbeat mientras la pantalla está abierta.
+ * - Polling frecuente + refresh al recuperar foco para alertas tempranas.
  */
 export default function useGrupoFamiliarEdicionPresencia(
   grupoFamiliarId,
-  { activo = false, initialEdicion = null } = {}
+  { activo = false, registrarPresencia = false, initialEdicion = null } = {}
 ) {
   const [edicion, setEdicion] = useState(initialEdicion ?? EMPTY_EDICION);
   const sessionIdRef = useRef(null);
   const grupoId = Number(grupoFamiliarId);
+  const shouldRegister = Boolean(registrarPresencia || activo);
 
   const applyEdicionMeta = useCallback((meta) => {
     if (meta?.edicion) {
       setEdicion(meta.edicion);
     }
   }, []);
+
+  const refreshEdicion = useCallback(async () => {
+    if (!grupoId) return null;
+
+    try {
+      const data = await GrupoFamiliarService.getEdicionPresencia(grupoId);
+      if (data) setEdicion(data);
+      return data;
+    } catch {
+      return null;
+    }
+  }, [grupoId]);
+
+  const touchPresencia = useCallback(async () => {
+    if (!grupoId || !shouldRegister) return null;
+
+    try {
+      const res = await GrupoFamiliarService.touchEdicionPresencia(
+        grupoId,
+        sessionIdRef.current
+      );
+
+      const sessionId = res?.data?.session_id ?? res?.session_id;
+      if (sessionId) sessionIdRef.current = sessionId;
+
+      const metaEdicion = res?.meta?.edicion;
+      if (metaEdicion) setEdicion(metaEdicion);
+
+      return res;
+    } catch {
+      return null;
+    }
+  }, [grupoId, shouldRegister]);
 
   useEffect(() => {
     if (initialEdicion) {
@@ -37,26 +73,13 @@ export default function useGrupoFamiliarEdicionPresencia(
   }, [initialEdicion]);
 
   useEffect(() => {
-    if (!grupoId || !activo) return undefined;
+    if (!grupoId || !shouldRegister) return undefined;
 
     let cancelled = false;
 
     const beat = async () => {
-      try {
-        const res = await GrupoFamiliarService.touchEdicionPresencia(
-          grupoId,
-          sessionIdRef.current
-        );
-        if (cancelled) return;
-
-        const sessionId = res?.data?.session_id ?? res?.session_id;
-        if (sessionId) sessionIdRef.current = sessionId;
-
-        const metaEdicion = res?.meta?.edicion;
-        if (metaEdicion) setEdicion(metaEdicion);
-      } catch {
-        // No interrumpir la edición si falla el heartbeat
-      }
+      if (cancelled) return;
+      await touchPresencia();
     };
 
     beat();
@@ -77,7 +100,7 @@ export default function useGrupoFamiliarEdicionPresencia(
       window.removeEventListener("beforeunload", release);
       release();
     };
-  }, [grupoId, activo]);
+  }, [grupoId, shouldRegister, touchPresencia]);
 
   useEffect(() => {
     if (!grupoId) return undefined;
@@ -85,22 +108,30 @@ export default function useGrupoFamiliarEdicionPresencia(
     let cancelled = false;
 
     const poll = async () => {
-      try {
-        const data = await GrupoFamiliarService.getEdicionPresencia(grupoId);
-        if (!cancelled && data) setEdicion(data);
-      } catch {
-        // Polling silencioso
-      }
+      if (cancelled) return;
+      await refreshEdicion();
     };
 
     poll();
     const intervalId = window.setInterval(poll, POLL_MS);
 
+    const onVisibilityOrFocus = () => {
+      if (document.visibilityState === "visible") {
+        poll();
+        if (shouldRegister) touchPresencia();
+      }
+    };
+
+    window.addEventListener("focus", onVisibilityOrFocus);
+    document.addEventListener("visibilitychange", onVisibilityOrFocus);
+
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
+      window.removeEventListener("focus", onVisibilityOrFocus);
+      document.removeEventListener("visibilitychange", onVisibilityOrFocus);
     };
-  }, [grupoId]);
+  }, [grupoId, shouldRegister, refreshEdicion, touchPresencia]);
 
-  return { edicion, applyEdicionMeta };
+  return { edicion, applyEdicionMeta, refreshEdicion, touchPresencia };
 }
