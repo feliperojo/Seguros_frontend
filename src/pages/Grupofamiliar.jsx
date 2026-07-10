@@ -1,7 +1,2299 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { FaFileExport } from "react-icons/fa";
+
+import "bootstrap/dist/css/bootstrap.min.css";
+import "../styles/Grupofamiliar.css";
+import apiRequest from "../services/api";
+import { Modal, Button, Card, Form, Row, Col, Table, Alert, Dropdown, Accordion, Nav } from "react-bootstrap";
+import Clientes from "./Clientes";
+import ClienteExistente from "../components/ClienteExistente"; // Importamos el nuevo componente
+import CountrySelectWithFlags from '../components/CountrySelect';
+import countryCodes from '../services/countryCodes';
+import Swal from 'sweetalert2';
+import GrupoFamiliarService from '../services/GrupoFamiliarService';
+import EditClienteModal from "../components/EditClienteModal";
+import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
+import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
+import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
+import { parseMoney, computeAnnual, calcIngresoFamiliar } from "../services/ingresos";
+import { vigenteDesdeEstadoCobertura } from "../utils/estadoPoliza";
+
+// Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
+const formatDateMdyDash = (value) => {
+  if (!value) return "";
+  try {
+    const s = String(value).trim();
+    // YYYY-MM-DD (o ISO con hora) => parse manual para evitar TZ
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      const [y, m, d] = s.split("T")[0].split("-");
+      if (y && m && d) return `${m}-${d}-${y}`;
+    }
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return s;
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${mm}-${dd}-${yyyy}`;
+  } catch {
+    return String(value);
+  }
+};
+
+// --- Input controlado MM-DD-YYYY que guarda YYYY-MM-DD ---
+const pad2 = (n) => String(n).padStart(2, "0");
+const isoYmd = (v) => {
+  if (v == null || v === "") return "";
+  const s = String(v).trim().split("T")[0];
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
+};
+const mdyDashToIso = (display) => {
+  const t = String(display ?? "").trim();
+  if (!t) return "";
+  // Si ya viene ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const digits = t.replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const mm = parseInt(digits.slice(0, 2), 10);
+  const dd = parseInt(digits.slice(2, 4), 10);
+  const yyyy = parseInt(digits.slice(4, 8), 10);
+  if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
+  const test = new Date(yyyy, mm - 1, dd);
+  if (test.getFullYear() !== yyyy || test.getMonth() !== mm - 1 || test.getDate() !== dd) return null;
+  return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+};
+const formatMdyDashTyping = (raw) => {
+  const digits = String(raw ?? "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+};
+const MdyDashDateInput = ({
+  valueIso,
+  onChangeIso,
+  disabled = false,
+  placeholder = "MM-DD-YYYY",
+  size = "sm",
+}) => {
+  const [display, setDisplay] = React.useState(() => formatDateMdyDash(valueIso));
+
+  React.useEffect(() => {
+    // sincronizar cuando cambia desde afuera
+    setDisplay(formatDateMdyDash(valueIso));
+  }, [valueIso]);
+
+  return (
+    <Form.Control
+      size={size}
+      type="text"
+      inputMode="numeric"
+      placeholder={placeholder}
+      value={display}
+      disabled={disabled}
+      onChange={(e) => {
+        const next = formatMdyDashTyping(e.target.value);
+        setDisplay(next);
+        const iso = mdyDashToIso(next);
+        // solo commit cuando está completa y válida, o cuando se limpia
+        if (iso === "") onChangeIso?.("");
+        else if (iso) onChangeIso?.(iso);
+      }}
+      onBlur={() => {
+        // Si quedó incompleta, no rompas el valor ISO actual; solo re-sincroniza display con ISO
+        const iso = mdyDashToIso(display);
+        if (iso === null) {
+          setDisplay(formatDateMdyDash(valueIso));
+        }
+      }}
+    />
+  );
+};
+
 
 const Grupofamiliar = () => {
-  return <div className="content">Grupo Familiar</div>;
+  // Estado para controlar la pestaña activa en el modal
+  const [activeTab, setActiveTab] = useState("nuevo");
+  const [showPDFModal, setShowPDFModal] = useState(false);
+  const [pdfData, setPdfData] = useState(null);
+  const [selectedClienteId, setSelectedClienteId] = useState(null);
+  const [selectedClienteData, setSelectedClienteData] = useState(null);
+  const [selectedClienteLanguage, setSelectedClienteLanguage] = useState("es");
+
+
+  const navigate = useNavigate();
+
+  const INITIAL_POLICY_STATE = {
+    compania: "",
+    plan: "",
+    metal: "",
+    precio: "",
+    elegibilidad: "",
+    personas_en_taxes: "",
+    personas_cobertura: "",
+    ingreso_familiar: "",
+    persona_contacto: "",
+    relacion: "",
+    medio_contacto: "",
+    telefono_1: "",
+    telefono_2: "",
+    notas_telefonos: "",
+    fecha_cancelacion: "",
+    compania_id: "",
+    agente: "",
+    cliente_id: "",
+    codigo_poliza: "",
+    policy_number: "",
+    referido: "",
+    captado_por: "",
+    parentesco: "",
+    estado_cobertura: "",
+    cobertura_tipo: "SEGURO MEDICO  OBAMA",
+    pertenece_grupo_familiar: false,
+    responsable: "",
+    carta_autorizacion: "",
+    llamada_cliente: "",
+    elegibilidad_carta: ""
+  };
+
+  const TIPOS_PRODUCTOS = [
+    { id: "SEGURO MEDICO  OBAMA", nombre: "SEGURO MEDICO  OBAMA" },
+    { id: "SEGURO  MEDICO SHORT TERM", nombre: "SEGURO  MEDICO SHORT TERM" },
+    { id: "VISION", nombre: "VISION" },
+    { id: "DENTAL", nombre: "DENTAL" },
+    { id: "VISION/DENTAL", nombre: "VISION/DENTAL" },
+    { id: "SEGURO DE VIDA", nombre: "SEGURO DE VIDA" },
+    { id: "PLAN DE DESCUENTO", nombre: "PLAN DE DESCUENTO" },
+    { id: "otro", nombre: "Otro" }
+  ];
+
+  const [currentStep, setCurrentStep] = useState(1);
+  const totalSteps = 2;
+
+  const [showClienteEditModal, setShowClienteEditModal] = useState(false);
+  const [clienteIdToEdit, setClienteIdToEdit] = useState(null);
+  const [clienteDataToEdit, setClienteDataToEdit] = useState(null);
+  const [mostrarRenovacion, setMostrarRenovacion] = useState(false);
+  const [mostrarModalRenovacion, setMostrarModalRenovacion] = useState(false);
+
+
+  const [conteoMiembros, setConteoMiembros] = useState(0);
+  const [conteoCoberturaYes, setConteoCoberturaYes] = useState(0);
+
+const [cancelacionGeneralActiva, setCancelacionGeneralActiva] = useState(false);
+const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
+
+  const [totalMiembros, setTotalMiembros] = useState(0);
+  const [totalYes, setTotalYes] = useState(0);
+  const [coverageGroups, setCoverageGroups] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [currentEditMember, setCurrentEditMember] = useState(null);
+  const [policyData, setPolicyData] = useState(INITIAL_POLICY_STATE);
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [availableCompanies, setAvailableCompanies] = useState([]);
+  const [availablePrentes, setAvailableParentes] = useState([]);
+  const [alert, setAlert] = useState({ type: "", message: "", visible: false });
+  const [contactMethods, setContactMethods] = useState({
+    whatsapp: false,
+    telegram: false,
+    texto_sms: false
+  });
+  const [selectedCode, setSelectedCode] = useState({
+    telefono_1: "us",
+    telefono_2: "us"
+  });
+
+  const getIngresoOcasionalAnual = (m) => {
+    const anualGuardado =
+      parseMoney(
+        m?.ingreso_ocasional_anual ??
+          m?.cliente?.ingreso_ocasional_anual ??
+          ""
+      ) || 0;
+    if (anualGuardado) return anualGuardado;
+
+    const directo =
+      parseMoney(
+        m?.ingreso_ocasional ??
+          m?.ingresoOcasional ??
+          m?.incomeOccasional ??
+          m?.cliente?.ingreso_ocasional ??
+          ""
+      ) || 0;
+    if (directo) return directo;
+
+    return (
+      computeAnnual(
+        m?.periodo_ingreso_ocasional ?? m?.cliente?.periodo_ingreso_ocasional,
+        m?.ingreso_por_periodo_ocasional ?? m?.cliente?.ingreso_por_periodo_ocasional
+      ) || 0
+    );
+  };
+
+ 
+
+  useEffect(() => {
+    const totalMiembros = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length,
+      0
+    );
+        const totalYes = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.estado_cobertura === "Yes").length
+      , 0);
+
+    setConteoMiembros(totalMiembros);
+    setConteoCoberturaYes(totalYes);
+  }, [coverageGroups]);
+
+  useEffect(() => {
+    const miembros = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length, 0
+    );
+    const conYes = coverageGroups.reduce((sum, group) =>
+      sum + group.members.filter(m => m.estado_cobertura === "Yes" && m.activo === true && !m.fecha_retiro).length, 0
+    );
+  
+    setTotalMiembros(miembros);
+    setTotalYes(conYes);
+  }, [coverageGroups]);
+  
+  // Initialize the first coverage group if none exists
+  useEffect(() => {
+    if (coverageGroups.length === 0) {
+      setCoverageGroups([{
+        id: 1,
+        tipoProducto: "SEGURO MEDICO  OBAMA", // Valor por defecto
+        policyData: { ...INITIAL_POLICY_STATE },
+        members: []
+      }]);
+    }
+  }, []);
+
+  // Fetch available clients and companies when component mounts
+  useEffect(() => {
+    fetchCompanies();
+    fetchDataparentesco();
+  }, []);
+
+  const handleCountryCodeChange = (name, isoCode) => {
+    setSelectedCode((prev) => ({
+      ...prev,
+      [name]: isoCode
+    }));
+  };
+
+  const handleNombreClick = async (rawClienteId) => {
+    if (!rawClienteId) {
+      console.warn("⚠️ clienteId es undefined o null");
+      Swal.fire("Advertencia", "Este cliente no tiene un ID válido para edición.", "warning");
+      return;
+    }
+  
+    // Si el ID contiene guiones, tomar solo la primera parte (cliente_id real)
+    const clienteId = typeof rawClienteId === 'string' && rawClienteId.includes('-')
+      ? rawClienteId.split('-')[0]
+      : rawClienteId;
+  
+   
+  
+    setClienteIdToEdit(clienteId);
+  
+    try {
+      const data = await apiRequest(`cliente/show/${clienteId}`, "GET");
+      setClienteDataToEdit(data);
+      setShowClienteEditModal(true);
+    } catch (error) {
+      console.error("❌ Error al cargar datos del cliente:", error);
+      Swal.fire("Error", "No se pudo cargar la información del cliente", "error");
+    }
+  };
+  
+  
+  
+  
+
+  const copiarDatosDelPrimero = (groupId, memberIdDestino) => {
+    const grupo = coverageGroups.find(g => g.id === groupId);
+    if (!grupo) return;
+  
+    const miembroModelo = grupo.members.find(m => m.parentesco === "TOMADOR" && m.activo && !m.fecha_retiro);
+    const miembroDestino = grupo.members.find(m => m.id === memberIdDestino);
+  
+    if (!miembroModelo) {
+      Swal.fire("Error", "No se encontró un TOMADOR activo para copiar.", "error");
+      return;
+    }
+  
+    if (!miembroDestino) {
+      Swal.fire("Error", "No se encontró el miembro de destino.", "error");
+      return;
+    }
+  
+    if (miembroModelo.id === miembroDestino.id) {
+      Swal.fire("Atención", "Este miembro ya es el TOMADOR.", "info");
+      return;
+    }
+  
+    const camposACopiar = [
+      "ano_cobertura",
+      "plan",
+      "elegibilidad",
+      "red",
+      "compania_id",
+      "metal",
+      "fecha_activacion",
+      "precio",
+      "estado_cobertura",
+      "pagador_id",
+      "tipo_pago",
+      "dia_pago"
+    ];
+  
+    const miembroActualizado = {
+      ...miembroDestino
+    };
+  
+    camposACopiar.forEach((campo) => {
+      miembroActualizado[campo] = miembroModelo[campo] ?? "";
+    });
+  
+    const updatedGroups = coverageGroups.map((group) => {
+      if (group.id !== groupId) return group;
+      return {
+        ...group,
+        members: group.members.map((m) =>
+          m.id === memberIdDestino ? miembroActualizado : m
+        ),
+      };
+    });
+  
+    setCoverageGroups(updatedGroups);
+  
+    setAlert({
+      type: "success",
+      message: "Se copiaron los datos correctamente desde el TOMADOR.",
+      visible: true,
+    });
+  
+    setTimeout(() => {
+      setAlert({ type: "", message: "", visible: false });
+    }, 3000);
+  };
+  
+  
+
+  const getCountryCode = (iso) => {
+    const country = countryCodes.find((c) => c.iso === iso);
+    return country ? country.code : "";
+  };
+
+  const fetchCompanies = async () => {
+    try {
+      const companiesResponse = await apiRequest("compania/", "GET");
+      if (Array.isArray(companiesResponse)) {
+        setAvailableCompanies(companiesResponse);
+      } else {
+        console.error("Unexpected companies API response format:", companiesResponse);
+      }
+    } catch (error) {
+      console.error("Error fetching companies:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al cargar las compañías",
+        visible: true
+      });
+    }
+  };
+
+
+  const fetchDataparentesco = async () => {
+    try {
+      const parentecoResponse = await apiRequest("parentesco/", "GET");
+      if (Array.isArray(parentecoResponse)) {
+        setAvailableParentes(parentecoResponse);
+      } else {
+        console.error("Unexpected parentesco API response format:", parentecoResponse);
+      }
+    } catch (error) {
+      console.error("Error fetching parentesco:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al cargar los tipos de parentesco",
+        visible: true
+      });
+    }
+  };
+
+  const grupoColorMap = {
+    G1: "#0d6efd",   // Azul Bootstrap
+    G2: "#198754",   // Verde Bootstrap
+    G3: "#ffc107"    // Amarillo Bootstrap
+  };
+
+  const formatPhoneNumber = (value) => {
+    const cleaned = value.replace(/\D/g, ""); // Eliminar caracteres no numéricos
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+
+    if (!match) return value; // Retorna el valor original si no hay coincidencias
+    return [match[1], match[2], match[3]].filter(Boolean).join("-");
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return "-";
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  };
+
+  const handlePolicyChange = (e) => {
+    const { name, value } = e.target;
+
+    // Aplicar formato de teléfono
+    let updatedValue = value;
+    if (["telefono_1", "telefono_2"].includes(name)) {
+      updatedValue = formatPhoneNumber(value);
+    }
+
+    setPolicyData(prev => ({
+      ...prev,
+      [name]: updatedValue
+    }));
+  };
+
+  const handleContactMethodChange = (e) => {
+    const { name, checked } = e.target;
+    setContactMethods(prev => ({
+      ...prev,
+      [name]: checked
+    }));
+  };
+
+  const handleProductTypeChange = (groupId, newProductType) => {
+    setCoverageGroups(prevGroups =>
+      prevGroups.map(group =>
+        group.id === groupId
+          ? { ...group, tipoProducto: newProductType }
+          : group
+      )
+    );
+  };
+
+  const addFamilyMember = async (client) => {
+    if (!client || !client.id) return;
+  
+    try {
+      const clientData = await apiRequest(`cliente/${client.id}`, "GET");
+      const ingresoAnualCliente = parseFloat(clientData.ingreso_anual || 0);
+  
+      const totalPermitido = parseInt(policyData.personas_cobertura || "0", 10);
+  
+      const totalActual = coverageGroups.reduce(
+        (sum, group) =>
+          sum + group.members.filter(m => m.activo === true && !m.fecha_retiro).length,
+        0
+      );
+  
+      // ❌ Verificar si ya existe una cobertura activa para el mismo cliente
+      const yaExisteActivoSinRetiro = coverageGroups.some(group =>
+        group.members.some(member =>
+          (member.cliente_id === client.id || member.id === client.id) &&
+          member.activo === true &&
+          !member.fecha_retiro &&
+          !member.fecha_cancelacion
+        )
+      );
+  
+      if (yaExisteActivoSinRetiro) {
+        setAlert({
+          type: "warning",
+          message: `El cliente "${clientData.nombre_completo}" ya está agregado con una cobertura activa.`,
+          visible: true
+        });
+        setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+        return;
+      }
+  
+   
+  
+      // ✅ Agregar nuevo miembro al primer grupo
+      setCoverageGroups(prevGroups => {
+        const updatedGroups = prevGroups.map((group, index) => {
+          if (index === 0) {
+            return {
+              ...group,
+              members: [
+                ...group.members,
+                {
+                  cobertura_id: null,
+                  id: client.id,
+                  cliente_id: client.id,
+                  nombre: clientData.nombre_completo,
+                  ingreso_anual: ingresoAnualCliente,
+                  periodo_ingreso_ocasional: clientData.periodo_ingreso_ocasional || "",
+                  ingreso_por_periodo_ocasional: clientData.ingreso_por_periodo_ocasional || "",
+                  ingreso_ocasional_anual: clientData.ingreso_ocasional_anual || "",
+                  parentesco: "",
+                  fecha_activacion: new Date().toISOString().split("T")[0],
+                  fecha_cancelacion: "",
+                  fecha_retiro: "", // ⚠️ Muy importante: nueva cobertura no retirada
+                  compania_id: "",
+                  agente: "",
+                  policy_number: "",
+                  codigo_poliza: "",
+                  plan: "",
+                  metal: "",
+                  red: "",
+                  precio: 0,
+                  estado_cobertura: "",
+                  elegibilidad: "",
+                  ano_cobertura: new Date().getFullYear().toString(),
+                  activo: true,      // ✅ Activo por defecto
+                  grupo: "G1",
+                  pagador_id: "",
+                  tipo_pago: "",
+                  dia_pago: 1,
+                  nota_cancel: ""
+                }
+              ]
+            };
+          }
+          return group;
+        });
+  
+        recalculateTotalIncome(updatedGroups);
+        return updatedGroups;
+      });
+  ////mantiene el modal de cliente abierto para continuar al paso 6 ojo
+      setShowModal(true);
+      setAlert({
+        type: "success",
+        message: `Cliente "${clientData.nombre_completo}" agregado correctamente.`,
+        visible: true
+      });
+  
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+    } catch (error) {
+      console.error("Error al agregar cliente:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al traer información del cliente.",
+        visible: true
+      });
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+    }
+  };
+  
+
+
+  const recalculateTotalIncome = (groups) => {
+    const total = calcIngresoFamiliar((groups || []).flatMap((g) => g.members || []));
+    setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
+  };
+  
+
+
+  useEffect(() => {
+    if (currentStep === 2) {
+      const total = calcIngresoFamiliar(coverageGroups.flatMap((g) => g.members || []));
+      setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
+    }
+  }, [coverageGroups, currentStep]);
+  
+
+  const handleClienteCreated = async (newClient) => {
+    if (newClient && newClient.id) {
+      addFamilyMember(newClient);
+      
+    }
+  };
+
+  const handleClienteExistenteSeleccionado = async (cliente) => {
+    try {
+      const clientData = await apiRequest(`cliente/show/${cliente.id}`, "GET");
+
+
+
+      if (!clientData || !clientData.id) throw new Error("Cliente no encontrado");
+
+      // Llama a la lógica de agregar al grupo, que ya valida duplicados
+      addFamilyMember(clientData);
+
+      
+    } catch (error) {
+      console.error("Error al traer información del cliente:", error);
+      setAlert({
+        type: "danger",
+        message: "Error al traer información del cliente.",
+        visible: true
+      });
+      setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+    }
+  };
+
+
+
+
+  const updateFamilyMember = (clientId, field, value) => {
+    setFamilyMembers(prev =>
+      prev.map(member =>
+        member.id === clientId
+          ? { ...member, [field]: value }
+          : member
+      )
+    );
+  };
+
+  const addCoverageGroup = () => {
+    let newMembers = [];
+
+    if (coverageGroups.length > 0) {
+      // Hacer copia profunda de los objetos de los miembros (evita referencias compartidas)
+      newMembers = coverageGroups[0].members.map(member => ({
+        ...JSON.parse(JSON.stringify(member)), // copia profunda segura
+        parentesco: "",
+        fecha_activacion: "",
+        fecha_cancelacion: "",
+        compania_id: "",
+        agente: "",
+        plan: "",
+        metal: "",
+        elegibilidad: "",
+        estado_cobertura: "",
+        codigo_poliza: "",
+        policy_number: "",
+        precio: "",
+        red: "",
+        ano_cobertura: "",
+        pagador_id: ""
+      }));
+    }
+
+    const newGroup = {
+      id: coverageGroups.length + 1,
+      cobertura_tipo: "SEGURO MEDICO  OBAMA",
+      policyData: { ...INITIAL_POLICY_STATE },
+      members: newMembers
+    };
+
+    setCoverageGroups([...coverageGroups, newGroup]);
+  };
+
+
+  const removeMemberFromGroup = async (groupId, memberId) => {
+    try {
+      const group = coverageGroups.find(g => g.id === groupId);
+      if (!group) throw new Error("Grupo no encontrado");
+
+      const member = group.members.find(m => m.id === memberId);
+      if (!member) throw new Error("Miembro no encontrado");
+
+      if (!member.cobertura_id) {
+        // Solo frontend
+        const updatedGroups = coverageGroups.map((group) =>
+          group.id === groupId
+            ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+            : group
+        );
+        setCoverageGroups(updatedGroups);
+        recalculateTotalIncome(updatedGroups);
+        return;
+      }
+
+      const response = await GrupoFamiliarService.deleteCobertura(member.cobertura_id);
+
+
+      // Verificar si la respuesta tiene message
+      if (response && response.message) {
+        // Eliminación exitosa
+        const updatedGroups = coverageGroups.map((group) =>
+          group.id === groupId
+            ? { ...group, members: group.members.filter((m) => m.id !== memberId) }
+            : group
+        );
+        setCoverageGroups(updatedGroups);
+        recalculateTotalIncome(updatedGroups);
+
+        setAlert({
+          type: "success",
+          message: "Cobertura eliminada correctamente.",
+          visible: true,
+        });
+        setTimeout(() => setAlert({ type: "", message: "", visible: false }), 3000);
+      } else {
+        throw new Error("La eliminación no fue confirmada por el servidor.");
+      }
+
+
+    } catch (error) {
+      console.error("Error al eliminar cobertura:", error);
+      setAlert({
+        type: "danger",
+        message: `Error al eliminar cobertura: ${error.message}`,
+        visible: true,
+      });
+    }
+  };
+
+
+
+  const updateMemberData = (groupId, memberId, field, value) => {
+    setCoverageGroups((prevGroups) => {
+      const updatedGroups = prevGroups.map((group) =>
+        group.id === groupId
+          ? {
+            ...group,
+            members: group.members.map((member) => {
+              if (member.id === memberId) {
+                const updatedMember = { ...member, [field]: value };
+
+                // Si se está actualizando fecha_cancelacion, actualizamos el campo "vigente" y "estado_cobertura"
+                if (field === "fecha_cancelacion") {
+                  updatedMember.vigente = value ? false : true; // Si tiene fecha de cancelación, desactivamos
+                  // Regla automática: si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior: Yes, Sí, Medicare, Medicaid, etc.)
+                  if (value) {
+                    updatedMember.estado_cobertura = "No";
+                  }
+                  // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+                }
+
+                // Regla automática: si se establece fecha_retiro, estado_cobertura debe ser "No" (sin importar el valor anterior)
+                if (field === "fecha_retiro") {
+                  if (value) {
+                    updatedMember.estado_cobertura = "No";
+                  }
+                  // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+                }
+
+                return updatedMember;
+              }
+              return member;
+            }),
+          }
+          : group
+      );
+
+      // Después de actualizar recalculamos el ingreso familiar
+      const total = calcIngresoFamiliar(updatedGroups.flatMap((g) => g.members || []));
+      
+      setPolicyData((prev) => ({ ...prev, ingreso_familiar: total }));
+      
+
+      return updatedGroups;
+    });
+  };
+
+  const handleAplicarCancelacionGeneral = () => {
+    setMostrarModalRenovacion(true);
+  };
+   
+
+
+  const openEditModal = (groupId, memberId) => {
+    const group = coverageGroups.find(g => g.id === groupId);
+    if (!group) return;
+
+    const member = group.members.find(m => m.id === memberId);
+    if (!member) return;
+
+    setCurrentEditMember({ ...member, groupId });
+    setShowEditModal(true);
+  };
+  const saveEditChanges = () => {
+    if (!currentEditMember) return;
+
+    // Verificar si el campo está vacío o inválido
+    const precioCrudo = currentEditMember.precio?.toString().replace(/[^0-9.]/g, '') || "0";
+    const parsedPrecio = parseFloat(precioCrudo);
+    const updatedvigente = currentEditMember.fecha_cancelacion ? false : true;
+    // Actualizar el grupo con el valor de precio corregido
+    setCoverageGroups(prevGroups =>
+      prevGroups.map(group =>
+        group.id === currentEditMember.groupId
+          ? {
+              ...group,
+              members: group.members.map(member =>
+                member.id === currentEditMember.id
+                  ? {
+                      ...member,
+                      ...currentEditMember,
+                      precio: isNaN(parsedPrecio) ? 0 : parsedPrecio,
+                      activo: currentEditMember.activo || false,
+                      vigente: updatedvigente
+                    }
+                  : member
+              )
+            }
+          : group
+      )
+    );
+    
+
+    setShowEditModal(false);
+    setCurrentEditMember(null);
+   
+
+  };
+
+
+
+  useEffect(() => {
+    const conYes = coverageGroups.reduce(
+      (sum, group) => sum + group.members.filter(m => m.estado_cobertura === "Yes").length,
+      0
+    );
+    setTotalYes(conYes);
+  }, [coverageGroups]);
+
+
+
+  const getCompanyName = (companyId) => {
+    if (!companyId) return "Sin compañía";
+
+    // Asegurar que estamos comparando el mismo tipo de datos
+    const company = availableCompanies.find(c => String(c.id) === String(companyId));
+
+    return company ? company.nombre : "Compañía desconocida";
+  };
+
+
+  
+    const nextStep = () => {
+      if (currentStep < totalSteps) {
+        setCurrentStep(currentStep + 1);
+      }
+    };
+    
+
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
+  };
+
+  // Función para abrir el modal y resetear a la pestaña por defecto
+  const handleOpenModal = () => {
+    setActiveTab("nuevo"); // Reset a la pestaña por defecto
+    setShowModal(true);
+  };
+  const existeTomadorValido = () => {
+    let hayCoberturasActivas = false;
+  
+    for (const group of coverageGroups) {
+      for (const member of group.members) {
+        if (member.activo && !member.fecha_retiro) {
+          hayCoberturasActivas = true;
+  
+          if (member.parentesco === "TOMADOR") {
+            return true; // Si hay un tomador activo, OK
+          }
+        }
+      }
+    }
+  
+    // Si hay coberturas activas pero ningún tomador
+    return !hayCoberturasActivas ? true : false;
+  };
+  
+  
+  const obtenerClienteTomador = () => {
+    for (const group of coverageGroups) {
+      const tomador = group.members.find(m => m.parentesco === "TOMADOR");
+      if (tomador) {
+        // Si el ID es tipo string y tiene guiones, tomamos la primera parte
+        if (typeof tomador.id === "string" && tomador.id.includes("-")) {
+          return tomador.id.split("-")[0]; // solo el ID real
+        }
+        console.log("id",tomador.id)
+        return tomador.id;
+      }
+    }
+    return null;
+  };
+  
+
+
+  const handleSubmit = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+
+    e.preventDefault();
+    setAlert({ type: "", message: "", visible: false });
+
+    try {
+      const ingresoFamiliarFinal = policyData.ingreso_familiar;
+
+      // Datos del grupo familiar
+      const grupoFamiliarData = {
+        personas_taxes: totalMiembros,
+        personas_cobertura: totalYes,
+        relacion: policyData.relacion,
+        ingreso_familiar_anual: ingresoFamiliarFinal,
+        persona_contacto: policyData.persona_contacto,
+        pertenece_grupo_familiar: policyData.pertenece_grupo_familiar,
+        telefonos: {
+          telefono_1: policyData.telefono_1 ? policyData.telefono_1 : null,
+          telefono_2: policyData.telefono_2 ? policyData.telefono_2 : null,
+          whatsapp: contactMethods.whatsapp,
+          telegram: contactMethods.telegram,
+          mensaje_sms: contactMethods.texto_sms
+        },
+        cod_tel_1: getCountryCode(selectedCode.telefono_1),
+        cod_tel_2: getCountryCode(selectedCode.telefono_2),
+        nota: policyData.notas_telefonos,
+        captado_por: policyData.captado_por || "",
+        cual: policyData.referido || "",
+        responsable: policyData.responsable || "",
+        carta_autorizacion: policyData.carta_autorizacion || "",
+        llamada_cliente: policyData.llamada_cliente || "",        
+        elegibilidad_carta: policyData.elegibilidad_carta || ""
+      };
+
+      const grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
+
+      const grupoFamiliarId = grupoFamiliarResponse.data?.id;
+      if (grupoFamiliarId) {
+        await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
+
+        Swal.fire({
+          title: "¡Actualización Exitosa!",
+          text: "El grupo familiar ha sido actualizado.",
+          icon: "success",
+          confirmButtonText: "Aceptar",
+          timer: 4000
+        }).then(() => {
+          navigate('/grupofamiliar/lista');
+        });
+
+        return;
+      }
+
+      setPolicyData(INITIAL_POLICY_STATE);
+      setCoverageGroups([{
+        id: 1,
+        tipoProducto: "SEGURO MEDICO  OBAMA",
+        policyData: { ...INITIAL_POLICY_STATE },
+        members: []
+      }]);
+
+    } catch (error) {
+      console.error("❌ Error en handleSubmit:", error);
+
+      setAlert({
+        type: "danger",
+        message: `Error al guardar: ${error.message || "Ocurrió un error inesperado"}`,
+        visible: true
+      });
+    }
+  };
+
+
+
+
+
+  const renderStepProgressBar = () => (
+    <div className="mb-4">
+      <div className="progress" style={{ height: '10px', borderRadius: '5px' }}>
+        <div
+          className="progress-bar bg-primary"
+          role="progressbar"
+          style={{
+            width: `${(currentStep / totalSteps) * 100}%`,
+            transition: 'width 0.3s ease-in-out'
+          }}
+          aria-valuenow={(currentStep / totalSteps) * 100}
+          aria-valuemin="0"
+          aria-valuemax="100"
+        ></div>
+      </div>
+      <div className="d-flex justify-content-between mt-2">
+        {Array.from({ length: totalSteps }, (_, i) => i + 1).map((step) => (
+          <div key={step} className="text-center" style={{ width: '100%' }}>
+            <div
+              className={`d-flex align-items-center justify-content-center rounded-circle mx-auto mb-2 ${step <= currentStep ? 'bg-primary text-white' : 'bg-light'
+                }`}
+              style={{ width: '32px', height: '32px' }}
+            >
+              {step}
+            </div>
+            <div className={step <= currentStep ? 'fw-bold' : ''}>
+              {step === 1 ? 'Datos Principales' : 'Coberturas'}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+  const companyColorMap = {
+    "AMBETER": "#FF99FF",
+    "BCBS TEXAS": "#89CFF0",
+    "BRIGHT HEALTH": "#9EFF00",
+    "FLORIDA BLUE": "#6FCFFF"
+
+  };
+
+  const metalColorMap = {
+    "BRONCE": "#CD7F32",   // Bronce
+    "SILVER": "#C0C0C0",   // Plata
+    "GOLD": "#FFD700"      // Oro
+  };
+
+
+  const getCompanyColor = (compania_id) => {
+    const name = getCompanyName(compania_id);
+    return companyColorMap[name] || "#d3d3d3"; // Gris claro por defecto
+  };
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <Card className="shadow-sm border-0 mb-4">
+            <Card.Body>
+              <h4 className="mb-3 text-primary">Datos de la Póliza</h4>
+              <hr />
+
+              <Row className="mb-4">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Personas en Taxes</Form.Label>
+                    <Form.Control
+                          type="text"
+                          value={totalMiembros}
+                          readOnly
+                          className="bg-light"
+                        />
+
+                  </Form.Group>
+                </Col>
+
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Personas en Cobertura</Form.Label>
+                    <Form.Control
+                          type="text"
+                          value={totalYes}
+                          readOnly
+                          className="bg-light"
+                        />
+
+                  </Form.Group>
+                </Col>
+
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Ingreso Familiar Anual ($)</Form.Label>
+                    <Form.Control
+
+                      type="text"
+                      name="ingreso_familiar"
+                      value={policyData.ingreso_familiar}
+                      onChange={handlePolicyChange}
+
+
+                      readOnly
+                      className="bg-light"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <h4 className="mt-4 mb-3 text-primary">Datos de Contacto</h4>
+              <hr />
+
+              <Row className="mb-4">
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Persona Contacto</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="persona_contacto"
+                      value={policyData.persona_contacto}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Seleccione la relacion entre la persona de contacto y el grupo familiar">
+                      Relación
+                    </Form.Label>
+                    <Form.Select name="relacion" value={policyData.relacion} onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="CONYUGE">CONYUGE</option>
+                      <option value="HIJO">HIJO</option>
+                      <option value="HERMANO">HERMANO</option>
+                      <option value="PADRE">PADRE</option>
+                      <option value="MADRE">MADRE</option>
+                      <option value="NIETO/A">NIETO/A</option>
+                      <option value="ABUELO/A">ABUELO/A</option>
+                      <option value="SUEGRO/A">SUEGRO/A</option>
+                      <option value="TIO/A">TIO/A</option>
+                      <option value="SOBRINO/A">SOBRINO/A</option>
+                      <option value="AMIGO">AMIGO</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium d-block">¿Pertenece al grupo familiar?</Form.Label>
+                    <Button
+                      variant={policyData.pertenece_grupo_familiar ? "primary" : "outline-primary"}
+                      onClick={() => {
+                        setPolicyData({
+                          ...policyData,
+                          pertenece_grupo_familiar: !policyData.pertenece_grupo_familiar
+                        });
+                      }}
+                      className="w-100"
+                    >
+                      {policyData.pertenece_grupo_familiar ? 'Sí' : 'No'}
+                    </Button>
+                  </Form.Group>
+                </Col>
+
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Teléfono 1</Form.Label>
+                    <div className="input-group">
+                      <span className="input-group-text p-0">
+                        <CountrySelectWithFlags
+                          name="telefono_1"
+                          selectedCode={selectedCode.telefono_1}
+                          onChange={handleCountryCodeChange}
+                        />
+                      </span>
+                      <Form.Control
+                        type="text"
+                        name="telefono_1"
+                        value={policyData.telefono_1}
+                        onChange={handlePolicyChange}
+                      />
+                    </div>
+                  </Form.Group>
+                </Col>
+
+                <Col md={3}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Teléfono 2</Form.Label>
+                    <div className="input-group">
+                      <span className="input-group-text p-0">
+                        <CountrySelectWithFlags
+                          name="telefono_2"
+                          selectedCode={selectedCode.telefono_2}
+                          onChange={handleCountryCodeChange}
+                        />
+                      </span>
+                      <Form.Control
+                        type="text"
+                        name="telefono_2"
+                        value={policyData.telefono_2}
+                        onChange={handlePolicyChange}
+                      />
+                    </div>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={6}>
+                  <Form.Group className="mb-3">
+                    <Form.Label className="fw-medium">Nota</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={3}
+                      name="notas_telefonos"
+                      value={policyData.notas_telefonos}
+                      onChange={handlePolicyChange}
+                      placeholder="Ingrese sus notas aquí..."
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Carta Autorización">
+                    Carta Autorización
+                    </Form.Label>
+                    <Form.Select name="carta_autorizacion" value={policyData.carta_autorizacion} onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="Pendiente">Pendiente</option>
+                      <option value="Carta">Carta</option>
+                      <option value="Cargada">Cargada</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Llamada cliente</Form.Label>
+                    <Form.Control
+                      type="date"
+                      name="llamada_cliente"
+                      value={policyData.llamada_cliente}
+                      onChange={handlePolicyChange}
+                      
+                      />
+                  </Form.Group>
+                </Col>
+                <Col md={2}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Elegibilidad</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="elegibilidad_carta"
+                      value={policyData.elegibilidad_carta}
+                      onChange={handlePolicyChange}
+                    
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+           <Row className="mb-4">
+                <Col xs={12}>
+                  <Form.Label className="fw-medium mb-2">Medios de contacto preferidos</Form.Label>
+                  <div className="d-flex flex-row flex-wrap gap-4">
+                    <Form.Check
+                      type="checkbox"
+                      id="whatsapp"
+                      name="whatsapp"
+                      label="WhatsApp"
+                      checked={contactMethods.whatsapp}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                    <Form.Check
+                      type="checkbox"
+                      id="telegram"
+                      name="telegram"
+                      label="Telegram"
+                      checked={contactMethods.telegram}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                    <Form.Check
+                      type="checkbox"
+                      id="texto_sms"
+                      name="texto_sms"
+                      label="Texto SMS"
+                      checked={contactMethods.texto_sms}
+                      onChange={handleContactMethodChange}
+                      className="d-flex align-items-center gap-2"
+                    />
+                  </div>
+                </Col>
+              </Row>
+
+              <Row className="mb-4">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium" title="Selecciona el medio por el cual fue conocido el grupo familiar">
+                      Captado por
+                    </Form.Label>
+                    <Form.Select name="captado_por" value={policyData.captado_por} onChange={handlePolicyChange}>
+                      <option value="">Seleccione</option>
+                      <option value="Referido">Referido</option>
+                      <option value="Google">Google</option>
+                      <option value="Redes sociales">Redes sociales</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Cuál</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="referido"
+                      value={policyData.referido}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-medium">Asesor</Form.Label>
+                    <Form.Control
+                      type="text"
+                      name="responsable"
+                      value={policyData.responsable}
+                      onChange={handlePolicyChange}
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </Card.Body>
+          </Card>
+        );
+      case 2:
+        return (
+          <Card className="shadow-sm border-0 mb-4">
+            <Card.Body>
+              <div className="mb-4">
+
+
+
+
+              </div>
+
+              <div className="d-flex justify-content-between align-items-center flex-wrap mb-3">
+  {/* Título */}
+  <h4 className="mb-2 mb-md-0 text-primary">Personas del Grupo Familiar</h4>
+
+  {/* Botones alineados */}
+  <div className="d-flex flex-wrap gap-2">
+    {/* Agregar Miembro */}
+    <Button
+      variant="outline-primary"
+      className="d-flex align-items-center"
+      onClick={handleOpenModal}
+    >
+      <i className="bi bi-plus-circle me-2"></i> Agregar Miembro
+    </Button>
+  </div>
+</div>
+
+
+              <hr />
+              <Form.Check
+                  type="checkbox"
+                  label="Aplicar Cancelación General a todas las coberturas activas"
+                  checked={cancelacionGeneralActiva}
+                  onChange={(e) => setCancelacionGeneralActiva(e.target.checked)}
+                  className="mb-2 fw-semibold"
+                />
+
+                  {cancelacionGeneralActiva && (
+                    <Row className="mb-3">
+                      <Col md={4}>
+                        <Form.Group>
+                          <Form.Label className="fw-semibold">Fecha de Cancelación General</Form.Label>
+                          <Form.Control
+                            type="date"
+                            value={fechaCancelacionGeneral}
+                            onChange={(e) => setFechaCancelacionGeneral(e.target.value)}
+                          />
+                        </Form.Group>
+                      </Col>
+                      <Col md={4} className="d-flex align-items-end">
+                        <Button
+                          variant="danger"
+                          onClick={handleAplicarCancelacionGeneral}
+                          disabled={!fechaCancelacionGeneral}
+                        >
+                          Aplicar Cancelación a Todas las Coberturas Activas
+                        </Button>
+                      </Col>
+                    </Row>
+                  )}
+
+              {coverageGroups.map((group) => (
+                
+                
+                <Accordion key={group.id} className="mb-4" defaultActiveKey="0">
+                  <Accordion.Item eventKey="0">
+                    <Accordion.Header>
+                      <div className="d-flex align-items-center">
+                        <span className="me-2">Cobertura {group.id}:</span>
+                        <Form.Select
+                          style={{ width: "auto", maxWidth: "300px", marginRight: "10px" }}
+                          value={group.tipoProducto}
+                          onChange={(e) => handleProductTypeChange(group.id, e.target.value)}
+                          className="form-select-sm"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {TIPOS_PRODUCTOS.map(producto => (
+                            <option key={producto.id} value={producto.id}>
+                              {producto.nombre}
+                            </option>
+                          ))}
+                        </Form.Select>
+
+
+                      </div>
+                    </Accordion.Header>
+
+
+                    <Accordion.Body>
+
+                      <Row>
+                        {group.members.filter(m => m.activo === true).length > 0 ? (
+                          group.members
+                            .filter(m => m.activo === true)
+                            .map((member, index) => (
+                              <Col key={member.id} lg={4} md={6} className="mb-3">
+                                <Card
+
+                                  className={`h-100 shadow-sm ${member.estado_cobertura !== "Yes" ? 'border-danger bg-light-subtle' : ''}`}>
+
+
+                                  <Card.Header className="d-flex justify-content-between align-items-start bg-light flex-wrap">
+                                    <div className="d-flex align-items-center flex-wrap gap-2">
+                                      <Form.Select
+                                        size="sm"
+                                        value={member.grupo || "G1"}
+                                        style={{
+                                          backgroundColor: grupoColorMap[member.grupo || "G1"],
+                                          color: "#fff",
+                                          fontWeight: "bold",
+                                          width: "55px",
+                                          padding: "2px 8px"
+                                        }}
+                                        onChange={(e) => updateMemberData(group.id, member.id, "grupo", e.target.value)}
+                                      >
+                                        <option value="G1">G1</option>
+                                        <option value="G2">G2</option>
+                                        <option value="G3">G3</option>
+                                      </Form.Select>
+                                      <Button
+                                            variant="link"
+                                            className="p-0 m-0 text-primary fw-semibold"
+                                            onClick={() => handleNombreClick(member.id)}
+                                          >
+                                            {member.nombre}
+                                          </Button>
+                                          {member.tipo_renovacion === "copiada" && (
+                                              <span className="badge bg-info text-white small ms-2">
+                                                <i className="bi bi-files me-1"></i>Copiada
+                                              </span>
+                                            )}
+
+                                            {member.tipo_renovacion === "vacia" && (
+                                              <span className="badge bg-secondary text-white small ms-2">
+                                                <i className="bi bi-file-earmark-plus me-1"></i>Vacía
+                                              </span>
+                                            )}
+
+                                    </div>
+
+                                    <Dropdown>
+                                      <Dropdown.Toggle variant="outline-secondary" size="sm" id={`dropdown-${member.id}`}>
+                                        <i className="bi bi-three-dots-vertical"></i>
+                                      </Dropdown.Toggle>
+                                      <Dropdown.Menu align="end">
+                                        <Dropdown.Item onClick={() => openEditModal(group.id, member.id)}>
+                                          <i className="bi bi-pencil me-2"></i> Editar
+                                        </Dropdown.Item>
+
+                                        {index > 0 && (
+                                          <Dropdown.Item onClick={() => {
+                                            Swal.fire({
+                                              title: '¿Está seguro?',
+                                              text: '¿Desea copiar la información del primer miembro a este miembro?',
+                                              icon: 'question',
+                                              showCancelButton: true,
+                                              confirmButtonText: 'Sí, copiar',
+                                              cancelButtonText: 'Cancelar',
+                                              customClass: {
+                                                confirmButton: 'btn btn-success me-2',
+                                                cancelButton: 'btn btn-secondary',
+                                                actions: 'd-flex justify-content-center gap-2'
+                                              },
+                                              buttonsStyling: false
+                                            }).then((result) => {
+                                              if (result.isConfirmed) {
+                                                copiarDatosDelPrimero(group.id, member.id);
+                                              }
+                                            });
+                                          }}>
+                                            <i className="bi bi-copy me-2"></i> Copiar datos
+                                          </Dropdown.Item>
+                                        )}
+
+                                        <Dropdown.Divider />
+
+                                        {member.parentesco === "TOMADOR" && (
+                                            <Dropdown.Item onClick={async () => {
+                                              try {
+                                                const { value: language } = await Swal.fire({
+                                                  title: "Idioma del documento",
+                                                  text: "¿En qué idioma deseas enviar la autorización?",
+                                                  icon: "question",
+                                                  input: "select",
+                                                  inputOptions: {
+                                                    es: "Español",
+                                                    en: "Inglés",
+                                                  },
+                                                  inputPlaceholder: "Selecciona un idioma",
+                                                  showCancelButton: true,
+                                                  confirmButtonText: "Aceptar",
+                                                  cancelButtonText: "Cancelar",
+                                                });
+
+                                                if (!language) return;
+
+                                                setSelectedClienteLanguage(language);
+                                                // Obtener datos del cliente para el modal
+                                                let clienteData = null;
+                                                try {
+                                                  clienteData = await apiRequest(`cliente/show/${member.cliente_id}`, "GET");
+                                                } catch (err) {
+                                                  console.warn("No se pudieron obtener datos del cliente:", err);
+                                                }
+
+                                                const result = await generarPDFAutorizacion(
+                                                  member.cliente_id,
+                                                  false,
+                                                  language
+                                                );
+                                                if (result) {
+                                                  setPdfData(result);
+                                                  setSelectedClienteId(member.cliente_id);
+                                                  setSelectedClienteData(clienteData);
+                                                  setShowPDFModal(true);
+                                                }
+                                              } catch (error) {
+                                                console.error("Error al generar PDF:", error);
+                                                await generarPDFAutorizacion(
+                                                  member.cliente_id,
+                                                  true,
+                                                  selectedClienteLanguage
+                                                );
+                                              }
+                                            }}>
+                                              <i className="bi bi-file-earmark-pdf me-2 text-danger"></i> Descargar Autorización
+                                            </Dropdown.Item>
+                                          )}
+
+
+
+
+                                      </Dropdown.Menu>
+                                    </Dropdown>
+
+                                  </Card.Header>
+
+                                  <Card.Body>
+                                    <div className="mb-3">
+                                    <Row className="mb-2">
+                                    <Col md={6}>
+                                      <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">ID Póliza</Form.Label>
+                                        <Form.Control
+                                          size="sm"
+                                          type="text"
+                                          value={member.codigo_poliza || ""}
+                                          onChange={(e) => updateMemberData(group.id, member.id, "codigo_poliza", e.target.value)}
+                                          placeholder="ID Póliza"
+                                        />
+                                      </Form.Group>
+                                      </Col>
+                                      <Col md={6}>
+                                      <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">Número de póliza</Form.Label>
+                                        <Form.Control
+                                          size="sm"
+                                          type="text"
+                                          value={member.policy_number || ""}
+                                          onChange={(e) => updateMemberData(group.id, member.id, "policy_number", e.target.value)}
+                                          placeholder="Número de Póliza"
+                                        />
+                                      </Form.Group>
+                                      </Col>
+                                      </Row>
+                                      <Row className="mb-2">
+                                      <Col md={6}>
+                                      <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">Elegibilidad</Form.Label>
+                                        <Form.Control
+                                          size="sm"
+                                          type="text"
+                                          value={member.elegibilidad || ""}
+                                          onChange={(e) => updateMemberData(group.id, member.id, "elegibilidad", e.target.value)}
+                                          placeholder="Elegibilidad"
+                                        />
+                                      </Form.Group>
+                                      </Col>
+                                      </Row>
+                                      <Form.Group className="mb-2">
+                                        <Form.Label className="small text-muted mb-1">Parentesco</Form.Label>
+                                        <Form.Select
+                                          size="sm"
+                                          value={member.parentesco || ""}
+                                          onChange={(e) => {
+                                            const selectedValue = e.target.value;
+                                            updateMemberData(group.id, member.id, "parentesco", selectedValue);
+
+                                          }}
+                                        >
+                                          <option value="">Seleccione</option>
+                                          <option value="TOMADOR">TOMADOR</option>
+                                          <option value="CONYUGE">CONYUGE</option>
+                                          <option value="HIJO">HIJO</option>
+                                          <option value="HERMANO">HERMANO</option>
+                                          <option value="PADRE">PADRE</option>
+                                          <option value="MADRE">MADRE</option>
+                                          <option value="NIETO/A">NIETO/A</option>
+                                          <option value="ABUELO/A">ABUELO/A</option>
+                                          <option value="SUEGRO/A">SUEGRO/A</option>
+                                          <option value="TIO/A">TIO/A</option>
+                                          <option value="SOBRINO/A">SOBRINO/A</option>
+                                          <option value="AMIGO">AMIGO</option>
+                                        </Form.Select>
+                                      </Form.Group>
+
+                                      <Row className="mb-2">
+                                        <Col xs={6}>
+                                          <Form.Group>
+                                            <Form.Label className="small text-muted mb-1">Activación</Form.Label>
+                                            <MdyDashDateInput
+                                              valueIso={isoYmd(member.fecha_activacion)}
+                                              disabled={member.estado_cobertura === "No"}
+                                              onChangeIso={(iso) =>
+                                                updateMemberData(group.id, member.id, "fecha_activacion", iso)
+                                              }
+                                            />
+
+                                          </Form.Group>
+                                        </Col>
+                                        <Col xs={6}>
+                                          <Form.Group>
+                                            <Form.Label className="small text-muted mb-1">Cancelación</Form.Label>
+                                            <MdyDashDateInput
+                                              valueIso={isoYmd(member.fecha_cancelacion)}
+                                              disabled={true}
+                                              onChangeIso={() => {}}
+                                            />
+                                          </Form.Group>
+                                        </Col>
+                                      </Row>
+                                    </div>
+
+                                    <Button
+                                      variant="outline-primary"
+                                      size="sm"
+                                      className="w-100"
+                                      onClick={() => openEditModal(group.id, member.id)}
+                                    >
+                                      <i className="bi bi-pencil-square me-1"></i> Editar detalles completos
+                                    </Button>
+                                  </Card.Body>
+                                  <Card.Footer className="bg-white">
+                                    <div className="d-flex justify-content-between align-items-center">
+                                      <small className="text-muted d-flex align-items-center gap-2">
+                                        <span
+                                          style={{
+                                            width: "12px",
+                                            height: "12px",
+                                            borderRadius: "50%",
+                                            backgroundColor: getCompanyColor(member.compania_id),
+                                            display: "inline-block"
+                                          }}
+                                        ></span>
+                                        {member.compania_id ? getCompanyName(member.compania_id) : "Sin compañía"}
+                                        {member.agente && (
+                                          <span className="ms-2 text-muted">
+                                            | Agente: {member.agente}
+                                          </span>
+                                        )}
+                                      </small>
+
+
+                                      <span className="badge rounded-pill"
+                                        style={{
+                                          backgroundColor: metalColorMap[member.metal] || '#d3d3d3',
+                                          color: 'black'
+                                        }}>
+                                        {member.metal || "Sin metal"}
+                                      </span>
+
+                                    </div>
+
+                                    {/* NUEVO BLOQUE: Cobertura y Precio */}
+                                    <div className="d-flex justify-content-between align-items-center mt-2 px-1">
+                                      <span className="d-flex align-items-center gap-1">
+                                        <span className="text-muted small fw-medium">Cobertura:</span>
+                                        <span
+                                          className={`badge rounded-pill text-white ${member.estado_cobertura === "Yes"
+                                            ? "bg-success"
+                                            : member.estado_cobertura === "No"
+                                              ? "bg-secondary"
+                                              : "bg-warning text-dark"
+                                            }`}
+                                        >
+                                          {member.estado_cobertura || "No definido"}
+                                        </span>
+                                      </span>
+
+
+                                      <span className="text-muted small">
+                                        <strong>Precio:</strong> {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(member.precio || 0)}
+                                      </span>
+                                    </div>
+
+
+                                  </Card.Footer>
+
+                                </Card>
+                              </Col>
+                            ))
+                        ) : (
+                          <Col xs={12}>
+                            <div className="text-center py-5 border rounded bg-light">
+                              <p className="mb-0 text-muted">No hay miembros agregados.</p>
+
+
+                            </div>
+                          </Col>
+                        )
+                        }
+                      </Row>
+                    </Accordion.Body>
+                  </Accordion.Item>
+                </Accordion>
+              ))}
+              <div className="rounded shadow-sm border border-info bg-light p-3 mb-4">
+                <Row className="text-center fw-medium small">
+                  <Col md={6}>
+                    <div className="text-info mb-2">Personas en Taxes</div>
+                    <span>{totalMiembros}</span>
+                  </Col>
+                  <Col md={6}>
+                    <div className="text-info mb-2">Personas con Cobertura</div>
+                    <span>{totalYes}</span>
+                  </Col>
+                </Row>
+              </div>
+              {/* <div className="mt-4">
+                <Button variant="outline-primary" onClick={addCoverageGroup} className="d-flex align-items-center">
+                  <i className="bi bi-plus-circle me-2"></i> Agregar nueva cobertura
+                </Button>
+              </div> */}
+            </Card.Body>
+          </Card>
+        );
+      default:
+        return null;
+    }
+  };
+  const isPolicyValid = () => {
+    const enTaxes = parseInt(policyData.personas_en_taxes || "0", 10);
+    const conCobertura = parseInt(policyData.personas_cobertura || "0", 10);
+
+    return (
+      enTaxes === totalMiembros &&
+      conCobertura === totalYes
+    );
+  };
+
+  return (
+    <div className="container-fluid py-4">
+      {/* Progress Bar */}
+      {renderStepProgressBar()}
+
+      {/* Alert Messages */}
+      {alert.visible && (
+        <Alert
+          variant={alert.type}
+          className="d-flex align-items-center shadow-sm mb-4"
+          dismissible
+          onClose={() => setAlert({ ...alert, visible: false })}
+        >
+          <i className={`bi ${alert.type === "success" ? "bi-check-circle" : "bi-exclamation-triangle"} me-2`} />
+          {alert.message}
+        </Alert>
+      )}
+
+
+
+      {/* Form Content */}
+      {renderStepContent()}
+
+      {/* Navigation Buttons */}
+      <div className="d-flex justify-content-between mb-4">
+        {currentStep > 1 && (
+          <Button variant="secondary" onClick={prevStep}>
+            <i className="bi bi-arrow-left me-2"></i>
+            Anterior
+          </Button>
+        )}
+
+        {currentStep < totalSteps ? (
+          <Button variant="primary" className="ms-auto" onClick={nextStep}>
+            Siguiente
+            <i className="bi bi-arrow-right ms-2"></i>
+          </Button>
+        ) : (
+       
+        
+          
+          <Button
+            variant="success"
+            className="ms-auto"
+            onClick={handleSubmit}
+            disabled={!existeTomadorValido()}
+            title={!existeTomadorValido() ? "Debe configurar un tomador activo en el grupo familiar" : ""}
+          >
+            <i className="bi bi-save me-2"></i>
+            Guardar Póliza de Grupo Familiar
+          </Button>
+        
+        )
+        
+        }
+      </div>
+
+      {/* Modal for adding client (nuevo o existente) */}
+      <Modal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        size="xl"
+        centered
+      >
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title>
+            <i className="bi bi-person-plus me-2"></i>
+            Agregar Miembro
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Nav variant="tabs" className="mb-4">
+            <Nav.Item>
+              <Nav.Link
+                active={activeTab === "nuevo"}
+                onClick={() => setActiveTab("nuevo")}
+                className={activeTab === "nuevo" ? "fw-bold" : ""}
+              >
+                <i className="bi bi-person-plus-fill me-2"></i>
+                Nuevo Cliente
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link
+                active={activeTab === "existente"}
+                onClick={() => setActiveTab("existente")}
+                className={activeTab === "existente" ? "fw-bold" : ""}
+              >
+                <i className="bi bi-search me-2"></i>
+                Cliente Existente
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
+
+          {activeTab === "nuevo" ? (
+            <Clientes onClienteCreado={handleClienteCreated} isModal={true} />
+          ) : (
+            <ClienteExistente onClienteSeleccionado={handleClienteExistenteSeleccionado} />
+          )}
+        </Modal.Body>
+      </Modal>
+
+      {/* Modal for editing member details */}
+      <Modal
+        show={showEditModal}
+        onHide={() => { setShowEditModal(false); setCurrentEditMember(null); }}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton className="bg-light">
+          <Modal.Title>
+            <i className="bi bi-pencil-square me-2"></i>
+            Editar Miembro
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {currentEditMember && (
+            <Form>
+            <Row>
+              <Col md={6}>
+                <Form.Group className="fw-semibold">
+                  <Form.Label>ID Póliza</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={currentEditMember.codigo_poliza || ""}
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, codigo_poliza: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group className="fw-semibold">
+                  <Form.Label>Número de póliza</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={currentEditMember.policy_number || ""}
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, policy_number: e.target.value })}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Fecha Activación</Form.Label>
+                    <MdyDashDateInput
+                      size="md"
+                      valueIso={isoYmd(currentEditMember.fecha_activacion)}
+                      disabled={currentEditMember.estado_cobertura !== "Yes"}
+                      onChangeIso={(iso) =>
+                        setCurrentEditMember({ ...currentEditMember, fecha_activacion: iso })
+                      }
+                    />
+
+                  </Form.Group>
+                </Col>
+            </Row>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Año Cobertura</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.ano_cobertura || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, ano_cobertura: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Compañía</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.compania_id || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, compania_id: e.target.value })}
+                    >
+                      <option value="">Seleccione</option>
+                      {availableCompanies.map(company => (
+                        <option key={company.id} value={company.id}>
+                          {company.nombre}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Agente</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.agente || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, agente: e.target.value })}
+                      placeholder="Ingrese el agente"
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Plan</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.plan || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, plan: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Metal</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.metal || ""}
+                      onChange={(e) =>
+                        setCurrentEditMember({ ...currentEditMember, metal: e.target.value })
+                      }
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="BRONCE">BRONCE</option>
+                      <option value="SILVER">SILVER</option>
+                      <option value="GOLD">GOLD</option>
+                    </Form.Select>
+
+                  </Form.Group>
+
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Elegibilidad</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.elegibilidad || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, elegibilidad: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Cobertura</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.estado_cobertura || ""}
+                      onChange={(e) => {
+                        const valor = e.target.value;
+                        const vigente = vigenteDesdeEstadoCobertura(valor);
+                        setCurrentEditMember(prev => ({
+                          ...prev,
+                          estado_cobertura: valor,
+                          ...(vigente !== null ? { vigente } : {}),
+                        }));
+                      }}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="Yes">Yes</option>
+                      <option value="No">No</option>
+                      <option value="MEDICARE">MEDICARE</option>
+                      <option value="MEDICAID">MEDICAID</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+
+              <Row>
+                <Col md={4}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Red</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.red || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, red: e.target.value })}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="HMO">HMO</option>
+                      <option value="EPO">EPO</option>
+                      <option value="PPO">PPO</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Pagador</Form.Label>
+                    <Form.Select
+                        value={currentEditMember.pagador_id || ""}
+                        onChange={(e) => setCurrentEditMember({ ...currentEditMember, pagador_id: e.target.value })}
+                      >
+                        <option value="">Seleccione un pagador</option>
+                        {Array.from(
+                          new Map(
+                            coverageGroups
+                              .flatMap(group => group.members)
+                              .filter(m => m.activo && m.cliente_id) // solo miembros activos con cliente
+                              .map(member => [member.cliente_id, member]) // agrupar por cliente_id
+                          ).values()
+                        ).map(member => (
+                          <option key={member.cliente_id} value={member.cliente_id}>
+                            {member.nombre}
+                          </option>
+                        ))}
+                      </Form.Select>
+
+
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Precio</Form.Label>
+                    <Form.Control
+                      type="text"
+                      value={currentEditMember.precio}
+                      onChange={(e) => {
+                        // Solo permite números y punto decimal
+                        const raw = e.target.value.replace(/[^0-9.]/g, '');
+                        setCurrentEditMember({
+                          ...currentEditMember,
+                          precio: raw
+                        });
+                      }}
+                      onBlur={(e) => {
+                        const number = parseFloat(currentEditMember.precio);
+                        if (!isNaN(number)) {
+                          const formatted = new Intl.NumberFormat('en-US', {
+                            style: 'currency',
+                            currency: 'USD',
+                          }).format(number);
+                          setCurrentEditMember({
+                            ...currentEditMember,
+                            precio: formatted
+                          });
+                        }
+                      }}
+                      onFocus={(e) => {
+
+                        if (!currentEditMember?.precio) return; // 👈 Protección
+                        const clean = currentEditMember.precio.replace(/[$,]/g, '');
+                        setCurrentEditMember({
+                          ...currentEditMember,
+                          precio: clean
+                        });
+                      }}
+
+                    />
+                  </Form.Group>
+
+
+                </Col>
+              </Row>
+              <Row>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Dia C/M</Form.Label>
+                    <Form.Control
+                      type="number"
+                      value={currentEditMember.dia_pago || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, dia_pago: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Tipo de pago</Form.Label>
+                    <Form.Select
+                      value={currentEditMember.tipo_pago || ""}
+                      onChange={(e) => setCurrentEditMember({ ...currentEditMember, tipo_pago: e.target.value })}
+                    >
+                      <option value="">Seleccione</option>
+                      <option value="DEBITO AUTOMATICO">DEBITO AUTOMATICO</option>
+                      <option value="CTE PAGA">CTE PAGA</option>
+                      <option value="MES A MES">MES A MES</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+
+              </Row>
+              <Row>
+              <Col md={4}>
+                  <Form.Group className="fw-semibold">
+                    <Form.Label>Fecha Cancelación</Form.Label>
+                    <Form.Control
+                          type="date"
+                          value={currentEditMember.fecha_cancelacion || ""}
+                          onChange={(e) => {
+                            const cancelDate = e.target.value;
+
+                            console.log("🟡 Edit modal → fecha_cancelacion:", cancelDate, "→ vigente:", cancelDate ? false : true);
+
+                            setCurrentEditMember(prev => ({
+                              ...prev,
+                              fecha_cancelacion: cancelDate,
+                              vigente: cancelDate ? false : true,
+                              // Regla automática: si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior: Yes, Sí, Medicare, Medicaid, etc.)
+                              estado_cobertura: cancelDate ? "No" : prev.estado_cobertura
+                            }));
+                          }}
+                        />
+
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                    <Form.Control
+                        type="date"
+                        value={currentEditMember.fecha_retiro || ""}
+                        onChange={(e) => {
+                          const retiroDate = e.target.value;
+                          setCurrentEditMember(prev => ({
+                            ...prev,
+                            fecha_retiro: retiroDate,
+                            // Regla automática: si hay fecha de retiro, estado_cobertura debe ser "No"
+                            estado_cobertura: retiroDate ? "No" : prev.estado_cobertura
+                          }));
+                        }}
+                        disabled={currentEditMember.activo}
+                      />
+
+                  </Form.Group>
+                </Col>
+                <Col md={4} className="d-flex align-items-center">
+                <Form.Group className="mb-0">
+                <Form.Check
+                      type="checkbox"
+                      label="Póliza activa para Taxes"
+                      checked={currentEditMember.activo || false}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setCurrentEditMember(prev => ({
+                          ...prev,
+                          activo: checked,
+                          fecha_retiro: checked ? "" : prev.fecha_retiro,
+                          nota_retiro: checked ? "" : prev.nota_retiro // Limpia si se activa
+                        }));
+                      }}
+                    />
+
+
+                </Form.Group>
+              </Col>
+              </Row>
+              <Row>
+              <Col md={12} className="mt-3">
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={2}
+                    value={currentEditMember.nota_cancel || ""}
+                    disabled={currentEditMember.activo} // ❌ Deshabilitado si está activo
+                    onChange={(e) => setCurrentEditMember({ ...currentEditMember, nota_cancel: e.target.value })}
+                    placeholder="Ingrese una nota si se retira al cliente"
+                  />
+                </Form.Group>
+              </Col>
+
+                              </Row>
+            </Form>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => { setShowEditModal(false); setCurrentEditMember(null); }}>
+            Cancelar
+          </Button>
+          <Button variant="primary" onClick={saveEditChanges}>
+            Guardar Cambios
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <EditClienteModal
+            show={showClienteEditModal}
+            onHide={() => setShowClienteEditModal(false)}
+            clienteId={clienteIdToEdit}
+            clienteData={clienteDataToEdit}
+            onClienteUpdated={(updatedClient) => {
+              setShowClienteEditModal(false);
+              // Si necesitas actualizar la UI, puedes hacerlo aquí
+            }}
+/>
+
+
+            <RenovacionCoberturas
+              trigger={mostrarModalRenovacion}
+              coverageGroups={coverageGroups}
+              setCoverageGroups={setCoverageGroups}
+              fechaCancelacion={fechaCancelacionGeneral}
+              onComplete={() => setMostrarModalRenovacion(false)}
+            />
+
+              {/* Modal para PDF de Autorización */}
+              {pdfData && selectedClienteId && (
+                <DocumentoGeneradoModal
+                  show={showPDFModal}
+                  onHide={() => {
+                    setShowPDFModal(false);
+                    setPdfData(null);
+                    setSelectedClienteId(null);
+                    setSelectedClienteData(null);
+                  }}
+                  pdfBlob={pdfData.blob}
+                  filename={pdfData.filename}
+                  documentType="AUTORIZACION"
+                  documentLanguage={selectedClienteLanguage}
+                  defaultSigner={{
+                    email: selectedClienteData?.email || "",
+                    name: selectedClienteData?.nombre_completo || "",
+                  }}
+                  metadata={{
+                    cliente_id: selectedClienteId,
+                    grupo_familiar_id: null,
+                  }}
+                />
+              )}
+
+
+    </div>
+  );
 };
 
 export default Grupofamiliar;
+
+
+

@@ -1,0 +1,105 @@
+/* EditarCliente.css */
+
+.editar-cliente-container {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  
+  .page-title {
+    color: #1a3964;
+    font-weight: 600;
+    font-size: 24px;
+    margin-bottom: 5px;
+  }
+  
+  .edit-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: none;
+    border-radius: 12px;
+    margin-bottom: 30px;
+  }
+  
+  /* Estilos para los campos modificados */
+  .campo-modificado {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  
+  .campo-modificado:focus {
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  }
+  
+  /* Información de valores originales */
+  small.text-info {
+    display: block;
+    margin-top: 6px;
+    font-style: italic;
+  }
+  
+  /* Estilos para el modal de historial */
+  .cambios-detalle {
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  
+  .cambio-item {
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #f8f9fa;
+    margin-bottom: 6px;
+  }
+  
+  .cambio-item strong {
+    display: block;
+    margin-bottom: 4px;
+    color: #495057;
+    text-transform: capitalize;
+  }
+  
+  .valor-anterior {
+    color: #6c757d;
+    text-decoration: line-through;
+    margin-right: 10px;
+  }
+  
+  .valor-nuevo {
+    color: #0d6efd;
+    font-weight: 500;
+  }
+  
+  /* Estilos para las pestañas */
+  .nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+  }
+  
+  .nav-tabs .nav-link {
+    border: none;
+    color: #495057;
+    font-weight: 500;
+    padding: 10px 15px;
+    margin-right: 5px;
+  }
+  
+  .nav-tabs .nav-link:hover {
+    border-color: transparent;
+    background-color: rgba(13, 110, 253, 0.05);
+  }
+  
+  .nav-tabs .nav-link.active {
+    color: #0d6efd;
+    background-color: transparent;
+    border-bottom: 2px solid #0d6efd;
+  }
+  
+  /* Estilos para el spinner */
+  .spinner-border {
+    width: 1rem;
+    height: 1rem;
+    border-width: 2px;
+  }
+  
+  /* Estilos para la alerta de cambios pendientes */
+  .alert {
+    border-radius: 8px;
+  }

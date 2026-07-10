@@ -1,13 +1,182 @@
-/* src/styles/MainLayout.css */
+@import "https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css";
+
+/* Contenedor principal del dashboard */
 .dashboard-container {
   display: flex;
-  height: 100vh;
-  background: #f8f9fc;
+  min-height: 100vh;
+  position: relative;
+}
+
+.dashboard-content {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* Botón de alerta de tareas */
+.tarea-alerta-button {
+  background: transparent !important; /* quitar fondo morado */
+  box-shadow: none !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: auto !important;
+  height: auto !important;
 }
 
 
 
 
+.tarea-alerta-button:hover {
+  transform: translateY(-2px) !important;
+  box-shadow: 0 8px 25px 0 rgba(79, 70, 229, 0.35) !important;
+  color: white !important;
+  text-decoration: none !important;
+}
+
+
+
+.tarea-alerta-button:active {
+  transform: translateY(0) !important;
+}
+
+.tarea-alerta-button:focus {
+  outline: none !important;
+  box-shadow: 0 8px 25px 0 rgba(79, 70, 229, 0.35) !important;
+  text-decoration: none !important;
+}
+
+/* Icono dentro del botón */
+.tarea-alerta-button i {
+  font-size: 20px !important;
+  z-index: 2 !important;
+  position: relative !important;
+  transition: transform 0.3s ease !important;
+  color: white !important;
+}
+
+.tarea-alerta-button:hover i {
+  transform: scale(1.1) !important;
+  color: white !important;
+}
+
+/* Badge de notificación */
+.tarea-alerta-button i {
+  font-size: 26px !important;
+  color: #3d3d3d !important; /* morado agradable */
+  position: relative !important;
+}
+
+.tarea-badge {
+  position: absolute !important;
+  top: -6px !important;
+  right: -10px !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 6px !important;
+  border-radius: 10px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4) !important;
+  z-index: 10 !important;
+  animation: badge-pulse 2s infinite !important;
+  line-height: 1 !important;
+}
+
+
+@keyframes badge-pulse {
+  0% {
+    box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 2px white, 0 3px 15px rgba(239, 68, 68, 0.6);
+  }
+  100% {
+    box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4);
+  }
+}
+
+/* Animación de shake cuando hay muchas tareas */
+.tarea-alerta-button:hover {
+  animation: subtle-shake 0.5s ease-in-out;
+}
+
+@keyframes subtle-shake {
+  0%, 100% { transform: translateY(-2px) rotate(0deg); }
+  25% { transform: translateY(-2px) rotate(-1deg); }
+  75% { transform: translateY(-2px) rotate(1deg); }
+}
+
+
+
+.tarea-alerta-button:hover::after {
+  width: 60px;
+  height: 60px;
+}
+
+/* Tooltip personalizado */
+.tarea-alerta-button[title] {
+  position: relative;
+}
+
+.tarea-alerta-wrapper:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background: rgba(17, 24, 39, 0.95);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.tarea-alerta-button[title]:hover::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50px;
+  right: 0;
+  background: rgba(17, 24, 39, 0.95);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  transform: translateY(0);
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+/* Topbar */
+.topbar {
+  background: #ffffff;
+  border-bottom: 1px solid #e6e6e6;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+
+/* Contenido principal */
 .main-content {
   transition: margin-left 0.3s ease-in-out;
   flex-grow: 1;
@@ -22,9 +191,205 @@
   margin-left: 80px;
 }
 
-/* Ajustes responsivos */
+/* Responsive design */
 @media screen and (max-width: 768px) {
   .main-content.expanded {
     margin-left: 80px;
   }
+  
+  .tarea-alerta-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 16px;
+    box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+    0 4px 14px 0 rgba(79, 70, 229, 0.25) !important;
+    overflow: visible;
+  }
+  
+  .tarea-alerta-button i {
+    font-size: 18px;
+  }
+  
+  .tarea-badge {
+    position: absolute !important;
+    top: -6px !important;
+    right: -8px !important;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+    color: white !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    padding: 4px 7px !important;
+    border-radius: 10px !important;
+    min-width: 20px !important;
+    height: 20px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4) !important;
+    z-index: 10 !important;
+    animation: badge-pulse 2s infinite !important;
+    line-height: 1 !important;
+  }
+  
 }
+
+/* Estados adicionales para diferentes niveles de urgencia */
+.tarea-alerta-button.urgente {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  animation: urgent-pulse 1.5s infinite;
+}
+
+@keyframes urgent-pulse {
+  0% {
+    box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.25);
+  }
+  50% {
+    box-shadow: 0 4px 20px 0 rgba(239, 68, 68, 0.5);
+  }
+  100% {
+    box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.25);
+  }
+}
+
+.tarea-alerta-button.critico {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+  animation: critical-shake 0.8s infinite;
+}
+
+@keyframes critical-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+
+/* ===== OVERRIDE BOOTSTRAP STYLES ===== */
+/* Este archivo debe cargarse DESPUÉS de Bootstrap */
+
+/* Selector más específico para sobrescribir Bootstrap */
+/* Borrar fondo morado completamente */
+.tarea-alerta-button,
+.topbar .tarea-alerta-button,
+.d-flex .tarea-alerta-button,
+a.tarea-alerta-button {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+/* Estados hover y focus */
+.topbar .tarea-alerta-button:hover,
+.d-flex .tarea-alerta-button:hover,
+a.tarea-alerta-button:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: #3d3d3d !important;
+  text-decoration: none !important;
+}
+
+.topbar .tarea-alerta-button:focus,
+.d-flex .tarea-alerta-button:focus,
+a.tarea-alerta-button:focus {
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: #3d3d3d !important;
+  text-decoration: none !important;
+}
+
+.topbar .tarea-alerta-button:active,
+.d-flex .tarea-alerta-button:active,
+a.tarea-alerta-button:active {
+  background: transparent !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: #3d3d3d !important;
+  text-decoration: none !important;
+}
+
+/* Icono */
+.tarea-alerta-button i {
+  font-size: 26px !important;
+  color: #3d3d3d !important;
+  position: relative !important;
+}
+
+
+
+/* Badge */
+.tarea-alerta-button .tarea-badge {
+  position: absolute !important;
+  top: -6px !important;
+  right: -6px !important;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+  color: white !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  padding: 4px 7px !important;
+  border-radius: 10px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4) !important;
+  z-index: 10 !important;
+  animation: badge-pulse 2s infinite !important;
+  line-height: 1 !important;
+}
+
+@keyframes badge-pulse {
+  0% {
+    box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4) !important;
+  }
+  50% {
+    box-shadow: 0 0 0 2px white, 0 3px 15px rgba(239, 68, 68, 0.6) !important;
+  }
+  100% {
+    box-shadow: 0 0 0 2px white, 0 3px 10px rgba(239, 68, 68, 0.4) !important;
+  }
+}
+
+/* Animación de shake */
+.tarea-alerta-button:hover {
+  animation: subtle-shake 0.5s ease-in-out !important;
+}
+
+@keyframes subtle-shake {
+  0%, 100% { transform: translateY(-2px) rotate(0deg) !important; }
+  25% { transform: translateY(-2px) rotate(-1deg) !important; }
+  75% { transform: translateY(-2px) rotate(1deg) !important; }
+}
+
+
+.tarea-alerta-wrapper {
+  position: relative;
+  display: inline-block;
+  margin-right: 10px;
+  
+}
+
+
+.bell-icon {
+  font-size: 22px;
+  color: #3d3d3d;
+  background: white;
+  border-radius: 50%;
+  padding: 8px;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.bell-icon:hover {
+  transform: scale(1.15);
+  cursor: pointer;
+}
+

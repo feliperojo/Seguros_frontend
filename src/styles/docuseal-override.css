@@ -1,0 +1,85 @@
+/**
+ * DocuSeal: ocultar notificaciones/toasts nativos y usar solo nuestro sistema (react-toastify).
+ * Todos los selectores están limitados al contenedor de DocuSeal para NO afectar toasts de la app.
+ */
+
+/* -------------------------------------------------------------------------
+   Dentro del contenedor del formulario de firma
+   ------------------------------------------------------------------------- */
+.docuseal-form-container docuseal-form [role="alert"],
+.docuseal-form-container docuseal-form [role="status"],
+.docuseal-form-container docuseal-form .notification,
+.docuseal-form-container docuseal-form .toast,
+.docuseal-form-container docuseal-form .alert-success,
+.docuseal-form-container docuseal-form .alert-info,
+.docuseal-form-container docuseal-form [class*="notification"],
+.docuseal-form-container docuseal-form [class*="toast"],
+.docuseal-form-container docuseal-form [class*="alert"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   Dentro del contenedor del builder (si se usa)
+   ------------------------------------------------------------------------- */
+.docuseal-form-container docuseal-builder [role="alert"],
+.docuseal-form-container docuseal-builder [role="status"],
+.docuseal-form-container docuseal-builder .notification,
+.docuseal-form-container docuseal-builder .toast,
+.docuseal-form-container docuseal-builder .alert-success,
+.docuseal-form-container docuseal-builder .alert-info,
+.docuseal-form-container docuseal-builder [class*="notification"],
+.docuseal-form-container docuseal-builder [class*="toast"],
+.docuseal-form-container docuseal-builder [class*="alert"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   Partes del Shadow DOM (si DocuSeal expone ::part)
+   ------------------------------------------------------------------------- */
+docuseal-form::part(notification),
+docuseal-form::part(toast),
+docuseal-form::part(alert),
+docuseal-builder::part(notification),
+docuseal-builder::part(toast),
+docuseal-builder::part(alert) {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   Contenedor con clase específica del embed (modal de firma)
+   ------------------------------------------------------------------------- */
+.docuseal-signer-embed docuseal-form [role="alert"],
+.docuseal-signer-embed docuseal-form [role="status"],
+.docuseal-signer-embed docuseal-form .notification,
+.docuseal-signer-embed docuseal-form .toast,
+.docuseal-signer-embed docuseal-form [class*="notification"],
+.docuseal-signer-embed docuseal-form [class*="toast"],
+.docuseal-signer-embed docuseal-form [class*="alert"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* -------------------------------------------------------------------------
+   Notificaciones inyectadas por el script de DocuSeal en el document
+   (solo wrappers claramente de notificación/toast; no tocar el embed principal)
+   ------------------------------------------------------------------------- */
+body > [id^="docuseal-notification"],
+body > [id^="docuseal-toast"],
+body > [class*="docuseal"][class*="notification"],
+body > [class*="docuseal"][class*="toast"] {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

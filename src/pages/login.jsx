@@ -1,12 +1,20 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
+import useToast from "../hooks/useToast";
+
 import "bootstrap/dist/css/bootstrap.min.css";
 import "../styles/Login.css"; // Estilos personalizados
 import logo from "../assets/tampa.jpg"; // Ruta del logo
-import apiRequest from "../services/api"; // Importa el servicio de API
+import { useAuth } from "../context/AuthContext"; // Importa el contexto de autenticación
 
 const Login = () => {
   const navigate = useNavigate(); // Hook para redireccionar
+  const { login } = useAuth(); // Hook para login
+  const toast = useToast(); // Hook para mostrar mensajes
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -24,23 +32,36 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null); // Reiniciar el estado de error antes de la petición
+    setLoading(true);
 
     try {
-      const response = await apiRequest("login", "POST", formData);
+      const result = await login(formData.email, formData.password);
 
-      if (response.token) {
-        localStorage.setItem("auth_token", response.token); // Guardar token en localStorage
-        localStorage.setItem("name", response.user.name);
+      if (result.success) {
+        toast.showSuccess("Inicio de sesión exitoso");
         navigate("/"); // Redirigir al Dashboard
       } else {
-        throw new Error("Datos de usuario incorrectos");
+        // Mostrar el mensaje del backend directamente
+        // No construir mensajes de negocio aquí
+        const errorMessage = result.error || "Error al iniciar sesión";
+        setError(errorMessage);
+        toast.showError(errorMessage);
       }
     } catch (err) {
-      if (err.message.includes("Failed to fetch")) {
-        setError("No se pudo conectar con el servidor. Intente más tarde.");
+      // Manejar errores de conexión
+      let errorMessage = "Error al iniciar sesión";
+      
+      if (err.message && err.message.includes("Failed to fetch")) {
+        errorMessage = "Error de conexión con el servidor";
       } else {
-        setError("Datos de usuario incorrectos");
+        // Mostrar el mensaje del error directamente
+        errorMessage = err.message || "Error al iniciar sesión";
       }
+      
+      setError(errorMessage);
+      toast.showError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -90,22 +111,39 @@ const Login = () => {
             />
           </div>
 
-          <div className="mb-4 text-start">
-            <label className="form-label fw-bold label-custom">Contraseña</label>
-            <input
-              type="password"
-              name="password"
-              className="form-control rounded-3"
-              placeholder="Contraseña"
-              value={formData.password}
-              onChange={handleChange}
-              required
-              style={{ padding: "12px", border: "1px solid #ccc" }}
-            />
-          </div>
+          <div className="mb-4 text-start position-relative">
+  <label className="form-label fw-bold label-custom">Contraseña</label>
+  <input
+    type={showPassword ? "text" : "password"}
+    name="password"
+    className="form-control rounded-3 pe-5"
+    placeholder="Contraseña"
+    value={formData.password}
+    onChange={handleChange}
+    required
+    style={{ padding: "12px", border: "1px solid #ccc" }}
+  />
+  <span
+    onClick={() => setShowPassword(!showPassword)}
+    style={{
+      position: "absolute",
+      right: "15px",
+      top: "42px",
+      cursor: "pointer",
+      color: "#666",
+    }}
+  >
+    {showPassword ? <FaEyeSlash /> : <FaEye />}
+  </span>
+</div>
 
-          <button type="submit" className="btn custom-btn w-100 fw-bold">
-            Ingresar
+
+          <button 
+            type="submit" 
+            className="btn custom-btn w-100 fw-bold"
+            disabled={loading}
+          >
+            {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
       </div>

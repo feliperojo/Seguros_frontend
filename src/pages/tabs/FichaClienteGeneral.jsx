@@ -1,0 +1,736 @@
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { useFichaCliente } from "../../context/fichaClienteContext";
+import ProductosButtons from "../../components/fase2/ProductosButtons";
+import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
+import ProductosDescartadosButtons from "../../components/fase2/ProductosDescartadosButtons";
+import PersonaContactoCard from "../../components/fase2/PersonaContactoCard";
+import TareasPendientesPanel from "../../components/fase2/TareasPendientesPanel";
+import TareasTerminadasPanel from "../../components/fase2/TareasTerminadasPanel";
+import GroupTags from "../../components/GroupTags";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { FaBirthdayCake } from "react-icons/fa";
+import { Badge } from "react-bootstrap";
+import {
+  derivarEstadoPoliza,
+  estadoPolizaBadgeVariant,
+  getCoberturasFromGrupoFull,
+  resolverCoberturaClienteEnGrupo,
+} from "../../utils/estadoPoliza";
+
+export default function FichaClienteGeneral() {
+  const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
+
+  // ===== helpers =====
+  const toValidId = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+
+  // Formatea el valor de la póliza para mostrarlo como monto legible
+  const formatearPrecioPoliza = (valor) => {
+    if (valor === null || valor === undefined || valor === "") return "—";
+    const numero = Number(valor);
+    if (!Number.isFinite(numero)) return String(valor);
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(numero);
+    } catch {
+      return numero.toFixed(2);
+    }
+  };
+
+  // ===== construir opciones de grupos disponibles =====
+  const grupoInicial =
+    coberturaPrincipal?.grupo_familiar_id ??
+    cliente?.grupo_familiar_id ??
+    null;
+
+  const grupos = useMemo(() => {
+    const arr = [];
+
+    // 1) desde coberturas (suele venir la info más rica)
+    const gfIdPrincipal = toValidId(
+      coberturaPrincipal?.grupo_familiar_id ??
+      coberturaPrincipal?.grupo_familiar?.id ??
+      null
+    );
+      for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
+      const id =
+        c?.grupo_familiar_id ??
+        c?.grupo_familiar?.id ??
+        c?.gf_id ??
+        null;
+      if (!toValidId(id)) continue;
+
+      // Solo usar "coberturaPrincipal" para estado si es realmente la MISMA cobertura.
+      // Si no, puede “contaminar” el estado del grupo con datos de otra cobertura.
+      const esMismaCobertura =
+        toValidId(coberturaPrincipal?.id) != null &&
+        toValidId(c?.id) != null &&
+        toValidId(coberturaPrincipal?.id) === toValidId(c?.id);
+
+      const coberturaParaEstado = esMismaCobertura ? coberturaPrincipal : c;
+
+      const { estado, fecha, tipoFecha } = derivarEstadoPoliza(
+        coberturaParaEstado
+      );
+
+      arr.push({
+        id: toValidId(id),
+        coberturaTipo:
+          c?.cobertura_tipo ||
+          coberturaPrincipal?.cobertura_tipo ||
+          "Sin producto",
+        responsable: c?.grupo_familiar?.responsable ?? c?.responsable ?? "—",
+        estado: c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? c?.estado_gf ?? c?.estado ?? "—",
+        anoCobertura: c?.ano_cobertura ?? c?.anio ?? c?.year ?? "—",
+        codigoPoliza: c?.codigo_poliza ?? c?.poliza ?? c?.policy_code ?? "—",
+        companiaId: c?.compania_id ?? c?.compania?.id ?? cliente?.compania_id ?? "—",
+        companiaNombre:
+          c?.compania?.nombre ??
+          c?.compania_nombre ??
+          cliente?.compania_nombre ??
+          cliente?.compania ??
+          "—",
+        estadoPoliza: estado,
+        fechaEstadoPoliza: fecha,
+        tipoFechaEstadoPoliza: tipoFecha,
+        precioPoliza: c?.precio ?? null,
+        raw: c,
+      });
+    }
+
+    // 2) fallback: si no hubo coberturas, intenta desde el propio cliente
+    if (arr.length === 0 && toValidId(cliente?.grupo_familiar_id)) {
+      const { estado, fecha, tipoFecha } = derivarEstadoPoliza(
+        coberturaPrincipal ?? cliente?.grupo_familiar
+      );
+
+      arr.push({
+        id: toValidId(cliente?.grupo_familiar_id),
+        coberturaTipo:
+          coberturaPrincipal?.cobertura_tipo ||
+          cliente?.cobertura_tipo ||
+          "Sin producto",
+        responsable: cliente?.grupo_familiar?.responsable ?? "—",
+        estado: cliente?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ?? cliente?.estado ?? "—",
+        anoCobertura: coberturaPrincipal?.ano_cobertura ?? "—",
+        codigoPoliza: coberturaPrincipal?.codigo_poliza ?? "—",
+        companiaId: coberturaPrincipal?.compania_id ?? cliente?.compania_id ?? "—",
+        companiaNombre:
+          coberturaPrincipal?.compania?.nombre ??
+          cliente?.compania_nombre ??
+          cliente?.compania ??
+          "—",
+        estadoPoliza: estado,
+        fechaEstadoPoliza: fecha,
+        tipoFechaEstadoPoliza: tipoFecha,
+        precioPoliza: coberturaPrincipal?.precio ?? null,
+        raw: cliente?.grupo_familiar ?? null,
+      });
+    }
+
+    // desduplicar por id
+    const unique = Object.values(
+      arr.reduce((acc, g) => {
+        if (g?.id != null) acc[g.id] = acc[g.id] ?? g;
+        return acc;
+      }, {})
+    );
+
+    // orden simple por id asc
+    unique.sort((a, b) => a.id - b.id);
+    return unique;
+  }, [cliente, coberturaPrincipal]);
+
+  // ===== grupo seleccionado (desde el contexto compartido) =====
+  const { selectedGrupoId, setSelectedGrupoId } = useFichaCliente();
+
+  // si cambia el cliente / cobertura principal, reasigna default usando el setter del contexto
+  useEffect(() => {
+    if (setSelectedGrupoId && grupoInicial !== null) {
+      setSelectedGrupoId(toValidId(grupoInicial));
+    }
+  }, [grupoInicial, setSelectedGrupoId]);
+
+  const currentGrupo = useMemo(() => {
+    const selectedId = toValidId(selectedGrupoId);
+    if (!selectedId) return grupos[0] ?? null;
+    return (
+      grupos.find((g) => toValidId(g.id) === selectedId) ??
+      grupos[0] ??
+      null
+    );
+  }, [grupos, selectedGrupoId]);
+
+  // ===== Estado para grupos full (fuente de verdad del endpoint) y etiquetas =====
+  const [gruposFullCache, setGruposFullCache] = useState({});
+  const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
+
+  const uniqueGrupoIds = useMemo(() => {
+    const ids = new Set();
+    for (const c of Array.isArray(cliente?.coberturas) ? cliente.coberturas : []) {
+      const id = toValidId(c?.grupo_familiar_id ?? c?.grupo_familiar?.id);
+      if (id) ids.add(id);
+    }
+    if (ids.size === 0 && toValidId(cliente?.grupo_familiar_id)) {
+      ids.add(toValidId(cliente.grupo_familiar_id));
+    }
+    return [...ids].sort((a, b) => a - b);
+  }, [cliente?.coberturas, cliente?.grupo_familiar_id]);
+
+  const grupoFull = useMemo(() => {
+    const selectedId = toValidId(selectedGrupoId) ?? toValidId(currentGrupo?.id);
+    return selectedId ? gruposFullCache[selectedId] ?? null : null;
+  }, [gruposFullCache, selectedGrupoId, currentGrupo?.id]);
+
+  const etiquetasGrupo = useMemo(() => {
+    const base = grupoFull ?? {};
+    const tagsRaw = base?.tags || base?.etiquetas || [];
+    let tagsArray = [];
+
+    if (Array.isArray(tagsRaw)) {
+      tagsArray = tagsRaw;
+    } else if (typeof tagsRaw === "string" && tagsRaw.trim().startsWith("[")) {
+      try {
+        tagsArray = JSON.parse(tagsRaw);
+        if (!Array.isArray(tagsArray)) tagsArray = [];
+      } catch {
+        tagsArray = [];
+      }
+    }
+
+    return tagsArray.filter(
+      (tag) =>
+        tag &&
+        typeof tag === "object" &&
+        tag.key &&
+        tag.label &&
+        tag.color
+    );
+  }, [grupoFull]);
+
+  // ===== cobertura seleccionada por grupo (fuente de verdad para estado/fechas) =====
+  const coberturaSeleccionada = useMemo(() => {
+    const selectedId = toValidId(selectedGrupoId) ?? toValidId(currentGrupo?.id);
+    if (!selectedId) return coberturaPrincipal ?? null;
+
+    const coberturasFuente = getCoberturasFromGrupoFull(grupoFull);
+    const coberturas =
+      coberturasFuente.length > 0
+        ? coberturasFuente
+        : Array.isArray(cliente?.coberturas)
+        ? cliente.coberturas
+        : [];
+
+    if (coberturas.length === 0) return coberturaPrincipal ?? null;
+
+    return (
+      resolverCoberturaClienteEnGrupo(
+        coberturas,
+        selectedId,
+        cliente?.id
+      ) ??
+      coberturaPrincipal ??
+      null
+    );
+  }, [
+    grupoFull,
+    cliente?.coberturas,
+    cliente?.id,
+    selectedGrupoId,
+    currentGrupo?.id,
+    coberturaPrincipal,
+  ]);
+
+  const resolveCoberturaParaEstado = useCallback(
+    (c) => {
+      const gf = toValidId(c?.grupo_familiar_id ?? c?.grupo_familiar?.id);
+      if (!gf) return c;
+
+      const fuenteGrupo = getCoberturasFromGrupoFull(gruposFullCache[gf]);
+      const fuente =
+        fuenteGrupo.length > 0
+          ? fuenteGrupo
+          : Array.isArray(cliente?.coberturas)
+          ? cliente.coberturas
+          : [];
+
+      return (
+        resolverCoberturaClienteEnGrupo(fuente, gf, cliente?.id) ?? c
+      );
+    },
+    [gruposFullCache, cliente?.coberturas, cliente?.id]
+  );
+
+  const estadoPolizaDerivado = useMemo(() => {
+    return derivarEstadoPoliza(coberturaSeleccionada);
+  }, [coberturaSeleccionada]);
+
+  // ===== datos derivados visibles según grupo seleccionado =====
+  const labelGrupoSelector = (g) => {
+    const producto = (g?.coberturaTipo || "Sin producto").trim();
+    const id = g?.id ?? "—";
+    return `${producto} · GF ${id}`;
+  };
+
+  const gfId          = currentGrupo?.id ?? null;
+  const gfResponsable = currentGrupo?.responsable ?? "—";
+  const gfEstado      = currentGrupo?.estado ?? "—";
+  const estadoPoliza  = estadoPolizaDerivado?.estado ?? currentGrupo?.estadoPoliza ?? "Vigente";
+  const fechaEstadoPoliza =
+    estadoPolizaDerivado?.fecha ?? currentGrupo?.fechaEstadoPoliza ?? null;
+  const tipoFechaEstadoPoliza =
+    estadoPolizaDerivado?.tipoFecha ??
+    currentGrupo?.tipoFechaEstadoPoliza ??
+    null;
+
+  const anoCobertura  =
+    coberturaSeleccionada?.ano_cobertura ??
+    currentGrupo?.anoCobertura ??
+    "—";
+  const codigoPoliza  =
+    coberturaSeleccionada?.codigo_poliza ??
+    coberturaSeleccionada?.policy_number ??
+    currentGrupo?.codigoPoliza ??
+    "—";
+  const precioPoliza  =
+    coberturaSeleccionada?.precio ?? currentGrupo?.precioPoliza ?? null;
+  const companiaId    =
+    coberturaSeleccionada?.compania_id ??
+    coberturaSeleccionada?.compania?.id ??
+    currentGrupo?.companiaId ??
+    "—";
+  const companiaNombre =
+    coberturaSeleccionada?.compania?.nombre ??
+    currentGrupo?.companiaNombre ??
+    coberturaPrincipal?.compania?.nombre ??
+    cliente?.compania_nombre ??
+    cliente?.compania ??
+    "—";
+
+  const parentescoCobertura =
+    coberturaSeleccionada?.parentesco ??
+    coberturaSeleccionada?.relacion ??
+    cliente?.parentesco ??
+    "—";
+
+  const esEstadoDescartado = useMemo(() => {
+    const estadoNormalizado = String(gfEstado ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase();
+    return estadoNormalizado === "descartado";
+  }, [gfEstado]);
+
+  const clienteId = toValidId(cliente?.id);
+  const grupoId   = toValidId(gfId);
+
+  // ===== Cargar datos completos de todos los grupos familiares del cliente =====
+  useEffect(() => {
+    if (!uniqueGrupoIds.length) {
+      setGruposFullCache({});
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingEtiquetas(true);
+
+    (async () => {
+      try {
+        const results = await Promise.all(
+          uniqueGrupoIds.map((id) => GrupoFamiliarService.getFullById(id))
+        );
+        if (cancelled) return;
+
+        const cache = {};
+        uniqueGrupoIds.forEach((id, i) => {
+          cache[id] = results[i]?.data ?? results[i] ?? null;
+        });
+        setGruposFullCache(cache);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Error al cargar grupos familiares:", error);
+          setGruposFullCache({});
+        }
+      } finally {
+        if (!cancelled) setLoadingEtiquetas(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [uniqueGrupoIds.join(",")]);
+
+  // ===== helper para formatear número con distribución 3-3-4 =====
+  const formatearNumeroTelefono = (numero) => {
+    if (!numero) return "";
+    // Remover todos los caracteres no numéricos
+    const soloDigitos = numero.toString().replace(/\D/g, "");
+    // Aplicar formato 3-3-4 si tiene 10 dígitos
+    if (soloDigitos.length === 10) {
+      return `${soloDigitos.slice(0, 3)}-${soloDigitos.slice(3, 6)}-${soloDigitos.slice(6)}`;
+    }
+    // Si no tiene 10 dígitos, devolver el número original
+    return numero;
+  };
+
+  // ===== verificar si es cumpleaños hoy =====
+  const esCumpleanosHoy = useMemo(() => {
+    const fechaNacimiento = cliente?.fecha_nacimiento;
+    if (!fechaNacimiento) return false;
+    try {
+      const hoy = new Date();
+      // Usar UTC para evitar problemas de zona horaria
+      let nacimiento;
+      if (typeof fechaNacimiento === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fechaNacimiento)) {
+        const [year, month, day] = fechaNacimiento.split('T')[0].split('-');
+        nacimiento = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, parseInt(day)));
+      } else {
+        const date = new Date(fechaNacimiento);
+        nacimiento = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+      }
+      
+      const hoyUTC = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate()));
+      
+      return (
+        hoyUTC.getUTCMonth() === nacimiento.getUTCMonth() &&
+        hoyUTC.getUTCDate() === nacimiento.getUTCDate()
+      );
+    } catch {
+      return false;
+    }
+  }, [cliente?.fecha_nacimiento]);
+
+  // ===== formatear teléfonos del cliente =====
+  const telefonosFormateados = useMemo(() => {
+    // Normalizar telefonos: puede venir como array, string JSON, o null
+    let telefonos = [];
+    if (Array.isArray(cliente?.telefonos)) {
+      telefonos = cliente.telefonos;
+    } else if (typeof cliente?.telefonos === "string" && cliente.telefonos.trim().startsWith("[")) {
+      try {
+        telefonos = JSON.parse(cliente.telefonos);
+        if (!Array.isArray(telefonos)) telefonos = [];
+      } catch (_) {
+        telefonos = [];
+      }
+    }
+    
+    if (telefonos.length === 0) {
+      // Fallback al campo legacy si no hay arreglo
+      return cliente?.telefono ? [cliente.telefono] : [];
+    }
+
+    // Ordenar: principal primero
+    const ordenados = [...telefonos].sort(
+      (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
+    );
+
+    // Formatear cada teléfono
+    return ordenados.map((t) => {
+      const indicativo = t?.indicativo ? `+${t.indicativo} ` : "";
+      const numeroFormateado = formatearNumeroTelefono(t?.numero || "");
+      const tipo = t?.tipo ? ` (${t.tipo})` : "";
+      const principal = t?.principal ? " [Principal]" : "";
+      return `${indicativo}${numeroFormateado}${tipo}${principal}`.trim();
+    });
+  }, [cliente?.telefonos, cliente?.telefono]);
+
+  // mocks opcionales
+  const USE_DEMO = false;
+
+  return (
+    <>
+      {/* Estilos para animación de cumpleaños */}
+      <style>
+        {`
+          @keyframes pulse {
+            0%, 100% {
+              opacity: 1;
+            }
+            50% {
+              opacity: 0.7;
+            }
+          }
+        `}
+      </style>
+      <div className="row g-4">
+      {/* Columna izquierda */}
+      <div className="col-lg-7">
+        <div className="card border">
+          <div className="card-body">
+            {/* Header con título y selector de grupo */}
+            <div className={`d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom ${esCumpleanosHoy ? 'bg-warning bg-opacity-10 rounded px-3 py-2' : ''}`}>
+              <h6 className="mb-0 fw-semibold text-dark d-flex align-items-center gap-2">
+                RESUMEN DEL CLIENTE
+                {esCumpleanosHoy && (
+                  <Badge bg="warning" className="d-flex align-items-center gap-1">
+                    <FaBirthdayCake /> ¡Cumpleaños de Hoy!
+                  </Badge>
+                )}
+              </h6>
+              <div style={{ minWidth: "220px" }}>
+                {grupos.length > 1 ? (
+                  <select
+                    className="form-select form-select-sm border-secondary"
+                    value={toValidId(selectedGrupoId) ?? ""}
+                    onChange={(e) => setSelectedGrupoId(toValidId(e.target.value))}
+                  >
+                    {grupos.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {labelGrupoSelector(g)}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-end">
+                    <span className="text-dark fw-normal">
+                      {currentGrupo
+                        ? labelGrupoSelector(currentGrupo)
+                        : `GF ${gfId ?? "—"}`}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sección: Datos Personales */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                DATOS PERSONALES
+              </h6>
+              <div className="row g-2">
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Nombre Completo</label>
+                    <div className="text-dark small">{cliente?.nombre_completo ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Fecha de Nacimiento</label>
+                    <div className={`text-dark small d-flex align-items-center gap-2 ${esCumpleanosHoy ? 'fw-bold text-warning' : ''}`} style={esCumpleanosHoy ? { animation: 'pulse 2s infinite' } : {}}>
+                      {formatDate(cliente?.fecha_nacimiento) ?? "—"}
+                      {esCumpleanosHoy && <FaBirthdayCake className="text-warning" />}
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Edad</label>
+                    <div className="text-dark small">{cliente?.edad ?? "—"} {cliente?.edad ? "años" : ""}</div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>ID Cliente</label>
+                    <div className="text-dark small">{cliente?.id ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Idioma</label>
+                    <div className="text-dark small">{cliente?.idioma || "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado</label>
+                    <div className="text-dark small">{cliente?.estado ?? "—"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sección: Información de Contacto */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                INFORMACIÓN DE CONTACTO
+              </h6>
+              <div className="row g-2">
+                <div className="col-12">
+                  <label className="text-muted small d-block mb-1" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Teléfonos</label>
+                  {telefonosFormateados.length > 0 ? (
+                    <div className="d-flex flex-column gap-1">
+                      {telefonosFormateados.map((tel, idx) => (
+                        <div key={idx} className="text-dark small">
+                          {tel}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-muted small">—</div>
+                  )}
+                </div>
+                <div className="col-md-6">
+                  <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Medio de Contacto</label>
+                  <div className="text-dark small">{cliente?.medio_contacto ?? "—"}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sección: Grupo Familiar y Póliza */}
+            <div className="mb-3">
+              <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
+                GRUPO FAMILIAR Y PÓLIZA
+              </h6>
+              <div className="row g-2">
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>ID Grupo Familiar</label>
+                    <div className="text-dark small">GF {gfId ?? "—"}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Asesor / Responsable</label>
+                    <div className="text-dark small fw-normal">{gfResponsable}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Relación</label>
+                    <div className="text-dark small">{parentescoCobertura}</div>
+                  </div>
+                </div>
+                <div className="col-md-6">
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Proceso</label>
+                    <div className={`small ${esEstadoDescartado ? "text-danger fw-semibold" : "text-dark"}`}>
+                      {gfEstado}
+                    </div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Compañía</label>
+                    <div className="text-dark small fw-normal">{companiaNombre}</div>
+                    {companiaId !== "—" && (
+                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>ID: {companiaId}</div>
+                    )}
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Código de Póliza</label>
+                    <div className="text-dark small">{codigoPoliza}</div>
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Valor de la Póliza</label>
+                    <div className="text-dark small">{formatearPrecioPoliza(precioPoliza)}</div>
+                  </div>
+                  {!esEstadoDescartado && (
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
+                      <div className="text-dark small">
+                        <Badge
+                          bg={estadoPolizaBadgeVariant(estadoPoliza)}
+                          className="text-uppercase"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {estadoPoliza}
+                        </Badge>
+                        {fechaEstadoPoliza && (
+                          <div className="mt-1 text-muted" style={{ fontSize: "0.7rem" }}>
+                            {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de cancelación: "}
+                            {tipoFechaEstadoPoliza === "retiro" && "Fecha de retiro: "}
+                            {!tipoFechaEstadoPoliza && "Fecha: "}
+                            {formatDate(fechaEstadoPoliza)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mb-2">
+                    <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Año de Cobertura</label>
+                    <div className="text-dark small">{anoCobertura}</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Etiquetas del Grupo Familiar */}
+              {grupoId && (
+                <div className="mt-3 pt-2 border-top">
+                  <label className="text-muted small d-block mb-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Etiquetas del Grupo Familiar</label>
+                  {loadingEtiquetas ? (
+                    <div className="text-muted small">
+                      <i className="fas fa-spinner fa-spin me-2"></i>
+                      Cargando etiquetas...
+                    </div>
+                  ) : (
+                    <GroupTags
+                      value={etiquetasGrupo}
+                      onChange={() => {}} // Solo lectura en la ficha del cliente
+                      readOnly={true}
+                      className="mb-0"
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+
+            <hr className="my-3 border-secondary opacity-25" />
+
+            <PersonaContactoCard
+  className="mb-3"
+  clienteId={clienteId}           // <- importante
+  grupoFamiliarId={grupoId}       // <- importante
+  grupoContextLabel={
+    gfId
+      ? `Estás asociando contactos para el Grupo Familiar ${gfId}, donde este cliente es "${parentescoCobertura}".`
+      : ""
+  }
+  primary={false}
+  addAnother={false}
+  onTogglePrimary={(v) => console.log("primary?", v)}
+  onToggleAddAnother={(v) => console.log("add another?", v)}
+  onChange={(form) => console.log("persona de contacto >", form)}
+  onSaved={({ contacto, link }) => {
+    // refrescar UI si quieres
+  }}
+  idiomaOptions={["Spanish", "English"]}
+  relacionOptions={["Cónyuge", "Hijo/a", "Padre/Madre", "Hermano/a", "Amigo/a", "Otro"]}
+/>
+
+
+            <ProductosButtons
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
+              onSelectCobertura={(c) => console.log("Producto (GF):", c)}
+            />
+
+            <CotizacionesButtons
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
+              onSelectCobertura={(c) => console.log("Cotización:", c)}
+            />
+
+            <ProductosDescartadosButtons
+              className="mb-3"
+              coberturas={cliente?.coberturas ?? []}
+              resolveCobertura={resolveCoberturaParaEstado}
+              onSelectCobertura={(c) => console.log("Producto descartado (GF):", c)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Columna derecha */}
+      <div className="col-lg-5">
+        <TareasPendientesPanel
+          className="mb-3"
+          clienteId={clienteId}
+          grupoId={grupoId}
+          perPage={20}
+          emptyMessage="No se tienen tareas pendientes o en progreso."
+          items={USE_DEMO ? [] : []}
+          onCreate={() => console.log("crear tarea")}
+          onOpen={(t) => console.log("abrir", t)}
+          onEdit={(t) => console.log("editar", t)}
+        />
+
+        <TareasTerminadasPanel
+          className="mb-3"
+          clienteId={clienteId}
+          grupoId={grupoId}
+          perPage={20}
+          emptyMessage="No se tienen tareas terminadas."
+        />
+      </div>
+    </div>
+    </>
+  );
+}

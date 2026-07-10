@@ -1,0 +1,10 @@
+/* 
+ * Tailwind CSS Directives
+ * Este archivo contiene las directivas de Tailwind CSS.
+ * Se importa después de Bootstrap para que Tailwind tenga prioridad cuando se use explícitamente.
+ * NO modifica estilos globales existentes gracias a important: true y preflight: false
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

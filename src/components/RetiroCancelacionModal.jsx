@@ -1,0 +1,525 @@
+import React, { useState, useEffect } from "react";
+import { Modal, Button, Form, Row, Col, Badge, InputGroup } from "react-bootstrap";
+import { FaCog } from "react-icons/fa";
+import apiRequest from "../services/api";
+import { formatDateForDisplay } from "../utils/formatters";
+
+// Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
+const normalizeDate = (dateString) => {
+  if (!dateString) return "";
+  // Si ya está en formato YYYY-MM-DD, retornarlo tal cual
+  if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  // Si viene como ISO string o Date, extraer solo la parte de fecha
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return "";
+  // Usar getFullYear, getMonth, getDate para evitar problemas de zona horaria
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+// Deriva el estado visible de la póliza (misma lógica que ficha de cliente)
+const derivarEstadoPolizaVisible = (c) => {
+  try {
+    if (!c || typeof c !== "object") return "Vigente";
+
+    const estadoCoberturaRaw =
+      c?.estado_cobertura != null ? String(c.estado_cobertura).trim() : "";
+    const estadoCoberturaNormalizado = estadoCoberturaRaw.toLowerCase();
+    const estadoCoberturaMostrar =
+      estadoCoberturaNormalizado === "no" ? "Sin cobertura" : estadoCoberturaRaw;
+
+    const fechaRetiroValida =
+      c?.fecha_retiro &&
+      String(c.fecha_retiro).trim() &&
+      String(c.fecha_retiro) !== "null"
+        ? String(c.fecha_retiro)
+        : null;
+
+    const fechaCancelacionValida =
+      c?.fecha_cancelacion &&
+      String(c.fecha_cancelacion).trim() &&
+      String(c.fecha_cancelacion) !== "null"
+        ? String(c.fecha_cancelacion)
+        : null;
+
+    const activo =
+      c?.activo !== undefined && c?.activo !== null
+        ? c.activo === true || c.activo === "true" || c.activo === 1
+        : true;
+
+    const vigente =
+      c?.vigente !== undefined && c?.vigente !== null
+        ? c.vigente === true || c.vigente === "true" || c.vigente === 1
+        : true;
+
+    // Prioridad: retirada
+    if (fechaRetiroValida || !activo) return "Retirada";
+    // Prioridad: cancelada
+    if (fechaCancelacionValida) return "Póliza Cancelada";
+
+    // Mostrar estado real cuando aplica (sin romper valores existentes)
+    if (
+      estadoCoberturaNormalizado === "no" ||
+      estadoCoberturaNormalizado === "medicare" ||
+      estadoCoberturaNormalizado === "medicaid" ||
+      estadoCoberturaNormalizado === "medicai"
+    ) {
+      return estadoCoberturaMostrar;
+    }
+
+    if (vigente) return "Vigente";
+    return "Póliza Cancelada";
+  } catch {
+    return "Vigente";
+  }
+};
+
+const RetiroCancelacionModal = ({ 
+  show, 
+  onHide, 
+  grupoFamiliar, 
+  onSave,
+  // ✅ NUEVO: Callback para actualizar estado local sin llamar al backend
+  onUpdateLocal = null,
+  // ✅ NUEVO: Si es true, el modal solo actualiza estado local (no llama al backend)
+  soloActualizarLocal = false
+}) => {
+  const [coberturas, setCoberturas] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [personasTaxes, setPersonasTaxes] = useState(grupoFamiliar?.personas_taxes || 0);
+  const [personasCobertura, setPersonasCobertura] = useState(grupoFamiliar?.personas_cobertura || 0);
+  const [fechasOriginales, setFechasOriginales] = useState([]);
+  const [cambiosDetectados, setCambiosDetectados] = useState(false);
+
+  // Input controlado MM-DD-YYYY que guarda YYYY-MM-DD (sin placeholder)
+  const pad2 = (n) => String(n).padStart(2, "0");
+  const mdyDashToIso = (display) => {
+    const t = String(display ?? "").trim();
+    if (!t) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+    const digits = t.replace(/\D/g, "");
+    if (digits.length !== 8) return null;
+    const mm = parseInt(digits.slice(0, 2), 10);
+    const dd = parseInt(digits.slice(2, 4), 10);
+    const yyyy = parseInt(digits.slice(4, 8), 10);
+    if (mm < 1 || mm > 12 || dd < 1 || dd > 31 || yyyy < 1000) return null;
+    const test = new Date(yyyy, mm - 1, dd);
+    if (test.getFullYear() !== yyyy || test.getMonth() !== mm - 1 || test.getDate() !== dd) return null;
+    return `${yyyy}-${pad2(mm)}-${pad2(dd)}`;
+  };
+  const formatMdyDashTyping = (raw) => {
+    const digits = String(raw ?? "").replace(/\D/g, "");
+    if (!digits) return "";
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+  };
+  const DateInputMdyDash = ({ valueIso, onChangeIso, disabled }) => {
+    const toDisplay = (iso) => {
+      const s = String(iso ?? "").slice(0, 10);
+      const f = formatDateForDisplay(s);
+      return f === "-" ? "" : f;
+    };
+    const [display, setDisplay] = useState(() => toDisplay(valueIso));
+    const dateRef = React.useRef(null);
+    useEffect(() => {
+      setDisplay(toDisplay(valueIso));
+    }, [valueIso]);
+    return (
+      <div style={{ position: "relative" }}>
+        <InputGroup>
+          <Form.Control
+            type="text"
+            value={display}
+            disabled={disabled}
+            readOnly
+            title="Formato: MM-DD-YYYY"
+          />
+          <Button
+            variant="outline-secondary"
+            disabled={disabled}
+            onClick={() => {
+              const el = dateRef.current;
+              if (!el) return;
+              if (typeof el.showPicker === "function") el.showPicker();
+              else el.click();
+            }}
+            title="Seleccionar fecha"
+          >
+            <i className="bi bi-calendar3" />
+          </Button>
+        </InputGroup>
+
+        <input
+          ref={dateRef}
+          type="date"
+          value={String(valueIso ?? "").slice(0, 10)}
+          onChange={(e) => onChangeIso?.(e.target.value)}
+          disabled={disabled}
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: 0,
+            pointerEvents: "none",
+          }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+      </div>
+    );
+  };
+
+  useEffect(() => {
+    if (grupoFamiliar?.coberturas) {
+      const coberturasActivas = grupoFamiliar.coberturas.filter(
+        c => c.estado_cobertura === "Activa" || c.activo === true
+      );
+
+      const coberturasIniciales = coberturasActivas.map(c => ({
+        ...c,
+        fecha_cancelacion: normalizeDate(c.fecha_cancelacion),
+        fecha_retiro: normalizeDate(c.fecha_retiro),
+        nota_cancel: c.nota_cancel || "",
+      }));
+
+      setCoberturas(coberturasIniciales);
+      setFechasOriginales(
+        coberturasIniciales.map(c => ({
+          id: c.id,
+          fecha_cancelacion: normalizeDate(c.fecha_cancelacion),
+          fecha_retiro: normalizeDate(c.fecha_retiro)
+        }))
+      );
+
+      setPersonasTaxes(grupoFamiliar.personas_taxes || 0);
+      setPersonasCobertura(grupoFamiliar.personas_cobertura || 0);
+    }
+  }, [grupoFamiliar]);
+
+
+  useEffect(() => {
+    if (fechasOriginales.length === 0 || coberturas.length === 0) return;
+
+    let cambiosEnCancelaciones = 0;
+    let cambiosEnRetiros = 0;
+    let hayCambios = false;
+
+    coberturas.forEach((actual) => {
+      const original = fechasOriginales.find(f => f.id === actual.id);
+
+      if (original) {
+        const nuevaCancelacion = !original.fecha_cancelacion && actual.fecha_cancelacion;
+        const nuevaRetiro = !original.fecha_retiro && actual.fecha_retiro;
+
+        if (nuevaCancelacion) cambiosEnCancelaciones++;
+        if (nuevaRetiro) cambiosEnRetiros++;
+
+        
+        if (
+          original.fecha_cancelacion !== actual.fecha_cancelacion ||
+          original.fecha_retiro !== actual.fecha_retiro ||
+          actual.nota_cancel?.trim()
+        ) {
+          hayCambios = true;
+        }
+      }
+    });
+
+    const totalOriginalTaxes = grupoFamiliar?.personas_taxes || 0;
+    const totalOriginalCobertura = grupoFamiliar?.personas_cobertura || 0;
+
+    setPersonasTaxes(totalOriginalTaxes - cambiosEnRetiros);
+    setPersonasCobertura(totalOriginalCobertura - cambiosEnCancelaciones);
+    setCambiosDetectados(hayCambios); // ← ACTUALIZA BOTÓN
+  }, [coberturas, fechasOriginales]);
+
+
+
+  const handleChange = (index, field, value) => {
+    const nuevasCoberturas = [...coberturas];
+
+    nuevasCoberturas[index][field] = value;
+
+    // Regla automática: si se establece fecha_cancelacion, estado_cobertura debe ser "No"
+    if (field === "fecha_cancelacion") {
+      nuevasCoberturas[index]["vigente"] = value ? false : true;
+      // Si hay fecha de cancelación, estado_cobertura debe ser "No" (sin importar el valor anterior)
+      if (value) {
+        nuevasCoberturas[index]["estado_cobertura"] = "No";
+      }
+      // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+    }
+
+    // Regla automática: si se establece fecha_retiro, estado_cobertura debe ser "No"
+    if (field === "fecha_retiro") {
+      // Si hay fecha de retiro, estado_cobertura debe ser "No" (sin importar el valor anterior)
+      if (value) {
+        nuevasCoberturas[index]["estado_cobertura"] = "No";
+      }
+      // Si se limpia la fecha, no forzamos el estado (se mantiene el valor actual)
+    }
+
+    if (field === "activo" && value === true) {
+      nuevasCoberturas[index]["fecha_retiro"] = "";
+    }
+
+    setCoberturas(nuevasCoberturas);
+  };
+
+
+
+
+
+  const handleSave = async () => {
+    setLoading(true);
+    try {
+      // ✅ MODO LOCAL: Solo actualizar estado local, NO llamar al backend
+      if (soloActualizarLocal && onUpdateLocal) {
+        // Preparar los datos actualizados para cada cobertura
+        const coberturasActualizadas = coberturas.map(cobertura => ({
+          cobertura_id: cobertura.id,
+          cliente_id: cobertura.cliente?.id || cobertura.cliente_id,
+          fecha_cancelacion: cobertura.fecha_cancelacion ? normalizeDate(cobertura.fecha_cancelacion) : null,
+          fecha_retiro: cobertura.fecha_retiro ? normalizeDate(cobertura.fecha_retiro) : null,
+          nota_cancel: cobertura.nota_cancel?.trim() || null,
+          nota_retiro: cobertura.nota_retiro?.trim() || null,
+          activo: cobertura.activo ?? false,
+          vigente: cobertura.vigente ?? true,
+          estado_cobertura: cobertura.estado_cobertura,
+          motivo_cancelacion: cobertura.motivo_cancelacion?.trim() || null,
+        }));
+
+        // Llamar al callback para actualizar el estado local
+        onUpdateLocal(coberturasActualizadas, {
+          personas_taxes: personasTaxes,
+          personas_cobertura: personasCobertura,
+        });
+
+        // Cerrar el modal
+        onHide();
+        setLoading(false);
+        return;
+      }
+
+      // ✅ MODO TRADICIONAL: Llamar al backend (comportamiento original)
+      for (const cobertura of coberturas) {
+        const payload = {
+          fecha_cancelacion: cobertura.fecha_cancelacion ? normalizeDate(cobertura.fecha_cancelacion) : null,
+          fecha_retiro: cobertura.fecha_retiro ? normalizeDate(cobertura.fecha_retiro) : null,
+          nota_cancel: cobertura.nota_cancel?.trim() || null,
+          activo: cobertura.activo ?? false,
+          vigente: cobertura.vigente ?? true,
+          estado_cobertura: cobertura.estado_cobertura
+        };
+
+        await apiRequest(`cobertura/${cobertura.id}`, "PUT", payload);
+      }
+
+      // Actualizar grupo familiar
+      const grupoPayload = {
+        personas_taxes: personasTaxes,
+        personas_cobertura: personasCobertura,
+      };
+      await apiRequest(`grupo_familiar/${grupoFamiliar.id}`, "PUT", grupoPayload);
+
+      // Notificar al padre que se guardó correctamente y cerrar el modal
+      if (onSave) {
+        onSave(grupoFamiliar);
+      }
+      onHide();
+    } catch (error) {
+      console.error("❌ Error al guardar:", error);
+      alert("Error al guardar los retiros");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+
+
+  return (
+    <>
+      <Modal show={show} onHide={onHide} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <FaCog className="me-2" />
+            Retiros y Cancelaciones de Coberturas
+          </Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body>
+          <div className="mb-3">
+            <Row>
+              <Col md={4}><strong>ID Grupo Familiar:</strong> #{grupoFamiliar?.id}</Col>
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Personas en Taxes</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={personasTaxes}
+                    disabled
+                    readOnly
+                  />
+                </Form.Group>
+              </Col>
+
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label className="fw-semibold">Personas en Cobertura</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={personasCobertura}
+                    disabled
+                    readOnly
+                  />
+                </Form.Group>
+              </Col>
+
+
+            </Row>
+          </div>
+
+          <hr />
+
+          {coberturas.map((cobertura, index) => (
+            <div key={index} className="p-3 mb-4 border rounded bg-white shadow-sm">
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <h6 className="mb-0">
+                  <Badge bg="primary" className="me-2">#{index + 1}</Badge>
+                  {cobertura.cliente?.nombre_completo || "Cliente sin nombre"} <small className="text-muted">({cobertura.parentesco || "-"})</small>
+                </h6>
+              </div>
+
+              <Row className="mb-3">
+                <Col md={3}>
+                  <div className="text-muted small">ID Póliza</div>
+                  <div className="fw-semibold">{cobertura.codigo_poliza || "-"}</div>
+                </Col>
+                <Col md={3}>
+                  <div className="text-muted small">Compañía</div>
+                  <div className="fw-semibold">{cobertura.compania?.nombre || "-"}</div>
+                </Col>
+                <Col md={3}>
+                  <div className="text-muted small">Año de Cobertura</div>
+                  <div className="fw-semibold">{cobertura.ano_cobertura || "-"}</div>
+                </Col>
+                <Col md={3}>
+                  <div className="text-muted small">Estado de la Póliza</div>
+                  <div className="fw-semibold">
+                    {(() => {
+                      const estadoPoliza = derivarEstadoPolizaVisible(cobertura);
+                      const bg =
+                        estadoPoliza === "Vigente"
+                          ? "success"
+                          : estadoPoliza === "Póliza Cancelada"
+                          ? "warning"
+                          : estadoPoliza === "Sin cobertura" ||
+                            estadoPoliza === "No" ||
+                            estadoPoliza === "Medicare" ||
+                            estadoPoliza === "Medicaid" ||
+                            estadoPoliza === "Medicai"
+                          ? "danger"
+                          : "secondary";
+                      return (
+                        <Badge
+                          bg={bg}
+                          className="text-uppercase"
+                          style={{ fontSize: "0.7rem" }}
+                        >
+                          {estadoPoliza}
+                        </Badge>
+                      );
+                    })()}
+                  </div>
+                </Col>
+              </Row>
+
+              <Row>
+
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
+                    <DateInputMdyDash
+                      valueIso={cobertura.fecha_cancelacion}
+                      disabled={false}
+                      onChangeIso={(iso) => handleChange(index, "fecha_cancelacion", iso)}
+                    />
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Fecha de Retiro</Form.Label>
+                    <DateInputMdyDash
+                      valueIso={cobertura.fecha_retiro}
+                      disabled={cobertura.activo === true} // ← aquí se desactiva
+                      onChangeIso={(iso) => handleChange(index, "fecha_retiro", iso)}
+                    />
+
+
+
+                  </Form.Group>
+                </Col>
+                <Col md={12} className="mt-3">
+                  <Form.Group>
+                    <Form.Check
+                      type="checkbox"
+                      label="Póliza activa para Taxes"
+                      checked={cobertura.activo || false}
+                      onChange={(e) =>
+                        handleChange(index, "activo", e.target.checked)
+                      }
+                    />
+                  </Form.Group>
+                </Col>
+
+                <Col md={12} className="mt-3">
+                  <Form.Group>
+                    <Form.Label className="fw-semibold">Nota del Retiro</Form.Label>
+                    <Form.Control
+                      as="textarea"
+                      rows={2}
+                      value={cobertura.nota_cancel}
+                      onChange={(e) => handleChange(index, "nota_cancel", e.target.value)}
+                      placeholder="Motivo o contexto del retiro..."
+                    />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
+          ))}
+
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Button variant="secondary" onClick={onHide}>Cerrar</Button>
+          <Button 
+            variant="primary" 
+            onClick={handleSave} 
+            disabled={loading || (!soloActualizarLocal && !cambiosDetectados)}
+          >
+            {loading 
+              ? "Guardando..." 
+              : soloActualizarLocal 
+                ? "Aplicar Cambios" 
+                : "Guardar Cambios"}
+          </Button>
+          {soloActualizarLocal && (
+            <small className="text-muted ms-2" style={{ fontSize: "0.75rem" }}>
+              Los cambios se aplicarán localmente. Usa "Guardar" del grupo familiar para enviarlos al backend.
+            </small>
+          )}
+        </Modal.Footer>
+
+      </Modal>
+    </>
+  );
+
+};
+
+export default RetiroCancelacionModal;

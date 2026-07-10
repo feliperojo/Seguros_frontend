@@ -1,0 +1,789 @@
+import React, { useState, useEffect } from "react";
+import { 
+  Modal, Button, Row, Col, Card, Badge, Table, 
+  ListGroup
+} from "react-bootstrap";
+import apiRequest from "../services/api";
+import {
+  FaUser, FaAddressCard, FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, 
+  FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
+} from "react-icons/fa";
+import MediosPagoTablas from "./MediosPagoTablas";
+
+const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fullscreenMode = false }) => {
+
+
+  // Si no hay datos de cliente, no mostrar nada
+  if (!clienteData) return null;
+ 
+  // Estado para controlar la pestaña activa
+  const [activeTab, setActiveTab] = useState("general");
+  const [mediosPago, setMediosPago] = useState([]);
+  const [loadingMediosPago, setLoadingMediosPago] = useState(false);
+
+  const [grupofamilia, setGrupoFamilia] = useState([]);
+  const [loadingGrupoFamilia, setLoadingGrupoFamilia] = useState(false);
+
+
+  const fetchMediosPago = async (clienteId) => {
+   
+    try {
+      setLoadingMediosPago(true);
+      const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
+     
+      setMediosPago(response);
+    } catch (error) {
+      console.error("Error obteniendo medios de pago", error);
+    } finally {
+      setLoadingMediosPago(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "medios" && clienteData?.id) {
+      fetchMediosPago(clienteData.id);
+    }
+  }, [activeTab, clienteData]);
+  
+  const fetchPolizas = async (grupoFamiliarId) => {
+
+    try {
+      setLoadingGrupoFamilia(true);
+    
+      const response = await apiRequest(`grupo_familiar/grupos-familiares-full/${grupoFamiliarId}`, "GET");
+     console.log("response", response);
+      
+      const personas = response.data?.coberturas?.map((item) => ({
+        ...item.cliente,
+        parentesco: item.parentesco,
+        tipo: item.parentesco === "TOMADOR" ? "TOMADOR" : "INTEGRANTE",
+        compania: item.compania?.nombre || "No registrado"
+      })) || [];
+
+      setGrupoFamilia(personas);
+    } catch (error) {
+      console.error("Error obteniendo grupo familiar", error);
+      setGrupoFamilia([]);
+    } finally {
+      setLoadingGrupoFamilia(false);
+    }
+  };
+  
+  
+  // Formatear fecha para mostrarla más legible
+  // Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
+  const formatDate = (dateString) => {
+    if (!dateString) return "No disponible";
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      const year = date.getFullYear();
+      return `${month}-${day}-${year}`;
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  /**
+   * Obtiene los teléfonos del cliente desde el array telefonos
+   * @param {Object} clienteData - Datos del cliente
+   * @returns {Array} Array de teléfonos normalizados
+   */
+  const getTelefonosFromArray = (clienteData) => {
+    if (!clienteData) return [];
+
+    // Primero intentar obtener del array de telefonos
+    const telefonos = Array.isArray(clienteData.telefonos) ? clienteData.telefonos : [];
+    
+    if (telefonos.length > 0) {
+      return telefonos.map((t) => ({
+        numero: t.numero || t.telefono || t.numero_e164 || t.numeroE164 || "",
+        tipo: t.tipo || "Móvil",
+        principal: !!t.principal,
+        iso: t.iso || "",
+        indicativo: t.indicativo || "",
+      })).filter((t) => t.numero.trim() !== "");
+    }
+
+    // Fallback: construir desde campos legacy
+    const telefonosLegacy = [];
+    
+    if (clienteData.telefono) {
+      telefonosLegacy.push({
+        numero: clienteData.telefono,
+        tipo: "Móvil",
+        principal: true,
+        iso: "",
+        indicativo: "",
+      });
+    }
+    
+    if (clienteData.secundario) {
+      telefonosLegacy.push({
+        numero: clienteData.secundario,
+        tipo: "Secundario",
+        principal: false,
+        iso: "",
+        indicativo: "",
+      });
+    }
+    
+    if (clienteData.whatsapp_num && clienteData.whatsapp_num !== clienteData.telefono) {
+      telefonosLegacy.push({
+        numero: clienteData.whatsapp_num,
+        tipo: "WhatsApp",
+        principal: false,
+        iso: "",
+        indicativo: "",
+      });
+    }
+
+    return telefonosLegacy;
+  };
+
+
+  useEffect(() => {
+    if (show && grupoFamiliarId) {
+  
+      fetchPolizas(grupoFamiliarId);
+    }
+  }, [show, grupoFamiliarId]);
+  
+
+  // Componente para mostrar información no disponible
+  const NotAvailable = () => <span className="text-muted fst-italic">No disponible</span>;
+  
+  return (
+    <Modal 
+      show={show} 
+      onHide={onHide}
+      size="xl"
+      centered
+      className="detalle-cliente-modal"
+    >
+<Modal.Header closeButton={!fullscreenMode} className="bg-light border-0">
+<Modal.Title className="d-flex align-items-center">
+          <FaUser className="me-2 text-primary" />
+          <div>
+            <h5 className="mb-0">{clienteData.nombre_completo}</h5>
+            <div className="d-flex align-items-center mt-1">
+              {clienteData.status && (
+                <Badge 
+                  bg={clienteData.status.toLowerCase() === "activo" ? "success" : 
+                      clienteData.status.toLowerCase() === "inactivo" ? "danger" : "warning"}
+                  className="me-2"
+                >
+                  {clienteData.status}
+                </Badge>
+              )}
+              {clienteData.categoria && (
+                <Badge bg="info" className="me-2">
+                  {clienteData.categoria}
+                </Badge>
+              )}
+              <small className="text-muted">ID: {clienteData.id}</small>
+            </div>
+          </div>
+        </Modal.Title>
+      </Modal.Header>
+      
+  {/* Pestañas en fila tipo barra de navegación */}
+<div className="border-bottom px-3">
+  <ul className="nav nav-tabs w-100 d-flex flex-row justify-content-start">
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "general" ? "active" : ""}`}
+        onClick={() => setActiveTab("general")}
+      >
+        Información General
+      </button>
+    </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "empleo" ? "active" : ""}`}
+        onClick={() => setActiveTab("empleo")}
+      >
+        Empleo e Ingresos
+      </button>
+    </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "polizas" ? "active" : ""}`}
+        onClick={() => setActiveTab("polizas")}
+      >
+        Pólizas y Coberturas
+      </button>
+    </li>
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "medios" ? "active" : ""}`}
+        onClick={() => setActiveTab("medios")}
+      >
+        Medios de Pago..
+      </button>
+    </li>
+
+    <li className="nav-item">
+      <button 
+        className={`nav-link ${activeTab === "info" ? "active" : ""}`}
+        onClick={() => setActiveTab("info")}
+      >
+        Información Adicional
+      </button>
+    </li>
+  </ul>
+</div>
+
+      
+      <Modal.Body className="p-3">
+        {/* Contenido de la pestaña Información General */}
+        {activeTab === "general" && (
+          <>
+            <Row>
+              <Col md={4} className="mb-3">
+                <Card className="h-100 border-0 shadow-sm">
+                  <Card.Header className="bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <FaUser className="me-2 text-primary" /> Información Personal
+                    </h6>
+                  </Card.Header>
+                  <ListGroup variant="flush">
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Primer Nombre</small>
+                      <strong>{clienteData.primer_nombre || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Segundo Nombre</small>
+                      <strong>{clienteData.segundo_nombre || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Apellidos</small>
+                      <strong>{clienteData.apellidos || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Fecha de Nacimiento</small>
+                      <strong>{formatDate(clienteData.fecha_nacimiento)}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                    <div className="d-flex justify-content-between">
+                    <div>
+                      <small className="text-muted d-block">Género</small>
+                      <strong>{clienteData.genero || <NotAvailable />}</strong>
+                      </div>
+                      <div>
+                      <small className="text-muted d-block">Idioma</small>
+                      <strong>{clienteData.idioma || <NotAvailable />}</strong>
+                      </div>
+                    </div>
+                    </ListGroup.Item>
+                  </ListGroup>
+                </Card>
+              </Col>
+              
+              <Col md={4} className="mb-3">
+                <Card className="h-100 border-0 shadow-sm">
+                  <Card.Header className="bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <FaPhoneAlt className="me-2 text-primary" /> Información de Contacto
+                    </h6>
+                  </Card.Header>
+                  <ListGroup variant="flush">
+                    {(() => {
+                      const telefonos = getTelefonosFromArray(clienteData);
+                      
+                      if (telefonos.length === 0) {
+                        return (
+                          <>
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Teléfonos</small>
+                              <strong>
+                                <NotAvailable />
+                              </strong>
+                            </ListGroup.Item>
+                            <ListGroup.Item>
+                              <small className="text-muted d-block">Preferencias de Contacto</small>
+                              <div className="mt-1">
+                                {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
+                                  <Badge bg="success" className="me-1">WhatsApp</Badge>
+                                )}
+                                {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
+                                  <Badge bg="info" className="me-1">Telegram</Badge>
+                                )}
+                                {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
+                                  <Badge bg="secondary" className="me-1">SMS</Badge>
+                                )}
+                                {(
+                                  !clienteData?.whatsapp &&
+                                  !clienteData?.telegram &&
+                                  !clienteData?.texto_sms
+                                ) && <NotAvailable />}
+                              </div>
+                            </ListGroup.Item>
+                          </>
+                        );
+                      }
+
+                      return (
+                        <>
+                          {telefonos.map((tel, index) => (
+                            <ListGroup.Item key={index}>
+                              <small className="text-muted d-block">
+                                {tel.principal ? "Teléfono Principal" : tel.tipo}
+                              </small>
+                              <strong className="d-flex align-items-center">
+                                <a
+                                  href={`tel:${tel.numero}`}
+                                  title="Llamar"
+                                  style={{ color: "#000", textDecoration: "none", display: "flex", alignItems: "center" }}
+                                >
+                                  <FaPhoneAlt className="me-2" />
+                                  {tel.indicativo && tel.indicativo.trim() !== "" ? `+${tel.indicativo} ` : ""}
+                                  {tel.numero}
+                                </a>
+                                {tel.principal && (
+                                  <Badge bg="primary" pill className="ms-2">
+                                    Principal
+                                  </Badge>
+                                )}
+                                {tel.tipo.toLowerCase().includes("whatsapp") && (
+                                  <Badge bg="success" pill className="ms-2">
+                                    WhatsApp
+                                  </Badge>
+                                )}
+                              </strong>
+                            </ListGroup.Item>
+                          ))}
+                          
+                          <ListGroup.Item>
+                            <small className="text-muted d-block">Preferencias de Contacto</small>
+                            <div className="mt-1">
+                              {(clienteData?.whatsapp === true || clienteData?.whatsapp === "true") && (
+                                <Badge bg="success" className="me-1">WhatsApp</Badge>
+                              )}
+                              {(clienteData?.telegram === true || clienteData?.telegram === "true") && (
+                                <Badge bg="info" className="me-1">Telegram</Badge>
+                              )}
+                              {(clienteData?.texto_sms === true || clienteData?.texto_sms === "true") && (
+                                <Badge bg="secondary" className="me-1">SMS</Badge>
+                              )}
+                              {(
+                                !clienteData?.whatsapp &&
+                                !clienteData?.telegram &&
+                                !clienteData?.texto_sms
+                              ) && <NotAvailable />}
+                            </div>
+                          </ListGroup.Item>
+                        </>
+                      );
+                    })()}
+                  </ListGroup>
+                </Card>
+              </Col>
+              
+              <Col md={4} className="mb-3">
+                <Card className="h-100 border-0 shadow-sm">
+                  <Card.Header className="bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <FaPassport className="me-2 text-primary" /> Status Migratorio
+                    </h6>
+                  </Card.Header>
+                  <ListGroup variant="flush">
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Status</small>
+                      <strong>{clienteData.status || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Social</small>
+                      <strong>{clienteData.social || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">A/USCIS</small>
+                      <strong>{clienteData.auscis || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <small className="text-muted d-block">Tarjeta #</small>
+                      <strong>{clienteData.tarjeta_numero || <NotAvailable />}</strong>
+                    </ListGroup.Item>
+                    <ListGroup.Item>
+                      <div className="d-flex justify-content-between">
+                        <div>
+                          <small className="text-muted d-block">Fecha Emisión</small>
+                          <strong>{formatDate(clienteData.fecha_emision)}</strong>
+                        </div>
+                        <div>
+                          <small className="text-muted d-block">Fecha Expedición</small>
+                          <strong>{formatDate(clienteData.fecha_expedicion)}</strong>
+                        </div>
+                      </div>
+                    </ListGroup.Item>
+                  </ListGroup>
+                </Card>
+              </Col>
+            </Row>
+            
+            <Row>
+              <Col md={12} className="mb-3">
+                <Card className="border-0 shadow-sm">
+                  <Card.Header className="bg-light">
+                    <h6 className="mb-0 d-flex align-items-center">
+                      <FaMapMarkerAlt className="me-2 text-primary" /> Dirección
+                    </h6>
+                  </Card.Header>
+                  <Card.Body>
+                    <Row>
+                      <Col md={6}>
+                        <dl className="row mb-0">
+                          <dt className="col-sm-4 text-muted">Direccion</dt>
+                          <dd className="col-sm-8">
+                            {clienteData.direccion 
+                              ? `${clienteData.direccion || ''}  ` 
+                              : <NotAvailable />}
+                          </dd>
+                          
+                          <dt className="col-sm-4 text-muted">Ciudad</dt>
+                          <dd className="col-sm-8">{clienteData?.ciudad || <NotAvailable />}</dd>
+                          
+                          <dt className="col-sm-4 text-muted">Estado/Provincia</dt>
+                          <dd className="col-sm-8">{clienteData?.estado || <NotAvailable />}</dd>
+                        </dl>
+                      </Col>
+                      <Col md={6}>
+                        <dl className="row mb-0">
+                          <dt className="col-sm-4 text-muted">Código Postal</dt>
+                          <dd className="col-sm-8">{clienteData?.codigo_postal || <NotAvailable />}</dd>
+                          
+                          <dt className="col-sm-4 text-muted">Condado</dt>
+                          <dd className="col-sm-8">{clienteData?.condado || <NotAvailable />}</dd>
+                          
+                          <dt className="col-sm-4 text-muted">Dir Correspondencia</dt>
+                          <dd className="col-sm-8">{clienteData?.dir_correspondencia || <NotAvailable />}</dd>
+                        </dl>
+                      </Col>
+                    </Row>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          </>
+        )}
+        
+        {/* Contenido de la pestaña Empleo e Ingresos */}
+        {activeTab === "empleo" && (
+          <Row>
+            <Col md={12} className="mb-3">
+              <Card className="border-0 shadow-sm">
+                <Card.Header className="bg-light">
+                  <h6 className="mb-0 d-flex align-items-center">
+                    <FaBriefcase className="me-2 text-primary" /> Información Laboral
+                  </h6>
+                </Card.Header>
+                <Card.Body>
+                  <Row>
+                    <Col md={6}>
+                      <dl className="row mb-0">
+                        <dt className="col-sm-4 text-muted">Tipo de Ingreso</dt>
+                        <dd className="col-sm-8">{clienteData.tipo_ingreso || <NotAvailable />}</dd>
+                        
+                        <dt className="col-sm-4 text-muted">Actividad Económica</dt>
+                        <dd className="col-sm-8">{clienteData.actividad_economica || <NotAvailable />}</dd>
+                        
+                        <dt className="col-sm-4 text-muted">Empleador</dt>
+                        <dd className="col-sm-8">{clienteData.empleador || <NotAvailable />}</dd>
+                        
+                        <dt className="col-sm-4 text-muted">Teléfono Empleador</dt>
+                        <dd className="col-sm-8">{clienteData.telefono_empleador || <NotAvailable />}</dd>
+                      </dl>
+                    </Col>
+                    <Col md={6}>
+                      <dl className="row mb-0">
+                        <dt className="col-sm-4 text-muted">Período de Ingreso</dt>
+                        <dd className="col-sm-8">
+                          {clienteData.periodo_ingreso ? (
+                            <Badge bg="secondary">
+                              {clienteData.periodo_ingreso === "HOUR" ? "HOUR" :
+                               clienteData.periodo_ingreso === "DAY" ? "DAY" :
+                               clienteData.periodo_ingreso === "WEEK" ? "WEEK" :
+                               clienteData.periodo_ingreso === "BIWEEK" ? "BIWEEK" :
+                               clienteData.periodo_ingreso === "MONTH" ? "MONTH" :
+                               clienteData.periodo_ingreso === "YEAR" ? "YEAR" :
+                               clienteData.periodo_ingreso}
+                            </Badge>
+                          ) : <NotAvailable />}
+                        </dd>
+                        
+                        <dt className="col-sm-4 text-muted">Ingreso por Período</dt>
+                        <dd className="col-sm-8">
+                          {clienteData.ingreso_por_periodo 
+                            ? `$${Number(clienteData.ingreso_por_periodo).toLocaleString()}` 
+                            : <NotAvailable />}
+                        </dd>
+                        
+                        <dt className="col-sm-4 text-muted fw-bold">Ingreso Anual</dt>
+                        <dd className="col-sm-8 fw-bold">
+                          {clienteData.ingreso_anual 
+                            ? `$${Number(clienteData.ingreso_anual).toLocaleString()}` 
+                            : <NotAvailable />}
+                        </dd>
+                      </dl>
+                    </Col>
+                    
+                  </Row>
+                  
+                  {(clienteData.periodo_ingreso_ocasional || clienteData.ingreso_por_periodo_ocasional || clienteData.nota_ingreso_ocasional) && (
+                    <div className="mt-4">
+                      <h6 className="border-bottom pb-2">Otro Ingreso</h6>
+                      <Row>
+                        <Col md={12}>
+                          <dl className="row mb-0">
+                            <dt className="col-sm-2 text-muted">Período</dt>
+                            <dd className="col-sm-4">
+                              {clienteData.periodo_ingreso_ocasional ? (
+                                <Badge bg="secondary">
+                                  {{
+                                    "HOUR": "HOUR",
+                                    "DAY": "DAY",
+                                    "WEEK": "WEEK",
+                                    "BIWEEK": "BIWEEK",
+                                    "MONTH": "MONTH",
+                                    "YEAR": "YEAR"
+                                   
+                                  }[clienteData.periodo_ingreso_ocasional] || clienteData.periodo_ingreso_ocasional}
+                                </Badge>
+                              ) : <NotAvailable />}
+                            </dd>
+
+                            <dt className="col-sm-2 text-muted">Monto</dt>
+                            <dd className="col-sm-4">
+                              {clienteData.ingreso_por_periodo_ocasional 
+                                ? `$${Number(clienteData.ingreso_por_periodo_ocasional).toLocaleString()}` 
+                                : <NotAvailable />}
+                            </dd>
+                          </dl>
+
+                          {clienteData.nota_ingreso_ocasional && (
+                            <div className="mt-3">
+                              <small className="text-muted">Nota:</small>
+                              <p className="mb-0 small mt-1">{clienteData.nota_ingreso_ocasional}</p>
+                            </div>
+                          )}
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+        )}
+        
+        {/* Contenido de la pestaña Pólizas y Coberturas */}
+              {activeTab === "polizas" && (
+          <>
+            <div className="mt-4">
+              <h5 className="border-bottom pb-2 mb-3 text-primary fw-bold">
+               Historial Grupo Familiar 
+              </h5>
+
+              {loadingGrupoFamilia ? (
+                <div className="text-center py-4">
+                  <span className="spinner-border text-primary"></span>
+                </div>
+              ) : grupofamilia.length > 0 ? (
+                <Table responsive bordered hover>
+                  <thead className="bg-light">
+                    <tr>
+                      <th>#</th>
+                      <th>Nombre Completo</th>
+                      <th>Parentesco</th>
+                      <th>Compañia</th>
+                   
+                    </tr>
+                  </thead>
+                  <tbody>
+                    
+                      {grupofamilia.map((integrante, index) => (
+                        
+                        <tr key={`${integrante.id}-${index}`}>
+                          <td>{index + 1}</td>
+                          <td className="d-flex align-items-center gap-2">
+                            {integrante.nombre_completo}
+                            {integrante.tipo === "TOMADOR" && (
+                              <Badge bg="primary" pill>TOMADOR</Badge>
+                            )}
+                          </td>
+                            <td>{integrante?.parentesco || "Sin parentesco"}</td>
+                          <td>{integrante?.compania || "Sin compañia"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+
+                </Table>
+              ) : (
+                <div className="text-center py-5 bg-light rounded">
+                  <FaUser size={40} className="text-muted mb-3" />
+                  <h6 className="text-muted">No hay personas asociadas.</h6>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+    {activeTab === "medios" && (
+  <>
+    {loadingMediosPago ? (
+      <div className="text-center py-4">
+        <span className="spinner-border text-primary"></span>
+      </div>
+    ) : (
+      <MediosPagoTablas 
+        mediosPago={mediosPago}
+        showActions={false} // Si no quieres acciones en esta vista
+      />
+    )}
+  </>
+)}
+
+
+        
+        {/* Contenido de la pestaña Información Adicional */}
+        {activeTab === "info" && (
+          <Row>
+            <Col md={6} className="mb-3">
+              <Card className="border-0 shadow-sm h-100">
+                <Card.Header className="bg-light">
+                  <h6 className="mb-0 d-flex align-items-center">
+                    <FaAddressCard className="me-2 text-primary" /> Información de Registro
+                  </h6>
+                </Card.Header>
+                <ListGroup variant="flush">
+                  <ListGroup.Item>
+                    <small className="text-muted d-block">Fecha de Registro</small>
+                    <strong>{formatDate(clienteData.created_at)}</strong>
+                  </ListGroup.Item>
+                  <ListGroup.Item>
+                    <small className="text-muted d-block">Última Actualización</small>
+                    <strong>{formatDate(clienteData.updated_at)}</strong>
+                  </ListGroup.Item>
+                  <ListGroup.Item>
+                    <small className="text-muted d-block">Categoría</small>
+                    <strong>{clienteData.categoria || <NotAvailable />}</strong>
+                  </ListGroup.Item>
+                  <ListGroup.Item>
+                      <small className="text-muted d-block">Notas</small>
+                      <p className="mb-0 small">{clienteData.nota || <NotAvailable />}</p>
+                    </ListGroup.Item>
+                </ListGroup>
+              </Card>
+            </Col>
+            
+            <Col md={6} className="mb-3">
+            <Card className="border-0 shadow-sm h-100">
+  <Card.Header className="bg-light">
+    <h6 className="mb-0 d-flex align-items-center">
+      <FaCalendarAlt className="me-2 text-primary" /> Historial y Eventos
+    </h6>
+  </Card.Header>
+  <Card.Body>
+    {Array.isArray(clienteData.historial) && clienteData.historial.length > 0 ? (
+      // ✅ Mostrar historial si existe
+      <div className="timeline">
+        {clienteData.historial.map((evento, index) => (
+          <div key={index} className="timeline-item mb-3">
+            <div className="timeline-badge bg-primary text-white px-2 py-1 rounded">
+              <small>{evento.fecha ? formatDate(evento.fecha) : "Sin fecha"}</small>
+            </div>
+            <div className="timeline-content mt-2">
+              <h6 className="mb-1">{evento.tipo || "Evento sin tipo"}</h6>
+              <p className="mb-0 text-muted">{evento.descripcion || "Sin descripción"}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      // ✅ Si no hay historial, mostramos info del primer contacto
+      <div className="text-center py-4">
+        <FaCalendarAlt size={30} className="text-muted mb-3" />
+        <p className="mb-3">No hay eventos registrados para este cliente.</p>
+
+        {clienteData.primer_contacto_info && clienteData.primer_contacto_info.trim() !== "" ? (
+          <div
+            className="text-start mt-3 p-3 rounded"
+            style={{ background: "#f8f9fa", border: "1px solid #dee2e6" }}
+          >
+            <h6 className="text-primary mb-2">📌 Información de Primer Contacto</h6>
+            <ul style={{ paddingLeft: "20px", marginBottom: 0 }}>
+              {clienteData.primer_contacto_info
+                .split("\n")
+                .filter((linea) => linea.trim() !== "")
+                .map((linea, index) => (
+                  <li key={index} style={{ fontSize: "14px", color: "#555" }}>
+                    {linea.trim()}
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="text-muted mt-3">Tampoco hay información de primer contacto.</p>
+        )}
+      </div>
+    )}
+  </Card.Body>
+</Card>
+
+
+            </Col>
+          </Row>
+        )}
+      </Modal.Body>
+      
+      {!fullscreenMode && (
+  <Modal.Footer className="bg-light">
+    <Button variant="secondary" onClick={onHide}>
+      Cerrar
+    </Button>
+  </Modal.Footer>
+)}
+
+    </Modal>
+  );
+};
+
+// Agrega estos estilos CSS directamente al componente para las pestañas horizontales
+const styles = `
+.nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.nav-tabs .nav-item {
+    margin-right: 1rem;
+}
+
+.nav-tabs .nav-link {
+    color: #6c757d;
+    font-weight: 500;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    transition: 0.3s ease;
+}
+
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    border-bottom: 2px solid #0d6efd;
+    background: none;
+}
+
+
+`;
+
+// Inyectar estilos CSS
+if (typeof document !== 'undefined') {
+  const styleEl = document.createElement('style');
+  styleEl.innerHTML = styles;
+  document.head.appendChild(styleEl);
+}
+
+export default DetalleClienteModal;

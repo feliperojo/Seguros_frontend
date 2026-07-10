@@ -1,0 +1,50 @@
+.requerimientos-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+    background-color: #fff;
+    font-size: 0.9rem;
+  }
+  
+  .requerimientos-table thead th {
+    background-color: #f8f9fa;
+    text-align: left;
+    padding: 0.75rem;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+  }
+  
+  .requerimientos-table tbody td {
+    padding: 0.65rem;
+    border-top: 1px solid #dee2e6;
+    vertical-align: middle;
+  }
+  
+  .requerimientos-table td input,
+  .requerimientos-table td select {
+    font-size: 0.85rem;
+    padding: 0.3rem;
+    width: 100%;
+  }
+  
+  .requerimientos-acciones {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .requerimientos-bloque {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 1rem;
+    background-color: #fafafa;
+    margin-bottom: 2rem;
+  }
+  
+  .requerimientos-bloque h6 {
+    font-size: 1rem;
+    font-weight: bold;
+    margin-bottom: 0.8rem;
+    color: #0d6efd;
+  }
+  

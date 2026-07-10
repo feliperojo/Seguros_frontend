@@ -1,0 +1,187 @@
+/* Estilos personalizados para los toasts */
+.custom-toast-container {
+  z-index: 9999;
+}
+
+/* Estilos para el contenedor de toast */
+.Toastify__toast-container {
+  width: 400px;
+}
+
+/* Estilos base para todos los toasts */
+.Toastify__toast {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  min-height: 60px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  position: relative;
+  overflow: hidden;
+  background: #ffffff !important;
+}
+
+/* Barra de progreso en la parte inferior - más visible */
+.Toastify__progress-bar {
+  height: 4px;
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  z-index: 1;
+}
+
+/* Toast de error - con barra roja en la parte inferior */
+.Toastify__toast--error {
+  background: #ffffff !important;
+  color: #333;
+  border-left: none;
+}
+
+.Toastify__toast--error .Toastify__progress-bar {
+  background: linear-gradient(to right, #dc3545 0%, #dc3545 20%, rgba(220, 53, 69, 0.2) 100%);
+}
+
+/* Icono de error personalizado - círculo rojo con exclamación */
+.Toastify__toast--error .Toastify__toast-icon {
+  width: 24px;
+  height: 24px;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.Toastify__toast--error .Toastify__toast-icon svg {
+  display: none;
+}
+
+.Toastify__toast--error .Toastify__toast-icon::before {
+  content: "!";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #dc3545;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* Toast de éxito */
+.Toastify__toast--success {
+  background: #ffffff;
+  color: #333;
+  border-left: 4px solid #28a745;
+}
+
+.Toastify__toast--success .Toastify__progress-bar {
+  background: linear-gradient(to right, #28a745 0%, #28a745 20%, rgba(40, 167, 69, 0.3) 100%);
+}
+
+.Toastify__toast--success .Toastify__toast-icon::before {
+  content: "✓";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #28a745;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* Toast de advertencia */
+.Toastify__toast--warning {
+  background: #ffffff;
+  color: #333;
+  border-left: 4px solid #ffc107;
+}
+
+.Toastify__toast--warning .Toastify__progress-bar {
+  background: linear-gradient(to right, #ffc107 0%, #ffc107 20%, rgba(255, 193, 7, 0.3) 100%);
+}
+
+.Toastify__toast--warning .Toastify__toast-icon::before {
+  content: "⚠";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #ffc107;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* Toast de información */
+.Toastify__toast--info {
+  background: #ffffff;
+  color: #333;
+  border-left: 4px solid #17a2b8;
+}
+
+.Toastify__toast--info .Toastify__progress-bar {
+  background: linear-gradient(to right, #17a2b8 0%, #17a2b8 20%, rgba(23, 162, 184, 0.3) 100%);
+}
+
+.Toastify__toast--info .Toastify__toast-icon::before {
+  content: "i";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #17a2b8;
+  color: white;
+  border-radius: 50%;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+/* Contenedor del mensaje */
+.Toastify__toast-body {
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Botón de cerrar */
+.Toastify__close-button {
+  color: #999;
+  opacity: 0.7;
+  align-self: flex-start;
+  margin-top: 2px;
+}
+
+.Toastify__close-button:hover {
+  opacity: 1;
+  color: #333;
+}
+
+.Toastify__close-button--default {
+  width: 20px;
+  height: 20px;
+}
+
+/* Ajustes para el icono por defecto de react-toastify */
+.Toastify__toast-icon {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+/* Asegurar que el contenido del mensaje no tenga emojis duplicados */
+.Toastify__toast-body > div {
+  display: flex;
+  align-items: center;
+}
+

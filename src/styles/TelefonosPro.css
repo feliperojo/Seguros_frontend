@@ -1,0 +1,148 @@
+/* ========================================
+   TelefonosPro - Estilos Profesionales
+   ======================================== */
+
+   .telefonos-pro-wrapper {
+    --tp-border-color: #dee2e6;
+    --tp-bg: #ffffff;
+    --tp-header-bg: #f8f9fa;
+    --tp-hover-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --tp-transition: all 0.2s ease;
+    --tp-text-muted: #6c757d;
+  }
+  
+  /* Card de teléfono */
+  .tp-phone-card {
+    background: var(--tp-bg);
+    border: 1px solid var(--tp-border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+    transition: var(--tp-transition);
+    overflow: hidden;
+  }
+  
+  .tp-phone-card:hover {
+    box-shadow: var(--tp-hover-shadow);
+    border-color: #adb5bd;
+  }
+  
+  /* Header con acciones */
+  .tp-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0.75rem;
+    background: var(--tp-header-bg);
+    border-bottom: 1px solid var(--tp-border-color);
+  }
+  
+  .tp-card-header .form-check-label {
+    font-weight: 500;
+    user-select: none;
+    color: var(--tp-text-muted);
+  }
+  
+  .tp-btn-delete {
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    text-decoration: none;
+  }
+  
+  .tp-btn-delete:hover {
+    opacity: 1;
+  }
+  
+  /* Body con campos */
+  .tp-card-body {
+    padding: 0.75rem;
+  }
+  
+  /* Estilos de labels */
+  .tp-card-body .form-label {
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    letter-spacing: 0.5px;
+    color: var(--tp-text-muted);
+  }
+  
+  /* Estilos de campos */
+  .tp-card-body .form-select,
+  .tp-card-body .form-control {
+    border-radius: 0.375rem;
+    border-color: var(--tp-border-color);
+    transition: var(--tp-transition);
+  }
+  
+  .tp-card-body .form-select:focus,
+  .tp-card-body .form-control:focus {
+    border-color: #86b7fe;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+  }
+  
+  /* Indicativo de país */
+  .tp-indicativo {
+    min-width: 60px;
+    background: var(--tp-header-bg);
+    border-right: none;
+    font-weight: 600;
+    color: #495057;
+  }
+  
+  /* Select de país */
+  .tp-select-country {
+    font-size: 0.875rem;
+  }
+  
+  /* Botón agregar */
+  .telefonos-pro-wrapper > .btn {
+    border-radius: 0.375rem;
+    font-weight: 500;
+    transition: var(--tp-transition);
+  }
+  
+  .telefonos-pro-wrapper > .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+  
+  /* Mensaje cuando no hay teléfonos */
+  .telefonos-pro-wrapper .text-center {
+    padding: 1.5rem;
+    color: var(--tp-text-muted);
+  }
+  
+  /* Responsive ajustes finos */
+  @media (max-width: 575.98px) {
+    .tp-card-body {
+      padding: 0.5rem;
+    }
+  
+    .tp-card-header {
+      padding: 0.4rem 0.5rem;
+    }
+  
+    .tp-card-body .form-label {
+      font-size: 0.65rem;
+    }
+  }
+  
+  /* Ajustes para espacios reducidos (col-6) */
+  @media (min-width: 768px) and (max-width: 991.98px) {
+    .tp-card-body .form-label {
+      font-size: 0.68rem;
+    }
+  }
+
+  /* Ajustar ancho y que parezca un form-select-sm */
+.tp-country-select-wrapper {
+  font-size: 0.875rem;
+}
+
+.tp-country-select__control {
+  border-radius: 0.2rem;
+}
+
+.tp-country-select__menu {
+  z-index: 9999; /* por si hay modales */
+}

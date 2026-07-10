@@ -1,9 +1,9 @@
-/* Estilos para el Sidebar */
+/* Estilos simplificados para el Sidebar */
 .sidebar {
   height: 100vh;
-  background: white; /* Fondo blanco */
-  color: #003366; /* Azul oscuro */
-  padding: 20px;
+  background: white;
+  color: #003366;
+  padding: 20px 15px;
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease-in-out;
@@ -11,6 +11,7 @@
   top: 0;
   left: 0;
   z-index: 1000;
+  border-right: 1px solid #e6e6e6;
 }
 
 .sidebar.expanded {
@@ -18,91 +19,274 @@
 }
 
 .sidebar.collapsed {
-  width: 80px;
+  width: 70px;
   align-items: center;
-}
-
-/* Botón de toggle */
-.sidebar .toggle-btn {
-  background: none;
-  border: none;
-  color: #003366;
-  font-size: 24px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10px;
 }
 
 /* Logo */
 .logo-container {
   width: 100%;
   text-align: center;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 .logo-img {
   max-width: 100%;
   height: auto;
-  display: block;
-  margin: 0 auto;
 }
 
 /* Bienvenida */
 .welcome-container {
   text-align: center;
   margin-bottom: 15px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e6e6e6;
 }
 
 .welcome-container p {
-  font-size: 16px;
-  font-weight: bold;
+  font-size: 14px;
   margin-bottom: 2px;
+  color: #6c757d;
 }
 
-.welcome-container span {
+.welcome-container span.welcome-user-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ff9800;
+  display: block;
+}
+
+.welcome-container .welcome-extension {
+  font-size: 12px;
+  color: #6c757d;
+  margin: 4px 0 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.welcome-container .welcome-extension-icon {
+  font-size: 10px;
+  opacity: 0.9;
+}
+
+/* Contenedor de fecha y hora en sidebar */
+.sidebar-datetime-container {
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e6e6e6;
+}
+
+.sidebar-datetime-container .datetime-display {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 10px 12px;
+  min-width: auto;
+  width: 100%;
+  box-shadow: none;
+}
+
+.sidebar-datetime-container .datetime-time {
   font-size: 18px;
-  font-weight: bold;
-  color: #ff9800; /* Naranja */
+  text-align: center;
+}
+
+.sidebar-datetime-container .datetime-date {
+  font-size: 11px;
+  text-align: center;
+  margin-top: 6px;
+}
+
+/* Navegación */
+nav {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
 }
 
 /* Enlaces del Sidebar */
 .sidebar .nav-link {
-  color: #003366; /* Azul oscuro */
+  color: #003366;
   text-decoration: none;
   display: flex;
   align-items: center;
-  padding: 14px;
-  font-size: 18px; /* Tamaño más grande */
-  font-weight: bold;
-  border-radius: 10px;
-  transition: background 0.3s, color 0.3s;
+  padding: 10px 15px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  cursor: pointer;
+  width: 100%;
+  margin-bottom: 2px;
 }
 
 .sidebar .nav-link svg {
-  font-size: 22px; /* Iconos más grandes */
-  margin-right: 10px;
+  font-size: 18px;
+  min-width: 18px;
+  margin-right: 15px;
+  color: #003366;
 }
 
-/* Efecto Hover */
-.sidebar .nav-link:hover {
-  background: #003366; /* Fondo azul */
-  color: white !important; /* Texto blanco */
+.collapsed .nav-link svg {
+  margin-right: 0;
 }
 
-/* Cerrar sesión */
+/* Elemento nav-item */
+.nav-item {
+  position: relative;
+  width: 100%;
+  margin-bottom: 2px;
+}
+
+/* Estilos limpios para los submenús */
+.submenu {
+  margin-left: 33px; /* Alineado con el texto del menú principal */
+  padding-left: 0;
+  border-left: none;
+  margin-top: 2px;
+  margin-bottom: 2px;
+  background: transparent;
+}
+
+.submenu-link {
+  padding: 8px 15px;
+  display: flex;
+  align-items: center;
+  color: #003366 !important;
+  text-decoration: none;
+  font-size: 13px;
+  transition: color 0.2s ease;
+  margin-bottom: 2px;
+  font-weight: normal;
+}
+
+/* Solo aplicar cambio de color al hover sin fondos */
+.sidebar .nav-link:hover, 
+.submenu-link:hover {
+  color: #0056b3 !important;
+}
+
+/* Icono del submenú */
+.submenu-link svg {
+  margin-right: 8px;
+  font-size: 13px;
+  color: #003366;
+  opacity: 0.7;
+}
+
+.submenu-icon {
+  margin-left: auto !important;
+  font-size: 10px;
+  color: #003366;
+}
+
+/* Estilos específicos solo para elementos activos */
+.nav-link.active {
+  color: #0056b3;
+  font-weight: 600;
+  border-left: 3px solid #0056b3;
+  padding-left: 12px;
+  background: transparent;
+}
+
+.submenu-link.active {
+  color: #0056b3 !important;
+  font-weight: 600;
+  background: transparent;
+}
+
+/* Ajustes para el menú colapsado */
+.collapsed .submenu {
+  display: none;
+}
+
+.collapsed .nav-link {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* Para que el botón de cerrar sesión quede en la parte inferior */
 .logout-button {
   margin-top: auto;
-  text-align: center;
+  padding: 10px 15px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: #003366;
 }
 
 .logout-icon {
-  font-size: 28px;
+  font-size: 18px;
   color: #003366;
   transition: color 0.3s;
 }
 
-.logout-icon:hover {
-  color: red;
+.logout-text {
+  margin-left: 15px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.logout-button:hover .logout-icon {
+  color: #dc3545;
+}
+
+
+/* Ajuste al botón de toggle */
+.sidebar .toggle-btn {
+  background: transparent;
+  border: none;
+  color: #003366;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  padding: 0;
+  transition: color 0.2s ease;
+  box-shadow: none;
+  outline: none;
+}
+
+.sidebar .toggle-btn:hover {
+  background: transparent;
+  color: #0056b3;
+}
+
+.sidebar .toggle-btn:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.sidebar {
+  width: 250px;
+  transition: width 0.3s ease, opacity 0.3s ease;
+  overflow-x: hidden;
+  background-color: #fff;
+  height: 100vh;
+}
+
+.sidebar.collapsed {
+  width: 60px;
+}
+
+.sidebar .logo-container,
+.sidebar .welcome-container,
+.sidebar .submenu,
+.sidebar span,
+.sidebar .logout-text {
+  transition: opacity 0.2s ease;
+}
+
+.sidebar.collapsed .logo-container,
+.sidebar.collapsed .welcome-container,
+.sidebar.collapsed .submenu,
+.sidebar.collapsed span,
+.sidebar.collapsed .logout-text {
+  opacity: 0;
+  pointer-events: none;
+}
+.sidebar.expanded {
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }

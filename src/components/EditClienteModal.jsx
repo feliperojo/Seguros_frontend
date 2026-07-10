@@ -1,0 +1,1606 @@
+import React, { useState, useEffect } from "react";
+import { 
+  Modal, Button, Form, Row, Col, Spinner, Alert, 
+  Nav, Tab, InputGroup, Badge
+} from "react-bootstrap";
+import apiRequest from "../services/api";
+import FormDireccion from "../components/FormDireccion";
+import CountrySelectWithFlags from "../components/CountrySelect";
+import { NumericFormat } from 'react-number-format';
+import { computeAnnual } from "../services/ingresos";
+import MediosPagoTablas from './MediosPagoTablas';
+import PrimerContacto from "../components/PrimerContacto";
+import CartaAutorizacion from "./Reports/CartaAutorizacion";
+import idiomas  from '../services/idiomas.js';
+import TelefonosPro from "./fase2/TelefonosPro";
+import { toLegacyFields, toStructuredPhones } from "../utils/phones";
+import { inflatePhones, toApiPhones } from "../utils/phone-mappers";
+import countryCodes from "../services/countryCodes";
+import { normalizeDateForInput } from "../utils/formatters";
+import MdyDashDateInput from "./common/MdyDashDateInput";
+import { STATUS_MIGRATORIO_OPTIONS } from "../constants/statusMigratorio";
+import { normalizeStatusMigratorioForSelect } from "../utils/clienteFieldNormalize";
+
+// Dentro del render del tab de mediosPago en EditClienteModal.js
+const renderMediosPagoTab = () => (
+  <div className="p-3">
+    <div className="d-flex justify-content-between align-items-center mb-3">
+      <h5 className="border-bottom pb-2 mb-0">Medios de Pago...</h5>
+      <Button
+        variant="primary"
+        onClick={() => window.open(`/clientes/mediopago/${clienteId}`, '_blank')}
+      >
+        <i className="bi bi-credit-card me-2"></i>
+        Administrar Medios de Pago..
+      </Button>
+    </div>
+
+    {loadingMediosPago ? (
+      <div className="text-center py-4">
+        <Spinner animation="border" variant="primary" size="sm" />
+        <p className="mt-2 mb-0 text-muted">Cargando medios de pago...</p>
+      </div>
+    ) : errorMediosPago ? (
+      <Alert variant="danger" className="mt-3">
+        <i className="bi bi-exclamation-triangle me-2"></i>
+        {errorMediosPago}
+      </Alert>
+    ) : mediosPago.length === 0 ? (
+      <div className="text-center border rounded py-4 mt-3 bg-light">
+        <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
+        <h6 className="mb-3">No hay medios de pago registrados</h6>
+        <p className="text-muted mb-3">
+          Utilice el administrador de medios de pago para añadir nuevos métodos de pago.
+        </p>
+      </div>
+    ) : (
+      <MediosPagoTablas
+        mediosPago={mediosPago}
+        onView={(medio) => alert(`Ver medio de pago: ${medio.titular} (${medio.forma_pago})`)}
+        onEdit={() => alert('Para editar, use el administrador de medios de pago.')}
+        onDelete={() => alert('Para eliminar, use el administrador de medios de pago.')}
+      />
+    )}
+
+    <div className="alert alert-info mt-4">
+      <div className="d-flex">
+        <i className="bi bi-info-circle me-2 fs-5"></i>
+        <div>
+          <h6 className="mb-1">Nota importante:</h6>
+          <p className="mb-0">
+            Para administrar completamente los medios de pago (añadir nuevos, editar existentes,
+            etc.), utilice el botón "Administrar Medios de Pago" que abrirá
+            la herramienta específica en una nueva ventana.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+
+const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
+  // Estado para los datos del cliente organizados por secciones
+
+
+  const [formData, setFormData] = useState({
+    // Sección 1: Datos Principales
+    datosPrincipales: {
+      primer_nombre: "",
+      segundo_nombre: "",
+      apellidos: "",
+      nombre_completo: "",
+      fecha_nacimiento: "",
+      edad: "",
+      genero: "",
+      estado_cliente: "cliente", // o "prospecto" o "descartado"
+      es_prospecto: false,
+      primer_contacto_info: "",
+      idioma: "",
+      pais_origen: "",
+    },
+    // Sección 2: Status Migratorio
+    statusMigratorio: {
+      social: "",
+      status: "",
+      auscis: "",
+      tarjeta_numero: "",
+      fecha_emision: "",
+      fecha_expedicion: "",
+      categoria: ""
+    },
+    // Sección 3: Datos de Contacto
+    datosContacto: {
+      telefono: "",
+      secundario: "",
+      whatsapp_num: "",
+      nota: "",
+      cod_tel_1: "",
+      cod_tel_2: "",
+      cod_tel_3: "",
+      activo: true,
+      servicios_mensajeria: {
+        whatsapp: false,
+        telegram: false,
+        texto_sms: false
+      },
+      email: "",
+      telefonos: [] // Array de teléfonos en formato nuevo
+    },
+   
+    // Sección 4: Dirección
+    direccion: {
+      calle: "",
+      apto: "",
+      ciudad: "",
+      estado: "",
+      codigo_postal: "",
+      condado: "",
+      dir_correspondencia: "",
+      copi_dir: false
+    },
+    
+    // Sección 5: Datos de Empleo e Ingreso
+    datosEmpleo: {
+      tipo_ingreso: "",
+      actividad_economica: "",
+      empleador: "",
+      telefono_empleador: "",
+      periodo_ingreso: "",
+      ingreso_por_periodo: "",
+      ingreso_anual: "",
+      ingreso_ocasional_anual: "",
+      ingreso_ocasional: {
+        nota_ingreso_ocasional: "",
+        periodo: "",
+        monto: ""
+      }
+    }
+  });
+
+  const buildPrimerContactoInfo = (data) => {
+    return `REF ${data.referido || ""}
+  COB.${data.cobertura_prospecto || ""}
+  TAXES ${data.taxes || ""}
+  ZIPCODE ${data.zipcode || ""}
+  EDAD ${data.edad ? `${data.edad} AÑOS` : ""}
+  INGRESOS ${data.ingresos || ""}
+  TLF ${data.telefono || ""}`.trim();
+  };
+  
+  
+  // Estado activo para las pestañas
+  const [activeTab, setActiveTab] = useState("datosPrincipales");
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [hasChanges, setHasChanges] = useState(false);
+  const [mediosPago, setMediosPago] = useState([]);
+  const [loadingMediosPago, setLoadingMediosPago] = useState(false);
+  const [errorMediosPago, setErrorMediosPago] = useState(null);
+  const [isIngresoModificado, setIsIngresoModificado] = useState(false);
+  const formatPhoneNumber = (value) => {
+    if (!value) return "";
+    const cleaned = value.replace(/\D/g, "");
+    const match = cleaned.match(/^(\d{3})(\d{3})(\d{4})$/);
+    return match ? `${match[1]}-${match[2]}-${match[3]}` : value;
+  };
+
+  // Función para convertir datos legacy de teléfonos al formato de array
+  const convertLegacyPhonesToArray = (data) => {
+    // Primero intentar usar el array de telefonos si existe
+    if (Array.isArray(data.telefonos) && data.telefonos.length > 0) {
+      return inflatePhones(data.telefonos, "us");
+    }
+    
+    // Si no, convertir desde campos legacy
+    const phones = [];
+    const codeToIso = new Map(
+      countryCodes.map((c) => [
+        String(c.code || "").replace(/\D+/g, ""),
+        String(c.iso || "").toLowerCase(),
+      ])
+    );
+    
+    // Función auxiliar para limpiar y obtener el número sin formato
+    const cleanPhoneNumber = (value) => {
+      if (!value) return "";
+      // Remover guiones y espacios, dejar solo dígitos
+      return String(value).replace(/[^\d]/g, "");
+    };
+    
+    if (data.telefono) {
+      const cod = String(data.cod_tel_1 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-1",
+        tipo: "Móvil",
+        numero: cleanPhoneNumber(data.telefono), // Dejar sin formato, TelefonosPro lo formateará
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    if (data.secundario) {
+      const cod = String(data.cod_tel_2 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-2",
+        tipo: "Trabajo",
+        numero: cleanPhoneNumber(data.secundario),
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    if (data.whatsapp_num) {
+      const cod = String(data.cod_tel_3 || "").replace(/\D+/g, "");
+      const iso = cod ? (codeToIso.get(cod) || "us") : "us";
+      phones.push({
+        id: "legacy-3",
+        tipo: "Whatsapp",
+        numero: cleanPhoneNumber(data.whatsapp_num),
+        principal: phones.length === 0,
+        iso: iso,
+        indicativo: cod || "1",
+      });
+    }
+    
+    return phones;
+  };
+  
+  const calcularEdad = (fechaNacimiento) => {
+    if (!fechaNacimiento) return "";
+    const hoy = new Date();
+    const fechaNac = new Date(fechaNacimiento);
+    let edad = hoy.getFullYear() - fechaNac.getFullYear();
+    const mes = hoy.getMonth() - fechaNac.getMonth();
+    if (mes < 0 || (mes === 0 && hoy.getDate() < fechaNac.getDate())) {
+      edad--;
+    }
+    return edad >= 0 ? edad : "";
+  };
+
+  const capitalizarPalabras = (texto) => {
+    if (!texto) return "";
+    return texto
+      .toLowerCase()
+      .replace(/\b\w/g, (letra) => letra.toUpperCase());
+  };
+  
+  
+// Añadir esta función para cargar los medios de pago
+const fetchMediosPago = async () => {
+  if (!clienteId) return;
+  
+  setLoadingMediosPago(true);
+  setErrorMediosPago(null);
+  
+  try {
+    // Llamada a la API
+    const response = await apiRequest(`mediopago/cliente/${clienteId}`, "GET");
+   
+    if (Array.isArray(response)) {
+      setMediosPago(response);
+    } else {
+      console.error("Respuesta inesperada:", response);
+      setMediosPago([]);
+    }
+  } catch (error) {
+    console.error("Error al cargar medios de pago:", error);
+    setErrorMediosPago("No se pudieron cargar los medios de pago.");
+  } finally {
+    setLoadingMediosPago(false);
+  }
+};
+
+
+
+// Cargar los medios de pago cuando se abre la pestaña
+useEffect(() => {
+  if (show && activeTab === "mediosPago") {
+    fetchMediosPago();
+  }
+}, [show, activeTab, clienteId]);
+
+
+useEffect(() => {
+  if (show && clienteData) {
+    const mapped = mapClienteDataToForm(clienteData);
+    setFormData(mapped);
+    setInitialFormData(JSON.parse(JSON.stringify(mapped))); // Copia profunda
+    setError(null);
+    setSuccessMessage("");
+    setHasChanges(false);
+    setIsIngresoModificado(false);
+  }
+}, [show, clienteData]);
+
+
+const formatuscis = (value) => {
+  const cleaned = value?.replace(/\D/g, ""); // elimina todo lo que no sea número
+  const match = cleaned?.match(/^(\d{0,3})(\d{0,3})(\d{0,3})$/);
+  return match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : value;
+};
+
+const formatsocial = (value) => {
+  const cleaned = value?.replace(/\D/g, ""); // elimina todo lo que no sea número
+  const match = cleaned?.match(/^(\d{0,3})(\d{0,2})(\d{0,4})$/);
+  return match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : value;
+};
+  
+const mapClienteDataToForm = (data) => {
+  return {
+    datosPrincipales: {
+      primer_nombre: data.primer_nombre || "",
+      segundo_nombre: data.segundo_nombre || "",
+      apellidos: data.apellidos || "",
+      nombre_completo: data.nombre_completo || "",
+      fecha_nacimiento: normalizeDateForInput(data.fecha_nacimiento),
+      edad: data.edad || "",
+      genero: data.genero || "",
+      estado_cliente: data.estado_cliente || "cliente",
+      es_prospecto: data.es_prospecto || false,
+      primer_contacto_info: data.primer_contacto_info || "",
+      idioma: data.idioma || "",
+      pais_origen: data.pais_origen || "",
+    },
+    statusMigratorio: {
+      social: data.social || "",
+      status: normalizeStatusMigratorioForSelect(data.status || ""),
+      auscis: data.auscis || "",
+      tarjeta_numero: data.tarjeta_numero || "",
+      fecha_emision: data.fecha_emision || "",
+      fecha_expedicion: data.fecha_expiracion || "",
+      categoria: data.categoria || ""
+    },
+    datosContacto: {
+      telefono: formatPhoneNumber(data.telefono || ""),
+      secundario: formatPhoneNumber(data.secundario || ""),
+      whatsapp_num: formatPhoneNumber(data.whatsapp_num || ""),
+      nota: data.nota || "",
+      cod_tel_1: data.cod_tel_1 || "",
+      cod_tel_2: data.cod_tel_2 || "",
+      cod_tel_3: data.cod_tel_3 || "",
+      servicios_mensajeria: {
+        whatsapp: data.whatsapp || false,
+        telegram: data.telegram || false,
+        texto_sms: data.texto_sms || false
+      },
+      email: data.email || "",
+      telefonos: convertLegacyPhonesToArray(data) // Convertir datos legacy a array
+    },
+    direccion: {
+      calle: data.calle || "",
+      apto: data.apto || "",
+      ciudad: data.ciudad || "",
+      estado: data.estado || "",
+      codigo_postal: data.codigo_postal || "",
+      condado: data.condado || "",
+      direccion: data.direccion || "",
+      dir_correspondencia: data.dir_correspondencia || "",
+      copi_dir: false
+    },
+    datosEmpleo: {
+      tipo_ingreso: data.tipo_ingreso || "",
+      actividad_economica: data.actividad_economica || "",
+      empleador: data.empleador || "",
+      telefono_empleador: data.telefono_empleador || "",
+      periodo_ingreso: data.periodo_ingreso || "",
+      ingreso_por_periodo: data.ingreso_por_periodo || "",
+      ingreso_anual: data.ingreso_anual || "",
+      ingreso_ocasional_anual:
+        data.ingreso_ocasional_anual != null && String(data.ingreso_ocasional_anual).trim() !== ""
+          ? String(data.ingreso_ocasional_anual)
+          : (() => {
+              const n = computeAnnual(
+                data.periodo_ingreso_ocasional,
+                data.ingreso_por_periodo_ocasional
+              );
+              return n ? n.toFixed(2) : "";
+            })(),
+      ingreso_ocasional: {
+        nota_ingreso_ocasional: data.nota_ingreso_ocasional || "",
+        periodo: data.periodo_ingreso_ocasional || "",
+        monto: data.ingreso_por_periodo_ocasional || ""
+      }
+    }
+  };
+};
+
+const [initialFormData, setInitialFormData] = useState(null);
+
+useEffect(() => {
+  if (show && clienteData) {
+    const mapped = mapClienteDataToForm(clienteData);
+    setFormData(mapped);
+    setInitialFormData(JSON.parse(JSON.stringify(mapped))); // misma estructura
+    setError(null);
+    setSuccessMessage("");
+    setHasChanges(false);
+    setIsIngresoModificado(false);
+  }
+}, [show, clienteData]);
+
+
+useEffect(() => {
+  if (!initialFormData) return;
+
+  const formChanged = JSON.stringify(formData) !== JSON.stringify(initialFormData);
+  setHasChanges(formChanged);
+}, [formData, initialFormData]);
+
+  const handleInputChange = (section, field, value) => {
+  setFormData((prevData) => {
+    let newValue = value;
+
+    // Capitalizar para nombre y apellidos
+    if (
+      section === "datosPrincipales" &&
+      (field === "primer_nombre" ||
+        field === "segundo_nombre" ||
+        field === "apellidos")
+    ) {
+      newValue = capitalizarPalabras(value);
+    }
+
+    // Si se cambia la fecha de nacimiento, recalcular edad
+    if (section === "datosPrincipales" && field === "fecha_nacimiento") {
+      const edadCalculada = calcularEdad(value);
+      return {
+        ...prevData,
+        [section]: {
+          ...prevData[section],
+          [field]: value,
+          edad: edadCalculada,
+        },
+      };
+    }
+
+    // Actualizar nombre completo si afecta nombres o apellidos
+    if (
+      section === "datosPrincipales" &&
+      (field === "primer_nombre" ||
+        field === "segundo_nombre" ||
+        field === "apellidos")
+    ) {
+      const primerNombre =
+        field === "primer_nombre"
+          ? newValue
+          : prevData.datosPrincipales.primer_nombre || "";
+      const segundoNombre =
+        field === "segundo_nombre"
+          ? newValue
+          : prevData.datosPrincipales.segundo_nombre || "";
+      const apellidos =
+        field === "apellidos"
+          ? newValue
+          : prevData.datosPrincipales.apellidos || "";
+
+      const nombreCompleto = [primerNombre, segundoNombre, apellidos]
+        .filter((part) => part && part.trim() !== "")
+        .join(" ");
+
+      return {
+        ...prevData,
+        [section]: {
+          ...prevData[section],
+          [field]: newValue,
+          nombre_completo: nombreCompleto,
+        },
+      };
+    }
+
+    // Para otros campos, actualizar normalmente
+    return {
+      ...prevData,
+      [section]: {
+        ...prevData[section],
+        [field]: newValue,
+      },
+    };
+  });
+};
+
+
+  // Manejar cambios en campos anidados (como servicios_mensajeria)
+  const handleNestedInputChange = (section, nestedField, field, value) => {
+    setFormData(prevData => ({
+      ...prevData,
+      [section]: {
+        ...prevData[section],
+        [nestedField]: {
+          ...prevData[section][nestedField],
+          [field]: value
+        }
+      }
+    }));
+   
+  };
+
+ 
+  // Preparar los datos para enviar
+  const prepareDataForSubmit = () => {
+    // Crear dirección concatenada como texto simple
+    const direccionConcatenada = [
+      formData.direccion.calle,
+      formData.direccion.apto, 
+      formData.direccion.ciudad,
+      formData.direccion.estado,
+      formData.direccion.codigo_postal
+    ].filter(Boolean).join(" ");
+  
+    // Convertir array de telefonos a formato API
+    const telefonosArray = Array.isArray(formData.datosContacto.telefonos) 
+      ? toApiPhones(formData.datosContacto.telefonos)
+      : [];
+    
+    // Convertir array de telefonos a campos legacy para compatibilidad
+    const legacyPhones = toLegacyFields(telefonosArray);
+    
+    // Obtener códigos de país desde el array de telefonos
+    const principalPhone = telefonosArray.find(p => p.principal) || telefonosArray[0];
+    const trabajoPhone = telefonosArray.find(p => p.tipo?.toLowerCase().includes("trabajo"));
+    const whatsappPhone = telefonosArray.find(p => p.tipo?.toLowerCase().includes("whatsapp"));
+    
+    const flatData = {
+      // Datos principales
+      ...formData.datosPrincipales,
+      
+      // Status migratorio
+      ...formData.statusMigratorio,
+      
+      // Datos de contacto - mantener campos legacy para compatibilidad
+      telefono: legacyPhones.telefono || "",
+      secundario: legacyPhones.secundario || "",
+      whatsapp_num: legacyPhones.whatsapp_num || "",
+      cod_tel_1: principalPhone?.indicativo || formData.datosContacto.cod_tel_1 || "",
+      cod_tel_2: trabajoPhone?.indicativo || formData.datosContacto.cod_tel_2 || "",
+      cod_tel_3: whatsappPhone?.indicativo || formData.datosContacto.cod_tel_3 || "",
+      nota: formData.datosContacto.nota || "",
+      servicios_mensajeria: formData.datosContacto.servicios_mensajeria,
+      email: formData.datosContacto.email || "",
+      // Incluir array de telefonos en formato nuevo
+      telefonos: telefonosArray,
+      
+      // Incluir los campos individuales de dirección
+      calle: formData.direccion.calle,
+      apto: formData.direccion.apto,
+      ciudad: formData.direccion.ciudad,
+      estado: formData.direccion.estado,
+      codigo_postal: formData.direccion.codigo_postal,
+      condado: formData.direccion.condado,
+      
+      
+      // Guardar la dirección como texto concatenado (no como objeto)
+      direccion: direccionConcatenada,
+      
+      // Dirección de correspondencia
+      dir_correspondencia: formData.direccion.dir_correspondencia,
+      
+      // Datos de empleo
+      ...formData.datosEmpleo,
+      nota_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.nota_ingreso_ocasional,
+      periodo_ingreso_ocasional: formData.datosEmpleo.ingreso_ocasional.periodo,
+      ingreso_por_periodo_ocasional: formData.datosEmpleo.ingreso_ocasional.monto,
+      ingreso_ocasional_anual: formData.datosEmpleo.ingreso_ocasional_anual,
+
+
+    };
+  
+    return flatData;
+  };  // Enviar los datos actualizados
+
+  const handleSubmit = () => {
+    // Guardar cambios del cliente directamente, sin pasar por bitácora
+    actualizarCliente();
+  };
+  
+  const actualizarCliente = async () => {
+    const dataToSubmit = prepareDataForSubmit();
+    try {
+      const response = await apiRequest(`cliente/${clienteId}`, "PUT", dataToSubmit);
+     
+  
+      if (onClienteUpdated) {
+        // ⬅️ Aquí debes pasar el cliente actualizado (usa el response.data)
+        onClienteUpdated({
+          id: clienteId,
+          ...dataToSubmit,
+          nombre_completo: formData.datosPrincipales.nombre_completo,
+          grupoFamiliarIds: clienteData?.grupoFamiliarIds || [], // ← mantenerlo
+        });
+      }
+  
+      onHide(); // <- cerrar modal
+    } catch (error) {
+      console.error("❌ Error al actualizar el cliente:", error);
+      setError("No se pudo actualizar el cliente.");
+    }
+  };
+  
+  
+
+  const handlePhoneInput = (section, field) => (e) => {
+    const raw = e.target.value.replace(/\D/g, "");
+    const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+    handleInputChange(section, field, formatted);
+  };
+  
+  const estadoActual = formData.datosPrincipales.estado_cliente;
+  const estadoOriginal = clienteData?.estado_cliente; // este viene desde el backend
+  const esClienteFijo = estadoOriginal === "cliente";
+  
+  
+  // Renderizar pestañas para la sección de datos principales
+  const renderDatosPrincipalesTab = () => (
+    
+    <div className="p-3">
+     <div className="btn-group mt-2 mt-md-0" role="group" aria-label="Tipo de cliente">
+     <input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnCliente"
+  autoComplete="off"
+  checked={estadoActual === "cliente"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "cliente",
+        es_prospecto: false,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-primary fw-semibold" htmlFor="btnCliente">
+  Cliente
+</label>
+
+<input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnProspecto"
+  autoComplete="off"
+  disabled={esClienteFijo} // ❌ si ya es cliente, no puede volver a prospecto
+  checked={estadoActual === "prospecto"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "prospecto",
+        es_prospecto: true,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-warning fw-semibold" htmlFor="btnProspecto">
+  Prospecto
+</label>
+
+<input
+  type="radio"
+  className="btn-check"
+  name="estado_cliente"
+  id="btnDescartado"
+  autoComplete="off"
+  disabled={esClienteFijo} // ❌ si ya es cliente, no puede ser descartado
+  checked={estadoActual === "descartado"}
+  onChange={() =>
+    setFormData(prev => ({
+      ...prev,
+      datosPrincipales: {
+        ...prev.datosPrincipales,
+        estado_cliente: "descartado",
+        es_prospecto: true,
+      }
+    }))
+  }
+/>
+<label className="btn btn-outline-danger fw-semibold" htmlFor="btnDescartado">
+  Descartado
+</label>
+</div>
+
+      
+      <Row className="mb-3">
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Primer Nombre</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.primer_nombre}
+              onChange={(e) => handleInputChange("datosPrincipales", "primer_nombre", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Segundo Nombre</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.segundo_nombre}
+              onChange={(e) => handleInputChange("datosPrincipales", "segundo_nombre", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Apellidos</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.apellidos}
+              onChange={(e) => handleInputChange("datosPrincipales", "apellidos", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+                <Form.Group>
+            <Form.Label>Nombre Completo</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.nombre_completo}
+              disabled
+              className="bg-light"
+            />
+          
+          </Form.Group>
+      
+      <Row className="mb-3">
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Fecha de Nacimiento</Form.Label>
+            <MdyDashDateInput
+              allowManualEntry
+              valueIso={normalizeDateForInput(formData.datosPrincipales.fecha_nacimiento)}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("datosPrincipales", "fecha_nacimiento", iso)
+              }
+            />
+          </Form.Group>
+        </Col>
+        <Col md={2}>
+          <Form.Group>
+            <Form.Label>Edad</Form.Label>
+            <Form.Control
+              type="number"
+              value={formData.datosPrincipales.edad}
+              readOnly
+              className="bg-light"
+              onChange={(e) => handleInputChange("datosPrincipales", "edad", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>Género</Form.Label>
+            <Form.Select
+              value={formData.datosPrincipales.genero}
+              onChange={(e) => handleInputChange("datosPrincipales", "genero", e.target.value)}
+            >
+              <option value="">Seleccione</option>
+              <option value="Male">Male</option>
+              <option value="Female">Female</option>
+              
+            </Form.Select>
+          </Form.Group>
+        </Col>
+        <Col md={3}>
+    <Form.Group>
+      <Form.Label>Idioma</Form.Label>
+      <Form.Select
+        value={formData.datosPrincipales.idioma}
+        onChange={(e) => handleInputChange("datosPrincipales", "idioma", e.target.value)}
+      >
+        <option value="">Seleccione</option>
+        {idiomas.map((idioma) => (
+          <option key={idioma.code} value={idioma.name}>
+            {idioma.name}
+          </option>
+        ))}
+      </Form.Select>
+    </Form.Group>
+  </Col>
+        <Col md={3}>
+          <Form.Group>
+            <Form.Label>País de Origen</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.datosPrincipales.pais_origen}
+              onChange={(e) => handleInputChange("datosPrincipales", "pais_origen", e.target.value)}
+              placeholder="País de origen"
+              style={{ textTransform: "capitalize" }}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      <Row className="mb-3">
+      <PrimerContacto
+            value={formData.datosPrincipales.primer_contacto_info}
+            onChange={(newString) => {
+              setFormData(prev => ({
+                ...prev,
+                datosPrincipales: {
+                  ...prev.datosPrincipales,
+                  primer_contacto_info: newString
+                }
+              }));
+            }}
+          />
+      </Row>
+
+    </div>
+  );
+
+  // Renderizar pestañas para status migratorio
+  const renderStatusMigratorioTab = () => (
+    <div className="p-3">
+      <h5 className="border-bottom pb-2 mb-3">Datos sobre Status Migratorio</h5>
+      
+      <Row className="mb-3">
+        <Col md={6}>
+        <Form.Group>
+              <Form.Label>Social</Form.Label>
+              <Form.Control
+                type="text"
+                value={formData.statusMigratorio.social}
+                onChange={(e) => {
+                  const formatted = formatsocial(e.target.value);
+                  handleInputChange("statusMigratorio", "social", formatted);
+                }}
+                maxLength={11}
+              />
+
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Status</Form.Label>
+            <Form.Select
+                  value={normalizeStatusMigratorioForSelect(formData.statusMigratorio.status)}
+                  onChange={(e) => handleInputChange("statusMigratorio", "status", e.target.value)}
+                >
+
+
+              <option value="">Seleccione</option>
+              {STATUS_MIGRATORIO_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>A/USCIS</Form.Label>
+            <Form.Control
+                type="text"
+                value={formData.statusMigratorio.auscis}
+                onChange={(e) => {
+                  const formatted = formatuscis(e.target.value);
+                  handleInputChange("statusMigratorio", "auscis", formatted);
+                }}
+                maxLength={11}
+
+              />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Tarjeta #</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.statusMigratorio.tarjeta_numero}
+              onChange={(e) => handleInputChange("statusMigratorio", "tarjeta_numero", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Fecha Emisión</Form.Label>
+            <MdyDashDateInput
+              valueIso={formData.statusMigratorio.fecha_emision}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("statusMigratorio", "fecha_emision", iso)
+              }
+            />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Fecha Expiración</Form.Label>
+            <MdyDashDateInput
+              valueIso={formData.statusMigratorio.fecha_expedicion}
+              minIso="1900-01-01"
+              maxIso="2099-12-31"
+              onChangeIso={(iso) =>
+                handleInputChange("statusMigratorio", "fecha_expedicion", iso)
+              }
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Group>
+            <Form.Label>Categoría</Form.Label>
+            <Form.Control
+              type="text"
+              value={formData.statusMigratorio.categoria}
+              onChange={(e) => handleInputChange("statusMigratorio", "categoria", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+    </div>
+  );
+
+  // Renderizar pestañas para datos de contacto
+  const renderDatosContactoTab = () => (
+    <div className="p-3">
+      <h5 className="border-bottom pb-2 mb-3">Datos de Contacto</h5>
+      
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Group>
+            <Form.Label className="mb-2">Teléfonos</Form.Label>
+            <TelefonosPro
+              value={formData.datosContacto.telefonos || []}
+              onChange={(telefonos) => {
+                setFormData(prevData => ({
+                  ...prevData,
+                  datosContacto: {
+                    ...prevData.datosContacto,
+                    telefonos: telefonos
+                  }
+                }));
+                setHasChanges(true);
+              }}
+              readOnly={false}
+              fallbackIso="us"
+              addLabel="Agregar teléfono"
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Group>
+            <Form.Label>Nota</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              value={formData.datosContacto.nota}
+              onChange={(e) => handleInputChange("datosContacto", "nota", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <h6 className="mt-4 mb-3">Servicios de Mensajería</h6>
+      
+      <div className="mb-3 d-flex gap-4">
+        <Form.Check 
+          type="checkbox"
+          id="whatsapp-check"
+          label="WhatsApp"
+          checked={formData.datosContacto.servicios_mensajeria.whatsapp}
+          onChange={(e) => handleNestedInputChange("datosContacto", "servicios_mensajeria", "whatsapp", e.target.checked)}
+        />
+        <Form.Check 
+          type="checkbox"
+          id="telegram-check"
+          label="Telegram"
+          checked={formData.datosContacto.servicios_mensajeria.telegram}
+          onChange={(e) => handleNestedInputChange("datosContacto", "servicios_mensajeria", "telegram", e.target.checked)}
+        />
+        <Form.Check 
+          type="checkbox"
+          id="sms-check"
+          label="Texto SMS"
+          checked={formData.datosContacto.servicios_mensajeria.texto_sms}
+          onChange={(e) => handleNestedInputChange("datosContacto", "servicios_mensajeria", "texto_sms", e.target.checked)}
+        />
+      </div>
+      
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Group>
+            <Form.Label>Email</Form.Label>
+            <Form.Control
+              type="email"
+              value={formData.datosContacto.email}
+              onChange={(e) => handleInputChange("datosContacto", "email", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+    </div>
+  );
+
+ // En el archivo EditClienteModal.js
+const renderDireccionTab = () => (
+  <div className="p-3">
+    <h5 className="border-bottom pb-2 mb-3">Dirección</h5>
+    
+    <FormDireccion
+      formData={formData.direccion || {}}
+      onChange={(name, value, direccionCompleta) => {
+        setFormData(prevData => {
+          // Crear una copia actualizada de los datos de dirección
+          const updatedDireccion = {
+            ...prevData.direccion,
+            [name]: value,
+          };
+          
+          // Si se actualizó un campo que afecta la dirección completa y no es el campo
+          // de correspondencia o el checkbox, actualizar la visualización de dirección
+          if (direccionCompleta && name !== "dir_correspondencia" && name !== "copi_dir") {
+            updatedDireccion.direccion = direccionCompleta;
+          }
+          
+          return {
+            ...prevData,
+            direccion: updatedDireccion
+          };
+        });
+        
+        setHasChanges(true);
+      }}
+      editable={true}
+    />
+  </div>
+);
+
+  // Renderizar pestañas para datos de empleo
+  const renderDatosEmpleoTab = () => (
+    <div className="p-3">
+      <h5 className="border-bottom pb-2 mb-3">Datos de Empleo e Ingreso</h5>
+      
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Tipo de Ingreso</Form.Label>
+            <Form.Select
+              value={formData.datosEmpleo.tipo_ingreso}
+              onChange={(e) => handleInputChange("datosEmpleo", "tipo_ingreso", e.target.value)}
+            >
+              <option value="">Seleccione</option>
+                  <option value="W2">W2</option>
+                  <option value="1099">1099</option>
+                  <option value="SOCIAL SECURITY">SOCIAL SECURITY</option>
+                  <option value="SELF EMPLOYMENT">SELF EMPLOYMENT</option>
+                  <option value="SUPPORT">SUPPORT</option>
+                  <option value="ALIMONY">ALIMONY</option>
+            </Form.Select>
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Actividad Económica</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Ej: Comercio, Servicios, etc."
+              value={formData.datosEmpleo.actividad_economica}
+              onChange={(e) => handleInputChange("datosEmpleo", "actividad_economica", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Empleador</Form.Label>
+            <Form.Control
+              type="text"
+              placeholder="Nombre de la empresa"
+              value={formData.datosEmpleo.empleador}
+              onChange={(e) => handleInputChange("datosEmpleo", "empleador", e.target.value)}
+            />
+          </Form.Group>
+        </Col>
+        <Col md={6}>
+          <Form.Group>
+            <Form.Label>Teléfono del Empleador</Form.Label>
+            <Form.Control
+                      type="text"
+                      value={formData.datosEmpleo.telefono_empleador}
+                      onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, "");
+                        const match = raw.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+                        const formatted = match ? [match[1], match[2], match[3]].filter(Boolean).join("-") : raw;
+
+                        handleInputChange("datosEmpleo", "telefono_empleador", formatted);
+                      }}
+                    />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Período de Ingreso</Form.Label>
+            <Form.Select
+                    value={formData.datosEmpleo.periodo_ingreso}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setFormData((prev) => {
+                        const datosEmpleo = { ...prev.datosEmpleo, periodo_ingreso: value };
+                        const principal = computeAnnual(value, datosEmpleo.ingreso_por_periodo);
+                        return {
+                          ...prev,
+                          datosEmpleo: {
+                            ...datosEmpleo,
+                            ingreso_anual: principal ? principal.toFixed(2) : "",
+                          },
+                        };
+                      });
+                    }}
+                    
+                  >
+
+
+                    <option value="">Seleccione</option>
+                    <option value="HOUR">HOUR</option>
+                    <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+                    <option value="WEEKLY">WEEKLY</option>
+                    <option value="BIWEEKLY">BIWEEKLY</option>
+                    <option value="MONTHLY">MONTHLY</option>
+                    <option value="ANNUAL">ANNUAL</option>
+                  </Form.Select>
+
+
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+          <Form.Label>Ingreso por Período ($)</Form.Label>
+          <NumericFormat
+                    value={formData.datosEmpleo.ingreso_por_periodo}
+                    thousandSeparator=","
+                    decimalSeparator="."
+                    prefix="$"
+                    decimalScale={2}
+                    fixedDecimalScale
+                    allowNegative={false}
+                    className="form-control"
+                    onValueChange={({ value }) => {
+                      setFormData((prev) => {
+                        const datosEmpleo = { ...prev.datosEmpleo, ingreso_por_periodo: value };
+                        const principal = computeAnnual(datosEmpleo.periodo_ingreso, value);
+                        return {
+                          ...prev,
+                          datosEmpleo: {
+                            ...datosEmpleo,
+                            ingreso_anual: principal ? principal.toFixed(2) : "",
+                          },
+                        };
+                      });
+                    }}
+                  />
+
+
+
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+          <Form.Label>Ingreso Anual ($)</Form.Label>
+              <NumericFormat
+                value={formData.datosEmpleo.ingreso_anual}
+                thousandSeparator=","
+                decimalSeparator="."
+                prefix="$"
+                decimalScale={2}
+                fixedDecimalScale
+                allowNegative={false}
+                className="form-control"
+                onValueChange={(values) => {
+                  const { value } = values;
+                  handleInputChange("datosEmpleo", "ingreso_anual", value);
+                }}
+              />
+
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <h6 className="mt-4 mb-3">Otro Ingreso</h6>
+      
+      <Row className="mb-3">
+        <Col md={12}>
+          <Form.Group>
+            <Form.Label>Nota</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={2}
+              value={formData.datosEmpleo.ingreso_ocasional.nota_ingreso_ocasional}
+              onChange={(e) => handleNestedInputChange("datosEmpleo", "ingreso_ocasional", "nota_ingreso_ocasional", e.target.value)}
+              
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+      
+      <Row className="mb-3">
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Período de Ingreso Ocasional</Form.Label>
+            <Form.Select
+              value={formData.datosEmpleo.ingreso_ocasional.periodo}
+              onChange={(e) => {
+                const value = e.target.value;
+                setFormData((prev) => {
+                  const ingreso_ocasional = {
+                    ...prev.datosEmpleo.ingreso_ocasional,
+                    periodo: value,
+                  };
+                  const datosEmpleo = { ...prev.datosEmpleo, ingreso_ocasional };
+                  const ocasional = computeAnnual(value, ingreso_ocasional.monto);
+                  return {
+                    ...prev,
+                    datosEmpleo: {
+                      ...datosEmpleo,
+                      ingreso_ocasional_anual: ocasional ? ocasional.toFixed(2) : "",
+                    },
+                  };
+                });
+              }}
+            >
+              <option value="">Seleccione</option>
+              <option value="HOUR">HOUR</option>
+            <option value="WEEKLY P.TIME">WEEKLY P.TIME</option>
+            <option value="WEEKLY">WEEKLY</option>
+            <option value="BIWEEKLY">BIWEEKLY</option>
+            <option value="MONTHLY">MONTHLY</option>
+            <option value="ANNUAL">ANNUAL</option>
+            </Form.Select>
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+          <Form.Label>Ingreso por Período ocasional ($)</Form.Label>
+              <NumericFormat
+                value={formData.datosEmpleo.ingreso_ocasional.monto}
+                thousandSeparator=","
+                decimalSeparator="."
+                prefix="$"
+                decimalScale={2}
+                fixedDecimalScale
+                allowNegative={false}
+                className="form-control"
+                onValueChange={(values) => {
+                  const { value } = values;
+                  setFormData((prev) => {
+                    const ingreso_ocasional = {
+                      ...prev.datosEmpleo.ingreso_ocasional,
+                      monto: value,
+                    };
+                    const datosEmpleo = { ...prev.datosEmpleo, ingreso_ocasional };
+                    const ocasional = computeAnnual(ingreso_ocasional.periodo, value);
+                    return {
+                      ...prev,
+                      datosEmpleo: {
+                        ...datosEmpleo,
+                        ingreso_ocasional_anual: ocasional ? ocasional.toFixed(2) : "",
+                      },
+                    };
+                  });
+                }}
+                
+              />
+
+          </Form.Group>
+        </Col>
+        <Col md={4}>
+          <Form.Group>
+            <Form.Label>Ingreso ocasional anual ($)</Form.Label>
+            <NumericFormat
+              value={formData.datosEmpleo.ingreso_ocasional_anual}
+              thousandSeparator=","
+              decimalSeparator="."
+              prefix="$"
+              decimalScale={2}
+              fixedDecimalScale
+              allowNegative={false}
+              className="form-control"
+              onValueChange={(values) => {
+                const { value } = values;
+                handleInputChange("datosEmpleo", "ingreso_ocasional_anual", value);
+              }}
+            />
+          </Form.Group>
+        </Col>
+      </Row>
+    </div>
+  );
+
+  // Renderizar sección de medios de pago como referencia
+  const renderMediosPagoTab = () => (
+    <div className="p-3">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h5 className="border-bottom pb-2 mb-0">Medios de Pago</h5>
+        <Button 
+          variant="primary"
+          onClick={() => window.open(`/clientes/mediopago/${clienteId}`, '_blank')}
+        >
+          <i className="bi bi-credit-card me-2"></i>
+          Administrar Medios de Pago
+        </Button>
+      </div>
+  
+      {loadingMediosPago ? (
+        <div className="text-center py-4">
+          <Spinner animation="border" variant="primary" size="sm" />
+          <p className="mt-2 mb-0 text-muted">Cargando medios de pago...</p>
+        </div>
+      ) : errorMediosPago ? (
+        <Alert variant="danger" className="mt-3">
+          <i className="bi bi-exclamation-triangle me-2"></i>
+          {errorMediosPago}
+        </Alert>
+      ) : mediosPago.length === 0 ? (
+        <div className="text-center border rounded py-4 mt-3 bg-light">
+          <i className="bi bi-credit-card-2-front display-5 text-muted mb-3"></i>
+          <h6 className="mb-3">No hay medios de pago registrados</h6>
+          <p className="text-muted mb-3">
+            Utilice el administrador de medios de pago para añadir nuevos métodos de pago.
+          </p>
+        </div>
+      ) : (
+        <MediosPagoTablas
+        mediosPago={mediosPago}
+        onView={(medio) =>
+          alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`)
+        }
+        onEdit={() => {}}
+        onDelete={() => {}}
+        showActions={false}
+      />
+      
+      
+      )}
+  
+      <div className="alert alert-info mt-4">
+        <div className="d-flex">
+          <i className="bi bi-info-circle me-2 fs-5"></i>
+          <div>
+            <h6 className="mb-1">Nota importante:</h6>
+            <p className="mb-0">
+              Para administrar completamente los medios de pago (añadir nuevos, editar existentes, 
+              etc.), utilice el botón "Administrar Medios de Pago" que abrirá 
+              la herramienta específica en una nueva ventana.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+  
+  return (
+    <Modal 
+      show={show} 
+      onHide={() => {
+        if (hasChanges && !saving) {
+          if (window.confirm("¿Estás seguro que deseas cerrar? Perderás los cambios no guardados.")) {
+            onHide();
+          }
+        } else {
+          onHide();
+        }
+      }}
+      size="xl"
+      centered
+      backdrop="static"
+      className="cliente-edit-modal"
+      dialogClassName="modal-90w"
+    >
+      <Modal.Header closeButton className="align-items-center">
+        <Modal.Title>
+          <i className="bi bi-pencil-square me-2"></i>
+          Editar Cliente: {clienteData?.nombre_completo || ""}
+        </Modal.Title>
+        {hasChanges && (
+          <Badge bg="warning" className="ms-3">
+            Cambios sin guardar
+          </Badge>
+        )}
+      </Modal.Header>
+      
+      <Modal.Body className="p-0">
+        {loading ? (
+          <div className="text-center py-5">
+            <Spinner animation="border" variant="primary" />
+            <p className="mt-3">Cargando datos del cliente...</p>
+          </div>
+        ) : error ? (
+          <Alert variant="danger" className="m-3">
+            {error}
+          </Alert>
+        ) : (
+          <>
+            {successMessage && (
+              <Alert variant="success" className="m-3">
+                <i className="bi bi-check-circle me-2"></i>
+                {successMessage}
+              </Alert>
+            )}
+            
+            <Tab.Container activeKey={activeTab} onSelect={setActiveTab}>
+              <div className="d-flex">
+                <div className="nav-tabs-left border-end" style={{ width: "220px", minHeight: "500px" }}>
+                  <Nav variant="pills" className="flex-column p-2">
+                    <Nav.Item>
+                      <Nav.Link eventKey="datosPrincipales" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          1
+                        </div>
+                        <span>Datos Principales</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                    <Nav.Item>
+                      <Nav.Link eventKey="statusMigratorio" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          2
+                        </div>
+                        <span>Status Migratorio</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                    <Nav.Item>
+                      <Nav.Link eventKey="datosContacto" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          3
+                        </div>
+                        <span>Datos de Contacto</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                    <Nav.Item>
+                      <Nav.Link eventKey="direccion" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          4
+                        </div>
+                        <span>Dirección</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                    <Nav.Item>
+                      <Nav.Link eventKey="datosEmpleo" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          5
+                        </div>
+                        <span>Empleo e Ingreso</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                    <Nav.Item>
+                      <Nav.Link eventKey="mediosPago" className="d-flex align-items-center">
+                        <div className="tab-icon rounded-circle text-white d-flex align-items-center justify-content-center me-2" 
+                             style={{ width: "24px", height: "24px", backgroundColor: "#0d6efd" }}>
+                          6
+                        </div>
+                        <span>Medios de Pago</span>
+                      </Nav.Link>
+                    </Nav.Item>
+                  </Nav>
+                  
+                  <div className="p-3 mt-auto">
+                    <Button 
+                      variant="success" 
+                      className="w-100 d-flex align-items-center justify-content-center"
+                      onClick={handleSubmit}
+                      disabled={saving || !hasChanges}
+                    >
+                      {saving ? (
+                        <>
+                          <Spinner as="span" animation="border" size="sm" role="status" aria-hidden="true" className="me-2" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-save me-2"></i>
+                          Guardar Cambios
+                        </>
+                      )}
+                    </Button>
+                    <CartaAutorizacion
+                            cliente={{
+                              nombre_completo: formData.datosPrincipales.nombre_completo,
+                              email: formData.datosContacto.email,
+                              direccion: `${formData.direccion.calle} ${formData.direccion.apto} ${formData.direccion.ciudad} ${formData.direccion.estado}`
+                            }}
+                          />
+
+                  </div>
+                </div>
+                
+                <div className="tab-content-right" style={{ flex: "1" }}>
+                  <Tab.Content>
+                    <Tab.Pane eventKey="datosPrincipales">
+                      {renderDatosPrincipalesTab()}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="statusMigratorio">
+                      {renderStatusMigratorioTab()}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="datosContacto">
+                      {renderDatosContactoTab()}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="direccion">
+                      {renderDireccionTab()}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="datosEmpleo">
+                      {renderDatosEmpleoTab()}
+                    </Tab.Pane>
+                    <Tab.Pane eventKey="mediosPago">
+                      {renderMediosPagoTab()}
+                    </Tab.Pane>
+                  </Tab.Content>
+                  
+                  <div className="d-flex justify-content-between p-3 border-top">
+                    <Button 
+                      variant="outline-secondary" 
+                      onClick={() => {
+                        const tabs = ["datosPrincipales", "statusMigratorio", "datosContacto", "direccion", "datosEmpleo", "mediosPago"];
+                        const currentIndex = tabs.indexOf(activeTab);
+                        if (currentIndex > 0) {
+                          setActiveTab(tabs[currentIndex - 1]);
+                        }
+                      }}
+                      disabled={activeTab === "datosPrincipales"}
+                    >
+                      <i className="bi bi-arrow-left me-2"></i>
+                      Anterior
+                    </Button>
+                    
+                    <Button 
+                      variant="outline-primary" 
+                      onClick={() => {
+                        const tabs = ["datosPrincipales", "statusMigratorio", "datosContacto", "direccion", "datosEmpleo", "mediosPago"];
+                        const currentIndex = tabs.indexOf(activeTab);
+                        if (currentIndex < tabs.length - 1) {
+                          setActiveTab(tabs[currentIndex + 1]);
+                        }
+                      }}
+                      disabled={activeTab === "mediosPago"}
+                    >
+                      Siguiente
+                      <i className="bi bi-arrow-right ms-2"></i>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </Tab.Container>
+          </>
+        )}
+      </Modal.Body>
+    </Modal>
+  );
+};
+
+export default EditClienteModal;

@@ -1,0 +1,84 @@
+/* Contenedor de la barra */
+.progressbar {
+    counter-reset: step;
+    gap: 0.75rem;              /* separacion entre items */
+    align-items: center;
+  }
+  
+  /* Cada paso */
+  .progressbar .step {
+    position: relative;
+    text-align: center;
+    flex: 1;
+    color: #6c757d;            /* gris bootstrap */
+    font-weight: 500;
+  }
+  
+  /* Círculo numerado */
+  .progressbar .step::before {
+    content: counter(step);
+    counter-increment: step;
+    width: 28px;
+    height: 28px;
+    line-height: 24px;
+    border: 2px solid #dee2e6; /* borde gris claro */
+    display: block;
+    text-align: center;
+    border-radius: 50%;
+    margin: 0 auto 6px;
+    background: #fff;
+    font-size: 0.85rem;
+  }
+  
+  /* Línea que conecta */
+  .progressbar .step::after {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 2px;
+    background: #dee2e6;
+    top: 13px;                 /* mitad del círculo */
+    left: -50%;
+    z-index: -1;
+  }
+  .progressbar .step:first-child::after { content: none; }
+  
+  /* Estados: completado */
+  .progressbar .step.done { color: #0d6efd; }
+  .progressbar .step.done::before { border-color: #0d6efd; }
+  .progressbar .step.done::after { background: #0d6efd; }
+  
+  /* Estado: activo */
+  .progressbar .step.active {
+    color: #0d6efd;            /* primary */
+    font-weight: 700;          /* negrita */
+  }
+  .progressbar .step.active::before {
+    border-color: #0d6efd;
+    background: #0d6efd;
+    color: #fff;
+  }
+
+  /* Estado descartado: resaltar en rojo */
+  .progressbar .step.discarded,
+  .progressbar .step.discarded.active {
+    color: #dc3545;
+    font-weight: 700;
+  }
+  .progressbar .step.discarded::before,
+  .progressbar .step.discarded.active::before {
+    border-color: #dc3545;
+    background: #dc3545;
+    color: #fff;
+  }
+  .progressbar .step.discarded::after {
+    background: #dc3545;
+  }
+  
+  /* Responsive: evita que el texto se rompa feo */
+  .progressbar .step span {
+    display: inline-block;
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  
