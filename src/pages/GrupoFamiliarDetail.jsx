@@ -178,9 +178,11 @@ const mapClienteForSave = (m) => {
     };
     // Solo incluir campos que tienen valor (no null/undefined)
     // Para telefonos, siempre incluirlo aunque sea array vacío
+    // Fechas de estatus migratorio: enviar null si el usuario las dejó en blanco
     const filtered = Object.fromEntries(
       Object.entries(payload).filter(([k, v]) => {
-        if (k === "telefonos") return true; // Siempre incluir telefonos (puede ser array vacío)
+        if (k === "telefonos") return true;
+        if (k === "fecha_emision" || k === "fecha_expiracion") return true;
         return v !== null && v !== undefined;
       })
     );
@@ -359,7 +361,14 @@ const buildFullUpdatePayloadParts = (formData, members, grupoId, productoCotizac
     .filter((m) => m?.cliente_id)
     .map(mapClienteForSave)
     .filter(Boolean)
-    .map(stripNulls);
+    .map((cli) => {
+      const { fecha_emision, fecha_expiracion, ...rest } = cli;
+      const cleaned = stripNulls(rest);
+      // Permitir limpiar fechas de estatus migratorio (stripNulls las omitiría).
+      if (fecha_emision !== undefined) cleaned.fecha_emision = fecha_emision || null;
+      if (fecha_expiracion !== undefined) cleaned.fecha_expiracion = fecha_expiracion || null;
+      return cleaned;
+    });
   const coberturasPayload = buildCoberturasPayloadForMembers(members, grupoId, productoCotizacion);
 
   return { grupoPayload, clientesPayload, coberturasPayload };
