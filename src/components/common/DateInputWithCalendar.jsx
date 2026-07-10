@@ -19,6 +19,7 @@ export default function DateInputWithCalendar({
   inputName,
   placeholder = "MM/DD/YYYY",
   title = "Seleccionar fecha",
+  highlightWarning = false,
 }) {
   const pickerRef = useRef(null);
   const [displayText, setDisplayText] = useState("");
@@ -60,13 +61,15 @@ export default function DateInputWithCalendar({
 
   const controlSize = size === "sm" ? "form-control-sm" : "";
   const btnSize = size === "sm" ? "btn-sm" : "";
+  const warningInputClass = highlightWarning ? "bg-warning bg-opacity-10 border-warning" : "";
+  const warningBtnClass = highlightWarning ? "btn-outline-warning" : "btn-outline-secondary";
 
   return (
     <div className={className}>
       <div className="input-group">
         <input
           type="text"
-          className={`form-control ${controlSize}`.trim()}
+          className={`form-control ${controlSize} ${warningInputClass}`.trim()}
           name={inputName}
           value={displayText}
           onChange={handleTextChange}
@@ -78,7 +81,7 @@ export default function DateInputWithCalendar({
         />
         <button
           type="button"
-          className={`btn btn-outline-secondary ${btnSize}`.trim()}
+          className={`btn ${warningBtnClass} ${btnSize}`.trim()}
           onClick={openPicker}
           disabled={disabled}
           title={title}

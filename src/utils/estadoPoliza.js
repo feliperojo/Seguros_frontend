@@ -1,3 +1,5 @@
+import { parseApiDateToLocalDate } from "./formatters";
+
 const toValidId = (v) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? n : null;
@@ -103,6 +105,24 @@ export function derivarEstadoPoliza(c) {
         ? String(c.fecha_cancelacion)
         : null;
 
+    const coberturaDefinida =
+      c?.cobertura_definida != null ? String(c.cobertura_definida).trim() : "";
+    if (coberturaDefinida) {
+      return {
+        estado: coberturaDefinida,
+        fecha:
+          coberturaDefinida === "Cancelado"
+            ? fechaCancelacionValida
+            : fechaRetiroValida,
+        tipoFecha:
+          coberturaDefinida === "Cancelado"
+            ? "cancelacion"
+            : coberturaDefinida === "Retirado" || coberturaDefinida === "Terminado"
+              ? "retiro"
+              : null,
+      };
+    }
+
     if (fechaRetiroValida || !activo) {
       return {
         estado: "Retirada",
@@ -191,4 +211,16 @@ export function estadoPolizaBadgeVariant(estado) {
     return "danger";
   }
   return "secondary";
+}
+
+/**
+ * Indica si la fecha de activación es posterior a hoy (plan aún no iniciado).
+ * Sin fecha válida devuelve false.
+ */
+export function isFechaActivacionPendiente(fechaActivacion, now = new Date()) {
+  const fecha = parseApiDateToLocalDate(fechaActivacion);
+  if (!fecha) return false;
+
+  const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return fecha.getTime() > hoy.getTime();
 }

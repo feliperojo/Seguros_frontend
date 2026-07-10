@@ -9,7 +9,7 @@ const GrupofamiliarCreate = () => {
       <Helmet>
         <title>Vantun/Crear Grupo Familiar</title>
       </Helmet>
-      <Grupofamiliar mode="create" />
+      <Grupofamiliar />
     </>
   );
 };

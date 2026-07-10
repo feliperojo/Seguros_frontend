@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { FaMapMarkerAlt, FaQuestionCircle } from "react-icons/fa";
+import { FaExclamationTriangle, FaMapMarkerAlt, FaQuestionCircle } from "react-icons/fa";
 import { OverlayTrigger, Tooltip } from "react-bootstrap";
 
 // Services
@@ -56,6 +56,7 @@ import {
   vigenteDesdeEstadoCobertura,
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
+  isFechaActivacionPendiente,
 } from "../../utils/estadoPoliza";
 
 /* =================== CONSTANTES =================== */
@@ -546,7 +547,7 @@ const ConfigurableFieldsGrid = ({ children, minWidth = 220, className = "" }) =>
   </div>
 );
 
-const Field = ({ label, labelHint, children, className = "col-md-6" }) => (
+const Field = ({ label, labelHint, labelWarning, children, className = "col-md-6" }) => (
   <div className={className}>
     <label className="form-label small fw-semibold text-muted d-flex align-items-center gap-1 mb-1">
       <span>{label}</span>
@@ -562,6 +563,21 @@ const Field = ({ label, labelHint, children, className = "col-md-6" }) => (
             aria-label="Ayuda"
           >
             <FaQuestionCircle size={12} />
+          </span>
+        </OverlayTrigger>
+      ) : null}
+      {labelWarning ? (
+        <OverlayTrigger
+          placement="top"
+          overlay={<Tooltip>{labelWarning}</Tooltip>}
+        >
+          <span
+            className="text-warning"
+            style={{ cursor: "help", lineHeight: 1 }}
+            role="img"
+            aria-label="Advertencia"
+          >
+            <FaExclamationTriangle size={12} />
           </span>
         </OverlayTrigger>
       ) : null}
@@ -2219,9 +2235,15 @@ const activeNormalized = useMemo(
                             {shouldShowCoverageField("fecha_activacion") && (
                               <ConfigField
                                 label="Fecha de Activación"
+                                labelWarning={
+                                  isFechaActivacionPendiente(m.fecha_activacion)
+                                    ? "Este plan aún no está activo: la fecha de activación es posterior a hoy."
+                                    : null
+                                }
                               >
                                 <DateInputWithCalendar
                                   size="sm"
+                                  highlightWarning={isFechaActivacionPendiente(m.fecha_activacion)}
                                   valueIso={(m.fecha_activacion || "").slice(0, 10)}
                                   minIso="1900-01-01"
                                   maxIso="2099-12-31"

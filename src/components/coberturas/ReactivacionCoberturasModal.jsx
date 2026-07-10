@@ -4,6 +4,7 @@ import { Modal, Button, Form, Table, Alert, Spinner, Badge } from "react-bootstr
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { formatDateForDisplay } from "../../utils/formatters";
+import { COBERTURA_DEFINIDA } from "../../utils/coberturaDefinida";
 
 /**
  * ReactivacionCoberturasModal
@@ -21,7 +22,8 @@ import { formatDateForDisplay } from "../../utils/formatters";
  * - Permite seleccionar una o varias coberturas mediante checkboxes
  * - Valida que haya al menos una cobertura seleccionada
  * - Envía peticiones PUT a /api/cobertura/{id} para reactivar cada cobertura seleccionada
- * - Actualiza: activo: true, vigente: true, fecha_retiro: null, fecha_cancelacion: null, motivo_cancelacion: null, nota_cancel: null
+ * - Actualiza: activo: true, vigente: true, estado_cobertura: Si, cobertura_definida: Vigente,
+ *   limpia fechas y motivos/notas de cancelación y retiro
  * - Muestra estados de loading, éxito y error
  */
 const ReactivacionCoberturasModal = ({
@@ -346,10 +348,14 @@ const ReactivacionCoberturasModal = ({
         const payload = {
           activo: true,
           vigente: true,
+          estado_cobertura: "Si",
+          cobertura_definida: COBERTURA_DEFINIDA.VIGENTE,
           fecha_retiro: null,
           fecha_cancelacion: null,
           motivo_cancelacion: null,
           nota_cancel: null,
+          motivo_retiro: null,
+          nota_retiro: null,
         };
 
         // DEBUG: Verificar payload antes de enviar

@@ -15,8 +15,6 @@ import GrupoFamiliarService from '../services/GrupoFamiliarService';
 import EditClienteModal from "../components/EditClienteModal";
 import RenovacionCoberturas from "../components/GrupoFamiliar/RenovacionCoberturas";
 import { generarPDFAutorizacion } from "../services/formatoAutorizacion";
-import RequerimientosModal from "../components/RequerimientosModal"; // Ajusta la ruta si es necesario
-import DriveUrlModal from "../components/GrupoFamiliar/DriveUrlModal"; // Ajusta la ruta
 import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
 import { parseMoney, computeAnnual, calcIngresoFamiliar } from "../services/ingresos";
 import { vigenteDesdeEstadoCobertura } from "../utils/estadoPoliza";
@@ -113,11 +111,9 @@ const MdyDashDateInput = ({
 };
 
 
-const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
+const Grupofamiliar = () => {
   // Estado para controlar la pestaña activa en el modal
   const [activeTab, setActiveTab] = useState("nuevo");
-  const [driveUrl, setDriveUrl] = useState(initialData?.drive_url || "");
-  const [showDriveModal, setShowDriveModal] = useState(false);
   const [showPDFModal, setShowPDFModal] = useState(false);
   const [pdfData, setPdfData] = useState(null);
   const [selectedClienteId, setSelectedClienteId] = useState(null);
@@ -126,61 +122,6 @@ const Grupofamiliar = ({ mode = "create", id = null, initialData = null }) => {
 
 
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (mode === "edit" && initialData) {
-
-      setPolicyData(prev => ({
-        ...prev,
-        personas_en_taxes: initialData.personas_taxes || "",
-        personas_cobertura: initialData.personas_cobertura || "",
-        ingreso_familiar: initialData.ingreso_familiar_anual || 0,
-        persona_contacto: initialData.persona_contacto || "",
-        relacion: initialData.relacion || "",
-        telefono_1: initialData.telefonos?.telefono_1 || "",
-        telefono_2: initialData.telefonos?.telefono_2 || "",
-        notas_telefonos: initialData.nota || "",
-        pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
-        captado_por: initialData.captado_por || "",
-        referido: initialData.cual || "",
-        responsable: initialData.responsable || "",
-        carta_autorizacion: initialData.carta_autorizacion || "",
-        llamada_cliente: initialData.llamada_cliente || "",
-        elegibilidad_carta: initialData.elegibilidad_carta || ""
-       
-
-      }));
-
-      setContactMethods({
-        whatsapp: initialData.telefonos?.whatsapp || false,
-        telegram: initialData.telefonos?.telegram || false,
-        texto_sms: initialData.telefonos?.mensaje_sms || false
-      });
-
-      if (initialData.cod_tel_1) {
-        const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_1);
-        if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
-      }
-      if (initialData.cod_tel_2) {
-        const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_2);
-        if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
-      }
-
-      if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
-        setCoverageGroups(transformarCoberturasAcoverageGroups(initialData.coberturas || []));
-      }
-
-      // Actualizar driveUrl cuando initialData cambia
-      if (initialData.drive_url !== undefined) {
-        setDriveUrl(initialData.drive_url || "");
-      }
-    }
-  }, [mode, initialData]);
-
-
-
-
-
 
   const INITIAL_POLICY_STATE = {
     compania: "",
@@ -258,8 +199,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     telegram: false,
     texto_sms: false
   });
-  const [showDocumentosModal, setShowDocumentosModal] = useState(false);
-
   const [selectedCode, setSelectedCode] = useState({
     telefono_1: "us",
     telefono_2: "us"
@@ -374,70 +313,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
   
   
 
-  const initializeEditData = (initialData) => {
-    if (!initialData) return;
-
-    // Inicializar los datos principales
-    setPolicyData(prev => ({
-      ...prev,
-      personas_en_taxes: initialData.personas_taxes || "",
-      personas_cobertura: initialData.personas_cobertura || "",
-      ingreso_familiar: initialData.ingreso_familiar_anual || 0,
-      persona_contacto: initialData.persona_contacto || "",
-      relacion: initialData.relacion || "",
-      telefono_1: initialData.telefonos?.telefono_1 || "",
-      telefono_2: initialData.telefonos?.telefono_2 || "",
-      notas_telefonos: initialData.nota || "",
-      pertenece_grupo_familiar: initialData.pertenece_grupo_familiar || false,
-      captado_por: initialData.captado_por || "",
-      referido: initialData.cual || "",
-      responsable: initialData.responsable || "",
-      carta_autorizacion: initialData.carta_autorizacion || "",
-      llamada_cliente: initialData.llamada_cliente || "",
-      elegibilidad_carta: initialData.elegibilidad_carta || ""
-    }));
-
-    // Inicializar codigos de país
-    if (initialData.cod_tel_1) {
-      const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_1);
-      if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_1: codeObj.iso }));
-    }
-    if (initialData.cod_tel_2) {
-      const codeObj = countryCodes.find(c => c.code === initialData.cod_tel_2);
-      if (codeObj) setSelectedCode(prev => ({ ...prev, telefono_2: codeObj.iso }));
-    }
-
-    // Inicializar medios de contacto
-    setContactMethods({
-      whatsapp: initialData.telefonos?.whatsapp || false,
-      telegram: initialData.telefonos?.telegram || false,
-      texto_sms: initialData.telefonos?.mensaje_sms || false
-    });
-
-    // Inicializar coverageGroups
-    if (initialData.coberturas && Array.isArray(initialData.coberturas)) {
-      const groups = transformarCoberturasAcoverageGroups(initialData.coberturas);
-      if (groups.length > 0) {
-        setCoverageGroups(groups);
-      } else {
-        // Si por alguna razón no hay coberturas, crear un grupo vacío
-        setCoverageGroups([{
-          id: 1,
-          tipoProducto: "SEGURO MEDICO OBAMA",
-          policyData: { ...INITIAL_POLICY_STATE },
-          members: []
-        }]);
-      }
-    }
-  };
-
-  useEffect(() => {
-    if (mode === "edit" && initialData) {
-      initializeEditData(initialData);
-    }
-  }, [mode, initialData]);
-
-
   const copiarDatosDelPrimero = (groupId, memberIdDestino) => {
     const grupo = coverageGroups.find(g => g.id === groupId);
     if (!grupo) return;
@@ -531,63 +406,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     }
   };
 
-
-  const transformarCoberturasAcoverageGroups = (coberturas) => {
-    if (!Array.isArray(coberturas)) return [];
-
-    const grupos = {};
-
-    coberturas.forEach(cob => {
-      if (!cob) return;
-
-      const tipo = cob.cobertura_tipo || "SEGURO MEDICO OBAMA";
-      if (!grupos[tipo]) {
-        grupos[tipo] = {
-          id: Object.keys(grupos).length + 1,
-          cobertura_tipo: tipo,
-          policyData: { ...INITIAL_POLICY_STATE },
-          members: []
-        };
-      }
-
-      const member = {
-        cobertura_id: cob.id || null,
-        id: cob.cliente?.id || `temp-${Math.random()}`,
-        cliente_id: cob.cliente?.id || null,
-        nombre: cob.cliente?.nombre_completo || "Sin nombre",
-        ingreso_anual: parseFloat(cob.cliente?.ingreso_anual) || 0,
-        periodo_ingreso_ocasional: cob.cliente?.periodo_ingreso_ocasional || "",
-        ingreso_por_periodo_ocasional: cob.cliente?.ingreso_por_periodo_ocasional || "",
-        ingreso_ocasional_anual: cob.cliente?.ingreso_ocasional_anual || "",
-        compania_id: cob.compania?.id || null,
-        agente: cob.agente || "",
-        estado_cobertura: cob.estado_cobertura || "No definido",
-        fecha_activacion: cob.fecha_activacion || "",
-        fecha_cancelacion: cob.fecha_cancelacion || "",
-        fecha_retiro: cob.fecha_retiro || "",
-        ano_cobertura: cob.ano_cobertura || new Date().getFullYear().toString(),
-        plan: cob.plan || "",
-        metal: cob.metal || "",
-        elegibilidad: cob.elegibilidad || "",
-        red: cob.red || "",
-        precio: parseFloat(cob.precio) || 0,
-        pagador_id: cob.pagador_id || "",
-        codigo_poliza: cob.codigo_poliza || "",
-        policy_number: cob.policy_number || "",
-        parentesco: cob.parentesco || "",
-        vigente: cob.fecha_cancelacion ? false : true,
-        activo: cob.activo ?? true,
-        dia_pago: cob.dia_pago || 1,
-        tipo_pago: cob.tipo_pago || "",
-        grupo: cob.grupo || "G1",
-        nota_cancel: cob.nota_cancel || "",
-      };
-
-      grupos[tipo].members.push(member);
-    });
-
-    return Object.values(grupos);
-  };
 
   const fetchDataparentesco = async () => {
     try {
@@ -777,15 +595,9 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
   useEffect(() => {
     if (currentStep === 2) {
       const total = calcIngresoFamiliar(coverageGroups.flatMap((g) => g.members || []));
-  
-      if (mode === "edit" && total === 0 && initialData) {
-        console.log("Manteniendo ingreso familiar original:", initialData.ingreso_familiar_anual);
-      } else {
-        setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
-        console.log("Actualizando ingreso familiar a:", total);
-      }
+      setPolicyData(prev => ({ ...prev, ingreso_familiar: total }));
     }
-  }, [coverageGroups, currentStep, mode, initialData]);
+  }, [coverageGroups, currentStep]);
   
 
   const handleClienteCreated = async (newClient) => {
@@ -1108,16 +920,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     setAlert({ type: "", message: "", visible: false });
 
     try {
-      let ingresoFamiliarFinal = policyData.ingreso_familiar;
-
-      // Modo edición: recalcular ingreso familiar si cambia
-      if (mode === "edit" && currentStep === 2) {
-        const calculatedIncome = calcIngresoFamiliar(
-          coverageGroups.flatMap((g) => g.members || [])
-        );
-
-        ingresoFamiliarFinal = calculatedIncome > 0 ? calculatedIncome : initialData.ingreso_familiar_anual;
-      }
+      const ingresoFamiliarFinal = policyData.ingreso_familiar;
 
       // Datos del grupo familiar
       const grupoFamiliarData = {
@@ -1143,81 +946,14 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         carta_autorizacion: policyData.carta_autorizacion || "",
         llamada_cliente: policyData.llamada_cliente || "",        
         elegibilidad_carta: policyData.elegibilidad_carta || ""
-        // ✅ drive_url NO se incluye aquí - solo se maneja desde DriveUrlModal
       };
 
-      let grupoFamiliarResponse;
-      if (mode === "edit") {
-        const payload = {
-          ...grupoFamiliarData,
-          coberturas: coverageGroups.flatMap(group =>
-            group.members
-              .filter(member => !!member.cliente_id) // ❗️Evita miembros sin cliente_id
-              .map(member => ({
-                id: member.cobertura_id || null,
-                codigo_poliza: member.codigo_poliza || "",
-                policy_number: member.policy_number || "",
-                parentesco: member.parentesco || "",
-                fecha_activacion: member.fecha_activacion || "",
-                fecha_cancelacion: member.fecha_cancelacion || "",
-                fecha_retiro: member.fecha_retiro || "",
-                ano_cobertura: member.ano_cobertura || new Date().getFullYear().toString(),
-                compania_id: member.compania_id || null,
-                agente: member.agente || "",
-                plan: member.plan || "",
-                metal: member.metal || "",
-                red: member.red || "",
-                precio: member.precio || 0,
-                elegibilidad: member.elegibilidad || "",
-                estado_cobertura: member.estado_cobertura || "",
-                pagador_id: member.pagador_id || "",
-                cliente_id: member.cliente_id, // ⚠️ Aquí fallaba si era undefined
-                cobertura_tipo: group.cobertura_tipo,
-                vigente: member.vigente ?? (member.fecha_cancelacion ? false : true),
-                activo: member.activo ?? true,
-                dia_pago: member.dia_pago || 1,
-                tipo_pago: member.tipo_pago || "",
-                grupo: member.grupo || "G1",
-                nota_cancel: member.nota_cancel || "",
-               
-              }))
-          )
-          
-        };
+      const grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
 
-        console.log("Payload coberturas:", payload.coberturas);
+      const grupoFamiliarId = grupoFamiliarResponse.data?.id;
+      if (grupoFamiliarId) {
+        await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
 
-        grupoFamiliarResponse = await GrupoFamiliarService.fullUpdate(id, payload);
-        
-      } else {
-        // CREACIÓN DEL GRUPO
-        grupoFamiliarResponse = await GrupoFamiliarService.create(grupoFamiliarData);
-
-        const grupoFamiliarId = grupoFamiliarResponse.data?.id;
-        if (grupoFamiliarId) {
-          await GrupoFamiliarService.saveCoberturas(grupoFamiliarId, coverageGroups);
-
-          // Mostrar confirmación y navegar a la lista
-          Swal.fire({
-            title: "¡Actualización Exitosa!",
-            text: "El grupo familiar ha sido actualizado.",
-            icon: "success",
-            confirmButtonText: "Aceptar",
-            timer: 4000
-          }).then(() => {
-            navigate('/grupofamiliar/lista');
-          });
-
-          return;
-        }
-
-      }
-
-
-      if (mode === "edit") {
-        const historialId = grupoFamiliarResponse?.data?.historial_id || null;
-
-        // Mostrar confirmación y navegar a la lista
         Swal.fire({
           title: "¡Actualización Exitosa!",
           text: "El grupo familiar ha sido actualizado.",
@@ -1231,19 +967,17 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         return;
       }
 
-
-      if (mode !== "edit") {
-        setPolicyData(INITIAL_POLICY_STATE);
-        setCoverageGroups([{
-          id: 1,
-          tipoProducto: "SEGURO MEDICO  OBAMA",
-          policyData: { ...INITIAL_POLICY_STATE },
-          members: []
-        }]);
-      }
+      setPolicyData(INITIAL_POLICY_STATE);
+      setCoverageGroups([{
+        id: 1,
+        tipoProducto: "SEGURO MEDICO  OBAMA",
+        policyData: { ...INITIAL_POLICY_STATE },
+        members: []
+      }]);
 
     } catch (error) {
       console.error("❌ Error en handleSubmit:", error);
+
       setAlert({
         type: "danger",
         message: `Error al guardar: ${error.message || "Ocurrió un error inesperado"}`,
@@ -1613,30 +1347,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
     >
       <i className="bi bi-plus-circle me-2"></i> Agregar Miembro
     </Button>
-
-    {/* Requerimientos */}
-    <Button
-      variant="outline-success"
-      className="d-flex align-items-center"
-      onClick={() => setShowDocumentosModal(true)}
-      disabled={!id} // ✅ Deshabilitar si no hay ID
-    >
-      <i className="bi bi-folder2-open me-2"></i> Requerimientos
-    </Button>
-
-    {/* Botones de Drive solo en modo edición */}
-    {mode === "edit" && (
-      <>
-        <Button
-          variant="outline-primary"
-          className="d-flex align-items-center"
-          onClick={() => setShowDriveModal(true)}
-        >
-          <i className="bi bi-pencil-square me-2"></i>
-          {driveUrl ? "Editar URL de Drive" : "Agregar URL de Drive"}
-        </Button>
-      </>
-    )}
   </div>
 </div>
 
@@ -2076,7 +1786,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
           dismissible
           onClose={() => setAlert({ ...alert, visible: false })}
         >
-          <i className={`bi ${alert.type === "success" ? "bi-check-circle" : "bi-exclamation-triangle"} me-2`}></i>
+          <i className={`bi ${alert.type === "success" ? "bi-check-circle" : "bi-exclamation-triangle"} me-2`} />
           {alert.message}
         </Alert>
       )}
@@ -2112,7 +1822,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
             title={!existeTomadorValido() ? "Debe configurar un tomador activo en el grupo familiar" : ""}
           >
             <i className="bi bi-save me-2"></i>
-            {mode === "edit" ? "Actualizar Grupo Familiar" : "Guardar Póliza de Grupo Familiar"}
+            Guardar Póliza de Grupo Familiar
           </Button>
         
         )
@@ -2553,20 +2263,6 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               onComplete={() => setMostrarModalRenovacion(false)}
             />
 
-              <RequerimientosModal
-                show={showDocumentosModal}
-                onHide={() => setShowDocumentosModal(false)}
-                grupoFamiliarId={id}
-              />
-
-              <DriveUrlModal
-                show={showDriveModal}
-                onHide={() => setShowDriveModal(false)}
-                grupoId={id}
-                initialUrl={driveUrl}
-                onSave={(newUrl) => setDriveUrl(newUrl)}
-              />
-
               {/* Modal para PDF de Autorización */}
               {pdfData && selectedClienteId && (
                 <DocumentoGeneradoModal
@@ -2587,7 +2283,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                   }}
                   metadata={{
                     cliente_id: selectedClienteId,
-                    grupo_familiar_id: id || null,
+                    grupo_familiar_id: null,
                   }}
                 />
               )}

@@ -247,6 +247,8 @@ const COBERTURA_CAMPOS_PROTEGIDOS = [
   "nota_cancel",
   "nota_retiro",
   "motivo_cancelacion",
+  "motivo_retiro",
+  "cobertura_definida",
   "activo",
   "vigente",
 ];
@@ -258,7 +260,9 @@ const memberTieneRetiroOCancelacion = (m = {}) =>
   m.vigente !== undefined ||
   m.nota_cancel !== undefined ||
   m.nota_retiro !== undefined ||
-  m.motivo_cancelacion !== undefined;
+  m.motivo_cancelacion !== undefined ||
+  m.motivo_retiro !== undefined ||
+  m.cobertura_definida !== undefined;
 
 const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) =>
   (members || [])
@@ -300,6 +304,15 @@ const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) 
         } else if (m.fecha_retiro) {
           cobertura.nota_retiro = null;
         }
+        if (m.motivo_retiro !== undefined) {
+          cobertura.motivo_retiro = (m.motivo_retiro || "").trim() || null;
+        } else if (m.fecha_retiro) {
+          cobertura.motivo_retiro = null;
+        }
+      }
+
+      if (m.cobertura_definida !== undefined) {
+        cobertura.cobertura_definida = (m.cobertura_definida || "").trim() || null;
       }
 
       const valoresProtegidos = {};
@@ -314,6 +327,9 @@ const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) 
             valoresProtegidos[campo] = null;
           }
           if (campo === "motivo_cancelacion" && cobertura.fecha_cancelacion) {
+            valoresProtegidos[campo] = null;
+          }
+          if (campo === "motivo_retiro" && cobertura.fecha_retiro) {
             valoresProtegidos[campo] = null;
           }
         }
@@ -554,8 +570,10 @@ const mapFullToMembers = (fullRaw) => {
       pagador_id:  cov.pagador_id  ?? null,
       fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
       fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
-      nota_retiro: cov.nota_retiro ?? cov.nota_cancel ?? "",
+      nota_retiro: cov.nota_retiro ?? "",
       motivo_cancelacion: cov.motivo_cancelacion ?? "",
+      motivo_retiro: cov.motivo_retiro ?? "",
+      cobertura_definida: cov.cobertura_definida ?? "",
       // Campo para filtrar coberturas inactivas
       // Si viene del backend, usarlo; si no, asumir true (activo por defecto)
       activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
@@ -741,12 +759,14 @@ const [grupoVersion, setGrupoVersion] = useState(null);
             ...member,
             fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
             fecha_retiro: formatDate(datosCobertura.fecha_retiro),
-            nota_cancel: datosCobertura.nota_cancel || null,
+            nota_cancel: datosCobertura.nota_cancel ?? member.nota_cancel ?? null,
             nota_retiro: datosCobertura.nota_retiro || null,
             activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.activo,
             vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.vigente,
             estado_cobertura: datosCobertura.estado_cobertura || member.estado_cobertura,
-            motivo_cancelacion: datosCobertura.motivo_cancelacion || null,
+            motivo_cancelacion: datosCobertura.motivo_cancelacion ?? member.motivo_cancelacion ?? null,
+            motivo_retiro: datosCobertura.motivo_retiro ?? null,
+            cobertura_definida: datosCobertura.cobertura_definida ?? member.cobertura_definida ?? null,
           };
 
           // También actualizar en el objeto cobertura si existe
@@ -755,12 +775,14 @@ const [grupoVersion, setGrupoVersion] = useState(null);
               ...member.cobertura,
               fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
               fecha_retiro: formatDate(datosCobertura.fecha_retiro),
-              nota_cancel: datosCobertura.nota_cancel || null,
+              nota_cancel: datosCobertura.nota_cancel ?? member.cobertura.nota_cancel ?? null,
               nota_retiro: datosCobertura.nota_retiro || null,
               activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.cobertura.activo,
               vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.cobertura.vigente,
               estado_cobertura: datosCobertura.estado_cobertura || member.cobertura.estado_cobertura,
-              motivo_cancelacion: datosCobertura.motivo_cancelacion || null,
+              motivo_cancelacion: datosCobertura.motivo_cancelacion ?? member.cobertura.motivo_cancelacion ?? null,
+              motivo_retiro: datosCobertura.motivo_retiro || null,
+              cobertura_definida: datosCobertura.cobertura_definida ?? member.cobertura.cobertura_definida ?? null,
             };
           }
 

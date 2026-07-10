@@ -4,6 +4,12 @@ import { Modal, Button, Form, Table, Alert, Spinner, Badge } from "react-bootstr
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
+import { formatDateForDisplay } from "../../utils/formatters";
+import {
+  COBERTURA_DEFINIDA,
+  OPCIONES_COBERTURA_RETIRO,
+  badgeCoberturaDefinida,
+} from "../../utils/coberturaDefinida";
 
 /**
  * CambioVidaCancelacionModal
@@ -43,10 +49,15 @@ const CambioVidaCancelacionModal = ({
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
 
-  // Formulario
-  const [fechaCancelacion, setFechaCancelacion] = useState("");
-  const [motivoCancelacion, setMotivoCancelacion] = useState("");
-  const [notaCancel, setNotaCancel] = useState("");
+  // Modo global opcional (aplicar mismos datos a varias coberturas)
+  const [usarDatosGlobales, setUsarDatosGlobales] = useState(false);
+  const [fechaCancelacionGlobal, setFechaCancelacionGlobal] = useState("");
+  const [fechaRetiroGlobal, setFechaRetiroGlobal] = useState("");
+  const [motivoCancelacionGlobal, setMotivoCancelacionGlobal] = useState("");
+  const [notaCancelGlobal, setNotaCancelGlobal] = useState("");
+  const [motivoRetiroGlobal, setMotivoRetiroGlobal] = useState("");
+  const [notaRetiroGlobal, setNotaRetiroGlobal] = useState("");
+  const [coberturaDefinidaGlobal, setCoberturaDefinidaGlobal] = useState(COBERTURA_DEFINIDA.RETIRADO);
 
   // Opciones predefinidas para motivo_cancelacion
   const motivosCancelacion = [
@@ -93,6 +104,11 @@ const CambioVidaCancelacionModal = ({
   const esSoloRetiro = (c = {}) => esBloqueSinCoberturaActiva(c);
 
   const getEstadoActualInfo = (c = {}) => {
+    const definida = c?.cobertura_definida ? String(c.cobertura_definida).trim() : "";
+    if (definida) {
+      return { bg: badgeCoberturaDefinida(definida), text: definida };
+    }
+
     const vigente = esTrue(c.vigente);
     const activo = esTrue(c.activo);
     const fueCancelada = hasFechaValida(c.fecha_cancelacion || c.fechaCancelacion);
@@ -134,11 +150,108 @@ const CambioVidaCancelacionModal = ({
   const resetFormulario = () => {
     setCoberturasSeleccionadas(new Set());
     setRenovacionCoberturas(new Map());
-    setFechaCancelacion("");
-    setMotivoCancelacion("");
-    setNotaCancel("");
+    setUsarDatosGlobales(false);
+    setFechaCancelacionGlobal("");
+    setFechaRetiroGlobal("");
+    setMotivoCancelacionGlobal("");
+    setNotaCancelGlobal("");
+    setMotivoRetiroGlobal("");
+    setNotaRetiroGlobal("");
+    setCoberturaDefinidaGlobal(COBERTURA_DEFINIDA.RETIRADO);
     setError("");
     setSuccess(false);
+  };
+
+  const normalizarFecha = (fecha) => {
+    if (!fecha) return "";
+    if (typeof fecha === "string" && /^\d{4}-\d{2}-\d{2}/.test(fecha)) {
+      return fecha.slice(0, 10);
+    }
+    const d = fecha instanceof Date ? fecha : new Date(fecha);
+    if (isNaN(d.getTime())) return "";
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const crearDatosInicialesCobertura = (cobertura) => {
+    const soloRetiro = esSoloRetiro(cobertura);
+    const yaCancelada = esPolizaCancelada(cobertura);
+    const fechaCancelExistente = yaCancelada
+      ? normalizarFecha(cobertura.fecha_cancelacion || cobertura.fechaCancelacion)
+      : "";
+
+    return {
+      renovar: soloRetiro || yaCancelada ? false : true,
+      fecha_retiro: "",
+      fecha_cancelacion: fechaCancelExistente,
+      motivo_cancelacion: yaCancelada ? cobertura.motivo_cancelacion || "" : "",
+      nota_cancel: yaCancelada ? cobertura.nota_cancel || "" : "",
+      motivo_retiro: "",
+      nota_retiro: "",
+      cobertura_definida: soloRetiro || yaCancelada
+        ? COBERTURA_DEFINIDA.RETIRADO
+        : COBERTURA_DEFINIDA.CANCELADO,
+    };
+  };
+
+  const esFlujoSoloRetiro = (cobertura, datos) =>
+    esSoloRetiro(cobertura) || esPolizaCancelada(cobertura) || datos?.renovar === false;
+
+  const requiereCamposCancelacion = (cobertura, datos) => {
+    if (esSoloRetiro(cobertura) || esPolizaCancelada(cobertura)) return false;
+    if (datos?.renovar === true) return true;
+    if (datos?.renovar === false) return true;
+    return false;
+  };
+
+  const requiereCamposRetiro = (cobertura, datos) => esFlujoSoloRetiro(cobertura, datos);
+
+  const requiereFechaCancelacionNueva = (cobertura) =>
+    !esSoloRetiro(cobertura) && !esPolizaCancelada(cobertura);
+
+  const requiereFechaRetiro = (cobertura, datos) =>
+    esSoloRetiro(cobertura) || esPolizaCancelada(cobertura) || datos?.renovar === false;
+
+  const handleCampoIndividualChange = (coberturaId, campo, valor) => {
+    if (!coberturaId) return;
+    setRenovacionCoberturas((prev) => {
+      const nuevo = new Map(prev);
+      const cobertura = coberturas.find((c) => c.id === coberturaId);
+      const actual = nuevo.get(coberturaId) || crearDatosInicialesCobertura(cobertura);
+      nuevo.set(coberturaId, { ...actual, [campo]: valor });
+      return nuevo;
+    });
+  };
+
+  const obtenerDatosFinalesCobertura = (id) => {
+    const datos = renovacionCoberturas.get(id);
+    const cobertura = coberturas.find((c) => c.id === id);
+    if (!datos || !cobertura) return null;
+
+    if (!usarDatosGlobales) {
+      return { ...datos, cobertura };
+    }
+
+    return {
+      ...datos,
+      motivo_cancelacion: motivoCancelacionGlobal || datos.motivo_cancelacion,
+      nota_cancel: notaCancelGlobal || datos.nota_cancel,
+      motivo_retiro: motivoRetiroGlobal || datos.motivo_retiro,
+      nota_retiro: notaRetiroGlobal || datos.nota_retiro,
+      cobertura_definida:
+        datos.renovar === true
+          ? COBERTURA_DEFINIDA.CANCELADO
+          : coberturaDefinidaGlobal || datos.cobertura_definida,
+      fecha_cancelacion: requiereFechaCancelacionNueva(cobertura)
+        ? fechaCancelacionGlobal || datos.fecha_cancelacion
+        : datos.fecha_cancelacion,
+      fecha_retiro: requiereFechaRetiro(cobertura, datos)
+        ? fechaRetiroGlobal || datos.fecha_retiro
+        : datos.fecha_retiro,
+      cobertura,
+    };
   };
 
   const cargarCoberturas = async () => {
@@ -186,13 +299,9 @@ const CambioVidaCancelacionModal = ({
         nuevo.add(coberturaId);
         const cobertura = coberturas.find((c) => c.id === coberturaId);
         const soloRetiro = esSoloRetiro(cobertura);
-        // Sin cobertura en póliza: solo retiro; con cobertura: por defecto cancelación (sigue activo)
         setRenovacionCoberturas((prevRenov) => {
           const nuevoRenov = new Map(prevRenov);
-          nuevoRenov.set(coberturaId, {
-            renovar: soloRetiro ? false : true,
-            fecha_retiro: "",
-          });
+          nuevoRenov.set(coberturaId, crearDatosInicialesCobertura(cobertura));
           return nuevoRenov;
         });
       }
@@ -214,11 +323,14 @@ const CambioVidaCancelacionModal = ({
     
     setRenovacionCoberturas((prev) => {
       const nuevo = new Map(prev);
-      const datosActuales = nuevo.get(coberturaId) || { fecha_retiro: "" };
+      const datosActuales = nuevo.get(coberturaId) || crearDatosInicialesCobertura(cobertura);
       nuevo.set(coberturaId, {
+        ...datosActuales,
         renovar: Boolean(renovar),
-        // Si se marca como que continúa activa, limpiar fecha de retiro
         fecha_retiro: renovar ? "" : datosActuales.fecha_retiro || "",
+        cobertura_definida: renovar
+          ? COBERTURA_DEFINIDA.CANCELADO
+          : datosActuales.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO,
       });
       return nuevo;
     });
@@ -276,38 +388,77 @@ const CambioVidaCancelacionModal = ({
       const nuevoRenov = new Map(prevRenov);
       ids.forEach((id) => {
         const cobertura = coberturas.find((c) => c.id === id);
-        const soloRetiro = esSoloRetiro(cobertura);
-        nuevoRenov.set(id, {
-          renovar: soloRetiro ? false : true,
-          fecha_retiro: "",
-        });
+        nuevoRenov.set(id, crearDatosInicialesCobertura(cobertura));
       });
       return nuevoRenov;
     });
   };
 
-  // Validar formulario
+  // Validar formulario (datos individuales por cobertura)
   const validarFormulario = () => {
     if (coberturasSeleccionadas.size === 0) {
       setError("Debe seleccionar al menos una cobertura.");
       return false;
     }
-    if (!fechaCancelacion) {
-      setError("La fecha de cancelación es requerida.");
-      return false;
+
+    if (usarDatosGlobales) {
+      const algunaCancelacion = Array.from(coberturasSeleccionadas).some((id) => {
+        const cobertura = coberturas.find((c) => c.id === id);
+        const datos = renovacionCoberturas.get(id);
+        return cobertura && datos && requiereCamposCancelacion(cobertura, datos);
+      });
+      const algunaRetiro = Array.from(coberturasSeleccionadas).some((id) => {
+        const cobertura = coberturas.find((c) => c.id === id);
+        const datos = renovacionCoberturas.get(id);
+        return cobertura && datos && requiereCamposRetiro(cobertura, datos);
+      });
+
+      if (algunaCancelacion) {
+        if (!motivoCancelacionGlobal) {
+          setError("El motivo de cancelación es requerido en el modo global.");
+          return false;
+        }
+        if (!notaCancelGlobal || String(notaCancelGlobal).trim().length === 0) {
+          setError("Las observaciones de cancelación son requeridas en el modo global.");
+          return false;
+        }
+      }
+
+      if (algunaRetiro) {
+        if (!motivoRetiroGlobal) {
+          setError("El motivo de retiro es requerido en el modo global.");
+          return false;
+        }
+        if (!notaRetiroGlobal || String(notaRetiroGlobal).trim().length === 0) {
+          setError("Las observaciones de retiro son requeridas en el modo global.");
+          return false;
+        }
+        if (!OPCIONES_COBERTURA_RETIRO.includes(coberturaDefinidaGlobal)) {
+          setError("Seleccione Retirado o Terminado en el modo global.");
+          return false;
+        }
+      }
+
+      const requiereCancelGlobal = Array.from(coberturasSeleccionadas).some((id) => {
+        const cobertura = coberturas.find((c) => c.id === id);
+        return cobertura && requiereFechaCancelacionNueva(cobertura);
+      });
+      if (requiereCancelGlobal && !fechaCancelacionGlobal) {
+        setError("La fecha de cancelación global es requerida para las coberturas con póliza vigente.");
+        return false;
+      }
+
+      const requiereRetiroGlobal = Array.from(coberturasSeleccionadas).some((id) => {
+        const cobertura = coberturas.find((c) => c.id === id);
+        const datos = renovacionCoberturas.get(id);
+        return cobertura && datos && requiereFechaRetiro(cobertura, datos);
+      });
+      if (requiereRetiroGlobal && !fechaRetiroGlobal) {
+        setError("La fecha de retiro global es requerida para las coberturas marcadas para retiro.");
+        return false;
+      }
     }
 
-    if (!motivoCancelacion) {
-      setError("El motivo de cancelación es requerido.");
-      return false;
-    }
-
-    if (!notaCancel || String(notaCancel).trim().length === 0) {
-      setError("Las observaciones/notas administrativas sobre la cancelación son requeridas.");
-      return false;
-    }
-    
-    // Validar que todas las coberturas seleccionadas tengan una decisión de renovación
     const coberturasSinDecision = Array.from(coberturasSeleccionadas).filter(
       (id) => !renovacionCoberturas.has(id)
     );
@@ -315,61 +466,74 @@ const CambioVidaCancelacionModal = ({
       setError("Por favor, indica para cada cobertura seleccionada si será cancelación o retiro.");
       return false;
     }
-    
-    // Sin cobertura en póliza: no se permite cancelación, solo retiro
-    const cancelacionInvalidaSinCobertura = Array.from(coberturasSeleccionadas).filter((id) => {
-      const cobertura = coberturas.find((c) => c.id === id);
-      const datos = renovacionCoberturas.get(id);
-      return esSoloRetiro(cobertura) && datos?.renovar === true;
-    });
-    if (cancelacionInvalidaSinCobertura.length > 0) {
-      const nombres = cancelacionInvalidaSinCobertura
-        .map((id) => {
-          const cobertura = coberturas.find((c) => c.id === id);
-          return cobertura?.cliente?.nombre_completo || `ID ${id}`;
-        })
-        .join(", ");
-      setError(
-        `Las siguientes coberturas no tienen póliza activa y solo pueden retirarse del grupo: ${nombres}`
-      );
-      return false;
+
+    for (const id of coberturasSeleccionadas) {
+      const datosFinales = obtenerDatosFinalesCobertura(id);
+      if (!datosFinales) continue;
+
+      const cobertura = datosFinales.cobertura;
+      const datos = datosFinales;
+      const nombre = cobertura?.cliente?.nombre_completo || `ID ${id}`;
+
+      if (esSoloRetiro(cobertura) && datos.renovar === true) {
+        setError(`${nombre} no tiene póliza activa y solo puede retirarse del grupo.`);
+        return false;
+      }
+
+      if (requiereFechaCancelacionNueva(cobertura) && !datos.fecha_cancelacion) {
+        setError(`${nombre}: la fecha de cancelación es requerida.`);
+        return false;
+      }
+
+      if (requiereFechaRetiro(cobertura, datos) && !datos.fecha_retiro) {
+        setError(`${nombre}: la fecha de retiro es requerida.`);
+        return false;
+      }
+
+      const motivoCancel = datos.motivo_cancelacion;
+      const notaCancel = datos.nota_cancel;
+      const motivoRetiro = datos.motivo_retiro;
+      const notaRetiro = datos.nota_retiro;
+      const definida = datos.cobertura_definida;
+
+      if (requiereCamposCancelacion(cobertura, datos)) {
+        if (!motivoCancel) {
+          setError(`${nombre}: el motivo de cancelación es requerido.`);
+          return false;
+        }
+        if (!notaCancel || String(notaCancel).trim().length === 0) {
+          setError(`${nombre}: las observaciones de cancelación son requeridas.`);
+          return false;
+        }
+      }
+
+      if (requiereCamposRetiro(cobertura, datos)) {
+        if (!OPCIONES_COBERTURA_RETIRO.includes(definida)) {
+          setError(`${nombre}: seleccione Retirado o Terminado.`);
+          return false;
+        }
+        if (!motivoRetiro) {
+          setError(`${nombre}: el motivo de retiro es requerido.`);
+          return false;
+        }
+        if (!notaRetiro || String(notaRetiro).trim().length === 0) {
+          setError(`${nombre}: las observaciones de retiro son requeridas.`);
+          return false;
+        }
+      }
+
+      const fechaCancel = datos.fecha_cancelacion;
+      const fechaRetiro = datos.fecha_retiro;
+      if (
+        fechaCancel &&
+        fechaRetiro &&
+        fechaRetiro < fechaCancel
+      ) {
+        setError(`${nombre}: la fecha de retiro no puede ser menor a la fecha de cancelación.`);
+        return false;
+      }
     }
 
-    // Validar que las coberturas que no continúan activas tengan fecha de retiro
-    const coberturasSinFechaRetiro = Array.from(coberturasSeleccionadas).filter((id) => {
-      const datos = renovacionCoberturas.get(id);
-      if (!datos) return true;
-      // Si no continúa activa (renovar = false), debe tener fecha de retiro
-      if (datos.renovar === false && !datos.fecha_retiro) {
-        return true;
-      }
-      return false;
-    });
-    
-    if (coberturasSinFechaRetiro.length > 0) {
-      const nombres = coberturasSinFechaRetiro
-        .map(id => {
-          const cobertura = coberturas.find(c => c.id === id);
-          return cobertura?.cliente?.nombre_completo || `ID ${id}`;
-        })
-        .join(", ");
-      setError(`Las siguientes coberturas requieren fecha de retiro: ${nombres}`);
-      return false;
-    }
-    
-    // Validar que las fechas de retiro no sean menores a la fecha de cancelación
-    const fechasInvalidas = Array.from(coberturasSeleccionadas).filter((id) => {
-      const datos = renovacionCoberturas.get(id);
-      if (!datos || !datos.fecha_retiro || !fechaCancelacion) return false;
-      if (datos.fecha_retiro < fechaCancelacion) return true;
-      return false;
-    });
-    
-    if (fechasInvalidas.length > 0) {
-      setError("La fecha de retiro no puede ser menor a la fecha de cancelación.");
-      return false;
-    }
-    
     return true;
   };
 
@@ -395,6 +559,67 @@ const CambioVidaCancelacionModal = ({
     return `${year}-${month}-${day}`;
   };
 
+  const construirDatosRenovacion = () =>
+    Array.from(coberturasSeleccionadas).map((id) => {
+      const datosFinales = obtenerDatosFinalesCobertura(id);
+      const cobertura = datosFinales?.cobertura;
+      const datos = datosFinales;
+      if (!cobertura || !datos) return null;
+
+      const yaCancelada = esPolizaCancelada(cobertura);
+      const soloRetiro = esSoloRetiro(cobertura);
+      const renovar = soloRetiro || yaCancelada ? false : (datos?.renovar ?? false);
+      const base = {
+        cobertura_id: Number(id),
+        cliente_id: cobertura?.cliente?.id || cobertura?.cliente_id || null,
+        renovar,
+      };
+
+      if (renovar === true) {
+        return {
+          ...base,
+          renovar: true,
+          activo: true,
+          vigente: false,
+          estado_cobertura: "No",
+          cobertura_definida: COBERTURA_DEFINIDA.CANCELADO,
+          fecha_cancelacion: datos.fecha_cancelacion || null,
+          fecha_retiro: null,
+          motivo_cancelacion: datos.motivo_cancelacion || null,
+          nota_cancel: datos.nota_cancel || null,
+        };
+      }
+
+      const fechaCancelFinal = yaCancelada
+        ? normalizarFecha(cobertura.fecha_cancelacion || cobertura.fechaCancelacion)
+        : soloRetiro
+          ? null
+          : datos.fecha_cancelacion || null;
+
+      const item = {
+        ...base,
+        renovar: false,
+        activo: false,
+        vigente: false,
+        estado_cobertura: "No",
+        cobertura_definida: datos.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO,
+        fecha_retiro: datos.fecha_retiro || null,
+        motivo_retiro: datos.motivo_retiro || null,
+        nota_retiro: datos.nota_retiro || null,
+      };
+
+      if (fechaCancelFinal) {
+        item.fecha_cancelacion = fechaCancelFinal;
+      }
+
+      if (!yaCancelada && requiereCamposCancelacion(cobertura, datos)) {
+        item.motivo_cancelacion = datos.motivo_cancelacion || null;
+        item.nota_cancel = datos.nota_cancel || null;
+      }
+
+      return item;
+    }).filter(Boolean);
+
   // Manejar envío del formulario
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -408,57 +633,7 @@ const CambioVidaCancelacionModal = ({
     setSuccess(false);
 
     try {
-      // Preparar datos de renovación por cobertura
-      // 
-      // FLUJO 1: CANCELACIÓN (renovar = true) - El miembro continúa activo
-      // - activo: true (se mantiene activo, no se actualiza a false)
-      // - vigente: false (porque hay fecha de cancelación)
-      // - fecha_cancelacion: [fecha] (se actualiza)
-      // - fecha_retiro: null (no se actualiza)
-      //
-      // FLUJO 2: RETIRO (renovar = false) - El miembro NO continúa activo
-      // - activo: false (se actualiza a false)
-      // - vigente: false (porque hay fecha de cancelación y retiro)
-      // - fecha_cancelacion: [fecha] (se actualiza)
-      // - fecha_retiro: [fecha] (se actualiza)
-      // Preparar datos de renovación por cobertura con todos los campos necesarios
-      const datosRenovacion = Array.from(coberturasSeleccionadas).map((id) => {
-        const datos = renovacionCoberturas.get(id);
-        const cobertura = coberturas.find(c => c.id === id);
-        // Sin póliza: forzar retiro aunque se haya seleccionado por error
-        const renovar = esSoloRetiro(cobertura) ? false : (datos?.renovar ?? false);
-        const fechaRetiroIndividual = datos?.fecha_retiro || null;
-        
-        // FLUJO 1: Cancelación (continúa activo)
-        if (renovar === true) {
-          return {
-            cobertura_id: Number(id),
-            cliente_id: cobertura?.cliente?.id || cobertura?.cliente_id || null,
-            renovar: true,
-            activo: true, // Se mantiene activo (NO se actualiza a false)
-            vigente: false, // Se actualiza a false porque hay fecha de cancelación
-            estado_cobertura: "No", // Se actualiza a "No" porque hay fecha de cancelación
-            fecha_cancelacion: fechaCancelacion || null,
-            fecha_retiro: null, // No se actualiza (null explícito)
-            motivo_cancelacion: motivoCancelacion || null,
-            nota_cancel: notaCancel || null,
-          };
-        }
-        
-        // FLUJO 2: Retiro (no continúa activo)
-        return {
-          cobertura_id: Number(id),
-          cliente_id: cobertura?.cliente?.id || cobertura?.cliente_id || null,
-          renovar: false,
-          activo: false, // Se actualiza a false
-          vigente: false, // Se actualiza a false
-          estado_cobertura: "No", // Se actualiza a "No"
-          fecha_cancelacion: fechaCancelacion || null,
-          fecha_retiro: fechaRetiroIndividual || null, // Se actualiza con la fecha de retiro
-          motivo_cancelacion: motivoCancelacion || null,
-          nota_cancel: notaCancel || null,
-        };
-      });
+      const datosRenovacion = construirDatosRenovacion();
 
       // ✅ MODO LOCAL: Solo actualizar estado local, NO llamar al backend
       if (soloActualizarLocal && onUpdateLocal) {
@@ -469,9 +644,7 @@ const CambioVidaCancelacionModal = ({
 
         // Llamar al callback para actualizar el estado local
         onUpdateLocal(datosRenovacion, {
-          fecha_cancelacion: fechaCancelacion,
-          motivo_cancelacion: motivoCancelacion,
-          nota_cancel: notaCancel,
+          usar_datos_globales: usarDatosGlobales,
         });
 
         setSuccess(true);
@@ -489,11 +662,7 @@ const CambioVidaCancelacionModal = ({
       // Construir payload principal con campos comunes
       const payload = {
         cobertura_ids: Array.from(coberturasSeleccionadas).map(Number),
-        fecha_cancelacion: fechaCancelacion || null,
-        motivo_cancelacion: motivoCancelacion || null,
-        nota_cancel: notaCancel || null,
         accion_origen: "Cambio de vida",
-        // Incluir datos_renovacion con valores específicos por cobertura
         datos_renovacion: datosRenovacion,
       };
 
@@ -589,20 +758,179 @@ const CambioVidaCancelacionModal = ({
     idsBloqueInferior.length > 0 &&
     idsBloqueInferior.every((id) => coberturasSeleccionadas.has(id));
 
+  const hayAlgunaConFechaCancelacion = coberturasOrdenadas.some((c) =>
+    hasFechaValida(c.fecha_cancelacion || c.fechaCancelacion)
+  );
+
+  const getFechaCancelacionMostrar = (cobertura) => {
+    const raw = cobertura?.fecha_cancelacion || cobertura?.fechaCancelacion;
+    if (!hasFechaValida(raw)) return null;
+    return formatDateForDisplay(normalizarFecha(raw));
+  };
+
+  const columnasDatos = hayAlgunaConFechaCancelacion ? 5 : 4;
+
   return (
-    <Modal show={show} onHide={onClose} size="xl" centered>
-      <Modal.Header closeButton className="bg-light border-bottom">
-        <div className="w-100">
-          <Modal.Title className="mb-1">
-            <i className="fas fa-file-contract me-2 text-primary"></i>
-            Gestión de Cancelaciones y Retiros de Coberturas
-          </Modal.Title>
-          <small className="text-muted">
-            Cancelación de póliza o retiro del grupo familiar según el estado de cada miembro
-          </small>
+    <>
+      <style>{`
+        .modal-cambio-vida-cancelacion-dialog {
+          width: calc(100vw - 1rem) !important;
+          max-width: calc(100vw - 1rem) !important;
+          margin: 0.5rem auto !important;
+        }
+        @media (min-width: 576px) {
+          .modal-cambio-vida-cancelacion-dialog {
+            width: calc(100vw - 2rem) !important;
+            max-width: min(96vw, 1500px) !important;
+            margin: 1rem auto !important;
+          }
+        }
+        @media (min-width: 992px) {
+          .modal-cambio-vida-cancelacion-dialog {
+            width: min(94vw, 1500px) !important;
+            max-width: min(94vw, 1500px) !important;
+          }
+        }
+        .modal-cambio-vida-cancelacion-content {
+          max-height: calc(100dvh - 1rem);
+          display: flex;
+          flex-direction: column;
+        }
+        @media (min-width: 576px) {
+          .modal-cambio-vida-cancelacion-content {
+            max-height: calc(100dvh - 2rem);
+          }
+        }
+        .modal-cambio-vida-cancelacion-content .modal-body {
+          flex: 1 1 auto;
+          overflow-y: auto;
+          min-height: 0;
+          padding: 0.75rem 1rem;
+        }
+        @media (min-width: 768px) {
+          .modal-cambio-vida-cancelacion-content .modal-body {
+            padding: 1rem 1.25rem;
+          }
+        }
+        .cvc-table-wrap {
+          max-height: min(58dvh, 680px);
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+        }
+        .cvc-table thead th {
+          font-size: 0.78rem;
+          font-weight: 600;
+          background: #f8f9fa;
+          border-bottom: 1px solid #dee2e6;
+          color: #495057;
+          white-space: nowrap;
+          position: sticky;
+          top: 0;
+          z-index: 2;
+        }
+        .cvc-table tbody td {
+          font-size: 0.85rem;
+          vertical-align: middle;
+        }
+        .cvc-row-selected {
+          background-color: #f0f7ff !important;
+        }
+        .cvc-detail-row td {
+          background: #fafbfc;
+          border-top: none;
+          padding: 0.5rem 0.75rem 0.75rem;
+        }
+        .cvc-detail-fields {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 0.65rem;
+          align-items: end;
+        }
+        @media (min-width: 576px) {
+          .cvc-detail-fields {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 992px) {
+          .cvc-detail-fields {
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+          }
+        }
+        .cvc-detail-fields .obs-col {
+          grid-column: 1 / -1;
+        }
+        .cvc-stat-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.35rem;
+          padding: 0.2rem 0.55rem;
+          border-radius: 999px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          background: #fff;
+          border: 1px solid #dee2e6;
+        }
+        .cvc-col-plan {
+          min-width: 140px;
+        }
+        .cvc-col-action {
+          min-width: 150px;
+        }
+        .cvc-col-fecha-cancel {
+          min-width: 110px;
+          white-space: nowrap;
+        }
+        @media (max-width: 575.98px) {
+          .cvc-col-estado {
+            display: none;
+          }
+          .cvc-member-name {
+            max-width: 160px;
+          }
+        }
+        @media (min-width: 576px) {
+          .cvc-member-name {
+            max-width: 320px;
+          }
+        }
+      `}</style>
+      <Modal
+        show={show}
+        onHide={onClose}
+        centered
+        scrollable
+        fullscreen="sm-down"
+        dialogClassName="modal-cambio-vida-cancelacion-dialog"
+        contentClassName="modal-cambio-vida-cancelacion-content"
+      >
+      <Modal.Header closeButton className="py-2 px-3 border-bottom">
+        <div className="w-100 d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <Modal.Title className="fs-6 mb-0 fw-semibold">
+              Gestión de Cancelaciones y Retiros
+            </Modal.Title>
+          </div>
+          {totalSeleccionadas > 0 && (
+            <div className="d-flex flex-wrap gap-2">
+              <span className="cvc-stat-chip text-primary">
+                {totalSeleccionadas} seleccionada{totalSeleccionadas !== 1 ? "s" : ""}
+              </span>
+              {totalCancelaciones > 0 && (
+                <span className="cvc-stat-chip text-warning">
+                  {totalCancelaciones} cancelación{totalCancelaciones !== 1 ? "es" : ""}
+                </span>
+              )}
+              {totalRetiros > 0 && (
+                <span className="cvc-stat-chip text-danger">
+                  {totalRetiros} retiro{totalRetiros !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </Modal.Header>
-      <Modal.Body className="p-4">
+      <Modal.Body>
+        <Form id="cvc-cancelacion-form" onSubmit={handleSubmit}>
         {loadingCoberturas ? (
           <div className="text-center py-4">
             <Spinner animation="border" variant="primary" />
@@ -615,96 +943,138 @@ const CambioVidaCancelacionModal = ({
           </Alert>
         ) : (
           <>
-            {/* Resumen ejecutivo */}
-            {totalSeleccionadas > 0 && (
-              <div className="card border-0 shadow-sm mb-4" style={{ backgroundColor: "#f8f9fa" }}>
-                <div className="card-body py-3">
-                  <div className="row text-center">
-                    <div className="col-md-4 border-end">
-                      <div className="text-muted small mb-1">Total seleccionadas</div>
-                      <div className="h4 mb-0 text-primary fw-bold">{totalSeleccionadas}</div>
-                    </div>
-                    <div className="col-md-4 border-end">
-                      <div className="text-muted small mb-1">Cancelaciones de póliza</div>
-                      <div className="h4 mb-0 text-warning fw-bold">{totalCancelaciones}</div>
-                      <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                        Permanece en el grupo
-                      </div>
-                    </div>
-                    <div className="col-md-4">
-                      <div className="text-muted small mb-1">Retiros del grupo</div>
-                      <div className="h4 mb-0 text-danger fw-bold">{totalRetiros}</div>
-                      {totalSoloRetiroEnSeleccion > 0 && (
-                        <div className="text-muted" style={{ fontSize: "0.7rem" }}>
-                          {totalSoloRetiroEnSeleccion} sin póliza activa
-                        </div>
-                      )}
-                    </div>
+            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+              <div className="d-flex flex-wrap align-items-center gap-2">
+                {hayConPoliza && (
+                  <Button
+                    variant="outline-secondary"
+                    size="sm"
+                    type="button"
+                    onClick={() => toggleGrupo("conPoliza")}
+                  >
+                    {todasConPolizaSeleccionadas ? "Deseleccionar con póliza" : "Seleccionar con póliza"}
+                  </Button>
+                )}
+                <Form.Check
+                  type="switch"
+                  id="usar-datos-globales"
+                  className="mb-0 ms-1"
+                  label={<span className="small">Datos globales</span>}
+                  checked={usarDatosGlobales}
+                  onChange={(e) => setUsarDatosGlobales(e.target.checked)}
+                />
+              </div>
+            </div>
+
+            {usarDatosGlobales && (
+              <div className="border rounded p-2 mb-2 bg-light">
+                <div className="row g-2 align-items-end">
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">F. cancelación</Form.Label>
+                    <DateInputWithCalendar
+                      valueIso={fechaCancelacionGlobal || ""}
+                      onChangeIso={(iso) => setFechaCancelacionGlobal(iso)}
+                      disabled={false}
+                    />
+                  </div>
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">F. retiro</Form.Label>
+                    <DateInputWithCalendar
+                      valueIso={fechaRetiroGlobal || ""}
+                      onChangeIso={(iso) => setFechaRetiroGlobal(iso)}
+                      minIso={fechaCancelacionGlobal || ""}
+                      disabled={false}
+                    />
+                  </div>
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">Motivo cancelación *</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={motivoCancelacionGlobal}
+                      onChange={(e) => setMotivoCancelacionGlobal(e.target.value)}
+                    >
+                      <option value="">Seleccione...</option>
+                      {motivosCancelacion.map((motivo) => (
+                        <option key={motivo} value={motivo}>{motivo}</option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">Obs. cancelación *</Form.Label>
+                    <Form.Control
+                      size="sm"
+                      value={notaCancelGlobal}
+                      onChange={(e) => setNotaCancelGlobal(e.target.value)}
+                      placeholder="Notas cancelación..."
+                    />
+                  </div>
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">Estado retiro *</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={coberturaDefinidaGlobal}
+                      onChange={(e) => setCoberturaDefinidaGlobal(e.target.value)}
+                    >
+                      {OPCIONES_COBERTURA_RETIRO.map((op) => (
+                        <option key={op} value={op}>{op}</option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                  <div className="col-md-3 col-6">
+                    <Form.Label className="small mb-1">Motivo retiro *</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={motivoRetiroGlobal}
+                      onChange={(e) => setMotivoRetiroGlobal(e.target.value)}
+                    >
+                      <option value="">Seleccione...</option>
+                      {motivosCancelacion.map((motivo) => (
+                        <option key={`r-${motivo}`} value={motivo}>{motivo}</option>
+                      ))}
+                    </Form.Select>
+                  </div>
+                  <div className="col-md-3 col-12">
+                    <Form.Label className="small mb-1">Obs. retiro *</Form.Label>
+                    <Form.Control
+                      size="sm"
+                      value={notaRetiroGlobal}
+                      onChange={(e) => setNotaRetiroGlobal(e.target.value)}
+                      placeholder="Notas retiro..."
+                    />
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Paso 1: Selección de coberturas */}
-            <div className="mb-4">
-              <div className="d-flex justify-content-between align-items-center mb-3">
-                <div>
-                  <h5 className="mb-1 fw-semibold">
-                    <span className="badge bg-primary me-2">1</span>
-                    Selección de Coberturas
-                  </h5>
-                  <small className="text-muted">
-                    {hayConPoliza && hayBloqueInferior
-                      ? "Seleccione por bloque: póliza vigente o sin cobertura activa"
-                      : "Seleccione las coberturas que serán procesadas"}
-                  </small>
-                </div>
-                {hayConPoliza && (
-                  <Button
-                    variant="outline-secondary"
-                    size="sm"
-                    onClick={() => toggleGrupo("conPoliza")}
-                    className="d-flex align-items-center"
-                  >
-                    <i
-                      className={`fas ${todasConPolizaSeleccionadas ? "fa-square-check" : "fa-square"} me-2`}
-                    ></i>
-                    {todasConPolizaSeleccionadas
-                      ? "Deseleccionar con póliza"
-                      : "Seleccionar con póliza"}
-                  </Button>
-                )}
-              </div>
-
-              <div className="table-responsive border rounded" style={{ maxHeight: "450px", overflowY: "auto" }}>
-                <Table hover size="sm" className="mb-0 table-striped">
-                  <thead className="table-dark sticky-top">
-                    <tr>
-                      <th width="50" className="text-center">
-                        {hayConPoliza ? (
-                          <Form.Check
-                            type="checkbox"
-                            checked={todasConPolizaSeleccionadas}
-                            ref={(el) => {
-                              if (el) {
-                                el.indeterminate =
-                                  algunaConPolizaSeleccionada && !todasConPolizaSeleccionadas;
-                              }
-                            }}
-                            onChange={() => toggleGrupo("conPoliza")}
-                            className="text-white"
-                            title="Seleccionar miembros con póliza"
-                          />
-                        ) : null}
-                      </th>
-                      <th className="fw-semibold">Cliente / Parentesco</th>
-                      <th className="fw-semibold">Numero ID</th>
-                      <th className="fw-semibold">Plan / Cobertura</th>
-                      <th width="260" className="text-center fw-semibold">Acción</th>
-                      <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
-                      <th width="170" className="text-center fw-semibold">Estado Actual</th>
-                    </tr>
-                  </thead>
+            <div className="table-responsive border rounded cvc-table-wrap">
+              <Table hover size="sm" className="mb-0 cvc-table">
+                <thead>
+                  <tr>
+                    <th width="40" className="text-center">
+                      {hayConPoliza ? (
+                        <Form.Check
+                          type="checkbox"
+                          checked={todasConPolizaSeleccionadas}
+                          ref={(el) => {
+                            if (el) {
+                              el.indeterminate =
+                                algunaConPolizaSeleccionada && !todasConPolizaSeleccionadas;
+                            }
+                          }}
+                          onChange={() => toggleGrupo("conPoliza")}
+                          title="Seleccionar miembros con póliza"
+                        />
+                      ) : null}
+                    </th>
+                    <th>Miembro</th>
+                    <th className="cvc-col-plan">Plan</th>
+                    {hayAlgunaConFechaCancelacion && (
+                      <th className="text-center cvc-col-fecha-cancel">F. cancelación</th>
+                    )}
+                    <th className="cvc-col-action">Acción</th>
+                    <th width="130" className="text-center cvc-col-estado">Estado</th>
+                  </tr>
+                </thead>
                   <tbody>
                     {coberturasOrdenadas.map((cobertura, index) => {
                       const coberturaId = cobertura.id;
@@ -712,11 +1082,10 @@ const CambioVidaCancelacionModal = ({
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
                       const soloRetiro = esSoloRetiro(cobertura);
                       const enBloqueInferior = esBloqueSinCoberturaActiva(cobertura);
-                      const datosRenovacion = renovacionCoberturas.get(coberturaId) || {
-                        renovar: soloRetiro ? false : true,
-                        fecha_retiro: "",
-                      };
+                      const datosRenovacion = renovacionCoberturas.get(coberturaId) || crearDatosInicialesCobertura(cobertura);
+                      const yaCancelada = esPolizaCancelada(cobertura);
                       const estadoActual = getEstadoActualInfo(cobertura);
+                      const fechaCancelMostrar = getFechaCancelacionMostrar(cobertura);
                       const filaAnterior = index > 0 ? coberturasOrdenadas[index - 1] : null;
                       const mostrarSeparadorBloqueInferior =
                         enBloqueInferior &&
@@ -726,49 +1095,30 @@ const CambioVidaCancelacionModal = ({
                       return (
                         <React.Fragment key={coberturaId}>
                           {mostrarSeparadorBloqueInferior && (
-                            <tr className="table-light">
-                              <td className="text-center align-middle">
+                            <tr className="table-secondary">
+                              <td className="text-center align-middle py-1">
                                 <Form.Check
                                   type="checkbox"
                                   checked={todasBloqueInferiorSeleccionadas}
                                   onChange={() => toggleGrupo("soloRetiro")}
-                                  title="Seleccionar bloque sin cobertura activa"
+                                  title="Seleccionar sin cobertura activa"
                                 />
                               </td>
-                              <td colSpan={6} className="py-2 px-3">
-                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                                  <span className="small fw-semibold text-muted text-uppercase">
-                                    <i className="fas fa-user-minus me-2"></i>
-                                    Sin cobertura activa — sin cobertura o póliza cancelada
-                                  </span>
-                                  <Button
-                                    variant="outline-secondary"
-                                    size="sm"
-                                    onClick={() => toggleGrupo("soloRetiro")}
-                                    className="d-flex align-items-center"
-                                  >
-                                    <i
-                                      className={`fas ${todasBloqueInferiorSeleccionadas ? "fa-square-check" : "fa-square"} me-2`}
-                                    ></i>
-                                    {todasBloqueInferiorSeleccionadas
-                                      ? "Deseleccionar bloque"
-                                      : "Seleccionar bloque"}
-                                  </Button>
-                                </div>
+                              <td colSpan={columnasDatos} className="py-1 px-2">
+                                <span className="small fw-semibold text-muted">
+                                  Sin cobertura activa o póliza cancelada
+                                </span>
                               </td>
                             </tr>
                           )}
                         <tr
                           className={
                             isSelected
-                              ? enBloqueInferior
-                                ? "table-secondary"
-                                : "table-primary"
+                              ? "cvc-row-selected"
                               : esTomador
                                 ? "table-warning"
                                 : ""
                           }
-                          style={enBloqueInferior && !isSelected ? { opacity: 0.92 } : undefined}
                         >
                           <td className="text-center align-middle">
                             <Form.Check
@@ -778,108 +1128,228 @@ const CambioVidaCancelacionModal = ({
                             />
                           </td>
                           <td className="align-middle">
-                            <div>
-                              <div className="fw-semibold">{cobertura.cliente?.nombre_completo || "-"}</div>
-                              <div className="d-flex align-items-center gap-2 mt-1">
-                                <span className="text-muted small">{cobertura.parentesco || "-"}</span>
-                                {esTomador && (
-                                  <Badge bg="warning" text="dark" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
-                                    TOMADOR
-                                  </Badge>
-                                )}
-                                {soloRetiro && (
-                                  <Badge bg="secondary" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
-                                    SOLO RETIRO
-                                  </Badge>
-                                )}
-                                {!soloRetiro && esPolizaCancelada(cobertura) && (
-                                  <Badge bg="danger" style={{ fontSize: "0.65rem", fontWeight: "600" }}>
-                                    PÓLIZA CANCELADA
-                                  </Badge>
-                                )}
-                              </div>
+                            <div className="fw-semibold text-truncate cvc-member-name">
+                              {cobertura.cliente?.nombre_completo || "-"}
+                            </div>
+                            <div className="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                              <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                                {cobertura.parentesco || "-"}
+                              </span>
+                              {esTomador && (
+                                <Badge bg="warning" text="dark" style={{ fontSize: "0.6rem" }}>TOMADOR</Badge>
+                              )}
+                              {soloRetiro && (
+                                <Badge bg="secondary" style={{ fontSize: "0.6rem" }}>SOLO RETIRO</Badge>
+                              )}
                             </div>
                           </td>
                           <td className="align-middle">
-                            <code className="text-primary fw-bold" style={{ fontSize: "0.9rem" }}>
-                              {cobertura.codigo_poliza || "-"}
-                            </code>
-                          </td>
-                          <td className="align-middle">
-                            <div>
-                              <div className="fw-semibold small">{cobertura.plan || "-"}</div>
-                              <div className="text-muted" style={{ fontSize: "0.75rem" }}>
-                                {cobertura.metal || "-"} • {cobertura.red || "-"}
-                              </div>
+                            <div className="small fw-medium">{cobertura.plan || "-"}</div>
+                            <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                              {[cobertura.metal, cobertura.red, cobertura.codigo_poliza].filter(Boolean).join(" · ") || "-"}
                             </div>
                           </td>
+                          {hayAlgunaConFechaCancelacion && (
+                            <td className="align-middle text-center cvc-col-fecha-cancel">
+                              {fechaCancelMostrar ? (
+                                <span className="small fw-medium text-danger">
+                                  {fechaCancelMostrar}
+                                </span>
+                              ) : (
+                                <span className="text-muted" style={{ fontSize: "0.78rem" }}>—</span>
+                              )}
+                            </td>
+                          )}
                           <td className="align-middle">
                             {isSelected ? (
                               soloRetiro ? (
-                                <div className="d-flex flex-column gap-1">
-                                  <Badge bg="danger" className="align-self-start">
-                                    Retiro del grupo
-                                  </Badge>
-                                  <span className="small text-muted">
-                                    Sin póliza activa — no aplica cancelación
-                                  </span>
-                                </div>
+                                <span className="small text-danger fw-medium">Retiro</span>
                               ) : (
-                                <div className="d-flex flex-column gap-2">
-                                  <Form.Check
-                                    type="radio"
-                                    id={`renovar-si-${coberturaId}`}
-                                    name={`renovar-${coberturaId}`}
-                                    label={
-                                      <span className="small fw-semibold text-warning">
-                                        Cancelar póliza — permanece en el grupo
-                                      </span>
-                                    }
-                                    checked={datosRenovacion.renovar === true}
-                                    onChange={() => handleRenovacionChange(coberturaId, true)}
-                                  />
-                                  <Form.Check
-                                    type="radio"
-                                    id={`renovar-no-${coberturaId}`}
-                                    name={`renovar-${coberturaId}`}
-                                    label={
-                                      <span className="small fw-semibold text-danger">
-                                        Retiro del grupo familiar
-                                      </span>
-                                    }
-                                    checked={datosRenovacion.renovar === false}
-                                    onChange={() => handleRenovacionChange(coberturaId, false)}
-                                  />
-                                </div>
+                                <Form.Select
+                                  size="sm"
+                                  value={datosRenovacion.renovar === true ? "cancelar" : "retiro"}
+                                  onChange={(e) =>
+                                    handleRenovacionChange(coberturaId, e.target.value === "cancelar")
+                                  }
+                                >
+                                  <option value="cancelar">Cancelar póliza</option>
+                                  <option value="retiro">Retiro del grupo</option>
+                                </Form.Select>
                               )
                             ) : (
-                              <span className="text-muted small fst-italic">
-                                {soloRetiro ? "Solo retiro disponible" : "Seleccione para definir"}
-                              </span>
+                              <span className="text-muted" style={{ fontSize: "0.78rem" }}>—</span>
                             )}
                           </td>
-                          <td className="align-middle text-center">
-                            {isSelected && (datosRenovacion.renovar === false || soloRetiro) ? (
-                              <DateInputWithCalendar
-                                valueIso={datosRenovacion.fecha_retiro || ""}
-                                onChangeIso={(iso) => handleFechaRetiroChange(coberturaId, iso)}
-                                minIso={fechaCancelacion || ""}
-                                disabled={false}
-                              />
-                            ) : (
-                              <span className="text-muted small fst-italic">-</span>
-                            )}
-                          </td>
-                          <td className="align-middle text-center">
-                            <Badge 
+                          <td className="align-middle cvc-col-estado text-center">
+                            <Badge
                               bg={estadoActual.bg}
                               className="small"
-                              style={{ fontWeight: "600", whiteSpace: "normal", lineHeight: 1.1 }}
+                              style={{ fontWeight: "500", fontSize: "0.7rem" }}
                             >
                               {estadoActual.text}
                             </Badge>
                           </td>
                         </tr>
+                        {isSelected && !usarDatosGlobales && (
+                          <tr className="cvc-detail-row">
+                            <td></td>
+                            <td colSpan={columnasDatos}>
+                              <div className="cvc-detail-fields">
+                                {requiereFechaCancelacionNueva(cobertura) && (
+                                  <div>
+                                    <Form.Label className="small mb-1">
+                                      F. cancelación <span className="text-danger">*</span>
+                                    </Form.Label>
+                                    <DateInputWithCalendar
+                                      valueIso={datosRenovacion.fecha_cancelacion || ""}
+                                      onChangeIso={(iso) =>
+                                        handleCampoIndividualChange(coberturaId, "fecha_cancelacion", iso)
+                                      }
+                                      disabled={false}
+                                    />
+                                  </div>
+                                )}
+                                {yaCancelada && datosRenovacion.fecha_cancelacion && (
+                                  <div>
+                                    <Form.Label className="small mb-1">F. cancelación</Form.Label>
+                                    <Form.Control
+                                      size="sm"
+                                      type="text"
+                                      value={datosRenovacion.fecha_cancelacion}
+                                      disabled
+                                      readOnly
+                                      className="bg-white"
+                                    />
+                                  </div>
+                                )}
+                                {requiereFechaRetiro(cobertura, datosRenovacion) && (
+                                  <div>
+                                    <Form.Label className="small mb-1">
+                                      F. retiro <span className="text-danger">*</span>
+                                    </Form.Label>
+                                    <DateInputWithCalendar
+                                      valueIso={datosRenovacion.fecha_retiro || ""}
+                                      onChangeIso={(iso) =>
+                                        handleCampoIndividualChange(coberturaId, "fecha_retiro", iso)
+                                      }
+                                      minIso={datosRenovacion.fecha_cancelacion || ""}
+                                      disabled={false}
+                                    />
+                                  </div>
+                                )}
+                                {yaCancelada && (datosRenovacion.motivo_cancelacion || datosRenovacion.nota_cancel) && (
+                                  <div className="obs-col">
+                                    <Form.Label className="small mb-1 text-muted">Cancelación previa</Form.Label>
+                                    <div className="small border rounded p-2 bg-white">
+                                      {datosRenovacion.motivo_cancelacion && (
+                                        <div><strong>Motivo:</strong> {datosRenovacion.motivo_cancelacion}</div>
+                                      )}
+                                      {datosRenovacion.nota_cancel && (
+                                        <div><strong>Nota:</strong> {datosRenovacion.nota_cancel}</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                {requiereCamposCancelacion(cobertura, datosRenovacion) && (
+                                  <>
+                                    <div>
+                                      <Form.Label className="small mb-1">
+                                        Motivo cancelación <span className="text-danger">*</span>
+                                      </Form.Label>
+                                      <Form.Select
+                                        size="sm"
+                                        value={datosRenovacion.motivo_cancelacion || ""}
+                                        onChange={(e) =>
+                                          handleCampoIndividualChange(
+                                            coberturaId,
+                                            "motivo_cancelacion",
+                                            e.target.value
+                                          )
+                                        }
+                                      >
+                                        <option value="">Seleccione...</option>
+                                        {motivosCancelacion.map((motivo) => (
+                                          <option key={motivo} value={motivo}>{motivo}</option>
+                                        ))}
+                                      </Form.Select>
+                                    </div>
+                                    <div>
+                                      <Form.Label className="small mb-1">
+                                        Obs. cancelación <span className="text-danger">*</span>
+                                      </Form.Label>
+                                      <Form.Control
+                                        size="sm"
+                                        value={datosRenovacion.nota_cancel || ""}
+                                        onChange={(e) =>
+                                          handleCampoIndividualChange(coberturaId, "nota_cancel", e.target.value)
+                                        }
+                                        placeholder="Notas de cancelación..."
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                                {requiereCamposRetiro(cobertura, datosRenovacion) && (
+                                  <>
+                                    <div>
+                                      <Form.Label className="small mb-1">
+                                        Estado <span className="text-danger">*</span>
+                                      </Form.Label>
+                                      <Form.Select
+                                        size="sm"
+                                        value={datosRenovacion.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO}
+                                        onChange={(e) =>
+                                          handleCampoIndividualChange(
+                                            coberturaId,
+                                            "cobertura_definida",
+                                            e.target.value
+                                          )
+                                        }
+                                      >
+                                        {OPCIONES_COBERTURA_RETIRO.map((op) => (
+                                          <option key={op} value={op}>{op}</option>
+                                        ))}
+                                      </Form.Select>
+                                    </div>
+                                    <div>
+                                      <Form.Label className="small mb-1">
+                                        Motivo retiro <span className="text-danger">*</span>
+                                      </Form.Label>
+                                      <Form.Select
+                                        size="sm"
+                                        value={datosRenovacion.motivo_retiro || ""}
+                                        onChange={(e) =>
+                                          handleCampoIndividualChange(
+                                            coberturaId,
+                                            "motivo_retiro",
+                                            e.target.value
+                                          )
+                                        }
+                                      >
+                                        <option value="">Seleccione...</option>
+                                        {motivosCancelacion.map((motivo) => (
+                                          <option key={`ret-${motivo}`} value={motivo}>{motivo}</option>
+                                        ))}
+                                      </Form.Select>
+                                    </div>
+                                    <div>
+                                      <Form.Label className="small mb-1">
+                                        Obs. retiro <span className="text-danger">*</span>
+                                      </Form.Label>
+                                      <Form.Control
+                                        size="sm"
+                                        value={datosRenovacion.nota_retiro || ""}
+                                        onChange={(e) =>
+                                          handleCampoIndividualChange(coberturaId, "nota_retiro", e.target.value)
+                                        }
+                                        placeholder="Notas de retiro..."
+                                      />
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                         </React.Fragment>
                       );
                     })}
@@ -887,271 +1357,50 @@ const CambioVidaCancelacionModal = ({
                 </Table>
               </div>
 
-            </div>
-
-            {/* Paso 2: Datos de la operación */}
-            {coberturasSeleccionadas.size > 0 && (
-              <div className="border-top pt-4 mt-4">
-                <h5 className="mb-3 fw-semibold">
-                  <span className="badge bg-primary me-2">2</span>
-                  Datos de la operación
-                </h5>
-
-                {totalSoloRetiroEnSeleccion > 0 && (
-                  <Alert variant="info" className="mb-3 py-2">
-                    <div className="small">
-                      <strong>
-                        {totalSoloRetiroEnSeleccion === totalSeleccionadas
-                          ? "Todas las seleccionadas son retiros"
-                          : `${totalSoloRetiroEnSeleccion} miembro(s) sin póliza activa`}
-                      </strong>
-                      {" — "}
-                      {totalSoloRetiroEnSeleccion === totalSeleccionadas
-                        ? "No se procesará ninguna cancelación de póliza, solo retiros del grupo."
-                        : "Esos miembros se procesarán únicamente como retiro, no como cancelación de póliza."}
-                    </div>
-                  </Alert>
-                )}
-
-                {totalCancelaciones > 0 && (
-                  <Alert variant="light" className="border mb-3 py-2">
-                    <div className="small text-muted">
-                      <strong className="text-dark">{totalCancelaciones} cancelación(es):</strong>{" "}
-                      la póliza se cierra pero el miembro permanece activo en el grupo familiar.
-                    </div>
-                  </Alert>
-                )}
-
-                <Form onSubmit={handleSubmit}>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">
-                          Fecha de Cancelación <span className="text-danger">*</span>
-                        </Form.Label>
-                        <DateInputWithCalendar
-                          valueIso={fechaCancelacion || ""}
-                          onChangeIso={(iso) => setFechaCancelacion(iso)}
-                          disabled={false}
-                        />
-                        <Form.Text className="text-muted small">
-                          {totalCancelaciones > 0
-                            ? "Fecha efectiva de cancelación de póliza para los miembros seleccionados"
-                            : "Fecha administrativa de cierre (requerida también para retiros)"}
-                        </Form.Text>
-                      </Form.Group>
-                    </div>
-
-                    <div className="col-md-6">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">
-                          Motivo de Cancelación <span className="text-danger">*</span>
-                        </Form.Label>
-                        <Form.Select
-                          value={motivoCancelacion}
-                          onChange={(e) => setMotivoCancelacion(e.target.value)}
-                          className="border-secondary"
-                          required
-                        >
-                          <option value="">Seleccione un motivo...</option>
-                          {motivosCancelacion.map((motivo) => (
-                            <option key={motivo} value={motivo}>
-                              {motivo}
-                            </option>
-                          ))}
-                        </Form.Select>
-                        <Form.Text className="text-muted small">
-                          Clasificación del motivo de cancelación
-                        </Form.Text>
-                      </Form.Group>
-                    </div>
-
-                    <div className="col-md-6">
-                      <Form.Group>
-                        <Form.Label className="fw-semibold mb-2">
-                          Observaciones <span className="text-danger">*</span>
-                        </Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={3}
-                          value={notaCancel}
-                          onChange={(e) => setNotaCancel(e.target.value)}
-                          placeholder="Ingrese observaciones adicionales sobre esta operación..."
-                          style={{ resize: "none" }}
-                          className="border-secondary"
-                          required
-                        />
-                        <Form.Text className="text-muted small">
-                          Notas administrativas sobre la cancelación
-                        </Form.Text>
-                      </Form.Group>
-                    </div>
-                  </div>
-
-                  {/* Miembros con retiro del grupo */}
-                  {totalRetiros > 0 && (
-                    <div className="mt-3 mb-3">
-                      <Alert variant="warning" className="mb-0">
-                        <div className="d-flex align-items-start">
-                          <i className="fas fa-user-minus me-2 mt-1 text-warning"></i>
-                          <div className="flex-grow-1">
-                            <strong className="text-dark">
-                              Retiros del grupo ({totalRetiros})
-                            </strong>
-                            <div className="text-muted small mt-1 mb-2">
-                              Estos miembros dejarán de estar activos en el grupo familiar.
-                              {totalSoloRetiroEnSeleccion > 0 && (
-                                <> Los marcados como <em>sin póliza</em> no generan cancelación de póliza.</>
-                              )}
-                            </div>
-                            <div className="small">
-                              <ul className="mb-0 mt-1">
-                                {idsSeleccionados
-                                  .filter((id) => renovacionCoberturas.get(id)?.renovar === false)
-                                  .map((id) => {
-                                    const cobertura = coberturas.find((c) => c.id === id);
-                                    const sinPolizaActiva = esBloqueSinCoberturaActiva(cobertura);
-                                    return (
-                                      <li key={id}>
-                                        <strong>{cobertura?.cliente?.nombre_completo || `ID ${id}`}</strong>
-                                        {sinPolizaActiva ? (
-                                          <Badge bg="secondary" className="ms-2" style={{ fontSize: "0.65rem" }}>
-                                            solo retiro
-                                          </Badge>
-                                        ) : (
-                                          <span className="text-muted ms-2">(cancelación + retiro)</span>
-                                        )}
-                                        {cobertura?.codigo_poliza && (
-                                          <span className="text-muted ms-1">— {cobertura.codigo_poliza}</span>
-                                        )}
-                                      </li>
-                                    );
-                                  })}
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-                      </Alert>
-                    </div>
-                  )}
-
-                  {/* Resumen cancelaciones de póliza */}
-                  {totalCancelaciones > 0 && (
-                    <div className="mt-3 mb-3">
-                      <Alert variant="light" className="border mb-0">
-                        <div className="d-flex align-items-start">
-                          <i className="fas fa-file-contract me-2 mt-1 text-warning"></i>
-                          <div className="flex-grow-1">
-                            <strong className="text-dark">
-                              Cancelaciones de póliza ({totalCancelaciones})
-                            </strong>
-                            <div className="text-muted small mt-1 mb-2">
-                              La póliza se cancela; el miembro sigue en el grupo sin cobertura activa.
-                            </div>
-                            <ul className="small mb-0">
-                              {idsSeleccionados
-                                .filter((id) => {
-                                  const datos = renovacionCoberturas.get(id);
-                                  const cobertura = coberturas.find((c) => c.id === id);
-                                  return datos?.renovar === true && !esBloqueSinCoberturaActiva(cobertura);
-                                })
-                                .map((id) => {
-                                  const cobertura = coberturas.find((c) => c.id === id);
-                                  return (
-                                    <li key={id}>
-                                      <strong>{cobertura?.cliente?.nombre_completo || `ID ${id}`}</strong>
-                                      {cobertura?.codigo_poliza && (
-                                        <span className="text-muted ms-2">({cobertura.codigo_poliza})</span>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                            </ul>
-                          </div>
-                        </div>
-                      </Alert>
-                    </div>
-                  )}
-
-                  {error && (
-                    <Alert variant="danger" className="mt-3 mb-0">
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-exclamation-triangle me-2"></i>
-                        <div>
-                          <strong>Error de validación:</strong> {error}
-                        </div>
-                      </div>
-                    </Alert>
-                  )}
-
-                  {success && (
-                    <Alert variant="success" className="mt-3 mb-0">
-                      <div className="d-flex align-items-center">
-                        <i className="fas fa-check-circle me-2"></i>
-                        <div>
-                          <strong>Operación completada:</strong> Las coberturas han sido procesadas correctamente.
-                        </div>
-                      </div>
-                    </Alert>
-                  )}
-
-                  <div className="d-flex justify-content-between align-items-center mt-4 pt-3 border-top">
-                    <div className="text-muted small">
-                      <i className="fas fa-shield-alt me-1"></i>
-                      {soloActualizarLocal ? (
-                        "Los cambios se aplicarán localmente. Usa 'Guardar' del grupo familiar para enviarlos al backend."
-                      ) : (
-                        "Esta operación será registrada en el historial del grupo familiar"
-                      )}
-                    </div>
-                    <div className="d-flex gap-2">
-                      <Button 
-                        variant="outline-secondary" 
-                        onClick={onClose} 
-                        disabled={loading}
-                        className="px-4"
-                      >
-                        <i className="fas fa-times me-2"></i>
-                        Cancelar
-                      </Button>
-                      <Button
-                        variant="primary"
-                        type="submit"
-                        disabled={
-                          loading ||
-                          coberturasSeleccionadas.size === 0 ||
-                          !fechaCancelacion ||
-                          !motivoCancelacion ||
-                          !notaCancel ||
-                          String(notaCancel).trim().length === 0
-                        }
-                        className="px-4"
-                      >
-                        {loading ? (
-                          <>
-                            <Spinner
-                              animation="border"
-                              size="sm"
-                              className="me-2"
-                            />
-                            {soloActualizarLocal ? "Aplicando..." : "Procesando..."}
-                          </>
-                        ) : (
-                          <>
-                            <i className="fas fa-check-double me-2"></i>
-                            {soloActualizarLocal ? "Aplicar Cambios" : "Confirmar Operación"}
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                </Form>
-              </div>
+            {error && (
+              <Alert variant="danger" className="mt-2 mb-0 py-2 small">
+                {error}
+              </Alert>
+            )}
+            {success && (
+              <Alert variant="success" className="mt-2 mb-0 py-2 small">
+                Operación completada correctamente.
+              </Alert>
             )}
           </>
         )}
+        </Form>
       </Modal.Body>
+      <Modal.Footer className="py-2 px-3 d-flex justify-content-between flex-wrap gap-2">
+        <span className="text-muted small">
+          {soloActualizarLocal
+            ? "Los cambios se aplican localmente hasta guardar el grupo."
+            : "Se registrará en el historial del grupo familiar."}
+        </span>
+        <div className="d-flex gap-2">
+          <Button variant="outline-secondary" size="sm" onClick={onClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            type="submit"
+            form="cvc-cancelacion-form"
+            disabled={loading || coberturasSeleccionadas.size === 0}
+          >
+            {loading ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-1" />
+                Procesando...
+              </>
+            ) : (
+              soloActualizarLocal ? "Aplicar cambios" : "Confirmar operación"
+            )}
+          </Button>
+        </div>
+      </Modal.Footer>
     </Modal>
+    </>
   );
 };
 

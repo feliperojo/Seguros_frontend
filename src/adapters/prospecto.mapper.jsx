@@ -368,6 +368,8 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
   const notaCancel = (m.nota_cancel ?? m?.cobertura?.nota_cancel ?? "").trim();
   const notaRetiro = (m.nota_retiro ?? m?.cobertura?.nota_retiro ?? "").trim();
   const motivoCancelacion = (m.motivo_cancelacion ?? m?.cobertura?.motivo_cancelacion ?? "").trim();
+  const motivoRetiro = (m.motivo_retiro ?? m?.cobertura?.motivo_retiro ?? "").trim();
+  const coberturaDefinida = (m.cobertura_definida ?? m?.cobertura?.cobertura_definida ?? "").trim();
   
   // Incluir fecha_cancelacion si está presente (incluso si es null para permitir limpiarla)
   if (m.fecha_cancelacion !== undefined || m?.cobertura?.fecha_cancelacion !== undefined) {
@@ -387,6 +389,11 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
   }
   if (m.fecha_retiro !== undefined || m?.cobertura?.fecha_retiro !== undefined || fechaRetiro) {
     payload.nota_retiro = notaRetiro || null;
+    payload.motivo_retiro = motivoRetiro || null;
+  }
+
+  if (m.cobertura_definida !== undefined || m?.cobertura?.cobertura_definida !== undefined || coberturaDefinida) {
+    payload.cobertura_definida = coberturaDefinida || null;
   }
   
   // motivo_cancelacion: incluir cuando hay fecha_cancelacion (necesario para retiro_cancelacion)

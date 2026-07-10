@@ -306,11 +306,11 @@ const Prospectogrupo = ({
                     className="btn btn-sm btn-outline-warning"
                     onClick={() => setShowCambioVidaModal(true)}
                     disabled={!resolvedGrupoId || readOnly}
-                    title="Reno/Canc/Reti"
+                    title="Retiro/cancelacion"
                     style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
                     <i className="fas fa-exclamation-triangle me-1"></i>
-                    <span className="d-none d-lg-inline">Renov/Canc/Reti</span>
+                    <span className="d-none d-lg-inline">Retiro/cancelacion</span>
                   </button>
                   <button
                     className="btn btn-sm btn-outline-success"

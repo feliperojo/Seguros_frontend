@@ -593,6 +593,24 @@ const HistorialCoberturasCanceladasModal = ({
                     </Badge>
                   </div>
                 </div>
+                <div className="col-md-4">
+                  <small className="text-muted">Estado definido:</small>
+                  <div className="fw-semibold">
+                    {item?.cobertura_definida || "-"}
+                  </div>
+                </div>
+                <div className="col-md-4">
+                  <small className="text-muted">Motivo de Retiro:</small>
+                  <div className="fw-semibold">
+                    {item?.motivo_retiro || "-"}
+                  </div>
+                </div>
+                <div className="col-md-12">
+                  <small className="text-muted">Nota de Retiro:</small>
+                  <div className="fw-semibold">
+                    {item?.nota_retiro || "-"}
+                  </div>
+                </div>
                 <div className="col-md-12">
                   <small className="text-muted">Nota de Cancelación:</small>
                   <div className="fw-semibold">
@@ -836,8 +854,11 @@ const HistorialCoberturasCanceladasModal = ({
                   <th>Plan</th>
                   <th>Fecha Cancelación</th>
                   <th>Fecha Retiro</th>
-                  <th>Motivo</th>
-                  <th>Nota</th>
+                  <th>Estado</th>
+                  <th>Motivo Canc.</th>
+                  <th>Motivo Ret.</th>
+                  <th>Nota Canc.</th>
+                  <th>Nota Ret.</th>
                   <th>Acción Origen</th>
                 </tr>
               </thead>
@@ -895,11 +916,28 @@ const HistorialCoberturasCanceladasModal = ({
                           {formatearFecha(item?.fecha_retiro)}
                         </td>
                         <td>
+                          <Badge bg={
+                            item?.cobertura_definida === "Cancelado" ? "warning" :
+                            item?.cobertura_definida === "Retirado" ? "secondary" :
+                            item?.cobertura_definida === "Terminado" ? "info" : "light"
+                          } text={item?.cobertura_definida === "Cancelado" ? "dark" : undefined}>
+                            {item?.cobertura_definida || "-"}
+                          </Badge>
+                        </td>
+                        <td>
                           {item?.motivo_cancelacion || "-"}
+                        </td>
+                        <td>
+                          {item?.motivo_retiro || "-"}
                         </td>
                         <td>
                           <small className="text-muted">
                             {item?.nota_cancel || "-"}
+                          </small>
+                        </td>
+                        <td>
+                          <small className="text-muted">
+                            {item?.nota_retiro || "-"}
                           </small>
                         </td>
                         <td>

@@ -13,7 +13,7 @@ export function getEntityPath(entityType, entityId) {
   }
 
   if (type === "grupofamiliar") {
-    return `/grupo-familiar/${entityId}/editar`;
+    return `/grupo_familiar/${entityId}`;
   }
 
   return null;

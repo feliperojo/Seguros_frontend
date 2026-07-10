@@ -1,10 +1,9 @@
 import React from "react";
-import { Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet, useParams } from "react-router-dom";
 
 import MainLayout from "./layout/MainLayout";
 import Dashboard from "./pages/Dashboard";
 import Cliente from "./pages/Clientes";
-import Grupofamiliar from "./pages/Grupofamiliar";
 
 import ImportarClientesPage from "./pages/ImportarClientesPage";
 import Login from "./pages/login";
@@ -16,7 +15,6 @@ import ReporteGrupoFamiliar from "../src/components/Reports/ReporteGrupoFamiliar
 import ReporteGruposFamiliaresClasificados from "./components/Reports/ReporteGruposFamiliaresClasificados";
 import ListaClientes from "./pages/ListaClientes";
 import GrupofamiliarCreate from "./components/GrupoFamiliar/GrupofamiliarCreate";
-import GrupofamiliarEdit from "./components/GrupoFamiliar/GrupofamiliarEdit";
 import Auditoria from "./components/Auditoria";
 import CentroOperaciones from "./pages/CentroOperaciones";
 import ConciliacionComisionesPage from "./pages/ConciliacionComisionesPage";
@@ -68,6 +66,11 @@ import Configurador from "./pages/admin/Configurador";
 import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
 import CallIdentifierContainer from "./components/CallIdentifier/CallIdentifierContainer";
 
+const GrupoFamiliarLegacyEditRedirect = () => {
+  const { id } = useParams();
+  return <Navigate to={`/grupo_familiar/${id}`} replace />;
+};
+
 // Layout protegido que envuelve todas las páginas
 const ProtectedLayout = () => {
   return (
@@ -110,7 +113,7 @@ const App = () => {
         <Route path="/grupofamiliar/reporte-clasificado" element={<ReporteGruposFamiliaresClasificados/>}/>
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
-        <Route path="/grupo-familiar/:id/editar" element={<GrupofamiliarEdit />} />
+        <Route path="/grupo-familiar/:id/editar" element={<GrupoFamiliarLegacyEditRedirect />} />
         <Route path="/grupofamiliar/RequerimientosAdmin" element={<RequerimientosAdmin />} />
         <Route path="/grupofamiliar/prospecto" element={<Porspectopage />} />
         <Route path="/grupo_familiar/:id" element={<GrupoFamiliarDetail />} />
