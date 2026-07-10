@@ -42,15 +42,17 @@ export const buildDeltaCambiosFromPayloads = ({
     cambios.grupo = grupoDiff;
   }
 
+  const sameId = (a, b) => Number(a) === Number(b) && Number.isFinite(Number(a));
+
   const clientesDiff = [];
   currentClientes.forEach((cur) => {
-    const base = baselineClientes.find((c) => c.id === cur.id);
+    const base = baselineClientes.find((c) => sameId(c.id, cur.id));
     if (!base) return;
 
     const campos = diffPayloadObjects(base, cur);
     delete campos.id;
     if (Object.keys(campos).length > 0) {
-      clientesDiff.push({ id: cur.id, campos });
+      clientesDiff.push({ id: Number(cur.id), campos });
     }
   });
   if (clientesDiff.length > 0) {
@@ -59,7 +61,7 @@ export const buildDeltaCambiosFromPayloads = ({
 
   const coberturasDiff = [];
   currentCoberturas.forEach((cur) => {
-    const base = baselineCoberturas.find((c) => c.id === cur.id);
+    const base = baselineCoberturas.find((c) => sameId(c.id, cur.id));
     if (!base) return;
 
     const { id, cliente_id, ...curCampos } = cur;

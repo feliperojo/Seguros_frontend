@@ -352,6 +352,9 @@ const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) 
 
 const buildFullUpdatePayloadParts = (formData, members, grupoId, productoCotizacion) => {
   const grupoPayload = stripNulls(mapGrupoFromForm(formData));
+  // Asesor puede quedar vacío a propósito: stripNulls omite responsable=null y el valor anterior persistía.
+  const asesor = String(formData?.asesor ?? "").trim();
+  grupoPayload.responsable = asesor === "" ? null : asesor;
   const clientesPayload = (members || [])
     .filter((m) => m?.cliente_id)
     .map(mapClienteForSave)
@@ -1319,6 +1322,8 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
       const hayCambiosDelta = Object.keys(cambios).length > 0;
       const otrosEditores = (presenciaAlGuardar?.editores ?? []).length > 0;
       const hayAlertaConcurrencia = Boolean(presenciaAlGuardar?.alerta || otrosEditores);
+      // Delta solo con concurrencia real. Sin ella se envía el payload legacy completo
+      // (si siempre mandamos `cambios`, el backend podía ignorar clientes/coberturas).
       const useDeltaSave = Boolean(editBaseline && hayCambiosDelta && hayAlertaConcurrencia);
 
       let finalPayload = {
@@ -1328,19 +1333,16 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         grupo_version: grupoVersion,
       };
 
-      if (editBaseline && hayCambiosDelta) {
-        finalPayload.cambios = cambios;
-      }
-
       if (useDeltaSave) {
         finalPayload.modo = "delta";
+        finalPayload.cambios = cambios;
       }
 
       console.log("🚀 [handleSave] Payload FINAL que se envía al backend (fullUpdate):", {
         grupoId: id,
-        modo: useDeltaSave ? "delta" : hayCambiosDelta ? "legacy+cambios" : "legacy",
+        modo: useDeltaSave ? "delta" : "legacy",
         hayAlertaConcurrencia,
-        incluyeCambiosDelta: hayCambiosDelta,
+        incluyeCambiosDelta: useDeltaSave,
         grupoPayload: {
           ...grupoPayload,
           tags: grupoPayload.tags ? 
