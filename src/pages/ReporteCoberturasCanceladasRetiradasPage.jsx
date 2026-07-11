@@ -3,8 +3,10 @@ import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from "reac
 import { Helmet } from "react-helmet-async";
 import { FaExclamationTriangle, FaFileInvoiceDollar, FaSearch, FaSync } from "react-icons/fa";
 import { Link, useSearchParams } from "react-router-dom";
+import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
 import { getReporteCoberturasCanceladasRetiradas } from "../services/reportesService";
+import { formatDateMMDDYYYY } from "../utils/formatters";
 
 const DEFAULT_FILTERS = {
   page: 1,
@@ -17,19 +19,43 @@ const DEFAULT_FILTERS = {
   sort_dir: "desc",
 };
 
+const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
+const GRUPO_FICHA_PATH = (id) => `/grupo_familiar/${id}`;
+
 const formatDate = (value) => {
   if (!value) return "—";
-  try {
-    const date = new Date(`${value}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-  } catch {
-    return value;
-  }
+  const formatted = formatDateMMDDYYYY(value);
+  return formatted || "—";
+};
+
+const renderGrupoLink = (grupoId) => {
+  if (!grupoId) return "—";
+  return (
+    <Link
+      to={GRUPO_FICHA_PATH(grupoId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-decoration-none fw-semibold"
+      title={`Ver grupo familiar #${grupoId}`}
+    >
+      {grupoId}
+    </Link>
+  );
+};
+
+const renderClienteLink = (clienteId, label) => {
+  if (!clienteId) return label || "—";
+  return (
+    <Link
+      to={CLIENTE_FICHA_PATH(clienteId)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-decoration-none fw-semibold"
+      title="Abrir ficha del cliente en una nueva pestaña"
+    >
+      {label || clienteId}
+    </Link>
+  );
 };
 
 const ReporteCoberturasCanceladasRetiradasPage = () => {
@@ -150,18 +176,21 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
             </Col>
             <Col md={3}>
               <Form.Label>Desde</Form.Label>
-              <Form.Control
-                type="date"
-                value={filters.date_from}
-                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, date_from: e.target.value }))}
+              <DateInputWithCalendar
+                valueIso={filters.date_from}
+                onChangeIso={(iso) =>
+                  setFilters((prev) => ({ ...prev, page: 1, date_from: iso || "" }))
+                }
               />
             </Col>
             <Col md={3}>
               <Form.Label>Hasta</Form.Label>
-              <Form.Control
-                type="date"
-                value={filters.date_to}
-                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, date_to: e.target.value }))}
+              <DateInputWithCalendar
+                valueIso={filters.date_to}
+                onChangeIso={(iso) =>
+                  setFilters((prev) => ({ ...prev, page: 1, date_to: iso || "" }))
+                }
+                minIso={filters.date_from || undefined}
               />
             </Col>
             <Col md={3}>
@@ -195,6 +224,9 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
             <Table hover className="mb-0 align-middle">
               <thead className="table-light">
                 <tr>
+                  <th role="button" onClick={() => handleSort("grupo_familiar_id")}>
+                    GF{sortIcon("grupo_familiar_id")}
+                  </th>
                   <th role="button" onClick={() => handleSort("nombre")}>
                     Nombre{sortIcon("nombre")}
                   </th>
@@ -218,21 +250,22 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-5">
+                    <td colSpan={7} className="text-center py-5">
                       <Spinner animation="border" size="sm" className="me-2" />
                       Cargando informe...
                     </td>
                   </tr>
                 ) : data.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-muted py-5">
+                    <td colSpan={7} className="text-center text-muted py-5">
                       No hay coberturas para los filtros seleccionados
                     </td>
                   </tr>
                 ) : (
                   data.map((row) => (
                     <tr key={`${row.id}-${row.fecha_cancelacion || ""}-${row.fecha_retiro || ""}-${row.tipo}`}>
-                      <td className="fw-medium">{row.nombre}</td>
+                      <td>{renderGrupoLink(row.grupo_familiar_id)}</td>
+                      <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
                       <td>{formatDate(row.fecha_cancelacion)}</td>
                       <td>{formatDate(row.fecha_retiro)}</td>
                       <td>{row.concepto || "—"}</td>
