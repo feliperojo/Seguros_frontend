@@ -24,6 +24,7 @@ const Prospectogrupo = ({
   formData = {},
   onChange,
   readOnly,
+  modoHistorico = false,
   grupoFamiliarId,
   onRefresh, // Función opcional para refrescar datos del grupo familiar
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
@@ -300,7 +301,7 @@ const Prospectogrupo = ({
                   <span className="d-none d-lg-inline">Autorización</span>
                 </button>
               )}
-              {puedeRenovar && (
+              {puedeRenovar && !modoHistorico && (
                 <>
                   <button
                     className="btn btn-sm btn-outline-warning"

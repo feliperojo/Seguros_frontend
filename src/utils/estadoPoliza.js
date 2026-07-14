@@ -169,6 +169,14 @@ export function vigenteDesdeEstadoCobertura(estado) {
   return null;
 }
 
+/**
+ * No / Medicare / Medicaid: no reciben datos de cobertura al copiar entre miembros.
+ * Solo aplica copiar dirección.
+ */
+export function soloPermiteCopiarDireccion(estado) {
+  return vigenteDesdeEstadoCobertura(estado) === false;
+}
+
 export function isMedicareOrMedicaidEstado(estado) {
   const s = (estado ?? "").trim().toLowerCase();
   return s === "medicare" || s === "medicaid";

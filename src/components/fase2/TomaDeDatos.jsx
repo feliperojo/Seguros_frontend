@@ -57,6 +57,7 @@ import {
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
   isFechaActivacionPendiente,
+  soloPermiteCopiarDireccion,
 } from "../../utils/estadoPoliza";
 
 /* =================== CONSTANTES =================== */
@@ -1209,10 +1210,14 @@ const activeNormalized = useMemo(
         if (!targetIds.includes(mid)) return m;
 
         let next = { ...m };
+        const soloDireccion = soloPermiteCopiarDireccion(m.estado_cobertura);
 
-        fieldKeys.forEach(k => {
-          if (k in src) next[k] = src[k];
-        });
+        // No / Medicare / Medicaid: no reciben datos de cobertura, solo dirección.
+        if (!soloDireccion) {
+          fieldKeys.forEach(k => {
+            if (k in src) next[k] = src[k];
+          });
+        }
 
         if (copyAddress) {
           const srcCli = src.cliente || {};
