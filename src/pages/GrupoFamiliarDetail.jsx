@@ -7,6 +7,7 @@ import ProspectoDatos from "../components/fase2/ProspectoDatos";
 import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
+import RenovacionCoberturasModal from "../components/GrupoFamiliar/RenovacionCoberturasModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney, computeAnnual, formatMoney2 } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
@@ -21,6 +22,8 @@ import { buildDeltaCambiosFromPayloads } from "../utils/grupoFamiliarConcurrentS
  import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
 
 const ANIO_ACTUAL = new Date().getFullYear();
+const ANIO_RENOVACION = ANIO_ACTUAL + 1;
+const VALOR_RENOVAR_ANIO = `renovar-${ANIO_RENOVACION}`;
 
 const formatFechaCorta = (value) => {
   if (!value) return "—";
@@ -712,6 +715,7 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [cierreAnio, setCierreAnio] = useState(null);
   const [cierreLoading, setCierreLoading] = useState(false);
   const [cierreError, setCierreError] = useState("");
+  const [showRenovacionModal, setShowRenovacionModal] = useState(false);
   const esAnioPasado = periodoRelativo === "pasado";
 
   const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
@@ -971,7 +975,9 @@ console.log("Ingreso Familiar:", total);
         if (normalizados.length > 0 && !normalizados.includes(ANIO_ACTUAL)) {
           normalizados.push(ANIO_ACTUAL);
         }
-        setAniosDisponibles(Array.from(new Set(normalizados)).sort((a, b) => b - a));
+        if (!cancelled) {
+          setAniosDisponibles(Array.from(new Set(normalizados)).sort((a, b) => b - a));
+        }
       } catch (err) {
         if (!cancelled) {
           console.error("Error al cargar años disponibles del grupo:", err);
@@ -986,7 +992,32 @@ console.log("Ingreso Familiar:", total);
     };
   }, [id]);
 
+  const refreshAniosDisponibles = useCallback(async () => {
+    if (!id) {
+      setAniosDisponibles([]);
+      return;
+    }
+    try {
+      const anios = await GrupoFamiliarService.getAniosDisponibles(id);
+      const normalizados = (Array.isArray(anios) ? anios : [])
+        .map((y) => Number(y))
+        .filter((y) => Number.isFinite(y) && y > 1900);
+      if (!normalizados.includes(ANIO_ACTUAL)) {
+        normalizados.push(ANIO_ACTUAL);
+      }
+      setAniosDisponibles(Array.from(new Set(normalizados)).sort((a, b) => b - a));
+    } catch (err) {
+      console.error("Error al cargar años disponibles del grupo:", err);
+      setAniosDisponibles([]);
+    }
+  }, [id]);
+
   const handleAnioConsultaChange = (year) => {
+    if (String(year) === VALOR_RENOVAR_ANIO) {
+      setShowRenovacionModal(true);
+      return;
+    }
+
     const next = Number(year);
     const params = new URLSearchParams(searchParams);
     if (!Number.isFinite(next) || next === ANIO_ACTUAL) {
@@ -995,6 +1026,12 @@ console.log("Ingreso Familiar:", total);
       params.set("anio", String(next));
     }
     setSearchParams(params, { replace: true });
+  };
+
+  const handleAfterRenovacionConfirm = async () => {
+    setShowRenovacionModal(false);
+    await refreshAniosDisponibles();
+    await reload();
   };
 
   useEffect(() => {
@@ -1612,7 +1649,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
         <GrupoFamiliarEdicionAlerta edicion={edicion} />
 
-        {aniosDisponibles.length > 1 && (
+        {aniosDisponibles.length >= 1 && (
           <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
             <div className="d-flex align-items-center gap-2">
               <i className="fas fa-calendar-alt text-primary" aria-hidden="true" />
@@ -1637,6 +1674,9 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                     {year === ANIO_ACTUAL ? " (actual)" : ""}
                   </option>
                 ))}
+                <option value={VALOR_RENOVAR_ANIO}>
+                  {ANIO_RENOVACION} — Renovar
+                </option>
               </Form.Select>
             </div>
           </div>
@@ -2047,6 +2087,13 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
             }}
           />
         )}
+
+        <RenovacionCoberturasModal
+          show={showRenovacionModal}
+          onHide={() => setShowRenovacionModal(false)}
+          grupoFamiliarId={id}
+          onAfterConfirm={handleAfterRenovacionConfirm}
+        />
         </div>
       </div>
     </div>
