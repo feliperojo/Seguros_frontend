@@ -185,7 +185,8 @@ const RenovacionCoberturasModal = ({
         items: itemsFromUI.map((it) => ({
           renovar: it.renovar,
           cobertura_id: it.cobertura_id,
-          // ya no mandamos cambios de plan/compañía/precio desde el UI
+          fecha_retiro: it.fecha_retiro || null,
+          motivo_retiro: it.motivo_retiro || null,
           borrador: it.borrador || {},
         })),
       };

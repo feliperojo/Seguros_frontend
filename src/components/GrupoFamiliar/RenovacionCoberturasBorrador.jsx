@@ -5,7 +5,7 @@ import { fetchCompanies } from "../../services/companies";
 /**
  * Paso 2 del flujo de renovación:
  * - Edita los datos de la póliza NUEVA por cobertura (codigo_poliza obligatorio).
- * - Permite omitir miembros (renovar: false).
+ * - Permite omitir miembros (renovar: false) con retiro si la cobertura está activa.
  */
 const TIPO_PAGO_OPTIONS = [
   { value: "DEBITO AUTOMATICO", label: "DEBITO AUTOMATICO" },
@@ -13,11 +13,27 @@ const TIPO_PAGO_OPTIONS = [
   { value: "MES A MES", label: "MES A MES" },
 ];
 
+const MOTIVOS_RETIRO_NO_RENOVACION = [
+  "CAMBIO DE AGENTE",
+  "MS CANCELO POR FALTA DE DOCUMENTOS",
+  "POR FALTA DE PAGO",
+  "POR FALTA DE PAGO INICIAL",
+  "TOMO MEDICAID",
+  "TOMO MEDICARE",
+  "TOMO SEGURO POR EL TRABAJO",
+  "CLIENTE CANCELO",
+  "CLIENTE SE MUDO A OTRO ESTADO",
+  "OTRO",
+];
+
 const toDateInput = (value) => {
   if (!value) return "";
   const s = String(value);
   return s.length >= 10 ? s.slice(0, 10) : s;
 };
+
+const nombreMiembro = (it) =>
+  it.actual?.cliente_nombre || `Cobertura #${it.cobertura_id || "?"}`;
 
 const RenovacionCoberturasBorrador = ({
   borrador,
@@ -55,6 +71,8 @@ const RenovacionCoberturasBorrador = ({
       const mapped = borrador.items.map((item) => ({
         renovar: item?.borrador?.renovar ?? true,
         cobertura_id: item?.actual?.cobertura_id,
+        fecha_retiro: "",
+        motivo_retiro: "",
         borrador: {
           ...(item.borrador || {}),
           fecha_activacion: toDateInput(
@@ -92,6 +110,9 @@ const RenovacionCoberturasBorrador = ({
     );
   };
 
+  const requiereRetiro = (it) =>
+    !it.renovar && Boolean(it.actual?.activo);
+
   const miembrosSinCodigo = useMemo(
     () =>
       items
@@ -100,21 +121,39 @@ const RenovacionCoberturasBorrador = ({
             it.renovar &&
             !String(it?.borrador?.codigo_poliza ?? "").trim()
         )
-        .map(
+        .map(nombreMiembro),
+    [items]
+  );
+
+  const miembrosSinRetiro = useMemo(
+    () =>
+      items
+        .filter(
           (it) =>
-            it.actual?.cliente_nombre ||
-            `Cobertura #${it.cobertura_id || "?"}`
-        ),
+            requiereRetiro(it) &&
+            (!String(it.fecha_retiro ?? "").trim() ||
+              !String(it.motivo_retiro ?? "").trim())
+        )
+        .map(nombreMiembro),
     [items]
   );
 
   const canConfirm =
-    items.length > 0 && miembrosSinCodigo.length === 0 && !loadingConfirm;
+    items.length > 0 &&
+    miembrosSinCodigo.length === 0 &&
+    miembrosSinRetiro.length === 0 &&
+    !loadingConfirm;
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setAttemptedSubmit(true);
-    if (!onConfirm || miembrosSinCodigo.length > 0) return;
+    if (
+      !onConfirm ||
+      miembrosSinCodigo.length > 0 ||
+      miembrosSinRetiro.length > 0
+    ) {
+      return;
+    }
     onConfirm(items);
   };
 
@@ -181,15 +220,27 @@ const RenovacionCoberturasBorrador = ({
           </div>
         )}
 
+        {attemptedSubmit && miembrosSinRetiro.length > 0 && (
+          <div className="alert alert-warning">
+            Completa la <strong>fecha</strong> y el <strong>motivo de
+            retiro</strong> de: {miembrosSinRetiro.join(", ")}.
+          </div>
+        )}
+
         <div className="d-flex flex-column gap-3 mt-3">
           {items.map((item, index) => {
             const actual = item.actual || {};
             const b = item.borrador || {};
-            const nombre =
-              actual.cliente_nombre || `Cobertura #${item.cobertura_id || "?"}`;
+            const nombre = nombreMiembro(item);
             const codigoVacio =
               item.renovar && !String(b.codigo_poliza ?? "").trim();
             const showCodigoError = attemptedSubmit && codigoVacio;
+            const mostrarRetiro = requiereRetiro(item);
+            const retiroIncompleto =
+              mostrarRetiro &&
+              (!String(item.fecha_retiro ?? "").trim() ||
+                !String(item.motivo_retiro ?? "").trim());
+            const showRetiroError = attemptedSubmit && retiroIncompleto;
 
             return (
               <div key={item.cobertura_id || index} className="card shadow-sm">
@@ -231,6 +282,72 @@ const RenovacionCoberturasBorrador = ({
                     </div>
                   </div>
                 </div>
+
+                {mostrarRetiro && (
+                  <div className="card-body border-bottom">
+                    <p className="small text-muted mb-3">
+                      Este miembro no se renovará. Indica los datos del retiro
+                      (cobertura vigente).
+                    </p>
+                    <div className="row g-2">
+                      <div className="col-md-4">
+                        <label className="form-label form-label-sm mb-1">
+                          Fecha de retiro{" "}
+                          <span className="text-danger">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          className={`form-control form-control-sm${
+                            showRetiroError &&
+                            !String(item.fecha_retiro ?? "").trim()
+                              ? " is-invalid border-danger"
+                              : ""
+                          }`}
+                          value={toDateInput(item.fecha_retiro)}
+                          onChange={(e) =>
+                            updateItem(index, {
+                              fecha_retiro: e.target.value,
+                            })
+                          }
+                          disabled={loadingConfirm}
+                        />
+                      </div>
+                      <div className="col-md-8">
+                        <label className="form-label form-label-sm mb-1">
+                          Motivo de retiro{" "}
+                          <span className="text-danger">*</span>
+                        </label>
+                        <select
+                          className={`form-select form-select-sm${
+                            showRetiroError &&
+                            !String(item.motivo_retiro ?? "").trim()
+                              ? " is-invalid border-danger"
+                              : ""
+                          }`}
+                          value={item.motivo_retiro || ""}
+                          onChange={(e) =>
+                            updateItem(index, {
+                              motivo_retiro: e.target.value,
+                            })
+                          }
+                          disabled={loadingConfirm}
+                        >
+                          <option value="">Seleccione…</option>
+                          {MOTIVOS_RETIRO_NO_RENOVACION.map((motivo) => (
+                            <option key={motivo} value={motivo}>
+                              {motivo}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    {showRetiroError && (
+                      <div className="invalid-feedback d-block mt-1">
+                        Fecha y motivo de retiro son obligatorios.
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {item.renovar && (
                   <div className="card-body">
@@ -492,7 +609,9 @@ const RenovacionCoberturasBorrador = ({
           title={
             miembrosSinCodigo.length > 0
               ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
-              : undefined
+              : miembrosSinRetiro.length > 0
+                ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
+                : undefined
           }
         >
           {loadingConfirm ? "Procesando..." : "Confirmar renovación"}

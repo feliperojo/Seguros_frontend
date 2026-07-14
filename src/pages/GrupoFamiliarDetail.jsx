@@ -710,6 +710,8 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [modoHistorico, setModoHistorico] = useState(false);
   const [periodoRelativo, setPeriodoRelativo] = useState("actual");
+  const [renovacionAnticipada, setRenovacionAnticipada] = useState(false);
+  const [anioConfiguracionVigente, setAnioConfiguracionVigente] = useState(null);
   const [anioConsultado, setAnioConsultado] = useState(ANIO_ACTUAL);
   const [aniosDisponibles, setAniosDisponibles] = useState([]);
   const [cierreAnio, setCierreAnio] = useState(null);
@@ -925,6 +927,19 @@ console.log("Ingreso Familiar:", total);
       setModoHistorico(historico);
       setPeriodoRelativo(relativo);
       setAnioConsultado(anioResuelto);
+      setRenovacionAnticipada(
+        Boolean(
+          fullData?.renovacion_anticipada ?? meta?.renovacion_anticipada
+        )
+      );
+      const anioConfig = Number(
+        fullData?.anio_configuracion_vigente ??
+          meta?.anio_configuracion_vigente ??
+          0
+      );
+      setAnioConfiguracionVigente(
+        Number.isFinite(anioConfig) && anioConfig > 0 ? anioConfig : null
+      );
       if (relativo === "pasado") {
         setIsEditing(false);
         setEditBaseline(null);
@@ -1698,6 +1713,18 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               Estás viendo una renovación anticipada para el año {anioConsultado}{" "}
               — todavía no está vigente. Puedes seguir ajustando estos datos
               hasta que llegue la fecha de activación.
+            </div>
+          </Alert>
+        )}
+
+        {periodoRelativo === "actual" && renovacionAnticipada && (
+          <Alert variant="info" className="d-flex align-items-center gap-2 mb-3">
+            <i className="fas fa-forward" aria-hidden="true" />
+            <div>
+              Ya se realizó la renovación al año{" "}
+              {anioConfiguracionVigente || ANIO_RENOVACION} — estás viendo esa
+              configuración. Para consultar {ANIO_ACTUAL}, selecciona ese año
+              arriba.
             </div>
           </Alert>
         )}
