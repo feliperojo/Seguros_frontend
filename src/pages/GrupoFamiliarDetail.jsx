@@ -986,8 +986,8 @@ console.log("Ingreso Familiar:", total);
         const normalizados = (Array.isArray(anios) ? anios : [])
           .map((y) => Number(y))
           .filter((y) => Number.isFinite(y) && y > 1900);
-        // Asegura que el año actual aparezca en el selector cuando hay otros años.
-        if (normalizados.length > 0 && !normalizados.includes(ANIO_ACTUAL)) {
+        // Asegura que el año actual aparezca siempre (selector + opción Renovar).
+        if (!normalizados.includes(ANIO_ACTUAL)) {
           normalizados.push(ANIO_ACTUAL);
         }
         if (!cancelled) {
