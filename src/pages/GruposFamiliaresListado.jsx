@@ -22,6 +22,7 @@ import { Helmet } from "react-helmet-async";
 
 const ITEMS_PER_PAGE = 50;
 const ANIO_ACTUAL = new Date().getFullYear();
+const ANIOS_BASE = [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3];
 
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
@@ -57,15 +58,43 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const location = useLocation();
 
-  // Año actual + 3 anteriores (sin endpoint global de años).
-  const aniosDisponibles = useMemo(
-    () => [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3],
-    []
-  );
+  // Año actual + 3 anteriores como base; se enriquecen con años ya creados en BD (incluye futuros).
+  const [aniosDisponibles, setAniosDisponibles] = useState(ANIOS_BASE);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiRequest(
+          "grupo_familiar/anios-disponibles-globales",
+          "GET"
+        );
+        const fromApi = (Array.isArray(response?.data) ? response.data : [])
+          .map((y) => Number(y))
+          .filter((y) => Number.isFinite(y) && y > 1900 && y < 2100);
+        if (cancelled) return;
+        const merged = Array.from(new Set([...fromApi, ...ANIOS_BASE])).sort(
+          (a, b) => b - a
+        );
+        setAniosDisponibles(merged);
+      } catch (err) {
+        console.error("Error al cargar años disponibles del listado:", err);
+        // Mantiene ANIOS_BASE — no rompe el listado.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const anioSeleccionado = useMemo(() => {
     const raw = Number(searchParams.get("anio"));
-    if (Number.isFinite(raw) && aniosDisponibles.includes(raw)) {
+    if (
+      Number.isFinite(raw) &&
+      (aniosDisponibles.includes(raw) ||
+        ANIOS_BASE.includes(raw) ||
+        raw > ANIO_ACTUAL)
+    ) {
       return raw;
     }
     return ANIO_ACTUAL;
@@ -88,6 +117,12 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     }
     setSearchParams(params, { replace: true });
     setCurrentPage(1);
+  };
+
+  const etiquetaAnio = (year) => {
+    if (year === ANIO_ACTUAL) return " (actual)";
+    if (year > ANIO_ACTUAL) return " (futuro)";
+    return "";
   };
 
   // Función para manejar el clic desde el componente de resumen
@@ -169,7 +204,7 @@ useEffect(() => {
         params.set("search", debouncedSearch.trim());
       }
 
-      // Solo propagar anio histórico; año actual = comportamiento por defecto del backend.
+      // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
       if (anioSeleccionado !== ANIO_ACTUAL) {
         params.set("anio", String(anioSeleccionado));
       }
@@ -379,7 +414,7 @@ useEffect(() => {
                 {aniosDisponibles.map((year) => (
                   <option key={year} value={year}>
                     {year}
-                    {year === ANIO_ACTUAL ? " (actual)" : ""}
+                    {etiquetaAnio(year)}
                   </option>
                 ))}
               </Form.Select>
