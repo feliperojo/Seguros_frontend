@@ -1701,7 +1701,20 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           <Alert variant="warning" className="d-flex align-items-center gap-2 mb-3">
             <i className="fas fa-history" aria-hidden="true" />
             <div>
-              Viendo el cierre del año {anioConsultado} — histórico, solo lectura
+              {anioConsultado === ANIO_ACTUAL && renovacionAnticipada ? (
+                <>
+                  Este grupo ya fue renovado al año{" "}
+                  {anioConfiguracionVigente || ANIO_RENOVACION} — estás viendo
+                  el cierre de {anioConsultado}. Para ver o editar{" "}
+                  {anioConfiguracionVigente || ANIO_RENOVACION}, selecciona ese
+                  año arriba.
+                </>
+              ) : (
+                <>
+                  Viendo el cierre del año {anioConsultado} — histórico, solo
+                  lectura
+                </>
+              )}
             </div>
           </Alert>
         )}
@@ -1713,18 +1726,6 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               Estás viendo una renovación anticipada para el año {anioConsultado}{" "}
               — todavía no está vigente. Puedes seguir ajustando estos datos
               hasta que llegue la fecha de activación.
-            </div>
-          </Alert>
-        )}
-
-        {periodoRelativo === "actual" && renovacionAnticipada && (
-          <Alert variant="info" className="d-flex align-items-center gap-2 mb-3">
-            <i className="fas fa-forward" aria-hidden="true" />
-            <div>
-              Ya se realizó la renovación al año{" "}
-              {anioConfiguracionVigente || ANIO_RENOVACION} — estás viendo esa
-              configuración. Para consultar {ANIO_ACTUAL}, selecciona ese año
-              arriba.
             </div>
           </Alert>
         )}
