@@ -597,6 +597,7 @@ const mapFullToMembers = (fullRaw) => {
       nota_retiro: cov.nota_retiro ?? "",
       motivo_cancelacion: cov.motivo_cancelacion ?? "",
       motivo_retiro: cov.motivo_retiro ?? "",
+      fue_renovado: !!cov.fue_renovado,
       cobertura_definida: cov.cobertura_definida ?? "",
       // Campo para filtrar coberturas inactivas
       // Si viene del backend, usarlo; si no, asumir true (activo por defecto)
@@ -1155,6 +1156,7 @@ const mapMemberFromAppendResponse = (res) => {
     estado_cobertura: cov.estado_cobertura || "Sí",
     activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
     vigente: cov.vigente !== undefined && cov.vigente !== null ? cov.vigente : true,
+    fue_renovado: !!cov.fue_renovado,
     whatsapp: !!cli.whatsapp,
     telegram: !!cli.telegram,
     texto_sms: !!cli.texto_sms,
