@@ -14,10 +14,14 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   fechaRetiro,
   fechaCancelacion,
   fechaActivacion,   // 👈 NUEVO
+  motivoCancelacion,
 }) {
   const normalizedStatus = String(status || "").toLowerCase();
   const hasRetiro = !!fechaRetiro;
   const hasCancel = !!fechaCancelacion;
+  const motivoNorm = String(motivoCancelacion ?? "").trim().toLowerCase();
+  const esRenovacion =
+    motivoNorm === "renovación" || motivoNorm === "renovacion";
 
   const shortDate = (d) => {
     if (!d) return "";
@@ -30,7 +34,10 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   let color = colorProp;
 
   if (!color) {
-    if (hasRetiro) {
+    if (hasRetiro && esRenovacion) {
+      // RENOVADO (cierre por renovación anual)
+      color = "#0dcaf0"; // info / renovación
+    } else if (hasRetiro) {
       // RETIRADO
       color = "#6c757d"; // gris
     } else if (hasCancel && !hasRetiro) {
@@ -63,7 +70,9 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   /* ================== ETIQUETA ================== */
   let label = "";
 
-  if (hasRetiro) {
+  if (hasRetiro && esRenovacion) {
+    label = "Renovado";
+  } else if (hasRetiro) {
     // Prioridad 1: Si tiene fecha de retiro → Retirado
     label = "Retirado";
   } else if (hasCancel && !hasRetiro) {

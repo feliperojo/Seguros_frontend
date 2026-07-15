@@ -1530,6 +1530,7 @@ const activeNormalized = useMemo(
   fechaRetiro={m.fecha_retiro}
   fechaCancelacion={m.fecha_cancelacion}
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
+  motivoCancelacion={m.motivo_cancelacion}
   size={50}
 />
 

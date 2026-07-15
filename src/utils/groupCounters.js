@@ -9,16 +9,37 @@ const isEstadoSi = (estado) => {
 const hasRetiro = (fechaRetiro) =>
   fechaRetiro !== null && fechaRetiro !== undefined && fechaRetiro !== "";
 
+/** Cierre por renovación anual (no es retiro real). */
+const esRenovacion = (motivoCancelacion) => {
+  const motivo = String(motivoCancelacion ?? "").trim().toLowerCase();
+  return motivo === "renovación" || motivo === "renovacion";
+};
+
+/** Retiro real (excluye de conteos). Renovación anual no cuenta como retiro. */
+const esRetiroReal = (fechaRetiro, motivoCancelacion) => {
+  if (esRenovacion(motivoCancelacion)) return false;
+  return hasRetiro(fechaRetiro);
+};
+
 export const isActiveCoverage = (m = {}) => {
   if (m.activo === false) return false;
-  if (hasRetiro(m.fecha_retiro)) return false;
+  if (esRetiroReal(m.fecha_retiro, m.motivo_cancelacion)) return false;
 
   const list = Array.isArray(m.coberturas)
     ? m.coberturas
-    : [{ estado_cobertura: m.estado_cobertura, fecha_retiro: m.fecha_retiro }];
+    : [{
+        estado_cobertura: m.estado_cobertura,
+        fecha_retiro: m.fecha_retiro,
+        motivo_cancelacion: m.motivo_cancelacion,
+      }];
 
   return list.some((c) => {
-    if (hasRetiro(c.fecha_retiro ?? m.fecha_retiro)) return false;
+    const motivo = c.motivo_cancelacion ?? m.motivo_cancelacion;
+    if (esRetiroReal(c.fecha_retiro ?? m.fecha_retiro, motivo)) {
+      return false;
+    }
+    // Renovado: tuvo cobertura ese año (período cerrado) — cuenta aunque estado sea "Cerrada"
+    if (esRenovacion(motivo)) return true;
     return isEstadoSi(c.estado_cobertura ?? m.estado_cobertura);
   });
 };
@@ -35,7 +56,7 @@ export const isInTaxes = (m = {}) => {
 export const countTaxesMembers = (members = []) =>
   members.filter((m) => {
     const isActive = m.activo !== false;
-    const notRetired = !hasRetiro(m.fecha_retiro);
+    const notRetired = !esRetiroReal(m.fecha_retiro, m.motivo_cancelacion);
     const inTaxes = isInTaxes(m);
     return isActive && notRetired && inTaxes;
   }).length;
