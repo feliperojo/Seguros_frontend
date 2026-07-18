@@ -8,6 +8,7 @@ import TomaDeDatos from "../components/fase2/TomaDeDatos";
 import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal";
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import RenovacionCoberturasModal from "../components/GrupoFamiliar/RenovacionCoberturasModal";
+import PreRenovacionModal from "../components/GrupoFamiliar/PreRenovacionModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney, computeAnnual, formatMoney2 } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
@@ -23,7 +24,6 @@ import { buildDeltaCambiosFromPayloads } from "../utils/grupoFamiliarConcurrentS
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
-const VALOR_RENOVAR_ANIO = `renovar-${ANIO_RENOVACION}`;
 
 const formatFechaCorta = (value) => {
   if (!value) return "—";
@@ -719,6 +719,7 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [cierreLoading, setCierreLoading] = useState(false);
   const [cierreError, setCierreError] = useState("");
   const [showRenovacionModal, setShowRenovacionModal] = useState(false);
+  const [showPreRenovacionModal, setShowPreRenovacionModal] = useState(false);
   const esAnioPasado = periodoRelativo === "pasado";
 
   const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
@@ -1029,11 +1030,6 @@ console.log("Ingreso Familiar:", total);
   }, [id]);
 
   const handleAnioConsultaChange = (year) => {
-    if (String(year) === VALOR_RENOVAR_ANIO) {
-      setShowRenovacionModal(true);
-      return;
-    }
-
     const next = Number(year);
     const params = new URLSearchParams(searchParams);
     if (!Number.isFinite(next) || next === ANIO_ACTUAL) {
@@ -1046,6 +1042,12 @@ console.log("Ingreso Familiar:", total);
 
   const handleAfterRenovacionConfirm = async () => {
     setShowRenovacionModal(false);
+    await refreshAniosDisponibles();
+    await reload();
+  };
+
+  const handleAfterPreRenovacionConsolidar = async () => {
+    setShowPreRenovacionModal(false);
     await refreshAniosDisponibles();
     await reload();
   };
@@ -1691,10 +1693,28 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                     {year === ANIO_ACTUAL ? " (actual)" : ""}
                   </option>
                 ))}
-                <option value={VALOR_RENOVAR_ANIO}>
-                  {ANIO_RENOVACION} — Renovar
-                </option>
               </Form.Select>
+            </div>
+
+            <div className="d-flex align-items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-primary btn-sm"
+                onClick={() => setShowPreRenovacionModal(true)}
+              >
+                <i className="fas fa-file-signature me-1" aria-hidden="true" />
+                Pre-renovación {ANIO_RENOVACION}
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-link btn-sm text-danger text-decoration-none"
+                onClick={() => setShowRenovacionModal(true)}
+                title="Ejecuta la renovación real de inmediato, sin pasar por un borrador. No se puede deshacer."
+              >
+                <i className="fas fa-triangle-exclamation me-1" aria-hidden="true" />
+                Renovar ahora (acción inmediata)
+              </button>
             </div>
           </div>
         )}
@@ -2123,6 +2143,14 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           onHide={() => setShowRenovacionModal(false)}
           grupoFamiliarId={id}
           onAfterConfirm={handleAfterRenovacionConfirm}
+        />
+
+        <PreRenovacionModal
+          show={showPreRenovacionModal}
+          onHide={() => setShowPreRenovacionModal(false)}
+          grupoFamiliarId={id}
+          anioDestino={ANIO_RENOVACION}
+          onAfterConsolidar={handleAfterPreRenovacionConsolidar}
         />
         </div>
       </div>

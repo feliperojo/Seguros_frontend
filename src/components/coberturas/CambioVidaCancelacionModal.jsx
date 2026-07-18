@@ -265,12 +265,25 @@ const CambioVidaCancelacionModal = ({
     });
   };
 
+  const normalizarCoberturaDefinidaRetiro = (valor) =>
+    OPCIONES_COBERTURA_RETIRO.includes(valor)
+      ? valor
+      : COBERTURA_DEFINIDA.RETIRADO;
+
   const obtenerDatosFinalesCobertura = (id) => {
     const datos = renovacionCoberturas.get(id);
     const cobertura = coberturas.find((c) => c.id === id);
     if (!datos || !cobertura) return null;
 
     if (!usarDatosGlobales) {
+      // Si el flujo es retiro y quedó "Cancelado" (al cambiar la acción), usar Retirado.
+      if (esFlujoSoloRetiro(cobertura, datos)) {
+        return {
+          ...datos,
+          cobertura,
+          cobertura_definida: normalizarCoberturaDefinidaRetiro(datos.cobertura_definida),
+        };
+      }
       return { ...datos, cobertura };
     }
 
@@ -281,7 +294,9 @@ const CambioVidaCancelacionModal = ({
       cobertura_definida:
         datos.renovar === true
           ? COBERTURA_DEFINIDA.CANCELADO
-          : coberturaDefinidaGlobal || datos.cobertura_definida,
+          : normalizarCoberturaDefinidaRetiro(
+              coberturaDefinidaGlobal || datos.cobertura_definida
+            ),
       fecha_retiro: requiereFechaRetiro(cobertura, datos)
         ? fechaRetiroGlobal || datos.fecha_retiro
         : datos.fecha_retiro,
@@ -402,13 +417,19 @@ const CambioVidaCancelacionModal = ({
     setRenovacionCoberturas((prev) => {
       const nuevo = new Map(prev);
       const datosActuales = nuevo.get(coberturaId) || crearDatosInicialesCobertura(cobertura);
+      // Al pasar a retiro, no conservar "Cancelado": el select solo admite Retirado/Terminado.
+      const coberturaDefinidaRetiro = OPCIONES_COBERTURA_RETIRO.includes(
+        datosActuales.cobertura_definida
+      )
+        ? datosActuales.cobertura_definida
+        : COBERTURA_DEFINIDA.RETIRADO;
       nuevo.set(coberturaId, {
         ...datosActuales,
         renovar: Boolean(renovar),
         fecha_retiro: renovar ? "" : datosActuales.fecha_retiro || "",
         cobertura_definida: renovar
           ? COBERTURA_DEFINIDA.CANCELADO
-          : datosActuales.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO,
+          : coberturaDefinidaRetiro,
       });
       return nuevo;
     });
@@ -420,16 +441,8 @@ const CambioVidaCancelacionModal = ({
       console.warn("handleFechaRetiroChange: coberturaId es undefined o null");
       return;
     }
-    
-    setRenovacionCoberturas((prev) => {
-      const nuevo = new Map(prev);
-      const datosActuales = nuevo.get(coberturaId) || { renovar: true };
-      nuevo.set(coberturaId, {
-        renovar: datosActuales.renovar,
-        fecha_retiro: fechaRetiro || "",
-      });
-      return nuevo;
-    });
+
+    handleCampoIndividualChange(coberturaId, "fecha_retiro", fechaRetiro || "");
   };
 
   // Seleccionar / deseleccionar un bloque: con póliza o solo retiro
@@ -1429,7 +1442,13 @@ const CambioVidaCancelacionModal = ({
                                       </Form.Label>
                                       <Form.Select
                                         size="sm"
-                                        value={datosRenovacion.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO}
+                                        value={
+                                          OPCIONES_COBERTURA_RETIRO.includes(
+                                            datosRenovacion.cobertura_definida
+                                          )
+                                            ? datosRenovacion.cobertura_definida
+                                            : COBERTURA_DEFINIDA.RETIRADO
+                                        }
                                         onChange={(e) =>
                                           handleCampoIndividualChange(
                                             coberturaId,
