@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Container, Card, Table, Badge, Button,
   Form, InputGroup, Dropdown, Modal
@@ -9,7 +9,7 @@ import {
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import apiRequest from "../services/api";
 import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
@@ -21,9 +21,12 @@ import { Helmet } from "react-helmet-async";
 
 
 const ITEMS_PER_PAGE = 50;
+const ANIO_ACTUAL = new Date().getFullYear();
+const ANIOS_BASE = [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3];
 
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
 
   // Estados
@@ -55,6 +58,73 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const location = useLocation();
 
+  // Año actual + 3 anteriores como base; se enriquecen con años ya creados en BD (incluye futuros).
+  const [aniosDisponibles, setAniosDisponibles] = useState(ANIOS_BASE);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await apiRequest(
+          "grupo_familiar/anios-disponibles-globales",
+          "GET"
+        );
+        const fromApi = (Array.isArray(response?.data) ? response.data : [])
+          .map((y) => Number(y))
+          .filter((y) => Number.isFinite(y) && y > 1900 && y < 2100);
+        if (cancelled) return;
+        const merged = Array.from(new Set([...fromApi, ...ANIOS_BASE])).sort(
+          (a, b) => b - a
+        );
+        setAniosDisponibles(merged);
+      } catch (err) {
+        console.error("Error al cargar años disponibles del listado:", err);
+        // Mantiene ANIOS_BASE — no rompe el listado.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const anioSeleccionado = useMemo(() => {
+    const raw = Number(searchParams.get("anio"));
+    if (
+      Number.isFinite(raw) &&
+      (aniosDisponibles.includes(raw) ||
+        ANIOS_BASE.includes(raw) ||
+        raw > ANIO_ACTUAL)
+    ) {
+      return raw;
+    }
+    return ANIO_ACTUAL;
+  }, [searchParams, aniosDisponibles]);
+
+  const buildDetallePath = (grupoId) => {
+    if (anioSeleccionado === ANIO_ACTUAL) {
+      return `/grupo_familiar/${grupoId}`;
+    }
+    return `/grupo_familiar/${grupoId}?anio=${anioSeleccionado}`;
+  };
+
+  const handleAnioChange = (year) => {
+    const next = Number(year);
+    const params = new URLSearchParams(searchParams);
+    if (next === ANIO_ACTUAL) {
+      params.delete("anio");
+    } else {
+      params.set("anio", String(next));
+    }
+    setSearchParams(params, { replace: true });
+    setCurrentPage(1);
+  };
+
+  const etiquetaAnio = (year) => {
+    if (year === ANIO_ACTUAL) return " (actual)";
+    if (year > ANIO_ACTUAL) return " (futuro)";
+    return "";
+  };
+
   // Función para manejar el clic desde el componente de resumen
   const handleEstadoClickFromResumen = (codigoEstado) => {
     // Si se hace clic en "Todos los estados", resetear el filtro
@@ -85,10 +155,10 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Cargar grupos al cambiar filtros, búsqueda o página
+  // Cargar grupos al cambiar filtros, búsqueda, página o año
   useEffect(() => {
     fetchGrupos();
-  }, [selectedStatus, debouncedSearch, currentPage]);
+  }, [selectedStatus, debouncedSearch, currentPage, anioSeleccionado]);
 
   // Volver a la primera página al cambiar búsqueda o filtro de estado
   useEffect(() => {
@@ -132,6 +202,11 @@ useEffect(() => {
 
       if (debouncedSearch.trim()) {
         params.set("search", debouncedSearch.trim());
+      }
+
+      // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
+      if (anioSeleccionado !== ANIO_ACTUAL) {
+        params.set("anio", String(anioSeleccionado));
       }
 
       const response = await apiRequest(
@@ -328,6 +403,22 @@ useEffect(() => {
                 <option value="descartado">Descartado</option>
               </Form.Select>
             </div>
+            <div style={{ minWidth: "140px" }}>
+              <Form.Select
+                size="sm"
+                style={{ minWidth: "7rem", height: "100%" }}
+                value={anioSeleccionado}
+                onChange={(e) => handleAnioChange(e.target.value)}
+                aria-label="Año del plan"
+              >
+                {aniosDisponibles.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                    {etiquetaAnio(year)}
+                  </option>
+                ))}
+              </Form.Select>
+            </div>
             <div>
               <Button variant="outline-secondary">
                 <FaFilter className="me-2" />
@@ -380,7 +471,7 @@ useEffect(() => {
                   <td>
                           {grupo.id ? (
                             <Link
-                              to={`/grupo_familiar/${grupo.id}`}
+                              to={buildDetallePath(grupo.id)}
                               className="text-decoration-none"
                               title="Ver detalle del grupo"
                             >
@@ -411,7 +502,7 @@ useEffect(() => {
                                   {grupo.id ? (
                                     <Badge
                                       as={Link}
-                                      to={`/grupo_familiar/${grupo.id}`}     // mismo destino que el ID
+                                      to={buildDetallePath(grupo.id)}
                                       bg={getGrupoEstado(grupo).variant}
                                       pill
                                       className="text-decoration-none"

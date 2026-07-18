@@ -50,6 +50,20 @@ const formatPrecio = (value) => {
   }).format(num);
 };
 
+const ANIO_ACTUAL = new Date().getFullYear();
+
+/** Año del registro según fecha de activación (fallback: expiración / created_at). */
+const getAnioHistorial = (item) => {
+  const raw =
+    item?.fecha_activacion ||
+    item?.fecha_expiracion ||
+    item?.created_at ||
+    "";
+  const s = String(raw).slice(0, 10);
+  const year = Number(s.slice(0, 4));
+  return Number.isFinite(year) && year > 1900 ? year : null;
+};
+
 const HistorialPlanCoberturaModal = ({
   show,
   onClose,
@@ -61,6 +75,7 @@ const HistorialPlanCoberturaModal = ({
 }) => {
   const [selectedCoberturaId, setSelectedCoberturaId] = useState(null);
   const [historial, setHistorial] = useState([]);
+  const [anioSeleccionado, setAnioSeleccionado] = useState(ANIO_ACTUAL);
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
@@ -83,6 +98,20 @@ const HistorialPlanCoberturaModal = ({
     () => members.find((m) => m.coberturaId === selectedCoberturaId) ?? null,
     [members, selectedCoberturaId]
   );
+
+  const aniosDisponibles = useMemo(() => {
+    const years = new Set();
+    historial.forEach((item) => {
+      const year = getAnioHistorial(item);
+      if (year != null) years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [historial]);
+
+  const historialFiltrado = useMemo(() => {
+    if (!anioSeleccionado) return historial;
+    return historial.filter((item) => getAnioHistorial(item) === anioSeleccionado);
+  }, [historial, anioSeleccionado]);
 
   const modalTitle = useMemo(() => {
     if (allowBulkArchive && members.length > 1) {
@@ -110,6 +139,7 @@ const HistorialPlanCoberturaModal = ({
   useEffect(() => {
     if (!show) {
       setHistorial([]);
+      setAnioSeleccionado(ANIO_ACTUAL);
       setError("");
       setSuccess("");
       setShowArchivarForm(false);
@@ -126,6 +156,7 @@ const HistorialPlanCoberturaModal = ({
       null;
 
     setSelectedCoberturaId(defaultId);
+    setAnioSeleccionado(ANIO_ACTUAL);
     setShowArchivarForm(false);
     setShowCrearForm(false);
     setManualForm(EMPTY_MANUAL_FORM);
@@ -150,6 +181,21 @@ const HistorialPlanCoberturaModal = ({
       cargarHistorial(selectedCoberturaId);
     }
   }, [show, selectedCoberturaId, cargarHistorial]);
+
+  // Al cargar historial: año actual si hay datos; si no, el más reciente disponible.
+  useEffect(() => {
+    if (aniosDisponibles.length === 0) {
+      setAnioSeleccionado(ANIO_ACTUAL);
+      return;
+    }
+    if (aniosDisponibles.includes(ANIO_ACTUAL)) {
+      setAnioSeleccionado(ANIO_ACTUAL);
+      return;
+    }
+    setAnioSeleccionado((prev) =>
+      aniosDisponibles.includes(prev) ? prev : aniosDisponibles[0]
+    );
+  }, [aniosDisponibles]);
 
   const toggleMemberSelection = (coberturaId) => {
     setSelectedForArchive((prev) => {
@@ -580,42 +626,79 @@ const HistorialPlanCoberturaModal = ({
               : "No hay planes archivados para esta cobertura."}
           </p>
         ) : (
-          <div className="table-responsive">
-            <Table striped bordered hover size="sm" className="mb-0">
-              <thead>
-                <tr>
-                  <th>Compañía</th>
-                  <th>Plan</th>
-                  <th>Metal</th>
-                  <th>Red</th>
-                  <th>Número ID</th>
-                  <th>Código ID</th>
-                  <th>Agente</th>
-                  <th>Precio ($)</th>
-                  <th>Activación</th>
-                  <th>Expiración</th>
-                  <th>Nota</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historial.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.compania?.nombre || "—"}</td>
-                    <td>{item.plan || "—"}</td>
-                    <td>{item.metal || "—"}</td>
-                    <td>{item.red || "—"}</td>
-                    <td>{item.policy_number || item.codigo_poliza || "—"}</td>
-                    <td>{item.codigo_poliza || "—"}</td>
-                    <td>{item.agente || "—"}</td>
-                    <td>{formatPrecio(item.precio)}</td>
-                    <td>{formatDate(item.fecha_activacion)}</td>
-                    <td>{formatDate(item.fecha_expiracion)}</td>
-                    <td>{item.nota || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          </div>
+          <>
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+              <div className="d-flex align-items-center gap-2">
+                <Form.Label className="small mb-0 text-nowrap">Año</Form.Label>
+                <Form.Select
+                  size="sm"
+                  style={{ width: "auto", minWidth: "7rem" }}
+                  value={anioSeleccionado}
+                  onChange={(e) => setAnioSeleccionado(Number(e.target.value))}
+                >
+                  {aniosDisponibles.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                      {year === ANIO_ACTUAL ? " (actual)" : ""}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <span className="small text-muted">
+                {historialFiltrado.length} registro
+                {historialFiltrado.length !== 1 ? "s" : ""} en {anioSeleccionado}
+                {aniosDisponibles.length > 1
+                  ? ` · ${aniosDisponibles.length} años disponibles`
+                  : ""}
+              </span>
+            </div>
+
+            {historialFiltrado.length === 0 ? (
+              <p className="text-muted mb-0">
+                No hay historial de plan para el año {anioSeleccionado}.
+                {aniosDisponibles.length > 0
+                  ? " Seleccione otro año para ver registros anteriores."
+                  : ""}
+              </p>
+            ) : (
+              <div className="table-responsive">
+                <Table striped bordered hover size="sm" className="mb-0">
+                  <thead>
+                    <tr>
+                      <th>Compañía</th>
+                      <th>Plan</th>
+                      <th>Metal</th>
+                      <th>Red</th>
+                      <th>Número ID</th>
+                      <th>Código ID</th>
+                      <th>Agente</th>
+                      <th>Precio ($)</th>
+                      <th>Activación</th>
+                      <th>Expiración</th>
+                      <th>Nota</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historialFiltrado.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.compania?.nombre || "—"}</td>
+                        <td>{item.plan || "—"}</td>
+                        <td>{item.metal || "—"}</td>
+                        <td>{item.red || "—"}</td>
+                        <td>{item.policy_number || item.codigo_poliza || "—"}</td>
+                        <td>{item.codigo_poliza || "—"}</td>
+                        <td>{item.agente || "—"}</td>
+                        <td>{formatPrecio(item.precio)}</td>
+                        <td>{formatDate(item.fecha_activacion)}</td>
+                        <td>{formatDate(item.fecha_expiracion)}</td>
+                        <td>{item.nota || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+            )}
+          </>
         )}
       </Modal.Body>
 

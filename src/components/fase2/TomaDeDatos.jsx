@@ -57,7 +57,9 @@ import {
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
   isFechaActivacionPendiente,
+  soloPermiteCopiarDireccion,
 } from "../../utils/estadoPoliza";
+import { buildDireccion } from "../../utils/direccion";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
@@ -197,13 +199,6 @@ const calcAge = (iso) => {
 };
 
 const getC = (m) => (m?.cliente ? m.cliente : m);
-
-const buildDireccion = (src) =>
-  [src.calle, src.apto, src.ciudad, src.condado, src.estado, src.codigo_postal]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/\s+/g, " ")
-    .trim();
 
 const yaEstaEnElGrupo = (clienteId, members) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
@@ -1209,10 +1204,14 @@ const activeNormalized = useMemo(
         if (!targetIds.includes(mid)) return m;
 
         let next = { ...m };
+        const soloDireccion = soloPermiteCopiarDireccion(m.estado_cobertura);
 
-        fieldKeys.forEach(k => {
-          if (k in src) next[k] = src[k];
-        });
+        // No / Medicare / Medicaid: no reciben datos de cobertura, solo dirección.
+        if (!soloDireccion) {
+          fieldKeys.forEach(k => {
+            if (k in src) next[k] = src[k];
+          });
+        }
 
         if (copyAddress) {
           const srcCli = src.cliente || {};
@@ -1525,6 +1524,7 @@ const activeNormalized = useMemo(
   fechaRetiro={m.fecha_retiro}
   fechaCancelacion={m.fecha_cancelacion}
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
+  fueRenovado={!!m.fue_renovado}
   size={50}
 />
 

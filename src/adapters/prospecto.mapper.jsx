@@ -4,6 +4,7 @@ import { splitFullName, formatDisplayName } from "../utils/names";
 import {
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
+  vigenteDesdeEstadoCobertura,
 } from "../utils/estadoPoliza";
 
 export const buildPersonaContacto = (nombre = "", apellidos = "") =>
@@ -414,16 +415,16 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     payload.activo = true;
   }
   
-  // vigente: SIEMPRE incluir (valores definidos por CambioVidaCancelacionModal)
-  // Si está definido, usar ese valor; si no, calcular basado en fecha_cancelacion
-  if (m.vigente !== undefined && m.vigente !== null) {
-    // Normalizar a booleano: acepta true, "true", 1, false, "false", 0
+  // vigente: coherente con estado_cobertura (Sí→true, No/Medicare/Medicaid→false)
+  const vigenteDesdeEstado = vigenteDesdeEstadoCobertura(payload.estado_cobertura);
+  if (vigenteDesdeEstado !== null) {
+    payload.vigente = vigenteDesdeEstado;
+  } else if (m.vigente !== undefined && m.vigente !== null) {
     const vigenteValue = typeof m.vigente === 'boolean' 
       ? m.vigente 
       : (m.vigente === true || m.vigente === "true" || m.vigente === 1 || m.vigente === "1");
     payload.vigente = vigenteValue;
   } else {
-    // Valor por defecto: false si hay fecha_cancelacion, true si no
     const tieneFechaCancelacion = m.fecha_cancelacion || m?.cobertura?.fecha_cancelacion;
     payload.vigente = !tieneFechaCancelacion;
   }

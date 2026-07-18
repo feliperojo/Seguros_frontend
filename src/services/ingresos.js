@@ -109,19 +109,34 @@ export const PERIOD_FACTOR = {
     return Number.isFinite(annual) ? Math.round(annual * 100) / 100 : 0;
   };
   
-  // ¿Retirada para ingreso familiar? → solo si tiene fecha_retiro
+  // ¿Retirada para ingreso familiar?
+  // Excepción: renovación pura (fue_renovado y sin fecha_cancelacion).
   const isCoberturaRetirada = (c = {}, fallback = {}) => {
+    const fueRenovado = Boolean(c?.fue_renovado ?? fallback?.fue_renovado);
+    const fechaCancel = c?.fecha_cancelacion ?? fallback?.fecha_cancelacion;
+    const hasCancel =
+      fechaCancel !== null &&
+      fechaCancel !== undefined &&
+      String(fechaCancel).trim() !== "" &&
+      String(fechaCancel).trim().toLowerCase() !== "null";
+
+    if (fueRenovado && !hasCancel) return false;
+
     const fr = c?.fecha_retiro ?? fallback?.fecha_retiro;
     if (fr === null || fr === undefined) return false;
     const s = String(fr).trim();
     return s !== "" && s.toLowerCase() !== "null" && s.toLowerCase() !== "undefined";
   };
 
-  // Contabilizable = al menos una cobertura sin fecha de retiro
+  // Contabilizable = al menos una cobertura sin retiro real
   export const isMemberContabilizable = (m = {}) => {
     const lista = Array.isArray(m.coberturas)
       ? m.coberturas
-      : [{ fecha_retiro: m.fecha_retiro }];
+      : [{
+          fecha_retiro: m.fecha_retiro,
+          fecha_cancelacion: m.fecha_cancelacion,
+          fue_renovado: m.fue_renovado,
+        }];
 
     return lista.some((c) => !isCoberturaRetirada(c, m));
   };

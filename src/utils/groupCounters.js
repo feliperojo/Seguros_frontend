@@ -6,19 +6,44 @@ const isEstadoSi = (estado) => {
   return lower === "sí" || lower === "si" || lower === "yes";
 };
 
-const hasRetiro = (fechaRetiro) =>
-  fechaRetiro !== null && fechaRetiro !== undefined && fechaRetiro !== "";
+const hasFecha = (fecha) =>
+  fecha !== null && fecha !== undefined && fecha !== "";
+
+/**
+ * Renovación pura: incluida en lote de renovación y sin cancelación real.
+ * Esos miembros siguen contando en Personas en Cobertura / Taxes.
+ */
+const esRenovacionPura = (c = {}, fallback = {}) => {
+  const fueRenovado = Boolean(c?.fue_renovado ?? fallback?.fue_renovado);
+  if (!fueRenovado) return false;
+  return !hasFecha(c?.fecha_cancelacion ?? fallback?.fecha_cancelacion);
+};
+
+/** Retiro real (excluye de conteos). Renovación pura no cuenta como retiro. */
+const esRetiroReal = (fechaRetiro, c = {}, fallback = {}) => {
+  if (esRenovacionPura(c, fallback)) return false;
+  return hasFecha(fechaRetiro);
+};
 
 export const isActiveCoverage = (m = {}) => {
   if (m.activo === false) return false;
-  if (hasRetiro(m.fecha_retiro)) return false;
+  if (esRetiroReal(m.fecha_retiro, m, m)) return false;
 
   const list = Array.isArray(m.coberturas)
     ? m.coberturas
-    : [{ estado_cobertura: m.estado_cobertura, fecha_retiro: m.fecha_retiro }];
+    : [{
+        estado_cobertura: m.estado_cobertura,
+        fecha_retiro: m.fecha_retiro,
+        fecha_cancelacion: m.fecha_cancelacion,
+        fue_renovado: m.fue_renovado,
+      }];
 
   return list.some((c) => {
-    if (hasRetiro(c.fecha_retiro ?? m.fecha_retiro)) return false;
+    if (esRetiroReal(c.fecha_retiro ?? m.fecha_retiro, c, m)) {
+      return false;
+    }
+    // Renovación pura: tuvo cobertura activa ese año — cuenta aunque el período esté cerrado
+    if (esRenovacionPura(c, m)) return true;
     return isEstadoSi(c.estado_cobertura ?? m.estado_cobertura);
   });
 };
@@ -35,7 +60,7 @@ export const isInTaxes = (m = {}) => {
 export const countTaxesMembers = (members = []) =>
   members.filter((m) => {
     const isActive = m.activo !== false;
-    const notRetired = !hasRetiro(m.fecha_retiro);
+    const notRetired = !esRetiroReal(m.fecha_retiro, m, m);
     const inTaxes = isInTaxes(m);
     return isActive && notRetired && inTaxes;
   }).length;

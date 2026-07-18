@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { soloPermiteCopiarDireccion } from "../../utils/estadoPoliza";
 
 /** Campos disponibles para copiar (área de cobertura/raíz) */
 const FIELD_DEFS = [
@@ -32,6 +33,11 @@ const fullName = (m) =>
   m?.cliente?.nombre_completo ||
   "Sin nombre";
 
+const estadoLabel = (m) => {
+  const raw = m?.estado_cobertura != null ? String(m.estado_cobertura).trim() : "";
+  return raw || "Sin estado";
+};
+
 export default function CopiarDatosModal({
   open,
   onClose,
@@ -47,6 +53,16 @@ export default function CopiarDatosModal({
 
   const [targetMode, setTargetMode] = useState("all"); // 'all' | 'some'
   const [selectedTargets, setSelectedTargets] = useState(() => new Set());
+
+  const targetsRestringidos = useMemo(
+    () =>
+      candidates.filter((m) => {
+        const id = m.id ?? m.cliente_id;
+        if (sourceId != null && id === sourceId) return false;
+        return soloPermiteCopiarDireccion(m.estado_cobertura);
+      }),
+    [candidates, sourceId]
+  );
 
   // Bloquear scroll y aplicar clase bootstrap mientras esté abierto
   useEffect(() => {
@@ -207,6 +223,14 @@ export default function CopiarDatosModal({
                     Dirección (residencia, calle, APT, ciudad, estado, código postal, condado y correspondencia)
                   </label>
                 </div>
+
+                {targetsRestringidos.length > 0 && (
+                  <div className="alert alert-warning small mt-3 mb-0 py-2">
+                    Miembros con cobertura <strong>No</strong>, <strong>Medicare</strong> o{" "}
+                    <strong>Medicaid</strong> solo reciben <strong>dirección</strong>; los
+                    datos de cobertura no se copian en ellos.
+                  </div>
+                )}
               </div>
 
               {/* Destino */}
@@ -246,6 +270,7 @@ export default function CopiarDatosModal({
                     {candidates.map((m) => {
                       const id = m.id ?? m.cliente_id;
                       if (id === sourceId) return null;
+                      const restringido = soloPermiteCopiarDireccion(m.estado_cobertura);
                       return (
                         <div className="form-check" key={id}>
                           <input
@@ -257,6 +282,11 @@ export default function CopiarDatosModal({
                           />
                           <label className="form-check-label" htmlFor={`tgt-${id}`}>
                             {fullName(m)} {m?.tipo ? `— ${m.tipo}` : ""}
+                            {restringido ? (
+                              <span className="text-warning small ms-1">
+                                ({estadoLabel(m)} · solo dirección)
+                              </span>
+                            ) : null}
                           </label>
                         </div>
                       );

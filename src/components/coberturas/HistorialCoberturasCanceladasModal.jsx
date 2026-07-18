@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Table, Alert, Spinner, Badge, Form, Row, Col, Accordion, Card } from "react-bootstrap";
 import { FaChevronDown, FaChevronRight } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
@@ -25,6 +26,7 @@ const HistorialCoberturasCanceladasModal = ({
   onClose,
   grupoFamiliarId,
 }) => {
+  const navigate = useNavigate();
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -860,6 +862,7 @@ const HistorialCoberturasCanceladasModal = ({
                   <th>Nota Canc.</th>
                   <th>Nota Ret.</th>
                   <th>Acción Origen</th>
+                  <th>Navegación</th>
                 </tr>
               </thead>
               <tbody>
@@ -868,6 +871,9 @@ const HistorialCoberturasCanceladasModal = ({
                   const coberturaId = item?.id || `cobertura-${index}`;
                   const isExpanded = filasExpandidas.has(coberturaId);
                   const clienteInfo = item?.cliente_info;
+                  const anioItem = item?.ano_cobertura;
+                  const grupoIdNavegar =
+                    item?.grupo_familiar_id || grupoFamiliarId;
                   
                   // Extraer nombre del cliente desde cliente_info (ya viene como objeto)
                   let nombreCliente = "-";
@@ -944,6 +950,25 @@ const HistorialCoberturasCanceladasModal = ({
                           <Badge bg="secondary">
                             {item?.accion_origen || "N/A"}
                           </Badge>
+                        </td>
+                        <td onClick={(e) => e.stopPropagation()}>
+                          {grupoIdNavegar && anioItem ? (
+                            <Button
+                              variant="link"
+                              size="sm"
+                              className="p-0 text-decoration-none"
+                              onClick={() => {
+                                onClose?.();
+                                navigate(
+                                  `/grupo_familiar/${grupoIdNavegar}?anio=${anioItem}`
+                                );
+                              }}
+                            >
+                              Ver grupo en {anioItem}
+                            </Button>
+                          ) : (
+                            <span className="text-muted small">—</span>
+                          )}
                         </td>
                       </tr>
                       {/* Fila expandible con información completa */}

@@ -38,15 +38,32 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   },
 
   // Incluye meta (ej. meta.edicion para alerta de presencia)
-  fetchFullGrupo: async (id, { onlyActive = false } = {}) => {
-    const url = onlyActive
-      ? `${BASE_GF}/grupos-familiares-full/${id}?onlyActive=true`
+  fetchFullGrupo: async (id, { onlyActive = false, anio = null } = {}) => {
+    const params = new URLSearchParams();
+    if (onlyActive) params.set("onlyActive", "true");
+    const anioActual = new Date().getFullYear();
+    if (anio != null && Number(anio) !== anioActual) {
+      params.set("anio", String(anio));
+    }
+    const qs = params.toString();
+    const url = qs
+      ? `${BASE_GF}/grupos-familiares-full/${id}?${qs}`
       : `${BASE_GF}/grupos-familiares-full/${id}`;
     const response = await apiRequest(url, "GET");
     return {
       data: response?.data ?? response,
       meta: response?.meta ?? {},
     };
+  },
+
+  getAniosDisponibles: async (id) => {
+    const res = await apiRequest(`${BASE_GF}/${id}/anios-disponibles`, "GET");
+    return Array.isArray(res?.data) ? res.data : [];
+  },
+
+  getCierreAnio: async (id, anio) => {
+    const res = await apiRequest(`${BASE_GF}/${id}/cierre/${anio}`, "GET");
+    return res?.data ?? res;
   },
 
   // (Mantengo esta variante para compatibilidad; usa la misma ruta)

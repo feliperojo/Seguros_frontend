@@ -185,7 +185,8 @@ const RenovacionCoberturasModal = ({
         items: itemsFromUI.map((it) => ({
           renovar: it.renovar,
           cobertura_id: it.cobertura_id,
-          // ya no mandamos cambios de plan/compañía/precio desde el UI
+          fecha_retiro: it.fecha_retiro || null,
+          motivo_retiro: it.motivo_retiro || null,
           borrador: it.borrador || {},
         })),
       };
@@ -301,18 +302,16 @@ const RenovacionCoberturasModal = ({
                         del año <strong>{anioOrigen}</strong>.
                       </li>
                       <li>
-                        Se crearán los registros de coberturas para el año{" "}
-                        <strong>{anioDestino}</strong> basados en la información
-                        actual.
+                        Se actualizará la póliza de cada miembro renovado con
+                        los datos del año <strong>{anioDestino}</strong> (nuevo
+                        número de póliza), conservando su historial de pagos y
+                        documentos. El período del año {anioOrigen} quedará
+                        cerrado en el histórico.
                       </li>
                       <li>
-                        Después de este proceso, podrás ingresar al grupo
-                        familiar y
-                        <strong>
-                          {" "}
-                          modificar directamente las pólizas del nuevo año
-                        </strong>{" "}
-                        (plan, compañía, precio, etc.) desde las cards.
+                        En el siguiente paso completarás los datos de cada
+                        póliza del año destino (código de póliza, compañía, plan,
+                        precio, etc.) antes de confirmar.
                       </li>
                     </ul>
                   </div>
