@@ -117,7 +117,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   useEffect(() => {
     if (location.pathname.toLowerCase().includes('/clientes')) {
       setExpandedMenu('clientes');
-    } else if (location.pathname.includes('/Grupofamiliar')) {
+    } else if (location.pathname.includes('/Grupofamiliar') || location.pathname.startsWith('/admin/renovaciones')) {
       setExpandedMenu('grupos');
     } else if (location.pathname.toLowerCase().includes('/informes') || location.pathname.toLowerCase().includes('/auditorias')) {
       setExpandedMenu('informes');
@@ -221,7 +221,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Grupo Familiar - Con submenú */}
         <div className="nav-item">
           <div
-            className={`nav-link ${location.pathname.includes('/Grupofamiliar') ? 'active' : ''}`}
+            className={`nav-link ${location.pathname.includes('/Grupofamiliar') || location.pathname.startsWith('/admin/renovaciones') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('grupos', e)}
           >
             <FaProjectDiagram />
@@ -256,6 +256,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link> */}
               <Link to="/Grupofamiliar/RequerimientosAdmin" className={`submenu-link ${isActive('/Grupofamiliar/proximos-vencimientos') ? 'active' : ''}`}>
                 <FaFile /> Documentos Solicitados
+              </Link>
+              <Link to="/admin/renovaciones" className={`submenu-link ${isActive('/admin/renovaciones') ? 'active' : ''}`}>
+                <FaSyncAlt /> Renovaciones
               </Link>
             </div>
           )}
