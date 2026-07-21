@@ -58,6 +58,8 @@ import {
   clearedCoverageFieldsForMedicareMedicaid,
   isFechaActivacionPendiente,
   soloPermiteCopiarDireccion,
+  CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
+  esElegibleParaCopiarEntreMiembros,
 } from "../../utils/estadoPoliza";
 import { buildDireccion } from "../../utils/direccion";
 
@@ -873,6 +875,12 @@ const sortedNormalized = useMemo(
   [sortedWithIndex]
 );
 
+// Candidatos del modal de copiar: activos en grupo (sin retiro ni cancelación)
+const membersElegiblesParaCopiar = useMemo(
+  () => sortedNormalized.filter(esElegibleParaCopiarEntreMiembros),
+  [sortedNormalized]
+);
+
 // Array de miembros activos sin índices (para payerOptions y otras utilidades)
 const activeNormalized = useMemo(
   () => normalized.filter(m => m.activo !== false),
@@ -1196,22 +1204,29 @@ const activeNormalized = useMemo(
 
   const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
     const src = (familyMembers || []).find(m => (m.id ?? m.cliente_id) === sourceId);
-    if (!src) return;
+    if (!src || !esElegibleParaCopiarEntreMiembros(src)) return;
 
     setFamilyMembers(prev =>
       (prev || []).map(m => {
         const mid = m.id ?? m.cliente_id;
         if (!targetIds.includes(mid)) return m;
+        // Retiradas / canceladas no reciben copia aunque vengan en targetIds.
+        if (!esElegibleParaCopiarEntreMiembros(m)) return m;
 
         let next = { ...m };
         const soloDireccion = soloPermiteCopiarDireccion(m.estado_cobertura);
 
-        // No / Medicare / Medicaid: no reciben datos de cobertura, solo dirección.
-        if (!soloDireccion) {
-          fieldKeys.forEach(k => {
-            if (k in src) next[k] = src[k];
-          });
-        }
+        // No / Medicare / Medicaid: solo dirección + elegibilidad; el resto de cobertura no.
+        fieldKeys.forEach(k => {
+          if (!(k in src)) return;
+          if (
+            soloDireccion &&
+            !CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA.includes(k)
+          ) {
+            return;
+          }
+          next[k] = src[k];
+        });
 
         if (copyAddress) {
           const srcCli = src.cliente || {};
@@ -2633,7 +2648,7 @@ const activeNormalized = useMemo(
       <CopiarDatosModal
         open={openCopy}
         onClose={() => setOpenCopy(false)}
-        members={sortedNormalized}
+        members={membersElegiblesParaCopiar}
         onApply={applyCopySelection}
       />
 

@@ -227,8 +227,9 @@ export default function CopiarDatosModal({
                 {targetsRestringidos.length > 0 && (
                   <div className="alert alert-warning small mt-3 mb-0 py-2">
                     Miembros con cobertura <strong>No</strong>, <strong>Medicare</strong> o{" "}
-                    <strong>Medicaid</strong> solo reciben <strong>dirección</strong>; los
-                    datos de cobertura no se copian en ellos.
+                    <strong>Medicaid</strong> solo reciben <strong>dirección</strong> y{" "}
+                    <strong>elegibilidad</strong>; el resto de datos de cobertura no se
+                    copian en ellos.
                   </div>
                 )}
               </div>
@@ -284,7 +285,7 @@ export default function CopiarDatosModal({
                             {fullName(m)} {m?.tipo ? `— ${m.tipo}` : ""}
                             {restringido ? (
                               <span className="text-warning small ms-1">
-                                ({estadoLabel(m)} · solo dirección)
+                                ({estadoLabel(m)} · solo dirección y elegibilidad)
                               </span>
                             ) : null}
                           </label>
