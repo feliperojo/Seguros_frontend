@@ -285,9 +285,11 @@ const hydrateClienteForMember = (cli = {}, m = {}) => {
 const normalizeMember = (m, idx) => {
   if (m?.cliente && typeof m.cliente === "object" && clienteTieneNombreVisible(m.cliente)) {
     const cliente = hydrateClienteForMember(m.cliente, m);
-    const primer = formatDisplayName(cliente.primer_nombre || m.primer_nombre || "");
-    const segundo = formatDisplayName(cliente.segundo_nombre || m.segundo_nombre || "");
-    const apell = formatDisplayName(cliente.apellidos || m.apellidos || "");
+    // toTitle (no trim) para poder escribir el espacio del segundo apellido mientras se digita.
+    // formatDisplayName hace .trim() y borraba ese espacio en cada re-normalización.
+    const primer = toTitle(cliente.primer_nombre || m.primer_nombre || "");
+    const segundo = toTitle(cliente.segundo_nombre || m.segundo_nombre || "");
+    const apell = toTitle(cliente.apellidos || m.apellidos || "");
     const nombreCompleto = formatDisplayName(
       cliente.nombre_completo ||
         m.nombre_completo ||
