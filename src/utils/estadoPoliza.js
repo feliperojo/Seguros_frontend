@@ -169,13 +169,36 @@ export function vigenteDesdeEstadoCobertura(estado) {
   return null;
 }
 
+const hasFechaCobertura = (v) => {
+  if (v === null || v === undefined) return false;
+  const s = String(v).trim();
+  return s !== "" && s.toLowerCase() !== "null";
+};
+
 /**
- * No / Medicare / Medicaid: no reciben datos de cobertura al copiar entre miembros.
- * Solo aplica copiar dirección.
+ * Quién puede participar en "Copiar datos entre miembros".
+ * Solo coberturas activas en el grupo: activo=true, sin retiro ni cancelación.
+ * No / Medicare / Medicaid sin esas fechas sí entran (dirección + elegibilidad).
+ * Retiradas (activo=false o fecha_retiro) y canceladas (fecha_cancelacion) no.
+ */
+export function esElegibleParaCopiarEntreMiembros(m = {}) {
+  if (!toBoolFlag(m.activo, true)) return false;
+  if (hasFechaCobertura(m.fecha_retiro)) return false;
+  if (hasFechaCobertura(m.fecha_cancelacion)) return false;
+  return true;
+}
+
+/**
+ * No / Medicare / Medicaid: al copiar entre miembros no reciben el resto de
+ * datos de cobertura. Sí pueden recibir dirección y elegibilidad.
+ * Solo aplica a coberturas aún elegibles para copiar (no retiradas/canceladas).
  */
 export function soloPermiteCopiarDireccion(estado) {
   return vigenteDesdeEstadoCobertura(estado) === false;
 }
+
+/** Campos de cobertura que sí se copian aunque el destino sea No/Medicare/Medicaid. */
+export const CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA = ["elegibilidad"];
 
 export function isMedicareOrMedicaidEstado(estado) {
   const s = (estado ?? "").trim().toLowerCase();
