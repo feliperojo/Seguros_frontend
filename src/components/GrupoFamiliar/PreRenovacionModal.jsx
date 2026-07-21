@@ -1,11 +1,29 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import apiRequest from "../../services/api";
+import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
 
+const TIPOS_PARENTESCO = [
+  "Tomador",
+  "Conyuge",
+  "Hijo/a",
+  "Hermano",
+  "Padre",
+  "Madre",
+  "Nieto",
+  "Abuelo/a",
+  "Suegro/a",
+  "Tio/a",
+  "Sobrino/a",
+];
+
 const nombreMiembro = (item) =>
-  item?.cobertura?.cliente?.nombre_completo ||
-  `Cobertura #${item?.cobertura_id || "?"}`;
+  item?.tipo_item === "miembro_nuevo"
+    ? item?.datos_borrador?.cliente?.nombre_completo ||
+      `Miembro nuevo #${item?.id || "?"}`
+    : item?.cobertura?.cliente?.nombre_completo ||
+      `Cobertura #${item?.cobertura_id || "?"}`;
 
 const getErrorMessage = (error) =>
   error?.response?.data?.message ||
@@ -29,6 +47,12 @@ const PreRenovacionModal = ({
   const [itemsConGuardadoPendiente, setItemsConGuardadoPendiente] = useState(
     () => new Set()
   );
+  const [showOpcionesAgregar, setShowOpcionesAgregar] = useState(false);
+  const [showClienteExistente, setShowClienteExistente] = useState(false);
+  const [showPersonaNueva, setShowPersonaNueva] = useState(false);
+  const [personaNuevaParentesco, setPersonaNuevaParentesco] = useState("");
+  const [personaNuevaNombre, setPersonaNuevaNombre] = useState("");
+  const [agregandoMiembro, setAgregandoMiembro] = useState(false);
 
   useEffect(() => {
     if (!show || !grupoFamiliarId || !anioDestino) return undefined;
@@ -41,6 +65,11 @@ const PreRenovacionModal = ({
     setShowConfirmacionFinal(false);
     setConfirmoRevision(false);
     setItemsConGuardadoPendiente(new Set());
+    setShowOpcionesAgregar(false);
+    setShowClienteExistente(false);
+    setShowPersonaNueva(false);
+    setPersonaNuevaParentesco("");
+    setPersonaNuevaNombre("");
 
     (async () => {
       try {
@@ -78,6 +107,68 @@ const PreRenovacionModal = ({
     );
   }, []);
 
+  const handleItemRemoved = useCallback((itemId) => {
+    setLote((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: (prev.items || []).filter(
+              (item) => Number(item.id) !== Number(itemId)
+            ),
+          }
+        : prev
+    );
+    setItemsConGuardadoPendiente((prev) => {
+      const next = new Set(prev);
+      next.delete(itemId);
+      return next;
+    });
+  }, []);
+
+  const agregarMiembroAlLote = useCallback(
+    async (body) => {
+      if (!lote?.id || !grupoFamiliarId) return;
+      setAgregandoMiembro(true);
+      setError("");
+      try {
+        const response = await apiRequest(
+          `/grupo_familiar/${grupoFamiliarId}/pre-renovacion/${lote.id}/miembros`,
+          "POST",
+          body
+        );
+        const nuevoItem = response?.data ?? response;
+        setLote((prev) =>
+          prev
+            ? { ...prev, items: [...(prev.items || []), nuevoItem] }
+            : prev
+        );
+        setShowOpcionesAgregar(false);
+        setShowClienteExistente(false);
+        setShowPersonaNueva(false);
+        setPersonaNuevaParentesco("");
+        setPersonaNuevaNombre("");
+      } catch (requestError) {
+        console.error("Error al agregar miembro nuevo", requestError);
+        setError(getErrorMessage(requestError));
+      } finally {
+        setAgregandoMiembro(false);
+      }
+    },
+    [lote?.id, grupoFamiliarId]
+  );
+
+  const handleAgregarClienteExistente = useCallback(
+    async (payload, clienteFull) => {
+      await agregarMiembroAlLote({
+        parentesco: payload.tipo,
+        cobertura_tipo: payload.cobertura_tipo,
+        cliente_id_existente: clienteFull.id,
+        cliente: { nombre_completo: clienteFull.nombre_completo },
+      });
+    },
+    [agregarMiembroAlLote]
+  );
+
   const handleSaveStateChange = useCallback((itemId, tienePendiente) => {
     setItemsConGuardadoPendiente((prev) => {
       const next = new Set(prev);
@@ -88,6 +179,24 @@ const PreRenovacionModal = ({
   }, []);
 
   const items = useMemo(() => lote?.items || [], [lote?.items]);
+
+  const defaultCoberturaTipo = useMemo(() => {
+    const desdeItem = items.find((item) => item?.datos_borrador?.cobertura_tipo)
+      ?.datos_borrador?.cobertura_tipo;
+    const desdeCobertura = items.find((item) => item?.cobertura?.cobertura_tipo)
+      ?.cobertura?.cobertura_tipo;
+    return desdeItem || desdeCobertura || "Plan de salud";
+  }, [items]);
+
+  const handleAgregarPersonaNueva = async (e) => {
+    e.preventDefault();
+    if (!personaNuevaParentesco.trim() || !personaNuevaNombre.trim()) return;
+    await agregarMiembroAlLote({
+      parentesco: personaNuevaParentesco,
+      cobertura_tipo: defaultCoberturaTipo,
+      cliente: { nombre_completo: personaNuevaNombre.trim() },
+    });
+  };
 
   const miembrosARenovar = useMemo(
     () => items.filter((item) => Boolean(item?.renovar)),
@@ -343,8 +452,9 @@ const PreRenovacionModal = ({
                   )}
 
                   {!loading && !error && items.length === 0 && (
-                    <div className="alert alert-warning mb-0">
+                    <div className="alert alert-warning mb-3">
                       No hay coberturas activas candidatas para pre-renovar.
+                      Puedes agregar un miembro nuevo solo para {anioDestino}.
                     </div>
                   )}
 
@@ -386,11 +496,144 @@ const PreRenovacionModal = ({
                         item={item}
                         anioDestino={anioDestino}
                         onItemUpdated={handleItemUpdated}
+                        onItemRemoved={handleItemRemoved}
                         attemptedConsolidar={attemptedConsolidar}
                         onSaveStateChange={handleSaveStateChange}
                       />
                     ))}
                   </div>
+
+                  {!loading && lote?.id && (
+                    <div className="mt-3 border-top pt-3">
+                      {!showOpcionesAgregar &&
+                        !showPersonaNueva &&
+                        !showClienteExistente && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-primary btn-sm"
+                            onClick={() => setShowOpcionesAgregar(true)}
+                            disabled={consolidando || agregandoMiembro}
+                          >
+                            + Agregar miembro nuevo para {anioDestino}
+                          </button>
+                        )}
+
+                      {showOpcionesAgregar && (
+                        <div className="card card-body bg-light">
+                          <div className="fw-semibold mb-2">
+                            ¿Cómo quieres agregar el miembro?
+                          </div>
+                          <div className="d-flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => {
+                                setShowOpcionesAgregar(false);
+                                setShowClienteExistente(true);
+                              }}
+                              disabled={agregandoMiembro}
+                            >
+                              Cliente existente en el sistema
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => {
+                                setShowOpcionesAgregar(false);
+                                setShowPersonaNueva(true);
+                              }}
+                              disabled={agregandoMiembro}
+                            >
+                              Persona nueva
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-link btn-sm"
+                              onClick={() => setShowOpcionesAgregar(false)}
+                              disabled={agregandoMiembro}
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {showPersonaNueva && (
+                        <form
+                          className="card card-body"
+                          onSubmit={handleAgregarPersonaNueva}
+                        >
+                          <div className="fw-semibold mb-2">
+                            Persona nueva para {anioDestino}
+                          </div>
+                          <div className="row g-2 align-items-end">
+                            <div className="col-md-4">
+                              <label className="form-label form-label-sm">
+                                Parentesco <span className="text-danger">*</span>
+                              </label>
+                              <select
+                                className="form-select form-select-sm"
+                                value={personaNuevaParentesco}
+                                onChange={(e) =>
+                                  setPersonaNuevaParentesco(e.target.value)
+                                }
+                                required
+                                disabled={agregandoMiembro}
+                              >
+                                <option value="">Seleccione…</option>
+                                {TIPOS_PARENTESCO.map((t) => (
+                                  <option key={t} value={t}>
+                                    {t}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div className="col-md-5">
+                              <label className="form-label form-label-sm">
+                                Nombre completo{" "}
+                                <span className="text-danger">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                value={personaNuevaNombre}
+                                onChange={(e) =>
+                                  setPersonaNuevaNombre(e.target.value)
+                                }
+                                required
+                                disabled={agregandoMiembro}
+                              />
+                            </div>
+                            <div className="col-md-3 d-flex gap-2">
+                              <button
+                                type="submit"
+                                className="btn btn-primary btn-sm"
+                                disabled={
+                                  agregandoMiembro ||
+                                  !personaNuevaParentesco.trim() ||
+                                  !personaNuevaNombre.trim()
+                                }
+                              >
+                                {agregandoMiembro ? "Agregando…" : "Agregar"}
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-outline-secondary btn-sm"
+                                onClick={() => {
+                                  setShowPersonaNueva(false);
+                                  setPersonaNuevaParentesco("");
+                                  setPersonaNuevaNombre("");
+                                }}
+                                disabled={agregandoMiembro}
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        </form>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="modal-footer">
@@ -432,6 +675,14 @@ const PreRenovacionModal = ({
         className="modal-backdrop fade show"
         style={{ zIndex: 1060 }}
         onClick={handleClose}
+      />
+
+      <ClienteExistenteModal
+        open={showClienteExistente}
+        grupoFamiliarId={grupoFamiliarId}
+        defaultCoberturaTipo={defaultCoberturaTipo}
+        onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
+        onClose={() => setShowClienteExistente(false)}
       />
     </>
   );

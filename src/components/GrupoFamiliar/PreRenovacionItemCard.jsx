@@ -3,6 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import { fetchCompanies } from "../../services/companies";
 import { buildDireccion } from "../../utils/direccion";
+import {
+  CLIENTE_FIELDS_PRINCIPALES,
+  CLIENTE_FIELDS_MIGRATORIO,
+  CLIENTE_FIELDS_DIRECCION,
+  CLIENTE_FIELDS_CONTACTO,
+  CLIENTE_FIELDS_EMPLEO,
+} from "../../utils/clienteFieldGroups";
 
 const TIPO_PAGO_OPTIONS = [
   { value: "DEBITO AUTOMATICO", label: "DEBITO AUTOMATICO" },
@@ -31,68 +38,6 @@ const DIRECCION_FORMULA_FIELDS = new Set([
   "estado",
   "codigo_postal",
 ]);
-
-const CLIENTE_FIELDS_PRINCIPALES = [
-  ["nombre_completo", "Nombre completo", "text"],
-  ["primer_nombre", "Primer nombre", "text"],
-  ["segundo_nombre", "Segundo nombre", "text"],
-  ["apellidos", "Apellidos", "text"],
-  ["fecha_nacimiento", "Fecha de nacimiento", "date"],
-  ["genero", "Género", "text"],
-  ["pais_origen", "País de origen", "text"],
-  ["peso", "Peso", "number"],
-  ["altura", "Altura", "number"],
-  ["pulgadas", "Pulgadas", "number"],
-  ["nota", "Nota", "text"],
-];
-
-const CLIENTE_FIELDS_MIGRATORIO = [
-  ["social", "Social / SSN", "text"],
-  ["status", "Status", "text"],
-  ["auscis", "USCIS", "text"],
-  ["tarjeta_numero", "Número de tarjeta", "text"],
-  ["categoria", "Categoría", "text"],
-  ["fecha_emision", "Fecha de emisión", "date"],
-  ["fecha_expiracion", "Fecha de expiración", "date"],
-];
-
-const CLIENTE_FIELDS_DIRECCION = [
-  ["direccion", "Dirección", "text"],
-  ["dir_correspondencia", "Dirección de correspondencia", "text"],
-  ["calle", "Calle", "text"],
-  ["apto", "Apto", "text"],
-  ["ciudad", "Ciudad", "text"],
-  ["condado", "Condado", "text"],
-  ["estado", "Estado", "text"],
-  ["codigo_postal", "Código postal", "text"],
-];
-
-const CLIENTE_FIELDS_CONTACTO = [
-  ["telefono", "Teléfono", "text"],
-  ["email", "Email", "email"],
-  ["whatsapp", "Acepta WhatsApp", "checkbox"],
-  ["whatsapp_num", "Número de WhatsApp", "text"],
-  ["telegram", "Acepta Telegram", "checkbox"],
-  ["texto_sms", "Acepta SMS", "checkbox"],
-  ["secundario", "Teléfono secundario", "text"],
-  ["idioma", "Idioma", "text"],
-  ["primer_contacto_info", "Primer contacto / info", "text"],
-];
-
-const CLIENTE_FIELDS_EMPLEO = [
-  ["tipo_ingreso", "Tipo de ingreso", "text"],
-  ["actividad_economica", "Actividad económica", "text"],
-  ["empleador", "Empleador", "text"],
-  ["telefono_empleador", "Teléfono del empleador", "text"],
-  ["periodo_ingreso", "Periodo de ingreso", "text"],
-  ["ingreso_por_periodo", "Ingreso por periodo", "number"],
-  ["ingreso_anual", "Ingreso anual", "number"],
-  ["empresa", "Empresa", "text"],
-  ["ingreso_ocasional_anual", "Ingreso ocasional anual", "number"],
-  ["periodo_ingreso_ocasional", "Periodo de ingreso ocasional", "text"],
-  ["ingreso_por_periodo_ocasional", "Ingreso por periodo ocasional", "number"],
-  ["nota_ingreso_ocasional", "Nota de ingreso ocasional", "text"],
-];
 
 const TEXT_FIELDS = [
   ["codigo_poliza", "Código de póliza", "text", "col-md-4"],
@@ -128,6 +73,7 @@ const PreRenovacionItemCard = ({
   item,
   anioDestino,
   onItemUpdated,
+  onItemRemoved,
   attemptedConsolidar = false,
   onSaveStateChange,
 }) => {
@@ -311,15 +257,24 @@ const PreRenovacionItemCard = ({
     );
   };
 
+  const esMiembroNuevo = item?.tipo_item === "miembro_nuevo";
   const cobertura = item?.cobertura || {};
   const clienteActual = cobertura?.cliente || {};
-  const nombre =
-    clienteActual.nombre_completo ||
-    [clienteActual.primer_nombre, clienteActual.apellidos].filter(Boolean).join(" ") ||
-    `Cobertura #${item?.cobertura_id || "?"}`;
-  const requiereRetiro = !renovar && Boolean(cobertura.activo);
+  const nombre = esMiembroNuevo
+    ? datos.cliente?.nombre_completo ||
+      item?.datos_borrador?.cliente?.nombre_completo ||
+      `Miembro nuevo #${item?.id || "?"}`
+    : clienteActual.nombre_completo ||
+      [clienteActual.primer_nombre, clienteActual.apellidos]
+        .filter(Boolean)
+        .join(" ") ||
+      `Cobertura #${item?.cobertura_id || "?"}`;
+  const requiereRetiro = !esMiembroNuevo && !renovar && Boolean(cobertura.activo);
+  const mostrarPoliza = esMiembroNuevo || renovar;
   const codigoInvalido =
-    attemptedConsolidar && renovar && !String(datos.codigo_poliza ?? "").trim();
+    attemptedConsolidar &&
+    mostrarPoliza &&
+    !String(datos.codigo_poliza ?? "").trim();
   const retiroFechaInvalida =
     attemptedConsolidar &&
     requiereRetiro &&
@@ -330,33 +285,76 @@ const PreRenovacionItemCard = ({
     !String(datos.motivo_retiro ?? "").trim();
   const disabled = bloqueado;
 
+  const handleQuitarMiembroNuevo = async () => {
+    if (disabled) return;
+    setEstadosGuardado((prev) => ({ ...prev, quitar: "guardando" }));
+    try {
+      await apiRequest(`/pre-renovacion/items/${item.id}`, "DELETE");
+      onItemRemoved?.(item.id);
+    } catch (error) {
+      if (error?.response?.status === 409) {
+        setBloqueado(true);
+        setMensajeBloqueo(
+          "Esta pre-renovación ya fue consolidada, no se puede seguir editando."
+        );
+      }
+      setEstadosGuardado((prev) => ({ ...prev, quitar: "error" }));
+      setErrores((prev) => ({ ...prev, quitar: getErrorMessage(error) }));
+    }
+  };
+
   return (
     <div className="card shadow-sm">
       <div className="card-header bg-light">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
           <div>
             <div className="fw-semibold">{nombre}</div>
-            <div className="small text-muted">
-              Póliza actual: <strong>{cobertura.codigo_poliza || "—"}</strong>
-              {" · "}
-              Plan: <strong>{cobertura.plan || "—"}</strong>
-            </div>
+            {esMiembroNuevo ? (
+              <span className="badge bg-info text-white">
+                Miembro nuevo para {anioDestino}
+              </span>
+            ) : (
+              <div className="small text-muted">
+                Póliza actual: <strong>{cobertura.codigo_poliza || "—"}</strong>
+                {" · "}
+                Plan: <strong>{cobertura.plan || "—"}</strong>
+              </div>
+            )}
           </div>
           <div className="text-end">
-            <div className="form-check">
-              <input
-                className="form-check-input"
-                type="checkbox"
-                id={`pre-renovar-${item.id}`}
-                checked={renovar}
-                onChange={(e) => cambiarRenovar(e.target.checked)}
-                disabled={disabled}
-              />
-              <label className="form-check-label" htmlFor={`pre-renovar-${item.id}`}>
-                Renovar a este miembro
-              </label>
-            </div>
-            {renderEstado("renovar")}
+            {esMiembroNuevo ? (
+              <div>
+                <button
+                  type="button"
+                  className="btn btn-outline-danger btn-sm"
+                  onClick={handleQuitarMiembroNuevo}
+                  disabled={disabled || estadosGuardado.quitar === "guardando"}
+                >
+                  🗑 Quitar de este borrador
+                </button>
+                {renderEstado("quitar")}
+              </div>
+            ) : (
+              <>
+                <div className="form-check">
+                  <input
+                    className="form-check-input"
+                    type="checkbox"
+                    id={`pre-renovar-${item.id}`}
+                    checked={renovar}
+                    onChange={(e) => cambiarRenovar(e.target.checked)}
+                    disabled={disabled}
+                  />
+                  <label
+                    className="form-check-label"
+                    htmlFor={`pre-renovar-${item.id}`}
+                  >
+                    Renovar a este miembro
+                  </label>
+                </div>
+                {renderEstado("renovar")}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -367,7 +365,7 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
-      {renovar && !cobertura.activo && (
+      {!esMiembroNuevo && renovar && !cobertura.activo && (
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
           cancelada o retirada después de agregarse a este borrador. Revisa si
@@ -421,7 +419,7 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
-      {renovar && (
+      {mostrarPoliza && (
         <div className="card-body border-bottom">
           <p className="small text-muted mb-3">
             Datos de la póliza para {anioDestino}

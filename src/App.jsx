@@ -62,6 +62,7 @@ import PermissionsList from "./pages/admin/PermissionsList";
 import AuditLogsList from "./pages/admin/AuditLogsList";
 import OperationalConceptsAdmin from "./pages/admin/OperationalConceptsAdmin";
 import Configurador from "./pages/admin/Configurador";
+import RenovacionesEstadoPage from "./pages/admin/RenovacionesEstadoPage";
 
 import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
 import CallIdentifierContainer from "./components/CallIdentifier/CallIdentifierContainer";
@@ -196,6 +197,14 @@ const App = () => {
           element={
             <PermissionRoute permission="users.view">
               <Configurador />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/renovaciones"
+          element={
+            <PermissionRoute permission="users.view">
+              <RenovacionesEstadoPage />
             </PermissionRoute>
           }
         />

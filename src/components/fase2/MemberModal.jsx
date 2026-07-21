@@ -342,16 +342,10 @@ export default function MemberModalCreate({
           // al backend SIEMPRE número
           ingreso_anual: toNumber(base.ingreso_anual),
         };
-        // >>> IMPORTANTE: onCreateRemote debe retornar el miembro creado
-        // (o al menos los datos necesarios para pintar la card).
-        const created = await onCreateRemote(remotePayload);
-  
-        // Si tu padre NO inserta en el estado dentro de onCreateRemote,
-        // habilita también onCreateLocal para insertar inmediatamente en UI.
-        if (onCreateLocal && created) {
-          await onCreateLocal(created); // respeta estado del padre
-        }
-  
+        // >>> IMPORTANTE: onCreateRemote inserta en el estado del padre (y/o hace reload).
+        // No llamar onCreateLocal aquí: duplicaría la tarjeta en Cotización/Toma de Datos.
+        await onCreateRemote(remotePayload);
+
         onClose?.();
         return;
       }
