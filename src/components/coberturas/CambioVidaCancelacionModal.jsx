@@ -223,15 +223,15 @@ const CambioVidaCancelacionModal = ({
     esSoloRetiro(cobertura) || esPolizaCancelada(cobertura) || datos?.renovar === false;
 
   /**
-   * Retiro de cobertura activa (Sí): cancela con los mismos datos del retiro
-   * (fecha, motivo y nota); no se piden campos de cancelación aparte.
+   * Retiro de cobertura activa (Sí): UI de retiro (F. retiro / motivo / obs).
+   * Internamente no se toca fecha_cancelacion ni campos de cancelación.
    */
   const esRetiroDeCoberturaActiva = (cobertura, datos) =>
     puedeCancelarPoliza(cobertura) && datos?.renovar === false;
 
   /**
    * Motivo/obs de cancelación: solo cancelación explícita de póliza en Sí.
-   * En retiro de cobertura activa se ocultan (se guardan desde motivo/nota de retiro).
+   * En retiro de cobertura activa se ocultan y no se envían.
    */
   const requiereCamposCancelacion = (cobertura, datos) => {
     if (!puedeCancelarPoliza(cobertura)) return false;
@@ -300,49 +300,16 @@ const CambioVidaCancelacionModal = ({
       fecha_retiro: requiereFechaRetiro(cobertura, datos)
         ? fechaRetiroGlobal || datos.fecha_retiro
         : datos.fecha_retiro,
-      fecha_cancelacion: (() => {
-        if (requiereFechaCancelacionNueva(cobertura, datos)) {
-          return fechaCancelacionGlobal || datos.fecha_cancelacion;
-        }
-        // Retiro de cobertura activa: F. retiro = F. cancelación
-        if (esRetiroDeCoberturaActiva(cobertura, datos)) {
-          return (
-            fechaRetiroGlobal ||
-            datos.fecha_retiro ||
-            fechaCancelacionGlobal ||
-            datos.fecha_cancelacion
-          );
-        }
-        return datos.fecha_cancelacion;
-      })(),
-      motivo_cancelacion: (() => {
-        if (requiereCamposCancelacion(cobertura, datos)) {
-          return motivoCancelacionGlobal || datos.motivo_cancelacion;
-        }
-        if (esRetiroDeCoberturaActiva(cobertura, datos)) {
-          return (
-            motivoRetiroGlobal ||
-            datos.motivo_retiro ||
-            motivoCancelacionGlobal ||
-            datos.motivo_cancelacion
-          );
-        }
-        return datos.motivo_cancelacion;
-      })(),
-      nota_cancel: (() => {
-        if (requiereCamposCancelacion(cobertura, datos)) {
-          return notaCancelGlobal || datos.nota_cancel;
-        }
-        if (esRetiroDeCoberturaActiva(cobertura, datos)) {
-          return (
-            notaRetiroGlobal ||
-            datos.nota_retiro ||
-            notaCancelGlobal ||
-            datos.nota_cancel
-          );
-        }
-        return datos.nota_cancel;
-      })(),
+      // Cancelación solo en flujo de cancelar póliza; en retiro no se inventa ni se pisa.
+      fecha_cancelacion: requiereFechaCancelacionNueva(cobertura, datos)
+        ? fechaCancelacionGlobal || datos.fecha_cancelacion
+        : datos.fecha_cancelacion,
+      motivo_cancelacion: requiereCamposCancelacion(cobertura, datos)
+        ? motivoCancelacionGlobal || datos.motivo_cancelacion
+        : datos.motivo_cancelacion,
+      nota_cancel: requiereCamposCancelacion(cobertura, datos)
+        ? notaCancelGlobal || datos.nota_cancel
+        : datos.nota_cancel,
       cobertura,
     };
   };
@@ -685,23 +652,16 @@ const CambioVidaCancelacionModal = ({
         };
       }
 
-      const fechaCancelFinal = yaCancelada
-        ? normalizarFecha(cobertura.fecha_cancelacion || cobertura.fechaCancelacion)
-        : soloRetiro
-          ? null
-          : esRetiroDeCoberturaActiva(cobertura, datos)
-            // Retiro de cobertura activa: cancelación = fecha de retiro
-            ? datos.fecha_retiro || datos.fecha_cancelacion || null
-            : datos.fecha_cancelacion || null;
-
       // Retiro: si ya era No/Medicare/Medicaid, conservar ese estado; si no → No.
       // vigente siempre coherente con estado_cobertura (false para No/Medicare/Medicaid).
+      // Importante: no enviar fecha_cancelacion (ni inventarla desde F. retiro):
+      // vacía o llena, el backend/local la dejan quieta.
       const estadoActualRaw = getEstadoCoberturaRaw(cobertura);
       const estadoRetiro = soloRetiro && !esEstadoEnCobertura(cobertura) && estadoActualRaw
         ? estadoActualRaw
         : "No";
       const vigenteRetiro = vigenteDesdeEstadoCobertura(estadoRetiro);
-      const item = {
+      return {
         ...base,
         renovar: false,
         activo: false,
@@ -712,21 +672,6 @@ const CambioVidaCancelacionModal = ({
         motivo_retiro: datos.motivo_retiro || null,
         nota_retiro: datos.nota_retiro || null,
       };
-
-      if (fechaCancelFinal) {
-        item.fecha_cancelacion = fechaCancelFinal;
-      }
-
-      if (!yaCancelada && requiereCamposCancelacion(cobertura, datos)) {
-        item.motivo_cancelacion = datos.motivo_cancelacion || null;
-        item.nota_cancel = datos.nota_cancel || null;
-      } else if (!yaCancelada && esRetiroDeCoberturaActiva(cobertura, datos)) {
-        // Retiro de cobertura activa: motivo/nota de cancelación = los del retiro
-        item.motivo_cancelacion = datos.motivo_retiro || datos.motivo_cancelacion || null;
-        item.nota_cancel = datos.nota_retiro || datos.nota_cancel || null;
-      }
-
-      return item;
     }).filter(Boolean);
 
   // Manejar envío del formulario

@@ -797,10 +797,16 @@ const [grupoVersion, setGrupoVersion] = useState(null);
             }
           };
 
+          // Retiro: si no viene fecha_cancelacion en el payload, no tocarla (vacía o llena).
+          const fechaCancelacionNueva =
+            datosCobertura.fecha_cancelacion !== undefined
+              ? formatDate(datosCobertura.fecha_cancelacion)
+              : member.fecha_cancelacion;
+
           // Actualizar los campos de retiro/cancelación en el miembro
           const memberActualizado = {
             ...member,
-            fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
+            fecha_cancelacion: fechaCancelacionNueva,
             fecha_retiro: formatDate(datosCobertura.fecha_retiro),
             nota_cancel: datosCobertura.nota_cancel ?? member.nota_cancel ?? null,
             nota_retiro: datosCobertura.nota_retiro || null,
@@ -816,7 +822,10 @@ const [grupoVersion, setGrupoVersion] = useState(null);
           if (member.cobertura) {
             memberActualizado.cobertura = {
               ...member.cobertura,
-              fecha_cancelacion: formatDate(datosCobertura.fecha_cancelacion),
+              fecha_cancelacion:
+                datosCobertura.fecha_cancelacion !== undefined
+                  ? formatDate(datosCobertura.fecha_cancelacion)
+                  : member.cobertura.fecha_cancelacion,
               fecha_retiro: formatDate(datosCobertura.fecha_retiro),
               nota_cancel: datosCobertura.nota_cancel ?? member.cobertura.nota_cancel ?? null,
               nota_retiro: datosCobertura.nota_retiro || null,
