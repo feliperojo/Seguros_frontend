@@ -202,11 +202,7 @@ const App = () => {
         />
         <Route
           path="/admin/renovaciones"
-          element={
-            <PermissionRoute permission="users.view">
-              <RenovacionesEstadoPage />
-            </PermissionRoute>
-          }
+          element={<RenovacionesEstadoPage />}
         />
 
         {import.meta.env.DEV && (
