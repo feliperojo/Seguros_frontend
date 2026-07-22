@@ -259,9 +259,15 @@ const PreRenovacionItemCard = ({
 
   const esMiembroNuevo = item?.tipo_item === "miembro_nuevo";
   const cobertura = item?.cobertura || {};
-  const clienteActual = cobertura?.cliente || {};
+  // Renovación normal: referencia en vivo = cobertura.cliente
+  // Miembro nuevo de cliente existente: referencia en vivo = cliente_existente (BD)
+  // Fallback: snapshot guardado en el borrador
+  const clienteActual = esMiembroNuevo
+    ? item?.cliente_existente || item?.datos_borrador?.cliente || {}
+    : cobertura?.cliente || {};
   const nombre = esMiembroNuevo
     ? datos.cliente?.nombre_completo ||
+      item?.cliente_existente?.nombre_completo ||
       item?.datos_borrador?.cliente?.nombre_completo ||
       `Miembro nuevo #${item?.id || "?"}`
     : clienteActual.nombre_completo ||

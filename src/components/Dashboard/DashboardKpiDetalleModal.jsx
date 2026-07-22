@@ -265,8 +265,9 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>activo = false</strong>, <strong>vigente = false</strong>,{" "}
-            <strong>fecha de cancelación</strong> y <strong>fecha de retiro</strong> registradas.
+            Pólizas con <strong>activo = false</strong>, <strong>vigente = false</strong> y{" "}
+            <strong>fecha de retiro</strong> registrada. La fecha de cancelación es opcional
+            (retiro directo).
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
@@ -274,7 +275,7 @@ export default function DashboardKpiDetalleModal({
               valor={estadisticas?.polizasRetiradas ?? 0}
               color="#ea4335"
               criterios={{ activo: false, vigente: false }}
-              descripcion="fecha_cancelacion + fecha_retiro"
+              descripcion="fecha_retiro (cancelación opcional)"
             />
           </div>
         </>

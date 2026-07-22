@@ -139,6 +139,26 @@ const RenovacionesEstadoPage = () => {
     }
   };
 
+  const handleEliminarBorrador = async (fila) => {
+    const confirmado = window.confirm(
+      `¿Eliminar el borrador de pre-renovación del grupo #${fila.id}? Se perderá todo lo que se haya guardado ahí (no afecta las coberturas reales de ${anioDestino - 1}).`
+    );
+    if (!confirmado) return;
+
+    try {
+      await apiRequest(
+        `/grupo_familiar/${fila.id}/pre-renovacion/${fila.lote_id}`,
+        "DELETE"
+      );
+      await fetchData();
+    } catch (error) {
+      console.error("Error al eliminar el borrador:", error);
+      alert(
+        error?.response?.data?.message || "No se pudo eliminar el borrador."
+      );
+    }
+  };
+
   const totalFiltered = paginationMeta.total ?? 0;
   const totalPages = Math.max(1, paginationMeta.last_page ?? 1);
   const safeCurrentPage = Math.min(currentPage, totalPages);
@@ -336,6 +356,14 @@ const RenovacionesEstadoPage = () => {
                                     }
                                   >
                                     Gestionar borrador
+                                  </Dropdown.Item>
+                                )}
+                                {fila.estado_renovacion === "borrador" && (
+                                  <Dropdown.Item
+                                    className="text-danger"
+                                    onClick={() => handleEliminarBorrador(fila)}
+                                  >
+                                    Eliminar borrador
                                   </Dropdown.Item>
                                 )}
                               </Dropdown.Menu>

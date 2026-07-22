@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import apiRequest from "../../services/api";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
+import { pickClienteParaBorrador } from "../../utils/clienteFieldGroups";
 
 const TIPOS_PARENTESCO = [
   "Tomador",
@@ -30,6 +31,9 @@ const getErrorMessage = (error) =>
   error?.message ||
   "Ocurrió un error al procesar la pre-renovación.";
 
+const buildFullName = (p = "", s = "", a = "") =>
+  [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
+
 const PreRenovacionModal = ({
   show,
   onHide,
@@ -51,7 +55,10 @@ const PreRenovacionModal = ({
   const [showClienteExistente, setShowClienteExistente] = useState(false);
   const [showPersonaNueva, setShowPersonaNueva] = useState(false);
   const [personaNuevaParentesco, setPersonaNuevaParentesco] = useState("");
-  const [personaNuevaNombre, setPersonaNuevaNombre] = useState("");
+  const [personaNuevaPrimerNombre, setPersonaNuevaPrimerNombre] = useState("");
+  const [personaNuevaSegundoNombre, setPersonaNuevaSegundoNombre] =
+    useState("");
+  const [personaNuevaApellidos, setPersonaNuevaApellidos] = useState("");
   const [agregandoMiembro, setAgregandoMiembro] = useState(false);
 
   useEffect(() => {
@@ -69,7 +76,9 @@ const PreRenovacionModal = ({
     setShowClienteExistente(false);
     setShowPersonaNueva(false);
     setPersonaNuevaParentesco("");
-    setPersonaNuevaNombre("");
+    setPersonaNuevaPrimerNombre("");
+    setPersonaNuevaSegundoNombre("");
+    setPersonaNuevaApellidos("");
 
     (async () => {
       try {
@@ -146,7 +155,9 @@ const PreRenovacionModal = ({
         setShowClienteExistente(false);
         setShowPersonaNueva(false);
         setPersonaNuevaParentesco("");
-        setPersonaNuevaNombre("");
+        setPersonaNuevaPrimerNombre("");
+        setPersonaNuevaSegundoNombre("");
+        setPersonaNuevaApellidos("");
       } catch (requestError) {
         console.error("Error al agregar miembro nuevo", requestError);
         setError(getErrorMessage(requestError));
@@ -159,11 +170,17 @@ const PreRenovacionModal = ({
 
   const handleAgregarClienteExistente = useCallback(
     async (payload, clienteFull) => {
+      const cliente = pickClienteParaBorrador(clienteFull);
+      // Garantiza al menos el nombre visible en la tarjeta si el pick no lo trajo.
+      if (!cliente.nombre_completo && clienteFull?.nombre_completo) {
+        cliente.nombre_completo = clienteFull.nombre_completo;
+      }
+
       await agregarMiembroAlLote({
         parentesco: payload.tipo,
         cobertura_tipo: payload.cobertura_tipo,
         cliente_id_existente: clienteFull.id,
-        cliente: { nombre_completo: clienteFull.nombre_completo },
+        cliente,
       });
     },
     [agregarMiembroAlLote]
@@ -190,11 +207,21 @@ const PreRenovacionModal = ({
 
   const handleAgregarPersonaNueva = async (e) => {
     e.preventDefault();
-    if (!personaNuevaParentesco.trim() || !personaNuevaNombre.trim()) return;
+    const nombreCompleto = buildFullName(
+      personaNuevaPrimerNombre,
+      personaNuevaSegundoNombre,
+      personaNuevaApellidos
+    );
+    if (!personaNuevaParentesco.trim() || !nombreCompleto) return;
     await agregarMiembroAlLote({
       parentesco: personaNuevaParentesco,
       cobertura_tipo: defaultCoberturaTipo,
-      cliente: { nombre_completo: personaNuevaNombre.trim() },
+      cliente: {
+        nombre_completo: nombreCompleto,
+        primer_nombre: personaNuevaPrimerNombre.trim() || null,
+        segundo_nombre: personaNuevaSegundoNombre.trim() || null,
+        apellidos: personaNuevaApellidos.trim() || null,
+      },
     });
   };
 
@@ -567,7 +594,7 @@ const PreRenovacionModal = ({
                             Persona nueva para {anioDestino}
                           </div>
                           <div className="row g-2 align-items-end">
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                               <label className="form-label form-label-sm">
                                 Parentesco <span className="text-danger">*</span>
                               </label>
@@ -588,47 +615,80 @@ const PreRenovacionModal = ({
                                 ))}
                               </select>
                             </div>
-                            <div className="col-md-5">
+                            <div className="col-md-3">
                               <label className="form-label form-label-sm">
-                                Nombre completo{" "}
+                                Primer nombre{" "}
                                 <span className="text-danger">*</span>
                               </label>
                               <input
                                 type="text"
                                 className="form-control form-control-sm"
-                                value={personaNuevaNombre}
+                                value={personaNuevaPrimerNombre}
                                 onChange={(e) =>
-                                  setPersonaNuevaNombre(e.target.value)
+                                  setPersonaNuevaPrimerNombre(e.target.value)
                                 }
                                 required
                                 disabled={agregandoMiembro}
                               />
                             </div>
-                            <div className="col-md-3 d-flex gap-2">
-                              <button
-                                type="submit"
-                                className="btn btn-primary btn-sm"
-                                disabled={
-                                  agregandoMiembro ||
-                                  !personaNuevaParentesco.trim() ||
-                                  !personaNuevaNombre.trim()
+                            <div className="col-md-3">
+                              <label className="form-label form-label-sm">
+                                Segundo nombre
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                value={personaNuevaSegundoNombre}
+                                onChange={(e) =>
+                                  setPersonaNuevaSegundoNombre(e.target.value)
                                 }
-                              >
-                                {agregandoMiembro ? "Agregando…" : "Agregar"}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-outline-secondary btn-sm"
-                                onClick={() => {
-                                  setShowPersonaNueva(false);
-                                  setPersonaNuevaParentesco("");
-                                  setPersonaNuevaNombre("");
-                                }}
                                 disabled={agregandoMiembro}
-                              >
-                                Cancelar
-                              </button>
+                              />
                             </div>
+                            <div className="col-md-3">
+                              <label className="form-label form-label-sm">
+                                Apellidos{" "}
+                                <span className="text-danger">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                className="form-control form-control-sm"
+                                value={personaNuevaApellidos}
+                                onChange={(e) =>
+                                  setPersonaNuevaApellidos(e.target.value)
+                                }
+                                required
+                                disabled={agregandoMiembro}
+                              />
+                            </div>
+                          </div>
+                          <div className="d-flex gap-2 mt-3">
+                            <button
+                              type="submit"
+                              className="btn btn-primary btn-sm"
+                              disabled={
+                                agregandoMiembro ||
+                                !personaNuevaParentesco.trim() ||
+                                !personaNuevaPrimerNombre.trim() ||
+                                !personaNuevaApellidos.trim()
+                              }
+                            >
+                              {agregandoMiembro ? "Agregando…" : "Agregar"}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => {
+                                setShowPersonaNueva(false);
+                                setPersonaNuevaParentesco("");
+                                setPersonaNuevaPrimerNombre("");
+                                setPersonaNuevaSegundoNombre("");
+                                setPersonaNuevaApellidos("");
+                              }}
+                              disabled={agregandoMiembro}
+                            >
+                              Cancelar
+                            </button>
                           </div>
                         </form>
                       )}
