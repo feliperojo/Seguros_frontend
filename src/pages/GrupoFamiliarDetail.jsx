@@ -9,6 +9,7 @@ import ProductoCotizacionModal from "../components/fase2/ProductoCotizacionModal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import RenovacionCoberturasModal from "../components/GrupoFamiliar/RenovacionCoberturasModal";
 import PreRenovacionModal from "../components/GrupoFamiliar/PreRenovacionModal";
+import HistorialCoberturasCanceladasModal from "../components/coberturas/HistorialCoberturasCanceladasModal";
 import GrupoFamiliarService from "../services/GrupoFamiliarService";
 import { calcIngresoFamiliar, parseMoney, computeAnnual, formatMoney2 } from '../services/ingresos';
 import { mapGrupoFromForm, mapClienteFromMember, mapCoberturaFromMember, stripNulls, cleanDate } from "../adapters/prospecto.mapper";
@@ -720,6 +721,8 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [cierreError, setCierreError] = useState("");
   const [showRenovacionModal, setShowRenovacionModal] = useState(false);
   const [showPreRenovacionModal, setShowPreRenovacionModal] = useState(false);
+  const [showHistorialRenovacionesAnio, setShowHistorialRenovacionesAnio] =
+    useState(false);
   const esAnioPasado = periodoRelativo === "pasado";
 
   const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
@@ -1968,11 +1971,20 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
         {periodoRelativo === "pasado" && (
           <div className="card mb-4 shadow-sm border-0">
-            <div className="card-header bg-light">
+            <div className="card-header bg-light d-flex flex-wrap align-items-center justify-content-between gap-2">
               <h5 className="mb-0 fw-semibold">
                 <i className="fas fa-clipboard-list text-primary me-2"></i>
                 Qué pasó este año ({anioConsultado})
               </h5>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowHistorialRenovacionesAnio(true)}
+                title={`Historial de renovaciones solo del año ${anioConsultado}`}
+              >
+                <i className="fas fa-history me-1" aria-hidden="true" />
+                Hist. Renov. {anioConsultado}
+              </button>
             </div>
             <div className="card-body">
               {cierreLoading && (
@@ -2088,6 +2100,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           onRefresh={reload} // Pasar función de reload para refrescar después de cancelar coberturas
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
           grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
+          anioConsultado={anioConsultado}
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
@@ -2160,6 +2173,14 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           grupoFamiliarId={id}
           anioDestino={ANIO_RENOVACION}
           onAfterConsolidar={handleAfterPreRenovacionConsolidar}
+        />
+
+        <HistorialCoberturasCanceladasModal
+          show={showHistorialRenovacionesAnio}
+          onClose={() => setShowHistorialRenovacionesAnio(false)}
+          grupoFamiliarId={id}
+          anioInicial={anioConsultado}
+          soloAnioInicial
         />
         </div>
       </div>
