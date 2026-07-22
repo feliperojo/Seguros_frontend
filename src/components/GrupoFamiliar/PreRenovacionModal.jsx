@@ -2,8 +2,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import apiRequest from "../../services/api";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
+import CopiarDatosModal from "../fase2/CopiarDatosModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
 import { pickClienteParaBorrador } from "../../utils/clienteFieldGroups";
+import {
+  buildCopyPatchForItem,
+  isTomadorItem,
+  itemElegibleParaCopiarEnBorrador,
+  itemToCopyMember,
+} from "../../utils/preRenovacionCopy";
 
 const TIPOS_PARENTESCO = [
   "Tomador",
@@ -60,6 +67,9 @@ const PreRenovacionModal = ({
     useState("");
   const [personaNuevaApellidos, setPersonaNuevaApellidos] = useState("");
   const [agregandoMiembro, setAgregandoMiembro] = useState(false);
+  const [showCopiarDatos, setShowCopiarDatos] = useState(false);
+  const [copiandoDatos, setCopiandoDatos] = useState(false);
+  const [cardsRevision, setCardsRevision] = useState(0);
 
   useEffect(() => {
     if (!show || !grupoFamiliarId || !anioDestino) return undefined;
@@ -75,10 +85,12 @@ const PreRenovacionModal = ({
     setShowOpcionesAgregar(false);
     setShowClienteExistente(false);
     setShowPersonaNueva(false);
+    setShowCopiarDatos(false);
     setPersonaNuevaParentesco("");
     setPersonaNuevaPrimerNombre("");
     setPersonaNuevaSegundoNombre("");
     setPersonaNuevaApellidos("");
+    setCardsRevision(0);
 
     (async () => {
       try {
@@ -197,6 +209,79 @@ const PreRenovacionModal = ({
 
   const items = useMemo(() => lote?.items || [], [lote?.items]);
 
+  const miembrosParaCopiar = useMemo(
+    () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
+    [items]
+  );
+
+  const tomadorSourceId = useMemo(() => {
+    const tomador = items.find(
+      (item) => itemElegibleParaCopiarEnBorrador(item) && isTomadorItem(item)
+    );
+    return tomador?.id ?? null;
+  }, [items]);
+
+  const puedeAbrirCopiar =
+    !loading &&
+    !consolidando &&
+    !copiandoDatos &&
+    !showConfirmacionFinal &&
+    itemsConGuardadoPendiente.size === 0 &&
+    miembrosParaCopiar.length >= 2;
+
+  const applyCopySelection = useCallback(
+    async ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+      const sourceItem = items.find(
+        (item) => Number(item.id) === Number(sourceId)
+      );
+      if (!sourceItem || !Array.isArray(targetIds) || targetIds.length === 0) {
+        return;
+      }
+
+      setCopiandoDatos(true);
+      setError("");
+      try {
+        const actualizados = [];
+        for (const targetId of targetIds) {
+          const targetItem = items.find(
+            (item) => Number(item.id) === Number(targetId)
+          );
+          if (!targetItem || !itemElegibleParaCopiarEnBorrador(targetItem)) {
+            continue;
+          }
+
+          const patch = buildCopyPatchForItem(sourceItem, targetItem, {
+            fieldKeys,
+            copyAddress,
+          });
+          if (Object.keys(patch).length === 0) continue;
+
+          const response = await apiRequest(
+            `/pre-renovacion/items/${targetItem.id}`,
+            "PUT",
+            { datos_borrador: patch }
+          );
+          actualizados.push(response?.data ?? response);
+        }
+
+        actualizados.forEach((itemActualizado) => {
+          if (itemActualizado?.id != null) {
+            handleItemUpdated(itemActualizado);
+          }
+        });
+        if (actualizados.length > 0) {
+          setCardsRevision((n) => n + 1);
+        }
+      } catch (requestError) {
+        console.error("Error al copiar datos en el borrador", requestError);
+        setError(getErrorMessage(requestError));
+      } finally {
+        setCopiandoDatos(false);
+      }
+    },
+    [items, handleItemUpdated]
+  );
+
   const defaultCoberturaTipo = useMemo(() => {
     const desdeItem = items.find((item) => item?.datos_borrador?.cobertura_tipo)
       ?.datos_borrador?.cobertura_tipo;
@@ -276,7 +361,8 @@ const PreRenovacionModal = ({
     [items]
   );
 
-  const hayGuardadosPendientes = itemsConGuardadoPendiente.size > 0;
+  const hayGuardadosPendientes =
+    itemsConGuardadoPendiente.size > 0 || copiandoDatos;
   const puedeConsolidar =
     items.length > 0 &&
     miembrosSinCodigo.length === 0 &&
@@ -516,10 +602,35 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
+                  {copiandoDatos && (
+                    <div className="alert alert-light border py-2 small">
+                      Copiando datos entre miembros del borrador…
+                    </div>
+                  )}
+
+                  {!loading && items.length > 0 && (
+                    <div className="d-flex justify-content-end mb-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        onClick={() => setShowCopiarDatos(true)}
+                        disabled={!puedeAbrirCopiar}
+                        title={
+                          miembrosParaCopiar.length < 2
+                            ? "Se necesitan al menos 2 miembros a renovar para copiar"
+                            : "Copiar datos entre miembros del borrador (mismo flujo del grupo familiar)"
+                        }
+                      >
+                        <i className="fas fa-copy me-1" aria-hidden="true" />
+                        Copiar
+                      </button>
+                    </div>
+                  )}
+
                   <div className="d-flex flex-column gap-3">
                     {items.map((item) => (
                       <PreRenovacionItemCard
-                        key={item.id}
+                        key={`${item.id}-${cardsRevision}`}
                         item={item}
                         anioDestino={anioDestino}
                         onItemUpdated={handleItemUpdated}
@@ -743,6 +854,15 @@ const PreRenovacionModal = ({
         defaultCoberturaTipo={defaultCoberturaTipo}
         onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
         onClose={() => setShowClienteExistente(false)}
+      />
+
+      <CopiarDatosModal
+        open={showCopiarDatos}
+        onClose={() => setShowCopiarDatos(false)}
+        members={miembrosParaCopiar}
+        defaultSourceId={tomadorSourceId}
+        zIndex={1080}
+        onApply={applyCopySelection}
       />
     </>
   );
