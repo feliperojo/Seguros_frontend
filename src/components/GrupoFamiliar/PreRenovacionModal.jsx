@@ -58,7 +58,6 @@ const PreRenovacionModal = ({
   const [itemsConGuardadoPendiente, setItemsConGuardadoPendiente] = useState(
     () => new Set()
   );
-  const [showOpcionesAgregar, setShowOpcionesAgregar] = useState(false);
   const [showClienteExistente, setShowClienteExistente] = useState(false);
   const [showPersonaNueva, setShowPersonaNueva] = useState(false);
   const [personaNuevaParentesco, setPersonaNuevaParentesco] = useState("");
@@ -82,7 +81,6 @@ const PreRenovacionModal = ({
     setShowConfirmacionFinal(false);
     setConfirmoRevision(false);
     setItemsConGuardadoPendiente(new Set());
-    setShowOpcionesAgregar(false);
     setShowClienteExistente(false);
     setShowPersonaNueva(false);
     setShowCopiarDatos(false);
@@ -163,7 +161,6 @@ const PreRenovacionModal = ({
             ? { ...prev, items: [...(prev.items || []), nuevoItem] }
             : prev
         );
-        setShowOpcionesAgregar(false);
         setShowClienteExistente(false);
         setShowPersonaNueva(false);
         setPersonaNuevaParentesco("");
@@ -207,7 +204,16 @@ const PreRenovacionModal = ({
     });
   }, []);
 
-  const items = useMemo(() => lote?.items || [], [lote?.items]);
+  const items = useMemo(() => {
+    const list = [...(lote?.items || [])];
+    list.sort((a, b) => {
+      const aTomador = isTomadorItem(a) ? 0 : 1;
+      const bTomador = isTomadorItem(b) ? 0 : 1;
+      if (aTomador !== bTomador) return aTomador - bTomador;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+    return list;
+  }, [lote?.items]);
 
   const miembrosParaCopiar = useMemo(
     () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
@@ -608,22 +614,61 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
-                  {!loading && items.length > 0 && (
-                    <div className="d-flex justify-content-end mb-2">
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary btn-sm"
-                        onClick={() => setShowCopiarDatos(true)}
-                        disabled={!puedeAbrirCopiar}
-                        title={
-                          miembrosParaCopiar.length < 2
-                            ? "Se necesitan al menos 2 miembros a renovar para copiar"
-                            : "Copiar datos entre miembros del borrador (mismo flujo del grupo familiar)"
-                        }
-                      >
-                        <i className="fas fa-copy me-1" aria-hidden="true" />
-                        Copiar
-                      </button>
+                  {!loading && (
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                      <h6 className="mb-0">
+                        <i className="fas fa-users me-2" aria-hidden="true" />
+                        Miembros
+                      </h6>
+                      <div className="btn-group">
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setShowClienteExistente(false);
+                            setShowPersonaNueva(true);
+                          }}
+                          disabled={
+                            consolidando ||
+                            agregandoMiembro ||
+                            copiandoDatos ||
+                            !lote?.id
+                          }
+                        >
+                          Añadir
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm"
+                          onClick={() => {
+                            setShowPersonaNueva(false);
+                            setShowClienteExistente(true);
+                          }}
+                          disabled={
+                            consolidando ||
+                            agregandoMiembro ||
+                            copiandoDatos ||
+                            !lote?.id
+                          }
+                        >
+                          <i className="fas fa-users me-1" aria-hidden="true" />
+                          Miembros existentes
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => setShowCopiarDatos(true)}
+                          disabled={!puedeAbrirCopiar}
+                          title={
+                            miembrosParaCopiar.length < 2
+                              ? "Se necesitan al menos 2 miembros a renovar para copiar"
+                              : "Copiar datos entre miembros del borrador"
+                          }
+                        >
+                          <i className="fas fa-copy me-1" aria-hidden="true" />
+                          Copiar
+                        </button>
+                      </div>
                     </div>
                   )}
 
@@ -641,169 +686,110 @@ const PreRenovacionModal = ({
                     ))}
                   </div>
 
-                  {!loading && lote?.id && (
-                    <div className="mt-3 border-top pt-3">
-                      {!showOpcionesAgregar &&
-                        !showPersonaNueva &&
-                        !showClienteExistente && (
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => setShowOpcionesAgregar(true)}
-                            disabled={consolidando || agregandoMiembro}
+                  {!loading && lote?.id && showPersonaNueva && (
+                    <form
+                      className="card card-body mt-3"
+                      onSubmit={handleAgregarPersonaNueva}
+                    >
+                      <div className="fw-semibold mb-2">
+                        Persona nueva para {anioDestino}
+                      </div>
+                      <div className="row g-2 align-items-end">
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Parentesco <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={personaNuevaParentesco}
+                            onChange={(e) =>
+                              setPersonaNuevaParentesco(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
                           >
-                            + Agregar miembro nuevo para {anioDestino}
-                          </button>
-                        )}
-
-                      {showOpcionesAgregar && (
-                        <div className="card card-body bg-light">
-                          <div className="fw-semibold mb-2">
-                            ¿Cómo quieres agregar el miembro?
-                          </div>
-                          <div className="d-flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => {
-                                setShowOpcionesAgregar(false);
-                                setShowClienteExistente(true);
-                              }}
-                              disabled={agregandoMiembro}
-                            >
-                              Cliente existente en el sistema
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => {
-                                setShowOpcionesAgregar(false);
-                                setShowPersonaNueva(true);
-                              }}
-                              disabled={agregandoMiembro}
-                            >
-                              Persona nueva
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-link btn-sm"
-                              onClick={() => setShowOpcionesAgregar(false)}
-                              disabled={agregandoMiembro}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
+                            <option value="">Seleccione…</option>
+                            {TIPOS_PARENTESCO.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
-
-                      {showPersonaNueva && (
-                        <form
-                          className="card card-body"
-                          onSubmit={handleAgregarPersonaNueva}
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Primer nombre <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaPrimerNombre}
+                            onChange={(e) =>
+                              setPersonaNuevaPrimerNombre(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Segundo nombre
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaSegundoNombre}
+                            onChange={(e) =>
+                              setPersonaNuevaSegundoNombre(e.target.value)
+                            }
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Apellidos <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaApellidos}
+                            onChange={(e) =>
+                              setPersonaNuevaApellidos(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                      </div>
+                      <div className="d-flex gap-2 mt-3">
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-sm"
+                          disabled={
+                            agregandoMiembro ||
+                            !personaNuevaParentesco.trim() ||
+                            !personaNuevaPrimerNombre.trim() ||
+                            !personaNuevaApellidos.trim()
+                          }
                         >
-                          <div className="fw-semibold mb-2">
-                            Persona nueva para {anioDestino}
-                          </div>
-                          <div className="row g-2 align-items-end">
-                            <div className="col-md-3">
-                              <label className="form-label form-label-sm">
-                                Parentesco <span className="text-danger">*</span>
-                              </label>
-                              <select
-                                className="form-select form-select-sm"
-                                value={personaNuevaParentesco}
-                                onChange={(e) =>
-                                  setPersonaNuevaParentesco(e.target.value)
-                                }
-                                required
-                                disabled={agregandoMiembro}
-                              >
-                                <option value="">Seleccione…</option>
-                                {TIPOS_PARENTESCO.map((t) => (
-                                  <option key={t} value={t}>
-                                    {t}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label form-label-sm">
-                                Primer nombre{" "}
-                                <span className="text-danger">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control form-control-sm"
-                                value={personaNuevaPrimerNombre}
-                                onChange={(e) =>
-                                  setPersonaNuevaPrimerNombre(e.target.value)
-                                }
-                                required
-                                disabled={agregandoMiembro}
-                              />
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label form-label-sm">
-                                Segundo nombre
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control form-control-sm"
-                                value={personaNuevaSegundoNombre}
-                                onChange={(e) =>
-                                  setPersonaNuevaSegundoNombre(e.target.value)
-                                }
-                                disabled={agregandoMiembro}
-                              />
-                            </div>
-                            <div className="col-md-3">
-                              <label className="form-label form-label-sm">
-                                Apellidos{" "}
-                                <span className="text-danger">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control form-control-sm"
-                                value={personaNuevaApellidos}
-                                onChange={(e) =>
-                                  setPersonaNuevaApellidos(e.target.value)
-                                }
-                                required
-                                disabled={agregandoMiembro}
-                              />
-                            </div>
-                          </div>
-                          <div className="d-flex gap-2 mt-3">
-                            <button
-                              type="submit"
-                              className="btn btn-primary btn-sm"
-                              disabled={
-                                agregandoMiembro ||
-                                !personaNuevaParentesco.trim() ||
-                                !personaNuevaPrimerNombre.trim() ||
-                                !personaNuevaApellidos.trim()
-                              }
-                            >
-                              {agregandoMiembro ? "Agregando…" : "Agregar"}
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm"
-                              onClick={() => {
-                                setShowPersonaNueva(false);
-                                setPersonaNuevaParentesco("");
-                                setPersonaNuevaPrimerNombre("");
-                                setPersonaNuevaSegundoNombre("");
-                                setPersonaNuevaApellidos("");
-                              }}
-                              disabled={agregandoMiembro}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
+                          {agregandoMiembro ? "Agregando…" : "Agregar"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => {
+                            setShowPersonaNueva(false);
+                            setPersonaNuevaParentesco("");
+                            setPersonaNuevaPrimerNombre("");
+                            setPersonaNuevaSegundoNombre("");
+                            setPersonaNuevaApellidos("");
+                          }}
+                          disabled={agregandoMiembro}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </div>
 

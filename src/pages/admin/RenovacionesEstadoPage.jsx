@@ -189,7 +189,7 @@ const RenovacionesEstadoPage = () => {
             <div className="flex-grow-1">
               <InputGroup>
                 <Form.Control
-                  placeholder="Buscar por ID o persona de contacto..."
+                  placeholder="Buscar por ID, responsable, contacto o nombre de miembro…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
@@ -268,6 +268,7 @@ const RenovacionesEstadoPage = () => {
                   <thead>
                     <tr>
                       <th>GRUPO</th>
+                      <th>RESPONSABLE</th>
                       <th>MIEMBROS ACTIVOS</th>
                       <th>ESTADO</th>
                       <th>DETALLE</th>
@@ -287,6 +288,13 @@ const RenovacionesEstadoPage = () => {
                                 ? fila.tomador_nombre
                                 : fila.persona_contacto || "Sin asignar"}
                             </div>
+                          </td>
+                          <td>
+                            <span className="text-muted">
+                              {fila.responsable?.trim()
+                                ? fila.responsable
+                                : "Sin responsable"}
+                            </span>
                           </td>
                           <td>
                             <span className="badge rounded-circle bg-info text-white me-1">
