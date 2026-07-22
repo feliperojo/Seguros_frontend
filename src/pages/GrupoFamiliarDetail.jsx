@@ -1722,7 +1722,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 type="button"
                 className="btn btn-link btn-sm text-danger text-decoration-none"
                 onClick={() => setShowRenovacionModal(true)}
-                title="Ejecuta la renovación real de inmediato, sin pasar por un borrador. No se puede deshacer."
+                title="Ejecuta la renovación real de inmediato, sin pasar por una pre-renovación. No se puede deshacer."
               >
                 <i className="fas fa-triangle-exclamation me-1" aria-hidden="true" />
                 Renovar ahora (acción inmediata)

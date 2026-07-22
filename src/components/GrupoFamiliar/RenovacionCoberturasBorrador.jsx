@@ -161,7 +161,7 @@ const RenovacionCoberturasBorrador = ({
     return (
       <div className="modal-body">
         <div className="alert alert-warning mb-0">
-          No se encontró información de borrador de renovación.
+          No se encontró información de pre-renovación.
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onClose}>

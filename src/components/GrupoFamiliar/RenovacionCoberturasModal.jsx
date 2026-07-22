@@ -157,7 +157,7 @@ const RenovacionCoberturasModal = ({
       console.error("Error al generar borrador de renovación", err);
       setError(
         err?.response?.data?.message ||
-          "Ocurrió un error al generar el borrador de renovación."
+          "Ocurrió un error al generar la pre-renovación."
       );
     } finally {
       setLoading(false);

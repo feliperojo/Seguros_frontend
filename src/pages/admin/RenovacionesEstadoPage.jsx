@@ -24,7 +24,7 @@ const ANIO_DEFAULT = new Date().getFullYear() + 1;
 const ESTADOS_FILTRO = [
   { key: "", label: "Todos" },
   { key: "pendiente", label: "Pendiente" },
-  { key: "borrador", label: "En borrador" },
+  { key: "borrador", label: "En pre-renovación" },
   { key: "consolidado", label: "Renovado" },
 ];
 
@@ -33,7 +33,7 @@ const estadoBadge = (estado) => {
     case "pendiente":
       return { label: "Pendiente", bg: "secondary" };
     case "borrador":
-      return { label: "En borrador", bg: "primary" };
+      return { label: "En pre-renovación", bg: "primary" };
     case "consolidado":
       return { label: "Renovado", bg: "success" };
     default:
@@ -68,6 +68,8 @@ const RenovacionesEstadoPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("");
+  const [responsableFiltro, setResponsableFiltro] = useState("");
+  const [responsablesOpciones, setResponsablesOpciones] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [paginationMeta, setPaginationMeta] = useState({
     total: 0,
@@ -85,11 +87,11 @@ const RenovacionesEstadoPage = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearch, estadoFiltro, anioDestino]);
+  }, [debouncedSearch, estadoFiltro, anioDestino, responsableFiltro]);
 
   useEffect(() => {
     fetchData();
-  }, [debouncedSearch, estadoFiltro, anioDestino, currentPage]);
+  }, [debouncedSearch, estadoFiltro, anioDestino, currentPage, responsableFiltro]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -102,6 +104,9 @@ const RenovacionesEstadoPage = () => {
       if (estadoFiltro) {
         params.set("estado", estadoFiltro);
       }
+      if (responsableFiltro) {
+        params.set("responsable", responsableFiltro);
+      }
       if (debouncedSearch.trim()) {
         params.set("search", debouncedSearch.trim());
       }
@@ -113,6 +118,11 @@ const RenovacionesEstadoPage = () => {
 
       if (response?.status === "success" && Array.isArray(response.data)) {
         setFilas(response.data);
+        setResponsablesOpciones(
+          Array.isArray(response?.filtros?.responsables)
+            ? response.filtros.responsables
+            : []
+        );
         setPaginationMeta(
           response.meta || {
             total: response.data.length,
@@ -123,6 +133,7 @@ const RenovacionesEstadoPage = () => {
         );
       } else {
         setFilas([]);
+        setResponsablesOpciones([]);
         setPaginationMeta({
           total: 0,
           last_page: 1,
@@ -141,7 +152,7 @@ const RenovacionesEstadoPage = () => {
 
   const handleEliminarBorrador = async (fila) => {
     const confirmado = window.confirm(
-      `¿Eliminar el borrador de pre-renovación del grupo #${fila.id}? Se perderá todo lo que se haya guardado ahí (no afecta las coberturas reales de ${anioDestino - 1}).`
+      `¿Eliminar la pre-renovación del grupo #${fila.id}? Se perderá todo lo que se haya guardado ahí (no afecta las coberturas reales de ${anioDestino - 1}).`
     );
     if (!confirmado) return;
 
@@ -152,9 +163,9 @@ const RenovacionesEstadoPage = () => {
       );
       await fetchData();
     } catch (error) {
-      console.error("Error al eliminar el borrador:", error);
+      console.error("Error al eliminar la pre-renovación:", error);
       alert(
-        error?.response?.data?.message || "No se pudo eliminar el borrador."
+        error?.response?.data?.message || "No se pudo eliminar la pre-renovación."
       );
     }
   };
@@ -198,6 +209,21 @@ const RenovacionesEstadoPage = () => {
                 </Button>
               </InputGroup>
             </div>
+            <div style={{ minWidth: "200px" }}>
+              <Form.Select
+                value={responsableFiltro}
+                onChange={(e) => setResponsableFiltro(e.target.value)}
+                aria-label="Filtrar por responsable"
+              >
+                <option value="">Todos los responsables</option>
+                <option value="__sin_responsable__">Sin responsable</option>
+                {responsablesOpciones.map((nombre) => (
+                  <option key={nombre} value={nombre}>
+                    {nombre}
+                  </option>
+                ))}
+              </Form.Select>
+            </div>
             <div style={{ minWidth: "140px" }}>
               <Form.Control
                 type="number"
@@ -216,7 +242,7 @@ const RenovacionesEstadoPage = () => {
                 variant="danger"
                 onClick={() => setShowConsolidarTodos(true)}
               >
-                Consolidar todos los borradores
+                Consolidar todas las pre-renovaciones
               </Button>
             </div>
           </div>
@@ -269,6 +295,7 @@ const RenovacionesEstadoPage = () => {
                     <tr>
                       <th>GRUPO</th>
                       <th>RESPONSABLE</th>
+                      <th>PRODUCTO</th>
                       <th>MIEMBROS ACTIVOS</th>
                       <th>ESTADO</th>
                       <th>DETALLE</th>
@@ -297,6 +324,11 @@ const RenovacionesEstadoPage = () => {
                             </span>
                           </td>
                           <td>
+                            <span className="text-muted">
+                              {fila.producto || "-"}
+                            </span>
+                          </td>
+                          <td>
                             <span className="badge rounded-circle bg-info text-white me-1">
                               {fila.miembros_activos ?? 0}
                             </span>
@@ -312,7 +344,10 @@ const RenovacionesEstadoPage = () => {
                               <div>
                                 <div>
                                   {fila.items_renovar ?? 0} a renovar /{" "}
-                                  {fila.items_omitir ?? 0} a omitir
+                                  {fila.items_omitir ?? 0}{" "}
+                                  {(fila.items_omitir ?? 0) === 1
+                                    ? "retirado"
+                                    : "retirados"}
                                 </div>
                                 <div className="text-muted small">
                                   Actualizado:{" "}
@@ -354,7 +389,7 @@ const RenovacionesEstadoPage = () => {
                                       setGrupoSeleccionado({ id: fila.id })
                                     }
                                   >
-                                    Generar borrador
+                                    Generar pre-renovación
                                   </Dropdown.Item>
                                 )}
                                 {fila.estado_renovacion === "borrador" && (
@@ -363,7 +398,7 @@ const RenovacionesEstadoPage = () => {
                                       setGrupoSeleccionado({ id: fila.id })
                                     }
                                   >
-                                    Gestionar borrador
+                                    Gestionar pre-renovación
                                   </Dropdown.Item>
                                 )}
                                 {fila.estado_renovacion === "borrador" && (
@@ -371,7 +406,7 @@ const RenovacionesEstadoPage = () => {
                                     className="text-danger"
                                     onClick={() => handleEliminarBorrador(fila)}
                                   >
-                                    Eliminar borrador
+                                    Eliminar pre-renovación
                                   </Dropdown.Item>
                                 )}
                               </Dropdown.Menu>

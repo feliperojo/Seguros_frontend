@@ -426,7 +426,7 @@ const PreRenovacionItemCard = ({
                   onClick={handleQuitarMiembroNuevo}
                   disabled={disabled || estadosGuardado.quitar === "guardando"}
                 >
-                  🗑 Quitar de este borrador
+                  🗑 Quitar de esta pre-renovación
                 </button>
                 {renderEstado("quitar")}
               </div>
@@ -464,7 +464,7 @@ const PreRenovacionItemCard = ({
       {!esMiembroNuevo && renovar && !cobertura.activo && (
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
-          cancelada o retirada después de agregarse a este borrador. Revisa si
+          cancelada o retirada después de agregarse a esta pre-renovación. Revisa si
           corresponde desmarcar &quot;Renovar a este miembro&quot;.
         </div>
       )}

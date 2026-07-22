@@ -279,7 +279,7 @@ const PreRenovacionModal = ({
           setCardsRevision((n) => n + 1);
         }
       } catch (requestError) {
-        console.error("Error al copiar datos en el borrador", requestError);
+        console.error("Error al copiar datos en la pre-renovación", requestError);
         setError(getErrorMessage(requestError));
       } finally {
         setCopiandoDatos(false);
@@ -435,7 +435,7 @@ const PreRenovacionModal = ({
               <h5 className="modal-title">
                 {showConfirmacionFinal
                   ? `Confirmar consolidación ${anioDestino}`
-                  : `Pre-renovación ${anioDestino} — borrador`}
+                  : `Pre-renovación ${anioDestino}`}
               </h5>
               <button
                 type="button"
@@ -549,7 +549,7 @@ const PreRenovacionModal = ({
               <>
                 <div className="modal-body">
                   <div className="alert alert-info">
-                    <strong>Esto es un borrador.</strong> Puedes cerrar esta
+                    <strong>Esto es una pre-renovación.</strong> Puedes cerrar esta
                     ventana y volver más tarde — cada cambio se guarda
                     automáticamente. Nada se aplica a las pólizas reales hasta
                     que uses “Consolidar”.
@@ -610,7 +610,7 @@ const PreRenovacionModal = ({
 
                   {copiandoDatos && (
                     <div className="alert alert-light border py-2 small">
-                      Copiando datos entre miembros del borrador…
+                      Copiando datos entre miembros de la pre-renovación…
                     </div>
                   )}
 
@@ -662,7 +662,7 @@ const PreRenovacionModal = ({
                           title={
                             miembrosParaCopiar.length < 2
                               ? "Se necesitan al menos 2 miembros a renovar para copiar"
-                              : "Copiar datos entre miembros del borrador"
+                              : "Copiar datos entre miembros de la pre-renovación"
                           }
                         >
                           <i className="fas fa-copy me-1" aria-hidden="true" />
