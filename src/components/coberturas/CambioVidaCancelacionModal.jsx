@@ -64,13 +64,21 @@ const CambioVidaCancelacionModal = ({
   const motivosCancelacion = [
     "CAMBIO DE AGENTE",
     "MS CANCELO POR FALTA DE DOCUMENTOS",
-    "POR FALTA DE PAGO",
-    "POR FALTA DE PAGO INICIAL",
     "TOMO MEDICAID",
-    "TOMO MEDICARE",
-    "TOMO SEGURO POR EL TRABAJO",
-    "CLIENTE CANCELO",
-    "CLIENTE SE MUDO A OTRO ESTADO",
+    "TOMO MEDICARE (65 AÑOS)",
+    "TOMO SEGURO POR EMPLEADOR/OTRO",
+    "CLIENTE CANCELO POR PRECIO",
+    "SE MUDO A OTRO ESTADO/PAIS",
+    "YA NO NECESITA EL SEGURO",
+    "SE CANCELO POR FALTA DE PAGO (MORA)",
+    "NO REALIZO EL PAGO INICIAL",
+    "OTRO",
+  ];
+
+  // Motivos de retiro: mismos de cancelación + opción adicional
+  const motivosRetiro = [
+    ...motivosCancelacion.slice(0, -1),
+    "TAXES POR SEPARADO",
     "OTRO",
   ];
 
@@ -1113,7 +1121,7 @@ const CambioVidaCancelacionModal = ({
                           onChange={(e) => setMotivoRetiroGlobal(e.target.value)}
                         >
                           <option value="">Seleccione...</option>
-                          {motivosCancelacion.map((motivo) => (
+                          {motivosRetiro.map((motivo) => (
                             <option key={`r-${motivo}`} value={motivo}>{motivo}</option>
                           ))}
                         </Form.Select>
@@ -1423,7 +1431,7 @@ const CambioVidaCancelacionModal = ({
                                         }
                                       >
                                         <option value="">Seleccione...</option>
-                                        {motivosCancelacion.map((motivo) => (
+                                        {motivosRetiro.map((motivo) => (
                                           <option key={`ret-${motivo}`} value={motivo}>{motivo}</option>
                                         ))}
                                       </Form.Select>
