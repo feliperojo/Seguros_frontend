@@ -23,11 +23,13 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
+import { useAuth } from "../../context/AuthContext";
 import { usersService, rolesService } from "../../services/adminApi";
 import UserForm from "../../components/admin/UserForm";
 import UserRolesModal from "../../components/admin/UserRolesModal";
 
 const UsersList = () => {
+  const { onlineUserIds, isPresenceLive } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -441,14 +443,23 @@ const UsersList = () => {
                             </Badge>
                           </td>
                           <td>
-                            <Badge bg={user.is_online ? "success" : "secondary"}>
-                              {user.is_online ? "En línea" : "Desconectado"}
-                            </Badge>
-                            {user.last_login_at && (
-                              <div className="text-muted small mt-1">
-                                Últ. acceso: {user.last_login_at}
-                              </div>
-                            )}
+                            {(() => {
+                              const isOnline = isPresenceLive
+                                ? Boolean(onlineUserIds?.has(Number(user.id)))
+                                : Boolean(user.is_online);
+                              return (
+                                <>
+                                  <Badge bg={isOnline ? "success" : "secondary"}>
+                                    {isOnline ? "En línea" : "Desconectado"}
+                                  </Badge>
+                                  {user.last_login_at && (
+                                    <div className="text-muted small mt-1">
+                                      Últ. acceso: {user.last_login_at}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td>
                             <div className="d-flex gap-2">

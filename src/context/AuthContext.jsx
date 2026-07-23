@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../services/api";
 import { normalizePermissions, normalizePermission, getPermissionAliases } from "../utils/permissions";
+import { useOnlinePresence } from "../hooks/useOnlinePresence";
 
 const AuthContext = createContext(null);
 
@@ -36,7 +37,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-
+  const { onlineUserIds, isPresenceLive } = useOnlinePresence(isAuthenticated);
   // Cargar datos del usuario al iniciar
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -375,6 +376,8 @@ export const AuthProvider = ({ children }) => {
     setAppSettings,
     isAuthenticated,
     loading,
+    onlineUserIds,
+    isPresenceLive,
     login,
     logout,
     hasPermission,
