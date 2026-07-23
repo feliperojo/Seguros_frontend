@@ -420,6 +420,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
                 <Link to="/admin/audit-logs" className={`submenu-link ${isActive('/admin/audit-logs') ? 'active' : ''}`}>
                   <FaHistory /> Auditoría
                 </Link>
+                <Link to="/admin/horas-conectadas" className={`submenu-link ${isActive('/admin/horas-conectadas') ? 'active' : ''}`}>
+                  <FaClock /> Horas Conectadas
+                </Link>
                 <Link to="/admin/configurador" className={`submenu-link ${isActive('/admin/configurador') ? 'active' : ''}`}>
                   <FaCogs /> Configurador
                 </Link>

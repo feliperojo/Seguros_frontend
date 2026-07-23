@@ -55,6 +55,16 @@ const UsersList = () => {
     loadRoles();
   }, [currentPage, searchTerm, statusFilter, roleFilter]);
 
+  // Refresca la lista periódicamente para reflejar quién está conectado ahora mismo.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!document.hidden) {
+        loadUsers();
+      }
+    }, 20000);
+    return () => clearInterval(intervalId);
+  }, [currentPage, searchTerm, statusFilter, roleFilter]);
+
   const loadUsers = async () => {
     try {
       setLoading(true);
@@ -401,6 +411,7 @@ const UsersList = () => {
                       <th>Email</th>
                       <th>Roles</th>
                       <th>Estado</th>
+                      <th>Conexión</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -428,6 +439,16 @@ const UsersList = () => {
                             <Badge bg={user.status === "active" ? "success" : "secondary"}>
                               {user.status === "active" ? "Activo" : "Inactivo"}
                             </Badge>
+                          </td>
+                          <td>
+                            <Badge bg={user.is_online ? "success" : "secondary"}>
+                              {user.is_online ? "En línea" : "Desconectado"}
+                            </Badge>
+                            {user.last_login_at && (
+                              <div className="text-muted small mt-1">
+                                Últ. acceso: {user.last_login_at}
+                              </div>
+                            )}
                           </td>
                           <td>
                             <div className="d-flex gap-2">
@@ -495,7 +516,7 @@ const UsersList = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted">
+                        <td colSpan={7} className="text-center text-muted">
                           No hay usuarios para mostrar
                         </td>
                       </tr>

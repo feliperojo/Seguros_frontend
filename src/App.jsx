@@ -60,6 +60,7 @@ import RolesList from "./pages/admin/RolesList";
 import RolePermissions from "./pages/admin/RolePermissions";
 import PermissionsList from "./pages/admin/PermissionsList";
 import AuditLogsList from "./pages/admin/AuditLogsList";
+import UserSessionsReport from "./pages/admin/UserSessionsReport";
 import OperationalConceptsAdmin from "./pages/admin/OperationalConceptsAdmin";
 import Configurador from "./pages/admin/Configurador";
 import RenovacionesEstadoPage from "./pages/admin/RenovacionesEstadoPage";
@@ -183,6 +184,14 @@ const App = () => {
           element={
             <PermissionRoute permission="users.view">
               <AuditLogsList />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/horas-conectadas"
+          element={
+            <PermissionRoute permission="audit.read">
+              <UserSessionsReport />
             </PermissionRoute>
           }
         />

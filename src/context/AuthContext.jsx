@@ -48,6 +48,28 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Heartbeat de presencia: mientras haya sesión activa, avisa periódicamente al backend
+  // que el usuario sigue conectado (alimenta la columna "Conexión" en Administración de Usuarios).
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const sendHeartbeat = () => {
+      if (document.hidden) return;
+      apiRequest("/v1/auth/heartbeat", "POST").catch(() => {
+        // Silencioso: si falla (red, token expirado) simplemente no se refresca la presencia.
+      });
+    };
+
+    sendHeartbeat();
+    const intervalId = setInterval(sendHeartbeat, 60000);
+    document.addEventListener("visibilitychange", sendHeartbeat);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", sendHeartbeat);
+    };
+  }, [isAuthenticated]);
+
   const loadUserData = async () => {
     try {
       const response = await apiRequest("/v1/auth/me", "GET");
