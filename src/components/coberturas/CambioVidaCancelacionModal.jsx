@@ -75,12 +75,8 @@ const CambioVidaCancelacionModal = ({
     "OTRO",
   ];
 
-  // Motivos de retiro: mismos de cancelación + opción adicional
-  const motivosRetiro = [
-    ...motivosCancelacion.slice(0, -1),
-    "TAXES POR SEPARADO",
-    "OTRO",
-  ];
+  // Motivos de retiro (lista distinta a cancelación)
+  const motivosRetiro = ["TAXES POR SEPARADO"];
 
   const esTrue = (v) => v === true || v === "true" || v === 1 || v === "1";
   const hasFechaValida = (v) => {
