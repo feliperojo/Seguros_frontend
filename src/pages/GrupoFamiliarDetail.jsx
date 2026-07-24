@@ -1707,27 +1707,6 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 ))}
               </Form.Select>
             </div>
-
-            <div className="d-flex align-items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-outline-primary btn-sm"
-                onClick={() => setShowPreRenovacionModal(true)}
-              >
-                <i className="fas fa-file-signature me-1" aria-hidden="true" />
-                Pre-renovación {ANIO_RENOVACION}
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-link btn-sm text-danger text-decoration-none"
-                onClick={() => setShowRenovacionModal(true)}
-                title="Ejecuta la renovación real de inmediato, sin pasar por una pre-renovación. No se puede deshacer."
-              >
-                <i className="fas fa-triangle-exclamation me-1" aria-hidden="true" />
-                Renovar ahora (acción inmediata)
-              </button>
-            </div>
           </div>
         )}
 

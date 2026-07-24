@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Container,
   Card,
@@ -16,6 +16,7 @@ import { Helmet } from "react-helmet-async";
 import apiRequest from "../../services/api";
 import PreRenovacionModal from "../../components/GrupoFamiliar/PreRenovacionModal";
 import ConsolidarTodosModal from "../../components/GrupoFamiliar/ConsolidarTodosModal";
+import { estadoGestionBadge } from "../../utils/renovacionEstadoGestion";
 import "../../styles/GruposFamiliaresListado.css";
 
 const ITEMS_PER_PAGE = 50;
@@ -298,6 +299,7 @@ const RenovacionesEstadoPage = () => {
                       <th>PRODUCTO</th>
                       <th>MIEMBROS ACTIVOS</th>
                       <th>ESTADO</th>
+                      <th>ESTADO DE GESTIÓN</th>
                       <th>DETALLE</th>
                       <th className="text-center">ACCIÓN</th>
                     </tr>
@@ -305,6 +307,9 @@ const RenovacionesEstadoPage = () => {
                   <tbody>
                     {filas.map((fila) => {
                       const badge = estadoBadge(fila.estado_renovacion);
+                      const badgeGestion = estadoGestionBadge(
+                        fila.estado_gestion
+                      );
                       return (
                         <tr key={fila.id}>
                           <td>
@@ -337,6 +342,11 @@ const RenovacionesEstadoPage = () => {
                           <td>
                             <Badge pill bg={badge.bg}>
                               {badge.label}
+                            </Badge>
+                          </td>
+                          <td>
+                            <Badge pill bg={badgeGestion.bg}>
+                              {badgeGestion.label}
                             </Badge>
                           </td>
                           <td>
