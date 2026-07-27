@@ -84,3 +84,40 @@ export const buildDeltaCambiosFromPayloads = ({
 
   return cambios;
 };
+
+/**
+ * En legacy el backend solo permite vaciar campos de cobertura si vienen en `_dirty_fields`.
+ * Reutiliza el diff ya calculado (mismo criterio que modo delta) y lo adjunta al payload completo.
+ */
+export const attachCoberturaDirtyFieldsForLegacy = (
+  coberturasPayload = [],
+  coberturasCambios = [],
+) => {
+  if (!Array.isArray(coberturasPayload) || coberturasPayload.length === 0) {
+    return coberturasPayload;
+  }
+  if (!Array.isArray(coberturasCambios) || coberturasCambios.length === 0) {
+    return coberturasPayload;
+  }
+
+  const dirtyById = new Map(
+    coberturasCambios
+      .filter((c) => c?.id != null && Array.isArray(c._dirty_fields) && c._dirty_fields.length > 0)
+      .map((c) => [Number(c.id), c._dirty_fields]),
+  );
+
+  if (dirtyById.size === 0) {
+    return coberturasPayload;
+  }
+
+  return coberturasPayload.map((cobertura) => {
+    const dirtyFields = dirtyById.get(Number(cobertura?.id));
+    if (!dirtyFields) {
+      return cobertura;
+    }
+    return {
+      ...cobertura,
+      _dirty_fields: dirtyFields,
+    };
+  });
+};
