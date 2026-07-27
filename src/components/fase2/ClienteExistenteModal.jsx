@@ -159,7 +159,7 @@ export default function ClienteExistenteModal({
   };
 
   return (
-    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
+    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)", zIndex: 1075}}>
       <div className="modal-dialog modal-xl">
         <div className="modal-content">
 

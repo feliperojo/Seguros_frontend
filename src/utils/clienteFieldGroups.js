@@ -59,3 +59,42 @@ export const CLIENTE_FIELDS_EMPLEO = [
   ["ingreso_por_periodo_ocasional", "Ingreso por periodo ocasional", "number"],
   ["nota_ingreso_ocasional", "Nota de ingreso ocasional", "text"],
 ];
+
+/** Claves de cliente permitidas en datos_borrador (mismas que el backend). */
+export const CLIENTE_BORRADOR_KEYS = [
+  ...CLIENTE_FIELDS_PRINCIPALES.map(([key]) => key),
+  ...CLIENTE_FIELDS_MIGRATORIO.map(([key]) => key),
+  ...CLIENTE_FIELDS_DIRECCION.map(([key]) => key),
+  ...CLIENTE_FIELDS_CONTACTO.map(([key]) => key),
+  ...CLIENTE_FIELDS_EMPLEO.map(([key]) => key),
+];
+
+const FECHA_KEYS = new Set([
+  "fecha_nacimiento",
+  "fecha_emision",
+  "fecha_expiracion",
+]);
+
+/**
+ * Copia al borrador solo campos de cliente con valor útil (omite vacíos).
+ * Normaliza fechas ISO a YYYY-MM-DD para inputs type="date".
+ */
+export const pickClienteParaBorrador = (clienteFull = {}) => {
+  const out = {};
+  if (!clienteFull || typeof clienteFull !== "object") return out;
+
+  for (const key of CLIENTE_BORRADOR_KEYS) {
+    const v = clienteFull[key];
+    if (v === null || v === undefined) continue;
+    if (typeof v === "string" && !v.trim()) continue;
+
+    if (FECHA_KEYS.has(key) && typeof v === "string") {
+      out[key] = v.slice(0, 10);
+      continue;
+    }
+
+    out[key] = v;
+  }
+
+  return out;
+};

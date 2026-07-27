@@ -4,7 +4,10 @@ import apiRequest from "./api";
 /** Obtiene el catálogo de compañías desde la API */
 export async function fetchCompanies() {
   const res = await apiRequest("compania/", "GET");
-  return Array.isArray(res) ? res : [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res?.data)) return res.data;
+  if (Array.isArray(res?.data?.data)) return res.data.data;
+  return [];
 }
 
 /** Busca nombre por id (id puede venir string/number) */

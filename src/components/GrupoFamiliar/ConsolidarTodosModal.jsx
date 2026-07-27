@@ -5,7 +5,7 @@ import apiRequest from "../../services/api";
 const getErrorMessage = (error) =>
   error?.response?.data?.message ||
   error?.message ||
-  "Ocurrió un error al consolidar los borradores.";
+  "Ocurrió un error al consolidar las pre-renovaciones.";
 
 const ConsolidarTodosModal = ({
   show,
@@ -65,7 +65,7 @@ const ConsolidarTodosModal = ({
       );
       setResumen(Array.isArray(response?.data) ? response.data : []);
     } catch (requestError) {
-      console.error("Error al consolidar todos los borradores", requestError);
+      console.error("Error al consolidar todas las pre-renovaciones", requestError);
       setError(getErrorMessage(requestError));
     } finally {
       setConsolidando(false);
@@ -101,7 +101,7 @@ const ConsolidarTodosModal = ({
               <h5 className="modal-title">
                 {resumen
                   ? `Resumen consolidación ${anioDestino}`
-                  : `Consolidar borradores ${anioDestino}`}
+                  : `Consolidar pre-renovaciones ${anioDestino}`}
               </h5>
               <button
                 type="button"
@@ -123,7 +123,7 @@ const ConsolidarTodosModal = ({
                     <span className="visually-hidden">Cargando...</span>
                   </div>
                   <p className="mt-2 mb-0 text-muted">
-                    Cargando borradores pendientes...
+                    Cargando pre-renovaciones pendientes...
                   </p>
                 </div>
               ) : resumen ? (
@@ -159,14 +159,14 @@ const ConsolidarTodosModal = ({
                 </div>
               ) : total === 0 ? (
                 <p className="text-muted mb-0">
-                  No hay borradores pendientes de consolidar para el año{" "}
+                  No hay pre-renovaciones pendientes de consolidar para el año{" "}
                   {anioDestino}.
                 </p>
               ) : (
                 <>
                   <div className="alert alert-warning">
                     Se consolidarán <strong>{total}</strong> grupo
-                    {total !== 1 ? "s" : ""} en borrador para el año{" "}
+                    {total !== 1 ? "s" : ""} en pre-renovación para el año{" "}
                     <strong>{anioDestino}</strong>. Esta acción ejecuta la
                     renovación real.
                   </div>
@@ -177,7 +177,7 @@ const ConsolidarTodosModal = ({
                         <tr>
                           <th>Grupo</th>
                           <th>Ítems a renovar</th>
-                          <th>Ítems a omitir</th>
+                          <th>Ítems retirados</th>
                         </tr>
                       </thead>
                       <tbody>

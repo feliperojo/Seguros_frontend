@@ -1,7 +1,10 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useRef, useState } from "react";
 import apiRequest from "../../services/api";
-import { fetchCompanies } from "../../services/companies";
+import useCompanies from "../../hooks/useCompanies";
+import LanguageSelect from "../selects/LanguageSelect";
+import MdyDashDateInput from "../common/MdyDashDateInput";
+import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import { buildDireccion } from "../../utils/direccion";
 import {
   CLIENTE_FIELDS_PRINCIPALES,
@@ -10,23 +13,35 @@ import {
   CLIENTE_FIELDS_CONTACTO,
   CLIENTE_FIELDS_EMPLEO,
 } from "../../utils/clienteFieldGroups";
+import {
+  normalizeGeneroForSelect,
+  normalizeStatusMigratorioForSelect,
+} from "../../utils/clienteFieldNormalize";
+import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
 
 const TIPO_PAGO_OPTIONS = [
-  { value: "DEBITO AUTOMATICO", label: "DEBITO AUTOMATICO" },
-  { value: "CTE PAGA", label: "CTE PAGA" },
-  { value: "MES A MES", label: "MES A MES" },
+  "DEBITO AUTOMATICO",
+  "CTE PAGA",
+  "MES A MES",
 ];
+
+/** Misma lista que TomaDeDatos (grupo familiar). */
+const METAL_OPTIONS = ["BRONCE", "SILVER", "GOLD", "PLATINUM"];
+const RED_OPTIONS = ["HMO", "EPO", "PPO", "POS"];
+const GENERO_OPTIONS = ["Masculino", "Femenino", "Otro"];
 
 const MOTIVOS_RETIRO_NO_RENOVACION = [
   "CAMBIO DE AGENTE",
   "MS CANCELO POR FALTA DE DOCUMENTOS",
-  "POR FALTA DE PAGO",
-  "POR FALTA DE PAGO INICIAL",
   "TOMO MEDICAID",
-  "TOMO MEDICARE",
-  "TOMO SEGURO POR EL TRABAJO",
-  "CLIENTE CANCELO",
-  "CLIENTE SE MUDO A OTRO ESTADO",
+  "TOMO MEDICARE (65 AÑOS)",
+  "TOMO SEGURO POR EMPLEADOR/OTRO",
+  "CLIENTE CANCELO POR PRECIO",
+  "SE MUDO A OTRO ESTADO/PAIS",
+  "YA NO NECESITA EL SEGURO",
+  "SE CANCELO POR FALTA DE PAGO (MORA)",
+  "NO REALIZO EL PAGO INICIAL",
+  "TAXES POR SEPARADO",
   "OTRO",
 ];
 
@@ -39,12 +54,11 @@ const DIRECCION_FORMULA_FIELDS = new Set([
   "codigo_postal",
 ]);
 
+/** Campos de póliza de texto libre (metal/red van como select aparte). */
 const TEXT_FIELDS = [
   ["codigo_poliza", "Código de póliza", "text", "col-md-4"],
   ["policy_number", "Policy number", "text", "col-md-4"],
   ["plan", "Plan", "text", "col-md-3"],
-  ["metal", "Metal", "text", "col-md-3"],
-  ["red", "Red", "text", "col-md-3"],
   ["elegibilidad", "Elegibilidad", "text", "col-md-3"],
   ["grupo", "Grupo", "text", "col-md-3"],
   ["precio", "Precio", "number", "col-md-3"],
@@ -58,15 +72,16 @@ const getErrorMessage = (error) =>
   error?.message ||
   "No se pudo guardar el cambio.";
 
-let companiesPromise;
-const loadCompanies = () => {
-  if (!companiesPromise) {
-    companiesPromise = fetchCompanies().catch((error) => {
-      companiesPromise = undefined;
-      throw error;
-    });
-  }
-  return companiesPromise;
+/** Incluye el valor actual si no está en el catálogo, para no perder datos existentes. */
+const optionsWithCurrent = (options, current) => {
+  const list = [...options];
+  const raw = current == null ? "" : String(current).trim();
+  if (!raw) return list;
+  const exists = list.some(
+    (opt) => String(opt).toLowerCase() === raw.toLowerCase()
+  );
+  if (!exists) list.push(raw);
+  return list;
 };
 
 const PreRenovacionItemCard = ({
@@ -82,8 +97,7 @@ const PreRenovacionItemCard = ({
     ...(item?.datos_borrador || {}),
     cliente: { ...(item?.datos_borrador?.cliente || {}) },
   }));
-  const [companies, setCompanies] = useState([]);
-  const [companiesLoading, setCompaniesLoading] = useState(true);
+  const { companies, loading: companiesLoading } = useCompanies();
   const [contactoAbierto, setContactoAbierto] = useState(false);
   const [estadosGuardado, setEstadosGuardado] = useState({});
   const [errores, setErrores] = useState({});
@@ -112,24 +126,6 @@ const PreRenovacionItemCard = ({
       });
     };
   }, [item.id]);
-
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const data = await loadCompanies();
-        if (active) setCompanies(Array.isArray(data) ? data : []);
-      } catch (error) {
-        console.error("Error al cargar compañías", error);
-        if (active) setCompanies([]);
-      } finally {
-        if (active) setCompaniesLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
 
   useEffect(() => {
     const hayPendiente = Object.values(estadosGuardado).some(
@@ -259,9 +255,15 @@ const PreRenovacionItemCard = ({
 
   const esMiembroNuevo = item?.tipo_item === "miembro_nuevo";
   const cobertura = item?.cobertura || {};
-  const clienteActual = cobertura?.cliente || {};
+  // Renovación normal: referencia en vivo = cobertura.cliente
+  // Miembro nuevo de cliente existente: referencia en vivo = cliente_existente (BD)
+  // Fallback: snapshot guardado en el borrador
+  const clienteActual = esMiembroNuevo
+    ? item?.cliente_existente || item?.datos_borrador?.cliente || {}
+    : cobertura?.cliente || {};
   const nombre = esMiembroNuevo
     ? datos.cliente?.nombre_completo ||
+      item?.cliente_existente?.nombre_completo ||
       item?.datos_borrador?.cliente?.nombre_completo ||
       `Miembro nuevo #${item?.id || "?"}`
     : clienteActual.nombre_completo ||
@@ -284,6 +286,102 @@ const PreRenovacionItemCard = ({
     requiereRetiro &&
     !String(datos.motivo_retiro ?? "").trim();
   const disabled = bloqueado;
+
+  const renderClienteSelectField = (field, label, options, normalizeFn) => {
+    const actual = clienteActual[field];
+    const help =
+      actual !== null && actual !== undefined && actual !== ""
+        ? `Actual: ${actual}`
+        : "Sin valor actual";
+    const key = `cliente.${field}`;
+    const rawValue = datos.cliente?.[field];
+    const selectValue = normalizeFn
+      ? normalizeFn(rawValue)
+      : rawValue == null
+        ? ""
+        : String(rawValue);
+    const optionsList = optionsWithCurrent(options, selectValue || rawValue);
+
+    return (
+      <div className="col-md-4" key={field}>
+        <label className="form-label form-label-sm mb-1">{label}</label>
+        <select
+          className="form-select form-select-sm"
+          value={selectValue}
+          onChange={(e) => cambiarCliente(field, e.target.value || null, true)}
+          disabled={disabled}
+        >
+          <option value="">Seleccione…</option>
+          {optionsList.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+        <div className="form-text">{help}</div>
+        {renderEstado(key)}
+      </div>
+    );
+  };
+
+  const renderClienteTextField = (field, label, type) => {
+    const actual = clienteActual[field];
+    const help =
+      actual !== null && actual !== undefined && actual !== ""
+        ? `Actual: ${actual}`
+        : "Sin valor actual";
+    const key = `cliente.${field}`;
+
+    if (type === "date") {
+      const valueIso = toDateInput(datos.cliente?.[field]);
+      const DateComponent =
+        field === "fecha_nacimiento" ? MdyDashDateInput : DateInputWithCalendar;
+      return (
+        <div className="col-md-4" key={field}>
+          <label className="form-label form-label-sm mb-1">{label}</label>
+          <DateComponent
+            size="sm"
+            allowManualEntry={field === "fecha_nacimiento" ? true : undefined}
+            valueIso={valueIso}
+            minIso="1900-01-01"
+            maxIso="2099-12-31"
+            disabled={disabled}
+            onChangeIso={(iso) => cambiarCliente(field, iso || null, true)}
+          />
+          <div className="form-text">{help}</div>
+          {renderEstado(key)}
+        </div>
+      );
+    }
+
+    return (
+      <div className="col-md-4" key={field}>
+        <label className="form-label form-label-sm mb-1">{label}</label>
+        <input
+          type={type}
+          step={type === "number" ? "0.01" : undefined}
+          className="form-control form-control-sm"
+          value={datos.cliente?.[field] ?? ""}
+          placeholder={String(actual ?? "")}
+          onChange={(e) => {
+            const raw = e.target.value;
+            cambiarCliente(
+              field,
+              type === "number"
+                ? raw === ""
+                  ? null
+                  : Number(raw)
+                : raw
+            );
+          }}
+          onBlur={() => guardarPendienteAhora(key)}
+          disabled={disabled}
+        />
+        <div className="form-text">{help}</div>
+        {renderEstado(key)}
+      </div>
+    );
+  };
 
   const handleQuitarMiembroNuevo = async () => {
     if (disabled) return;
@@ -330,7 +428,7 @@ const PreRenovacionItemCard = ({
                   onClick={handleQuitarMiembroNuevo}
                   disabled={disabled || estadosGuardado.quitar === "guardando"}
                 >
-                  🗑 Quitar de este borrador
+                  🗑 Quitar de esta pre-renovación
                 </button>
                 {renderEstado("quitar")}
               </div>
@@ -368,7 +466,7 @@ const PreRenovacionItemCard = ({
       {!esMiembroNuevo && renovar && !cobertura.activo && (
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
-          cancelada o retirada después de agregarse a este borrador. Revisa si
+          cancelada o retirada después de agregarse a esta pre-renovación. Revisa si
           corresponde desmarcar &quot;Renovar a este miembro&quot;.
         </div>
       )}
@@ -383,15 +481,22 @@ const PreRenovacionItemCard = ({
               <label className="form-label form-label-sm mb-1">
                 Fecha de retiro <span className="text-danger">*</span>
               </label>
-              <input
-                type="date"
-                className={`form-control form-control-sm${
-                  retiroFechaInvalida ? " is-invalid" : ""
-                }`}
-                value={toDateInput(datos.fecha_retiro)}
-                onChange={(e) => cambiarDato("fecha_retiro", e.target.value, true)}
+              <DateInputWithCalendar
+                size="sm"
+                valueIso={toDateInput(datos.fecha_retiro)}
+                minIso="1900-01-01"
+                maxIso="2099-12-31"
                 disabled={disabled}
+                className={retiroFechaInvalida ? "is-invalid" : ""}
+                onChangeIso={(iso) =>
+                  cambiarDato("fecha_retiro", iso || null, true)
+                }
               />
+              {retiroFechaInvalida && (
+                <div className="invalid-feedback d-block">
+                  Obligatoria para consolidar.
+                </div>
+              )}
               {renderEstado("fecha_retiro")}
             </div>
             <div className="col-md-8">
@@ -463,11 +568,55 @@ const PreRenovacionItemCard = ({
               </div>
             ))}
 
+            <div className="col-md-3">
+              <label className="form-label form-label-sm mb-1">Metal</label>
+              <select
+                className="form-select form-select-sm"
+                value={datos.metal || ""}
+                onChange={(e) =>
+                  cambiarDato("metal", e.target.value || null, true)
+                }
+                disabled={disabled}
+              >
+                <option value="">Seleccione…</option>
+                {optionsWithCurrent(METAL_OPTIONS, datos.metal).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              {renderEstado("metal")}
+            </div>
+
+            <div className="col-md-3">
+              <label className="form-label form-label-sm mb-1">Red</label>
+              <select
+                className="form-select form-select-sm"
+                value={datos.red || ""}
+                onChange={(e) =>
+                  cambiarDato("red", e.target.value || null, true)
+                }
+                disabled={disabled}
+              >
+                <option value="">Seleccione…</option>
+                {optionsWithCurrent(RED_OPTIONS, datos.red).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              {renderEstado("red")}
+            </div>
+
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">Compañía</label>
               <select
                 className="form-select form-select-sm"
-                value={datos.compania_id ?? ""}
+                value={
+                  datos.compania_id != null && datos.compania_id !== ""
+                    ? String(datos.compania_id)
+                    : ""
+                }
                 onChange={(e) =>
                   cambiarDato(
                     "compania_id",
@@ -478,10 +627,14 @@ const PreRenovacionItemCard = ({
                 disabled={disabled || companiesLoading}
               >
                 <option value="">
-                  {companiesLoading ? "Cargando…" : "Seleccione…"}
+                  {companiesLoading
+                    ? "Cargando…"
+                    : companies.length === 0
+                      ? "Sin compañías disponibles"
+                      : "Seleccione…"}
                 </option>
                 {companies.map((company) => (
-                  <option key={company.id} value={company.id}>
+                  <option key={company.id} value={String(company.id)}>
                     {company.nombre}
                   </option>
                 ))}
@@ -493,14 +646,15 @@ const PreRenovacionItemCard = ({
               <label className="form-label form-label-sm mb-1">
                 Fecha de activación
               </label>
-              <input
-                type="date"
-                className="form-control form-control-sm"
-                value={toDateInput(datos.fecha_activacion)}
-                onChange={(e) =>
-                  cambiarDato("fecha_activacion", e.target.value, true)
-                }
+              <DateInputWithCalendar
+                size="sm"
+                valueIso={toDateInput(datos.fecha_activacion)}
+                minIso="1900-01-01"
+                maxIso="2099-12-31"
                 disabled={disabled}
+                onChangeIso={(iso) =>
+                  cambiarDato("fecha_activacion", iso || null, true)
+                }
               />
               {renderEstado("fecha_activacion")}
             </div>
@@ -516,11 +670,13 @@ const PreRenovacionItemCard = ({
                 disabled={disabled}
               >
                 <option value="">Seleccione…</option>
-                {TIPO_PAGO_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
+                {optionsWithCurrent(TIPO_PAGO_OPTIONS, datos.tipo_pago).map(
+                  (opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  )
+                )}
               </select>
               {renderEstado("tipo_pago")}
             </div>
@@ -547,86 +703,30 @@ const PreRenovacionItemCard = ({
             <div className="text-muted small fw-semibold mb-2">Datos principales</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_PRINCIPALES.map(([field, label, type]) => {
-                const actual = clienteActual[field];
-                const help =
-                  actual !== null && actual !== undefined && actual !== ""
-                    ? `Actual: ${actual}`
-                    : "Sin valor actual";
-                const key = `cliente.${field}`;
-                return (
-                  <div className="col-md-4" key={field}>
-                    <label className="form-label form-label-sm mb-1">{label}</label>
-                    <input
-                      type={type}
-                      step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
-                      value={
-                        type === "date"
-                          ? toDateInput(datos.cliente?.[field])
-                          : (datos.cliente?.[field] ?? "")
-                      }
-                      placeholder={String(actual ?? "")}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        cambiarCliente(
-                          field,
-                          type === "number"
-                            ? raw === ""
-                              ? null
-                              : Number(raw)
-                            : raw
-                        );
-                      }}
-                      onBlur={() => guardarPendienteAhora(key)}
-                      disabled={disabled}
-                    />
-                    <div className="form-text">{help}</div>
-                    {renderEstado(key)}
-                  </div>
-                );
+                if (field === "genero") {
+                  return renderClienteSelectField(
+                    field,
+                    label,
+                    GENERO_OPTIONS,
+                    normalizeGeneroForSelect
+                  );
+                }
+                return renderClienteTextField(field, label, type);
               })}
             </div>
 
             <div className="text-muted small fw-semibold mb-2">Estatus migratorio</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_MIGRATORIO.map(([field, label, type]) => {
-                const actual = clienteActual[field];
-                const help =
-                  actual !== null && actual !== undefined && actual !== ""
-                    ? `Actual: ${actual}`
-                    : "Sin valor actual";
-                const key = `cliente.${field}`;
-                return (
-                  <div className="col-md-4" key={field}>
-                    <label className="form-label form-label-sm mb-1">{label}</label>
-                    <input
-                      type={type}
-                      step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
-                      value={
-                        type === "date"
-                          ? toDateInput(datos.cliente?.[field])
-                          : (datos.cliente?.[field] ?? "")
-                      }
-                      placeholder={String(actual ?? "")}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        cambiarCliente(
-                          field,
-                          type === "number"
-                            ? raw === ""
-                              ? null
-                              : Number(raw)
-                            : raw
-                        );
-                      }}
-                      onBlur={() => guardarPendienteAhora(key)}
-                      disabled={disabled}
-                    />
-                    <div className="form-text">{help}</div>
-                    {renderEstado(key)}
-                  </div>
-                );
+                if (field === "status") {
+                  return renderClienteSelectField(
+                    field,
+                    label,
+                    STATUS_MIGRATORIO_OPTIONS,
+                    normalizeStatusMigratorioForSelect
+                  );
+                }
+                return renderClienteTextField(field, label, type);
               })}
             </div>
 
@@ -730,6 +830,29 @@ const PreRenovacionItemCard = ({
                   actual !== null && actual !== undefined && actual !== ""
                     ? `Actual: ${actual}`
                     : "Sin valor actual";
+
+                if (field === "idioma") {
+                  return (
+                    <div className="col-md-4" key={field}>
+                      <label className="form-label form-label-sm mb-1">
+                        {label}
+                      </label>
+                      <LanguageSelect
+                        name="idioma"
+                        value={datos.cliente?.[field] ?? ""}
+                        onChange={(e) =>
+                          cambiarCliente(field, e.target.value || null, true)
+                        }
+                        disabled={disabled}
+                        className="form-select form-select-sm"
+                        placeholder="Seleccione…"
+                      />
+                      <div className="form-text">{help}</div>
+                      {renderEstado(key)}
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="col-md-4" key={field}>
                     <label className="form-label form-label-sm mb-1">{label}</label>

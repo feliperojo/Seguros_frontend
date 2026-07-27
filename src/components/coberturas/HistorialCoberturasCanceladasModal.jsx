@@ -25,6 +25,10 @@ const HistorialCoberturasCanceladasModal = ({
   show,
   onClose,
   grupoFamiliarId,
+  /** Prefija el filtro de año al abrir (p. ej. año cerrado en consulta histórica). */
+  anioInicial = null,
+  /** Si true, el filtro de año queda fijo en anioInicial (no se puede cambiar a "todos"). */
+  soloAnioInicial = false,
 }) => {
   const navigate = useNavigate();
   const [historial, setHistorial] = useState([]);
@@ -44,14 +48,18 @@ const HistorialCoberturasCanceladasModal = ({
   const [anios, setAnios] = useState([]);
   const [loadingOpciones, setLoadingOpciones] = useState(false);
 
-  // Cargar opciones de filtro cuando se abre el modal
+  const anioInicialStr =
+    anioInicial != null && anioInicial !== "" ? String(anioInicial) : "";
+
+  // Al abrir: opciones + filtro de año prefijado. La carga de datos la dispara el efecto de filtros.
   useEffect(() => {
     if (show && grupoFamiliarId) {
+      setFiltroClienteId("");
+      setFiltroCompaniaId("");
+      setFiltroAnio(anioInicialStr);
+      setFilasExpandidas(new Set());
       cargarOpcionesFiltro();
-      // Cargar historial inicial sin filtros
-      cargarHistorial();
-    } else {
-      // Limpiar datos al cerrar
+    } else if (!show) {
       setHistorial([]);
       setError("");
       setFiltroClienteId("");
@@ -60,19 +68,22 @@ const HistorialCoberturasCanceladasModal = ({
       setClientes([]);
       setCompanias([]);
       setAnios([]);
+      setGrupoFamiliarInfo(null);
+      setFilasExpandidas(new Set());
     }
-  }, [show, grupoFamiliarId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cargarOpcionesFiltro es estable en práctica
+  }, [show, grupoFamiliarId, anioInicialStr]);
 
   // Cargar historial cuando cambian los filtros (solo si el modal está abierto)
   useEffect(() => {
     if (show && grupoFamiliarId) {
-      // Usar un pequeño delay para evitar múltiples llamadas rápidas
       const timeoutId = setTimeout(() => {
         cargarHistorial();
       }, 300);
-      
+
       return () => clearTimeout(timeoutId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtroClienteId, filtroAnio, filtroCompaniaId, show, grupoFamiliarId]);
 
   const cargarOpcionesFiltro = async () => {
@@ -118,8 +129,12 @@ const HistorialCoberturasCanceladasModal = ({
       // Generar lista de años (últimos 10 años hasta el próximo)
       const anioActual = new Date().getFullYear();
       const listaAnios = [];
-      for (let i = anioActual + 1; i >= anioActual - 10; i--) {
-        listaAnios.push(i);
+      if (soloAnioInicial && anioInicialStr) {
+        listaAnios.push(Number(anioInicialStr) || anioInicialStr);
+      } else {
+        for (let i = anioActual + 1; i >= anioActual - 10; i--) {
+          listaAnios.push(i);
+        }
       }
       setAnios(listaAnios);
     } catch (err) {
@@ -143,8 +158,10 @@ const HistorialCoberturasCanceladasModal = ({
       if (filtroClienteId) {
         params.append("cliente_id", filtroClienteId);
       }
-      if (filtroAnio) {
-        params.append("anio", filtroAnio);
+      const anioParaQuery =
+        soloAnioInicial && anioInicialStr ? anioInicialStr : filtroAnio;
+      if (anioParaQuery) {
+        params.append("anio", anioParaQuery);
       }
       if (filtroCompaniaId) {
         params.append("compania_id", filtroCompaniaId);
@@ -333,12 +350,15 @@ const HistorialCoberturasCanceladasModal = ({
   // Limpiar filtros
   const limpiarFiltros = () => {
     setFiltroClienteId("");
-    setFiltroAnio("");
+    setFiltroAnio(soloAnioInicial && anioInicialStr ? anioInicialStr : "");
     setFiltroCompaniaId("");
   };
 
-  // Verificar si hay filtros activos
-  const hayFiltrosActivos = filtroClienteId || filtroAnio || filtroCompaniaId;
+  // Verificar si hay filtros activos (el año fijo del modo histórico no cuenta)
+  const hayFiltrosActivos =
+    Boolean(filtroClienteId) ||
+    Boolean(filtroCompaniaId) ||
+    (!soloAnioInicial && Boolean(filtroAnio));
 
   // Toggle para expandir/contraer filas
   const toggleFila = (coberturaId) => {
@@ -652,10 +672,12 @@ const HistorialCoberturasCanceladasModal = ({
         <Modal.Header closeButton>
           <Modal.Title>
             <i className="fas fa-history text-primary me-2"></i>
-            Historial de Coberturas Canceladas
+            Historial de renovaciones
+            {soloAnioInicial && anioInicialStr
+              ? ` — ${anioInicialStr}`
+              : ""}
           </Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
+        </Modal.Header>        <Modal.Body>
         {/* Información del Grupo Familiar (Encabezado) */}
         {grupoFamiliarInfo && (
           <Card className="mb-4 border-primary">
@@ -757,14 +779,20 @@ const HistorialCoberturasCanceladasModal = ({
             <Col md={4}>
               <Form.Group className="mb-3">
                 <Form.Label>
-                  <small className="text-muted">Año</small>
+                  <small className="text-muted">
+                    Año
+                    {soloAnioInicial ? " (año cerrado)" : ""}
+                  </small>
                 </Form.Label>
                 <Form.Select
                   value={filtroAnio}
                   onChange={(e) => setFiltroAnio(e.target.value)}
                   size="sm"
+                  disabled={soloAnioInicial}
                 >
-                  <option value="">Todos los años</option>
+                  {!soloAnioInicial && (
+                    <option value="">Todos los años</option>
+                  )}
                   {anios.map((anio) => (
                     <option key={anio} value={anio}>
                       {anio}

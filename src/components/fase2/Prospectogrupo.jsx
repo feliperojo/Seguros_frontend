@@ -29,6 +29,7 @@ const Prospectogrupo = ({
   onRefresh, // Función opcional para refrescar datos del grupo familiar
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
   grupo, // Grupo completo opcional para generar PDF de confirmación
+  anioConsultado = null, // Año que se está consultando (para filtrar hist. renov. en modo histórico)
 }) => {
   const [showGestion, setShowGestion] = useState(false);
   const [showComentarioModal, setShowComentarioModal] = useState(false);
@@ -323,17 +324,27 @@ const Prospectogrupo = ({
                     <i className="fas fa-redo me-1"></i>
                     <span className="d-none d-lg-inline">Reactivar</span>
                   </button>
-                  <button
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => setShowHistorialCanceladasModal(true)}
-                    disabled={!resolvedGrupoId}
-                    title="Historial de renovaciones"
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
-                  >
-                    <i className="fas fa-history me-1"></i>
-                    <span className="d-none d-lg-inline">Hist. Renov.</span>
-                  </button>
                 </>
+              )}
+              {(modoHistorico || puedeRenovar) && (
+                <button
+                  className="btn btn-sm btn-outline-secondary"
+                  onClick={() => setShowHistorialCanceladasModal(true)}
+                  disabled={!resolvedGrupoId}
+                  title={
+                    modoHistorico && anioConsultado
+                      ? `Historial de renovaciones del año ${anioConsultado}`
+                      : "Historial de renovaciones"
+                  }
+                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
+                >
+                  <i className="fas fa-history me-1"></i>
+                  <span className="d-none d-lg-inline">
+                    {modoHistorico && anioConsultado
+                      ? `Hist. Renov. ${anioConsultado}`
+                      : "Hist. Renov."}
+                  </span>
+                </button>
               )}
             </div>
           </div>
@@ -618,6 +629,8 @@ const Prospectogrupo = ({
   show={showHistorialCanceladasModal}
   onClose={() => setShowHistorialCanceladasModal(false)}
   grupoFamiliarId={resolvedGrupoId}
+  anioInicial={modoHistorico ? anioConsultado : null}
+  soloAnioInicial={Boolean(modoHistorico && anioConsultado)}
 />
 
 <ReactivacionCoberturasModal

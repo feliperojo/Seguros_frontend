@@ -23,11 +23,13 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
+import { useAuth } from "../../context/AuthContext";
 import { usersService, rolesService } from "../../services/adminApi";
 import UserForm from "../../components/admin/UserForm";
 import UserRolesModal from "../../components/admin/UserRolesModal";
 
 const UsersList = () => {
+  const { onlineUserIds, isPresenceLive } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,6 +55,16 @@ const UsersList = () => {
   useEffect(() => {
     loadUsers();
     loadRoles();
+  }, [currentPage, searchTerm, statusFilter, roleFilter]);
+
+  // Refresca la lista periódicamente para reflejar quién está conectado ahora mismo.
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!document.hidden) {
+        loadUsers();
+      }
+    }, 20000);
+    return () => clearInterval(intervalId);
   }, [currentPage, searchTerm, statusFilter, roleFilter]);
 
   const loadUsers = async () => {
@@ -401,6 +413,7 @@ const UsersList = () => {
                       <th>Email</th>
                       <th>Roles</th>
                       <th>Estado</th>
+                      <th>Conexión</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -428,6 +441,25 @@ const UsersList = () => {
                             <Badge bg={user.status === "active" ? "success" : "secondary"}>
                               {user.status === "active" ? "Activo" : "Inactivo"}
                             </Badge>
+                          </td>
+                          <td>
+                            {(() => {
+                              const isOnline = isPresenceLive
+                                ? Boolean(onlineUserIds?.has(Number(user.id)))
+                                : Boolean(user.is_online);
+                              return (
+                                <>
+                                  <Badge bg={isOnline ? "success" : "secondary"}>
+                                    {isOnline ? "En línea" : "Desconectado"}
+                                  </Badge>
+                                  {user.last_login_at && (
+                                    <div className="text-muted small mt-1">
+                                      Últ. acceso: {user.last_login_at}
+                                    </div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td>
                             <div className="d-flex gap-2">
@@ -495,7 +527,7 @@ const UsersList = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="text-center text-muted">
+                        <td colSpan={7} className="text-center text-muted">
                           No hay usuarios para mostrar
                         </td>
                       </tr>

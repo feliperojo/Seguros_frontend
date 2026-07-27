@@ -1,8 +1,22 @@
 /* eslint-disable react/prop-types */
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import apiRequest from "../../services/api";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
+import CopiarDatosModal from "../fase2/CopiarDatosModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
+import { pickClienteParaBorrador } from "../../utils/clienteFieldGroups";
+import {
+  buildCopyPatchForItem,
+  isTomadorItem,
+  itemElegibleParaCopiarEnBorrador,
+  itemToCopyMember,
+} from "../../utils/preRenovacionCopy";
+import {
+  ESTADOS_GESTION_OPTIONS,
+  estadoGestionBadge,
+  etiquetaEstadoGestion,
+} from "../../utils/renovacionEstadoGestion";
 
 const TIPOS_PARENTESCO = [
   "Tomador",
@@ -18,6 +32,19 @@ const TIPOS_PARENTESCO = [
   "Sobrino/a",
 ];
 
+const formatHistorialFecha = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("es-CO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+};
+
 const nombreMiembro = (item) =>
   item?.tipo_item === "miembro_nuevo"
     ? item?.datos_borrador?.cliente?.nombre_completo ||
@@ -29,6 +56,9 @@ const getErrorMessage = (error) =>
   error?.response?.data?.message ||
   error?.message ||
   "Ocurrió un error al procesar la pre-renovación.";
+
+const buildFullName = (p = "", s = "", a = "") =>
+  [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
 
 const PreRenovacionModal = ({
   show,
@@ -47,12 +77,20 @@ const PreRenovacionModal = ({
   const [itemsConGuardadoPendiente, setItemsConGuardadoPendiente] = useState(
     () => new Set()
   );
-  const [showOpcionesAgregar, setShowOpcionesAgregar] = useState(false);
   const [showClienteExistente, setShowClienteExistente] = useState(false);
   const [showPersonaNueva, setShowPersonaNueva] = useState(false);
   const [personaNuevaParentesco, setPersonaNuevaParentesco] = useState("");
-  const [personaNuevaNombre, setPersonaNuevaNombre] = useState("");
+  const [personaNuevaPrimerNombre, setPersonaNuevaPrimerNombre] = useState("");
+  const [personaNuevaSegundoNombre, setPersonaNuevaSegundoNombre] =
+    useState("");
+  const [personaNuevaApellidos, setPersonaNuevaApellidos] = useState("");
   const [agregandoMiembro, setAgregandoMiembro] = useState(false);
+  const [showCopiarDatos, setShowCopiarDatos] = useState(false);
+  const [copiandoDatos, setCopiandoDatos] = useState(false);
+  const [cardsRevision, setCardsRevision] = useState(0);
+  const [estadoGestionDraft, setEstadoGestionDraft] = useState("");
+  const [notaEstadoGestion, setNotaEstadoGestion] = useState("");
+  const [guardandoEstadoGestion, setGuardandoEstadoGestion] = useState(false);
 
   useEffect(() => {
     if (!show || !grupoFamiliarId || !anioDestino) return undefined;
@@ -65,11 +103,17 @@ const PreRenovacionModal = ({
     setShowConfirmacionFinal(false);
     setConfirmoRevision(false);
     setItemsConGuardadoPendiente(new Set());
-    setShowOpcionesAgregar(false);
     setShowClienteExistente(false);
     setShowPersonaNueva(false);
+    setShowCopiarDatos(false);
     setPersonaNuevaParentesco("");
-    setPersonaNuevaNombre("");
+    setPersonaNuevaPrimerNombre("");
+    setPersonaNuevaSegundoNombre("");
+    setPersonaNuevaApellidos("");
+    setCardsRevision(0);
+    setEstadoGestionDraft("");
+    setNotaEstadoGestion("");
+    setGuardandoEstadoGestion(false);
 
     (async () => {
       try {
@@ -78,7 +122,11 @@ const PreRenovacionModal = ({
           "POST",
           { anio_destino: anioDestino }
         );
-        if (active) setLote(response?.data ?? response);
+        if (active) {
+          const data = response?.data ?? response;
+          setLote(data);
+          setEstadoGestionDraft(data?.estado_gestion || "pre_renovacion");
+        }
       } catch (requestError) {
         console.error("Error al abrir la pre-renovación", requestError);
         if (active) setError(getErrorMessage(requestError));
@@ -91,6 +139,48 @@ const PreRenovacionModal = ({
       active = false;
     };
   }, [show, grupoFamiliarId, anioDestino]);
+
+  useEffect(() => {
+    if (lote?.estado_gestion) {
+      setEstadoGestionDraft(lote.estado_gestion);
+    }
+  }, [lote?.estado_gestion]);
+
+  const handleGuardarEstadoGestion = useCallback(async () => {
+    if (!lote?.id || !estadoGestionDraft) return;
+    if (estadoGestionDraft === lote.estado_gestion) return;
+
+    setGuardandoEstadoGestion(true);
+    try {
+      const body = { estado_gestion: estadoGestionDraft };
+      if (notaEstadoGestion.trim()) {
+        body.nota = notaEstadoGestion.trim();
+      }
+      const response = await apiRequest(
+        `/renovacion_lote/${lote.id}/estado-gestion`,
+        "PATCH",
+        body
+      );
+      const updated = response?.data ?? response;
+      setLote((prev) =>
+        prev
+          ? {
+              ...prev,
+              estado_gestion: updated?.estado_gestion ?? estadoGestionDraft,
+              estado_historial:
+                updated?.estado_historial ?? prev.estado_historial,
+            }
+          : prev
+      );
+      setNotaEstadoGestion("");
+    } catch (requestError) {
+      console.error("Error al actualizar estado de gestión", requestError);
+      toast.error(getErrorMessage(requestError));
+      setEstadoGestionDraft(lote.estado_gestion || "pre_renovacion");
+    } finally {
+      setGuardandoEstadoGestion(false);
+    }
+  }, [lote, estadoGestionDraft, notaEstadoGestion]);
 
   const handleItemUpdated = useCallback((itemActualizado) => {
     setLote((prev) =>
@@ -142,11 +232,12 @@ const PreRenovacionModal = ({
             ? { ...prev, items: [...(prev.items || []), nuevoItem] }
             : prev
         );
-        setShowOpcionesAgregar(false);
         setShowClienteExistente(false);
         setShowPersonaNueva(false);
         setPersonaNuevaParentesco("");
-        setPersonaNuevaNombre("");
+        setPersonaNuevaPrimerNombre("");
+        setPersonaNuevaSegundoNombre("");
+        setPersonaNuevaApellidos("");
       } catch (requestError) {
         console.error("Error al agregar miembro nuevo", requestError);
         setError(getErrorMessage(requestError));
@@ -159,11 +250,17 @@ const PreRenovacionModal = ({
 
   const handleAgregarClienteExistente = useCallback(
     async (payload, clienteFull) => {
+      const cliente = pickClienteParaBorrador(clienteFull);
+      // Garantiza al menos el nombre visible en la tarjeta si el pick no lo trajo.
+      if (!cliente.nombre_completo && clienteFull?.nombre_completo) {
+        cliente.nombre_completo = clienteFull.nombre_completo;
+      }
+
       await agregarMiembroAlLote({
         parentesco: payload.tipo,
         cobertura_tipo: payload.cobertura_tipo,
         cliente_id_existente: clienteFull.id,
-        cliente: { nombre_completo: clienteFull.nombre_completo },
+        cliente,
       });
     },
     [agregarMiembroAlLote]
@@ -178,7 +275,89 @@ const PreRenovacionModal = ({
     });
   }, []);
 
-  const items = useMemo(() => lote?.items || [], [lote?.items]);
+  const items = useMemo(() => {
+    const list = [...(lote?.items || [])];
+    list.sort((a, b) => {
+      const aTomador = isTomadorItem(a) ? 0 : 1;
+      const bTomador = isTomadorItem(b) ? 0 : 1;
+      if (aTomador !== bTomador) return aTomador - bTomador;
+      return Number(a.id || 0) - Number(b.id || 0);
+    });
+    return list;
+  }, [lote?.items]);
+
+  const miembrosParaCopiar = useMemo(
+    () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
+    [items]
+  );
+
+  const tomadorSourceId = useMemo(() => {
+    const tomador = items.find(
+      (item) => itemElegibleParaCopiarEnBorrador(item) && isTomadorItem(item)
+    );
+    return tomador?.id ?? null;
+  }, [items]);
+
+  const puedeAbrirCopiar =
+    !loading &&
+    !consolidando &&
+    !copiandoDatos &&
+    !showConfirmacionFinal &&
+    itemsConGuardadoPendiente.size === 0 &&
+    miembrosParaCopiar.length >= 2;
+
+  const applyCopySelection = useCallback(
+    async ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+      const sourceItem = items.find(
+        (item) => Number(item.id) === Number(sourceId)
+      );
+      if (!sourceItem || !Array.isArray(targetIds) || targetIds.length === 0) {
+        return;
+      }
+
+      setCopiandoDatos(true);
+      setError("");
+      try {
+        const actualizados = [];
+        for (const targetId of targetIds) {
+          const targetItem = items.find(
+            (item) => Number(item.id) === Number(targetId)
+          );
+          if (!targetItem || !itemElegibleParaCopiarEnBorrador(targetItem)) {
+            continue;
+          }
+
+          const patch = buildCopyPatchForItem(sourceItem, targetItem, {
+            fieldKeys,
+            copyAddress,
+          });
+          if (Object.keys(patch).length === 0) continue;
+
+          const response = await apiRequest(
+            `/pre-renovacion/items/${targetItem.id}`,
+            "PUT",
+            { datos_borrador: patch }
+          );
+          actualizados.push(response?.data ?? response);
+        }
+
+        actualizados.forEach((itemActualizado) => {
+          if (itemActualizado?.id != null) {
+            handleItemUpdated(itemActualizado);
+          }
+        });
+        if (actualizados.length > 0) {
+          setCardsRevision((n) => n + 1);
+        }
+      } catch (requestError) {
+        console.error("Error al copiar datos en la pre-renovación", requestError);
+        setError(getErrorMessage(requestError));
+      } finally {
+        setCopiandoDatos(false);
+      }
+    },
+    [items, handleItemUpdated]
+  );
 
   const defaultCoberturaTipo = useMemo(() => {
     const desdeItem = items.find((item) => item?.datos_borrador?.cobertura_tipo)
@@ -190,11 +369,21 @@ const PreRenovacionModal = ({
 
   const handleAgregarPersonaNueva = async (e) => {
     e.preventDefault();
-    if (!personaNuevaParentesco.trim() || !personaNuevaNombre.trim()) return;
+    const nombreCompleto = buildFullName(
+      personaNuevaPrimerNombre,
+      personaNuevaSegundoNombre,
+      personaNuevaApellidos
+    );
+    if (!personaNuevaParentesco.trim() || !nombreCompleto) return;
     await agregarMiembroAlLote({
       parentesco: personaNuevaParentesco,
       cobertura_tipo: defaultCoberturaTipo,
-      cliente: { nombre_completo: personaNuevaNombre.trim() },
+      cliente: {
+        nombre_completo: nombreCompleto,
+        primer_nombre: personaNuevaPrimerNombre.trim() || null,
+        segundo_nombre: personaNuevaSegundoNombre.trim() || null,
+        apellidos: personaNuevaApellidos.trim() || null,
+      },
     });
   };
 
@@ -249,7 +438,8 @@ const PreRenovacionModal = ({
     [items]
   );
 
-  const hayGuardadosPendientes = itemsConGuardadoPendiente.size > 0;
+  const hayGuardadosPendientes =
+    itemsConGuardadoPendiente.size > 0 || copiandoDatos;
   const puedeConsolidar =
     items.length > 0 &&
     miembrosSinCodigo.length === 0 &&
@@ -316,7 +506,7 @@ const PreRenovacionModal = ({
               <h5 className="modal-title">
                 {showConfirmacionFinal
                   ? `Confirmar consolidación ${anioDestino}`
-                  : `Pre-renovación ${anioDestino} — borrador`}
+                  : `Pre-renovación ${anioDestino}`}
               </h5>
               <button
                 type="button"
@@ -430,11 +620,106 @@ const PreRenovacionModal = ({
               <>
                 <div className="modal-body">
                   <div className="alert alert-info">
-                    <strong>Esto es un borrador.</strong> Puedes cerrar esta
+                    <strong>Esto es una pre-renovación.</strong> Puedes cerrar esta
                     ventana y volver más tarde — cada cambio se guarda
                     automáticamente. Nada se aplica a las pólizas reales hasta
                     que uses “Consolidar”.
                   </div>
+
+                  {!loading && lote?.id && (
+                    <div className="border rounded p-3 mb-3 bg-light">
+                      <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
+                        <span
+                          className={`badge text-bg-${estadoGestionBadge(lote.estado_gestion).bg}`}
+                        >
+                          {estadoGestionBadge(lote.estado_gestion).label}
+                        </span>
+                        <select
+                          className="form-select form-select-sm"
+                          style={{ maxWidth: 220 }}
+                          value={estadoGestionDraft}
+                          disabled={guardandoEstadoGestion || consolidando}
+                          onChange={(e) =>
+                            setEstadoGestionDraft(e.target.value)
+                          }
+                          aria-label="Estado de gestión"
+                        >
+                          {ESTADOS_GESTION_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {opt.label}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          className="form-control form-control-sm"
+                          style={{ maxWidth: 240 }}
+                          placeholder="Nota (opcional)"
+                          value={notaEstadoGestion}
+                          disabled={guardandoEstadoGestion || consolidando}
+                          onChange={(e) =>
+                            setNotaEstadoGestion(e.target.value)
+                          }
+                        />
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-outline-primary"
+                          disabled={
+                            guardandoEstadoGestion ||
+                            consolidando ||
+                            !estadoGestionDraft ||
+                            estadoGestionDraft === lote.estado_gestion
+                          }
+                          onClick={handleGuardarEstadoGestion}
+                        >
+                          {guardandoEstadoGestion ? (
+                            <>
+                              <span
+                                className="spinner-border spinner-border-sm me-1"
+                                role="status"
+                                aria-hidden="true"
+                              />
+                              Guardando…
+                            </>
+                          ) : (
+                            "Guardar estado"
+                          )}
+                        </button>
+                      </div>
+
+                      {(lote.estado_historial || []).length > 0 && (
+                        <ul
+                          className="list-unstyled mb-0 small text-muted"
+                          style={{
+                            maxHeight: 140,
+                            overflowY: "auto",
+                          }}
+                        >
+                          {(lote.estado_historial || []).map((entry) => (
+                            <li key={entry.id} className="mb-1">
+                              <span>
+                                {etiquetaEstadoGestion(entry.estado_anterior)}{" "}
+                                → {etiquetaEstadoGestion(entry.estado_nuevo)}
+                              </span>
+                              {" · "}
+                              <span>
+                                {entry.creado_por?.name || "Sistema"}
+                              </span>
+                              {" · "}
+                              <span>
+                                {formatHistorialFecha(entry.created_at)}
+                              </span>
+                              {entry.nota ? (
+                                <div className="fst-italic ms-1">
+                                  {entry.nota}
+                                </div>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
 
                   {error && (
                     <div className="alert alert-danger py-2">{error}</div>
@@ -489,10 +774,74 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
+                  {copiandoDatos && (
+                    <div className="alert alert-light border py-2 small">
+                      Copiando datos entre miembros de la pre-renovación…
+                    </div>
+                  )}
+
+                  {!loading && (
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                      <h6 className="mb-0">
+                        <i className="fas fa-users me-2" aria-hidden="true" />
+                        Miembros
+                      </h6>
+                      <div className="btn-group">
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => {
+                            setShowClienteExistente(false);
+                            setShowPersonaNueva(true);
+                          }}
+                          disabled={
+                            consolidando ||
+                            agregandoMiembro ||
+                            copiandoDatos ||
+                            !lote?.id
+                          }
+                        >
+                          Añadir
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-sm"
+                          onClick={() => {
+                            setShowPersonaNueva(false);
+                            setShowClienteExistente(true);
+                          }}
+                          disabled={
+                            consolidando ||
+                            agregandoMiembro ||
+                            copiandoDatos ||
+                            !lote?.id
+                          }
+                        >
+                          <i className="fas fa-users me-1" aria-hidden="true" />
+                          Miembros existentes
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => setShowCopiarDatos(true)}
+                          disabled={!puedeAbrirCopiar}
+                          title={
+                            miembrosParaCopiar.length < 2
+                              ? "Se necesitan al menos 2 miembros a renovar para copiar"
+                              : "Copiar datos entre miembros de la pre-renovación"
+                          }
+                        >
+                          <i className="fas fa-copy me-1" aria-hidden="true" />
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="d-flex flex-column gap-3">
                     {items.map((item) => (
                       <PreRenovacionItemCard
-                        key={item.id}
+                        key={`${item.id}-${cardsRevision}`}
                         item={item}
                         anioDestino={anioDestino}
                         onItemUpdated={handleItemUpdated}
@@ -503,136 +852,110 @@ const PreRenovacionModal = ({
                     ))}
                   </div>
 
-                  {!loading && lote?.id && (
-                    <div className="mt-3 border-top pt-3">
-                      {!showOpcionesAgregar &&
-                        !showPersonaNueva &&
-                        !showClienteExistente && (
-                          <button
-                            type="button"
-                            className="btn btn-outline-primary btn-sm"
-                            onClick={() => setShowOpcionesAgregar(true)}
-                            disabled={consolidando || agregandoMiembro}
+                  {!loading && lote?.id && showPersonaNueva && (
+                    <form
+                      className="card card-body mt-3"
+                      onSubmit={handleAgregarPersonaNueva}
+                    >
+                      <div className="fw-semibold mb-2">
+                        Persona nueva para {anioDestino}
+                      </div>
+                      <div className="row g-2 align-items-end">
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Parentesco <span className="text-danger">*</span>
+                          </label>
+                          <select
+                            className="form-select form-select-sm"
+                            value={personaNuevaParentesco}
+                            onChange={(e) =>
+                              setPersonaNuevaParentesco(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
                           >
-                            + Agregar miembro nuevo para {anioDestino}
-                          </button>
-                        )}
-
-                      {showOpcionesAgregar && (
-                        <div className="card card-body bg-light">
-                          <div className="fw-semibold mb-2">
-                            ¿Cómo quieres agregar el miembro?
-                          </div>
-                          <div className="d-flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              onClick={() => {
-                                setShowOpcionesAgregar(false);
-                                setShowClienteExistente(true);
-                              }}
-                              disabled={agregandoMiembro}
-                            >
-                              Cliente existente en el sistema
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-outline-primary btn-sm"
-                              onClick={() => {
-                                setShowOpcionesAgregar(false);
-                                setShowPersonaNueva(true);
-                              }}
-                              disabled={agregandoMiembro}
-                            >
-                              Persona nueva
-                            </button>
-                            <button
-                              type="button"
-                              className="btn btn-link btn-sm"
-                              onClick={() => setShowOpcionesAgregar(false)}
-                              disabled={agregandoMiembro}
-                            >
-                              Cancelar
-                            </button>
-                          </div>
+                            <option value="">Seleccione…</option>
+                            {TIPOS_PARENTESCO.map((t) => (
+                              <option key={t} value={t}>
+                                {t}
+                              </option>
+                            ))}
+                          </select>
                         </div>
-                      )}
-
-                      {showPersonaNueva && (
-                        <form
-                          className="card card-body"
-                          onSubmit={handleAgregarPersonaNueva}
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Primer nombre <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaPrimerNombre}
+                            onChange={(e) =>
+                              setPersonaNuevaPrimerNombre(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Segundo nombre
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaSegundoNombre}
+                            onChange={(e) =>
+                              setPersonaNuevaSegundoNombre(e.target.value)
+                            }
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                        <div className="col-md-3">
+                          <label className="form-label form-label-sm">
+                            Apellidos <span className="text-danger">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            className="form-control form-control-sm"
+                            value={personaNuevaApellidos}
+                            onChange={(e) =>
+                              setPersonaNuevaApellidos(e.target.value)
+                            }
+                            required
+                            disabled={agregandoMiembro}
+                          />
+                        </div>
+                      </div>
+                      <div className="d-flex gap-2 mt-3">
+                        <button
+                          type="submit"
+                          className="btn btn-primary btn-sm"
+                          disabled={
+                            agregandoMiembro ||
+                            !personaNuevaParentesco.trim() ||
+                            !personaNuevaPrimerNombre.trim() ||
+                            !personaNuevaApellidos.trim()
+                          }
                         >
-                          <div className="fw-semibold mb-2">
-                            Persona nueva para {anioDestino}
-                          </div>
-                          <div className="row g-2 align-items-end">
-                            <div className="col-md-4">
-                              <label className="form-label form-label-sm">
-                                Parentesco <span className="text-danger">*</span>
-                              </label>
-                              <select
-                                className="form-select form-select-sm"
-                                value={personaNuevaParentesco}
-                                onChange={(e) =>
-                                  setPersonaNuevaParentesco(e.target.value)
-                                }
-                                required
-                                disabled={agregandoMiembro}
-                              >
-                                <option value="">Seleccione…</option>
-                                {TIPOS_PARENTESCO.map((t) => (
-                                  <option key={t} value={t}>
-                                    {t}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                            <div className="col-md-5">
-                              <label className="form-label form-label-sm">
-                                Nombre completo{" "}
-                                <span className="text-danger">*</span>
-                              </label>
-                              <input
-                                type="text"
-                                className="form-control form-control-sm"
-                                value={personaNuevaNombre}
-                                onChange={(e) =>
-                                  setPersonaNuevaNombre(e.target.value)
-                                }
-                                required
-                                disabled={agregandoMiembro}
-                              />
-                            </div>
-                            <div className="col-md-3 d-flex gap-2">
-                              <button
-                                type="submit"
-                                className="btn btn-primary btn-sm"
-                                disabled={
-                                  agregandoMiembro ||
-                                  !personaNuevaParentesco.trim() ||
-                                  !personaNuevaNombre.trim()
-                                }
-                              >
-                                {agregandoMiembro ? "Agregando…" : "Agregar"}
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-outline-secondary btn-sm"
-                                onClick={() => {
-                                  setShowPersonaNueva(false);
-                                  setPersonaNuevaParentesco("");
-                                  setPersonaNuevaNombre("");
-                                }}
-                                disabled={agregandoMiembro}
-                              >
-                                Cancelar
-                              </button>
-                            </div>
-                          </div>
-                        </form>
-                      )}
-                    </div>
+                          {agregandoMiembro ? "Agregando…" : "Agregar"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={() => {
+                            setShowPersonaNueva(false);
+                            setPersonaNuevaParentesco("");
+                            setPersonaNuevaPrimerNombre("");
+                            setPersonaNuevaSegundoNombre("");
+                            setPersonaNuevaApellidos("");
+                          }}
+                          disabled={agregandoMiembro}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </form>
                   )}
                 </div>
 
@@ -683,6 +1006,15 @@ const PreRenovacionModal = ({
         defaultCoberturaTipo={defaultCoberturaTipo}
         onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
         onClose={() => setShowClienteExistente(false)}
+      />
+
+      <CopiarDatosModal
+        open={showCopiarDatos}
+        onClose={() => setShowCopiarDatos(false)}
+        members={miembrosParaCopiar}
+        defaultSourceId={tomadorSourceId}
+        zIndex={1080}
+        onApply={applyCopySelection}
       />
     </>
   );

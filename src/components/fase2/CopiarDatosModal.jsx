@@ -43,8 +43,13 @@ export default function CopiarDatosModal({
   onClose,
   members = [],
   onApply, // ({ sourceId, fieldKeys, copyAddress, targetIds })
+  /** Base z-index (modal). Backdrop = zIndex - 10. Subir si se abre sobre otro modal. */
+  zIndex = 1060,
+  /** Si se pasa, preselecciona ese origen al abrir (p. ej. el tomador). */
+  defaultSourceId = null,
 }) {
   const candidates = useMemo(() => members || [], [members]);
+  const backdropZ = zIndex - 10;
 
   // ✅ por defecto: todo marcado
   const [fieldKeys, setFieldKeys] = useState(() => new Set(ALL_KEYS));
@@ -84,10 +89,11 @@ export default function CopiarDatosModal({
       setCopyAddress(true);
       setTargetMode("all");
       setSelectedTargets(new Set());
-      // Si prefieres limpiar siempre el origen, descomenta:
-      // setSourceId(null);
+      if (defaultSourceId != null) {
+        setSourceId(Number(defaultSourceId));
+      }
     }
-  }, [open]);
+  }, [open, defaultSourceId]);
 
   // Si cambia el origen, limpiamos selección de destinos específicos
   useEffect(() => {
@@ -135,7 +141,7 @@ export default function CopiarDatosModal({
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
-        style={{ display: "block", zIndex: 1060, pointerEvents: "auto" }}
+        style={{ display: "block", zIndex, pointerEvents: "auto" }}
       >
         <div className="modal-dialog modal-lg modal-dialog-scrollable">
           <div className="modal-content">
@@ -317,7 +323,7 @@ export default function CopiarDatosModal({
       <div
         className="modal-backdrop fade show"
         onClick={onClose}
-        style={{ zIndex: 1050 }}
+        style={{ zIndex: backdropZ }}
       />
     </>,
     document.body

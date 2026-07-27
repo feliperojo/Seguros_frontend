@@ -16,13 +16,15 @@ const TIPO_PAGO_OPTIONS = [
 const MOTIVOS_RETIRO_NO_RENOVACION = [
   "CAMBIO DE AGENTE",
   "MS CANCELO POR FALTA DE DOCUMENTOS",
-  "POR FALTA DE PAGO",
-  "POR FALTA DE PAGO INICIAL",
   "TOMO MEDICAID",
-  "TOMO MEDICARE",
-  "TOMO SEGURO POR EL TRABAJO",
-  "CLIENTE CANCELO",
-  "CLIENTE SE MUDO A OTRO ESTADO",
+  "TOMO MEDICARE (65 AÑOS)",
+  "TOMO SEGURO POR EMPLEADOR/OTRO",
+  "CLIENTE CANCELO POR PRECIO",
+  "SE MUDO A OTRO ESTADO/PAIS",
+  "YA NO NECESITA EL SEGURO",
+  "SE CANCELO POR FALTA DE PAGO (MORA)",
+  "NO REALIZO EL PAGO INICIAL",
+  "TAXES POR SEPARADO",
   "OTRO",
 ];
 
@@ -161,7 +163,7 @@ const RenovacionCoberturasBorrador = ({
     return (
       <div className="modal-body">
         <div className="alert alert-warning mb-0">
-          No se encontró información de borrador de renovación.
+          No se encontró información de pre-renovación.
         </div>
         <div className="modal-footer">
           <button type="button" className="btn btn-secondary" onClick={onClose}>
