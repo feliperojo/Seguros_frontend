@@ -17,7 +17,10 @@ import { deriveCounts } from "../utils/groupCounters";
 import { formatDisplayName } from "../utils/names";
 import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPresencia";
 import GrupoFamiliarEdicionAlerta from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
-import { buildDeltaCambiosFromPayloads } from "../utils/grupoFamiliarConcurrentSave";
+import {
+  attachCoberturaDirtyFieldsForLegacy,
+  buildDeltaCambiosFromPayloads,
+} from "../utils/grupoFamiliarConcurrentSave";
 
 
  import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
@@ -1528,10 +1531,20 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
       // (si siempre mandamos `cambios`, el backend podía ignorar clientes/coberturas).
       const useDeltaSave = Boolean(editBaseline && hayCambiosDelta && hayAlertaConcurrencia);
 
+      // En legacy, marcar campos de cobertura realmente editados (_dirty_fields) para que
+      // el backend permita vaciarlos (p. ej. Codigo de ID / policy_number). Sin esto,
+      // la protección anti-borrado conserva el valor anterior.
+      const coberturasParaEnviar = useDeltaSave
+        ? coberturasPayload
+        : attachCoberturaDirtyFieldsForLegacy(
+            coberturasPayload,
+            cambios.coberturas,
+          );
+
       let finalPayload = {
         ...grupoPayload,
         clientes: clientesPayload,
-        coberturas: coberturasPayload,
+        coberturas: coberturasParaEnviar,
         grupo_version: grupoVersion,
       };
 
