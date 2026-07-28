@@ -29,6 +29,10 @@ import {
   PAGOS_INFORME_MONTH_ABBR,
 } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
+import {
+  ESTADOS_GESTION_EDITABLES,
+  estadoGestionBadge,
+} from "../utils/renovacionEstadoGestion";
 
 /**
  * Estados de auditoría permitidos
@@ -384,6 +388,7 @@ const AuditoriaRunDetallePage = () => {
   const [pagosListadoCompleto, setPagosListadoCompleto] = useState([]);
   const [loadingPagos, setLoadingPagos] = useState(false);
   const [savingPagoId, setSavingPagoId] = useState(null);
+  const [savingRenovacionLoteId, setSavingRenovacionLoteId] = useState(null);
   
   // Estado de filtros
   const [filters, setFilters] = useState({
@@ -481,6 +486,15 @@ const AuditoriaRunDetallePage = () => {
       meta?.withPagos
   );
   const includePagosEnabled = includePagosFromRun || includePagosFromMeta;
+
+  const includeRenovacionesFromRun = toBool(
+    runInfo?.include_renovaciones ?? runInfo?.includeRenovaciones
+  );
+  const includeRenovacionesFromMeta = toBool(
+    meta?.include_renovaciones ?? meta?.includeRenovaciones
+  );
+  const includeRenovacionesEnabled =
+    includeRenovacionesFromRun || includeRenovacionesFromMeta;
 
   const periodoRunRaw =
     runInfo?.periodo ??
@@ -584,6 +598,45 @@ const AuditoriaRunDetallePage = () => {
       console.error("Error al actualizar pago desde auditoría:", err);
     } finally {
       setSavingPagoId(null);
+    }
+  };
+
+  const handleRenovacionEstadoChange = async (cobertura, nuevoEstado) => {
+    const loteId = cobertura?.renovacion_lote_id;
+    if (!loteId || !nuevoEstado) return;
+    if (nuevoEstado === cobertura?.renovacion_estado_gestion) return;
+
+    setSavingRenovacionLoteId(loteId);
+    try {
+      await apiRequest(`renovacion_lote/${loteId}/estado-gestion`, "PATCH", {
+        estado_gestion: nuevoEstado,
+      });
+      const editable = !["consolidado", "no_renovara"].includes(nuevoEstado);
+      setCoberturas((prev) =>
+        Array.isArray(prev)
+          ? prev.map((row) =>
+              Number(row?.renovacion_lote_id) === Number(loteId)
+                ? {
+                    ...row,
+                    renovacion_estado_gestion: nuevoEstado,
+                    renovacion_editable: editable,
+                  }
+                : row
+            )
+          : prev
+      );
+      if (toast && typeof toast.showSuccess === "function") {
+        toast.showSuccess("Estado de renovación actualizado");
+      }
+    } catch (err) {
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        "Error al actualizar el estado de renovación";
+      if (toast && typeof toast.showError === "function") toast.showError(msg);
+      console.error("Error al actualizar renovación desde auditoría:", err);
+    } finally {
+      setSavingRenovacionLoteId(null);
     }
   };
 
@@ -1632,6 +1685,14 @@ const AuditoriaRunDetallePage = () => {
                           Situación pago
                         </th>
                       )}
+                      {includeRenovacionesEnabled && (
+                        <th
+                          className="text-nowrap"
+                          title="Estado de gestión de la renovación (solo titular del grupo)"
+                        >
+                          Estado renovación
+                        </th>
+                      )}
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -1845,6 +1906,55 @@ const AuditoriaRunDetallePage = () => {
                                 </Badge>
                               );
                             })()}
+                          </td>
+                        )}
+                        {includeRenovacionesEnabled && (
+                          <td style={{ minWidth: 180 }}>
+                            {cobertura.renovacion_estado_gestion == null ? (
+                              <span className="text-muted">—</span>
+                            ) : (
+                              <div className="d-flex flex-column gap-1">
+                                {(() => {
+                                  const badge = estadoGestionBadge(
+                                    cobertura.renovacion_estado_gestion
+                                  );
+                                  return <Badge bg={badge.bg}>{badge.label}</Badge>;
+                                })()}
+                                {cobertura.renovacion_editable &&
+                                  cobertura.renovacion_lote_id != null && (
+                                    <div className="d-flex align-items-center gap-2">
+                                      <Form.Select
+                                        size="sm"
+                                        value={cobertura.renovacion_estado_gestion}
+                                        onChange={(e) =>
+                                          void handleRenovacionEstadoChange(
+                                            cobertura,
+                                            e.target.value
+                                          )
+                                        }
+                                        disabled={
+                                          savingRenovacionLoteId ===
+                                          cobertura.renovacion_lote_id
+                                        }
+                                      >
+                                        {ESTADOS_GESTION_EDITABLES.map((opt) => (
+                                          <option key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                          </option>
+                                        ))}
+                                      </Form.Select>
+                                      {savingRenovacionLoteId ===
+                                        cobertura.renovacion_lote_id && (
+                                        <Spinner
+                                          animation="border"
+                                          size="sm"
+                                          className="text-primary"
+                                        />
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+                            )}
                           </td>
                         )}
                         <td>

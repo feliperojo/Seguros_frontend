@@ -13,7 +13,7 @@ import {
   itemToCopyMember,
 } from "../../utils/preRenovacionCopy";
 import {
-  ESTADOS_GESTION_OPTIONS,
+  ESTADOS_GESTION_EDITABLES,
   estadoGestionBadge,
   etiquetaEstadoGestion,
 } from "../../utils/renovacionEstadoGestion";
@@ -286,6 +286,13 @@ const PreRenovacionModal = ({
     return list;
   }, [lote?.items]);
 
+  const edicionBloqueada = ["anulado", "no_renovara", "consolidado"].includes(
+    lote?.estado_gestion
+  );
+  const estadoGestionTerminal = ["consolidado", "no_renovara"].includes(
+    lote?.estado_gestion
+  );
+
   const miembrosParaCopiar = useMemo(
     () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
     [items]
@@ -301,6 +308,7 @@ const PreRenovacionModal = ({
   const puedeAbrirCopiar =
     !loading &&
     !consolidando &&
+    !edicionBloqueada &&
     !copiandoDatos &&
     !showConfirmacionFinal &&
     itemsConGuardadoPendiente.size === 0 &&
@@ -447,7 +455,8 @@ const PreRenovacionModal = ({
     miembrosInactivosMarcadosRenovar.length === 0 &&
     !hayGuardadosPendientes &&
     !loading &&
-    !consolidando;
+    !consolidando &&
+    !edicionBloqueada;
 
   const handleClose = () => {
     if (consolidando) return;
@@ -637,18 +646,32 @@ const PreRenovacionModal = ({
                         <select
                           className="form-select form-select-sm"
                           style={{ maxWidth: 220 }}
-                          value={estadoGestionDraft}
-                          disabled={guardandoEstadoGestion || consolidando}
+                          value={
+                            estadoGestionTerminal
+                              ? lote.estado_gestion
+                              : estadoGestionDraft
+                          }
+                          disabled={
+                            guardandoEstadoGestion ||
+                            consolidando ||
+                            estadoGestionTerminal
+                          }
                           onChange={(e) =>
                             setEstadoGestionDraft(e.target.value)
                           }
                           aria-label="Estado de gestión"
                         >
-                          {ESTADOS_GESTION_OPTIONS.map((opt) => (
-                            <option key={opt.value} value={opt.value}>
-                              {opt.label}
+                          {estadoGestionTerminal ? (
+                            <option value={lote.estado_gestion}>
+                              {estadoGestionBadge(lote.estado_gestion).label}
                             </option>
-                          ))}
+                          ) : (
+                            ESTADOS_GESTION_EDITABLES.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))
+                          )}
                         </select>
                         <input
                           type="text"
@@ -656,7 +679,11 @@ const PreRenovacionModal = ({
                           style={{ maxWidth: 240 }}
                           placeholder="Nota (opcional)"
                           value={notaEstadoGestion}
-                          disabled={guardandoEstadoGestion || consolidando}
+                          disabled={
+                            guardandoEstadoGestion ||
+                            consolidando ||
+                            estadoGestionTerminal
+                          }
                           onChange={(e) =>
                             setNotaEstadoGestion(e.target.value)
                           }
@@ -667,6 +694,7 @@ const PreRenovacionModal = ({
                           disabled={
                             guardandoEstadoGestion ||
                             consolidando ||
+                            estadoGestionTerminal ||
                             !estadoGestionDraft ||
                             estadoGestionDraft === lote.estado_gestion
                           }
@@ -796,6 +824,7 @@ const PreRenovacionModal = ({
                           }}
                           disabled={
                             consolidando ||
+                            edicionBloqueada ||
                             agregandoMiembro ||
                             copiandoDatos ||
                             !lote?.id
@@ -812,6 +841,7 @@ const PreRenovacionModal = ({
                           }}
                           disabled={
                             consolidando ||
+                            edicionBloqueada ||
                             agregandoMiembro ||
                             copiandoDatos ||
                             !lote?.id
@@ -848,6 +878,7 @@ const PreRenovacionModal = ({
                         onItemRemoved={handleItemRemoved}
                         attemptedConsolidar={attemptedConsolidar}
                         onSaveStateChange={handleSaveStateChange}
+                        edicionBloqueada={edicionBloqueada}
                       />
                     ))}
                   </div>
@@ -872,7 +903,7 @@ const PreRenovacionModal = ({
                               setPersonaNuevaParentesco(e.target.value)
                             }
                             required
-                            disabled={agregandoMiembro}
+                            disabled={agregandoMiembro || edicionBloqueada}
                           >
                             <option value="">Seleccione…</option>
                             {TIPOS_PARENTESCO.map((t) => (

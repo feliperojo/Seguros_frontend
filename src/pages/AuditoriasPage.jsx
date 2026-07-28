@@ -81,6 +81,7 @@ const AuditoriasPage = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [includePagos, setIncludePagos] = useState(false);
+  const [includeRenovaciones, setIncludeRenovaciones] = useState(false);
   const [validatingPagos, setValidatingPagos] = useState(false);
   const [showPagosModal, setShowPagosModal] = useState(false);
   const [pagosModalMessage, setPagosModalMessage] = useState("");
@@ -378,6 +379,10 @@ const AuditoriasPage = () => {
     try {
       const payload = buildBasePayload();
 
+      if (includeRenovaciones && targetType === "coberturas") {
+        payload.include_renovaciones = true;
+      }
+
       // Opcional: incluir pagos del mes. Primero validamos si existen pagos generados para ese periodo.
       if (includePagos) {
         setValidatingPagos(true);
@@ -434,6 +439,10 @@ const AuditoriasPage = () => {
     try {
       const payload = buildBasePayload();
       let pagosNote = null;
+
+      if (includeRenovaciones && targetType === "coberturas") {
+        payload.include_renovaciones = true;
+      }
 
       if (includePagos) {
         setValidatingPagos(true);
@@ -554,6 +563,9 @@ const AuditoriasPage = () => {
                 onChange={(e) => {
                   setTargetType(e.target.value);
                   setAuditTypeId(""); // Resetear selección al cambiar target_type
+                  if (e.target.value !== "coberturas") {
+                    setIncludeRenovaciones(false);
+                  }
                 }}
               >
                 <option value="coberturas">Coberturas</option>
@@ -637,9 +649,27 @@ const AuditoriasPage = () => {
                 onChange={(e) => setIncludePagos(e.target.checked)}
                 disabled={creating || validatingPagos || previewLoading}
               />
-              <Form.Text className="text-muted">
+              <Form.Text className="text-muted d-block mb-2">
                 Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
               </Form.Text>
+              {targetType === "coberturas" && (
+                <>
+                  <Form.Check
+                    type="switch"
+                    id="include-renovaciones-switch"
+                    label="Incluir renovaciones del período"
+                    checked={includeRenovaciones}
+                    onChange={(e) => setIncludeRenovaciones(e.target.checked)}
+                    disabled={creating || validatingPagos || previewLoading}
+                  />
+                  <Form.Text className="text-muted">
+                    Muestra y permite gestionar el estado de la renovación de cada grupo familiar (solo en la fila del titular).
+                    {String(periodo || "").slice(0, 4) && (
+                      <> Se tomarán las renovaciones con año destino {String(periodo).slice(0, 4)}.</>
+                    )}
+                  </Form.Text>
+                </>
+              )}
             </div>
             
             <div className="col-md-3 d-flex flex-column gap-2">

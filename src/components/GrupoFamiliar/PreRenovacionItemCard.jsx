@@ -91,6 +91,7 @@ const PreRenovacionItemCard = ({
   onItemRemoved,
   attemptedConsolidar = false,
   onSaveStateChange,
+  edicionBloqueada = false,
 }) => {
   const [renovar, setRenovar] = useState(Boolean(item?.renovar ?? true));
   const [datos, setDatos] = useState(() => ({
@@ -285,7 +286,7 @@ const PreRenovacionItemCard = ({
     attemptedConsolidar &&
     requiereRetiro &&
     !String(datos.motivo_retiro ?? "").trim();
-  const disabled = bloqueado;
+  const disabled = bloqueado || edicionBloqueada;
 
   const renderClienteSelectField = (field, label, options, normalizeFn) => {
     const actual = clienteActual[field];
