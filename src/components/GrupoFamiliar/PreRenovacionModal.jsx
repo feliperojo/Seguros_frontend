@@ -298,12 +298,15 @@ const PreRenovacionModal = ({
     return list;
   }, [lote?.items]);
 
-  const edicionBloqueada = ["anulado", "no_renovara", "consolidado"].includes(
-    lote?.estado_gestion
+  const loteCerrado = ["consolidado", "confirmado"].includes(
+    String(lote?.estado || "").toLowerCase()
   );
-  const estadoGestionTerminal = ["consolidado", "no_renovara"].includes(
-    lote?.estado_gestion
-  );
+  // Igual que anulado: no_renovara no cierra el lote; el historial registra el cambio.
+  const edicionBloqueada =
+    loteCerrado ||
+    ["anulado", "no_renovara", "consolidado"].includes(lote?.estado_gestion);
+  const estadoGestionTerminal =
+    loteCerrado || lote?.estado_gestion === "consolidado";
 
   const miembrosParaCopiar = useMemo(
     () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),

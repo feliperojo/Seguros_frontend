@@ -26,7 +26,7 @@ const ESTADOS_FILTRO = [
   { key: "", label: "Todos" },
   { key: "pendiente", label: "Pendiente" },
   { key: "borrador", label: "En pre-renovación" },
-  { key: "consolidado", label: "Renovado" },
+  { key: "consolidado", label: "Consolidado" },
 ];
 
 const estadoBadge = (estado) => {
@@ -36,7 +36,7 @@ const estadoBadge = (estado) => {
     case "borrador":
       return { label: "En pre-renovación", bg: "primary" };
     case "consolidado":
-      return { label: "Renovado", bg: "success" };
+      return { label: "Consolidado", bg: "success" };
     default:
       return { label: estado || "—", bg: "secondary" };
   }

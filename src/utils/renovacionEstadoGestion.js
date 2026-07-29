@@ -9,7 +9,7 @@ export const ESTADOS_GESTION_OPTIONS = [
   { value: "consolidado", label: "Consolidado", bg: "success" },
 ];
 
-/** Opciones elegibles a mano; "consolidado" lo pone solo el proceso de consolidación. */
+/** Opciones elegibles a mano. "consolidado" en gestión es legacy (ya no se asigna al consolidar). */
 export const ESTADOS_GESTION_EDITABLES = ESTADOS_GESTION_OPTIONS.filter(
   (o) => o.value !== "consolidado"
 );

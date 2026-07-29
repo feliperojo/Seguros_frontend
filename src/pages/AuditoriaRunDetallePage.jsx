@@ -611,7 +611,7 @@ const AuditoriaRunDetallePage = () => {
       await apiRequest(`renovacion_lote/${loteId}/estado-gestion`, "PATCH", {
         estado_gestion: nuevoEstado,
       });
-      const editable = !["consolidado", "no_renovara"].includes(nuevoEstado);
+      const editable = nuevoEstado !== "consolidado";
       setCoberturas((prev) =>
         Array.isArray(prev)
           ? prev.map((row) =>
