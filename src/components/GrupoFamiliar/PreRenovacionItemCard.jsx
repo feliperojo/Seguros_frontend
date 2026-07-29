@@ -29,6 +29,7 @@ const TIPO_PAGO_OPTIONS = [
 const METAL_OPTIONS = ["BRONCE", "SILVER", "GOLD", "PLATINUM"];
 const RED_OPTIONS = ["HMO", "EPO", "PPO", "POS"];
 const GENERO_OPTIONS = ["Masculino", "Femenino", "Otro"];
+const ESTADO_COBERTURA_OPTIONS = ["Sí", "No", "Medicare", "Medicaid"];
 
 const MOTIVOS_RETIRO_NO_RENOVACION = [
   "CAMBIO DE AGENTE",
@@ -680,6 +681,57 @@ const PreRenovacionItemCard = ({
                 )}
               </select>
               {renderEstado("tipo_pago")}
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label form-label-sm mb-1">Cobertura</label>
+              <select
+                className="form-select form-select-sm"
+                value={datos.estado_cobertura ?? "Sí"}
+                onChange={(e) =>
+                  cambiarDato("estado_cobertura", e.target.value || null, true)
+                }
+                disabled={disabled}
+              >
+                <option value="">Seleccione…</option>
+                {optionsWithCurrent(
+                  ESTADO_COBERTURA_OPTIONS,
+                  datos.estado_cobertura ?? "Sí"
+                ).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+              {renderEstado("estado_cobertura")}
+            </div>
+
+            <div className="col-md-4">
+              <label className="form-label form-label-sm mb-1">
+                Año de cobertura
+              </label>
+              <input
+                type="number"
+                min="2000"
+                max="2100"
+                className="form-control form-control-sm"
+                value={
+                  datos.ano_cobertura != null && datos.ano_cobertura !== ""
+                    ? datos.ano_cobertura
+                    : anioDestino
+                }
+                placeholder={String(anioDestino)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  cambiarDato(
+                    "ano_cobertura",
+                    raw === "" ? null : Number(raw)
+                  );
+                }}
+                onBlur={() => guardarPendienteAhora("ano_cobertura")}
+                disabled={disabled}
+              />
+              {renderEstado("ano_cobertura")}
             </div>
           </div>
         </div>

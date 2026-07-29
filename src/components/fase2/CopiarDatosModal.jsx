@@ -14,6 +14,7 @@ const FIELD_DEFS = [
   { key: "tipo_pago",         label: "Tipo de pago" },
   { key: "dia_pago",          label: "Día de pago" },
   { key: "estado_cobertura",  label: "Cobertura" },
+  { key: "ano_cobertura",     label: "Año de cobertura" },
   { key: "fecha_activacion",  label: "fecha de activacion" },
 ];
 

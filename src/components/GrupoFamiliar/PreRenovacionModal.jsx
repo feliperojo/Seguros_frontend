@@ -52,10 +52,22 @@ const nombreMiembro = (item) =>
     : item?.cobertura?.cliente?.nombre_completo ||
       `Cobertura #${item?.cobertura_id || "?"}`;
 
-const getErrorMessage = (error) =>
-  error?.response?.data?.message ||
-  error?.message ||
-  "Ocurrió un error al procesar la pre-renovación.";
+const getErrorMessage = (error) => {
+  const raw =
+    error?.response?.data?.message ||
+    error?.message ||
+    "Ocurrió un error al procesar la pre-renovación.";
+  const text = String(raw);
+  // No mostrar SQL crudo al usuario (unique, SQLSTATE, etc.).
+  if (
+    /SQLSTATE|Unique violation|duplicate key|renovacion_lote_grupo_familiar_id_anio_destino_unique/i.test(
+      text
+    )
+  ) {
+    return "Este grupo ya tiene una renovación registrada para ese año. Revisa si ya fue consolidada o vuelve a abrir la pre-renovación.";
+  }
+  return text;
+};
 
 const buildFullName = (p = "", s = "", a = "") =>
   [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
