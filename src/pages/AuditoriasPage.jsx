@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
 import { FaEdit } from "react-icons/fa";
 import { Helmet } from "react-helmet-async";
-import { listRuns, createRun, closeRun, listAuditTypes, previewRun } from "../services/auditoriasService";
+import { listRuns, createRun, closeRun, deleteRun, listAuditTypes, previewRun } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
 import AuditRunPreviewModal from "../components/AuditRunPreviewModal";
@@ -92,6 +92,7 @@ const AuditoriasPage = () => {
   const [previewPagosNote, setPreviewPagosNote] = useState(null);
   const [pendingPreviewPayload, setPendingPreviewPayload] = useState(null);
   const [closingRunId, setClosingRunId] = useState(null);
+  const [deletingRunId, setDeletingRunId] = useState(null);
   const [error, setError] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
 
@@ -533,6 +534,32 @@ const AuditoriasPage = () => {
       console.error("Error al cerrar run:", err);
     } finally {
       setClosingRunId(null);
+    }
+  };
+
+  // Manejar eliminación de run
+  const handleDeleteRun = async (runId, e) => {
+    e.stopPropagation(); // Evitar navegación al hacer clic
+
+    if (!window.confirm("¿Eliminar esta auditoría? Esta acción no se puede deshacer y borrará también sus ítems, tareas y comentarios asociados.")) {
+      return;
+    }
+
+    setDeletingRunId(runId);
+
+    try {
+      await deleteRun(runId);
+      toast.showSuccess("Auditoría eliminada exitosamente");
+
+      // Recargar la lista
+      const data = await loadRunsData();
+      setRuns(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || "Error al eliminar la auditoría";
+      toast.showError(errorMessage);
+      console.error("Error al eliminar run:", err);
+    } finally {
+      setDeletingRunId(null);
     }
   };
   
@@ -995,6 +1022,19 @@ const AuditoriasPage = () => {
                               )}
                             </Button>
                           )}
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={(e) => handleDeleteRun(run.id, e)}
+                            disabled={deletingRunId === run.id}
+                            title="Eliminar esta auditoría y todo su detalle (irreversible)"
+                          >
+                            {deletingRunId === run.id ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              "Eliminar"
+                            )}
+                          </Button>
                         </div>
                       </td>
                     </tr>
