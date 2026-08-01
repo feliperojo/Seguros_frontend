@@ -5,19 +5,28 @@ import useCompanies from "../../hooks/useCompanies";
 import LanguageSelect from "../selects/LanguageSelect";
 import MdyDashDateInput from "../common/MdyDashDateInput";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
+import TelefonosPro from "../fase2/TelefonosPro";
 import { buildDireccion } from "../../utils/direccion";
+import { buildNombreCompleto } from "../../utils/nombre";
+import { formatDateForDisplay } from "../../utils/formatters";
+import {
+  resolveClienteTelefonos,
+  toApiPhones,
+} from "../../utils/phone-mappers";
+import { toLegacyFields } from "../../utils/phones";
 import {
   CLIENTE_FIELDS_PRINCIPALES,
   CLIENTE_FIELDS_MIGRATORIO,
   CLIENTE_FIELDS_DIRECCION,
   CLIENTE_FIELDS_CONTACTO,
-  CLIENTE_FIELDS_EMPLEO,
+  CLIENTE_PHONE_LEGACY_FIELDS,
 } from "../../utils/clienteFieldGroups";
 import {
   normalizeGeneroForSelect,
   normalizeStatusMigratorioForSelect,
 } from "../../utils/clienteFieldNormalize";
 import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
+import { computeAnnual } from "../../services/ingresos";
 
 const TIPO_PAGO_OPTIONS = [
   "DEBITO AUTOMATICO",
@@ -54,6 +63,53 @@ const DIRECCION_FORMULA_FIELDS = new Set([
   "estado",
   "codigo_postal",
 ]);
+
+const NOMBRE_FORMULA_FIELDS = new Set([
+  "primer_nombre",
+  "segundo_nombre",
+  "apellidos",
+]);
+
+/** Misma lista que TomaDeDatos / EditClienteModal. */
+const TIPO_INGRESO_OPTIONS = [
+  "W2",
+  "1099",
+  "SOCIAL SECURITY",
+  "SELF EMPLOYMENT",
+  "SUPPORT",
+  "ALIMONY",
+];
+
+const PERIODO_INGRESO_OPTIONS = [
+  "HOUR",
+  "WEEKLY P.TIME",
+  "WEEKLY",
+  "BIWEEKLY",
+  "MONTHLY",
+  "ANNUAL",
+];
+
+/** Alias legacy (p. ej. MENSUAL) → clave de PERIOD_FACTOR. */
+const normalizePeriodoIngreso = (periodo) => {
+  const p = String(periodo || "").trim().toUpperCase();
+  const aliases = {
+    MENSUAL: "MONTHLY",
+    ANUAL: "ANNUAL",
+    ANUALMENTE: "ANNUAL",
+    SEMANAL: "WEEKLY",
+    QUINCENAL: "BIWEEKLY",
+    HORA: "HOUR",
+  };
+  return aliases[p] || p;
+};
+
+const toAnnualMoney = (periodo, ingresoPorPeriodo) => {
+  const anual = computeAnnual(
+    normalizePeriodoIngreso(periodo),
+    ingresoPorPeriodo
+  );
+  return anual ? Number(anual.toFixed(2)) : null;
+};
 
 /** Campos de póliza de texto libre (metal/red van como select aparte). */
 const TEXT_FIELDS = [
@@ -101,6 +157,7 @@ const PreRenovacionItemCard = ({
   }));
   const { companies, loading: companiesLoading } = useCompanies();
   const [contactoAbierto, setContactoAbierto] = useState(false);
+  const [copiarDir, setCopiarDir] = useState(false);
   const [estadosGuardado, setEstadosGuardado] = useState({});
   const [errores, setErrores] = useState({});
   const [bloqueado, setBloqueado] = useState(false);
@@ -221,6 +278,19 @@ const PreRenovacionItemCard = ({
     }
   };
 
+  const cambiarClienteCampos = (campos, key, inmediato = false) => {
+    setDatos((prev) => ({
+      ...prev,
+      cliente: { ...(prev.cliente || {}), ...campos },
+    }));
+    const cambios = { cliente: { ...campos } };
+    if (inmediato) {
+      guardarCambio(cambios, key);
+    } else {
+      programarGuardado(cambios, key);
+    }
+  };
+
   const cambiarRenovar = (checked) => {
     setRenovar(checked);
     guardarCambio({ renovar: checked }, "renovar", true);
@@ -263,6 +333,46 @@ const PreRenovacionItemCard = ({
   const clienteActual = esMiembroNuevo
     ? item?.cliente_existente || item?.datos_borrador?.cliente || {}
     : cobertura?.cliente || {};
+
+  const resolverDireccionCliente = (overrides = {}) => {
+    const base = {
+      calle: datos.cliente?.calle ?? clienteActual.calle,
+      apto: datos.cliente?.apto ?? clienteActual.apto,
+      ciudad: datos.cliente?.ciudad ?? clienteActual.ciudad,
+      condado: datos.cliente?.condado ?? clienteActual.condado,
+      estado: datos.cliente?.estado ?? clienteActual.estado,
+      codigo_postal: datos.cliente?.codigo_postal ?? clienteActual.codigo_postal,
+      ...overrides,
+    };
+    return (
+      buildDireccion(base) ||
+      datos.cliente?.direccion ||
+      clienteActual.direccion ||
+      ""
+    );
+  };
+
+  const draftCliente = datos.cliente || {};
+  const hasDraftTelefonos = Array.isArray(draftCliente.telefonos);
+  const hasDraftLegacyPhone =
+    draftCliente.telefono != null ||
+    draftCliente.secundario != null ||
+    draftCliente.whatsapp_num != null;
+  const telefonosValue = resolveClienteTelefonos(
+    {
+      ...clienteActual,
+      ...draftCliente,
+      // Preferir array del borrador; si solo hay legacy en borrador, forzar
+      // reconstrucción desde esos campos (no ignorarlos por el array actual).
+      telefonos: hasDraftTelefonos
+        ? draftCliente.telefonos
+        : hasDraftLegacyPhone
+          ? null
+          : clienteActual.telefonos,
+    },
+    "us"
+  );
+
   const nombre = esMiembroNuevo
     ? datos.cliente?.nombre_completo ||
       item?.cliente_existente?.nombre_completo ||
@@ -328,13 +438,23 @@ const PreRenovacionItemCard = ({
 
   const renderClienteTextField = (field, label, type) => {
     const actual = clienteActual[field];
-    const help =
-      actual !== null && actual !== undefined && actual !== ""
+    const esNombreCalculado = field === "nombre_completo";
+    const help = esNombreCalculado
+      ? "Se calcula automáticamente"
+      : actual !== null && actual !== undefined && actual !== ""
         ? `Actual: ${actual}`
         : "Sin valor actual";
     const key = `cliente.${field}`;
 
     if (type === "date") {
+      const actualFmt =
+        actual !== null && actual !== undefined && actual !== ""
+          ? formatDateForDisplay(actual)
+          : null;
+      const help =
+        actualFmt && actualFmt !== "-"
+          ? `Actual: ${actualFmt}`
+          : "Sin valor actual";
       const valueIso = toDateInput(datos.cliente?.[field]);
       const DateComponent =
         field === "fecha_nacimiento" ? MdyDashDateInput : DateInputWithCalendar;
@@ -366,18 +486,37 @@ const PreRenovacionItemCard = ({
           value={datos.cliente?.[field] ?? ""}
           placeholder={String(actual ?? "")}
           onChange={(e) => {
+            if (esNombreCalculado) return;
             const raw = e.target.value;
-            cambiarCliente(
-              field,
+            const value =
               type === "number"
                 ? raw === ""
                   ? null
                   : Number(raw)
-                : raw
-            );
+                : raw;
+            cambiarCliente(field, value);
+            if (NOMBRE_FORMULA_FIELDS.has(field)) {
+              const siguienteCliente = {
+                primer_nombre:
+                  datos.cliente?.primer_nombre ?? clienteActual.primer_nombre,
+                segundo_nombre:
+                  datos.cliente?.segundo_nombre ?? clienteActual.segundo_nombre,
+                apellidos: datos.cliente?.apellidos ?? clienteActual.apellidos,
+                [field]: value,
+              };
+              const nombreCalculado = buildNombreCompleto(siguienteCliente);
+              cambiarCliente("nombre_completo", nombreCalculado);
+            }
           }}
-          onBlur={() => guardarPendienteAhora(key)}
-          disabled={disabled}
+          onBlur={() => {
+            if (esNombreCalculado) return;
+            guardarPendienteAhora(key);
+            if (NOMBRE_FORMULA_FIELDS.has(field)) {
+              guardarPendienteAhora("cliente.nombre_completo");
+            }
+          }}
+          disabled={disabled || esNombreCalculado}
+          readOnly={esNombreCalculado}
         />
         <div className="form-text">{help}</div>
         {renderEstado(key)}
@@ -794,6 +933,62 @@ const PreRenovacionItemCard = ({
                   : actual !== null && actual !== undefined && actual !== ""
                     ? `Actual: ${actual}`
                     : "Sin valor actual";
+
+                if (field === "dir_correspondencia") {
+                  return (
+                    <div className="col-12" key={field}>
+                      <div className="row g-2 align-items-end">
+                        <div className="col-md-9">
+                          <label className="form-label form-label-sm mb-1">
+                            {label}
+                          </label>
+                          <input
+                            type={type}
+                            className="form-control form-control-sm"
+                            value={datos.cliente?.[field] ?? ""}
+                            placeholder={String(actual ?? "")}
+                            onChange={(e) =>
+                              cambiarCliente(field, e.target.value)
+                            }
+                            onBlur={() => guardarPendienteAhora(key)}
+                            disabled={disabled}
+                          />
+                          <div className="form-text">{help}</div>
+                          {renderEstado(key)}
+                        </div>
+                        <div className="col-md-3 d-flex align-items-center pb-4">
+                          <div className="form-check">
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              id={`pre-copy-dir-${item.id}`}
+                              checked={copiarDir}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setCopiarDir(checked);
+                                if (checked) {
+                                  cambiarCliente(
+                                    "dir_correspondencia",
+                                    resolverDireccionCliente(),
+                                    true
+                                  );
+                                }
+                              }}
+                              disabled={disabled}
+                            />
+                            <label
+                              className="form-check-label"
+                              htmlFor={`pre-copy-dir-${item.id}`}
+                            >
+                              Copiar Dirección
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
                 return (
                   <div className="col-md-4" key={field}>
                     <label className="form-label form-label-sm mb-1">{label}</label>
@@ -814,13 +1009,16 @@ const PreRenovacionItemCard = ({
                             : raw;
                         cambiarCliente(field, value);
                         if (DIRECCION_FORMULA_FIELDS.has(field)) {
-                          const siguienteCliente = {
-                            ...(datos.cliente || {}),
+                          const direccionCalculada = resolverDireccionCliente({
                             [field]: value,
-                          };
-                          const direccionCalculada =
-                            buildDireccion(siguienteCliente);
+                          });
                           cambiarCliente("direccion", direccionCalculada);
+                          if (copiarDir) {
+                            cambiarCliente(
+                              "dir_correspondencia",
+                              direccionCalculada
+                            );
+                          }
                         }
                       }}
                       onBlur={() => {
@@ -828,6 +1026,9 @@ const PreRenovacionItemCard = ({
                         guardarPendienteAhora(key);
                         if (DIRECCION_FORMULA_FIELDS.has(field)) {
                           guardarPendienteAhora("cliente.direccion");
+                          if (copiarDir) {
+                            guardarPendienteAhora("cliente.dir_correspondencia");
+                          }
                         }
                       }}
                       disabled={disabled || esDireccionCalculada}
@@ -842,7 +1043,39 @@ const PreRenovacionItemCard = ({
 
             <div className="text-muted small fw-semibold mb-2">Datos de contacto</div>
             <div className="row g-2 mb-3">
+              <div className="col-12">
+                <label className="form-label form-label-sm mb-1">Teléfonos</label>
+                <TelefonosPro
+                  value={telefonosValue}
+                  onChange={(arr) => {
+                    const cleaned = toApiPhones(arr);
+                    const legacy = toLegacyFields(cleaned);
+                    cambiarClienteCampos(
+                      {
+                        telefonos: cleaned,
+                        telefono: legacy.telefono || null,
+                        secundario: legacy.secundario || null,
+                        whatsapp_num: legacy.whatsapp_num || null,
+                      },
+                      "cliente.telefonos"
+                    );
+                  }}
+                  readOnly={disabled}
+                />
+                <div className="form-text">
+                  {Array.isArray(clienteActual.telefonos) &&
+                  clienteActual.telefonos.length > 0
+                    ? `Actual: ${clienteActual.telefonos.length} teléfono(s)`
+                    : clienteActual.telefono
+                      ? `Actual: ${clienteActual.telefono}`
+                      : "Sin valor actual"}
+                </div>
+                {renderEstado("cliente.telefonos")}
+              </div>
+
               {CLIENTE_FIELDS_CONTACTO.map(([field, label, type]) => {
+                if (CLIENTE_PHONE_LEGACY_FIELDS.has(field)) return null;
+
                 const actual = clienteActual[field];
                 const key = `cliente.${field}`;
 
@@ -938,41 +1171,394 @@ const PreRenovacionItemCard = ({
 
             <div className="text-muted small fw-semibold mb-2">Empleo e ingreso</div>
             <div className="row g-2">
-              {CLIENTE_FIELDS_EMPLEO.map(([field, label, type]) => {
-                const actual = clienteActual[field];
-                const help =
-                  actual !== null && actual !== undefined && actual !== ""
+              {(() => {
+                const valorEmpleo = (field) =>
+                  datos.cliente?.[field] ?? clienteActual[field] ?? "";
+                const helpEmpleo = (field) => {
+                  const actual = clienteActual[field];
+                  return actual !== null && actual !== undefined && actual !== ""
                     ? `Actual: ${actual}`
                     : "Sin valor actual";
-                const key = `cliente.${field}`;
+                };
+                const moneyValue = (field) => {
+                  const v = datos.cliente?.[field];
+                  if (v === null || v === undefined) return "";
+                  return v;
+                };
+
                 return (
-                  <div className="col-md-4" key={field}>
-                    <label className="form-label form-label-sm mb-1">{label}</label>
-                    <input
-                      type={type}
-                      step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
-                      value={datos.cliente?.[field] ?? ""}
-                      placeholder={String(actual ?? "")}
-                      onChange={(e) => {
-                        const raw = e.target.value;
-                        cambiarCliente(
-                          field,
-                          type === "number"
-                            ? raw === ""
-                              ? null
-                              : Number(raw)
-                            : raw
-                        );
-                      }}
-                      onBlur={() => guardarPendienteAhora(key)}
-                      disabled={disabled}
-                    />
-                    <div className="form-text">{help}</div>
-                    {renderEstado(key)}
-                  </div>
+                  <>
+                    <div className="col-md-6">
+                      <label className="form-label form-label-sm mb-1">
+                        Tipo de ingreso
+                      </label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={datos.cliente?.tipo_ingreso ?? ""}
+                        onChange={(e) =>
+                          cambiarCliente(
+                            "tipo_ingreso",
+                            e.target.value || null,
+                            true
+                          )
+                        }
+                        disabled={disabled}
+                      >
+                        <option value="">Seleccione…</option>
+                        {optionsWithCurrent(
+                          TIPO_INGRESO_OPTIONS,
+                          datos.cliente?.tipo_ingreso || clienteActual.tipo_ingreso
+                        ).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">{helpEmpleo("tipo_ingreso")}</div>
+                      {renderEstado("cliente.tipo_ingreso")}
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label form-label-sm mb-1">
+                        Actividad económica
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={datos.cliente?.actividad_economica ?? ""}
+                        placeholder={String(clienteActual.actividad_economica ?? "")}
+                        onChange={(e) =>
+                          cambiarCliente("actividad_economica", e.target.value)
+                        }
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.actividad_economica")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("actividad_economica")}
+                      </div>
+                      {renderEstado("cliente.actividad_economica")}
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label form-label-sm mb-1">
+                        Empleador
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={datos.cliente?.empleador ?? ""}
+                        placeholder={
+                          String(clienteActual.empleador ?? "") ||
+                          "Nombre de la empresa"
+                        }
+                        onChange={(e) =>
+                          cambiarCliente("empleador", e.target.value)
+                        }
+                        onBlur={() => guardarPendienteAhora("cliente.empleador")}
+                        disabled={disabled}
+                      />
+                      <div className="form-text">{helpEmpleo("empleador")}</div>
+                      {renderEstado("cliente.empleador")}
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label form-label-sm mb-1">
+                        Teléfono del empleador
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={datos.cliente?.telefono_empleador ?? ""}
+                        placeholder={String(
+                          clienteActual.telefono_empleador ?? ""
+                        )}
+                        onChange={(e) =>
+                          cambiarCliente("telefono_empleador", e.target.value)
+                        }
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.telefono_empleador")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("telefono_empleador")}
+                      </div>
+                      {renderEstado("cliente.telefono_empleador")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Periodo de ingreso
+                      </label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={datos.cliente?.periodo_ingreso ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value || null;
+                          const anual = toAnnualMoney(
+                            value,
+                            valorEmpleo("ingreso_por_periodo")
+                          );
+                          cambiarClienteCampos(
+                            {
+                              periodo_ingreso: value,
+                              ingreso_anual: anual,
+                            },
+                            "cliente.periodo_ingreso",
+                            true
+                          );
+                        }}
+                        disabled={disabled}
+                      >
+                        <option value="">Seleccione…</option>
+                        {optionsWithCurrent(
+                          PERIODO_INGRESO_OPTIONS,
+                          datos.cliente?.periodo_ingreso ||
+                            clienteActual.periodo_ingreso
+                        ).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">
+                        {helpEmpleo("periodo_ingreso")}
+                      </div>
+                      {renderEstado("cliente.periodo_ingreso")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Ingreso por periodo ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="form-control form-control-sm"
+                        value={moneyValue("ingreso_por_periodo")}
+                        placeholder={String(
+                          clienteActual.ingreso_por_periodo ?? ""
+                        )}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const value = raw === "" ? null : Number(raw);
+                          const anual = toAnnualMoney(
+                            valorEmpleo("periodo_ingreso"),
+                            value
+                          );
+                          cambiarClienteCampos(
+                            {
+                              ingreso_por_periodo: value,
+                              ingreso_anual: anual,
+                            },
+                            "cliente.ingreso_por_periodo"
+                          );
+                        }}
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.ingreso_por_periodo")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("ingreso_por_periodo")}
+                      </div>
+                      {renderEstado("cliente.ingreso_por_periodo")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Ingreso anual ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="form-control form-control-sm"
+                        value={moneyValue("ingreso_anual")}
+                        placeholder={String(clienteActual.ingreso_anual ?? "")}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          cambiarCliente(
+                            "ingreso_anual",
+                            raw === "" ? null : Number(raw)
+                          );
+                        }}
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.ingreso_anual")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("ingreso_anual")}
+                      </div>
+                      {renderEstado("cliente.ingreso_anual")}
+                    </div>
+
+                    <div className="col-12">
+                      <label className="form-label form-label-sm mb-1">
+                        Nota de ingreso ocasional
+                      </label>
+                      <textarea
+                        rows={2}
+                        className="form-control form-control-sm"
+                        value={datos.cliente?.nota_ingreso_ocasional ?? ""}
+                        placeholder={String(
+                          clienteActual.nota_ingreso_ocasional ?? ""
+                        )}
+                        onChange={(e) =>
+                          cambiarCliente(
+                            "nota_ingreso_ocasional",
+                            e.target.value
+                          )
+                        }
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.nota_ingreso_ocasional")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("nota_ingreso_ocasional")}
+                      </div>
+                      {renderEstado("cliente.nota_ingreso_ocasional")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Periodo de ingreso ocasional
+                      </label>
+                      <select
+                        className="form-select form-select-sm"
+                        value={datos.cliente?.periodo_ingreso_ocasional ?? ""}
+                        onChange={(e) => {
+                          const value = e.target.value || null;
+                          const anual = toAnnualMoney(
+                            value,
+                            valorEmpleo("ingreso_por_periodo_ocasional")
+                          );
+                          cambiarClienteCampos(
+                            {
+                              periodo_ingreso_ocasional: value,
+                              ingreso_ocasional_anual: anual,
+                            },
+                            "cliente.periodo_ingreso_ocasional",
+                            true
+                          );
+                        }}
+                        disabled={disabled}
+                      >
+                        <option value="">Seleccione…</option>
+                        {optionsWithCurrent(
+                          PERIODO_INGRESO_OPTIONS,
+                          datos.cliente?.periodo_ingreso_ocasional ||
+                            clienteActual.periodo_ingreso_ocasional
+                        ).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="form-text">
+                        {helpEmpleo("periodo_ingreso_ocasional")}
+                      </div>
+                      {renderEstado("cliente.periodo_ingreso_ocasional")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Ingreso por periodo ocasional ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="form-control form-control-sm"
+                        value={moneyValue("ingreso_por_periodo_ocasional")}
+                        placeholder={String(
+                          clienteActual.ingreso_por_periodo_ocasional ?? ""
+                        )}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const value = raw === "" ? null : Number(raw);
+                          const anual = toAnnualMoney(
+                            valorEmpleo("periodo_ingreso_ocasional"),
+                            value
+                          );
+                          cambiarClienteCampos(
+                            {
+                              ingreso_por_periodo_ocasional: value,
+                              ingreso_ocasional_anual: anual,
+                            },
+                            "cliente.ingreso_por_periodo_ocasional"
+                          );
+                        }}
+                        onBlur={() =>
+                          guardarPendienteAhora(
+                            "cliente.ingreso_por_periodo_ocasional"
+                          )
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("ingreso_por_periodo_ocasional")}
+                      </div>
+                      {renderEstado("cliente.ingreso_por_periodo_ocasional")}
+                    </div>
+
+                    <div className="col-md-4">
+                      <label className="form-label form-label-sm mb-1">
+                        Ingreso ocasional anual ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        inputMode="decimal"
+                        className="form-control form-control-sm"
+                        value={moneyValue("ingreso_ocasional_anual")}
+                        placeholder={String(
+                          clienteActual.ingreso_ocasional_anual ?? ""
+                        )}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          cambiarCliente(
+                            "ingreso_ocasional_anual",
+                            raw === "" ? null : Number(raw)
+                          );
+                        }}
+                        onBlur={() =>
+                          guardarPendienteAhora("cliente.ingreso_ocasional_anual")
+                        }
+                        disabled={disabled}
+                      />
+                      <div className="form-text">
+                        {helpEmpleo("ingreso_ocasional_anual")}
+                      </div>
+                      {renderEstado("cliente.ingreso_ocasional_anual")}
+                    </div>
+
+                    <div className="col-md-6">
+                      <label className="form-label form-label-sm mb-1">
+                        Empresa
+                      </label>
+                      <input
+                        type="text"
+                        className="form-control form-control-sm"
+                        value={datos.cliente?.empresa ?? ""}
+                        placeholder={String(clienteActual.empresa ?? "")}
+                        onChange={(e) =>
+                          cambiarCliente("empresa", e.target.value)
+                        }
+                        onBlur={() => guardarPendienteAhora("cliente.empresa")}
+                        disabled={disabled}
+                      />
+                      <div className="form-text">{helpEmpleo("empresa")}</div>
+                      {renderEstado("cliente.empresa")}
+                    </div>
+                  </>
                 );
-              })}
+              })()}
             </div>
           </div>
         )}

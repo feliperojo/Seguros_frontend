@@ -67,7 +67,15 @@ export const CLIENTE_BORRADOR_KEYS = [
   ...CLIENTE_FIELDS_DIRECCION.map(([key]) => key),
   ...CLIENTE_FIELDS_CONTACTO.map(([key]) => key),
   ...CLIENTE_FIELDS_EMPLEO.map(([key]) => key),
+  "telefonos",
 ];
+
+/** Campos de teléfono legacy sustituidos por TelefonosPro en la UI. */
+export const CLIENTE_PHONE_LEGACY_FIELDS = new Set([
+  "telefono",
+  "whatsapp_num",
+  "secundario",
+]);
 
 const FECHA_KEYS = new Set([
   "fecha_nacimiento",
@@ -87,6 +95,7 @@ export const pickClienteParaBorrador = (clienteFull = {}) => {
     const v = clienteFull[key];
     if (v === null || v === undefined) continue;
     if (typeof v === "string" && !v.trim()) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
 
     if (FECHA_KEYS.has(key) && typeof v === "string") {
       out[key] = v.slice(0, 10);

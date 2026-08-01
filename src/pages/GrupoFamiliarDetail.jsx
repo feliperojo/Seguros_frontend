@@ -582,6 +582,7 @@ const mapFullToMembers = (fullRaw) => {
       cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
       ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),
       fecha_activacion: date10(cov.fecha_activacion ?? cov.fechaActivacion ?? null),
+      fecha_creacion_cobertura: date10(cov.created_at ?? cov.fecha_creacion ?? null),
       plan: cov.plan ?? null,
       metal: cov.metal ?? null,
       red: cov.red ?? null,
@@ -1159,6 +1160,9 @@ const mapMemberFromAppendResponse = (res) => {
     red: cov.red || null,
     ano_cobertura: cov.ano_cobertura || null,
     fecha_activacion: cov.fecha_activacion || "",
+    fecha_creacion_cobertura: cov.created_at
+      ? String(cov.created_at).slice(0, 10)
+      : "",
     elegibilidad: cov.elegibilidad || "",
     compania_id: cov.compania_id || "",
     agente: cov.agente || "",

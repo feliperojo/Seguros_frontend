@@ -27,6 +27,8 @@ const ESTADOS_FILTRO = [
   { key: "pendiente", label: "Pendiente" },
   { key: "borrador", label: "En pre-renovación" },
   { key: "consolidado", label: "Consolidado" },
+  // key API se mantiene; la etiqueta habla del grupo familiar
+  { key: "sin_cobertura_activa", label: "Grupo inactivo" },
 ];
 
 const estadoBadge = (estado) => {
@@ -310,8 +312,14 @@ const RenovacionesEstadoPage = () => {
                       const badgeGestion = estadoGestionBadge(
                         fila.estado_gestion
                       );
+                      const sinCoberturaActiva =
+                        (fila.miembros_activos ?? 0) === 0;
+                      const grupoInactivo = sinCoberturaActiva;
                       return (
-                        <tr key={fila.id}>
+                        <tr
+                          key={fila.id}
+                          className={grupoInactivo ? "table-warning" : undefined}
+                        >
                           <td>
                             <div className="fw-semibold">#{fila.id}</div>
                             <div className="text-muted small">
@@ -338,6 +346,18 @@ const RenovacionesEstadoPage = () => {
                               {fila.miembros_activos ?? 0}
                             </span>
                             <span className="text-muted">activos</span>
+                            {grupoInactivo && (
+                              <>
+                                <Badge bg="warning" text="dark" className="ms-1">
+                                  Grupo inactivo
+                                </Badge>
+                                {fila.ultima_ano_cobertura != null && (
+                                  <div className="text-muted small mt-1">
+                                    Última cobertura: {fila.ultima_ano_cobertura}
+                                  </div>
+                                )}
+                              </>
+                            )}
                           </td>
                           <td>
                             <Badge pill bg={badge.bg}>

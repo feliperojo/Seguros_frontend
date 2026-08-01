@@ -34,6 +34,7 @@ import {
   formatUSCIS,
   formatPhone334,
   normalizeDateForInput,
+  formatDateForDisplay,
 } from "../../utils/formatters";
 import {
   mergeClientePreferNonEmpty,
@@ -312,6 +313,10 @@ const normalizeMember = (m, idx) => {
       nombre_completo: nombreCompleto,
       activo: m.activo !== undefined && m.activo !== null ? m.activo : true,
       fecha_retiro: m.fecha_retiro ?? null,
+      fecha_creacion_cobertura:
+        m.fecha_creacion_cobertura ||
+        (m.cobertura?.created_at ? String(m.cobertura.created_at).slice(0, 10) : "") ||
+        "",
       telefono: m.telefono || clienteFormateado.telefono,
       secundario: m.secundario || clienteFormateado.secundario,
       whatsapp_num: m.whatsapp_num || clienteFormateado.whatsapp_num,
@@ -348,6 +353,10 @@ const normalizeMember = (m, idx) => {
     codigo_poliza: m.codigo_poliza || "",
     policy_number: m.policy_number || "",
     fecha_activacion: m.fecha_activacion || "",
+    fecha_creacion_cobertura:
+      m.fecha_creacion_cobertura ||
+      (m.cobertura?.created_at ? String(m.cobertura.created_at).slice(0, 10) : "") ||
+      "",
     vigencia: m.vigencia || "",
     cobertura_tipo: m.cobertura_tipo || "Plan de salud",
     ano_cobertura: m.ano_cobertura || new Date().getFullYear(),
@@ -1571,7 +1580,7 @@ const activeNormalized = useMemo(
 
                 <div
                   className="d-flex align-items-center justify-content-end ms-3"
-                  style={{ width: leftRightWidth }}
+                  style={{ minWidth: leftRightWidth }}
                 >
                   <div className="text-start me-3">
                     <div className="small">
@@ -1593,6 +1602,14 @@ const activeNormalized = useMemo(
                       Ingreso total:{" "}
                       <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
                     </div>
+                    {m.fecha_creacion_cobertura && (
+                      <div className="small text-muted mt-1" style={{ whiteSpace: "nowrap" }}>
+                        Enrolamiento:{" "}
+                        <span className="fw-semibold text-muted">
+                          {formatDateForDisplay(m.fecha_creacion_cobertura) || "—"}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

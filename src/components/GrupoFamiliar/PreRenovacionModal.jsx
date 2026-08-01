@@ -103,6 +103,7 @@ const PreRenovacionModal = ({
   const [estadoGestionDraft, setEstadoGestionDraft] = useState("");
   const [notaEstadoGestion, setNotaEstadoGestion] = useState("");
   const [guardandoEstadoGestion, setGuardandoEstadoGestion] = useState(false);
+  const [guardandoPagoConfirmado, setGuardandoPagoConfirmado] = useState(false);
 
   useEffect(() => {
     if (!show || !grupoFamiliarId || !anioDestino) return undefined;
@@ -126,6 +127,7 @@ const PreRenovacionModal = ({
     setEstadoGestionDraft("");
     setNotaEstadoGestion("");
     setGuardandoEstadoGestion(false);
+    setGuardandoPagoConfirmado(false);
 
     (async () => {
       try {
@@ -161,13 +163,14 @@ const PreRenovacionModal = ({
   const handleGuardarEstadoGestion = useCallback(async () => {
     if (!lote?.id || !estadoGestionDraft) return;
     if (estadoGestionDraft === lote.estado_gestion) return;
+    if (!notaEstadoGestion.trim()) return;
 
     setGuardandoEstadoGestion(true);
     try {
-      const body = { estado_gestion: estadoGestionDraft };
-      if (notaEstadoGestion.trim()) {
-        body.nota = notaEstadoGestion.trim();
-      }
+      const body = {
+        estado_gestion: estadoGestionDraft,
+        nota: notaEstadoGestion.trim(),
+      };
       const response = await apiRequest(
         `/renovacion_lote/${lote.id}/estado-gestion`,
         "PATCH",
@@ -193,6 +196,37 @@ const PreRenovacionModal = ({
       setGuardandoEstadoGestion(false);
     }
   }, [lote, estadoGestionDraft, notaEstadoGestion]);
+
+  const handleTogglePagoConfirmado = useCallback(async () => {
+    if (!lote?.id) return;
+
+    const nuevoValor = !lote.pago_confirmado_externo;
+    setGuardandoPagoConfirmado(true);
+    try {
+      const response = await apiRequest(
+        `/renovacion_lote/${lote.id}/pago-confirmado`,
+        "PATCH",
+        { confirmado: nuevoValor }
+      );
+      const updated = response?.data ?? response;
+      setLote((prev) =>
+        prev
+          ? {
+              ...prev,
+              pago_confirmado_externo:
+                updated?.pago_confirmado_externo ?? nuevoValor,
+              pago_confirmado_por: updated?.pago_confirmado_por ?? null,
+              pago_confirmado_en: updated?.pago_confirmado_en ?? null,
+            }
+          : prev
+      );
+    } catch (requestError) {
+      console.error("Error al actualizar confirmación de pago", requestError);
+      toast.error(getErrorMessage(requestError));
+    } finally {
+      setGuardandoPagoConfirmado(false);
+    }
+  }, [lote]);
 
   const handleItemUpdated = useCallback((itemActualizado) => {
     setLote((prev) =>
@@ -307,6 +341,8 @@ const PreRenovacionModal = ({
     ["anulado", "no_renovara", "consolidado"].includes(lote?.estado_gestion);
   const estadoGestionTerminal =
     loteCerrado || lote?.estado_gestion === "consolidado";
+  const pagoConfirmadoBloqueado =
+    loteCerrado || ["consolidado", "no_renovara"].includes(lote?.estado_gestion);
 
   const miembrosParaCopiar = useMemo(
     () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
@@ -692,7 +728,8 @@ const PreRenovacionModal = ({
                           type="text"
                           className="form-control form-control-sm"
                           style={{ maxWidth: 240 }}
-                          placeholder="Nota (opcional)"
+                          placeholder="Nota (obligatoria): motivo del cambio"
+                          required
                           value={notaEstadoGestion}
                           disabled={
                             guardandoEstadoGestion ||
@@ -711,7 +748,8 @@ const PreRenovacionModal = ({
                             consolidando ||
                             estadoGestionTerminal ||
                             !estadoGestionDraft ||
-                            estadoGestionDraft === lote.estado_gestion
+                            estadoGestionDraft === lote.estado_gestion ||
+                            !notaEstadoGestion.trim()
                           }
                           onClick={handleGuardarEstadoGestion}
                         >
@@ -761,6 +799,48 @@ const PreRenovacionModal = ({
                           ))}
                         </ul>
                       )}
+
+                      <hr className="my-3" />
+                      <div className="form-check">
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          id="pagoConfirmadoExterno"
+                          checked={!!lote.pago_confirmado_externo}
+                          disabled={guardandoPagoConfirmado || pagoConfirmadoBloqueado}
+                          onChange={handleTogglePagoConfirmado}
+                        />
+                        <label
+                          className="form-check-label"
+                          htmlFor="pagoConfirmadoExterno"
+                        >
+                          Pago confirmado externamente
+                          {guardandoPagoConfirmado && (
+                            <span
+                              className="spinner-border spinner-border-sm ms-2"
+                              role="status"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </label>
+                        <div className="form-text">
+                          Marca esta opción únicamente si estás en el proceso de
+                          cierre de renovaciones y confirmaste el pago revisando
+                          la plataforma externa de la aseguradora. Al consolidar,
+                          esto generará automáticamente los pagos reales de este
+                          grupo como &quot;pagado&quot;. No la actives para el
+                          flujo normal de pagos.
+                        </div>
+                        {lote.pago_confirmado_externo && (
+                          <div className="small text-muted mt-1">
+                            Confirmado por{" "}
+                            {lote.pago_confirmado_por?.name || "—"}
+                            {lote.pago_confirmado_en
+                              ? ` el ${formatHistorialFecha(lote.pago_confirmado_en)}`
+                              : ""}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 

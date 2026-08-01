@@ -333,16 +333,16 @@ const Prospectogrupo = ({
                   disabled={!resolvedGrupoId}
                   title={
                     modoHistorico && anioConsultado
-                      ? `Historial de renovaciones del año ${anioConsultado}`
-                      : "Historial de renovaciones"
+                      ? `Historial de retiros y cancelaciones del año ${anioConsultado}`
+                      : "Historial de retiros y cancelaciones"
                   }
                   style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                 >
                   <i className="fas fa-history me-1"></i>
                   <span className="d-none d-lg-inline">
                     {modoHistorico && anioConsultado
-                      ? `Hist. Renov. ${anioConsultado}`
-                      : "Hist. Renov."}
+                      ? `Hist. retiros y cancel. ${anioConsultado}`
+                      : "Hist. retiros y cancelaciones"}
                   </span>
                 </button>
               )}
