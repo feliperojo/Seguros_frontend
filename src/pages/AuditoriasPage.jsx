@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
 import { FaEdit } from "react-icons/fa";
 import { Helmet } from "react-helmet-async";
-import { listRuns, createRun, closeRun, listAuditTypes, previewRun } from "../services/auditoriasService";
+import { listRuns, createRun, closeRun, deleteRun, listAuditTypes, previewRun } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
 import AuditRunPreviewModal from "../components/AuditRunPreviewModal";
@@ -81,6 +81,7 @@ const AuditoriasPage = () => {
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [includePagos, setIncludePagos] = useState(false);
+  const [includeRenovaciones, setIncludeRenovaciones] = useState(false);
   const [validatingPagos, setValidatingPagos] = useState(false);
   const [showPagosModal, setShowPagosModal] = useState(false);
   const [pagosModalMessage, setPagosModalMessage] = useState("");
@@ -91,6 +92,7 @@ const AuditoriasPage = () => {
   const [previewPagosNote, setPreviewPagosNote] = useState(null);
   const [pendingPreviewPayload, setPendingPreviewPayload] = useState(null);
   const [closingRunId, setClosingRunId] = useState(null);
+  const [deletingRunId, setDeletingRunId] = useState(null);
   const [error, setError] = useState(null);
   const [infoMessage, setInfoMessage] = useState(null);
 
@@ -378,6 +380,10 @@ const AuditoriasPage = () => {
     try {
       const payload = buildBasePayload();
 
+      if (includeRenovaciones && targetType === "coberturas") {
+        payload.include_renovaciones = true;
+      }
+
       // Opcional: incluir pagos del mes. Primero validamos si existen pagos generados para ese periodo.
       if (includePagos) {
         setValidatingPagos(true);
@@ -434,6 +440,10 @@ const AuditoriasPage = () => {
     try {
       const payload = buildBasePayload();
       let pagosNote = null;
+
+      if (includeRenovaciones && targetType === "coberturas") {
+        payload.include_renovaciones = true;
+      }
 
       if (includePagos) {
         setValidatingPagos(true);
@@ -526,6 +536,32 @@ const AuditoriasPage = () => {
       setClosingRunId(null);
     }
   };
+
+  // Manejar eliminación de run
+  const handleDeleteRun = async (runId, e) => {
+    e.stopPropagation(); // Evitar navegación al hacer clic
+
+    if (!window.confirm("¿Eliminar esta auditoría? Esta acción no se puede deshacer y borrará también sus ítems, tareas y comentarios asociados.")) {
+      return;
+    }
+
+    setDeletingRunId(runId);
+
+    try {
+      await deleteRun(runId);
+      toast.showSuccess("Auditoría eliminada exitosamente");
+
+      // Recargar la lista
+      const data = await loadRunsData();
+      setRuns(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const errorMessage = err.response?.data?.message || err.message || "Error al eliminar la auditoría";
+      toast.showError(errorMessage);
+      console.error("Error al eliminar run:", err);
+    } finally {
+      setDeletingRunId(null);
+    }
+  };
   
   // Navegar al detalle del run
   const handleOpenRun = (runId) => {
@@ -554,6 +590,9 @@ const AuditoriasPage = () => {
                 onChange={(e) => {
                   setTargetType(e.target.value);
                   setAuditTypeId(""); // Resetear selección al cambiar target_type
+                  if (e.target.value !== "coberturas") {
+                    setIncludeRenovaciones(false);
+                  }
                 }}
               >
                 <option value="coberturas">Coberturas</option>
@@ -637,9 +676,27 @@ const AuditoriasPage = () => {
                 onChange={(e) => setIncludePagos(e.target.checked)}
                 disabled={creating || validatingPagos || previewLoading}
               />
-              <Form.Text className="text-muted">
+              <Form.Text className="text-muted d-block mb-2">
                 Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
               </Form.Text>
+              {targetType === "coberturas" && (
+                <>
+                  <Form.Check
+                    type="switch"
+                    id="include-renovaciones-switch"
+                    label="Incluir renovaciones del período"
+                    checked={includeRenovaciones}
+                    onChange={(e) => setIncludeRenovaciones(e.target.checked)}
+                    disabled={creating || validatingPagos || previewLoading}
+                  />
+                  <Form.Text className="text-muted">
+                    Muestra y permite gestionar el estado de la renovación de cada grupo familiar (solo en la fila del titular).
+                    {String(periodo || "").slice(0, 4) && (
+                      <> Se tomarán las renovaciones con año destino {String(periodo).slice(0, 4)}.</>
+                    )}
+                  </Form.Text>
+                </>
+              )}
             </div>
             
             <div className="col-md-3 d-flex flex-column gap-2">
@@ -965,6 +1022,19 @@ const AuditoriasPage = () => {
                               )}
                             </Button>
                           )}
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={(e) => handleDeleteRun(run.id, e)}
+                            disabled={deletingRunId === run.id}
+                            title="Eliminar esta auditoría y todo su detalle (irreversible)"
+                          >
+                            {deletingRunId === run.id ? (
+                              <Spinner animation="border" size="sm" />
+                            ) : (
+                              "Eliminar"
+                            )}
+                          </Button>
                         </div>
                       </td>
                     </tr>

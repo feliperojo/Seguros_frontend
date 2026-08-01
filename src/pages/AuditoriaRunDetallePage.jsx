@@ -13,6 +13,7 @@ import {
   FaHistory,
   FaExclamationTriangle,
   FaDollarSign,
+  FaExternalLinkAlt,
 } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
@@ -21,6 +22,7 @@ import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
 import NuevaTareaAuditoriaModal from "../components/Tareas/NuevaTareaAuditoriaModal";
 import HistorialTareasAuditoriaModal from "../components/Tareas/HistorialTareasAuditoriaModal";
+import PreRenovacionModal from "../components/GrupoFamiliar/PreRenovacionModal";
 import { getItemTasks, listTasks } from "../services/auditoriasTasksService";
 import apiRequest from "../services/api";
 import {
@@ -29,6 +31,10 @@ import {
   PAGOS_INFORME_MONTH_ABBR,
 } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
+import {
+  estadoGestionBadge,
+  estadoRenovacionBadge,
+} from "../utils/renovacionEstadoGestion";
 
 /**
  * Estados de auditoría permitidos
@@ -384,6 +390,7 @@ const AuditoriaRunDetallePage = () => {
   const [pagosListadoCompleto, setPagosListadoCompleto] = useState([]);
   const [loadingPagos, setLoadingPagos] = useState(false);
   const [savingPagoId, setSavingPagoId] = useState(null);
+  const [grupoRenovacionAbierto, setGrupoRenovacionAbierto] = useState(null);
   
   // Estado de filtros
   const [filters, setFilters] = useState({
@@ -481,6 +488,19 @@ const AuditoriaRunDetallePage = () => {
       meta?.withPagos
   );
   const includePagosEnabled = includePagosFromRun || includePagosFromMeta;
+
+  const includeRenovacionesFromRun = toBool(
+    runInfo?.include_renovaciones ?? runInfo?.includeRenovaciones
+  );
+  const includeRenovacionesFromMeta = toBool(
+    meta?.include_renovaciones ?? meta?.includeRenovaciones
+  );
+  const includeRenovacionesEnabled =
+    includeRenovacionesFromRun || includeRenovacionesFromMeta;
+
+  const columnasVisiblesConfig = runInfo?.audit_type?.columnas_visibles;
+  const columnaVisible = (key) =>
+    !Array.isArray(columnasVisiblesConfig) || columnasVisiblesConfig.includes(key);
 
   const periodoRunRaw =
     runInfo?.periodo ??
@@ -1579,32 +1599,37 @@ const AuditoriaRunDetallePage = () => {
                       >
                         Fecha Activación {renderSortIcon("fecha_activacion")}
                       </th>
-                      <th
-                        style={{ cursor: "pointer" }}
-                        onClick={() => handleSort("codigo_poliza")}
-                      >
-                        Numero ID {renderSortIcon("codigo_poliza")}
-                      </th>
+                      {columnaVisible("codigo_poliza") && (
+                        <th
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleSort("codigo_poliza")}
+                        >
+                          Numero ID {renderSortIcon("codigo_poliza")}
+                        </th>
+                      )}
                       <th
                         style={{ cursor: "pointer" }}
                         onClick={() => handleSort("cliente")}
                       >
                         Cliente {renderSortIcon("cliente")}
                       </th>
-                      <th>Compañía</th>
+                      {columnaVisible("compania") && <th>Compañía</th>}
+                      {columnaVisible("agente") && <th>Agente</th>}
                       <th
                         style={{ cursor: "pointer" }}
                         onClick={() => handleSort("precio")}
                       >
                         Precio {renderSortIcon("precio")}
                       </th>
-                      <th
-                        style={{ cursor: "pointer" }}
-                        onClick={() => handleSort("req_pendientes")}
-                      >
-                        Requerimientos {renderSortIcon("req_pendientes")}
-                      </th>
-                      <th>Estado Auditoría</th>
+                      {columnaVisible("requerimientos") && (
+                        <th
+                          style={{ cursor: "pointer" }}
+                          onClick={() => handleSort("req_pendientes")}
+                        >
+                          Requerimientos {renderSortIcon("req_pendientes")}
+                        </th>
+                      )}
+                      <th>{runInfo?.audit_type?.etiqueta_estado_auditoria || "Estado Auditoría"}</th>
                       <th>Revisado En</th>
                       {includePagosEnabled && (
                         <th
@@ -1630,6 +1655,22 @@ const AuditoriaRunDetallePage = () => {
                           className="text-nowrap"
                         >
                           Situación pago
+                        </th>
+                      )}
+                      {includeRenovacionesEnabled && (
+                        <th
+                          className="text-nowrap"
+                          title="Estado del lote de renovación: Pendiente, En pre-renovación o Consolidado (solo titular del grupo)"
+                        >
+                          Estado
+                        </th>
+                      )}
+                      {includeRenovacionesEnabled && (
+                        <th
+                          className="text-nowrap"
+                          title="Estado de gestión de la renovación (solo titular del grupo)"
+                        >
+                          Estado renovación
                         </th>
                       )}
                       <th>Acciones</th>
@@ -1693,26 +1734,35 @@ const AuditoriaRunDetallePage = () => {
                           </span>
                         </td>
                         <td>{formatDate(cobertura.fecha_activacion)}</td>
-                        <td>{cobertura.codigo_poliza || "-"}</td>
+                        {columnaVisible("codigo_poliza") && (
+                          <td>{cobertura.codigo_poliza || "-"}</td>
+                        )}
                         <td>{cobertura.cliente || "-"}</td>
-                        <td>{cobertura.compania || "-"}</td>
+                        {columnaVisible("compania") && (
+                          <td>{cobertura.compania || "-"}</td>
+                        )}
+                        {columnaVisible("agente") && (
+                          <td>{cobertura.responsable || "-"}</td>
+                        )}
                         <td>{formatCurrency(cobertura.precio)}</td>
-                        <td>
-                          {cobertura.req_total === 0 ? (
-                            <span className="text-muted">0/0</span>
-                          ) : (
-                            <>
-                              {cobertura.req_pendientes > 0 && (
-                                <Badge bg="warning" className="me-1">
-                                  {cobertura.req_pendientes}
-                                </Badge>
-                              )}
-                              <span>
-                                {cobertura.req_pendientes}/{cobertura.req_total}
-                              </span>
-                            </>
-                          )}
-                        </td>
+                        {columnaVisible("requerimientos") && (
+                          <td>
+                            {cobertura.req_total === 0 ? (
+                              <span className="text-muted">0/0</span>
+                            ) : (
+                              <>
+                                {cobertura.req_pendientes > 0 && (
+                                  <Badge bg="warning" className="me-1">
+                                    {cobertura.req_pendientes}
+                                  </Badge>
+                                )}
+                                <span>
+                                  {cobertura.req_pendientes}/{cobertura.req_total}
+                                </span>
+                              </>
+                            )}
+                          </td>
+                        )}
                         <td>
                           {(() => {
                             const rawStatus = cobertura.audit_status || "PENDIENTE";
@@ -1845,6 +1895,54 @@ const AuditoriaRunDetallePage = () => {
                                 </Badge>
                               );
                             })()}
+                          </td>
+                        )}
+                        {includeRenovacionesEnabled && (
+                          <td className="text-nowrap">
+                            {cobertura.renovacion_estado == null ? (
+                              <span className="text-muted">—</span>
+                            ) : (
+                              (() => {
+                                const badge = estadoRenovacionBadge(
+                                  cobertura.renovacion_estado
+                                );
+                                return <Badge bg={badge.bg}>{badge.label}</Badge>;
+                              })()
+                            )}
+                          </td>
+                        )}
+                        {includeRenovacionesEnabled && (
+                          <td style={{ minWidth: 180 }}>
+                            {cobertura.renovacion_estado_gestion == null ? (
+                              <span className="text-muted">—</span>
+                            ) : (
+                              <div className="d-flex flex-column gap-1">
+                                {(() => {
+                                  const badge = estadoGestionBadge(
+                                    cobertura.renovacion_estado_gestion
+                                  );
+                                  return <Badge bg={badge.bg}>{badge.label}</Badge>;
+                                })()}
+                                {cobertura.renovacion_lote_id != null &&
+                                  cobertura.renovacion_estado !== "consolidado" && (
+                                  <Button
+                                    variant="outline-secondary"
+                                    size="sm"
+                                    className="align-self-start"
+                                    title="Abrir pre-renovación"
+                                    onClick={() =>
+                                      setGrupoRenovacionAbierto({
+                                        grupoId: cobertura.grupo_familiar_id,
+                                        anio: cobertura.renovacion_anio_destino,
+                                      })
+                                    }
+                                  >
+                                    <FaExternalLinkAlt className="me-1" />
+                                    Pre-renovación
+                                  </Button>
+                                )}
+                              </div>
+                            )}
                           </td>
                         )}
                         <td>
@@ -2042,6 +2140,22 @@ const AuditoriaRunDetallePage = () => {
           cobertura={selectedCobertura}
         />
       )}
+
+      <PreRenovacionModal
+        show={!!grupoRenovacionAbierto}
+        onHide={() => setGrupoRenovacionAbierto(null)}
+        grupoFamiliarId={grupoRenovacionAbierto?.grupoId}
+        anioDestino={grupoRenovacionAbierto?.anio}
+        onAfterConsolidar={async () => {
+          setGrupoRenovacionAbierto(null);
+          try {
+            await refreshReporteCoberturas();
+            toast.showSuccess("Renovación consolidada");
+          } catch (err) {
+            console.error("Error al refrescar reporte tras consolidar:", err);
+          }
+        }}
+      />
       
       {/* Modal de Nueva Tarea de Auditoría */}
       {selectedItemForTask && (

@@ -102,6 +102,7 @@ export const itemToCopyMember = (item) => {
     "tipo_pago",
     "dia_pago",
     "estado_cobertura",
+    "ano_cobertura",
     "fecha_activacion",
     "precio",
     "grupo",

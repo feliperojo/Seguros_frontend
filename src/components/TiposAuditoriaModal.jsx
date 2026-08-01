@@ -19,6 +19,14 @@ const ESTADO_COBERTURA_OPTIONS = [
   { uiKey: "estado_medicai", apiValue: "medicai", label: "Medicaid" },
 ];
 
+/** Keys configurables de columnas en la tabla de resultados del run. */
+const COLUMNAS_VISIBLES_OPTIONS = [
+  { key: "codigo_poliza", label: "Numero ID" },
+  { key: "compania", label: "Compañía" },
+  { key: "agente", label: "Agente" },
+  { key: "requerimientos", label: "Requerimientos" },
+];
+
 const emptyFiltrosCoberturaUi = () => ({
   precio_gt_zero: false,
   use_precio_min: false,
@@ -31,6 +39,26 @@ const emptyFiltrosCoberturaUi = () => ({
   estado_medicare: false,
   estado_medicai: false,
 });
+
+const emptyColumnasVisiblesUi = () => ({
+  codigo_poliza: true,
+  compania: true,
+  agente: true,
+  requerimientos: true,
+});
+
+const columnasVisiblesFromApi = (raw) => {
+  if (!Array.isArray(raw)) return emptyColumnasVisiblesUi();
+  return {
+    codigo_poliza: raw.includes("codigo_poliza"),
+    compania: raw.includes("compania"),
+    agente: raw.includes("agente"),
+    requerimientos: raw.includes("requerimientos"),
+  };
+};
+
+const buildColumnasVisiblesPayload = (ui) =>
+  COLUMNAS_VISIBLES_OPTIONS.map((o) => o.key).filter((key) => !!ui[key]);
 
 const filtrosCoberturaFromApi = (raw) => {
   const u = emptyFiltrosCoberturaUi();
@@ -105,14 +133,20 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
     nombre: "",
     codigo: "",
     descripcion: "",
+    etiqueta_estado_auditoria: "",
     target_type: targetType || "coberturas",
     is_active: true,
   });
   const [filtrosCoberturaUi, setFiltrosCoberturaUi] = useState(emptyFiltrosCoberturaUi());
+  const [columnasVisiblesUi, setColumnasVisiblesUi] = useState(emptyColumnasVisiblesUi());
   const [formErrors, setFormErrors] = useState({});
 
   const updateFiltrosUi = useCallback((patch) => {
     setFiltrosCoberturaUi((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const updateColumnasVisiblesUi = useCallback((patch) => {
+    setColumnasVisiblesUi((prev) => ({ ...prev, ...patch }));
   }, []);
 
   useEffect(() => {
@@ -134,10 +168,12 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
         nombre: "",
         codigo: "",
         descripcion: "",
+        etiqueta_estado_auditoria: "",
         target_type: targetType || "coberturas",
         is_active: true,
       });
       setFiltrosCoberturaUi(emptyFiltrosCoberturaUi());
+      setColumnasVisiblesUi(emptyColumnasVisiblesUi());
       setEditingType(null);
       setFormErrors({});
       setLoadingDetail(false);
@@ -170,10 +206,12 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       nombre: "",
       codigo: "",
       descripcion: "",
+      etiqueta_estado_auditoria: "",
       target_type: targetType || "coberturas",
       is_active: true,
     });
     setFiltrosCoberturaUi(emptyFiltrosCoberturaUi());
+    setColumnasVisiblesUi(emptyColumnasVisiblesUi());
     setEditingType(null);
     setFormErrors({});
     setLoadingDetail(false);
@@ -191,20 +229,24 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
         nombre: row.nombre || "",
         codigo: row.codigo || "",
         descripcion: row.descripcion || "",
+        etiqueta_estado_auditoria: row.etiqueta_estado_auditoria || "",
         target_type: row.target_type || targetType,
         is_active: row.is_active !== undefined ? row.is_active : true,
       });
       setFiltrosCoberturaUi(filtrosCoberturaFromApi(row.filtros_cobertura));
+      setColumnasVisiblesUi(columnasVisiblesFromApi(row.columnas_visibles));
     } catch (err) {
       console.error("Detalle tipo auditoría:", err);
       setFormData({
         nombre: type.nombre || "",
         codigo: type.codigo || "",
         descripcion: type.descripcion || "",
+        etiqueta_estado_auditoria: type.etiqueta_estado_auditoria || "",
         target_type: type.target_type || targetType,
         is_active: type.is_active !== undefined ? type.is_active : true,
       });
       setFiltrosCoberturaUi(filtrosCoberturaFromApi(type.filtros_cobertura));
+      setColumnasVisiblesUi(columnasVisiblesFromApi(type.columnas_visibles));
       toast.showWarning(
         err.response?.data?.message ||
           "No se pudo cargar el detalle del tipo; se usan los datos de la lista."
@@ -234,6 +276,8 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       nombre: formData.nombre.trim(),
       codigo: formData.codigo.trim(),
       descripcion: formData.descripcion?.trim() || "",
+      etiqueta_estado_auditoria: formData.etiqueta_estado_auditoria?.trim() || "",
+      columnas_visibles: buildColumnasVisiblesPayload(columnasVisiblesUi),
       target_type: formData.target_type,
       is_active: !!formData.is_active,
       filtros_cobertura: filtrosPayload,
@@ -375,6 +419,16 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                 </Form.Group>
 
                 <Form.Group className="mb-3">
+                  <Form.Label>Título de la columna &quot;Estado Auditoría&quot; (opcional)</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={formData.etiqueta_estado_auditoria}
+                    onChange={(e) => handleFormChange("etiqueta_estado_auditoria", e.target.value)}
+                    placeholder='Ej: Estado NPN, Estado Sherpa... Si lo dejas vacío, se usa "Estado Auditoría".'
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
                   <Form.Label>Tipo de objeto</Form.Label>
                   <Form.Select
                     value={formData.target_type}
@@ -403,6 +457,35 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                     Solo los tipos activos aparecen al crear auditorías.
                   </Form.Text>
                 </Form.Group>
+
+                <hr className="my-4" />
+                <h6 className="fw-semibold mb-3">Columnas visibles en la tabla de resultados</h6>
+                <p className="text-muted small mb-3">
+                  Controla qué columnas se muestran en el detalle del run. Si no configuras nada
+                  (tipos existentes con <code className="small">columnas_visibles: null</code>),
+                  se muestran las 4. Al crear un tipo nuevo, las 4 inician marcadas.
+                </p>
+                {formErrors.columnas_visibles && (
+                  <Alert variant="danger" className="py-2 small">
+                    {formErrors.columnas_visibles}
+                  </Alert>
+                )}
+                <div className="border rounded-3 p-3 bg-light bg-opacity-50 mb-3">
+                  <div className="d-flex flex-wrap gap-3 column-gap-4">
+                    {COLUMNAS_VISIBLES_OPTIONS.map((opt) => (
+                      <Form.Check
+                        key={opt.key}
+                        id={`cv-${opt.key}`}
+                        type="checkbox"
+                        label={opt.label}
+                        checked={!!columnasVisiblesUi[opt.key]}
+                        onChange={(e) =>
+                          updateColumnasVisiblesUi({ [opt.key]: e.target.checked })
+                        }
+                      />
+                    ))}
+                  </div>
+                </div>
 
                 {filtrosSectionVisible ? (
                   <>

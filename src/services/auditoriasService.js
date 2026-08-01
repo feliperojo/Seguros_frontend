@@ -254,6 +254,26 @@ export const closeRun = async (runId) => {
 };
 
 /**
+ * Elimina un run de auditoría (cascada en ítems/tareas; pagos solo se desvinculan)
+ * @param {number|string} runId - ID del run
+ * @returns {Promise<Object>} Confirmación de eliminación
+ */
+export const deleteRun = async (runId) => {
+  if (!runId) {
+    throw new Error("runId es requerido");
+  }
+
+  const endpoint = `auditorias/runs/${runId}`;
+
+  try {
+    const response = await apiRequest(endpoint, "DELETE");
+    return response;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
  * Actualiza el estado de un item de auditoría (genérico - funciona para coberturas y clientes)
  * @param {number|string} runId - ID del run
  * @param {number|string} entityId - ID de la entidad (cobertura_id o cliente_id)
@@ -375,6 +395,7 @@ export default {
   previewRun,
   getRun,
   closeRun,
+  deleteRun,
   getRunReporte,
   updateItem,
   listAuditTypes,
