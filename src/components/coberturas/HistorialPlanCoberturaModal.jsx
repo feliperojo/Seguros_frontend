@@ -7,6 +7,9 @@ import {
   Spinner,
   Form,
   Nav,
+  Badge,
+  OverlayTrigger,
+  Tooltip,
 } from "react-bootstrap";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import CompanySelect from "../selects/CompanySelect";
@@ -86,6 +89,7 @@ const HistorialPlanCoberturaModal = ({
   const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM);
   const [fechaExpiracion, setFechaExpiracion] = useState("");
   const [nota, setNota] = useState("");
+  const [esAnulacion, setEsAnulacion] = useState(false);
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
   const { companies } = useCompanies();
 
@@ -162,6 +166,7 @@ const HistorialPlanCoberturaModal = ({
     setManualForm(EMPTY_MANUAL_FORM);
     setFechaExpiracion("");
     setNota("");
+    setEsAnulacion(false);
     setSuccess("");
     setError("");
 
@@ -210,17 +215,23 @@ const HistorialPlanCoberturaModal = ({
   };
 
   const archivarCobertura = async (coberturaId) => {
-    return archivarPlanActual(coberturaId, {
-      vigente_hasta: fechaExpiracion,
-      fecha_expiracion: fechaExpiracion,
+    const payload = {
+      es_anulacion: esAnulacion,
       nota: nota.trim() || undefined,
       limpiar_campos: false,
-    });
+    };
+
+    if (!esAnulacion) {
+      payload.vigente_hasta = fechaExpiracion;
+      payload.fecha_expiracion = fechaExpiracion;
+    }
+
+    return archivarPlanActual(coberturaId, payload);
   };
 
   const handleArchivar = async (e) => {
     e.preventDefault();
-    if (!fechaExpiracion) return;
+    if (!esAnulacion && !fechaExpiracion) return;
 
     const targets = allowBulkArchive
       ? membersWithPlan.filter((m) => selectedForArchive.has(m.coberturaId))
@@ -255,10 +266,17 @@ const HistorialPlanCoberturaModal = ({
       if (archivados > 0) {
         setSuccess(
           archivados === 1
-            ? "Plan archivado correctamente."
-            : `${archivados} planes archivados correctamente.`
+            ? esAnulacion
+              ? "Plan archivado por anulación correctamente."
+              : "Plan archivado correctamente."
+            : esAnulacion
+              ? `${archivados} planes archivados por anulación correctamente.`
+              : `${archivados} planes archivados correctamente.`
         );
         setShowArchivarForm(false);
+        setEsAnulacion(false);
+        setFechaExpiracion("");
+        setNota("");
         await cargarHistorial(selectedCoberturaId);
       }
 
@@ -315,7 +333,39 @@ const HistorialPlanCoberturaModal = ({
   };
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl" centered scrollable>
+    <>
+      <style>{`
+        .modal-historial-plan {
+          max-width: 95vw;
+          width: 1400px;
+        }
+        .modal-historial-plan .modal-content {
+          max-height: 92vh;
+        }
+        .modal-historial-plan .table {
+          font-size: 0.875rem;
+          margin-bottom: 0;
+        }
+        .modal-historial-plan .table th,
+        .modal-historial-plan .table td {
+          padding: 0.5rem 0.55rem;
+          vertical-align: middle;
+          white-space: nowrap;
+        }
+        .modal-historial-plan .table td:last-child {
+          white-space: normal;
+          min-width: 8rem;
+          max-width: 14rem;
+        }
+      `}</style>
+      <Modal
+        show={show}
+        onHide={handleClose}
+        size="xl"
+        centered
+        scrollable
+        dialogClassName="modal-historial-plan"
+      >
       <Modal.Header closeButton>
         <Modal.Title>{modalTitle}</Modal.Title>
       </Modal.Header>
@@ -366,6 +416,9 @@ const HistorialPlanCoberturaModal = ({
                   onClick={() => {
                     setShowArchivarForm(true);
                     setShowCrearForm(false);
+                    setEsAnulacion(false);
+                    setFechaExpiracion("");
+                    setNota("");
                   }}
                 >
                   <i className="fas fa-archive me-1" />
@@ -388,7 +441,12 @@ const HistorialPlanCoberturaModal = ({
                 variant="link"
                 size="sm"
                 className="text-muted"
-                onClick={() => setShowArchivarForm(false)}
+                onClick={() => {
+                  setShowArchivarForm(false);
+                  setEsAnulacion(false);
+                  setFechaExpiracion("");
+                  setNota("");
+                }}
               >
                 Cancelar archivado
               </Button>
@@ -542,21 +600,44 @@ const HistorialPlanCoberturaModal = ({
                 : "Archivar datos del plan vigente"}
             </h6>
             <div className="row g-3">
-              <div className="col-md-6">
-                <Form.Label className="small mb-1">Fecha de expiración *</Form.Label>
-                <DateInputWithCalendar
-                  size="sm"
-                  valueIso={fechaExpiracion}
-                  onChangeIso={setFechaExpiracion}
+              <div className="col-12">
+                <Form.Check
+                  type="checkbox"
+                  id="archivar-es-anulacion"
+                  label="Archivar por anulación (sin fecha de expiración)"
+                  checked={esAnulacion}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setEsAnulacion(checked);
+                    if (checked) setFechaExpiracion("");
+                  }}
                 />
+                <Form.Text className="text-muted d-block">
+                  Marque esta opción cuando el plan se archiva porque la cobertura fue anulada.
+                  En ese caso no aplica fecha de expiración.
+                </Form.Text>
               </div>
-              <div className="col-md-6">
+              {!esAnulacion && (
+                <div className="col-md-6">
+                  <Form.Label className="small mb-1">Fecha de expiración *</Form.Label>
+                  <DateInputWithCalendar
+                    size="sm"
+                    valueIso={fechaExpiracion}
+                    onChangeIso={setFechaExpiracion}
+                  />
+                </div>
+              )}
+              <div className={esAnulacion ? "col-md-12" : "col-md-6"}>
                 <Form.Label className="small mb-1">Nota</Form.Label>
                 <Form.Control
                   size="sm"
                   value={nota}
                   onChange={(e) => setNota(e.target.value)}
-                  placeholder="Ej. Cambio de compañía"
+                  placeholder={
+                    esAnulacion
+                      ? "Ej. Cobertura anulada"
+                      : "Ej. Cambio de compañía"
+                  }
                 />
               </div>
             </div>
@@ -593,7 +674,7 @@ const HistorialPlanCoberturaModal = ({
                 size="sm"
                 disabled={
                   archiving ||
-                  !fechaExpiracion ||
+                  (!esAnulacion && !fechaExpiracion) ||
                   (allowBulkArchive && members.length > 1
                     ? selectedForArchive.size === 0
                     : !selectedCoberturaId)
@@ -665,6 +746,7 @@ const HistorialPlanCoberturaModal = ({
                 <Table striped bordered hover size="sm" className="mb-0">
                   <thead>
                     <tr>
+                      <th style={{ width: "1%" }}>Origen</th>
                       <th>Compañía</th>
                       <th>Plan</th>
                       <th>Metal</th>
@@ -681,6 +763,24 @@ const HistorialPlanCoberturaModal = ({
                   <tbody>
                     {historialFiltrado.map((item) => (
                       <tr key={item.id}>
+                        <td className="text-center align-middle">
+                          {item.es_anulacion ? (
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={
+                                <Tooltip id={`anulacion-${item.id}`}>
+                                  Archivado por anulación · sin fecha de expiración
+                                </Tooltip>
+                              }
+                            >
+                              <Badge bg="danger" pill className="user-select-none">
+                                Anulado
+                              </Badge>
+                            </OverlayTrigger>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
                         <td>{item.compania?.nombre || "—"}</td>
                         <td>{item.plan || "—"}</td>
                         <td>{item.metal || "—"}</td>
@@ -690,7 +790,11 @@ const HistorialPlanCoberturaModal = ({
                         <td>{item.agente || "—"}</td>
                         <td>{formatPrecio(item.precio)}</td>
                         <td>{formatDate(item.fecha_activacion)}</td>
-                        <td>{formatDate(item.fecha_expiracion)}</td>
+                        <td>
+                          {item.es_anulacion
+                            ? "No aplica"
+                            : formatDate(item.fecha_expiracion)}
+                        </td>
                         <td>{item.nota || "—"}</td>
                       </tr>
                     ))}
@@ -708,6 +812,7 @@ const HistorialPlanCoberturaModal = ({
         </Button>
       </Modal.Footer>
     </Modal>
+    </>
   );
 };
 

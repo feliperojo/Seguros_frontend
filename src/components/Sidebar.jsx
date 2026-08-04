@@ -5,7 +5,7 @@ import {
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
   FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock,
-  FaBook, FaColumns, FaCreditCard
+  FaBook, FaColumns, FaCreditCard, FaExchangeAlt
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -188,7 +188,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Clientes - Con submenú */}
         <div className="nav-item">
           <div
-            className={`nav-link ${location.pathname.includes('/Clientes') ? 'active' : ''}`}
+            className={`nav-link ${location.pathname.toLowerCase().includes('/clientes') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('clientes', e)}
           >
             <FaUsers />
@@ -212,7 +212,11 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/Clientes/crear" className={`submenu-link ${isActive('/Clientes/crear') ? 'active' : ''}`}>
                 <FaUserPlus /> Crear Cliente
               </Link>
-              <Link to="/clientes/contacto" className={`submenu-link ${isActive('/clientes/contacto') ? 'active' : ''}`}>                <FaUserPlus /> Contactos
+              <Link to="/clientes/contacto" className={`submenu-link ${isActive('/clientes/contacto') ? 'active' : ''}`}>
+                <FaUserPlus /> Contactos
+              </Link>
+              <Link to="/clientes/clasificar-estado" className={`submenu-link ${isActive('/clientes/clasificar-estado') ? 'active' : ''}`}>
+                <FaExchangeAlt /> Clasificar estado
               </Link>
             </div>
           )}
