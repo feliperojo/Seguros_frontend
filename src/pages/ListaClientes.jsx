@@ -78,6 +78,50 @@ const estadoToVariant = (estado) => {
   }
 };
 
+/**
+ * Etiqueta legible de estado_cliente
+ * @param {string} estado
+ * @returns {string}
+ */
+const labelEstadoCliente = (estado) => {
+  switch (norm(estado)) {
+    case "contacto":
+      return "Contacto";
+    case "cliente":
+      return "Cliente";
+    case "empresa":
+      return "Empresa";
+    case "prospecto":
+      return "Prospecto";
+    case "descartado":
+      return "Descartado";
+    default:
+      return estado || "Sin definir";
+  }
+};
+
+/**
+ * Variante de Badge para estado_cliente
+ * @param {string} estado
+ * @returns {string}
+ */
+const estadoClienteToVariant = (estado) => {
+  switch (norm(estado)) {
+    case "contacto":
+      return "secondary";
+    case "empresa":
+      return "dark";
+    case "prospecto":
+      return "warning";
+    case "descartado":
+      return "danger";
+    case "cliente":
+      return "primary";
+    default:
+      return "secondary";
+  }
+};
+
 // ============================================================================
 // COMPONENTES AUXILIARES
 // ============================================================================
@@ -819,6 +863,7 @@ const ListaClientes = () => {
                   <tr>
                     <th className="fw-semibold">ID</th>
                     <th className="fw-semibold">Nombre Completo</th>
+                    <th className="fw-semibold">Estado</th>
                     <th className="fw-semibold">Fecha Nacimiento</th>
                     <th className="fw-semibold">Código Postal</th>
                     <th className="fw-semibold">Parentesco</th>
@@ -840,6 +885,14 @@ const ListaClientes = () => {
                         </td>
                         <td>
                           {renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}
+                        </td>
+                        <td>
+                          <Badge
+                            bg={estadoClienteToVariant(cliente.estado_cliente)}
+                            className="fw-normal"
+                          >
+                            {labelEstadoCliente(cliente.estado_cliente)}
+                          </Badge>
                         </td>
                         <td>{formatDate(cliente.fecha_nacimiento)}</td>
                         <td>{cliente.codigo_postal || <span className="text-muted">—</span>}</td>
@@ -942,7 +995,7 @@ const ListaClientes = () => {
       {/* Header con título y botón de nuevo cliente */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h1 className="page-title mb-1">Lista de Clientes</h1>
+          <h1 className="page-title mb-1">Listado general</h1>
           <p className="text-muted small mb-0">
             Gestiona y visualiza todos los clientes del sistema
           </p>
