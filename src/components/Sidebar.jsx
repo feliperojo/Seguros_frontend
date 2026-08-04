@@ -207,7 +207,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
           {isOpen && expandedMenu === 'clientes' && (
             <div className="submenu">
               <Link to="/Clientes/lista" className={`submenu-link ${isActive('/Clientes/lista') ? 'active' : ''}`}>
-                <FaList /> Lista de Clientes
+                <FaList /> Listado general
               </Link>
               <Link to="/Clientes/crear" className={`submenu-link ${isActive('/Clientes/crear') ? 'active' : ''}`}>
                 <FaUserPlus /> Crear Cliente
