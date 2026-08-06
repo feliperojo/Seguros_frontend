@@ -280,7 +280,7 @@ const CambioVidaCancelacionModal = ({
     if (!datos || !cobertura) return null;
 
     if (!usarDatosGlobales) {
-      // Si el flujo es retiro y quedó "Cancelado" (al cambiar la acción), usar Retirado.
+      // En retiro, cobertura_definida debe ser Retirado, Terminado o Cancelado.
       if (esFlujoSoloRetiro(cobertura, datos)) {
         return {
           ...datos,
@@ -1046,7 +1046,7 @@ const CambioVidaCancelacionModal = ({
                 <div className="row g-2 align-items-end">
                   {seleccionRequiereFechaCancelacion && (
                     <div className="col-md-3 col-6">
-                      <Form.Label className="small mb-1">F. cancelación</Form.Label>
+                      <Form.Label className="small mb-1">F. expiración</Form.Label>
                       <DateInputWithCalendar
                         valueIso={fechaCancelacionGlobal || ""}
                         onChangeIso={(iso) => setFechaCancelacionGlobal(iso)}
@@ -1160,7 +1160,7 @@ const CambioVidaCancelacionModal = ({
                     <th>Miembro</th>
                     <th className="cvc-col-plan">Plan</th>
                     {hayAlgunaConFechaCancelacion && (
-                      <th className="text-center cvc-col-fecha-cancel">F. cancelación</th>
+                      <th className="text-center cvc-col-fecha-cancel">F. expiración</th>
                     )}
                     <th className="cvc-col-action">Acción</th>
                     <th width="130" className="text-center cvc-col-estado">Estado</th>
@@ -1289,7 +1289,7 @@ const CambioVidaCancelacionModal = ({
                                 {requiereFechaCancelacionNueva(cobertura, datosRenovacion) && (
                                   <div>
                                     <Form.Label className="small mb-1">
-                                      F. cancelación <span className="text-danger">*</span>
+                                      F. expiración <span className="text-danger">*</span>
                                     </Form.Label>
                                     <DateInputWithCalendar
                                       valueIso={datosRenovacion.fecha_cancelacion || ""}
@@ -1302,7 +1302,7 @@ const CambioVidaCancelacionModal = ({
                                 )}
                                 {yaCancelada && datosRenovacion.fecha_cancelacion && (
                                   <div>
-                                    <Form.Label className="small mb-1">F. cancelación</Form.Label>
+                                    <Form.Label className="small mb-1">F. expiración</Form.Label>
                                     <Form.Control
                                       size="sm"
                                       type="text"

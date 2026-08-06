@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
 import { FaExclamationTriangle, FaFileInvoiceDollar, FaSearch, FaSync } from "react-icons/fa";
@@ -7,6 +7,7 @@ import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
 import { getReporteCoberturasCanceladasRetiradas } from "../services/reportesService";
 import { formatDateMMDDYYYY } from "../utils/formatters";
+import { badgeCoberturaDefinida, COBERTURA_DEFINIDA } from "../utils/coberturaDefinida";
 
 const DEFAULT_FILTERS = {
   page: 1,
@@ -26,6 +27,35 @@ const formatDate = (value) => {
   if (!value) return "—";
   const formatted = formatDateMMDDYYYY(value);
   return formatted || "—";
+};
+
+/** Badge del estado elegido en el modal; fallback por tipo de fórmula. */
+const badgeEstadoReporte = (row) => {
+  const label = String(row?.estado || row?.cobertura_definida || "").trim();
+  if (!label) {
+    return {
+      text: row?.tipo === "cancelados" ? "Cancelada" : "Retirada",
+      bg: row?.tipo === "cancelados" ? "danger" : "secondary",
+      textColor: undefined,
+    };
+  }
+
+  const conocida = Object.values(COBERTURA_DEFINIDA).includes(label);
+  if (conocida) {
+    return {
+      text: label,
+      bg: badgeCoberturaDefinida(label),
+      textColor: undefined,
+    };
+  }
+
+  // Registros antiguos sin cobertura_definida (Cancelada / Retirada)
+  const lower = label.toLowerCase();
+  return {
+    text: label,
+    bg: lower.startsWith("cancel") ? "danger" : "secondary",
+    textColor: undefined,
+  };
 };
 
 const renderGrupoLink = (grupoId) => {
@@ -231,7 +261,7 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                     Nombre{sortIcon("nombre")}
                   </th>
                   <th role="button" onClick={() => handleSort("fecha_cancelacion")}>
-                    Fecha de cancelación{sortIcon("fecha_cancelacion")}
+                    Fecha de expiración{sortIcon("fecha_cancelacion")}
                   </th>
                   <th role="button" onClick={() => handleSort("fecha_retiro")}>
                     Fecha de retiro{sortIcon("fecha_retiro")}
@@ -271,15 +301,14 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                       <td>{row.concepto || "—"}</td>
                       <td>{row.motivo || "—"}</td>
                       <td className="text-end">
-                        {row.tipo === "cancelados" ? (
-                          <Badge bg="danger" pill>
-                            Cancelada
-                          </Badge>
-                        ) : (
-                          <Badge bg="secondary" pill>
-                            Retirada
-                          </Badge>
-                        )}
+                        {(() => {
+                          const badge = badgeEstadoReporte(row);
+                          return (
+                            <Badge bg={badge.bg} text={badge.textColor} pill>
+                              {badge.text}
+                            </Badge>
+                          );
+                        })()}
                       </td>
                     </tr>
                   ))

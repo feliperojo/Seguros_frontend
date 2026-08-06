@@ -241,21 +241,40 @@ const ReporteGruposFamiliaresClasificados = () => {
   const gruposFiltrados = useMemo(() => {
     let filtrados = gruposClasificados;
 
-    // Filtro por término de búsqueda
+    // Filtro por término de búsqueda (ID, contacto, tomador o cualquier miembro)
     if (searchTerm) {
-      const termino = searchTerm.toLowerCase();
+      const termino = searchTerm
+        .toLowerCase()
+        .trim()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+
+      const textoCoincide = (valor) => {
+        const t = String(valor || "")
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+        return t.includes(termino);
+      };
+
       filtrados = filtrados.filter((grupo) => {
         const id = grupo.id?.toString() || "";
-        const personaContacto = (grupo.persona_contacto || "").toLowerCase();
-        const tomador = grupo.coberturas
-          ?.find(c => c.parentesco?.toUpperCase() === "TOMADOR")
-          ?.cliente?.nombre_completo?.toLowerCase() || "";
-        
-        return (
-          id.includes(termino) ||
-          personaContacto.includes(termino) ||
-          tomador.includes(termino)
-        );
+        if (id.includes(termino)) return true;
+        if (textoCoincide(grupo.persona_contacto)) return true;
+        if (textoCoincide(grupo.responsable)) return true;
+
+        const coberturas = grupo.coberturas || grupo.miembrosClasificados || [];
+        return coberturas.some((c) => {
+          const cliente = c.cliente || {};
+          return (
+            textoCoincide(cliente.nombre_completo) ||
+            textoCoincide(
+              [cliente.primer_nombre, cliente.segundo_nombre, cliente.apellidos]
+                .filter(Boolean)
+                .join(" ")
+            )
+          );
+        });
       });
     }
 
@@ -630,7 +649,7 @@ const ReporteGruposFamiliaresClasificados = () => {
                     <FaSearch />
                   </InputGroup.Text>
                   <Form.Control
-                    placeholder="Buscar por ID, tomador o persona de contacto..."
+                    placeholder="Buscar por ID, tomador, miembro o persona de contacto..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />

@@ -112,6 +112,10 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return await apiRequest(`${BASE_GR}/${grupoId}/estado-actual`, "GET");
   },
 
+  getHistorialEstado: async (grupoId) => {
+    return await apiRequest(`${BASE_GR}/${grupoId}/historial-estado`, "GET");
+  },
+
   // headers opcional por si quieres auditar/etiquetar la transición
   setEstado: async (grupoId, codigo, motivo = null, metadata = null, headers = {}) => {
     return await apiRequest(`${BASE_GR}/${grupoId}/estado`, "POST", {

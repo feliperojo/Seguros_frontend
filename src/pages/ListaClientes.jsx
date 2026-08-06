@@ -14,6 +14,7 @@ import "../styles/ListaClientes.css";
 import apiRequest from "../services/api";
 import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
+import { labelEstadoGrupoParaDisplay } from "../constants/estadosGrupoFamiliar";
 
 // ============================================================================
 // CONSTANTES Y HELPERS
@@ -61,22 +62,6 @@ const norm = (s) =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-
-/**
- * Convierte el estado del proceso a una variante de color de Bootstrap
- * @param {string} estado - Estado del proceso
- * @returns {string} Variante de color para Badge
- */
-const estadoToVariant = (estado) => {
-  switch (norm(estado)) {
-    case "toma de datos": return "info";
-    case "cotizacion": return "warning";
-    case "seguimiento": return "success";
-    case "inscripcion inicial": return "primary";
-    case "descartado": return "danger";
-    default: return "secondary";
-  }
-};
 
 /**
  * Etiqueta legible de estado_cliente
@@ -134,11 +119,7 @@ const estadoClienteToVariant = (estado) => {
  */
 const ProcesoCell = ({ grupos }) => {
   if (!grupos?.length) {
-    return (
-      <Badge bg="light" text="dark" className="fw-normal">
-        Sin proceso
-      </Badge>
-    );
+    return <span className="fw-bold">Sin proceso</span>;
   }
 
   const MAX_VISIBLE = 3; // Máximo de badges visibles sin expandir
@@ -160,12 +141,10 @@ const ProcesoCell = ({ grupos }) => {
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="text-decoration-none"
-              title={`Ver grupo familiar #${g.id} - ${g.estado || "Sin estado"}`}
+              className="text-decoration-none text-dark fw-bold"
+              title={`Ver grupo familiar #${g.id} - ${labelEstadoGrupoParaDisplay(g.estado || "Sin estado")}`}
             >
-              <Badge pill bg={estadoToVariant(g.estado)} className="stacked-badge">
-                {g.estado || "Sin estado"}
-              </Badge>
+              {labelEstadoGrupoParaDisplay(g.estado || "Sin estado")}
             </Link>
           </div>
         ))}
@@ -452,20 +431,35 @@ const ListaClientes = () => {
     return "Sin parentesco";
   };
 
-  const getProductoNombre = (cliente) => {
+  const getProductosLista = (cliente) => {
     if (!cliente.coberturas || !Array.isArray(cliente.coberturas) || cliente.coberturas.length === 0) {
-      return "—";
+      return [];
     }
 
-    const tipos = [
+    return [
       ...new Set(
         cliente.coberturas
           .map((c) => (c.cobertura_tipo || "").trim())
           .filter(Boolean)
       ),
     ];
+  };
 
-    return tipos.length > 0 ? tipos.join(", ") : "—";
+  const renderProductosCell = (cliente) => {
+    const tipos = getProductosLista(cliente);
+    if (tipos.length === 0) {
+      return <span className="text-muted">—</span>;
+    }
+
+    return (
+      <div className="stacked-list">
+        {tipos.map((tipo) => (
+          <div key={tipo} className="stacked-item">
+            {tipo}
+          </div>
+        ))}
+      </div>
+    );
   };
 
   /**
@@ -901,7 +895,7 @@ const ListaClientes = () => {
                         <td>
                           <ProcesoCell grupos={grupos} />
                         </td>
-                        <td>{getProductoNombre(cliente)}</td>
+                        <td>{renderProductosCell(cliente)}</td>
                         <td className="text-center">
                           <div className="btn-group" role="group">
                             <Button
@@ -1059,7 +1053,7 @@ const ListaClientes = () => {
                   <option value="cotizacion">Cotización</option>
                   <option value="seguimiento">Seguimiento</option>
                   <option value="toma de datos">Toma de Datos</option>
-                  <option value="inscripcion inicial">Inscripción Inicial</option>
+                  <option value="inscripcion inicial">Inscripción / Confirmación</option>
                   <option value="descartado">Descartado</option>
                   <option value="sin-proceso">Sin proceso</option>
                 </Form.Select>

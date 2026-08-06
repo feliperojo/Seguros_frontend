@@ -94,6 +94,8 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
       "en cotización": "cotizacion",
       "toma de datos": "toma_datos",
       "inscripción inicial": "inscripcion_ini",
+      "inscripción / confirmación": "inscripcion_ini",
+      "inscripcion / confirmacion": "inscripcion_ini",
       "grupo familiar": "grupo_familiar"
     };
     
