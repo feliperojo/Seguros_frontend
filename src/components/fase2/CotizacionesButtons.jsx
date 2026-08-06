@@ -26,7 +26,7 @@ export default function CotizacionesButtons({
     "Inscripción Inicial",
   ];
 
-  const Btn = ({ title, subtitle, cobertura, gfId, onClick, loading }) => (
+  const Btn = ({ title, subtitle, cobertura, gfId, estadoGrupo, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
@@ -40,7 +40,12 @@ export default function CotizacionesButtons({
           <div className="small text-muted text-truncate">{subtitle}</div>
         ) : null}
       </span>
-      <CoberturaEstadoGfBadges cobertura={cobertura} gfId={gfId} loading={loading} />
+      <CoberturaEstadoGfBadges
+        cobertura={cobertura}
+        gfId={gfId}
+        loading={loading}
+        estadoGrupoFamiliar={estadoGrupo}
+      />
     </button>
   );
 
@@ -79,12 +84,13 @@ export default function CotizacionesButtons({
               const loading = loadingId === gfId;
               const coberturaEstado = resolveCobertura?.(c) ?? c;
               return (
-                <div className="col-md-6" key={c.id}>
+                <div className="col-md-12" key={c.id}>
                   <Btn
                     title={estado}
                     subtitle={c.cobertura_tipo || ""}
                     cobertura={coberturaEstado}
                     gfId={gfId}
+                    estadoGrupo={estado}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}
                   />

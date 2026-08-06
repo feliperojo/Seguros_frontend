@@ -74,6 +74,19 @@
   .progressbar .step.discarded::after {
     background: #dc3545;
   }
+
+  /* Clic en DESCARTADO para ver motivo/nota sin ocupar espacio extra */
+  .progressbar .step.step-clickable {
+    cursor: pointer;
+  }
+  .progressbar .step.step-clickable:hover span {
+    text-decoration: underline;
+  }
+  .progressbar .step.step-clickable:focus-visible {
+    outline: 2px solid #dc3545;
+    outline-offset: 4px;
+    border-radius: 4px;
+  }
   
   /* Responsive: evita que el texto se rompa feo */
   .progressbar .step span {

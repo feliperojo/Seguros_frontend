@@ -8,6 +8,7 @@ export const COBERTURA_DEFINIDA = {
 export const OPCIONES_COBERTURA_RETIRO = [
   COBERTURA_DEFINIDA.RETIRADO,
   COBERTURA_DEFINIDA.TERMINADO,
+  COBERTURA_DEFINIDA.CANCELADO,
 ];
 
 export const badgeCoberturaDefinida = (valor) => {

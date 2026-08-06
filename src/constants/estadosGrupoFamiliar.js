@@ -31,7 +31,7 @@ export const ESTADOS_GRUPO_CONFIG = {
   inscripcion_ini: {
     icon: FaCheckCircle,
     color: "#4285f4",
-    label: "Inscripción Inicial",
+    label: "Inscripción / Confirmación",
   },
   grupo_familiar: {
     icon: FaProjectDiagram,
@@ -64,6 +64,30 @@ export function getEstadoGrupoConfig(estado) {
   };
 }
 
+/**
+ * Label de display para un estado de GF (por código o nombre de catálogo).
+ * No cambia códigos internos; solo el texto visible.
+ */
+export function labelEstadoGrupoParaDisplay(codigoOrNombre) {
+  if (!codigoOrNombre) return "Sin estado";
+  const raw = String(codigoOrNombre).trim();
+  const asCode = raw.toLowerCase().replace(/\s+/g, "_");
+  if (ESTADOS_GRUPO_CONFIG[asCode]) {
+    return ESTADOS_GRUPO_CONFIG[asCode].label;
+  }
+
+  const norm = raw
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (norm === "inscripcion inicial" || norm === "inscripcion / confirmacion") {
+    return ESTADOS_GRUPO_CONFIG.inscripcion_ini.label;
+  }
+
+  return raw;
+}
+
 export function ordenarResumenGrupos(resumenEstados = []) {
   const estadosProcesados = Array.isArray(resumenEstados)
     ? resumenEstados.map((item) => ({
@@ -85,13 +109,19 @@ export function ordenarResumenGrupos(resumenEstados = []) {
 
   return estadosOrdenados.map((estado) => {
     const config = getEstadoGrupoConfig(estado.codigo);
+    // Labels de catálogo conocidos: priorizar config frontend (display only).
+    const tieneLabelFijo = Object.prototype.hasOwnProperty.call(
+      ESTADOS_GRUPO_CONFIG,
+      estado.codigo
+    );
+    const label = tieneLabelFijo ? config.label : (estado.nombre || config.label);
     return {
       key: estado.codigo,
       valor: estado.total_grupos,
-      nombre: estado.nombre || config.label,
+      nombre: label,
       config: {
         ...config,
-        label: estado.nombre || config.label,
+        label,
       },
     };
   });

@@ -13,6 +13,7 @@ import { calcIngresoFamiliar, sanitizeMoneyInput, parseMoney } from '../services
 import ProspectoService from "../services/ProspectoService";
 import apiRequest from '../services/api';
 import { toApiPhones } from '../utils/phone-mappers';
+import { estadoClienteDesdeProcesoGrupo } from '../utils/clasificacionClienteProceso';
 
 
 const normalizeCode = (s) =>
@@ -362,6 +363,8 @@ useEffect(() => {
           ...base,
           ingreso_anual: moneyToDecimal(limpio), // ahora numérico y consistente
           telefonos: toApiPhones(telefonosArray),
+          // Alta de prospecto: etapas 1–5 → contacto
+          estado_cliente: estadoClienteDesdeProcesoGrupo(estadoActual || "PROSPECTO"),
         };
       });
       
@@ -532,13 +535,18 @@ useEffect(() => {
         <ProspectoBarra 
           currentCode={estadoActual}
           grupoId={grupoId}
-          onDescartar={async () => {
+          onDescartar={async ({ motivo, metadata } = {}) => {
             if (!grupoId) return;
             try {
               await descartarCoberturasDelGrupo(grupoId);
-              await GrupoFamiliarService.setEstado(grupoId, 'DESCARTADO', 'Cambio a estado DESCARTADO');
-              setEstadoActual('DESCARTADO');
-              alert('Prospecto marcado como DESCARTADO');
+              await GrupoFamiliarService.setEstado(
+                grupoId,
+                "DESCARTADO",
+                motivo || "Descartado",
+                metadata || null
+              );
+              setEstadoActual("DESCARTADO");
+              alert("Prospecto marcado como DESCARTADO");
               navigate(`/grupo_familiar/${grupoId}`);
             } catch (error) {
               throw error;

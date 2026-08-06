@@ -18,7 +18,7 @@ export default function ProductosButtons({
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState(null);
 
-  const Btn = ({ left, cobertura, gfId, onClick, loading }) => (
+  const Btn = ({ left, cobertura, gfId, estadoGrupo, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
@@ -29,7 +29,12 @@ export default function ProductosButtons({
       <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3">
         {left}
       </span>
-      <CoberturaEstadoGfBadges cobertura={cobertura} gfId={gfId} loading={loading} />
+      <CoberturaEstadoGfBadges
+        cobertura={cobertura}
+        gfId={gfId}
+        loading={loading}
+        estadoGrupoFamiliar={estadoGrupo}
+      />
     </button>
   );
 
@@ -65,6 +70,9 @@ export default function ProductosButtons({
           <div className="row g-2">
             {filtradas.map((c) => {
               const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
+              const estadoGrupo =
+                c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ??
+                "Grupo Familiar";
               const loading = loadingId === gfId;
               const coberturaEstado = resolveCobertura?.(c) ?? c;
               return (
@@ -73,6 +81,7 @@ export default function ProductosButtons({
                     left={c.cobertura_tipo || "Sin tipo"}
                     cobertura={coberturaEstado}
                     gfId={gfId}
+                    estadoGrupo={estadoGrupo}
                     loading={loading}
                     onClick={() => handleOpenFicha(c)}
                   />

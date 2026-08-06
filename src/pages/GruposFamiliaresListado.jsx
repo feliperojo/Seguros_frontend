@@ -15,6 +15,7 @@ import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import ResumenGruposEstados from "../components/ResumenGruposEstados";
+import { labelEstadoGrupoParaDisplay } from "../constants/estadosGrupoFamiliar";
 import { Helmet } from "react-helmet-async";
 
 
@@ -258,12 +259,13 @@ useEffect(() => {
   // };
   const getGrupoEstado = (grupo) => {
     // Extract the estado (state) and estado_codigo from the response
-    const estado = grupo.estado || "Sin estado";  // Default to "Sin estado" if no estado is found
+    const estadoRaw = grupo.estado || "Sin estado";
+    const estado = labelEstadoGrupoParaDisplay(estadoRaw);
   
     // Define the badge color based on the estado value
-    const variant = estado === "Cotización" ? "warning" :
-                    estado === "Activo" ? "success" :
-                    estado === "Inactivo" ? "danger" : "secondary";
+    const variant = estadoRaw === "Cotización" ? "warning" :
+                    estadoRaw === "Activo" ? "success" :
+                    estadoRaw === "Inactivo" ? "danger" : "secondary";
   
     return { estado, variant };
   };
@@ -398,7 +400,7 @@ useEffect(() => {
                 <option value="cotizacion">Cotización</option>
                 <option value="seguimiento">Seguimiento</option>
                 <option value="toma_datos">Toma de Datos</option>
-                <option value="inscripcion_ini">Inscripción Inicial</option>
+                <option value="inscripcion_ini">Inscripción / Confirmación</option>
                 <option value="grupo_familiar">Grupo Familiar</option>
                 <option value="descartado">Descartado</option>
               </Form.Select>
@@ -499,25 +501,21 @@ useEffect(() => {
                             </Badge>
                           </td>
                           <td>
-                                  {grupo.id ? (
-                                    <Badge
-                                      as={Link}
-                                      to={buildDetallePath(grupo.id)}
-                                      bg={getGrupoEstado(grupo).variant}
-                                      pill
-                                      className="text-decoration-none"
-                                      title="Ver detalle del grupo"
-                                      onClick={(e) => e.stopPropagation()}   // por si el <tr> fuese clickable
-                                      style={{ cursor: "pointer" }}
-                                    >
-                                      {getGrupoEstado(grupo).estado}
-                                    </Badge>
-                                  ) : (
-                                    <Badge pill bg={getGrupoEstado(grupo).variant}>
-                                      {getGrupoEstado(grupo).estado}
-                                    </Badge>
-                                  )}
-                                </td>
+                            {grupo.id ? (
+                              <Link
+                                to={buildDetallePath(grupo.id)}
+                                className="text-decoration-none text-dark fw-bold"
+                                title="Ver detalle del grupo"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {getGrupoEstado(grupo).estado}
+                              </Link>
+                            ) : (
+                              <span className="fw-bold">
+                                {getGrupoEstado(grupo).estado}
+                              </span>
+                            )}
+                          </td>
                           <td>{getProductoNombre(grupo)}</td>
 
                           <td>

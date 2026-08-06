@@ -1,18 +1,28 @@
 // components/fase2/ProspectoBarra.jsx
-import React from "react";
+import React, { useState } from "react";
 import "../../styles/ProspectoBarra.css";
+import DescartarGrupoModal from "../GrupoFamiliar/DescartarGrupoModal";
+import DetalleDescarteModal from "../GrupoFamiliar/DetalleDescarteModal";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 
 const STEPS = [
   { code: "PROSPECTO",       label: "PROSPECTO" },
   { code: "COTIZACION",      label: "COTIZACIÓN" },
   { code: "SEGUIMIENTO",     label: "SEGUIMIENTO" },
   { code: "TOMA_DATOS",      label: "TOMA DE DATOS" },
-  { code: "INSCRIPCION_INI", label: "INSCRIPCIÓN INICIAL" },
+  { code: "INSCRIPCION_INI", label: "INSCRIPCIÓN / CONFIRMACIÓN" },
   { code: "GRUPO_FAMILIAR",       label: "TERMINADO" },
   { code: "DESCARTADO",      label: "DESCARTADO" },
 ];
 
 const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimiento }) => {
+  const [showDescartarModal, setShowDescartarModal] = useState(false);
+  const [descartando, setDescartando] = useState(false);
+  const [showDetalleDescarte, setShowDetalleDescarte] = useState(false);
+  const [loadingDetalle, setLoadingDetalle] = useState(false);
+  const [detalleDescarte, setDetalleDescarte] = useState(null);
+  const [errorDetalle, setErrorDetalle] = useState(null);
+
   const safeCode = (currentCode || "PROSPECTO").toUpperCase();
   const currentIndex = Math.max(0, STEPS.findIndex((s) => s.code === safeCode));
   
@@ -24,19 +34,19 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
     grupoId &&
     onDescartar;
   const puedeReactivarSeguimiento = safeCode === "DESCARTADO" && grupoId && onReactivarSeguimiento;
+  const puedeVerDetalleDescarte = safeCode === "DESCARTADO" && !!grupoId;
 
-  const handleDescartar = async () => {
-    if (!window.confirm("¿Está seguro de que desea marcar este prospecto como DESCARTADO?")) {
-      return;
-    }
-    
-    if (onDescartar) {
-      try {
-        await onDescartar();
-      } catch (error) {
-        console.error("Error al cambiar estado a DESCARTADO:", error);
-        alert("Error al cambiar el estado a DESCARTADO");
-      }
+  const handleConfirmDescartar = async ({ motivo, metadata }) => {
+    if (!onDescartar) return;
+    setDescartando(true);
+    try {
+      await onDescartar({ motivo, metadata });
+      setShowDescartarModal(false);
+    } catch (error) {
+      console.error("Error al cambiar estado a DESCARTADO:", error);
+      alert(error?.message || "Error al cambiar el estado a DESCARTADO");
+    } finally {
+      setDescartando(false);
     }
   };
 
@@ -55,6 +65,30 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
     }
   };
 
+  const handleClickDescartado = async () => {
+    if (!puedeVerDetalleDescarte) return;
+
+    setShowDetalleDescarte(true);
+    setLoadingDetalle(true);
+    setErrorDetalle(null);
+    setDetalleDescarte(null);
+
+    try {
+      const rows = await GrupoFamiliarService.getHistorialEstado(grupoId);
+      const list = Array.isArray(rows) ? rows : Array.isArray(rows?.data) ? rows.data : [];
+      const descartes = list.filter(
+        (r) => String(r?.codigo || "").toUpperCase() === "DESCARTADO"
+      );
+      const ultimo = descartes.length ? descartes[descartes.length - 1] : null;
+      setDetalleDescarte(ultimo);
+    } catch (e) {
+      console.error("Error al cargar detalle de descarte:", e);
+      setErrorDetalle(e?.message || "No se pudo cargar el motivo del descarte.");
+    } finally {
+      setLoadingDetalle(false);
+    }
+  };
+
   return (
     <div className="mb-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -69,11 +103,31 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
               
               const isActive = idx === currentIndex;
               const isDone = idx < currentIndex;
+              const esDescartadoClickable =
+                s.code === "DESCARTADO" && puedeVerDetalleDescarte;
+
               return (
                 <li
                   key={s.code}
-                  className={`step ${isActive ? "active" : ""} ${isDone ? "done" : ""} ${s.code === "DESCARTADO" && safeCode === "DESCARTADO" ? "discarded" : ""}`}
-                  title={s.code}
+                  className={`step ${isActive ? "active" : ""} ${isDone ? "done" : ""} ${s.code === "DESCARTADO" && safeCode === "DESCARTADO" ? "discarded" : ""} ${esDescartadoClickable ? "step-clickable" : ""}`}
+                  title={
+                    esDescartadoClickable
+                      ? "Clic para ver motivo y nota del descarte"
+                      : s.code
+                  }
+                  role={esDescartadoClickable ? "button" : undefined}
+                  tabIndex={esDescartadoClickable ? 0 : undefined}
+                  onClick={esDescartadoClickable ? handleClickDescartado : undefined}
+                  onKeyDown={
+                    esDescartadoClickable
+                      ? (e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            handleClickDescartado();
+                          }
+                        }
+                      : undefined
+                  }
                 >
                   <span>{s.label}</span>
                 </li>
@@ -85,7 +139,7 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
           <button
             type="button"
             className="btn btn-outline-danger ms-3"
-            onClick={handleDescartar}
+            onClick={() => setShowDescartarModal(true)}
             title="Marcar como descartado"
           >
             <i className="fas fa-times-circle me-2"></i>
@@ -104,6 +158,23 @@ const ProspectoBarra = ({ currentCode, grupoId, onDescartar, onReactivarSeguimie
           </button>
         )}
       </div>
+
+      <DescartarGrupoModal
+        show={showDescartarModal}
+        loading={descartando}
+        onHide={() => {
+          if (!descartando) setShowDescartarModal(false);
+        }}
+        onConfirm={handleConfirmDescartar}
+      />
+
+      <DetalleDescarteModal
+        show={showDetalleDescarte}
+        onHide={() => setShowDetalleDescarte(false)}
+        loading={loadingDetalle}
+        registro={detalleDescarte}
+        error={errorDetalle}
+      />
     </div>
   );
 };

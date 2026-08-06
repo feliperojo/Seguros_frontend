@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import { Alert, Form } from "react-bootstrap";
+import { Alert, Form, Modal, Button } from "react-bootstrap";
 import ProspectoBarra from "../components/fase2/ProspectoBarra";
 import Prospectogrupo from "../components/fase2/Prospectogrupo";
 import ProspectoDatos from "../components/fase2/ProspectoDatos";
@@ -24,7 +24,8 @@ import {
 } from "../utils/grupoFamiliarConcurrentSave";
 
 
- import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
+import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
+import { estadoClienteDesdeProcesoGrupo } from "../utils/clasificacionClienteProceso";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
@@ -712,6 +713,8 @@ const GrupoFamiliarDetail = () => {
 const [grupoVersion, setGrupoVersion] = useState(null);
   const [editBaseline, setEditBaseline] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
+  const [showConfirmTerminadoModal, setShowConfirmTerminadoModal] = useState(false);
+  const [pendingAdvanceTo, setPendingAdvanceTo] = useState(null);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [modoHistorico, setModoHistorico] = useState(false);
@@ -1301,6 +1304,8 @@ const handleCreateMemberRemote = async (memberData) => {
         ? { ingreso_por_periodo_ocasional: pickMoney("ingreso_por_periodo_ocasional") }
         : {}),
       nota: memberData.nota || null,
+      // Denominación según etapa del proceso del GF (1–5 contacto, 6 cliente)
+      estado_cliente: estadoClienteDesdeProcesoGrupo(estadoActual),
       // 📞 Enviar arreglo completo de teléfonos y también el campo legacy "telefono"
       telefonos: toApiPhones(memberData.telefonos || []),
       telefono: (() => {
@@ -1369,18 +1374,59 @@ const handleCreateMemberRemote = async (memberData) => {
 };
 
 
-  const advanceState = async (targetCode) => {
+  const advanceState = async (targetCode, motivo = null, metadata = null) => {
     setAdvancing(true);
     try {
-      await GrupoFamiliarService.setEstado(id, targetCode, `Cambio a ${targetCode}`);
+      const res = await GrupoFamiliarService.setEstado(
+        id,
+        targetCode,
+        motivo ?? `Cambio a ${targetCode}`,
+        metadata
+      );
       setEstadoActual(targetCode);
       await reload();
-      showToast("success", "Etapa actualizada", `Ahora estás en ${targetCode}.`);
+      const promovidos = Number(res?.miembros_promovidos_a_cliente || 0);
+      const labelDestino =
+        String(targetCode).toUpperCase() === "GRUPO_FAMILIAR" ? "TERMINADO" : targetCode;
+      const extra =
+        String(targetCode).toUpperCase() === "GRUPO_FAMILIAR" && promovidos > 0
+          ? ` ${promovidos} contacto(s) pasaron a cliente.`
+          : "";
+      showToast("success", "Etapa actualizada", `Ahora estás en ${labelDestino}.${extra}`);
+      return true;
     } catch (e) {
       showToast("danger", "Error al cambiar de etapa", e?.message || "No fue posible cambiar de etapa.");
+      return false;
     } finally {
       setAdvancing(false);
     }
+  };
+
+  /** Solicita avance de etapa; si va a Terminado (producto activo) pide confirmación en modal. */
+  const requestAdvanceState = async (to) => {
+    const from = (estadoActual || "").toUpperCase();
+    const target = (to || "").toUpperCase();
+    if (!canAdvance(from, target, { formData, familyMembers })) {
+      showToast("warning", "No disponible", "No puedes avanzar todavía.");
+      return;
+    }
+
+    if (from === "INSCRIPCION_INI" && target === "GRUPO_FAMILIAR") {
+      setPendingAdvanceTo(target);
+      setShowConfirmTerminadoModal(true);
+      return;
+    }
+
+    const ok = window.confirm(`¿Pasar a ${target}?`);
+    if (!ok) return;
+    await advanceState(target);
+  };
+
+  const confirmAdvanceTerminado = async () => {
+    const target = pendingAdvanceTo || "GRUPO_FAMILIAR";
+    setShowConfirmTerminadoModal(false);
+    setPendingAdvanceTo(null);
+    await advanceState(target);
   };
 
   const formatTodayLocal = () => {
@@ -1457,7 +1503,10 @@ const handleCreateMemberRemote = async (memberData) => {
        await GrupoFamiliarService.appendMiembro(id, {
          request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
          grupo_version: grupoVersion,
-         cliente_nuevo: cliNuevo,
+         cliente_nuevo: {
+           ...cliNuevo,
+           estado_cliente: estadoClienteDesdeProcesoGrupo(estadoActual),
+         },
          parentesco: m.parentesco || m.tipo || "Tomador",
          cobertura: {
            ...cov,
@@ -1770,9 +1819,16 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         <ProspectoBarra 
           currentCode={estadoActual}
           grupoId={id}
-          onDescartar={esAnioPasado ? undefined : async () => {
+          onDescartar={esAnioPasado ? undefined : async ({ motivo, metadata } = {}) => {
             await descartarCoberturasDelGrupo();
-            await advanceState("DESCARTADO");
+            const ok = await advanceState(
+              "DESCARTADO",
+              motivo || "Descartado",
+              metadata || null
+            );
+            if (!ok) {
+              throw new Error("No se pudo marcar el grupo como descartado.");
+            }
           }}
           onReactivarSeguimiento={esAnioPasado ? undefined : async () => {
             await advanceState("SEGUIMIENTO");
@@ -1826,19 +1882,13 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                           disabled={advancing}
                           onClick={async () => {
                             setShowActionsDropdown(false);
-                            const from = (estadoActual || "").toUpperCase();
-                            const to = nextOf(from);
-                            if (!canAdvance(from, to, { formData, familyMembers })) {
-                              showToast("warning", "No disponible", "No puedes avanzar todavía.");
-                              return;
-                            }
-                            const ok = window.confirm(`¿Pasar a ${to}?`);
-                            if (!ok) return;
-                            await advanceState(to);
+                            const to = nextOf((estadoActual || "").toUpperCase());
+                            if (!to) return;
+                            await requestAdvanceState(to);
                           }}
                         >
                           <i className="fas fa-arrow-right me-2"></i>
-                          Pasar a {nextOf(estadoActual)}
+                          Pasar a {nextOf(estadoActual) === "GRUPO_FAMILIAR" ? "TERMINADO" : nextOf(estadoActual)}
                         </button>
                       </li>
                     </ul>
@@ -2140,6 +2190,59 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
 
         )}
+
+        {/* Modal confirmación: Inscripción/Confirmación → Terminado (producto activo) */}
+        <Modal
+          show={showConfirmTerminadoModal}
+          onHide={() => {
+            if (advancing) return;
+            setShowConfirmTerminadoModal(false);
+            setPendingAdvanceTo(null);
+          }}
+          centered
+          backdrop="static"
+        >
+          <Modal.Header closeButton={!advancing}>
+            <Modal.Title>Confirmar producto activo</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p className="mb-3">
+              Al confirmar, el grupo familiar pasará a <strong>Terminado</strong> y
+              quedará como <strong>producto activo</strong>.
+            </p>
+            <Alert variant="warning" className="mb-0">
+              ⚠️ No marque este producto como activo sin antes verificar con la
+              aseguradora que el pago inicial fue recibido y que la cobertura ya
+              está activa.
+            </Alert>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button
+              variant="outline-secondary"
+              disabled={advancing}
+              onClick={() => {
+                setShowConfirmTerminadoModal(false);
+                setPendingAdvanceTo(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="primary"
+              disabled={advancing}
+              onClick={confirmAdvanceTerminado}
+            >
+              {advancing ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status" />
+                  Activando…
+                </>
+              ) : (
+                "Sí, pasar a Terminado"
+              )}
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
         {/* ✅ Modal de Retiro/Cancelación - Solo actualiza estado local */}
         {!esAnioPasado && (

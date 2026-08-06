@@ -823,6 +823,10 @@ const handleOpenViewModal = (cliente) => {
         item?.nota_retiro ||
         "—",
       tipo: esCancelada ? "cancelados" : esRetirada ? "retiros" : "otros",
+      cobertura_definida: item?.cobertura_definida || null,
+      estado:
+        (item?.cobertura_definida && String(item.cobertura_definida).trim()) ||
+        (esCancelada ? "Cancelada" : esRetirada ? "Retirada" : "—"),
     };
   };
 
@@ -1578,7 +1582,7 @@ const handleOpenViewModal = (cliente) => {
                 <thead>
                   <tr>
                     <th>Nombre</th>
-                    <th>Fecha de cancelación</th>
+                    <th>Fecha de expiración</th>
                     <th>Fecha de retiro</th>
                     <th>Concepto</th>
                     <th>Motivo</th>
@@ -1597,11 +1601,21 @@ const handleOpenViewModal = (cliente) => {
                             <td>{poliza.concepto || "—"}</td>
                             <td>{poliza.motivo || "—"}</td>
                             <td className="text-end">
-                              {poliza.tipo === "cancelados" ? (
-                                <Badge bg="danger" pill>Cancelada</Badge>
-                              ) : (
-                                <Badge bg="secondary" pill>Retirada</Badge>
-                              )}
+                              {(() => {
+                                const label = String(poliza.estado || "").trim() || (poliza.tipo === "cancelados" ? "Cancelada" : "Retirada");
+                                const lower = label.toLowerCase();
+                                const bg =
+                                  lower === "cancelado" || lower === "cancelada"
+                                    ? "danger"
+                                    : lower === "terminado"
+                                      ? "dark"
+                                      : "secondary";
+                                return (
+                                  <Badge bg={bg} pill>
+                                    {label}
+                                  </Badge>
+                                );
+                              })()}
                             </td>
                           </tr>
                         ))
