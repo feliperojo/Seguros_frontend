@@ -89,27 +89,78 @@ export function labelEstadoGrupoParaDisplay(codigoOrNombre) {
 }
 
 /**
- * Hasta estado 5 (INSCRIPCION_INI) se puede cambiar parentesco/tipo y eliminar cobertura.
+ * Estados 1–5: se puede cambiar parentesco/tipo y eliminar cobertura.
+ * Estado 5 = INSCRIPCION_INI (Inscripción / Confirmación).
  * Desde estado 6 (GRUPO_FAMILIAR / Terminado) o Descartado queda bloqueado.
  */
+export const ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+  "TOMA_DATOS",
+  "INSCRIPCION_INI",
+];
+
+export const ESTADOS_GRUPO_IDS_PERMITEN_PARENTESCO_COBERTURA = [1, 2, 3, 4, 5];
+
+/** @deprecated usar ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA */
 export const ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA = [
   "GRUPO_FAMILIAR",
   "TERMINADO",
   "DESCARTADO",
 ];
 
+/** Normaliza códigos/nombres de estado a código de catálogo. */
+export function normalizeEstadoGrupoCodigo(raw) {
+  if (raw == null) return "";
+  if (typeof raw === "object") {
+    return normalizeEstadoGrupoCodigo(
+      raw.codigo || raw.code || raw.cod || raw.nombre || ""
+    );
+  }
+
+  const norm = String(raw)
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s\/-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  if (!norm) return "";
+  if (norm === "TERMINADO" || norm === "GRUPO_FAMILIAR") return "GRUPO_FAMILIAR";
+  if (norm.includes("INSCRIPCION")) return "INSCRIPCION_INI";
+  if (norm.includes("TOMA_DATOS") || norm === "TOMA_DE_DATOS") return "TOMA_DATOS";
+  if (norm.includes("COTIZACION")) return "COTIZACION";
+  if (norm.includes("SEGUIMIENTO")) return "SEGUIMIENTO";
+  if (norm.includes("PROSPECTO")) return "PROSPECTO";
+  if (norm.includes("DESCARTADO")) return "DESCARTADO";
+  return norm;
+}
+
 /**
  * True si aún se puede editar parentesco/tipo o eliminar cobertura (estados 1–5).
+ * Incluye explícitamente INSCRIPCION_INI (estado 5).
  */
 export function puedeEditarParentescoOEliminarCobertura(
   estadoCodigo,
-  { readOnly = false } = {}
+  { readOnly = false, estadoId = null } = {}
 ) {
   if (readOnly) return false;
-  const code = String(estadoCodigo || "")
-    .trim()
-    .toUpperCase();
-  return !ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA.includes(code);
+
+  const code = normalizeEstadoGrupoCodigo(estadoCodigo);
+  if (code) {
+    return ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA.includes(code);
+  }
+
+  const id = Number(estadoId);
+  if (Number.isFinite(id) && id > 0) {
+    return ESTADOS_GRUPO_IDS_PERMITEN_PARENTESCO_COBERTURA.includes(id);
+  }
+
+  // Sin estado conocido: no bloquear en modo edición
+  return true;
 }
 
 /** IDs de catálogo que exigen clave de super admin para eliminar (Terminado / Descartado). */

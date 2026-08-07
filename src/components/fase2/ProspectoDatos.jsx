@@ -13,6 +13,7 @@ import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
+import { compareMembersByParentesco } from "../../utils/parentescoOrder";
 import { normalizeDateForInput } from "../../utils/formatters";
 import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import {
@@ -624,6 +625,7 @@ const ProspectoDatos = ({
   readOnly,
   canAdd = false,
   estadoActual,
+  estadoId = null,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote, 
@@ -860,14 +862,10 @@ const ProspectoDatos = ({
 
     return res;
   };
-  // Render: Tomador primero, resto en su orden original
+  // Render: Tomador → Cónyuge → Hijo/a → resto
 const sortedMembers = familyMembers
-.map((m, i) => ({ m, i }))                   // guardamos índice original
-.sort((a, b) => {
-  const pa = isTomador(a.m) ? 0 : 1;
-  const pb = isTomador(b.m) ? 0 : 1;
-  return pa - pb || a.i - b.i;               // estable
-})
+.map((m, i) => ({ m, i }))
+.sort((a, b) => compareMembersByParentesco(a.m, b.m, a.i, b.i))
 .map(x => x.m);
 
 
@@ -961,7 +959,7 @@ const sortedMembers = familyMembers
                     : `temp-${index}`;
                 const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
                   estadoActual,
-                  { readOnly }
+                  { readOnly, estadoId }
                 );
 
                 return (

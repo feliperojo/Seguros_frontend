@@ -49,6 +49,7 @@ import {
 import { toLegacyFields } from "../../utils/phones";
 import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
+import { compareMembersByParentesco } from "../../utils/parentescoOrder";
 import { buildPayerOptions } from "../../utils/payers";
 import {
   normalizeGeneroForSelect,
@@ -757,6 +758,7 @@ const TomaDeDatos = ({
   canAdd = false,
   readOnly = false,
   estadoActual,
+  estadoId = null,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote,
@@ -864,13 +866,11 @@ const TomaDeDatos = ({
       }
     });
     
-    // Función de ordenamiento: tomador primero
+    // Orden: Tomador → Cónyuge → Hijo/a → resto
     const sortMembers = (arr) => {
-      return arr.sort((a, b) => {
-        const pa = isTomador(a.m) ? 0 : 1;
-        const pb = isTomador(b.m) ? 0 : 1;
-        return pa - pb || a.idx - b.idx;
-      });
+      return arr.sort((a, b) =>
+        compareMembersByParentesco(a.m, b.m, a.idx, b.idx)
+      );
     };
     
     return {
@@ -1468,7 +1468,7 @@ const activeNormalized = useMemo(
     const isReadOnly = readOnly || isInactive;
     const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
       estadoActual,
-      { readOnly: isReadOnly }
+      { readOnly: isReadOnly, estadoId }
     );
     
     // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
