@@ -367,6 +367,9 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               <Link to="/informes/coberturas" className={`submenu-link ${isActive('/informes/coberturas') ? 'active' : ''}`}>
                 <FaFileAlt /> Reporte de Coberturas
               </Link>
+              <Link to="/informes/estado-coberturas" className={`submenu-link ${isActive('/informes/estado-coberturas') ? 'active' : ''}`}>
+                <FaShieldAlt /> Estado de coberturas
+              </Link>
               <Link to="/informes/cumpleanos" className={`submenu-link ${isActive('/informes/cumpleanos') ? 'active' : ''}`}>
                 <FaBirthdayCake /> Cumpleaños de Clientes
               </Link>

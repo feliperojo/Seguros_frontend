@@ -317,5 +317,63 @@ export const getReporteCoberturasCanceladasRetiradas = async (params = {}, signa
   return apiRequest(endpoint, "GET");
 };
 
+const buildEstadoCoberturasQueryParams = (params) => {
+  const queryParams = new URLSearchParams();
+
+  if (params.page) queryParams.append("page", params.page);
+  if (params.per_page) queryParams.append("per_page", params.per_page);
+  if (params.search) queryParams.append("search", params.search);
+  if (params.estado_cobertura) queryParams.append("estado_cobertura", params.estado_cobertura);
+  if (params.sort_by) {
+    queryParams.append("sort_by", params.sort_by);
+    if (params.sort_dir) queryParams.append("sort_dir", params.sort_dir);
+  }
+
+  return queryParams.toString();
+};
+
+/**
+ * Informe de estado de coberturas (GF, cliente, estado, producto, activo/inactivo por vigente).
+ */
+export const getReporteEstadoCoberturas = async (params = {}, signal = null) => {
+  const queryString = buildEstadoCoberturasQueryParams(params);
+  const endpoint = `reportes/estado-coberturas${queryString ? `?${queryString}` : ""}`;
+
+  if (signal) {
+    const token = getAuthToken();
+    const url = `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
+
+    const headers = {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    };
+
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    try {
+      const response = await fetch(url, { method: "GET", headers, signal });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+
+      if (!response.ok) {
+        const error = new Error(data?.message || "Error en la petición");
+        error.response = { status: response.status, data };
+        throw error;
+      }
+
+      return data;
+    } catch (err) {
+      if (err?.name === "AbortError") {
+        const cancelled = new Error("Petición cancelada");
+        cancelled.name = "AbortError";
+        throw cancelled;
+      }
+      throw err;
+    }
+  }
+
+  return apiRequest(endpoint, "GET");
+};
+
 export default getReporteCoberturas;
 

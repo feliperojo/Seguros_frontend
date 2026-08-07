@@ -30,6 +30,7 @@ import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
 import ReporteCumpleanosPage from "./pages/ReporteCumpleanosPage";
 import ReporteMediosPagoPage from "./pages/ReporteMediosPagoPage";
 import ReporteCoberturasCanceladasRetiradasPage from "./pages/ReporteCoberturasCanceladasRetiradasPage";
+import ReporteEstadoCoberturasPage from "./pages/ReporteEstadoCoberturasPage";
 import DocumentsReport from "./pages/DocumentsReport";
 import DetalleClientePage from "./pages/DetalleClientePage";
 import Porspectopage from "./pages/Prospecto";
@@ -129,6 +130,7 @@ const App = () => {
         <Route path="/informes/tareas-usuario" element={<InformeTareasUsuario />} />
         <Route path="/informes/tiempo-por-concepto" element={<InformeTiempoPorConcepto />} />
         <Route path="/informes/coberturas" element={<ReporteCoberturasPage />} />
+        <Route path="/informes/estado-coberturas" element={<ReporteEstadoCoberturasPage />} />
         <Route path="/informes/cumpleanos" element={<ReporteCumpleanosPage />} />
         <Route path="/informes/medios-pago" element={<ReporteMediosPagoPage />} />
         <Route path="/informes/coberturas-canceladas-retiradas" element={<ReporteCoberturasCanceladasRetiradasPage />} />

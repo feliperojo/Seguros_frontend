@@ -499,7 +499,7 @@ const ReactivacionCoberturasModal = ({
                       <th className="fw-semibold">Numero ID</th>
                       <th className="fw-semibold">Compañía</th>
                       <th width="150" className="text-center fw-semibold">Fecha Retiro</th>
-                      <th width="150" className="text-center fw-semibold">Fecha Cancelación</th>
+                      <th width="150" className="text-center fw-semibold">Fecha de expiración</th>
                       <th width="100" className="text-center fw-semibold">ESTADO DE POLIZA</th>
                     </tr>
                   </thead>

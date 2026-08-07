@@ -1819,6 +1819,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         <ProspectoBarra 
           currentCode={estadoActual}
           grupoId={id}
+          productoLabel={productoCotizacion?.label || null}
           onDescartar={esAnioPasado ? undefined : async ({ motivo, metadata } = {}) => {
             await descartarCoberturasDelGrupo();
             const ok = await advanceState(

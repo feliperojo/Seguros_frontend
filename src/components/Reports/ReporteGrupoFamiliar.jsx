@@ -93,7 +93,7 @@ const ReporteGrupoFamiliar = () => {
 
               <div className="row mb-2">
                 <div className="col-md-4"><strong>Activación:</strong> {c.fecha_activacion ? new Date(c.fecha_activacion).toLocaleDateString() : "-"}</div>
-                <div className="col-md-4"><strong>Cancelación:</strong> {c.fecha_cancelacion ? new Date(c.fecha_cancelacion).toLocaleDateString() : "-"}</div>
+                <div className="col-md-4"><strong>Expiración:</strong> {c.fecha_cancelacion ? new Date(c.fecha_cancelacion).toLocaleDateString() : "-"}</div>
                 <div className="col-md-4"><strong>Retiro:</strong> {c.fecha_retiro ? new Date(c.fecha_retiro).toLocaleDateString() : "-"}</div>
               </div>
               <div className="row mb-2">

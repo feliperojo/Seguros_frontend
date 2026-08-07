@@ -16,7 +16,7 @@ const RenovacionCoberturas = ({
       // Reemplaza la parte del HTML del modal con esto:
 html: `
 <p>Este proceso marcará <strong>todas las coberturas activas</strong> como canceladas.</p>
-<p>Se usará la fecha <strong>${fechaCancelacion}</strong> como cancelación y retiro.</p>
+<p>Se usará la fecha <strong>${fechaCancelacion}</strong> como fecha de expiración y retiro.</p>
 <div class="form-check mt-3 text-start">
   <input class="form-check-input" type="radio" name="tipo_renovacion" id="renovar_vacio" value="vacio" checked />
   <label class="form-check-label fw-semibold" for="renovar_vacio">

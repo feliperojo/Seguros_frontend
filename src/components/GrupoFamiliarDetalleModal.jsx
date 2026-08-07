@@ -363,7 +363,7 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                           <th>Año</th>
                           <th>Precio</th>
                           <th>Activación</th>
-                          <th>Cancelación</th>
+                          <th>Expiración</th>
                         </tr>
                       </thead>
                       <tbody>

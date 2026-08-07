@@ -557,7 +557,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                         className="mb-3"
                         type="checkbox"
                         id="fc-sin-cancel"
-                        label="Sin fecha de cancelación"
+                        label="Sin fecha de expiración"
                         checked={filtrosCoberturaUi.sin_cancelacion}
                         onChange={(e) => updateFiltrosUi({ sin_cancelacion: e.target.checked })}
                       />

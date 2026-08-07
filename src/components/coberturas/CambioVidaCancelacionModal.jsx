@@ -507,7 +507,7 @@ const CambioVidaCancelacionModal = ({
         return cobertura && datos && requiereFechaCancelacionNueva(cobertura, datos);
       });
       if (requiereCancelGlobal && !fechaCancelacionGlobal) {
-        setError("La fecha de cancelación global es requerida para las coberturas con póliza vigente.");
+        setError("La fecha de expiración global es requerida para las coberturas con póliza vigente.");
         return false;
       }
 
@@ -546,7 +546,7 @@ const CambioVidaCancelacionModal = ({
       }
 
       if (requiereFechaCancelacionNueva(cobertura, datos) && !datos.fecha_cancelacion) {
-        setError(`${nombre}: la fecha de cancelación es requerida.`);
+        setError(`${nombre}: la fecha de expiración es requerida.`);
         return false;
       }
 
@@ -594,7 +594,7 @@ const CambioVidaCancelacionModal = ({
         fechaRetiro &&
         fechaRetiro < fechaCancel
       ) {
-        setError(`${nombre}: la fecha de retiro no puede ser menor a la fecha de cancelación.`);
+        setError(`${nombre}: la fecha de retiro no puede ser menor a la fecha de expiración.`);
         return false;
       }
     }

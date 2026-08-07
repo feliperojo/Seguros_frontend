@@ -444,7 +444,7 @@ const RetiroCancelacionModal = ({
 
                 <Col md={6}>
                   <Form.Group>
-                    <Form.Label className="fw-semibold">Fecha de Cancelación</Form.Label>
+                    <Form.Label className="fw-semibold">Fecha de expiración</Form.Label>
                     <DateInputMdyDash
                       valueIso={cobertura.fecha_cancelacion}
                       disabled={false}

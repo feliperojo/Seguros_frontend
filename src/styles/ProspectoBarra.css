@@ -75,6 +75,20 @@
     background: #dc3545;
   }
 
+  /* Descarte histórico (grupo reactivado): visible y cliqueable, sin marcar etapa activa */
+  .progressbar .step.discarded-history {
+    color: #b02a37;
+    font-weight: 600;
+  }
+  .progressbar .step.discarded-history::before {
+    border-color: #dc3545;
+    background: #fff;
+    color: #dc3545;
+  }
+  .progressbar .step.discarded-history::after {
+    background: #f1aeb5;
+  }
+
   /* Clic en DESCARTADO para ver motivo/nota sin ocupar espacio extra */
   .progressbar .step.step-clickable {
     cursor: pointer;
@@ -93,5 +107,32 @@
     display: inline-block;
     white-space: nowrap;
     font-size: 0.9rem;
+  }
+
+  /* Aviso discreto en etapa Inscripción / Confirmación */
+  .prospecto-etapa-aviso {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid #adb5bd;
+    background: #f8f9fa;
+    color: #495057;
+    border-radius: 0 4px 4px 0;
+  }
+  .prospecto-etapa-aviso__titulo {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin-bottom: 0.25rem;
+  }
+  .prospecto-etapa-aviso__texto {
+    font-size: 0.925rem;
+    line-height: 1.45;
+    color: #343a40;
+  }
+  .prospecto-etapa-aviso__texto strong {
+    font-weight: 600;
+    color: #212529;
   }
   
