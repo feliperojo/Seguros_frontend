@@ -1364,7 +1364,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
                     <Row className="mb-3">
                       <Col md={4}>
                         <Form.Group>
-                          <Form.Label className="fw-semibold">Fecha de Cancelación General</Form.Label>
+                          <Form.Label className="fw-semibold">Fecha de expiración general</Form.Label>
                           <Form.Control
                             type="date"
                             value={fechaCancelacionGeneral}
@@ -2152,7 +2152,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
               <Row>
               <Col md={4}>
                   <Form.Group className="fw-semibold">
-                    <Form.Label>Fecha Cancelación</Form.Label>
+                    <Form.Label>Fecha de expiración</Form.Label>
                     <Form.Control
                           type="date"
                           value={currentEditMember.fecha_cancelacion || ""}

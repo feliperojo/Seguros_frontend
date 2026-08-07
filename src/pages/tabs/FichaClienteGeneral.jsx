@@ -623,7 +623,7 @@ export default function FichaClienteGeneral() {
                         </Badge>
                         {fechaEstadoPoliza && (
                           <div className="mt-1 text-muted" style={{ fontSize: "0.7rem" }}>
-                            {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de cancelación: "}
+                            {tipoFechaEstadoPoliza === "cancelacion" && "Fecha de expiración: "}
                             {tipoFechaEstadoPoliza === "retiro" && "Fecha de retiro: "}
                             {!tipoFechaEstadoPoliza && "Fecha: "}
                             {formatDate(fechaEstadoPoliza)}

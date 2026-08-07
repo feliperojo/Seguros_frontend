@@ -49,6 +49,8 @@ const FIELD_LABELS = {
   compania: "Compañía",
   precio: "Precio",
   tipo_pago: "Tipo de pago",
+  fecha_cancelacion: "Fecha de expiración",
+  fecha_retiro: "Fecha de retiro",
 };
 
 const CLIENTE_FIELD_LABELS = {

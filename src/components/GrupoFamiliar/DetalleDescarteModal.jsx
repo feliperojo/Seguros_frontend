@@ -41,6 +41,8 @@ export default function DetalleDescarteModal({
     null;
   const nota = (meta?.nota || "").trim();
   const motivoTexto = (registro?.motivo || "").trim();
+  const usuario =
+    (registro?.created_by_name || registro?.usuario || "").trim() || null;
 
   return (
     <Modal show={show} onHide={onHide} centered size="md">
@@ -80,6 +82,17 @@ export default function DetalleDescarteModal({
               <div className="fs-6" style={{ whiteSpace: "pre-wrap" }}>
                 {nota || (
                   <span className="text-muted">Sin nota adicional</span>
+                )}
+              </div>
+            </div>
+
+            <div className="mb-3">
+              <div className="text-muted small text-uppercase fw-semibold mb-1">
+                Usuario
+              </div>
+              <div className="fs-6">
+                {usuario || (
+                  <span className="text-muted">No registrado</span>
                 )}
               </div>
             </div>

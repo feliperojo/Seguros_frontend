@@ -97,7 +97,7 @@ const FIELD_LABELS = {
   precio: "Precio",
   ano_cobertura: "Año de cobertura",
   fecha_activacion: "Fecha de activación",
-  fecha_cancelacion: "Fecha de cancelación",
+  fecha_cancelacion: "Fecha de expiración",
   fecha_retiro: "Fecha de retiro",
   elegibilidad: "Elegibilidad",
   nombre: "Nombre",

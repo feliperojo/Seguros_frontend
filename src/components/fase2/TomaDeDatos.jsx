@@ -2501,7 +2501,7 @@ const activeNormalized = useMemo(
 
                             {m.fecha_cancelacion && (
                               <>
-                                <ConfigField label="Fecha de Cancelación">
+                                <ConfigField label="Fecha de expiración">
                                   <MdyDashDateInput
                                     size="sm"
                                     valueIso={(m.fecha_cancelacion || "").slice(0, 10)}
