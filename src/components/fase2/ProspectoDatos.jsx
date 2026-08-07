@@ -25,6 +25,7 @@ import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 import MdyDashDateInput from "../common/MdyDashDateInput";
+import { puedeEditarParentescoOEliminarCobertura } from "../../constants/estadosGrupoFamiliar";
 
 
 /* ---------- Helpers de UI ---------- */
@@ -958,11 +959,10 @@ const sortedMembers = familyMembers
                   : member.id 
                     ? `member-${member.id}` 
                     : `temp-${index}`;
-                const currentState = (estadoActual || "").toUpperCase();
-                const canEditParentesco =
-                  !readOnly &&
-                  currentState !== "TERMINADO" &&
-                  currentState !== "GRUPO_FAMILIAR";
+                const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
+                  estadoActual,
+                  { readOnly }
+                );
 
                 return (
                   <div key={uniqueKey} className="col-md-12 mb-3">
@@ -995,7 +995,7 @@ const sortedMembers = familyMembers
                         </div>
                         <CoberturaDeleteButton
     member={member}
-    readOnly={readOnly}
+    readOnly={!canEditParentesco}
     service={GrupoFamiliarService}     // 👈 usa el service con DELETE correcto
     removeLocal={removeMemberLocal}    // 👈 limpia el estado
     // allowDeleteTomador={false} // opcional

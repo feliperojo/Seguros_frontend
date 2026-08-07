@@ -88,6 +88,91 @@ export function labelEstadoGrupoParaDisplay(codigoOrNombre) {
   return raw;
 }
 
+/**
+ * Hasta estado 5 (INSCRIPCION_INI) se puede cambiar parentesco/tipo y eliminar cobertura.
+ * Desde estado 6 (GRUPO_FAMILIAR / Terminado) o Descartado queda bloqueado.
+ */
+export const ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA = [
+  "GRUPO_FAMILIAR",
+  "TERMINADO",
+  "DESCARTADO",
+];
+
+/**
+ * True si aún se puede editar parentesco/tipo o eliminar cobertura (estados 1–5).
+ */
+export function puedeEditarParentescoOEliminarCobertura(
+  estadoCodigo,
+  { readOnly = false } = {}
+) {
+  if (readOnly) return false;
+  const code = String(estadoCodigo || "")
+    .trim()
+    .toUpperCase();
+  return !ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA.includes(code);
+}
+
+/** IDs de catálogo que exigen clave de super admin para eliminar (Terminado / Descartado). */
+export const ESTADOS_GRUPO_IDS_DELETE_REQUIERE_ADMIN = [6, 7];
+
+/** Códigos equivalentes (más robustos si los IDs difieren entre ambientes). */
+export const ESTADOS_GRUPO_CODIGOS_DELETE_REQUIERE_ADMIN = [
+  "GRUPO_FAMILIAR",
+  "DESCARTADO",
+];
+
+/**
+ * True si eliminar el grupo requiere clave del super administrador.
+ * Estados 1–5: libre. Estados 6–7 (Terminado / Descartado): protegidos.
+ */
+export function grupoFamiliarDeleteRequiereAdmin(grupo) {
+  if (!grupo) return false;
+
+  const estadoId = Number(grupo.estado_id);
+  if (ESTADOS_GRUPO_IDS_DELETE_REQUIERE_ADMIN.includes(estadoId)) {
+    return true;
+  }
+
+  const codigo = String(grupo.estado_codigo || "")
+    .trim()
+    .toUpperCase();
+  return ESTADOS_GRUPO_CODIGOS_DELETE_REQUIERE_ADMIN.includes(codigo);
+}
+
+/**
+ * En el listado, estados 1–5 (Prospecto … Inscripción) no muestran personas en cobertura
+ * (solo efecto visual; no altera datos).
+ */
+export const ESTADOS_GRUPO_IDS_OCULTAR_COBERTURA_LISTADO = [1, 2, 3, 4, 5];
+
+export const ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+  "TOMA_DATOS",
+  "INSCRIPCION_INI",
+];
+
+export function ocultarPersonasCoberturaEnListado(grupo) {
+  if (!grupo) return false;
+
+  const estadoId = Number(grupo.estado_id);
+  if (ESTADOS_GRUPO_IDS_OCULTAR_COBERTURA_LISTADO.includes(estadoId)) {
+    return true;
+  }
+
+  const codigo = String(grupo.estado_codigo || "")
+    .trim()
+    .toUpperCase();
+  return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
+}
+
+/** Valor de P. COBERTURA solo para render del listado. */
+export function personasCoberturaParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) return 0;
+  return grupo?.personas_cobertura || 0;
+}
+
 export function ordenarResumenGrupos(resumenEstados = []) {
   const estadosProcesados = Array.isArray(resumenEstados)
     ? resumenEstados.map((item) => ({

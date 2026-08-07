@@ -23,10 +23,12 @@ import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
 import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
+import CoberturaDeleteButton from "./CoberturaDeleteButton";
 
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
+import { puedeEditarParentescoOEliminarCobertura } from "../../constants/estadosGrupoFamiliar";
 
 // Utils
 import {
@@ -951,6 +953,15 @@ const activeNormalized = useMemo(
     [setFamilyMembers]
   );
 
+  const removeMemberLocal = useCallback(
+    (memberId) => {
+      setFamilyMembers((prev) =>
+        (prev ?? []).filter((m) => (m.id ?? null) !== memberId)
+      );
+    },
+    [setFamilyMembers]
+  );
+
   const handleAdd = () => {
     if (!canAdd) return onBlockedAddClick?.();
     setEditingMember(null);
@@ -1455,11 +1466,10 @@ const activeNormalized = useMemo(
     const isInactive = m.activo === false;
     // Si está inactiva, bloquear todos los campos
     const isReadOnly = readOnly || isInactive;
-    const currentState = (estadoActual || "").toUpperCase();
-    const canEditParentesco =
-      !isReadOnly &&
-      currentState !== "TERMINADO" &&
-      currentState !== "GRUPO_FAMILIAR";
+    const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
+      estadoActual,
+      { readOnly: isReadOnly }
+    );
     
     // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
     const isMedicareOrMedicaid = isMedicareOrMedicaidEstado(m.estado_cobertura);
@@ -1582,6 +1592,15 @@ const activeNormalized = useMemo(
                   className="d-flex align-items-center justify-content-end ms-3"
                   style={{ minWidth: leftRightWidth }}
                 >
+                  {canEditParentesco && (
+                    <CoberturaDeleteButton
+                      member={m}
+                      readOnly={!canEditParentesco}
+                      service={GrupoFamiliarService}
+                      removeLocal={removeMemberLocal}
+                      className="btn btn-outline-danger btn-sm me-2"
+                    />
+                  )}
                   <div className="text-start me-3">
                     <div className="small">
                       <span className="text-muted">Edad: </span>
