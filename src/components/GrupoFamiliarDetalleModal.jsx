@@ -325,7 +325,15 @@ const GrupoFamiliarDetalleModal = ({ show, onHide, grupo, getTomadorNombre }) =>
                   <div className="row">
                     <div className="col-md-12 mt-3">
                       <p className="text-muted mb-1">📝 Nota</p>
-                      <h6>{grupo.nota || "-"}</h6>
+                      {grupo.nota ? (
+                        <div
+                          className="small"
+                          style={{ whiteSpace: "pre-wrap" }}
+                          dangerouslySetInnerHTML={{ __html: grupo.nota }}
+                        />
+                      ) : (
+                        <h6>-</h6>
+                      )}
                     </div>
                   </div>    
                 </div>
