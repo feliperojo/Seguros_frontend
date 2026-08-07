@@ -18,6 +18,7 @@ import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCobertura
 import ReactivacionCoberturasModal from "../coberturas/ReactivacionCoberturasModal";
 import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
 import GroupTags from "../GroupTags";
+import GrupoNotaEditor from "../GrupoFamiliar/GrupoNotaEditor";
 
 
 const Prospectogrupo = ({
@@ -546,15 +547,11 @@ const Prospectogrupo = ({
                         <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                           Nota
                         </label>
-                        <textarea
-                          className="form-control"
-                          name="nota"
-                          rows={3}
+                        <GrupoNotaEditor
                           value={formData.nota || ""}
                           onChange={onChange}
                           disabled={readOnly}
                           placeholder="Notas del grupo familiar..."
-                          style={{ fontSize: '0.9rem', resize: 'vertical' }}
                         />
                       </div>
                     </div>
