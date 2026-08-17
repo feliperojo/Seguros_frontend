@@ -26,7 +26,11 @@ import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 import MdyDashDateInput from "../common/MdyDashDateInput";
-import { puedeEditarParentescoOEliminarCobertura } from "../../constants/estadosGrupoFamiliar";
+import {
+  puedeEditarParentescoOEliminarCobertura,
+  esProcesoInicialGrupoFamiliar,
+  opcionesEstadoCoberturaPorProceso,
+} from "../../constants/estadosGrupoFamiliar";
 
 
 /* ---------- Helpers de UI ---------- */
@@ -190,7 +194,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;   // ✅ NUEVO
 
 /* ---------- Subcomponente: Acordeón editable por miembro ---------- */
-const MemberAccordionForm = ({ member, readOnly, onChange }) => {
+const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
   // Estado para controlar si el acordeón está abierto o cerrado
   const [isOpen, setIsOpen] = useState(false);
   
@@ -510,10 +514,14 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                 disabled={readOnly}
                 onChange={handle("estado_cobertura")}
               >
-                <option value="Sí">Sí</option>
-                <option value="No">No</option>
-                <option value="Medicare">Medicare</option>
-                <option value="Medicaid">Medicaid</option>
+                {opcionesEstadoCoberturaPorProceso(
+                  estadoActual,
+                  member.estado_cobertura
+                ).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -961,6 +969,8 @@ const sortedMembers = familyMembers
                   estadoActual,
                   { readOnly, estadoId }
                 );
+                const ocultarEstadoCobertura =
+                  esProcesoInicialGrupoFamiliar(estadoActual);
 
                 return (
                   <div key={uniqueKey} className="col-md-12 mb-3">
@@ -1007,7 +1017,11 @@ const sortedMembers = familyMembers
                           className="me-3 d-flex align-items-center justify-content-center"
                           style={{ width: 50 }}
                         >
-                          <UserCoverageIcon status={member.estado_cobertura} size={50} />
+                          <UserCoverageIcon
+                            status={member.estado_cobertura}
+                            estadoProceso={estadoActual}
+                            size={50}
+                          />
                         </div>
 
                         <div className="flex-grow-1 text-center">
@@ -1035,9 +1049,11 @@ const sortedMembers = familyMembers
                           <small className="text-muted d-block">
                             Género: {getMemberGenero(member) || ""}
                           </small>
-                          <small className="text-muted d-block">
-                            Cobertura: {member.estado_cobertura}
-                          </small>
+                          {!ocultarEstadoCobertura && (
+                            <small className="text-muted d-block">
+                              Cobertura: {member.estado_cobertura}
+                            </small>
+                          )}
                         </div>
                       </div>
 
@@ -1046,6 +1062,7 @@ const sortedMembers = familyMembers
 <MemberAccordionForm
   member={member}
   readOnly={readOnly}
+  estadoActual={estadoActual}
   onChange={(patch) => updateMemberLocal(member.id, patch)}
 />
 
@@ -1068,6 +1085,7 @@ const sortedMembers = familyMembers
         canAdd={canAdd}
         readOnly={readOnly}
         isProspecto={isProspecto}
+        estadoActual={estadoActual}
         onCreateLocal={createLocal}
         onUpdateLocal={updateLocal}
         onCreateRemote={createRemote}

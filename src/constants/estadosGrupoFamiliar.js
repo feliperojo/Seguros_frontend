@@ -103,6 +103,81 @@ export const ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA = [
 
 export const ESTADOS_GRUPO_IDS_PERMITEN_PARENTESCO_COBERTURA = [1, 2, 3, 4, 5];
 
+/** Estados 1–3: cotización / proceso inicial (aún no hay póliza real). */
+export const ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+];
+
+/** True en Prospecto, Cotización o Seguimiento. */
+export function esProcesoInicialGrupoFamiliar(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL.includes(code);
+}
+
+/**
+ * True cuando el GF ya está en Terminado (GRUPO_FAMILIAR).
+ * Ahí sí aplica mostrar datos de póliza en ficha.
+ */
+export function esGrupoFamiliarTerminado(estadoCodigoOrNombre) {
+  return normalizeEstadoGrupoCodigo(estadoCodigoOrNombre) === "GRUPO_FAMILIAR";
+}
+
+/**
+ * Etapas 1–5: hay grupo en proceso, pero aún no es póliza/producto terminado.
+ */
+export function esProcesoAntesDeTerminado(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA.includes(code);
+}
+
+/** Opciones básicas de estado_cobertura (estados 1–4). */
+export const ESTADOS_COBERTURA_OPCIONES_BASICAS = [
+  { value: "Sí", label: "Sí" },
+  { value: "No", label: "No" },
+];
+
+/** Opciones completas desde Inscripción / Confirmación (estado 5). */
+export const ESTADOS_COBERTURA_OPCIONES_COMPLETAS = [
+  ...ESTADOS_COBERTURA_OPCIONES_BASICAS,
+  { value: "Medicare", label: "Medicare" },
+  { value: "Medicaid", label: "Medicaid" },
+];
+
+/**
+ * Medicare/Medicaid solo desde estado 5 (INSCRIPCION_INI) en adelante.
+ * Estados 1–4: únicamente Sí / No.
+ */
+export function permiteMedicareMedicaidEnCobertura(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return code === "INSCRIPCION_INI" || code === "GRUPO_FAMILIAR";
+}
+
+/**
+ * Lista de opciones para el select de estado_cobertura según etapa del GF.
+ * Si el valor actual es Medicare/Medicaid y aún no aplica la etapa, se conserva
+ * en la lista para no romper el valor guardado.
+ */
+export function opcionesEstadoCoberturaPorProceso(
+  estadoCodigoOrNombre,
+  valorActual = null
+) {
+  const base = permiteMedicareMedicaidEnCobertura(estadoCodigoOrNombre)
+    ? ESTADOS_COBERTURA_OPCIONES_COMPLETAS
+    : ESTADOS_COBERTURA_OPCIONES_BASICAS;
+
+  const actual = String(valorActual || "").trim();
+  if (!actual) return base;
+
+  const yaIncluida = base.some(
+    (o) => o.value.toLowerCase() === actual.toLowerCase()
+  );
+  if (yaIncluida) return base;
+
+  return [...base, { value: actual, label: actual }];
+}
+
 /** @deprecated usar ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA */
 export const ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA = [
   "GRUPO_FAMILIAR",

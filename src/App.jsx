@@ -30,6 +30,8 @@ import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
 import ReporteCumpleanosPage from "./pages/ReporteCumpleanosPage";
 import ReporteMediosPagoPage from "./pages/ReporteMediosPagoPage";
 import ReporteCoberturasCanceladasRetiradasPage from "./pages/ReporteCoberturasCanceladasRetiradasPage";
+import ReporteGruposDescartadosPage from "./pages/ReporteGruposDescartadosPage";
+import ReporteGruposInactivosPage from "./pages/ReporteGruposInactivosPage";
 import ReporteEstadoCoberturasPage from "./pages/ReporteEstadoCoberturasPage";
 import DocumentsReport from "./pages/DocumentsReport";
 import DetalleClientePage from "./pages/DetalleClientePage";
@@ -115,6 +117,8 @@ const App = () => {
         <Route path="/grupofamiliar/lista" element={<GruposFamiliaresListado/>}/>
         <Route path="/grupofamiliar/lista-etiquetas" element={<GruposFamiliaresConTags/>}/>
         <Route path="/grupofamiliar/reporte-clasificado" element={<ReporteGruposFamiliaresClasificados/>}/>
+        <Route path="/grupofamiliar/reporte-descartados" element={<ReporteGruposDescartadosPage />} />
+        <Route path="/grupofamiliar/reporte-inactivos" element={<ReporteGruposInactivosPage />} />
         <Route path="/clientes/lista" element={<ListaClientes/>}/>
         <Route path="/grupofamiliar/crear" element={<GrupofamiliarCreate />} />
         <Route path="/grupo-familiar/:id/editar" element={<GrupoFamiliarLegacyEditRedirect />} />

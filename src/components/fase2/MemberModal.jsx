@@ -5,6 +5,7 @@ import { normalizeDateForInput } from "../../utils/formatters";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import apiRequest from "../../services/api";
 import { getListFromApi } from "../../utils/apiResponse";
+import { opcionesEstadoCoberturaPorProceso } from "../../constants/estadosGrupoFamiliar";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -52,6 +53,7 @@ export default function MemberModalCreate({
   defaultCoberturaTipo = "Plan de salud",
   readOnly = false,
   isProspecto = false,
+  estadoActual = null,
   onCreateLocal,
   onUpdateLocal,
   onCreateRemote,
@@ -486,10 +488,14 @@ export default function MemberModalCreate({
                 <div className="col-md-3">
                   <label className="form-label">¿Está en Cobertura?</label>
                   <select className="form-select" name="estado_cobertura" value={data.estado_cobertura} onChange={onChange} disabled={readOnly}>
-                    <option value="Sí">Sí</option>
-                    <option value="No">No</option>
-                    <option value="Medicare">Medicare</option>
-                    <option value="Medicaid">Medicaid</option>
+                    {opcionesEstadoCoberturaPorProceso(
+                      estadoActual,
+                      data.estado_cobertura
+                    ).map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

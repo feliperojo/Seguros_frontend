@@ -28,7 +28,10 @@ import CoberturaDeleteButton from "./CoberturaDeleteButton";
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
-import { puedeEditarParentescoOEliminarCobertura } from "../../constants/estadosGrupoFamiliar";
+import {
+  puedeEditarParentescoOEliminarCobertura,
+  opcionesEstadoCoberturaPorProceso,
+} from "../../constants/estadosGrupoFamiliar";
 
 // Utils
 import {
@@ -1561,6 +1564,7 @@ const activeNormalized = useMemo(
   fechaCancelacion={m.fecha_cancelacion}
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
   fueRenovado={!!m.fue_renovado}
+  estadoProceso={estadoActual}
   size={50}
 />
 
@@ -2226,10 +2230,14 @@ const activeNormalized = useMemo(
                                 disabled={isReadOnly}
                               >
                                 <option value="">Seleccione…</option>
-                                <option value="Sí">Sí</option>
-                                <option value="No">No</option>
-                                <option value="Medicare">Medicare</option>
-                                <option value="Medicaid">Medicaid</option>
+                                {opcionesEstadoCoberturaPorProceso(
+                                  estadoActual,
+                                  m.estado_cobertura
+                                ).map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
                               </select>
                             </ConfigField>
 
@@ -2439,17 +2447,21 @@ const activeNormalized = useMemo(
                             {shouldShowCoverageField("estado_cobertura") && (
                               <ConfigField label="Cobertura">
                                 <select
-                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duración-200 shadow-sm"
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="estado_cobertura"
                                   value={m.estado_cobertura || ""}
                                   onChange={onChange}
                                   disabled={isReadOnly}
                                 >
                                   <option value="">Seleccione…</option>
-                                  <option value="Sí">Sí</option>
-                                  <option value="No">No</option>
-                                  <option value="Medicare">Medicare</option>
-                                  <option value="Medicaid">Medicaid</option>
+                                  {opcionesEstadoCoberturaPorProceso(
+                                    estadoActual,
+                                    m.estado_cobertura
+                                  ).map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
                                 </select>
                               </ConfigField>
                             )}
@@ -2674,6 +2686,7 @@ const activeNormalized = useMemo(
         defaultCoberturaTipo={defaultCoberturaTipo}
         readOnly={readOnly}
         isProspecto={isProspecto}
+        estadoActual={estadoActual}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}

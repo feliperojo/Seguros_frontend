@@ -5,7 +5,7 @@ import {
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
   FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock,
-  FaBook, FaColumns, FaCreditCard, FaExchangeAlt
+  FaBook, FaColumns, FaCreditCard, FaExchangeAlt, FaBan, FaUserSlash
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -117,7 +117,10 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
   useEffect(() => {
     if (location.pathname.toLowerCase().includes('/clientes')) {
       setExpandedMenu('clientes');
-    } else if (location.pathname.includes('/Grupofamiliar') || location.pathname.startsWith('/admin/renovaciones')) {
+    } else if (
+      location.pathname.toLowerCase().includes('/grupofamiliar') ||
+      location.pathname.startsWith('/admin/renovaciones')
+    ) {
       setExpandedMenu('grupos');
     } else if (location.pathname.toLowerCase().includes('/informes') || location.pathname.toLowerCase().includes('/auditorias')) {
       setExpandedMenu('informes');
@@ -142,7 +145,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
 
   // Verifica si un enlace está activo
   const isActive = (path) => {
-    return location.pathname === path;
+    return location.pathname.toLowerCase() === String(path).toLowerCase();
   };
 
   return (
@@ -225,7 +228,7 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         {/* Grupo Familiar - Con submenú */}
         <div className="nav-item">
           <div
-            className={`nav-link ${location.pathname.includes('/Grupofamiliar') || location.pathname.startsWith('/admin/renovaciones') ? 'active' : ''}`}
+            className={`nav-link ${location.pathname.toLowerCase().includes('/grupofamiliar') || location.pathname.startsWith('/admin/renovaciones') ? 'active' : ''}`}
             onClick={(e) => isOpen && toggleSubmenu('grupos', e)}
           >
             <FaProjectDiagram />
@@ -251,6 +254,12 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
               </Link>
               <Link to="/Grupofamiliar/reporte-clasificado" className={`submenu-link ${isActive('/Grupofamiliar/reporte-clasificado') ? 'active' : ''}`}>
                 <FaChartBar /> Reporte Clasificado
+              </Link>
+              <Link to="/grupofamiliar/reporte-descartados" className={`submenu-link ${isActive('/grupofamiliar/reporte-descartados') ? 'active' : ''}`}>
+                <FaBan /> Grupos descartados
+              </Link>
+              <Link to="/grupofamiliar/reporte-inactivos" className={`submenu-link ${isActive('/grupofamiliar/reporte-inactivos') ? 'active' : ''}`}>
+                <FaUserSlash /> Grupos inactivos
               </Link>
               <Link to="/Grupofamiliar/prospecto" className={`submenu-link ${isActive('/Grupofamiliar/prospecto') ? 'active' : ''}`}>
                 <FaUserFriends /> Cotizaciones
