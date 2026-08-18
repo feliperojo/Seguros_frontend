@@ -27,6 +27,7 @@ const esRetiroReal = (fechaRetiro, c = {}, fallback = {}) => {
 
 export const isActiveCoverage = (m = {}) => {
   if (m.activo === false) return false;
+  if (hasFecha(m.fecha_anulacion)) return false;
   if (esRetiroReal(m.fecha_retiro, m, m)) return false;
 
   const list = Array.isArray(m.coberturas)
@@ -61,8 +62,9 @@ export const countTaxesMembers = (members = []) =>
   members.filter((m) => {
     const isActive = m.activo !== false;
     const notRetired = !esRetiroReal(m.fecha_retiro, m, m);
+    const notAnulado = !hasFecha(m.fecha_anulacion);
     const inTaxes = isInTaxes(m);
-    return isActive && notRetired && inTaxes;
+    return isActive && notRetired && notAnulado && inTaxes;
   }).length;
 
 export const countCoverageMembers = (members = []) =>

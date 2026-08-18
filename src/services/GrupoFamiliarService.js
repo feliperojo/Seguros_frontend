@@ -284,6 +284,16 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return await apiRequest(`${BASE_COB}/${coberturaId}`, "DELETE", null, headers);
   },
 
+  anularCobertura: async (coberturaId, payload = {}, headers = {}) => {
+    if (!coberturaId) throw new Error("Cobertura ID es requerido para anular.");
+    return await apiRequest(
+      `${BASE_COB}/${coberturaId}/anular`,
+      "POST",
+      payload,
+      headers
+    );
+  },
+
   updateCobertura: async (coberturaId, payload, headers = {}) => {
     if (!coberturaId) throw new Error("Cobertura ID es requerido para actualizar.");
     return await apiRequest(`${BASE_COB}/${coberturaId}`, "PUT", payload, headers);

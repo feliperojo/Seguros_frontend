@@ -3,6 +3,7 @@ import { Modal, Button, Form, Row, Col, Badge, InputGroup } from "react-bootstra
 import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { formatDateForDisplay } from "../utils/formatters";
+import { esInscripcionPendienteDeActivacion } from "../utils/coberturaAnulacion";
 
 // Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
 const normalizeDate = (dateString) => {
@@ -176,7 +177,9 @@ const RetiroCancelacionModal = ({
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
       const coberturasActivas = grupoFamiliar.coberturas.filter(
-        c => c.estado_cobertura === "Activa" || c.activo === true
+        (c) =>
+          (c.estado_cobertura === "Activa" || c.activo === true) &&
+          !esInscripcionPendienteDeActivacion(c)
       );
 
       const coberturasIniciales = coberturasActivas.map(c => ({

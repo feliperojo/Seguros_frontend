@@ -105,8 +105,24 @@ export function derivarEstadoPoliza(c) {
         ? String(c.fecha_cancelacion)
         : null;
 
+    const fechaAnulacionValida =
+      c?.fecha_anulacion &&
+      String(c.fecha_anulacion).trim() &&
+      String(c.fecha_anulacion) !== "null"
+        ? String(c.fecha_anulacion)
+        : null;
+
     const coberturaDefinida =
       c?.cobertura_definida != null ? String(c.cobertura_definida).trim() : "";
+
+    if (fechaAnulacionValida || coberturaDefinida === "Anulado") {
+      return {
+        estado: "Anulado",
+        fecha: fechaAnulacionValida,
+        tipoFecha: "anulacion",
+      };
+    }
+
     if (coberturaDefinida) {
       return {
         estado: coberturaDefinida,
@@ -185,6 +201,7 @@ export function esElegibleParaCopiarEntreMiembros(m = {}) {
   if (!toBoolFlag(m.activo, true)) return false;
   if (hasFechaCobertura(m.fecha_retiro)) return false;
   if (hasFechaCobertura(m.fecha_cancelacion)) return false;
+  if (hasFechaCobertura(m.fecha_anulacion)) return false;
   return true;
 }
 
@@ -232,6 +249,7 @@ export function clearedCoverageFieldsForMedicareMedicaid() {
 export function estadoPolizaBadgeVariant(estado) {
   if (estado === "Vigente") return "success";
   if (estado === "Póliza Cancelada") return "warning";
+  if (estado === "Anulado") return "warning";
   if (
     estado === "Sin cobertura" ||
     estado === "No" ||

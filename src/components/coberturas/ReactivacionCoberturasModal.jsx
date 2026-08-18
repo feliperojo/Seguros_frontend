@@ -5,6 +5,7 @@ import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { formatDateForDisplay } from "../../utils/formatters";
 import { COBERTURA_DEFINIDA } from "../../utils/coberturaDefinida";
+import { tieneFechaAnulacion } from "../../utils/coberturaAnulacion";
 
 /**
  * ReactivacionCoberturasModal
@@ -120,10 +121,17 @@ const ReactivacionCoberturasModal = ({
 
       // Extraer coberturas retiradas (vigente === false y retiro)
       // Excluimos las que sean canceladas para evitar duplicados en la tabla.
-      const coberturasRetiradas = lista.filter((c) => esCoberturaRetirada(c) && !esCoberturaCancelada(c));
+      const coberturasRetiradas = lista.filter(
+        (c) =>
+          esCoberturaRetirada(c) &&
+          !esCoberturaCancelada(c) &&
+          !tieneFechaAnulacion(c)
+      );
 
       // Extraer coberturas canceladas (activo: true y vigente: false + fecha_cancelacion)
-      const coberturasCanceladas = lista.filter((c) => esCoberturaCancelada(c));
+      const coberturasCanceladas = lista.filter(
+        (c) => esCoberturaCancelada(c) && !tieneFechaAnulacion(c)
+      );
 
       // Mostramos ambas en la tabla; la selección de canceladas depende de reactivarCanceladas
       setCoberturas([...coberturasRetiradas, ...coberturasCanceladas]);

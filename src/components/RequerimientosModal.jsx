@@ -24,7 +24,7 @@ const estadosOptions = [
 const documentosDisponibles = [
   "Status",
   "Ingresos",
-  "Medicare",
+  "Medicare (mayor de 65 años)",
   "Medicaid",
   // Agrega otros documentos necesarios aquí
 ];
@@ -49,6 +49,29 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     if (!valor) return "-";
     const formatted = formatDateMMDDYYYY(String(valor).split("T")[0]);
     return formatted || "-";
+  };
+
+  const esEstadoCompletado = (estado) =>
+    String(estado || "").trim().toLowerCase() === "completado";
+
+  /** Fecha de cierre: fecha_envio (al pasar a Completado) o última actualización. */
+  const fechaCierreRequerimiento = (req) =>
+    req?.fecha_envio || req?.updated_at || req?.updatedAt || "";
+
+  const renderFechaCierre = (req, estadoActual) => {
+    if (!esEstadoCompletado(estadoActual)) return null;
+    const yaEstabaCompletado = esEstadoCompletado(req?.estado);
+    const fecha = yaEstabaCompletado
+      ? fechaCierreRequerimiento(req)
+      : getLocalISODate();
+    return (
+      <div
+        className="small text-muted mt-1"
+        title="Fecha en que se completó el requerimiento"
+      >
+        {formatReqDateCell(fecha)}
+      </div>
+    );
   };
 
   const [coberturas, setCoberturas] = useState([]);
@@ -403,27 +426,33 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                         <td>{formatReqDateCell(r.fecha_solicitud)}</td>
                         <td>
                           {editingId === r.id ? (
-                            <Form.Control
-                              as="select"
-                              value={editableRequerimiento?.estado || "Pendiente"}
-                              onChange={(e) =>
-                                setEditableRequerimiento({
-                                  ...editableRequerimiento,
-                                  estado: e.target.value
-                                })
-                              }
-                              size="sm"
-                            >
-                              {estadosOptions.map((estado) => (
-                                <option key={estado.value} value={estado.value}>
-                                  {estado.label}
-                                </option>
-                              ))}
-                            </Form.Control>
+                            <>
+                              <Form.Control
+                                as="select"
+                                value={editableRequerimiento?.estado || "Pendiente"}
+                                onChange={(e) =>
+                                  setEditableRequerimiento({
+                                    ...editableRequerimiento,
+                                    estado: e.target.value
+                                  })
+                                }
+                                size="sm"
+                              >
+                                {estadosOptions.map((estado) => (
+                                  <option key={estado.value} value={estado.value}>
+                                    {estado.label}
+                                  </option>
+                                ))}
+                              </Form.Control>
+                              {renderFechaCierre(r, editableRequerimiento?.estado)}
+                            </>
                           ) : (
-                            <Badge bg={estados[r.estado] || "secondary"}>
-                              {r.estado}
-                            </Badge>
+                            <>
+                              <Badge bg={estados[r.estado] || "secondary"}>
+                                {r.estado}
+                              </Badge>
+                              {renderFechaCierre(r, r.estado)}
+                            </>
                           )}
                         </td>
                         <td>{r.observaciones}</td>

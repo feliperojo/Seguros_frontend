@@ -10,6 +10,7 @@ import {
   OPCIONES_COBERTURA_RETIRO,
   badgeCoberturaDefinida,
 } from "../../utils/coberturaDefinida";
+import { esInscripcionPendienteDeActivacion } from "../../utils/coberturaAnulacion";
 import { vigenteDesdeEstadoCobertura } from "../../utils/estadoPoliza";
 
 /**
@@ -330,7 +331,9 @@ const CambioVidaCancelacionModal = ({
       
       // Extraer coberturas vigentes (activas)
       const coberturasVigentes = (grupoData?.coberturas || []).filter(
-        (c) => c.activo === true || c.activo === "true" || c.activo === 1
+        (c) =>
+          (c.activo === true || c.activo === "true" || c.activo === 1) &&
+          !esInscripcionPendienteDeActivacion(c)
       );
 
       setCoberturas(coberturasVigentes);
