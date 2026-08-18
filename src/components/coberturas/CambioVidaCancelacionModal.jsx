@@ -229,7 +229,7 @@ const CambioVidaCancelacionModal = ({
 
   /**
    * Retiro de cobertura activa (Sí): UI de retiro (F. retiro / motivo / obs).
-   * Internamente no se toca fecha_cancelacion ni campos de cancelación.
+   * Al confirmar, fecha_cancelacion se copia de F. retiro (póliza vigente).
    */
   const esRetiroDeCoberturaActiva = (cobertura, datos) =>
     puedeCancelarPoliza(cobertura) && datos?.renovar === false;
@@ -305,7 +305,7 @@ const CambioVidaCancelacionModal = ({
       fecha_retiro: requiereFechaRetiro(cobertura, datos)
         ? fechaRetiroGlobal || datos.fecha_retiro
         : datos.fecha_retiro,
-      // Cancelación solo en flujo de cancelar póliza; en retiro no se inventa ni se pisa.
+      // Cancelación explícita usa F. expiración; en retiro de Sí se copia F. retiro al persistir.
       fecha_cancelacion: requiereFechaCancelacionNueva(cobertura, datos)
         ? fechaCancelacionGlobal || datos.fecha_cancelacion
         : datos.fecha_cancelacion,
@@ -661,24 +661,31 @@ const CambioVidaCancelacionModal = ({
 
       // Retiro: si ya era No/Medicare/Medicaid, conservar ese estado; si no → No.
       // vigente siempre coherente con estado_cobertura (false para No/Medicare/Medicaid).
-      // Importante: no enviar fecha_cancelacion (ni inventarla desde F. retiro):
-      // vacía o llena, el backend/local la dejan quieta.
       const estadoActualRaw = getEstadoCoberturaRaw(cobertura);
       const estadoRetiro = soloRetiro && !esEstadoEnCobertura(cobertura) && estadoActualRaw
         ? estadoActualRaw
         : "No";
       const vigenteRetiro = vigenteDesdeEstadoCobertura(estadoRetiro);
-      return {
+      const fechaRetiro = datos.fecha_retiro || null;
+      const payloadRetiro = {
         ...base,
         renovar: false,
         activo: false,
         vigente: vigenteRetiro !== null ? vigenteRetiro : false,
         estado_cobertura: estadoRetiro,
         cobertura_definida: datos.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO,
-        fecha_retiro: datos.fecha_retiro || null,
+        fecha_retiro: fechaRetiro,
         motivo_retiro: datos.motivo_retiro || null,
         nota_retiro: datos.nota_retiro || null,
       };
+
+      // Solo si estaba en cobertura Sí: fecha_cancelacion = F. retiro del usuario.
+      // No/Medicare/Medicaid o ya cancelada: no se envía ni se pisa.
+      if (esEstadoEnCobertura(cobertura) && !yaCancelada && fechaRetiro) {
+        payloadRetiro.fecha_cancelacion = fechaRetiro;
+      }
+
+      return payloadRetiro;
     }).filter(Boolean);
 
   // Manejar envío del formulario
@@ -741,7 +748,8 @@ const CambioVidaCancelacionModal = ({
         activo: d.activo,
         vigente: d.vigente,
         estado_cobertura: d.estado_cobertura,
-        fecha_retiro: d.fecha_retiro
+        fecha_retiro: d.fecha_retiro,
+        fecha_cancelacion: d.fecha_cancelacion,
       })));
 
       await apiRequest("coberturas/cancelar", "POST", payload);
