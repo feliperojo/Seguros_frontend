@@ -789,18 +789,25 @@ const handleOpenViewModal = (cliente) => {
     const fechaRetiro = item?.fecha_retiro || item?.fechaRetiro || null;
     const vigente = item?.vigente;
     const activo = item?.activo;
+    const definida = String(item?.cobertura_definida || "").trim();
+    const esCanceladoDefinido = definida.toLowerCase() === "cancelado";
+    const esRetiroDefinido =
+      definida.toLowerCase() === "retirado" || definida.toLowerCase() === "terminado";
 
-    // Mantener criterio consistente con ReactivacionCoberturasModal:
-    // - Cancelada: vigente false + fecha_cancelacion + NO fecha_retiro
-    // - Retirada: vigente false + (activo false o fecha_retiro)
-    const esRetirada =
-      esVigenteFalse(vigente) &&
-      (esActivoFalse(activo) || isFechaValida(fechaRetiro));
-
+    // Cancelada: fecha_cancelacion + estado Cancelado (opción del retiro).
+    // Legacy sin definida: vigente false, activo true y fecha_cancelacion.
     const esCancelada =
-      esVigenteFalse(vigente) &&
       isFechaValida(fechaCancelacion) &&
-      !isFechaValida(fechaRetiro);
+      (esCanceladoDefinido ||
+        (!definida &&
+          esVigenteFalse(vigente) &&
+          !esActivoFalse(activo)));
+
+    const esRetirada =
+      !esCancelada &&
+      isFechaValida(fechaRetiro) &&
+      (esRetiroDefinido ||
+        (!definida && esVigenteFalse(vigente) && esActivoFalse(activo)));
 
     return {
       id: item?.id || item?.cobertura_id || `${item?.cliente_id || "x"}-${fechaCancelacion || fechaRetiro || Math.random()}`,

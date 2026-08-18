@@ -241,7 +241,8 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
             Coberturas Canceladas y Retiradas
           </h2>
           <p className="text-muted mb-0">
-            Historial completo de cancelaciones y retiros.{" "}
+            Historial completo de cancelaciones y retiros. Cancelados: fecha de
+            cancelación y estado Cancelado. Retiros: estado Retirado o Terminado.{" "}
             <Link to="/">Volver al panel principal</Link>
           </p>
         </div>
