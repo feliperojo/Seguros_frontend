@@ -190,8 +190,15 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
   useEffect(() => {
     const loadCompanies = async () => {
       try {
-        const list = await fetchCompanies();
-        setCompanies(Array.isArray(list) ? list : []);
+        const listRaw = await fetchCompanies();
+        const list = Array.isArray(listRaw) ? listRaw : [];
+        const sorted = [...list].sort((a, b) =>
+          String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
+            sensitivity: "base",
+            numeric: true,
+          })
+        );
+        setCompanies(sorted);
       } catch (err) {
         console.error("Error al cargar compañías:", err);
       }
