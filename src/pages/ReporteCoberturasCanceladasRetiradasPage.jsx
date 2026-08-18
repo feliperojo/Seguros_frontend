@@ -260,6 +260,15 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                   <th role="button" onClick={() => handleSort("nombre")}>
                     Nombre{sortIcon("nombre")}
                   </th>
+                  <th role="button" onClick={() => handleSort("compania")}>
+                    Compañía{sortIcon("compania")}
+                  </th>
+                  <th role="button" onClick={() => handleSort("codigo_poliza")}>
+                    Numero ID{sortIcon("codigo_poliza")}
+                  </th>
+                  <th role="button" onClick={() => handleSort("fecha_activacion")}>
+                    Fecha de activación{sortIcon("fecha_activacion")}
+                  </th>
                   <th role="button" onClick={() => handleSort("fecha_cancelacion")}>
                     Fecha de expiración{sortIcon("fecha_cancelacion")}
                   </th>
@@ -280,14 +289,14 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-5">
+                    <td colSpan={10} className="text-center py-5">
                       <Spinner animation="border" size="sm" className="me-2" />
                       Cargando informe...
                     </td>
                   </tr>
                 ) : data.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted py-5">
+                    <td colSpan={10} className="text-center text-muted py-5">
                       No hay coberturas para los filtros seleccionados
                     </td>
                   </tr>
@@ -296,6 +305,9 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                     <tr key={`${row.id}-${row.fecha_cancelacion || ""}-${row.fecha_retiro || ""}-${row.tipo}`}>
                       <td>{renderGrupoLink(row.grupo_familiar_id)}</td>
                       <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
+                      <td>{row.compania || "—"}</td>
+                      <td>{row.codigo_poliza || "—"}</td>
+                      <td>{formatDate(row.fecha_activacion)}</td>
                       <td>{formatDate(row.fecha_cancelacion)}</td>
                       <td>{formatDate(row.fecha_retiro)}</td>
                       <td>{row.concepto || "—"}</td>
