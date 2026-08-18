@@ -6,6 +6,15 @@ import ModalAdjuntos from '../components/ModalAdjuntos';
 import '../styles/RequerimientosAdmin.css';
 import { Helmet } from "react-helmet-async";
 import useToast from '../hooks/useToast';
+import { formatDateMMDDYYYY } from '../utils/formatters';
+import DateInputWithCalendar from '../components/common/DateInputWithCalendar';
+import {
+  esEstadoCompletado,
+  fechaCierreAlCompletar,
+  fechaCierreRequerimiento,
+  hoyIsoLocal,
+  isoDateOnly,
+} from '../utils/requerimientoFechas';
 
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaUserPlus, FaCog,
@@ -19,22 +28,6 @@ const estados = {
   Completado: { label: 'Completado', color: 'badge bg-success' },
 };
 
-const esEstadoCompletado = (estado) =>
-  String(estado || "").trim().toLowerCase() === "completado";
-
-const isoDateOnly = (valor) => {
-  if (!valor) return "";
-  const s = String(valor).split("T")[0];
-  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
-};
-
-const hoyIsoLocal = () => {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-};
-
 const yearFromDate = (valor) => {
   const iso = isoDateOnly(valor);
   if (iso) return iso.slice(0, 4);
@@ -42,8 +35,11 @@ const yearFromDate = (valor) => {
   return /^\d{4}$/.test(y) ? y : "";
 };
 
-const fechaCierreRequerimiento = (req) =>
-  isoDateOnly(req?.fecha_envio) || isoDateOnly(req?.updated_at) || isoDateOnly(req?.updatedAt);
+const formatReqDateCell = (valor) => {
+  if (!valor) return "-";
+  const formatted = formatDateMMDDYYYY(String(valor).split("T")[0]);
+  return formatted || "-";
+};
 
 export default function RequerimientosAdmin() {
   const toast = useToast();
@@ -86,19 +82,31 @@ const [reqActivo, setReqActivo] = useState(null);
   const handleEdit = (req) => {
     setEditingId(req.id);
     setFormData({
-      fecha_vencimiento: req.fecha_vencimiento || '',
+      fecha_vencimiento: isoDateOnly(req.fecha_vencimiento) || req.fecha_vencimiento || '',
       estado: req.estado || '',
       observaciones: req.observaciones || '',
+      fecha_cierre: esEstadoCompletado(req.estado) ? fechaCierreAlCompletar(req) : fechaCierreRequerimiento(req),
     });
   };
 
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === 'estado' && esEstadoCompletado(value) && !isoDateOnly(prev.fecha_cierre)) {
+        next.fecha_cierre = hoyIsoLocal();
+      }
+      return next;
+    });
   };
 
   const handleUpdate = async (req) => {
     try {
-      await apiRequest(`coberturas/${req.cobertura_id}/documentos/${req.id}`, 'PUT', formData);
+      const payload = { ...formData };
+      if (esEstadoCompletado(payload.estado)) {
+        payload.fecha_cierre = isoDateOnly(payload.fecha_cierre) || hoyIsoLocal();
+      }
+      await apiRequest(`coberturas/${req.cobertura_id}/documentos/${req.id}`, 'PUT', payload);
       setEditingId(null);
       fetchRequerimientos();
       toast.showSuccess('Requerimiento actualizado correctamente');
@@ -259,10 +267,10 @@ const [reqActivo, setReqActivo] = useState(null);
                           className="form-control"
                         />
                       ) : (
-                        req.fecha_vencimiento || '-'
+                        formatReqDateCell(req.fecha_vencimiento)
                       )}
                     </td>
-                    <td>{req.fecha_solicitud || '-'}</td>
+                    <td>{formatReqDateCell(req.fecha_solicitud)}</td>
                     <td>
                       {editingId === req.id ? (
                         <>
@@ -278,13 +286,23 @@ const [reqActivo, setReqActivo] = useState(null);
                             ))}
                           </select>
                           {esEstadoCompletado(formData.estado) && (
-                            <div
-                              className="small text-muted mt-1"
-                              title="Fecha en que se completó el requerimiento"
-                            >
-                              {esEstadoCompletado(req.estado)
-                                ? (fechaCierreRequerimiento(req) || hoyIsoLocal())
-                                : hoyIsoLocal()}
+                            <div className="mt-2">
+                              <label className="form-label small text-muted mb-1">
+                                Fecha de cierre
+                              </label>
+                              <DateInputWithCalendar
+                                size="sm"
+                                valueIso={formData.fecha_cierre || hoyIsoLocal()}
+                                minIso="1900-01-01"
+                                maxIso="2099-12-31"
+                                onChangeIso={(iso) =>
+                                  setFormData((prev) => ({
+                                    ...prev,
+                                    fecha_cierre: iso || hoyIsoLocal(),
+                                  }))
+                                }
+                                title="Fecha en que se cerró el requerimiento"
+                              />
                             </div>
                           )}
                         </>
@@ -296,9 +314,9 @@ const [reqActivo, setReqActivo] = useState(null);
                           {esEstadoCompletado(req.estado) && fechaCierreRequerimiento(req) && (
                             <div
                               className="small text-muted mt-1"
-                              title="Fecha en que se completó el requerimiento"
+                              title="Fecha en que se cerró el requerimiento"
                             >
-                              {fechaCierreRequerimiento(req)}
+                              {formatReqDateCell(fechaCierreRequerimiento(req))}
                             </div>
                           )}
                         </>

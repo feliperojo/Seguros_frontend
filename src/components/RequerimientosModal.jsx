@@ -4,6 +4,13 @@ import apiRequest from "../services/api"; // Asumiendo que usas este servicio pa
 import { getListFromApi } from "../utils/apiResponse";
 import { formatDateMMDDYYYY } from "../utils/formatters";
 import DateInputWithCalendar from "./common/DateInputWithCalendar";
+import {
+  esEstadoCompletado,
+  fechaCierreAlCompletar,
+  fechaCierreRequerimiento,
+  hoyIsoLocal,
+  isoDateOnly,
+} from "../utils/requerimientoFechas";
 
 const estados = {
   Pendiente: "warning",
@@ -30,19 +37,10 @@ const documentosDisponibles = [
 ];
 
 const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
-  const pad2 = (n) => String(n).padStart(2, "0");
-
   // Fecha en formato YYYY-MM-DD (hora local), para enviar al backend sin cambiar contrato
-  const getLocalISODate = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  };
+  const getLocalISODate = () => hoyIsoLocal();
 
-  const isoYmd = (valor) => {
-    if (valor == null || valor === "") return "";
-    const s = String(valor).split("T")[0];
-    return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : "";
-  };
+  const isoYmd = (valor) => isoDateOnly(valor);
 
   /** Tabla / solo lectura: MM/DD/YYYY consistente con el resto de la app */
   const formatReqDateCell = (valor) => {
@@ -51,23 +49,37 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
     return formatted || "-";
   };
 
-  const esEstadoCompletado = (estado) =>
-    String(estado || "").trim().toLowerCase() === "completado";
-
-  /** Fecha de cierre: fecha_envio (al pasar a Completado) o última actualización. */
-  const fechaCierreRequerimiento = (req) =>
-    req?.fecha_envio || req?.updated_at || req?.updatedAt || "";
-
-  const renderFechaCierre = (req, estadoActual) => {
+  const renderFechaCierre = (req, estadoActual, { editable = false } = {}) => {
     if (!esEstadoCompletado(estadoActual)) return null;
-    const yaEstabaCompletado = esEstadoCompletado(req?.estado);
-    const fecha = yaEstabaCompletado
-      ? fechaCierreRequerimiento(req)
-      : getLocalISODate();
+    const fecha = editable
+      ? (isoYmd(editableRequerimiento?.fecha_cierre) || fechaCierreAlCompletar(req))
+      : fechaCierreRequerimiento(req);
+
+    if (editable) {
+      return (
+        <div className="mt-2">
+          <Form.Label className="small text-muted mb-1">Fecha de cierre</Form.Label>
+          <DateInputWithCalendar
+            size="sm"
+            valueIso={fecha}
+            minIso="1900-01-01"
+            maxIso="2099-12-31"
+            onChangeIso={(iso) =>
+              setEditableRequerimiento((prev) =>
+                prev ? { ...prev, fecha_cierre: iso || getLocalISODate() } : prev
+              )
+            }
+            title="Fecha en que se cerró el requerimiento"
+          />
+        </div>
+      );
+    }
+
+    if (!fecha) return null;
     return (
       <div
         className="small text-muted mt-1"
-        title="Fecha en que se completó el requerimiento"
+        title="Fecha en que se cerró el requerimiento"
       >
         {formatReqDateCell(fecha)}
       </div>
@@ -141,7 +153,10 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
       ...requerimiento,
       fecha_vencimiento: fvIso,
       estado: requerimiento.estado || "Pendiente",
-      codigo_poliza: requerimiento.codigo_poliza || null
+      codigo_poliza: requerimiento.codigo_poliza || null,
+      fecha_cierre: esEstadoCompletado(requerimiento.estado)
+        ? fechaCierreAlCompletar(requerimiento)
+        : fechaCierreRequerimiento(requerimiento),
     });
   };
 
@@ -172,6 +187,10 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
         estado: editableRequerimiento.estado,
         codigo_poliza: codigoPoliza,
       };
+      if (esEstadoCompletado(editableRequerimiento.estado)) {
+        updatedData.fecha_cierre =
+          isoYmd(editableRequerimiento.fecha_cierre) || getLocalISODate();
+      }
   
       // Call the API to update the requerimiento
       await apiRequest(
@@ -430,12 +449,16 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                               <Form.Control
                                 as="select"
                                 value={editableRequerimiento?.estado || "Pendiente"}
-                                onChange={(e) =>
-                                  setEditableRequerimiento({
-                                    ...editableRequerimiento,
-                                    estado: e.target.value
-                                  })
-                                }
+                                onChange={(e) => {
+                                  const estado = e.target.value;
+                                  setEditableRequerimiento((prev) => ({
+                                    ...prev,
+                                    estado,
+                                    fecha_cierre: esEstadoCompletado(estado)
+                                      ? (isoYmd(prev?.fecha_cierre) || fechaCierreAlCompletar(r) || getLocalISODate())
+                                      : prev?.fecha_cierre,
+                                  }));
+                                }}
                                 size="sm"
                               >
                                 {estadosOptions.map((estado) => (
@@ -444,7 +467,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
                                   </option>
                                 ))}
                               </Form.Control>
-                              {renderFechaCierre(r, editableRequerimiento?.estado)}
+                              {renderFechaCierre(r, editableRequerimiento?.estado, { editable: true })}
                             </>
                           ) : (
                             <>

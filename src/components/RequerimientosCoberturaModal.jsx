@@ -4,6 +4,15 @@ import { Modal, Button, Table, Badge, Alert, Spinner, Form } from "react-bootstr
 import { getRequerimientosByCobertura } from "../services/requerimientosService";
 import apiRequest from "../services/api";
 import useToast from "../hooks/useToast";
+import DateInputWithCalendar from "./common/DateInputWithCalendar";
+import {
+  esEstadoCompletado,
+  fechaCierreAlCompletar,
+  fechaCierreRequerimiento,
+  hoyIsoLocal,
+  isoDateOnly,
+} from "../utils/requerimientoFechas";
+import { formatDateMMDDYYYY } from "../utils/formatters";
 
 // Mapeo de estados a colores de Bootstrap
 const estadosBadge = {
@@ -122,6 +131,9 @@ const RequerimientosCoberturaModal = ({ isOpen, onClose, cobertura }) => {
     setEditingData({
       estado: req.estado || "Pendiente",
       fecha_vencimiento: req.fecha_vencimiento || "",
+      fecha_cierre: esEstadoCompletado(req.estado)
+        ? fechaCierreAlCompletar(req)
+        : fechaCierreRequerimiento(req),
     });
   };
 
@@ -131,10 +143,13 @@ const RequerimientosCoberturaModal = ({ isOpen, onClose, cobertura }) => {
   };
 
   const handleChange = (field, value) => {
-    setEditingData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setEditingData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === "estado" && esEstadoCompletado(value) && !isoDateOnly(prev.fecha_cierre)) {
+        next.fecha_cierre = hoyIsoLocal();
+      }
+      return next;
+    });
   };
 
   const handleUpdate = async (req) => {
@@ -152,6 +167,10 @@ const RequerimientosCoberturaModal = ({ isOpen, onClose, cobertura }) => {
       // Solo incluir fecha_vencimiento si tiene valor
       if (editingData.fecha_vencimiento) {
         updatePayload.fecha_vencimiento = editingData.fecha_vencimiento;
+      }
+      if (esEstadoCompletado(editingData.estado)) {
+        updatePayload.fecha_cierre =
+          isoDateOnly(editingData.fecha_cierre) || hoyIsoLocal();
       }
 
       await apiRequest(
@@ -285,22 +304,45 @@ const RequerimientosCoberturaModal = ({ isOpen, onClose, cobertura }) => {
                     </td>
                     <td>
                       {editingId === req.id ? (
-                        <Form.Select
-                          size="sm"
-                          value={editingData.estado || ""}
-                          onChange={(e) => handleChange("estado", e.target.value)}
-                          disabled={updating}
-                        >
-                          {estadosOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </Form.Select>
+                        <>
+                          <Form.Select
+                            size="sm"
+                            value={editingData.estado || ""}
+                            onChange={(e) => handleChange("estado", e.target.value)}
+                            disabled={updating}
+                          >
+                            {estadosOptions.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </Form.Select>
+                          {esEstadoCompletado(editingData.estado) && (
+                            <div className="mt-2">
+                              <div className="small text-muted mb-1">Fecha de cierre</div>
+                              <DateInputWithCalendar
+                                size="sm"
+                                valueIso={editingData.fecha_cierre || hoyIsoLocal()}
+                                minIso="1900-01-01"
+                                maxIso="2099-12-31"
+                                onChangeIso={(iso) =>
+                                  handleChange("fecha_cierre", iso || hoyIsoLocal())
+                                }
+                              />
+                            </div>
+                          )}
+                        </>
                       ) : (
-                        <Badge bg={estadosBadge[req.estado] || "secondary"}>
-                          {req.estado || "Sin estado"}
-                        </Badge>
+                        <>
+                          <Badge bg={estadosBadge[req.estado] || "secondary"}>
+                            {req.estado || "Sin estado"}
+                          </Badge>
+                          {esEstadoCompletado(req.estado) && fechaCierreRequerimiento(req) && (
+                            <div className="small text-muted mt-1">
+                              {formatDateMMDDYYYY(fechaCierreRequerimiento(req)) || formatDate(fechaCierreRequerimiento(req))}
+                            </div>
+                          )}
+                        </>
                       )}
                     </td>
                     <td>
