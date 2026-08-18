@@ -19,7 +19,7 @@ import DocumentoGeneradoModal from "../components/DocumentoGeneradoModal";
 import { parseMoney, computeAnnual, calcIngresoFamiliar } from "../services/ingresos";
 import { vigenteDesdeEstadoCobertura } from "../utils/estadoPoliza";
 
-// Solo visual: mostrar fechas como MM-DD-YYYY (sin tocar valor interno YYYY-MM-DD)
+// Solo visual: mostrar fechas como MM/DD/YYYY (sin tocar valor interno YYYY-MM-DD)
 const formatDateMdyDash = (value) => {
   if (!value) return "";
   try {
@@ -27,14 +27,14 @@ const formatDateMdyDash = (value) => {
     // YYYY-MM-DD (o ISO con hora) => parse manual para evitar TZ
     if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
       const [y, m, d] = s.split("T")[0].split("-");
-      if (y && m && d) return `${m}-${d}-${y}`;
+      if (y && m && d) return `${m}/${d}/${y}`;
     }
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return s;
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const dd = String(d.getDate()).padStart(2, "0");
     const yyyy = d.getFullYear();
-    return `${mm}-${dd}-${yyyy}`;
+    return `${mm}/${dd}/${yyyy}`;
   } catch {
     return String(value);
   }
@@ -66,14 +66,14 @@ const formatMdyDashTyping = (raw) => {
   const digits = String(raw ?? "").replace(/\D/g, "");
   if (!digits) return "";
   if (digits.length <= 2) return digits;
-  if (digits.length <= 4) return `${digits.slice(0, 2)}-${digits.slice(2)}`;
-  return `${digits.slice(0, 2)}-${digits.slice(2, 4)}-${digits.slice(4, 8)}`;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4, 8)}`;
 };
 const MdyDashDateInput = ({
   valueIso,
   onChangeIso,
   disabled = false,
-  placeholder = "MM-DD-YYYY",
+  placeholder = "MM/DD/YYYY",
   size = "sm",
 }) => {
   const [display, setDisplay] = React.useState(() => formatDateMdyDash(valueIso));
@@ -89,6 +89,7 @@ const MdyDashDateInput = ({
       type="text"
       inputMode="numeric"
       placeholder={placeholder}
+      maxLength={10}
       value={display}
       disabled={disabled}
       onChange={(e) => {

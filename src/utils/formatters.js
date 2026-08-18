@@ -4,7 +4,7 @@
 export const onlyDigits = (s = "") => (s || "").toString().replace(/\D+/g, "");
 
 /** Join a digit string into hyphenated groups, e.g. [3,2,4] -> 123-45-6789 */
-export const chunkJoin = (digits, groups) => {
+export const chunkJoin = (digits, groups, separator = "-") => {
   let out = [];
   let idx = 0;
   for (const g of groups) {
@@ -12,7 +12,36 @@ export const chunkJoin = (digits, groups) => {
     out.push(digits.slice(idx, idx + g));
     idx += g;
   }
-  return out.filter(Boolean).join("-");
+  return out.filter(Boolean).join(separator);
+};
+
+/** MM/DD/YYYY mientras se escribe: 08182026 → 08/18/2026 */
+export const formatMdySlashTyping = (raw = "") =>
+  chunkJoin(onlyDigits(raw).slice(0, 8), [2, 2, 4], "/");
+
+/** Dígitos a la izquierda del caret (ignora / y otros separadores). */
+export const countDigitsBeforeCaret = (s, idx) => {
+  const end = Math.max(0, Math.min(idx ?? 0, s?.length ?? 0));
+  let n = 0;
+  for (let i = 0; i < end; i++) {
+    const c = s[i];
+    if (c >= "0" && c <= "9") n++;
+  }
+  return n;
+};
+
+/** Posición de caret a partir de cuántos dígitos se vieron en el texto formateado. */
+export const caretIndexFromDigitCount = (formatted, digitIndex) => {
+  const target = Math.max(0, digitIndex ?? 0);
+  let seen = 0;
+  for (let i = 0; i < (formatted?.length ?? 0); i++) {
+    const c = formatted[i];
+    if (c >= "0" && c <= "9") {
+      seen++;
+      if (seen >= target) return i + 1;
+    }
+  }
+  return formatted?.length ?? 0;
 };
 
 /** SSN => 3-2-4 (e.g., 123-45-6789) */
@@ -270,6 +299,16 @@ export const parseMMDDYYYYToYmd = (value) => {
       return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     }
     return "";
+  }
+
+  const digits = onlyDigits(s);
+  if (digits.length === 8 && !/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const month = Number(digits.slice(0, 2));
+    const day = Number(digits.slice(2, 4));
+    const year = Number(digits.slice(4, 8));
+    if (isValidCalendarYmd(year, month, day)) {
+      return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
   }
 
   return normalizeDateForInput(s);

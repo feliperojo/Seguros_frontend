@@ -1,12 +1,17 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
+  caretIndexFromDigitCount,
+  countDigitsBeforeCaret,
   formatDateMMDDYYYY,
+  formatMdySlashTyping,
   normalizeDateForInput,
+  onlyDigits,
   parseMMDDYYYYToYmd,
 } from "../../utils/formatters";
 
 /**
  * Campo de fecha con texto MM/DD/YYYY, calendario nativo y valor interno YYYY-MM-DD.
+ * Al escribir, los / se insertan solos (08182026 → 08/18/2026).
  */
 export default function DateInputWithCalendar({
   valueIso = "",
@@ -22,13 +27,30 @@ export default function DateInputWithCalendar({
   highlightWarning = false,
 }) {
   const pickerRef = useRef(null);
+  const textRef = useRef(null);
+  const focusedRef = useRef(false);
+  const pendingSelectionRef = useRef(null);
   const [displayText, setDisplayText] = useState("");
 
   const iso = normalizeDateForInput(valueIso);
 
   useEffect(() => {
+    if (focusedRef.current) return;
     setDisplayText(iso ? formatDateMMDDYYYY(iso) : "");
   }, [iso]);
+
+  useLayoutEffect(() => {
+    const sel = pendingSelectionRef.current;
+    if (!sel) return;
+    pendingSelectionRef.current = null;
+    const el = textRef.current;
+    if (!el) return;
+    try {
+      el.setSelectionRange(sel.start, sel.end);
+    } catch {
+      // noop
+    }
+  }, [displayText]);
 
   const applyIso = (ymd) => {
     const normalized = ymd ? normalizeDateForInput(ymd) : "";
@@ -37,11 +59,79 @@ export default function DateInputWithCalendar({
   };
 
   const handleTextChange = (e) => {
-    setDisplayText(e.target.value);
+    const inputEl = e.currentTarget;
+    const raw = e.target.value;
+    const selStart = inputEl?.selectionStart ?? raw.length;
+    const selEnd = inputEl?.selectionEnd ?? raw.length;
+    const next = formatMdySlashTyping(raw);
+    pendingSelectionRef.current = {
+      start: caretIndexFromDigitCount(next, countDigitsBeforeCaret(raw, selStart)),
+      end: caretIndexFromDigitCount(next, countDigitsBeforeCaret(raw, selEnd)),
+    };
+    setDisplayText(next);
+
+    const parsed = parseMMDDYYYYToYmd(next);
+    if (parsed) {
+      onChangeIso?.(parsed);
+    } else if (!next) {
+      onChangeIso?.("");
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    const el = e.currentTarget;
+    if (!el) return;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    if (start == null || end == null || start !== end) return;
+    const v = el.value ?? "";
+
+    if (e.key === "Backspace" && start > 0 && v[start - 1] === "/") {
+      e.preventDefault();
+      const nextPos = start - 1;
+      pendingSelectionRef.current = { start: nextPos, end: nextPos };
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(nextPos, nextPos);
+        } catch {
+          // noop
+        }
+      });
+      return;
+    }
+
+    if (e.key === "Delete" && start < v.length && v[start] === "/") {
+      e.preventDefault();
+      const nextPos = start + 1;
+      pendingSelectionRef.current = { start: nextPos, end: nextPos };
+      requestAnimationFrame(() => {
+        try {
+          el.setSelectionRange(nextPos, nextPos);
+        } catch {
+          // noop
+        }
+      });
+    }
   };
 
   const handleTextBlur = () => {
-    applyIso(parseMMDDYYYYToYmd(displayText));
+    focusedRef.current = false;
+    const trimmed = displayText.trim();
+    if (!trimmed) {
+      applyIso("");
+      return;
+    }
+    const parsed = parseMMDDYYYYToYmd(trimmed);
+    if (parsed) {
+      applyIso(parsed);
+      return;
+    }
+    const digitCount = onlyDigits(trimmed).length;
+    if (digitCount > 0 && digitCount < 8) {
+      setDisplayText(iso ? formatDateMMDDYYYY(iso) : "");
+      return;
+    }
+    setDisplayText(iso ? formatDateMMDDYYYY(iso) : "");
   };
 
   const handleCalendarChange = (e) => {
@@ -68,16 +158,23 @@ export default function DateInputWithCalendar({
     <div className={className}>
       <div className="input-group">
         <input
+          ref={textRef}
           type="text"
           className={`form-control ${controlSize} ${warningInputClass}`.trim()}
           name={inputName}
           value={displayText}
           onChange={handleTextChange}
+          onKeyDown={handleKeyDown}
+          onFocus={() => {
+            focusedRef.current = true;
+          }}
           onBlur={handleTextBlur}
           disabled={disabled}
           placeholder={placeholder}
           inputMode="numeric"
           autoComplete="off"
+          maxLength={10}
+          title="Formato: MM/DD/YYYY. Escriba o use el calendario."
         />
         <button
           type="button"

@@ -2,10 +2,12 @@ import React from "react";
 import { flushSync } from "react-dom";
 import { Button, Form, InputGroup } from "react-bootstrap";
 import {
-  formatDateForDisplay,
+  caretIndexFromDigitCount,
+  countDigitsBeforeCaret,
+  formatDateMMDDYYYY,
+  formatMdySlashTyping,
   normalizeDateForInput,
   onlyDigits,
-  chunkJoin,
 } from "../../utils/formatters";
 
 const isoYmd = (v) => {
@@ -14,30 +16,7 @@ const isoYmd = (v) => {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : normalizeDateForInput(s) || "";
 };
 
-const formatMdyFromDigits = (digits) => chunkJoin(digits.slice(0, 8), [2, 2, 4]);
-
-const countDigitsBefore = (s, idx) => {
-  const end = Math.max(0, Math.min(idx ?? 0, s?.length ?? 0));
-  let n = 0;
-  for (let i = 0; i < end; i++) {
-    const c = s[i];
-    if (c >= "0" && c <= "9") n++;
-  }
-  return n;
-};
-
-const caretFromDigitIndex = (formatted, digitIndex) => {
-  const target = Math.max(0, digitIndex ?? 0);
-  let seen = 0;
-  for (let i = 0; i < (formatted?.length ?? 0); i++) {
-    const c = formatted[i];
-    if (c >= "0" && c <= "9") {
-      seen++;
-      if (seen >= target) return i + 1;
-    }
-  }
-  return formatted?.length ?? 0;
-};
+const formatMdyFromDigits = (digits) => formatMdySlashTyping(digits);
 
 /**
  * Fecha “cerrada” para parsear con `normalizeDateForInput`.
@@ -72,8 +51,7 @@ function MdyDashDateInputReadonly({
   const iso = isoYmd(valueIso);
   const syncedDisplay = React.useMemo(() => {
     if (!iso) return "";
-    const f = formatDateForDisplay(iso);
-    return f === "-" ? "" : f;
+    return formatDateMMDDYYYY(iso) || "";
   }, [iso]);
 
   const emitIso = React.useCallback(
@@ -94,7 +72,7 @@ function MdyDashDateInputReadonly({
           disabled={disabled}
           readOnly
           tabIndex={disabled ? -1 : 0}
-          title={title || "Formato: MM-DD-YYYY"}
+          title={title || "Formato: MM/DD/YYYY"}
         />
         <Button
           variant={buttonVariant}
@@ -181,8 +159,7 @@ function MdyDashDateInputEditable({
   const iso = isoYmd(valueIso);
   const syncedDisplay = React.useMemo(() => {
     if (!iso) return "";
-    const f = formatDateForDisplay(iso);
-    return f === "-" ? "" : f;
+    return formatDateMMDDYYYY(iso) || "";
   }, [iso]);
 
   const [text, setText] = React.useState(syncedDisplay);
@@ -260,8 +237,8 @@ function MdyDashDateInputEditable({
     if (r.iso !== iso) {
       emitIso(r.iso);
     }
-    const disp = formatDateForDisplay(r.iso);
-    setText(disp === "-" ? "" : disp);
+    const disp = formatDateMMDDYYYY(r.iso);
+    setText(disp || "");
   }, [text, tryParseCommitted, syncedDisplay, iso, emitIso]);
 
   const handleTextChange = (e) => {
@@ -276,21 +253,26 @@ function MdyDashDateInputEditable({
       /^\d{4}-\d{2}-\d{2}$/.test(tryNorm) &&
       isWithinBounds(tryNorm)
     ) {
-      const disp = formatDateForDisplay(tryNorm);
-      if (disp !== "-") {
+      const disp = formatDateMMDDYYYY(tryNorm);
+      if (disp) {
         pendingSelectionRef.current = { start: disp.length, end: disp.length };
         setText(disp);
+        if (tryNorm !== iso) emitIso(tryNorm);
         return;
       }
     }
     const d = onlyDigits(raw).slice(0, 8);
     const next = formatMdyFromDigits(d);
-    const startDigits = countDigitsBefore(raw, selStart);
-    const endDigits = countDigitsBefore(raw, selEnd);
-    const nextStart = caretFromDigitIndex(next, startDigits);
-    const nextEnd = caretFromDigitIndex(next, endDigits);
+    const startDigits = countDigitsBeforeCaret(raw, selStart);
+    const endDigits = countDigitsBeforeCaret(raw, selEnd);
+    const nextStart = caretIndexFromDigitCount(next, startDigits);
+    const nextEnd = caretIndexFromDigitCount(next, endDigits);
     pendingSelectionRef.current = { start: nextStart, end: nextEnd };
     setText(next);
+    const committed = tryParseCommitted(next);
+    if (committed.ok && committed.iso !== iso) {
+      emitIso(committed.iso);
+    }
   };
 
   const handleKeyDown = (e) => {
@@ -302,7 +284,7 @@ function MdyDashDateInputEditable({
     if (start !== end) return;
     const v = el.value ?? "";
 
-    if (e.key === "Backspace" && start > 0 && v[start - 1] === "-") {
+    if (e.key === "Backspace" && start > 0 && (v[start - 1] === "/" || v[start - 1] === "-")) {
       e.preventDefault();
       const nextPos = start - 1;
       pendingSelectionRef.current = { start: nextPos, end: nextPos };
@@ -316,7 +298,7 @@ function MdyDashDateInputEditable({
       return;
     }
 
-    if (e.key === "Delete" && start < v.length && v[start] === "-") {
+    if (e.key === "Delete" && start < v.length && (v[start] === "/" || v[start] === "-")) {
       e.preventDefault();
       const nextPos = start + 1;
       pendingSelectionRef.current = { start: nextPos, end: nextPos };
@@ -361,11 +343,12 @@ function MdyDashDateInputEditable({
           autoCorrect="off"
           autoCapitalize="none"
           spellCheck={false}
+          maxLength={10}
           value={text}
           disabled={disabled}
           required={required}
           tabIndex={disabled ? -1 : 0}
-          title={title || "Formato: MM-DD-YYYY. Escriba o use el calendario."}
+          title={title || "Formato: MM/DD/YYYY. Escriba o use el calendario."}
           onFocus={() => {
             focusedRef.current = true;
           }}
@@ -409,8 +392,8 @@ function MdyDashDateInputEditable({
           if (!next) {
             setText("");
           } else {
-            const disp = formatDateForDisplay(next);
-            if (disp !== "-") setText(disp);
+            const disp = formatDateMMDDYYYY(next);
+            if (disp) setText(disp);
           }
           input?.blur?.();
           requestAnimationFrame(() => {
@@ -442,7 +425,7 @@ function MdyDashDateInputEditable({
 }
 
 /**
- * Campo de fecha con calendario nativo, pero visual fijo MM-DD-YYYY.
+ * Campo de fecha con calendario nativo, pero visual fijo MM/DD/YYYY.
  * Internamente mantiene YYYY-MM-DD (ideal para API/forms).
  *
  * @param {boolean} [allowManualEntry=false] — Si es true, el usuario puede escribir o pegar además del calendario.
