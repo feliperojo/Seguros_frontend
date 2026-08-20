@@ -23,10 +23,16 @@ import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
 import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
+import CoberturaDeleteButton from "./CoberturaDeleteButton";
+import CoberturaAnularButton from "./CoberturaAnularButton";
 
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
+import {
+  puedeEditarParentescoOEliminarCobertura,
+  opcionesEstadoCoberturaPorProceso,
+} from "../../constants/estadosGrupoFamiliar";
 
 // Utils
 import {
@@ -47,6 +53,7 @@ import {
 import { toLegacyFields } from "../../utils/phones";
 import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 import { getTypeColor } from "../../utils/parentescoColors";
+import { compareMembersByParentesco } from "../../utils/parentescoOrder";
 import { buildPayerOptions } from "../../utils/payers";
 import {
   normalizeGeneroForSelect,
@@ -161,6 +168,9 @@ const ROOT_FIELDS = new Set([
   "fecha_cancelacion",
   "fecha_retiro",
   "nota_retiro",
+  "fecha_anulacion",
+  "motivo_anulacion",
+  "nota_anulacion",
   "grupo",
   "nota_cancel",
 ]);
@@ -313,6 +323,9 @@ const normalizeMember = (m, idx) => {
       nombre_completo: nombreCompleto,
       activo: m.activo !== undefined && m.activo !== null ? m.activo : true,
       fecha_retiro: m.fecha_retiro ?? null,
+      fecha_anulacion: m.fecha_anulacion ?? null,
+      motivo_anulacion: m.motivo_anulacion ?? null,
+      nota_anulacion: m.nota_anulacion ?? null,
       fecha_creacion_cobertura:
         m.fecha_creacion_cobertura ||
         (m.cobertura?.created_at ? String(m.cobertura.created_at).slice(0, 10) : "") ||
@@ -350,6 +363,9 @@ const normalizeMember = (m, idx) => {
     estado_cobertura: m.estado_cobertura || "Sí",
     activo: m.activo !== undefined && m.activo !== null ? m.activo : true,
     fecha_retiro: m.fecha_retiro ?? null,
+    fecha_anulacion: m.fecha_anulacion ?? null,
+    motivo_anulacion: m.motivo_anulacion ?? null,
+    nota_anulacion: m.nota_anulacion ?? null,
     codigo_poliza: m.codigo_poliza || "",
     policy_number: m.policy_number || "",
     fecha_activacion: m.fecha_activacion || "",
@@ -755,6 +771,7 @@ const TomaDeDatos = ({
   canAdd = false,
   readOnly = false,
   estadoActual,
+  estadoId = null,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote,
@@ -862,13 +879,11 @@ const TomaDeDatos = ({
       }
     });
     
-    // Función de ordenamiento: tomador primero
+    // Orden: Tomador → Cónyuge → Hijo/a → resto
     const sortMembers = (arr) => {
-      return arr.sort((a, b) => {
-        const pa = isTomador(a.m) ? 0 : 1;
-        const pb = isTomador(b.m) ? 0 : 1;
-        return pa - pb || a.idx - b.idx;
-      });
+      return arr.sort((a, b) =>
+        compareMembersByParentesco(a.m, b.m, a.idx, b.idx)
+      );
     };
     
     return {
@@ -945,6 +960,39 @@ const activeNormalized = useMemo(
           if ((m.id ?? null) !== id) return m;
           const merged = { ...m, ...payload, id };
           return recomputeDerived(merged);
+        })
+      );
+    },
+    [setFamilyMembers]
+  );
+
+  const removeMemberLocal = useCallback(
+    (memberId) => {
+      setFamilyMembers((prev) =>
+        (prev ?? []).filter((m) => (m.id ?? null) !== memberId)
+      );
+    },
+    [setFamilyMembers]
+  );
+
+  const handleAnulada = useCallback(
+    (member, data = {}) => {
+      const covId = member?.cobertura_id ?? member?.id ?? null;
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((m) => {
+          const same =
+            (covId != null && (m.cobertura_id ?? m.id) === covId) ||
+            (member?.id != null && m.id === member.id);
+          if (!same) return m;
+          return {
+            ...m,
+            activo: false,
+            vigente: false,
+            fecha_anulacion: data.fecha_anulacion ?? m.fecha_anulacion,
+            motivo_anulacion: data.motivo_anulacion ?? m.motivo_anulacion,
+            nota_anulacion: data.nota_anulacion ?? m.nota_anulacion,
+            cobertura_definida: "Anulado",
+          };
         })
       );
     },
@@ -1455,11 +1503,10 @@ const activeNormalized = useMemo(
     const isInactive = m.activo === false;
     // Si está inactiva, bloquear todos los campos
     const isReadOnly = readOnly || isInactive;
-    const currentState = (estadoActual || "").toUpperCase();
-    const canEditParentesco =
-      !isReadOnly &&
-      currentState !== "TERMINADO" &&
-      currentState !== "GRUPO_FAMILIAR";
+    const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
+      estadoActual,
+      { readOnly: isReadOnly, estadoId }
+    );
     
     // Detectar si es Medicare o Medicaid para mostrar solo campos específicos
     const isMedicareOrMedicaid = isMedicareOrMedicaidEstado(m.estado_cobertura);
@@ -1550,7 +1597,9 @@ const activeNormalized = useMemo(
   fechaRetiro={m.fecha_retiro}
   fechaCancelacion={m.fecha_cancelacion}
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
+  fechaAnulacion={m.fecha_anulacion}
   fueRenovado={!!m.fue_renovado}
+  estadoProceso={estadoActual}
   size={50}
 />
 
@@ -1582,6 +1631,21 @@ const activeNormalized = useMemo(
                   className="d-flex align-items-center justify-content-end ms-3"
                   style={{ minWidth: leftRightWidth }}
                 >
+                  {canEditParentesco && (
+                    <CoberturaDeleteButton
+                      member={m}
+                      readOnly={!canEditParentesco}
+                      service={GrupoFamiliarService}
+                      removeLocal={removeMemberLocal}
+                      className="btn btn-outline-danger btn-sm me-2"
+                    />
+                  )}
+                  <CoberturaAnularButton
+                    member={m}
+                    estadoActual={estadoActual}
+                    readOnly={isReadOnly}
+                    onAnulada={handleAnulada}
+                  />
                   <div className="text-start me-3">
                     <div className="small">
                       <span className="text-muted">Edad: </span>
@@ -2207,10 +2271,14 @@ const activeNormalized = useMemo(
                                 disabled={isReadOnly}
                               >
                                 <option value="">Seleccione…</option>
-                                <option value="Sí">Sí</option>
-                                <option value="No">No</option>
-                                <option value="Medicare">Medicare</option>
-                                <option value="Medicaid">Medicaid</option>
+                                {opcionesEstadoCoberturaPorProceso(
+                                  estadoActual,
+                                  m.estado_cobertura
+                                ).map((opt) => (
+                                  <option key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </option>
+                                ))}
                               </select>
                             </ConfigField>
 
@@ -2420,17 +2488,21 @@ const activeNormalized = useMemo(
                             {shouldShowCoverageField("estado_cobertura") && (
                               <ConfigField label="Cobertura">
                                 <select
-                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duración-200 shadow-sm"
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="estado_cobertura"
                                   value={m.estado_cobertura || ""}
                                   onChange={onChange}
                                   disabled={isReadOnly}
                                 >
                                   <option value="">Seleccione…</option>
-                                  <option value="Sí">Sí</option>
-                                  <option value="No">No</option>
-                                  <option value="Medicare">Medicare</option>
-                                  <option value="Medicaid">Medicaid</option>
+                                  {opcionesEstadoCoberturaPorProceso(
+                                    estadoActual,
+                                    m.estado_cobertura
+                                  ).map((opt) => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
                                 </select>
                               </ConfigField>
                             )}
@@ -2564,6 +2636,40 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
+                            {m.fecha_anulacion && (
+                              <>
+                                <ConfigField label="Fecha de anulación">
+                                  <MdyDashDateInput
+                                    size="sm"
+                                    valueIso={(m.fecha_anulacion || "").slice(0, 10)}
+                                    disabled
+                                    title="Inscripción anulada antes de activarse"
+                                    onChangeIso={() => {}}
+                                  />
+                                </ConfigField>
+                                {m.motivo_anulacion && (
+                                  <ConfigField label="Motivo de anulación">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      value={m.motivo_anulacion}
+                                      disabled
+                                      readOnly
+                                    />
+                                  </ConfigField>
+                                )}
+                                {m.nota_anulacion && (
+                                  <ConfigField label="Nota de anulación">
+                                    <input
+                                      className="form-control form-control-sm"
+                                      value={m.nota_anulacion}
+                                      disabled
+                                      readOnly
+                                    />
+                                  </ConfigField>
+                                )}
+                              </>
+                            )}
+
                             {shouldShowCoverageField("grupo") && (
                               <ConfigField label="Grupo">
                                 <select
@@ -2622,7 +2728,9 @@ const activeNormalized = useMemo(
             <div className="d-flex align-items-center gap-2">
               <h6 className="mb-0 text-muted">
                 <i className="fas fa-users-slash me-2"></i>
-                Miembros Retirados ({inactiveMembers.length})
+                {inactiveMembers.some((x) => x.m?.fecha_anulacion)
+                  ? `Miembros retirados / anulados (${inactiveMembers.length})`
+                  : `Miembros Retirados (${inactiveMembers.length})`}
               </h6>
             </div>
             <div className="form-check form-switch">
@@ -2634,7 +2742,10 @@ const activeNormalized = useMemo(
                 onChange={(e) => setShowRetirados(e.target.checked)}
               />
               <label className="form-check-label" htmlFor="show-retirados">
-                {showRetirados ? 'Ocultar' : 'Mostrar'} retirados
+                {showRetirados ? "Ocultar" : "Mostrar"}{" "}
+                {inactiveMembers.some((x) => x.m?.fecha_anulacion)
+                  ? "retirados / anulados"
+                  : "retirados"}
               </label>
             </div>
           </div>
@@ -2655,6 +2766,7 @@ const activeNormalized = useMemo(
         defaultCoberturaTipo={defaultCoberturaTipo}
         readOnly={readOnly}
         isProspecto={isProspecto}
+        estadoActual={estadoActual}
         onCreateLocal={onCreateLocal}
         onUpdateLocal={onUpdateLocal}
         onCreateRemote={onCreateMemberRemote}

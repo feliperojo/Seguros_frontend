@@ -16,6 +16,13 @@ import {
   getCoberturasFromGrupoFull,
   resolverCoberturaClienteEnGrupo,
 } from "../../utils/estadoPoliza";
+import {
+  esProcesoInicialGrupoFamiliar,
+  esGrupoFamiliarTerminado,
+  esProcesoAntesDeTerminado,
+  normalizeEstadoGrupoCodigo,
+  labelEstadoGrupoParaDisplay,
+} from "../../constants/estadosGrupoFamiliar";
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
@@ -328,6 +335,46 @@ export default function FichaClienteGeneral() {
     return estadoNormalizado === "descartado";
   }, [gfEstado]);
 
+  const codigoProcesoGrupo = useMemo(() => {
+    const codigoRaw =
+      currentGrupo?.raw?.grupo_familiar?.estado_actual_catalogo?.estado_codigo ??
+      currentGrupo?.raw?.estado_actual_catalogo?.estado_codigo ??
+      currentGrupo?.raw?.estado_codigo ??
+      grupoFull?.estado_actual?.codigo ??
+      grupoFull?.estado_codigo ??
+      gfEstado;
+    return normalizeEstadoGrupoCodigo(codigoRaw);
+  }, [currentGrupo, grupoFull, gfEstado]);
+
+  // Prospecto / Cotización / Seguimiento: aún no mostrar estado de póliza real
+  const ocultarEstadoPolizaPorProcesoInicial = useMemo(
+    () => esProcesoInicialGrupoFamiliar(codigoProcesoGrupo),
+    [codigoProcesoGrupo]
+  );
+
+  // Póliza solo aplica cuando el GF ya está en Terminado
+  const mostrarSeccionPoliza = useMemo(
+    () => !!gfId && esGrupoFamiliarTerminado(codigoProcesoGrupo),
+    [gfId, codigoProcesoGrupo]
+  );
+
+  // Hay GF en proceso (antes de Terminado): mostrar contexto, no póliza
+  const mostrarContextoProceso = useMemo(() => {
+    if (!gfId || mostrarSeccionPoliza) return false;
+    if (esProcesoAntesDeTerminado(codigoProcesoGrupo) || esEstadoDescartado) {
+      return true;
+    }
+    // GF asociado pero etapa aún no es Terminado (o código desconocido)
+    return !esGrupoFamiliarTerminado(codigoProcesoGrupo);
+  }, [gfId, mostrarSeccionPoliza, codigoProcesoGrupo, esEstadoDescartado]);
+
+  const sinGrupoFamiliar = !gfId;
+
+  const procesoDisplayLabel = useMemo(
+    () => labelEstadoGrupoParaDisplay(codigoProcesoGrupo || gfEstado),
+    [codigoProcesoGrupo, gfEstado]
+  );
+
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
@@ -494,6 +541,8 @@ export default function FichaClienteGeneral() {
                     <span className="text-dark fw-normal">
                       {currentGrupo
                         ? labelGrupoSelector(currentGrupo)
+                        : sinGrupoFamiliar
+                        ? "Sin grupo familiar"
                         : `GF ${gfId ?? "—"}`}
                     </span>
                   </div>
@@ -568,7 +617,88 @@ export default function FichaClienteGeneral() {
               </div>
             </div>
 
-            {/* Sección: Grupo Familiar y Póliza */}
+            {/* Sin grupo familiar */}
+            {sinGrupoFamiliar && (
+              <div className="mb-3">
+                <h6
+                  className="text-dark border-bottom pb-1 mb-2"
+                  style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}
+                >
+                  GRUPO FAMILIAR
+                </h6>
+                <div className="alert alert-light border small mb-0 py-2">
+                  No hay grupo familiar asociado. Los datos de póliza no aplican hasta
+                  vincular a un GF y completar el proceso hasta <strong>Terminado</strong>.
+                </div>
+              </div>
+            )}
+
+            {/* GF en proceso (antes de Terminado): contexto claro, sin póliza */}
+            {mostrarContextoProceso && (
+              <div className="mb-3">
+                <h6
+                  className="text-dark border-bottom pb-1 mb-2"
+                  style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}
+                >
+                  CONTEXTO DEL GRUPO FAMILIAR
+                </h6>
+                <div className="row g-2">
+                  <div className="col-md-6">
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                        ID Grupo Familiar
+                      </label>
+                      <div className="text-dark small">GF {gfId}</div>
+                    </div>
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                        Relación en el grupo
+                      </label>
+                      <div className="text-dark small">{parentescoCobertura}</div>
+                    </div>
+                  </div>
+                  <div className="col-md-6">
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                        Proceso
+                      </label>
+                      <div className={`small ${esEstadoDescartado ? "text-danger fw-semibold" : "text-dark"}`}>
+                        {procesoDisplayLabel}
+                      </div>
+                    </div>
+                    <div className="mb-2">
+                      <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                        Asesor / Responsable
+                      </label>
+                      <div className="text-dark small fw-normal">{gfResponsable}</div>
+                    </div>
+                  </div>
+                </div>
+                {grupoId && (
+                  <div className="mt-3 pt-2 border-top">
+                    <label className="text-muted small d-block mb-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                      Etiquetas del Grupo Familiar
+                    </label>
+                    {loadingEtiquetas ? (
+                      <div className="text-muted small">
+                        <i className="fas fa-spinner fa-spin me-2"></i>
+                        Cargando etiquetas...
+                      </div>
+                    ) : (
+                      <GroupTags
+                        value={etiquetasGrupo}
+                        onChange={() => {}}
+                        readOnly={true}
+                        className="mb-0"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Solo en Terminado: Grupo Familiar y Póliza completa */}
+            {mostrarSeccionPoliza && (
             <div className="mb-3">
               <h6 className="text-dark border-bottom pb-1 mb-2" style={{ fontSize: "0.85rem", fontWeight: "600", letterSpacing: "0.5px" }}>
                 GRUPO FAMILIAR Y PÓLIZA
@@ -592,7 +722,7 @@ export default function FichaClienteGeneral() {
                   <div className="mb-2">
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Proceso</label>
                     <div className={`small ${esEstadoDescartado ? "text-danger fw-semibold" : "text-dark"}`}>
-                      {gfEstado}
+                      {procesoDisplayLabel}
                     </div>
                   </div>
                   <div className="mb-2">
@@ -610,7 +740,7 @@ export default function FichaClienteGeneral() {
                     <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Valor de la Póliza</label>
                     <div className="text-dark small">{formatearPrecioPoliza(precioPoliza)}</div>
                   </div>
-                  {!esEstadoDescartado && (
+                  {!esEstadoDescartado && !ocultarEstadoPolizaPorProcesoInicial && (
                     <div className="mb-2">
                       <label className="text-muted small d-block mb-0" style={{ fontSize: "0.75rem", fontWeight: "500" }}>Estado de la Póliza</label>
                       <div className="text-dark small">
@@ -659,6 +789,7 @@ export default function FichaClienteGeneral() {
                 </div>
               )}
             </div>
+            )}
 
             <hr className="my-3 border-secondary opacity-25" />
 
@@ -666,11 +797,7 @@ export default function FichaClienteGeneral() {
   className="mb-3"
   clienteId={clienteId}           // <- importante
   grupoFamiliarId={grupoId}       // <- importante
-  grupoContextLabel={
-    gfId
-      ? `Estás asociando contactos para el Grupo Familiar ${gfId}, donde este cliente es "${parentescoCobertura}".`
-      : ""
-  }
+  grupoContextLabel=""
   primary={false}
   addAnother={false}
   onTogglePrimary={(v) => console.log("primary?", v)}

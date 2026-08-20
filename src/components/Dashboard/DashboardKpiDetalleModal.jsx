@@ -130,7 +130,9 @@ export default function DashboardKpiDetalleModal({
 
   const enlaces = {
     clientes: "/clientes/lista",
-    grupos: "/Grupofamiliar/lista",
+    grupos: "/grupofamiliar/lista",
+    canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
+    retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
   };
 
   const detalleClientes = estadisticas?.detalleClientes || {};
@@ -196,6 +198,9 @@ export default function DashboardKpiDetalleModal({
         <>
           <p className="dashboard-kpi-detalle-intro">
             Grupos familiares según su estado actual en el flujo de trabajo.
+            El estado <strong>Grupo Familiar</strong> se divide en{" "}
+            <strong>activos</strong> e <strong>inactivos</strong> (todas las
+            coberturas canceladas o retiradas).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {estadosGrupo.map(({ key, valor, config }) => (
@@ -244,17 +249,16 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>estado_cobertura = No</strong>,{" "}
-            <strong>activo = true</strong>, <strong>vigente = false</strong> y{" "}
-            <strong>fecha de expiración</strong> registrada.
+            Pólizas con <strong>fecha de cancelación</strong> y estado{" "}
+            <strong>Cancelado</strong> (el elegido al retirar o cancelar).
+            Retiros en Retirado o Terminado no entran aquí.
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
               label="Canceladas"
               valor={estadisticas?.polizasCanceladas ?? 0}
               color="#ea4335"
-              criterios={{ activo: true, vigente: false }}
-              descripcion="estado_cobertura = No + fecha_cancelacion"
+              descripcion="fecha_cancelacion + estado Cancelado"
             />
           </div>
         </>
@@ -265,17 +269,16 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>activo = false</strong>, <strong>vigente = false</strong> y{" "}
-            <strong>fecha de retiro</strong> registrada. La fecha de expiración es opcional
-            (retiro directo).
+            Pólizas que salieron del grupo con estado <strong>Retirado</strong> o{" "}
+            <strong>Terminado</strong> y <strong>fecha de retiro</strong>. Las que
+            quedaron en Cancelado van al recuento de canceladas.
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
               label="Retiradas"
               valor={estadisticas?.polizasRetiradas ?? 0}
               color="#ea4335"
-              criterios={{ activo: false, vigente: false }}
-              descripcion="fecha_retiro (cancelación opcional)"
+              descripcion="estado Retirado o Terminado + fecha_retiro"
             />
           </div>
         </>

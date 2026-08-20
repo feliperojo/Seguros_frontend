@@ -38,6 +38,16 @@ export const ESTADOS_GRUPO_CONFIG = {
     color: "#9334e6",
     label: "Grupo Familiar",
   },
+  grupo_familiar_activo: {
+    icon: FaProjectDiagram,
+    color: "#9334e6",
+    label: "GF activos",
+  },
+  grupo_familiar_inactivo: {
+    icon: FaProjectDiagram,
+    color: "#6c757d",
+    label: "GF inactivos",
+  },
   descartado: {
     icon: FaProjectDiagram,
     color: "#6c757d",
@@ -51,6 +61,8 @@ export const ORDEN_ESTADOS_GRUPO = [
   "seguimiento",
   "toma_datos",
   "inscripcion_ini",
+  "grupo_familiar_activo",
+  "grupo_familiar_inactivo",
   "grupo_familiar",
   "descartado",
 ];
@@ -86,6 +98,217 @@ export function labelEstadoGrupoParaDisplay(codigoOrNombre) {
   }
 
   return raw;
+}
+
+/**
+ * Estados 1–5: se puede cambiar parentesco/tipo y eliminar cobertura.
+ * Estado 5 = INSCRIPCION_INI (Inscripción / Confirmación).
+ * Desde estado 6 (GRUPO_FAMILIAR / Terminado) o Descartado queda bloqueado.
+ */
+export const ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+  "TOMA_DATOS",
+  "INSCRIPCION_INI",
+];
+
+export const ESTADOS_GRUPO_IDS_PERMITEN_PARENTESCO_COBERTURA = [1, 2, 3, 4, 5];
+
+/** Estados 1–3: cotización / proceso inicial (aún no hay póliza real). */
+export const ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+];
+
+/** True en Prospecto, Cotización o Seguimiento. */
+export function esProcesoInicialGrupoFamiliar(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL.includes(code);
+}
+
+/**
+ * True cuando el GF ya está en Terminado (GRUPO_FAMILIAR).
+ * Ahí sí aplica mostrar datos de póliza en ficha.
+ */
+export function esGrupoFamiliarTerminado(estadoCodigoOrNombre) {
+  return normalizeEstadoGrupoCodigo(estadoCodigoOrNombre) === "GRUPO_FAMILIAR";
+}
+
+/**
+ * Etapas 1–5: hay grupo en proceso, pero aún no es póliza/producto terminado.
+ */
+export function esProcesoAntesDeTerminado(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA.includes(code);
+}
+
+/** Opciones básicas de estado_cobertura (estados 1–4). */
+export const ESTADOS_COBERTURA_OPCIONES_BASICAS = [
+  { value: "Sí", label: "Sí" },
+  { value: "No", label: "No" },
+];
+
+/** Opciones completas desde Inscripción / Confirmación (estado 5). */
+export const ESTADOS_COBERTURA_OPCIONES_COMPLETAS = [
+  ...ESTADOS_COBERTURA_OPCIONES_BASICAS,
+  { value: "Medicare", label: "Medicare" },
+  { value: "Medicaid", label: "Medicaid" },
+];
+
+/**
+ * Medicare/Medicaid solo desde estado 5 (INSCRIPCION_INI) en adelante.
+ * Estados 1–4: únicamente Sí / No.
+ */
+export function permiteMedicareMedicaidEnCobertura(estadoCodigoOrNombre) {
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
+  return code === "INSCRIPCION_INI" || code === "GRUPO_FAMILIAR";
+}
+
+/**
+ * Lista de opciones para el select de estado_cobertura según etapa del GF.
+ * Si el valor actual es Medicare/Medicaid y aún no aplica la etapa, se conserva
+ * en la lista para no romper el valor guardado.
+ */
+export function opcionesEstadoCoberturaPorProceso(
+  estadoCodigoOrNombre,
+  valorActual = null
+) {
+  const base = permiteMedicareMedicaidEnCobertura(estadoCodigoOrNombre)
+    ? ESTADOS_COBERTURA_OPCIONES_COMPLETAS
+    : ESTADOS_COBERTURA_OPCIONES_BASICAS;
+
+  const actual = String(valorActual || "").trim();
+  if (!actual) return base;
+
+  const yaIncluida = base.some(
+    (o) => o.value.toLowerCase() === actual.toLowerCase()
+  );
+  if (yaIncluida) return base;
+
+  return [...base, { value: actual, label: actual }];
+}
+
+/** @deprecated usar ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA */
+export const ESTADOS_GRUPO_CODIGOS_BLOQUEAN_PARENTESCO_COBERTURA = [
+  "GRUPO_FAMILIAR",
+  "TERMINADO",
+  "DESCARTADO",
+];
+
+/** Normaliza códigos/nombres de estado a código de catálogo. */
+export function normalizeEstadoGrupoCodigo(raw) {
+  if (raw == null) return "";
+  if (typeof raw === "object") {
+    return normalizeEstadoGrupoCodigo(
+      raw.codigo || raw.code || raw.cod || raw.nombre || ""
+    );
+  }
+
+  const norm = String(raw)
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\s\/-]+/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+
+  if (!norm) return "";
+  if (norm === "TERMINADO" || norm === "GRUPO_FAMILIAR") return "GRUPO_FAMILIAR";
+  if (norm.includes("INSCRIPCION")) return "INSCRIPCION_INI";
+  if (norm.includes("TOMA_DATOS") || norm === "TOMA_DE_DATOS") return "TOMA_DATOS";
+  if (norm.includes("COTIZACION")) return "COTIZACION";
+  if (norm.includes("SEGUIMIENTO")) return "SEGUIMIENTO";
+  if (norm.includes("PROSPECTO")) return "PROSPECTO";
+  if (norm.includes("DESCARTADO")) return "DESCARTADO";
+  return norm;
+}
+
+/**
+ * True si aún se puede editar parentesco/tipo o eliminar cobertura (estados 1–5).
+ * Incluye explícitamente INSCRIPCION_INI (estado 5).
+ */
+export function puedeEditarParentescoOEliminarCobertura(
+  estadoCodigo,
+  { readOnly = false, estadoId = null } = {}
+) {
+  if (readOnly) return false;
+
+  const code = normalizeEstadoGrupoCodigo(estadoCodigo);
+  if (code) {
+    return ESTADOS_GRUPO_CODIGOS_PERMITEN_PARENTESCO_COBERTURA.includes(code);
+  }
+
+  const id = Number(estadoId);
+  if (Number.isFinite(id) && id > 0) {
+    return ESTADOS_GRUPO_IDS_PERMITEN_PARENTESCO_COBERTURA.includes(id);
+  }
+
+  // Sin estado conocido: no bloquear en modo edición
+  return true;
+}
+
+/** IDs de catálogo que exigen clave de super admin para eliminar (Terminado / Descartado). */
+export const ESTADOS_GRUPO_IDS_DELETE_REQUIERE_ADMIN = [6, 7];
+
+/** Códigos equivalentes (más robustos si los IDs difieren entre ambientes). */
+export const ESTADOS_GRUPO_CODIGOS_DELETE_REQUIERE_ADMIN = [
+  "GRUPO_FAMILIAR",
+  "DESCARTADO",
+];
+
+/**
+ * True si eliminar el grupo requiere clave del super administrador.
+ * Estados 1–5: libre. Estados 6–7 (Terminado / Descartado): protegidos.
+ */
+export function grupoFamiliarDeleteRequiereAdmin(grupo) {
+  if (!grupo) return false;
+
+  const estadoId = Number(grupo.estado_id);
+  if (ESTADOS_GRUPO_IDS_DELETE_REQUIERE_ADMIN.includes(estadoId)) {
+    return true;
+  }
+
+  const codigo = String(grupo.estado_codigo || "")
+    .trim()
+    .toUpperCase();
+  return ESTADOS_GRUPO_CODIGOS_DELETE_REQUIERE_ADMIN.includes(codigo);
+}
+
+/**
+ * En el listado, estados 1–5 (Prospecto … Inscripción) no muestran personas en cobertura
+ * (solo efecto visual; no altera datos).
+ */
+export const ESTADOS_GRUPO_IDS_OCULTAR_COBERTURA_LISTADO = [1, 2, 3, 4, 5];
+
+export const ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+  "TOMA_DATOS",
+  "INSCRIPCION_INI",
+];
+
+export function ocultarPersonasCoberturaEnListado(grupo) {
+  if (!grupo) return false;
+
+  const estadoId = Number(grupo.estado_id);
+  if (ESTADOS_GRUPO_IDS_OCULTAR_COBERTURA_LISTADO.includes(estadoId)) {
+    return true;
+  }
+
+  const codigo = String(grupo.estado_codigo || "")
+    .trim()
+    .toUpperCase();
+  return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
+}
+
+/** Valor de P. COBERTURA solo para render del listado. */
+export function personasCoberturaParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) return 0;
+  return grupo?.personas_cobertura || 0;
 }
 
 export function ordenarResumenGrupos(resumenEstados = []) {

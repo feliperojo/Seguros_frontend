@@ -96,7 +96,11 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
       "inscripción inicial": "inscripcion_ini",
       "inscripción / confirmación": "inscripcion_ini",
       "inscripcion / confirmacion": "inscripcion_ini",
-      "grupo familiar": "grupo_familiar"
+      "grupo familiar": "grupo_familiar",
+      "grupo familiar (activos)": "grupo_familiar_activo",
+      "grupo familiar (inactivos)": "grupo_familiar_inactivo",
+      "gf activos": "grupo_familiar_activo",
+      "gf inactivos": "grupo_familiar_inactivo",
     };
     
     const nombreMapeado = nombreMap[nombreLower];

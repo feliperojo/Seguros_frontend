@@ -366,6 +366,9 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
   const fechaRetiro = cleanDate(
     m.fecha_retiro ?? m?.cobertura?.fecha_retiro ?? null
   );
+  const fechaAnulacion = cleanDate(
+    m.fecha_anulacion ?? m?.cobertura?.fecha_anulacion ?? null
+  );
   const notaCancel = (m.nota_cancel ?? m?.cobertura?.nota_cancel ?? "").trim();
   const notaRetiro = (m.nota_retiro ?? m?.cobertura?.nota_retiro ?? "").trim();
   const motivoCancelacion = (m.motivo_cancelacion ?? m?.cobertura?.motivo_cancelacion ?? "").trim();
@@ -380,6 +383,14 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
   // Incluir fecha_retiro si está presente (incluso si es null para permitir limpiarla)
   if (m.fecha_retiro !== undefined || m?.cobertura?.fecha_retiro !== undefined) {
     payload.fecha_retiro = fechaRetiro;
+  }
+
+  if (fechaAnulacion) {
+    payload.fecha_anulacion = fechaAnulacion;
+    payload.motivo_anulacion =
+      (m.motivo_anulacion ?? m?.cobertura?.motivo_anulacion ?? "").trim() || null;
+    payload.nota_anulacion =
+      (m.nota_anulacion ?? m?.cobertura?.nota_anulacion ?? "").trim() || null;
   }
   
   // ✅ IMPORTANTE: Incluir notas y motivo_cancelacion cuando hay fechas de retiro/cancelación

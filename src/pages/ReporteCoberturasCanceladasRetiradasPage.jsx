@@ -6,6 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
 import { getReporteCoberturasCanceladasRetiradas } from "../services/reportesService";
+import { fetchCompanies } from "../services/companies";
 import { formatDateMMDDYYYY } from "../utils/formatters";
 import { badgeCoberturaDefinida, COBERTURA_DEFINIDA } from "../utils/coberturaDefinida";
 
@@ -16,9 +17,51 @@ const DEFAULT_FILTERS = {
   search: "",
   date_from: "",
   date_to: "",
+  compania_id: "",
+  mes: "",
+  anio: "",
+  motivo_cancelacion: "",
   sort_by: "fecha_cancelacion",
   sort_dir: "desc",
 };
+
+const MESES_CANCELACION = [
+  { value: "1", label: "Enero" },
+  { value: "2", label: "Febrero" },
+  { value: "3", label: "Marzo" },
+  { value: "4", label: "Abril" },
+  { value: "5", label: "Mayo" },
+  { value: "6", label: "Junio" },
+  { value: "7", label: "Julio" },
+  { value: "8", label: "Agosto" },
+  { value: "9", label: "Septiembre" },
+  { value: "10", label: "Octubre" },
+  { value: "11", label: "Noviembre" },
+  { value: "12", label: "Diciembre" },
+];
+
+const MOTIVOS_CANCELACION = [
+  "CAMBIO DE AGENTE",
+  "MS CANCELO POR FALTA DE DOCUMENTOS",
+  "TOMO MEDICAID",
+  "TOMO MEDICARE (65 AÑOS)",
+  "TOMO SEGURO POR EMPLEADOR/OTRO",
+  "CLIENTE CANCELO POR PRECIO",
+  "SE MUDO A OTRO ESTADO/PAIS",
+  "YA NO NECESITA EL SEGURO",
+  "SE CANCELO POR FALTA DE PAGO (MORA)",
+  "NO REALIZO EL PAGO INICIAL",
+  "OTRO",
+];
+
+const aniosCancelacion = (() => {
+  const actual = new Date().getFullYear();
+  const years = [];
+  for (let y = actual + 1; y >= actual - 6; y -= 1) {
+    years.push(y);
+  }
+  return years;
+})();
 
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 const GRUPO_FICHA_PATH = (id) => `/grupo_familiar/${id}`;
@@ -100,6 +143,7 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
   const [resumen, setResumen] = useState({ total: 0, cancelados: 0, retiros: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [companies, setCompanies] = useState([]);
   const abortRef = useRef(null);
 
   const queryParams = useMemo(() => {
@@ -107,6 +151,10 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
     if (!params.search) delete params.search;
     if (!params.date_from) delete params.date_from;
     if (!params.date_to) delete params.date_to;
+    if (!params.compania_id) delete params.compania_id;
+    if (!params.mes) delete params.mes;
+    if (!params.anio) delete params.anio;
+    if (!params.motivo_cancelacion) delete params.motivo_cancelacion;
     return params;
   }, [filters]);
 
@@ -138,6 +186,25 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
     loadReport();
     return () => abortRef.current?.abort();
   }, [loadReport]);
+
+  useEffect(() => {
+    const loadCompanies = async () => {
+      try {
+        const listRaw = await fetchCompanies();
+        const list = Array.isArray(listRaw) ? listRaw : [];
+        const sorted = [...list].sort((a, b) =>
+          String(a?.nombre || "").localeCompare(String(b?.nombre || ""), "es", {
+            sensitivity: "base",
+            numeric: true,
+          })
+        );
+        setCompanies(sorted);
+      } catch (err) {
+        console.error("Error al cargar compañías:", err);
+      }
+    };
+    loadCompanies();
+  }, []);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -174,7 +241,8 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
             Coberturas Canceladas y Retiradas
           </h2>
           <p className="text-muted mb-0">
-            Historial completo de cancelaciones y retiros.{" "}
+            Historial completo de cancelaciones y retiros. Cancelados: fecha de
+            cancelación y estado Cancelado. Retiros: estado Retirado o Terminado.{" "}
             <Link to="/">Volver al panel principal</Link>
           </p>
         </div>
@@ -238,6 +306,66 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                 </div>
               </Form>
             </Col>
+            <Col md={3}>
+              <Form.Label>Compañía</Form.Label>
+              <Form.Select
+                value={filters.compania_id}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, page: 1, compania_id: e.target.value }))
+                }
+              >
+                <option value="">Todas</option>
+                {companies.map((comp) => (
+                  <option key={comp.id} value={comp.id}>
+                    {comp.nombre}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+            <Col md={3}>
+              <Form.Label>Mes de cancelación</Form.Label>
+              <Form.Select
+                value={filters.mes}
+                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, mes: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {MESES_CANCELACION.map((mes) => (
+                  <option key={mes.value} value={mes.value}>
+                    {mes.label}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+            <Col md={2}>
+              <Form.Label>Año</Form.Label>
+              <Form.Select
+                value={filters.anio}
+                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, anio: e.target.value }))}
+              >
+                <option value="">Todos</option>
+                {aniosCancelacion.map((anio) => (
+                  <option key={anio} value={anio}>
+                    {anio}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
+            <Col md={4}>
+              <Form.Label>Motivo de cancelación</Form.Label>
+              <Form.Select
+                value={filters.motivo_cancelacion}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, page: 1, motivo_cancelacion: e.target.value }))
+                }
+              >
+                <option value="">Todos</option>
+                {MOTIVOS_CANCELACION.map((motivo) => (
+                  <option key={motivo} value={motivo}>
+                    {motivo}
+                  </option>
+                ))}
+              </Form.Select>
+            </Col>
           </Row>
         </Card.Body>
       </Card>
@@ -260,6 +388,15 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                   <th role="button" onClick={() => handleSort("nombre")}>
                     Nombre{sortIcon("nombre")}
                   </th>
+                  <th role="button" onClick={() => handleSort("compania")}>
+                    Compañía{sortIcon("compania")}
+                  </th>
+                  <th role="button" onClick={() => handleSort("codigo_poliza")}>
+                    Numero ID{sortIcon("codigo_poliza")}
+                  </th>
+                  <th role="button" onClick={() => handleSort("fecha_activacion")}>
+                    Fecha de activación{sortIcon("fecha_activacion")}
+                  </th>
                   <th role="button" onClick={() => handleSort("fecha_cancelacion")}>
                     Fecha de expiración{sortIcon("fecha_cancelacion")}
                   </th>
@@ -280,14 +417,14 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-5">
+                    <td colSpan={10} className="text-center py-5">
                       <Spinner animation="border" size="sm" className="me-2" />
                       Cargando informe...
                     </td>
                   </tr>
                 ) : data.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center text-muted py-5">
+                    <td colSpan={10} className="text-center text-muted py-5">
                       No hay coberturas para los filtros seleccionados
                     </td>
                   </tr>
@@ -296,6 +433,9 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                     <tr key={`${row.id}-${row.fecha_cancelacion || ""}-${row.fecha_retiro || ""}-${row.tipo}`}>
                       <td>{renderGrupoLink(row.grupo_familiar_id)}</td>
                       <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
+                      <td>{row.compania || "—"}</td>
+                      <td>{row.codigo_poliza || "—"}</td>
+                      <td>{formatDate(row.fecha_activacion)}</td>
                       <td>{formatDate(row.fecha_cancelacion)}</td>
                       <td>{formatDate(row.fecha_retiro)}</td>
                       <td>{row.concepto || "—"}</td>

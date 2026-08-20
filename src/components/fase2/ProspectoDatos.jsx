@@ -13,6 +13,7 @@ import { deriveCounts } from "../../utils/groupCounters";
 import useLanguages from "../../hooks/useLanguages";
 import ClienteExistenteModal from "./ClienteExistenteModal";
 import { getTypeColor } from "../../utils/parentescoColors";
+import { compareMembersByParentesco } from "../../utils/parentescoOrder";
 import { normalizeDateForInput } from "../../utils/formatters";
 import { mergeClientePreferNonEmpty, unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import {
@@ -25,6 +26,11 @@ import { resolveClienteTelefonos } from "../../utils/phone-mappers";
 
 import CoberturaDeleteButton from "../fase2/CoberturaDeleteButton";
 import MdyDashDateInput from "../common/MdyDashDateInput";
+import {
+  puedeEditarParentescoOEliminarCobertura,
+  esProcesoInicialGrupoFamiliar,
+  opcionesEstadoCoberturaPorProceso,
+} from "../../constants/estadosGrupoFamiliar";
 
 
 /* ---------- Helpers de UI ---------- */
@@ -188,7 +194,7 @@ const apell   = toTitle(c.apellidos || c.apellido || "");
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;   // ✅ NUEVO
 
 /* ---------- Subcomponente: Acordeón editable por miembro ---------- */
-const MemberAccordionForm = ({ member, readOnly, onChange }) => {
+const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
   // Estado para controlar si el acordeón está abierto o cerrado
   const [isOpen, setIsOpen] = useState(false);
   
@@ -508,10 +514,14 @@ const MemberAccordionForm = ({ member, readOnly, onChange }) => {
                 disabled={readOnly}
                 onChange={handle("estado_cobertura")}
               >
-                <option value="Sí">Sí</option>
-                <option value="No">No</option>
-                <option value="Medicare">Medicare</option>
-                <option value="Medicaid">Medicaid</option>
+                {opcionesEstadoCoberturaPorProceso(
+                  estadoActual,
+                  member.estado_cobertura
+                ).map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -623,6 +633,7 @@ const ProspectoDatos = ({
   readOnly,
   canAdd = false,
   estadoActual,
+  estadoId = null,
   isProspecto = false,
   defaultCoberturaTipo = "Plan de salud",
   onCreateMemberRemote, 
@@ -859,14 +870,10 @@ const ProspectoDatos = ({
 
     return res;
   };
-  // Render: Tomador primero, resto en su orden original
+  // Render: Tomador → Cónyuge → Hijo/a → resto
 const sortedMembers = familyMembers
-.map((m, i) => ({ m, i }))                   // guardamos índice original
-.sort((a, b) => {
-  const pa = isTomador(a.m) ? 0 : 1;
-  const pb = isTomador(b.m) ? 0 : 1;
-  return pa - pb || a.i - b.i;               // estable
-})
+.map((m, i) => ({ m, i }))
+.sort((a, b) => compareMembersByParentesco(a.m, b.m, a.i, b.i))
 .map(x => x.m);
 
 
@@ -958,11 +965,12 @@ const sortedMembers = familyMembers
                   : member.id 
                     ? `member-${member.id}` 
                     : `temp-${index}`;
-                const currentState = (estadoActual || "").toUpperCase();
-                const canEditParentesco =
-                  !readOnly &&
-                  currentState !== "TERMINADO" &&
-                  currentState !== "GRUPO_FAMILIAR";
+                const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
+                  estadoActual,
+                  { readOnly, estadoId }
+                );
+                const ocultarEstadoCobertura =
+                  esProcesoInicialGrupoFamiliar(estadoActual);
 
                 return (
                   <div key={uniqueKey} className="col-md-12 mb-3">
@@ -995,7 +1003,7 @@ const sortedMembers = familyMembers
                         </div>
                         <CoberturaDeleteButton
     member={member}
-    readOnly={readOnly}
+    readOnly={!canEditParentesco}
     service={GrupoFamiliarService}     // 👈 usa el service con DELETE correcto
     removeLocal={removeMemberLocal}    // 👈 limpia el estado
     // allowDeleteTomador={false} // opcional
@@ -1009,7 +1017,11 @@ const sortedMembers = familyMembers
                           className="me-3 d-flex align-items-center justify-content-center"
                           style={{ width: 50 }}
                         >
-                          <UserCoverageIcon status={member.estado_cobertura} size={50} />
+                          <UserCoverageIcon
+                            status={member.estado_cobertura}
+                            estadoProceso={estadoActual}
+                            size={50}
+                          />
                         </div>
 
                         <div className="flex-grow-1 text-center">
@@ -1037,9 +1049,11 @@ const sortedMembers = familyMembers
                           <small className="text-muted d-block">
                             Género: {getMemberGenero(member) || ""}
                           </small>
-                          <small className="text-muted d-block">
-                            Cobertura: {member.estado_cobertura}
-                          </small>
+                          {!ocultarEstadoCobertura && (
+                            <small className="text-muted d-block">
+                              Cobertura: {member.estado_cobertura}
+                            </small>
+                          )}
                         </div>
                       </div>
 
@@ -1048,6 +1062,7 @@ const sortedMembers = familyMembers
 <MemberAccordionForm
   member={member}
   readOnly={readOnly}
+  estadoActual={estadoActual}
   onChange={(patch) => updateMemberLocal(member.id, patch)}
 />
 
@@ -1070,6 +1085,7 @@ const sortedMembers = familyMembers
         canAdd={canAdd}
         readOnly={readOnly}
         isProspecto={isProspecto}
+        estadoActual={estadoActual}
         onCreateLocal={createLocal}
         onUpdateLocal={updateLocal}
         onCreateRemote={createRemote}

@@ -15,7 +15,12 @@ import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import ResumenGruposEstados from "../components/ResumenGruposEstados";
-import { labelEstadoGrupoParaDisplay } from "../constants/estadosGrupoFamiliar";
+import {
+  labelEstadoGrupoParaDisplay,
+  grupoFamiliarDeleteRequiereAdmin,
+  personasCoberturaParaListado,
+} from "../constants/estadosGrupoFamiliar";
+import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
 import { Helmet } from "react-helmet-async";
 
 
@@ -41,7 +46,21 @@ const GruposFamiliaresListado = () => {
     per_page: ITEMS_PER_PAGE,
     page: 1,
   });
-  const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
+  const [selectedStatus, setSelectedStatus] = useState(() => {
+    const fromUrl = (searchParams.get("estado") || "").toLowerCase();
+    const validos = [
+      "prospecto",
+      "cotizacion",
+      "seguimiento",
+      "toma_datos",
+      "inscripcion_ini",
+      "grupo_familiar",
+      "grupo_familiar_activo",
+      "grupo_familiar_inactivo",
+      "descartado",
+    ];
+    return validos.includes(fromUrl) ? fromUrl : "Todos los estados";
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
@@ -54,6 +73,8 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   // Estados para modales
   const [showViewModal, setShowViewModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showAdminPasswordModal, setShowAdminPasswordModal] = useState(false);
+  const [adminPasswordForDelete, setAdminPasswordForDelete] = useState("");
   const [currentGrupo, setCurrentGrupo] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
@@ -176,6 +197,8 @@ useEffect(() => {
       "toma_datos": "TOMA_DATOS",
       "inscripcion_ini": "INSCRIPCION_INI",
       "grupo_familiar": "GRUPO_FAMILIAR",
+      "grupo_familiar_activo": "GRUPO_FAMILIAR_ACTIVO",
+      "grupo_familiar_inactivo": "GRUPO_FAMILIAR_INACTIVO",
       "descartado": "DESCARTADO"
     };
     
@@ -295,26 +318,55 @@ useEffect(() => {
     navigate(`/grupo-familiar/${id}/editar`);
   };
 
+  const resetDeleteState = () => {
+    setShowDeleteModal(false);
+    setShowAdminPasswordModal(false);
+    setAdminPasswordForDelete("");
+    setCurrentGrupo(null);
+  };
+
   const handleDelete = (grupo) => {
     setCurrentGrupo(grupo);
+    setAdminPasswordForDelete("");
+    if (grupoFamiliarDeleteRequiereAdmin(grupo)) {
+      setShowAdminPasswordModal(true);
+      return;
+    }
+    setShowDeleteModal(true);
+  };
+
+  const handleAdminPasswordSuccess = (password) => {
+    setAdminPasswordForDelete(password);
+    setShowAdminPasswordModal(false);
     setShowDeleteModal(true);
   };
 
   const confirmDelete = async () => {
     if (!currentGrupo) return;
 
+    const requiereAdmin = grupoFamiliarDeleteRequiereAdmin(currentGrupo);
+    if (requiereAdmin && !adminPasswordForDelete) {
+      setShowDeleteModal(false);
+      setShowAdminPasswordModal(true);
+      return;
+    }
+
     setDeleteLoading(true);
     try {
       const id = currentGrupo.id;
-      await apiRequest(`grupo_familiar/${id}`, "DELETE");
+      const body = requiereAdmin
+        ? { admin_password: adminPasswordForDelete }
+        : null;
+      await apiRequest(`grupo_familiar/${id}`, "DELETE", body);
       await fetchGrupos();
-      setShowDeleteModal(false);
-      setCurrentGrupo(null);
-      // Mostrar mensaje de éxito
+      resetDeleteState();
       alert("Grupo familiar eliminado correctamente");
     } catch (error) {
       console.error("Error al eliminar grupo familiar:", error);
-      alert("No se pudo eliminar el grupo familiar. Por favor, inténtelo de nuevo.");
+      alert(
+        error?.message ||
+          "No se pudo eliminar el grupo familiar. Por favor, inténtelo de nuevo."
+      );
     } finally {
       setDeleteLoading(false);
     }
@@ -401,7 +453,9 @@ useEffect(() => {
                 <option value="seguimiento">Seguimiento</option>
                 <option value="toma_datos">Toma de Datos</option>
                 <option value="inscripcion_ini">Inscripción / Confirmación</option>
-                <option value="grupo_familiar">Grupo Familiar</option>
+                <option value="grupo_familiar_activo">Grupo Familiar (activos)</option>
+                <option value="grupo_familiar_inactivo">Grupo Familiar (inactivos)</option>
+                <option value="grupo_familiar">Grupo Familiar (todos)</option>
                 <option value="descartado">Descartado</option>
               </Form.Select>
             </div>
@@ -486,7 +540,7 @@ useEffect(() => {
                           <td>{getTomadorNombre(grupo)}</td>
                           <td>
                             <span className="badge rounded-circle bg-info text-white me-1">
-                              {grupo.personas_cobertura || "0"}
+                              {personasCoberturaParaListado(grupo)}
                             </span>
                             <span className="text-muted">en cobertura</span>
                           </td>
@@ -580,8 +634,23 @@ useEffect(() => {
         </Card.Body>
       </Card>
 
+      <SuperAdminPasswordModal
+        show={showAdminPasswordModal}
+        onHide={() => {
+          setShowAdminPasswordModal(false);
+          setAdminPasswordForDelete("");
+          setCurrentGrupo(null);
+        }}
+        onSuccess={handleAdminPasswordSuccess}
+        title="Clave requerida para eliminar"
+        message={
+          `El grupo familiar ${currentGrupo?.persona_contacto || `ID: ${currentGrupo?.id}`} ` +
+          "está en estado Terminado o Descartado. Para eliminarlo debe ingresar la contraseña del super administrador."
+        }
+      />
+
       {/* Modal de Confirmación para Eliminar */}
-      <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} backdrop="static" centered>
+      <Modal show={showDeleteModal} onHide={resetDeleteState} backdrop="static" centered>
         <Modal.Header closeButton>
           <Modal.Title>Confirmar eliminación</Modal.Title>
         </Modal.Header>
@@ -590,9 +659,14 @@ useEffect(() => {
           <p className="text-danger mb-0">
             <strong>Advertencia:</strong> Esta acción eliminará también todas las coberturas y datos relacionados.
           </p>
+          {grupoFamiliarDeleteRequiereAdmin(currentGrupo) && (
+            <p className="text-warning mt-2 mb-0 small">
+              Se verificó la clave del super administrador para este grupo en estado protegido.
+            </p>
+          )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)} disabled={deleteLoading}>
+          <Button variant="secondary" onClick={resetDeleteState} disabled={deleteLoading}>
             Cancelar
           </Button>
           <Button variant="danger" onClick={confirmDelete} disabled={deleteLoading}>

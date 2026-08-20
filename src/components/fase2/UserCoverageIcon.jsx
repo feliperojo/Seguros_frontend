@@ -1,6 +1,14 @@
 // src/components/fase2/UserCoverageIcon.jsx
 import React from "react";
 import { formatDateForDisplay } from "../../utils/formatters";
+import {
+  normalizeEstadoGrupoCodigo,
+  esProcesoInicialGrupoFamiliar,
+} from "../../constants/estadosGrupoFamiliar";
+import { isFechaActivacionPendiente } from "../../utils/estadoPoliza";
+
+/** Pasos 4 y 5: Toma de datos e Inscripción / Confirmación */
+const ESTADOS_POR_ACTIVAR = ["TOMA_DATOS", "INSCRIPCION_INI"];
 
 const UserCoverageIcon = React.memo(function UserCoverageIcon({
   status,
@@ -14,11 +22,31 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   fechaRetiro,
   fechaCancelacion,
   fechaActivacion,   // 👈 NUEVO
+  fechaAnulacion = null,
   fueRenovado = false,
+  /** Código/nombre del estado del grupo familiar (para “por activar” en pasos 4–5) */
+  estadoProceso = null,
 }) {
-  const normalizedStatus = String(status || "").toLowerCase();
+  const normalizedStatus = String(status || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
   const hasRetiro = !!fechaRetiro;
   const hasCancel = !!fechaCancelacion;
+  const hasAnulacion = !!fechaAnulacion;
+  const procesoCode = normalizeEstadoGrupoCodigo(estadoProceso);
+  const enPaso4o5 = ESTADOS_POR_ACTIVAR.includes(procesoCode);
+  const enProcesoInicial = esProcesoInicialGrupoFamiliar(procesoCode);
+  const esSi = normalizedStatus === "si";
+  const pendienteEnTerminado =
+    esSi &&
+    !hasRetiro &&
+    !hasCancel &&
+    !hasAnulacion &&
+    !enProcesoInicial &&
+    !enPaso4o5 &&
+    isFechaActivacionPendiente(fechaActivacion);
 
   const shortDate = (d) => {
     if (!d) return "";
@@ -34,15 +62,17 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     if (fueRenovado) {
       // Color del estado real (no azul de “renovación”)
       color = hasCancel ? "#ffc107" : "#6c757d";
+    } else if (hasAnulacion) {
+      color = "#fd7e14"; // naranja — anulado, nunca se activó
     } else if (hasRetiro) {
       // RETIRADO
       color = "#6c757d"; // gris
     } else if (hasCancel && !hasRetiro) {
       // CANCELADO (cuando hay cancelación y NO hay retiro)
       color = "#ffc107"; // amarillo
-    } else if (normalizedStatus === "sí") {
-      // ACTIVO
-      color = "#1aa860"; // verde
+    } else if (esSi) {
+      // ACTIVO o pendiente de activación en GF terminado
+      color = pendienteEnTerminado ? "#f0ad4e" : "#1aa860";
     } else if (
       normalizedStatus === "no" ||
       normalizedStatus === "medicare" ||
@@ -62,21 +92,29 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const showCheck =
     typeof showCheckProp === "boolean"
       ? showCheckProp
-      : !hasRetiro && !hasCancel && normalizedStatus === "sí";
+      : !hasRetiro && !hasCancel && !hasAnulacion && esSi && !pendienteEnTerminado;
 
   /* ================== ETIQUETA ================== */
   let label = "";
 
   if (fueRenovado) {
     label = hasCancel ? "Cancelado - Renovado" : "Retirado - Renovado";
+  } else if (hasAnulacion) {
+    label = "Anulado";
   } else if (hasRetiro) {
     // Prioridad 1: Si tiene fecha de retiro → Retirado
     label = "Retirado";
   } else if (hasCancel && !hasRetiro) {
     // Prioridad 2: Si tiene fecha de cancelación y NO tiene retiro → Cancelado
     label = "Cancelado";
-  } else if (normalizedStatus === "sí") {
-    label = "Vigente";
+  } else if (esSi) {
+    // 1–3: sin etiqueta (cotización / proceso inicial)
+    // 4–5: “por activar”
+    // 6+: Vigente
+    if (enProcesoInicial) label = "";
+    else if (enPaso4o5) label = "por activar";
+    else if (pendienteEnTerminado) label = "Pendiente de activación";
+    else label = "Vigente";
   } else if (
     normalizedStatus === "no" ||
     normalizedStatus === "medicare" ||
@@ -96,7 +134,9 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   /* ================== FECHA A MOSTRAR ================== */
   let dateLabel = "";
 
-  if (hasRetiro && fechaRetiro) {
+  if (hasAnulacion && fechaAnulacion) {
+    dateLabel = `${shortDate(fechaAnulacion)}`;
+  } else if (hasRetiro && fechaRetiro) {
     // 👇 prioridad total cuando está retirado
     dateLabel = `${shortDate(fechaRetiro)}`;
   } else if (!hasRetiro && hasCancel && fechaCancelacion) {
@@ -105,10 +145,13 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   } else if (
     !hasRetiro &&
     !hasCancel &&
-    normalizedStatus === "sí" &&
-    fechaActivacion
+    !hasAnulacion &&
+    esSi &&
+    fechaActivacion &&
+    !enPaso4o5 &&
+    !enProcesoInicial
   ) {
-    // 👇 solo activación cuando está activo sin retiro ni cancelación
+    // 👇 activación solo cuando está Vigente (no en proceso inicial ni “por activar”)
     dateLabel = `${shortDate(fechaActivacion)}`;
   }
 

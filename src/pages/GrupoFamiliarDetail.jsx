@@ -26,6 +26,7 @@ import {
 
 import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
 import { estadoClienteDesdeProcesoGrupo } from "../utils/clasificacionClienteProceso";
+import { normalizeEstadoGrupoCodigo } from "../constants/estadosGrupoFamiliar";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
@@ -55,13 +56,10 @@ const canAdvance = (from, to, ctx = {}) => {
   return true;
 };
 
-// Convierte cualquier forma de estado en código UPPERCASE
+// Convierte cualquier forma de estado en código UPPERCASE de catálogo
 const toEstadoCode = (raw) => {
-  if (!raw) return null;
-  if (typeof raw === "string") return raw.toUpperCase();
-  if (typeof raw === "object")
-    return (raw.codigo || raw.code || raw.cod || raw.nombre || "").toUpperCase();
-  return null;
+  const code = normalizeEstadoGrupoCodigo(raw);
+  return code || null;
 };
 
 const calcAge = (dateStr) => {
@@ -600,6 +598,9 @@ const mapFullToMembers = (fullRaw) => {
       pagador_id:  cov.pagador_id  ?? null,
       fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
       fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
+      fecha_anulacion: date10(cov.fecha_anulacion ?? cov.fechaAnulacion ?? null),
+      motivo_anulacion: cov.motivo_anulacion ?? "",
+      nota_anulacion: cov.nota_anulacion ?? "",
       nota_retiro: cov.nota_retiro ?? "",
       motivo_cancelacion: cov.motivo_cancelacion ?? "",
       motivo_retiro: cov.motivo_retiro ?? "",
@@ -699,6 +700,7 @@ const GrupoFamiliarDetail = () => {
   }, [searchParams]);
 
   const [estadoActual, setEstadoActual] = useState("PROSPECTO");
+  const [estadoIdActual, setEstadoIdActual] = useState(null);
   const [formData, setFormData] = useState(null);
   const [familyMembers, setFamilyMembers] = useState([]);
   const [productoCotizacion, setProductoCotizacion] = useState(null); // 👈 Nuevo estado
@@ -980,6 +982,14 @@ console.log("Ingreso Familiar:", total);
   
       const code = toEstadoCode(fullData?.estado_actual) || "PROSPECTO";
       setEstadoActual(code);
+      const estadoIdRaw =
+        fullData?.estado_actual?.estado_id ??
+        fullData?.estado_id ??
+        null;
+      const estadoIdNum = Number(estadoIdRaw);
+      setEstadoIdActual(
+        Number.isFinite(estadoIdNum) && estadoIdNum > 0 ? estadoIdNum : null
+      );
     } catch (err) {
       console.error(err);
       setLoadError(err?.message || "No se pudo cargar el grupo.");
@@ -1175,6 +1185,9 @@ const mapMemberFromAppendResponse = (res) => {
     precio: cov.precio ?? "",
     fecha_cancelacion: cov.fecha_cancelacion || "",
     fecha_retiro: cov.fecha_retiro || "",
+    fecha_anulacion: cov.fecha_anulacion || "",
+    motivo_anulacion: cov.motivo_anulacion || "",
+    nota_anulacion: cov.nota_anulacion || "",
     nota_retiro: cov.nota_retiro || "",
     codigo_poliza: cov.codigo_poliza || "",
     estado_cobertura: cov.estado_cobertura || "Sí",
@@ -1383,7 +1396,8 @@ const handleCreateMemberRemote = async (memberData) => {
         motivo ?? `Cambio a ${targetCode}`,
         metadata
       );
-      setEstadoActual(targetCode);
+      setEstadoActual(toEstadoCode(targetCode) || targetCode);
+      setEstadoIdActual(null); // se refresca en reload()
       await reload();
       const promovidos = Number(res?.miembros_promovidos_a_cliente || 0);
       const labelDestino =
@@ -2151,13 +2165,14 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
-          (estadoActual || "").toUpperCase()
+          toEstadoCode(estadoActual) || ""
         ) ? (
           <TomaDeDatos
           grupoFamiliarId={id}  
           familyMembers={familyMembers}
           setFamilyMembers={setFamilyMembers}
           estadoActual={estadoActual}
+          estadoId={estadoIdActual}
           readOnly={readOnly}
           canAdd={canAddMember}
           isProspecto={isProspecto}
@@ -2175,6 +2190,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 readOnly={readOnly}
                 canAdd={canAddMember}
                 estadoActual={estadoActual}
+                estadoId={estadoIdActual}
                 defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
                 isProspecto={isProspecto}                                       
                 onCreateMemberRemote={handleCreateMemberRemote}                      

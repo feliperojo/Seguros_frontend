@@ -3,6 +3,7 @@ export const COBERTURA_DEFINIDA = {
   CANCELADO: "Cancelado",
   RETIRADO: "Retirado",
   TERMINADO: "Terminado",
+  ANULADO: "Anulado",
 };
 
 export const OPCIONES_COBERTURA_RETIRO = [
@@ -17,6 +18,7 @@ export const badgeCoberturaDefinida = (valor) => {
     [COBERTURA_DEFINIDA.CANCELADO]: "danger",
     [COBERTURA_DEFINIDA.RETIRADO]: "secondary",
     [COBERTURA_DEFINIDA.TERMINADO]: "dark",
+    [COBERTURA_DEFINIDA.ANULADO]: "warning",
   };
   return map[valor] || "secondary";
 };
