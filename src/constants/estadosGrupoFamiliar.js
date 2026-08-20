@@ -38,6 +38,16 @@ export const ESTADOS_GRUPO_CONFIG = {
     color: "#9334e6",
     label: "Grupo Familiar",
   },
+  grupo_familiar_activo: {
+    icon: FaProjectDiagram,
+    color: "#9334e6",
+    label: "GF activos",
+  },
+  grupo_familiar_inactivo: {
+    icon: FaProjectDiagram,
+    color: "#6c757d",
+    label: "GF inactivos",
+  },
   descartado: {
     icon: FaProjectDiagram,
     color: "#6c757d",
@@ -51,6 +61,8 @@ export const ORDEN_ESTADOS_GRUPO = [
   "seguimiento",
   "toma_datos",
   "inscripcion_ini",
+  "grupo_familiar_activo",
+  "grupo_familiar_inactivo",
   "grupo_familiar",
   "descartado",
 ];

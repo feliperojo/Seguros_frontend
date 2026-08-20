@@ -130,7 +130,7 @@ export default function DashboardKpiDetalleModal({
 
   const enlaces = {
     clientes: "/clientes/lista",
-    grupos: "/Grupofamiliar/lista",
+    grupos: "/grupofamiliar/lista",
     canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
     retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
   };
@@ -198,6 +198,9 @@ export default function DashboardKpiDetalleModal({
         <>
           <p className="dashboard-kpi-detalle-intro">
             Grupos familiares según su estado actual en el flujo de trabajo.
+            El estado <strong>Grupo Familiar</strong> se divide en{" "}
+            <strong>activos</strong> e <strong>inactivos</strong> (todas las
+            coberturas canceladas o retiradas).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {estadosGrupo.map(({ key, valor, config }) => (

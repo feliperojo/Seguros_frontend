@@ -46,7 +46,21 @@ const GruposFamiliaresListado = () => {
     per_page: ITEMS_PER_PAGE,
     page: 1,
   });
-  const [selectedStatus, setSelectedStatus] = useState("Todos los estados");
+  const [selectedStatus, setSelectedStatus] = useState(() => {
+    const fromUrl = (searchParams.get("estado") || "").toLowerCase();
+    const validos = [
+      "prospecto",
+      "cotizacion",
+      "seguimiento",
+      "toma_datos",
+      "inscripcion_ini",
+      "grupo_familiar",
+      "grupo_familiar_activo",
+      "grupo_familiar_inactivo",
+      "descartado",
+    ];
+    return validos.includes(fromUrl) ? fromUrl : "Todos los estados";
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
@@ -183,6 +197,8 @@ useEffect(() => {
       "toma_datos": "TOMA_DATOS",
       "inscripcion_ini": "INSCRIPCION_INI",
       "grupo_familiar": "GRUPO_FAMILIAR",
+      "grupo_familiar_activo": "GRUPO_FAMILIAR_ACTIVO",
+      "grupo_familiar_inactivo": "GRUPO_FAMILIAR_INACTIVO",
       "descartado": "DESCARTADO"
     };
     
@@ -437,7 +453,9 @@ useEffect(() => {
                 <option value="seguimiento">Seguimiento</option>
                 <option value="toma_datos">Toma de Datos</option>
                 <option value="inscripcion_ini">Inscripción / Confirmación</option>
-                <option value="grupo_familiar">Grupo Familiar</option>
+                <option value="grupo_familiar_activo">Grupo Familiar (activos)</option>
+                <option value="grupo_familiar_inactivo">Grupo Familiar (inactivos)</option>
+                <option value="grupo_familiar">Grupo Familiar (todos)</option>
                 <option value="descartado">Descartado</option>
               </Form.Select>
             </div>
