@@ -27,6 +27,7 @@ import apiRequest from "../../services/api";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
+import { esGrupoEnFlujoCotizacion } from "../../constants/estadosGrupoFamiliar";
 
 /**
  * Utilidad para verificar si una fecha está vacía o no válida
@@ -37,15 +38,52 @@ const fechaVacia = (fecha) => {
   return false;
 };
 
+const esEstadoCoberturaSi = (estadoCobertura) => {
+  const upper = String(estadoCobertura || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return upper === "SI" || upper === "YES";
+};
+
+const esVigenteTrue = (cobertura) => {
+  if (cobertura.vigente === undefined || cobertura.vigente === null) {
+    return true; // compatibilidad si el API aún no envía vigente
+  }
+  return (
+    cobertura.vigente === true ||
+    cobertura.vigente === 1 ||
+    cobertura.vigente === "1" ||
+    cobertura.vigente === "true"
+  );
+};
+
+const esActivoTrue = (cobertura) => {
+  if (cobertura.activo === undefined || cobertura.activo === null) {
+    return true;
+  }
+  return (
+    cobertura.activo === true ||
+    cobertura.activo === 1 ||
+    cobertura.activo === "1" ||
+    cobertura.activo === "true"
+  );
+};
+
 /**
- * Utilidad para clasificar el estado de un miembro
+ * Clasifica un miembro alineado al panel:
+ * - Activos reales: Sí + activo + vigente, fuera de cotización y sin fechas de baja.
+ * - Cotización: misma cobertura “Sí” pero el GF aún está en estados 1–4.
  */
-const clasificarEstadoMiembro = (cobertura) => {
+const clasificarEstadoMiembro = (cobertura, grupo = {}) => {
   const estadoCobertura = cobertura.estado_cobertura || "";
   const estadoCoberturaUpper = estadoCobertura.toUpperCase();
-  const activo = cobertura.activo !== undefined ? cobertura.activo : true;
   const fechaCancelacion = cobertura.fecha_cancelacion;
   const fechaRetiro = cobertura.fecha_retiro;
+  const enCotizacion = esGrupoEnFlujoCotizacion(
+    grupo.estado_codigo ?? grupo.estado_id ?? grupo.estado
+  );
 
   // Retirado (tiene fecha de retiro válida)
   if (!fechaVacia(fechaRetiro)) {
@@ -67,17 +105,23 @@ const clasificarEstadoMiembro = (cobertura) => {
     };
   }
 
-  // Activo con cobertura
-  // Considera "Yes", "YES", "Sí", "SÍ" como estados activos
-  const esActivo = estadoCoberturaUpper === "YES" || 
-                   estadoCobertura === "Yes" || 
-                   estadoCoberturaUpper === "SÍ" ||
-                   estadoCobertura === "Sí";
-  
-  // Verificar que no tenga fechas de cancelación o retiro
   const sinFechasInvalidas = fechaVacia(fechaCancelacion) && fechaVacia(fechaRetiro);
-  
-  if (esActivo && activo && sinFechasInvalidas) {
+  const pareceActiva =
+    esEstadoCoberturaSi(estadoCobertura) &&
+    esActivoTrue(cobertura) &&
+    esVigenteTrue(cobertura) &&
+    sinFechasInvalidas;
+
+  if (pareceActiva && enCotizacion) {
+    return {
+      categoria: "cotizacion",
+      label: "Cotización",
+      variant: "warning",
+      icon: FaExclamationTriangle
+    };
+  }
+
+  if (pareceActiva) {
     return {
       categoria: "activos_con_cobertura",
       label: "Activo con Cobertura",
@@ -168,18 +212,7 @@ const ReporteGruposFamiliaresClasificados = () => {
       
       // Clasificar cada cobertura/miembro
       const miembrosClasificados = coberturas.map((cobertura) => {
-        // Debug: log para ver los valores reales
-        if (cobertura.estado_cobertura === "Yes" || cobertura.estado_cobertura === "YES") {
-          console.log("🔍 Cobertura activa encontrada:", {
-            id: cobertura.id,
-            estado_cobertura: cobertura.estado_cobertura,
-            activo: cobertura.activo,
-            fecha_cancelacion: cobertura.fecha_cancelacion,
-            fecha_retiro: cobertura.fecha_retiro
-          });
-        }
-        
-        const estado = clasificarEstadoMiembro(cobertura);
+        const estado = clasificarEstadoMiembro(cobertura, grupo);
         return {
           ...cobertura,
           estadoClasificado: estado
@@ -189,6 +222,7 @@ const ReporteGruposFamiliaresClasificados = () => {
       // Agrupar por categoría
       const porCategoria = {
         activos_con_cobertura: miembrosClasificados.filter(m => m.estadoClasificado.categoria === "activos_con_cobertura"),
+        cotizacion: miembrosClasificados.filter(m => m.estadoClasificado.categoria === "cotizacion"),
         cancelados: miembrosClasificados.filter(m => m.estadoClasificado.categoria === "cancelados"),
         retirados: miembrosClasificados.filter(m => m.estadoClasificado.categoria === "retirados"),
         sin_cobertura: miembrosClasificados.filter(m => m.estadoClasificado.categoria === "sin_cobertura"),
@@ -199,6 +233,7 @@ const ReporteGruposFamiliaresClasificados = () => {
       const estadisticas = {
         total: miembrosClasificados.length,
         activos_con_cobertura: porCategoria.activos_con_cobertura.length,
+        cotizacion: porCategoria.cotizacion.length,
         cancelados: porCategoria.cancelados.length,
         retirados: porCategoria.retirados.length,
         sin_cobertura: porCategoria.sin_cobertura.length,
@@ -663,6 +698,7 @@ const ReporteGruposFamiliaresClasificados = () => {
                 >
                   <option value="todos">Todos los estados</option>
                   <option value="activos_con_cobertura">Activos con Cobertura</option>
+                  <option value="cotizacion">Cotización</option>
                   <option value="cancelados">Cancelados</option>
                   <option value="retirados">Retirados</option>
                   <option value="sin_cobertura">Sin Cobertura</option>
@@ -709,6 +745,12 @@ const ReporteGruposFamiliaresClasificados = () => {
               <h5 className="text-success mb-1">Activos con Cobertura</h5>
               <h3 className="fw-bold text-success">
                 {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.activos_con_cobertura, 0)}
+              </h3>
+            </Col>
+            <Col>
+              <h5 className="text-warning mb-1">Cotización</h5>
+              <h3 className="fw-bold text-warning">
+                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cotizacion, 0)}
               </h3>
             </Col>
             <Col>
@@ -795,6 +837,10 @@ const ReporteGruposFamiliaresClasificados = () => {
                             <strong className="text-success">{grupo.estadisticas.activos_con_cobertura}</strong>
                           </Col>
                           <Col>
+                            <small className="text-warning d-block">Cotización</small>
+                            <strong className="text-warning">{grupo.estadisticas.cotizacion}</strong>
+                          </Col>
+                          <Col>
                             <small className="text-danger d-block">Cancelados</small>
                             <strong className="text-danger">{grupo.estadisticas.cancelados}</strong>
                           </Col>
@@ -868,6 +914,11 @@ const ReporteGruposFamiliaresClasificados = () => {
                   {renderCategoriaMiembros(
                     "activos_con_cobertura",
                     grupo.porCategoria.activos_con_cobertura,
+                    grupo.id
+                  )}
+                  {renderCategoriaMiembros(
+                    "cotizacion",
+                    grupo.porCategoria.cotizacion,
                     grupo.id
                   )}
                   {renderCategoriaMiembros(
