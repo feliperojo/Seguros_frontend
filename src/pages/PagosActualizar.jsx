@@ -285,7 +285,7 @@ const PagosActualizar = () => {
                           : p.estado === "pendiente"
                           ? "bg-secondary text-white"
                           : p.estado === "procesando"
-                          ? "bg-warning text-dark"
+                          ? "bg-primary text-white"
                           : "bg-secondary"
                       }`}
                     >
