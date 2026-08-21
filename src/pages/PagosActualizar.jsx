@@ -227,6 +227,7 @@ const PagosActualizar = () => {
                 <th>Pagador</th>
                 <th>Fecha de Pago</th>
                 <th>Compañía</th>
+                <th>Tipo de Pago</th>
                 <th>Monto</th>
                 <th>Medios</th>
                 <th>Estado</th>
@@ -261,6 +262,7 @@ const PagosActualizar = () => {
                   <td>{p.cobertura?.pagador?.nombre_completo || "-"}</td>
                   <td>{p.fecha_pago || "-"}</td>
                   <td>{p.cobertura?.compania?.nombre || "-"}</td>
+                  <td className="text-center">{p.cobertura?.tipo_pago || "-"}</td>
                   <td>${Number(p.monto).toFixed(2)}</td>
                   <td className="text-center">
                         <Button
