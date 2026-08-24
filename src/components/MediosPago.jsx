@@ -352,8 +352,18 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   };
 
   const handleApplyClienteDireccion = async (medio) => {
-    const direccion = String(clienteDireccion || "").trim();
     if (!medio?.id) return;
+
+    let direccion = "";
+    try {
+      const response = await apiRequest(`cliente/${clienteId}`, "GET");
+      direccion = resolveClienteDireccion(response);
+      setClienteDireccion(direccion);
+    } catch (error) {
+      console.error("Error al cargar la dirección del cliente:", error);
+      direccion = String(clienteDireccion || "").trim();
+    }
+
     if (!direccion) {
       toast.showWarning("El cliente no tiene una dirección configurada.");
       return;

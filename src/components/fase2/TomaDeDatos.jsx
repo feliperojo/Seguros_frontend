@@ -69,7 +69,7 @@ import {
   CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
   esElegibleParaCopiarEntreMiembros,
 } from "../../utils/estadoPoliza";
-import { buildDireccion } from "../../utils/direccion";
+import { buildDireccion, resolveClienteDireccion } from "../../utils/direccion";
 
 /* =================== CONSTANTES =================== */
 const NAME_FIELDS = new Set(["primer_nombre", "segundo_nombre", "apellidos"]);
@@ -2229,6 +2229,7 @@ const activeNormalized = useMemo(
                         <MediosPagoSection 
                           clienteId={m.cliente_id || m?.cliente?.id || m.id} 
                           isOpen={isOpen}
+                          clienteDireccion={resolveClienteDireccion(m)}
                         />
                       )}
                     </AccordionItem>

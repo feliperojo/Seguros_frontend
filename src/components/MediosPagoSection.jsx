@@ -7,13 +7,14 @@ import useToast from "../hooks/useToast";
 import apiRequest from "../services/api";
 import { normalizeDireccion, resolveClienteDireccion } from "../utils/direccion";
 
-export default function MediosPagoSection({ clienteId, isOpen }) {
+export default function MediosPagoSection({ clienteId, isOpen, clienteDireccion: clienteDireccionProp }) {
   const { showPaymentMethodsData } = useAppSettings();
   const toast = useToast();
   const [medios, setMedios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [clienteDireccion, setClienteDireccion] = useState("");
+  const direccionClienteActual = String(clienteDireccionProp || clienteDireccion || "").trim();
 
   const fetchData = useCallback(async () => {
     if (!clienteId) return;
@@ -52,8 +53,20 @@ export default function MediosPagoSection({ clienteId, isOpen }) {
   }, [isOpen, clienteId]);
 
   const handleApplyClienteDireccion = async (medio) => {
-    const direccion = String(clienteDireccion || "").trim();
     if (!medio?.id) return;
+
+    let direccion = String(clienteDireccionProp || "").trim();
+    if (!direccion) {
+      try {
+        const response = await apiRequest(`cliente/${clienteId}`, "GET");
+        direccion = resolveClienteDireccion(response);
+        setClienteDireccion(direccion);
+      } catch (error) {
+        console.error("Error al cargar la dirección del cliente:", error);
+        direccion = String(clienteDireccion || "").trim();
+      }
+    }
+
     if (!direccion) {
       toast.showWarning("El cliente no tiene una dirección configurada.");
       return;
@@ -127,7 +140,7 @@ export default function MediosPagoSection({ clienteId, isOpen }) {
         <MediosPagoTablas
           mediosPago={medios}
           showPaymentMethodsData={showPaymentMethodsData}
-          clienteDireccion={clienteDireccion}
+          clienteDireccion={direccionClienteActual}
           onApplyClienteDireccion={handleApplyClienteDireccion}
           onView={(medio) =>
             alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`)

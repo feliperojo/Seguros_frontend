@@ -13,16 +13,14 @@ export const CopiarDireccionClienteCheck = ({
     title={title}
   >
     <input
-      className="form-check-input"
+      className="form-check-input mt-0"
       type="checkbox"
       id={id}
       checked={checked}
       onChange={onChange}
       disabled={disabled}
+      aria-label={title || "Actualizar con la dirección del cliente"}
     />
-    <label className="form-check-label text-nowrap" htmlFor={id}>
-      Del cliente
-    </label>
   </div>
 );
 

@@ -3,7 +3,6 @@ import { Button } from 'react-bootstrap';
 import { FaEdit, FaLock, FaTrashAlt, FaUnlock } from 'react-icons/fa';
 import PasswordUnlockModal from './PasswordUnlockModal';
 import { CopiarDireccionClienteCheck } from './DireccionMedioPagoInput';
-import { normalizeDireccion } from '../utils/direccion';
 
 const MediosPagoTablas = ({
   mediosPago,
@@ -126,9 +125,6 @@ const MediosPagoTablas = ({
   const renderDireccion = (medio) => {
     const direccionTexto = String(medio?.direccion || "").trim();
     const direccionCliente = String(clienteDireccion || "").trim();
-    const yaSincronizada =
-      Boolean(direccionCliente) &&
-      normalizeDireccion(direccionTexto) === normalizeDireccion(direccionCliente);
     const checkId = `copiar_direccion_medio_${medio.id}`;
 
     if (!canApplyClienteDireccion) {
@@ -144,14 +140,12 @@ const MediosPagoTablas = ({
           ) : (
             <CopiarDireccionClienteCheck
               id={checkId}
-              checked={yaSincronizada}
-              disabled={!direccionCliente || yaSincronizada}
+              checked={false}
+              disabled={!direccionCliente}
               title={
                 !direccionCliente
                   ? "El cliente no tiene dirección configurada"
-                  : yaSincronizada
-                    ? "Ya usa la dirección del cliente"
-                    : "Usar la dirección configurada del cliente"
+                  : "Actualizar con la dirección del cliente"
               }
               onChange={(e) => {
                 if (e.target.checked) handleApplyClienteDireccion(medio);
