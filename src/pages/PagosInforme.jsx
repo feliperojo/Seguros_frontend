@@ -230,8 +230,10 @@ const PagosInforme = () => {
                           <>
                             <span className={`badge text-bg-${pago.estado === "pagado"
                               ? "success"
+                              : pago.estado === "procesando"
+                              ? "primary"
                               : pago.estado === "pendiente"
-                              ? "warning"
+                              ? "secondary"
                               : pago.estado === "cancelado"
                               ? "danger"
                               : "secondary"

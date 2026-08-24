@@ -22,6 +22,11 @@ const TablaConfiguracionPagos = () => {
   });
   const [showPagosYaExistenModal, setShowPagosYaExistenModal] = useState(false);
   const [pagosYaExistenDetalle, setPagosYaExistenDetalle] = useState({ periodo: "", count: null });
+  const [showInconsistenciasModal, setShowInconsistenciasModal] = useState(false);
+  const [inconsistenciasDetalle, setInconsistenciasDetalle] = useState({
+    message: "",
+    inconsistencias: [],
+  });
 
   const mostrarAlerta = (mensaje, tipo = "success", duracion = 5000) => {
     setAlerta({ show: true, variant: tipo, mensaje });
@@ -161,9 +166,15 @@ const TablaConfiguracionPagos = () => {
       }
     } catch (err) {
       console.error("Error al generar cobros:", err);
-      if (err.response?.status === 409) {
+      const status = err.response?.status;
+      const data = err.response?.data || {};
+      const inconsistencias = Array.isArray(data.inconsistencias)
+        ? data.inconsistencias
+        : [];
+
+      if (status === 409) {
         const msg =
-          err.response?.data?.message ||
+          data.message ||
           "Ya existen pagos generados para este mes. No se puede repetir la generación.";
         mostrarAlerta(msg, "warning");
         const periodo = periodoParaMes(mesSeleccionado);
@@ -180,9 +191,26 @@ const TablaConfiguracionPagos = () => {
             /* ignore */
           }
         }
+      } else if (
+        status === 422 &&
+        (data.code === "COBERTURAS_INCONSISTENTES" || inconsistencias.length > 0)
+      ) {
+        setInconsistenciasDetalle({
+          message:
+            data.message ||
+            "No se generaron los pagos por inconsistencias en algunas coberturas.",
+          inconsistencias,
+        });
+        setShowInconsistenciasModal(true);
+        mostrarAlerta(
+          data.message ||
+            "No se generaron los pagos: revise las coberturas con inconsistencias.",
+          "danger",
+          8000
+        );
       } else {
         mostrarAlerta(
-          err.response?.data?.message || "Ocurrió un error al generar los cobros",
+          data.message || err.message || "Ocurrió un error al generar los cobros",
           "danger"
         );
       }
@@ -323,6 +351,78 @@ const TablaConfiguracionPagos = () => {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="primary" onClick={() => setShowPagosYaExistenModal(false)}>
+            Entendido
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={showInconsistenciasModal}
+        onHide={() => setShowInconsistenciasModal(false)}
+        centered
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>No se pudieron generar los pagos</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p className="mb-3">
+            {inconsistenciasDetalle.message ||
+              "Hay coberturas con datos incompletos o inconsistentes. Corrija lo indicado y vuelva a intentar."}
+          </p>
+          <p className="text-muted small mb-2">
+            No se creó ningún pago. Ajuste estas coberturas en su grupo familiar y reintente la generación.
+          </p>
+          <div className="table-responsive" style={{ maxHeight: "50vh" }}>
+            <Table bordered hover size="sm" className="mb-0 align-middle">
+              <thead className="table-light">
+                <tr>
+                  <th>ID GF</th>
+                  <th>Póliza</th>
+                  <th>Cliente</th>
+                  <th>Motivos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inconsistenciasDetalle.inconsistencias.map((item, idx) => (
+                  <tr key={`${item.cobertura_id}-${idx}`}>
+                    <td className="text-nowrap">
+                      {item.grupo_familiar_id ? (
+                        <Link
+                          to={`/grupo_familiar/${item.grupo_familiar_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-decoration-none fw-semibold"
+                        >
+                          {item.grupo_familiar_id}
+                        </Link>
+                      ) : (
+                        "—"
+                      )}
+                      {item.grupo_contacto ? (
+                        <div className="text-muted small">{item.grupo_contacto}</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <div className="fw-semibold">{item.codigo_poliza || "—"}</div>
+                      <div className="text-muted small">Cob. #{item.cobertura_id}</div>
+                    </td>
+                    <td>{item.cliente_nombre || "—"}</td>
+                    <td>
+                      <ul className="mb-0 ps-3">
+                        {(item.motivos || []).map((motivo, mIdx) => (
+                          <li key={mIdx}>{motivo}</li>
+                        ))}
+                      </ul>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={() => setShowInconsistenciasModal(false)}>
             Entendido
           </Button>
         </Modal.Footer>

@@ -39,13 +39,13 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const enPaso4o5 = ESTADOS_POR_ACTIVAR.includes(procesoCode);
   const enProcesoInicial = esProcesoInicialGrupoFamiliar(procesoCode);
   const esSi = normalizedStatus === "si";
-  const pendienteEnTerminado =
+  // Si hay fecha de activación futura: mismo estilo amarillo en cualquier etapa del GF
+  // (no solo en Terminado), para que se vea igual que “Pendiente de activación”.
+  const pendienteActivacion =
     esSi &&
     !hasRetiro &&
     !hasCancel &&
     !hasAnulacion &&
-    !enProcesoInicial &&
-    !enPaso4o5 &&
     isFechaActivacionPendiente(fechaActivacion);
 
   const shortDate = (d) => {
@@ -71,8 +71,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
       // CANCELADO (cuando hay cancelación y NO hay retiro)
       color = "#ffc107"; // amarillo
     } else if (esSi) {
-      // ACTIVO o pendiente de activación en GF terminado
-      color = pendienteEnTerminado ? "#f0ad4e" : "#1aa860";
+      // ACTIVO o pendiente de activación (fecha futura)
+      color = pendienteActivacion ? "#f0ad4e" : "#1aa860";
     } else if (
       normalizedStatus === "no" ||
       normalizedStatus === "medicare" ||
@@ -92,7 +92,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const showCheck =
     typeof showCheckProp === "boolean"
       ? showCheckProp
-      : !hasRetiro && !hasCancel && !hasAnulacion && esSi && !pendienteEnTerminado;
+      : !hasRetiro && !hasCancel && !hasAnulacion && esSi && !pendienteActivacion;
 
   /* ================== ETIQUETA ================== */
   let label = "";
@@ -108,12 +108,10 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     // Prioridad 2: Si tiene fecha de cancelación y NO tiene retiro → Cancelado
     label = "Cancelado";
   } else if (esSi) {
-    // 1–3: sin etiqueta (cotización / proceso inicial)
-    // 4–5: “por activar”
-    // 6+: Vigente
-    if (enProcesoInicial) label = "";
+    // Fecha futura: siempre “Pendiente de activación” (amarillo), también en 4–5
+    if (pendienteActivacion) label = "Pendiente de activación";
+    else if (enProcesoInicial) label = "";
     else if (enPaso4o5) label = "por activar";
-    else if (pendienteEnTerminado) label = "Pendiente de activación";
     else label = "Vigente";
   } else if (
     normalizedStatus === "no" ||
@@ -148,10 +146,9 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     !hasAnulacion &&
     esSi &&
     fechaActivacion &&
-    !enPaso4o5 &&
-    !enProcesoInicial
+    (pendienteActivacion || (!enPaso4o5 && !enProcesoInicial))
   ) {
-    // 👇 activación solo cuando está Vigente (no en proceso inicial ni “por activar”)
+    // Pendiente: muestra fecha también en pasos 4–5; Vigente: como antes
     dateLabel = `${shortDate(fechaActivacion)}`;
   }
 
@@ -226,11 +223,17 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
       {/* Etiqueta + fecha bajo el icono */}
       {(label || dateLabel) && (
         <div
-          className="text-muted small text-center"
-          style={{ fontSize: size * 0.3, lineHeight: 1.15 }}
+          className="small text-center"
+          style={{
+            fontSize: size * 0.3,
+            lineHeight: 1.15,
+            color: pendienteActivacion ? color : undefined,
+          }}
         >
-          {label && <div>{label}</div>}
-          {dateLabel && <div>{dateLabel}</div>}
+          {label && <div className={pendienteActivacion ? undefined : "text-muted"}>{label}</div>}
+          {dateLabel && (
+            <div className={pendienteActivacion ? undefined : "text-muted"}>{dateLabel}</div>
+          )}
         </div>
       )}
     </div>

@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Button } from 'react-bootstrap';
-import { FaEdit, FaTrashAlt, FaLock, FaUnlock } from 'react-icons/fa';
+import { FaEdit, FaLock, FaTrashAlt, FaUnlock } from 'react-icons/fa';
 import PasswordUnlockModal from './PasswordUnlockModal';
+import { CopiarDireccionClienteCheck } from './DireccionMedioPagoInput';
 
 const MediosPagoTablas = ({
   mediosPago,
@@ -10,11 +11,15 @@ const MediosPagoTablas = ({
   onDelete,
   showActions = true,
   showPaymentMethodsData = false,
+  clienteDireccion = '',
+  onApplyClienteDireccion,
 }) => {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [unlockExpiry, setUnlockExpiry] = useState(null);
+  const [updatingDireccionId, setUpdatingDireccionId] = useState(null);
   const pendingActionRef = useRef(null);
+  const canApplyClienteDireccion = typeof onApplyClienteDireccion === "function";
 
   const inferFormaPago = (medio) => {
     const fp = medio?.forma_pago;
@@ -107,6 +112,61 @@ const MediosPagoTablas = ({
     return 'N/A';
   };
 
+  const getCorreoCliente = (medio) => {
+    const email =
+      medio?.cliente?.email ||
+      medio?.cliente_email ||
+      medio?.email ||
+      "";
+    const trimmed = String(email).trim();
+    return trimmed || "—";
+  };
+
+  const handleApplyClienteDireccion = async (medio) => {
+    if (!canApplyClienteDireccion || updatingDireccionId) return;
+    setUpdatingDireccionId(medio.id);
+    try {
+      await onApplyClienteDireccion(medio);
+    } finally {
+      setUpdatingDireccionId(null);
+    }
+  };
+
+  const renderDireccion = (medio) => {
+    const direccionTexto = String(medio?.direccion || "").trim();
+    const direccionCliente = String(clienteDireccion || "").trim();
+    const checkId = `copiar_direccion_medio_${medio.id}`;
+
+    if (!canApplyClienteDireccion) {
+      return direccionTexto || "—";
+    }
+
+    return (
+      <div className="d-flex align-items-start gap-2">
+        <span className="text-break">{direccionTexto || <span className="text-muted">—</span>}</span>
+        <div className="flex-shrink-0">
+          {updatingDireccionId === medio.id ? (
+            <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+          ) : (
+            <CopiarDireccionClienteCheck
+              id={checkId}
+              checked={false}
+              disabled={!direccionCliente}
+              title={
+                !direccionCliente
+                  ? "El cliente no tiene dirección configurada"
+                  : "Actualizar con la dirección del cliente"
+              }
+              onChange={(e) => {
+                if (e.target.checked) handleApplyClienteDireccion(medio);
+              }}
+            />
+          )}
+        </div>
+      </div>
+    );
+  };
+
   const renderPrincipal = (medio) => {
     const isPrincipal =
       medio?.es_principal === true || medio?.es_principal === 1 || medio?.es_principal === "1";
@@ -183,8 +243,8 @@ const MediosPagoTablas = ({
                     <th>Principal</th>
                     <th>Tipo de Pago</th>
                     <th>Tipo</th>
-                    <th>Quien paga</th>
                     <th>Titular</th>
+                    <th>Correo</th>
                     <th>Direccion</th>
                     <th>Número</th>
                     <th>Vencimiento</th>
@@ -199,9 +259,9 @@ const MediosPagoTablas = ({
                         <td>{renderPrincipal(medio)}</td>
                         <td>{getTipoPago(medio)}</td>
                         <td>{medio.tipo_tarjeta}</td>
-                        <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
-                        <td>{medio.direccion}</td>
+                        <td className="text-break">{getCorreoCliente(medio)}</td>
+                        <td>{renderDireccion(medio)}</td>
                         <td>
                           {datosVisibles ? medio.numero_tarjeta : maskCardNumber(medio.numero_tarjeta)}
                         </td>
@@ -248,8 +308,8 @@ const MediosPagoTablas = ({
                 <tr>
                     <th>Principal</th>
                     <th>Banco</th>
-                    <th>Quien paga</th>
                     <th>Titular</th>
+                    <th>Correo</th>
                     <th>Dirección</th>
                     <th>Ruta/Código de Banco</th>
                     <th>Número de Cuenta</th>
@@ -262,9 +322,9 @@ const MediosPagoTablas = ({
                     <tr key={medio.id}>
                         <td>{renderPrincipal(medio)}</td>
                         <td>{medio.banco}</td>
-                        <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
-                        <td>{medio.direccion}</td>
+                        <td className="text-break">{getCorreoCliente(medio)}</td>
+                        <td>{renderDireccion(medio)}</td>
                         <td>{medio.ruta}</td>
                         <td>
                           {datosVisibles ? medio.cuenta_numero : maskCardNumber(medio.cuenta_numero)}

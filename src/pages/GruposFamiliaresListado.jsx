@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, Fragment } from "react";
 import {
   Container, Card, Table, Badge, Button,
   Form, InputGroup, Dropdown, Modal
@@ -6,7 +6,8 @@ import {
 import Pagination from "../components/Pagination";
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaCog,
-  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport
+  FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport,
+  FaChevronDown, FaChevronUp,
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -15,6 +16,7 @@ import GrupoFamiliarDetalleModal from "../components/GrupoFamiliarDetalleModal";
 import RequerimientosModal from "../components/RequerimientosModal"; // Importar el modal
 import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import ResumenGruposEstados from "../components/ResumenGruposEstados";
+import GrupoFamiliarClasificadoDetalle from "../components/GrupoFamiliar/GrupoFamiliarClasificadoDetalle";
 import {
   labelEstadoGrupoParaDisplay,
   grupoFamiliarDeleteRequiereAdmin,
@@ -78,6 +80,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [currentGrupo, setCurrentGrupo] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
+  const [gruposExpandidos, setGruposExpandidos] = useState(() => new Set());
   const location = useLocation();
 
   // Año actual + 3 anteriores como base; se enriquecen con años ya creados en BD (incluye futuros).
@@ -180,7 +183,17 @@ useEffect(() => {
   // Cargar grupos al cambiar filtros, búsqueda, página o año
   useEffect(() => {
     fetchGrupos();
+    setGruposExpandidos(new Set());
   }, [selectedStatus, debouncedSearch, currentPage, anioSeleccionado]);
+
+  const toggleGrupoExpandido = (grupoId) => {
+    setGruposExpandidos((prev) => {
+      const next = new Set(prev);
+      if (next.has(grupoId)) next.delete(grupoId);
+      else next.add(grupoId);
+      return next;
+    });
+  };
 
   // Volver a la primera página al cambiar búsqueda o filtro de estado
   useEffect(() => {
@@ -510,6 +523,7 @@ useEffect(() => {
                   <Table hover className="align-middle">
                     <thead>
                       <tr>
+                        <th style={{ width: "2.5rem" }} aria-label="Expandir" />
                         <th>ID GF</th>
                         <th>TOMADOR</th>
                         <th>P. COBERTURA</th>
@@ -522,14 +536,25 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {grupos.map((grupo) => (
-                        <tr key={grupo.id}>
+                      {grupos.map((grupo) => {
+                        const estaExpandido = gruposExpandidos.has(grupo.id);
+                        return (
+                        <Fragment key={grupo.id}>
+                        <tr
+                          className={estaExpandido ? "table-active" : undefined}
+                          style={{ cursor: "pointer" }}
+                          onClick={() => toggleGrupoExpandido(grupo.id)}
+                        >
+                          <td className="text-muted">
+                            {estaExpandido ? <FaChevronUp /> : <FaChevronDown />}
+                          </td>
                   <td>
                           {grupo.id ? (
                             <Link
                               to={buildDetallePath(grupo.id)}
                               className="text-decoration-none"
                               title="Ver detalle del grupo"
+                              onClick={(e) => e.stopPropagation()}
                             >
                               {grupo.id}
                             </Link>
@@ -597,7 +622,10 @@ useEffect(() => {
                               <Button
                                 variant="outline-danger"
                                 size="sm"
-                                onClick={() => handleDelete(grupo)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(grupo);
+                                }}
                                 title="Eliminar grupo familiar"
                               >
                                 <FaTrashAlt />
@@ -605,7 +633,8 @@ useEffect(() => {
                               <Button
                                 variant="outline-primary"
                                 size="sm"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setGrupoFamiliarId(grupo.id);
                                   setShowDocumentosModal(true);
                                 }}
@@ -615,7 +644,24 @@ useEffect(() => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        {estaExpandido && (
+                          <tr className="grupo-listado-acordeon-detalle">
+                            <td colSpan={10} className="bg-white border-bottom p-3">
+                              <GrupoFamiliarClasificadoDetalle
+                                grupoId={grupo.id}
+                                anio={
+                                  anioSeleccionado !== ANIO_ACTUAL
+                                    ? anioSeleccionado
+                                    : null
+                                }
+                                detallePath={buildDetallePath(grupo.id)}
+                              />
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
+                        );
+                      })}
                     </tbody>
                   </Table>
                 </div>

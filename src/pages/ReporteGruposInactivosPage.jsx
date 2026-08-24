@@ -37,14 +37,7 @@ const TIPO_OPTIONS = [
   { value: "mixtos", label: "Cancelados y retirados" },
 ];
 
-const formatFecha = (value) => {
-  if (!value) return "—";
-  try {
-    return new Date(value).toLocaleDateString("es-CO", { dateStyle: "medium" });
-  } catch {
-    return formatDateMMDDYYYY(value) || "—";
-  }
-};
+const formatFecha = (value) => formatDateMMDDYYYY(value) || "—";
 
 const badgeTipo = (tipo) => {
   switch (tipo) {

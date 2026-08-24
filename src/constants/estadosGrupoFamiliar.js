@@ -122,10 +122,42 @@ export const ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL = [
   "SEGUIMIENTO",
 ];
 
+/**
+ * Estados 1–4: flujo de cotización del panel (Prospecto → Toma de Datos).
+ * Las coberturas de estos grupos no cuentan como “activas reales”.
+ */
+export const ESTADOS_GRUPO_CODIGOS_FLUJO_COTIZACION = [
+  "PROSPECTO",
+  "COTIZACION",
+  "SEGUIMIENTO",
+  "TOMA_DATOS",
+];
+
+export const ESTADOS_GRUPO_IDS_FLUJO_COTIZACION = [1, 2, 3, 4];
+
 /** True en Prospecto, Cotización o Seguimiento. */
 export function esProcesoInicialGrupoFamiliar(estadoCodigoOrNombre) {
   const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombre);
   return ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL.includes(code);
+}
+
+/**
+ * True si el GF está en flujo de cotización (estados 1–4).
+ * Acepta código, nombre o id numérico del catálogo.
+ */
+export function esGrupoEnFlujoCotizacion(estadoCodigoOrNombreOrId) {
+  if (
+    typeof estadoCodigoOrNombreOrId === "number" ||
+    (typeof estadoCodigoOrNombreOrId === "string" &&
+      /^\d+$/.test(estadoCodigoOrNombreOrId.trim()))
+  ) {
+    return ESTADOS_GRUPO_IDS_FLUJO_COTIZACION.includes(
+      Number(estadoCodigoOrNombreOrId)
+    );
+  }
+
+  const code = normalizeEstadoGrupoCodigo(estadoCodigoOrNombreOrId);
+  return ESTADOS_GRUPO_CODIGOS_FLUJO_COTIZACION.includes(code);
 }
 
 /**
