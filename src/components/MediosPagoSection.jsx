@@ -3,12 +3,17 @@ import { useEffect, useState, useCallback } from "react";
 import { MediosPagoService } from "../services/MediosPagoService";
 import MediosPagoTablas from "./MediosPagoTablas";
 import useAppSettings from "../hooks/useAppSettings";
+import useToast from "../hooks/useToast";
+import apiRequest from "../services/api";
+import { normalizeDireccion, resolveClienteDireccion } from "../utils/direccion";
 
 export default function MediosPagoSection({ clienteId, isOpen }) {
   const { showPaymentMethodsData } = useAppSettings();
+  const toast = useToast();
   const [medios, setMedios] = useState([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
+  const [clienteDireccion, setClienteDireccion] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!clienteId) return;
@@ -30,6 +35,50 @@ export default function MediosPagoSection({ clienteId, isOpen }) {
   useEffect(() => {
     if (isOpen && clienteId) fetchData();
   }, [isOpen, clienteId, fetchData]);
+
+  useEffect(() => {
+    const fetchClienteDireccion = async () => {
+      if (!isOpen || !clienteId) return;
+      try {
+        const response = await apiRequest(`cliente/${clienteId}`, "GET");
+        setClienteDireccion(resolveClienteDireccion(response));
+      } catch (error) {
+        console.error("Error al cargar la dirección del cliente:", error);
+        setClienteDireccion("");
+      }
+    };
+
+    fetchClienteDireccion();
+  }, [isOpen, clienteId]);
+
+  const handleApplyClienteDireccion = async (medio) => {
+    const direccion = String(clienteDireccion || "").trim();
+    if (!medio?.id) return;
+    if (!direccion) {
+      toast.showWarning("El cliente no tiene una dirección configurada.");
+      return;
+    }
+    if (normalizeDireccion(medio.direccion) === normalizeDireccion(direccion)) {
+      toast.showInfo("Este medio de pago ya usa la dirección del cliente.");
+      return;
+    }
+
+    try {
+      const response = await MediosPagoService.update(medio.id, { direccion });
+      const updated = response?.data || response;
+      setMedios((prev) =>
+        prev.map((item) =>
+          item.id === medio.id
+            ? { ...item, ...updated, direccion: updated.direccion ?? direccion }
+            : item
+        )
+      );
+      toast.showSuccess("Dirección actualizada con la del cliente.");
+    } catch (error) {
+      console.error("Error al actualizar la dirección del medio de pago:", error);
+      toast.showError(error?.message || "No se pudo actualizar la dirección.");
+    }
+  };
 
   return (
     <div className="p-3">
@@ -78,6 +127,8 @@ export default function MediosPagoSection({ clienteId, isOpen }) {
         <MediosPagoTablas
           mediosPago={medios}
           showPaymentMethodsData={showPaymentMethodsData}
+          clienteDireccion={clienteDireccion}
+          onApplyClienteDireccion={handleApplyClienteDireccion}
           onView={(medio) =>
             alert(`Ver medio de pago:\nTitular: ${medio.titular}\nTipo: ${medio.forma_pago}`)
           }

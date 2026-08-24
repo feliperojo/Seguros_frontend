@@ -10,4 +10,9 @@ export const MediosPagoService = {
     // apiRequest no acepta AbortSignal, así que solo lo pasamos a fetch si quisieras
     return apiRequest(endpoint, "GET");
   },
+
+  async update(id, payload) {
+    if (!id) throw new Error("Id de medio de pago requerido");
+    return apiRequest(`mediopago/${id}`, "PUT", payload);
+  },
 };

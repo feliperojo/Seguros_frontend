@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import apiRequest from "../services/api";
 import MediosPagoTablas from "./MediosPagoTablas";
+import DireccionMedioPagoInput from "./DireccionMedioPagoInput";
 import useAppSettings from "../hooks/useAppSettings";
+import useToast from "../hooks/useToast";
+import { MediosPagoService } from "../services/MediosPagoService";
+import { normalizeDireccion, resolveClienteDireccion } from "../utils/direccion";
 
 
 const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
   const { showPaymentMethodsData } = useAppSettings();
+  const toast = useToast();
 
   // Inicialización de estados
   const [mediosPago, setMediosPago] = useState([]);
@@ -61,8 +66,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       if (!clienteId) return;
       try {
         const response = await apiRequest(`cliente/${clienteId}`, 'GET');
-        const direccion = response?.direccion ?? response?.dir_correspondencia ?? '';
-        setClienteDireccion(direccion || '');
+        setClienteDireccion(resolveClienteDireccion(response));
       } catch (error) {
         console.error('Error al cargar la dirección del cliente:', error);
         setClienteDireccion('');
@@ -347,6 +351,35 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
     setDireccionAntesCopiar('');
   };
 
+  const handleApplyClienteDireccion = async (medio) => {
+    const direccion = String(clienteDireccion || "").trim();
+    if (!medio?.id) return;
+    if (!direccion) {
+      toast.showWarning("El cliente no tiene una dirección configurada.");
+      return;
+    }
+    if (normalizeDireccion(medio.direccion) === normalizeDireccion(direccion)) {
+      toast.showInfo("Este medio de pago ya usa la dirección del cliente.");
+      return;
+    }
+
+    try {
+      const response = await MediosPagoService.update(medio.id, { direccion });
+      const updated = response?.data || response;
+      setMediosPago((prev) =>
+        prev.map((item) =>
+          item.id === medio.id
+            ? { ...item, ...updated, direccion: updated.direccion ?? direccion }
+            : item
+        )
+      );
+      toast.showSuccess("Dirección actualizada con la del cliente.");
+    } catch (error) {
+      console.error("Error al actualizar la dirección del medio de pago:", error);
+      toast.showError(error?.message || "No se pudo actualizar la dirección.");
+    }
+  };
+
   // Validar formulario antes de guardar
   const validateForm = () => {
     // Validar según forma de pago
@@ -564,30 +597,13 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                 )}
               </div>
             </div>
-            <div className="form-group mb-3">
-              <label htmlFor="direccion" className="mb-2">Dirección</label>
-              <div className="form-check mb-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="copiar_direccion"
-                  checked={copiarDireccion}
-                  onChange={handleToggleCopiarDireccion}
-                  disabled={!clienteDireccion}
-                />
-                <label className="form-check-label" htmlFor="copiar_direccion">
-                  Copiar dirección
-                </label>
-              </div>
-              <input
-                type="text"
-                className="form-control"
-                id="direccion"
-                name="direccion"
-                value={currentMedioPago.direccion || ''}
-                onChange={handleChange}
-              />
-            </div>
+            <DireccionMedioPagoInput
+              value={currentMedioPago.direccion || ''}
+              onChange={handleChange}
+              copiarDireccion={copiarDireccion}
+              onToggleCopiar={handleToggleCopiarDireccion}
+              clienteDireccion={clienteDireccion}
+            />
           </>
         );
     }
@@ -611,30 +627,13 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
               )}
             </div>
 
-            <div className="form-group mb-3">
-              <label htmlFor="direccion" className="mb-2">Dirección</label>
-              <div className="form-check mb-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="copiar_direccion"
-                  checked={copiarDireccion}
-                  onChange={handleToggleCopiarDireccion}
-                  disabled={!clienteDireccion}
-                />
-                <label className="form-check-label" htmlFor="copiar_direccion">
-                  Copiar dirección
-                </label>
-              </div>
-              <input
-                type="text"
-                className="form-control"
-                id="direccion"
-                name="direccion"
-                value={currentMedioPago.direccion || ''}
-                onChange={handleChange}
-              />
-            </div>
+            <DireccionMedioPagoInput
+              value={currentMedioPago.direccion || ''}
+              onChange={handleChange}
+              copiarDireccion={copiarDireccion}
+              onToggleCopiar={handleToggleCopiarDireccion}
+              clienteDireccion={clienteDireccion}
+            />
             <div className="form-group mb-3">
               <label htmlFor="banco">Banco</label>
               <input
@@ -690,6 +689,8 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
       <MediosPagoTablas
             mediosPago={mediosPago}
             showPaymentMethodsData={showPaymentMethodsData}
+            clienteDireccion={clienteDireccion}
+            onApplyClienteDireccion={handleApplyClienteDireccion}
             onView={(medio) => alert(`Ver medio de pago: ${medio.titular} (${medio.forma_pago})`)}
             onEdit={(medio) => {
               const index = mediosPago.findIndex(m => m.id === medio.id);
@@ -776,6 +777,7 @@ const MediosPago = ({ clienteId, grupoFamiliarId, onSave }) => {
                       <option value="">Seleccione...</option>
                       <option value="titular">Titular</option>
                       <option value="tercero">Tercero</option>
+                      <option value="tomador">Tomador</option>
                     </select>
                   </div>
 
