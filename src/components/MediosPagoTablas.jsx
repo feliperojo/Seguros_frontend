@@ -112,6 +112,16 @@ const MediosPagoTablas = ({
     return 'N/A';
   };
 
+  const getCorreoCliente = (medio) => {
+    const email =
+      medio?.cliente?.email ||
+      medio?.cliente_email ||
+      medio?.email ||
+      "";
+    const trimmed = String(email).trim();
+    return trimmed || "—";
+  };
+
   const handleApplyClienteDireccion = async (medio) => {
     if (!canApplyClienteDireccion || updatingDireccionId) return;
     setUpdatingDireccionId(medio.id);
@@ -233,8 +243,8 @@ const MediosPagoTablas = ({
                     <th>Principal</th>
                     <th>Tipo de Pago</th>
                     <th>Tipo</th>
-                    <th>Quien paga</th>
                     <th>Titular</th>
+                    <th>Correo</th>
                     <th>Direccion</th>
                     <th>Número</th>
                     <th>Vencimiento</th>
@@ -249,8 +259,8 @@ const MediosPagoTablas = ({
                         <td>{renderPrincipal(medio)}</td>
                         <td>{getTipoPago(medio)}</td>
                         <td>{medio.tipo_tarjeta}</td>
-                        <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
+                        <td className="text-break">{getCorreoCliente(medio)}</td>
                         <td>{renderDireccion(medio)}</td>
                         <td>
                           {datosVisibles ? medio.numero_tarjeta : maskCardNumber(medio.numero_tarjeta)}
@@ -298,8 +308,8 @@ const MediosPagoTablas = ({
                 <tr>
                     <th>Principal</th>
                     <th>Banco</th>
-                    <th>Quien paga</th>
                     <th>Titular</th>
+                    <th>Correo</th>
                     <th>Dirección</th>
                     <th>Ruta/Código de Banco</th>
                     <th>Número de Cuenta</th>
@@ -312,8 +322,8 @@ const MediosPagoTablas = ({
                     <tr key={medio.id}>
                         <td>{renderPrincipal(medio)}</td>
                         <td>{medio.banco}</td>
-                        <td>{medio.quien_paga}</td>
                         <td>{medio.titular}</td>
+                        <td className="text-break">{getCorreoCliente(medio)}</td>
                         <td>{renderDireccion(medio)}</td>
                         <td>{medio.ruta}</td>
                         <td>
