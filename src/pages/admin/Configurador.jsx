@@ -29,6 +29,7 @@ import SystemConfigSection, {
 // Tipos de producto (cobertura_tipo) soportados en el formulario de Grupo Familiar
 const COVERAGE_PRODUCT_TYPES = [
   "Plan de salud",
+  "Dental MS",
   "Plan Dental",
   "Plan de vida",
   "Plan de Descuentos",

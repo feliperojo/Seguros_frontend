@@ -12,6 +12,11 @@ import {
 } from "../../utils/coberturaDefinida";
 import { esInscripcionPendienteDeActivacion } from "../../utils/coberturaAnulacion";
 import { vigenteDesdeEstadoCobertura } from "../../utils/estadoPoliza";
+import {
+  COBERTURA_TIPO_DENTAL_MS,
+  isDentalCoberturaTipo,
+  isSaludCoberturaTipo,
+} from "../../constants/coberturaTipos";
 
 /**
  * CambioVidaCancelacionModal
@@ -78,6 +83,72 @@ const CambioVidaCancelacionModal = ({
 
   // Motivos de retiro (lista distinta a cancelación)
   const motivosRetiro = ["TAXES POR SEPARADO"];
+
+  const getClienteIdFromCobertura = (c = {}) => c?.cliente?.id ?? c?.cliente_id ?? null;
+
+  const getEtiquetaProducto = (c = {}) =>
+    isDentalCoberturaTipo(c?.cobertura_tipo)
+      ? COBERTURA_TIPO_DENTAL_MS
+      : (c?.cobertura_tipo || "Salud MS");
+
+  const findDentalCoberturaForCliente = (clienteId, list = coberturas) => {
+    if (!clienteId) return null;
+    return (
+      list.find(
+        (c) =>
+          getClienteIdFromCobertura(c) === clienteId &&
+          isDentalCoberturaTipo(c?.cobertura_tipo)
+      ) || null
+    );
+  };
+
+  const findSaludCoberturaForCliente = (clienteId, list = coberturas) => {
+    if (!clienteId) return null;
+    return (
+      list.find(
+        (c) =>
+          getClienteIdFromCobertura(c) === clienteId &&
+          isSaludCoberturaTipo(c?.cobertura_tipo)
+      ) || null
+    );
+  };
+
+  const getDentalIdVinculadoASalud = (saludId) => {
+    const salud = coberturas.find((c) => c.id === saludId);
+    if (!salud || !isSaludCoberturaTipo(salud.cobertura_tipo)) return null;
+    return findDentalCoberturaForCliente(getClienteIdFromCobertura(salud))?.id ?? null;
+  };
+
+  const esDentalVinculadaASaludSeleccionada = (dentalId) => {
+    const dental = coberturas.find((c) => c.id === dentalId);
+    if (!dental) return false;
+    const salud = findSaludCoberturaForCliente(getClienteIdFromCobertura(dental));
+    return Boolean(salud?.id && coberturasSeleccionadas.has(salud.id));
+  };
+
+  const copiarDatosSaludADental = (datosSalud, dentalCobertura) => {
+    const base = crearDatosInicialesCobertura(dentalCobertura);
+    return {
+      ...base,
+      renovar: datosSalud.renovar,
+      fecha_retiro: datosSalud.fecha_retiro,
+      fecha_cancelacion: datosSalud.fecha_cancelacion,
+      motivo_cancelacion: datosSalud.motivo_cancelacion,
+      nota_cancel: datosSalud.nota_cancel,
+      motivo_retiro: datosSalud.motivo_retiro,
+      nota_retiro: datosSalud.nota_retiro,
+      cobertura_definida: datosSalud.cobertura_definida,
+    };
+  };
+
+  const idsDentalVinculadosASalud = (saludIds = []) => {
+    const extras = new Set();
+    saludIds.forEach((id) => {
+      const dentalId = getDentalIdVinculadoASalud(id);
+      if (dentalId) extras.add(dentalId);
+    });
+    return extras;
+  };
 
   const esTrue = (v) => v === true || v === "true" || v === 1 || v === "1";
   const hasFechaValida = (v) => {
@@ -265,7 +336,17 @@ const CambioVidaCancelacionModal = ({
       const nuevo = new Map(prev);
       const cobertura = coberturas.find((c) => c.id === coberturaId);
       const actual = nuevo.get(coberturaId) || crearDatosInicialesCobertura(cobertura);
-      nuevo.set(coberturaId, { ...actual, [campo]: valor });
+      const actualizado = { ...actual, [campo]: valor };
+      nuevo.set(coberturaId, actualizado);
+
+      const dentalId = getDentalIdVinculadoASalud(coberturaId);
+      if (dentalId && coberturasSeleccionadas.has(dentalId)) {
+        const dentalCov = coberturas.find((c) => c.id === dentalId);
+        if (dentalCov) {
+          nuevo.set(dentalId, copiarDatosSaludADental(actualizado, dentalCov));
+        }
+      }
+
       return nuevo;
     });
   };
@@ -351,29 +432,63 @@ const CambioVidaCancelacionModal = ({
       console.warn("toggleCobertura: coberturaId es undefined o null");
       return;
     }
-    
-    setCoberturasSeleccionadas((prev) => {
-      const nuevo = new Set(prev);
-      if (nuevo.has(coberturaId)) {
-        nuevo.delete(coberturaId);
-        // Limpiar datos de renovación cuando se deselecciona
-        setRenovacionCoberturas((prevRenov) => {
-          const nuevoRenov = new Map(prevRenov);
-          nuevoRenov.delete(coberturaId);
-          return nuevoRenov;
-        });
-      } else {
-        nuevo.add(coberturaId);
-        const cobertura = coberturas.find((c) => c.id === coberturaId);
-        const soloRetiro = esSoloRetiro(cobertura);
-        setRenovacionCoberturas((prevRenov) => {
-          const nuevoRenov = new Map(prevRenov);
-          nuevoRenov.set(coberturaId, crearDatosInicialesCobertura(cobertura));
-          return nuevoRenov;
-        });
+
+    const cobertura = coberturas.find((c) => c.id === coberturaId);
+    if (!cobertura) return;
+
+    if (coberturasSeleccionadas.has(coberturaId)) {
+      if (isDentalCoberturaTipo(cobertura.cobertura_tipo)) {
+        const salud = findSaludCoberturaForCliente(getClienteIdFromCobertura(cobertura));
+        if (salud?.id && coberturasSeleccionadas.has(salud.id)) {
+          setError(
+            "Al cancelar o retirar la cobertura de salud, Dental MS del mismo miembro se incluye obligatoriamente."
+          );
+          return;
+        }
       }
-      return nuevo;
+
+      const idsToRemove = new Set([coberturaId]);
+      if (isSaludCoberturaTipo(cobertura.cobertura_tipo)) {
+        const dental = findDentalCoberturaForCliente(getClienteIdFromCobertura(cobertura));
+        if (dental?.id) idsToRemove.add(dental.id);
+      }
+
+      setCoberturasSeleccionadas((prev) => {
+        const nuevo = new Set(prev);
+        idsToRemove.forEach((id) => nuevo.delete(id));
+        return nuevo;
+      });
+      setRenovacionCoberturas((prevRenov) => {
+        const nuevoRenov = new Map(prevRenov);
+        idsToRemove.forEach((id) => nuevoRenov.delete(id));
+        return nuevoRenov;
+      });
+      setError("");
+      return;
+    }
+
+    const idsToAdd = new Set([coberturaId]);
+    const renovUpdates = new Map();
+
+    const registrarSeleccion = (cov) => {
+      if (!cov?.id) return;
+      idsToAdd.add(cov.id);
+      renovUpdates.set(cov.id, crearDatosInicialesCobertura(cov));
+    };
+
+    registrarSeleccion(cobertura);
+    if (isSaludCoberturaTipo(cobertura.cobertura_tipo)) {
+      const dental = findDentalCoberturaForCliente(getClienteIdFromCobertura(cobertura));
+      if (dental) registrarSeleccion(dental);
+    }
+
+    setCoberturasSeleccionadas((prev) => new Set([...prev, ...idsToAdd]));
+    setRenovacionCoberturas((prevRenov) => {
+      const nuevoRenov = new Map(prevRenov);
+      renovUpdates.forEach((datos, id) => nuevoRenov.set(id, datos));
+      return nuevoRenov;
     });
+    setError("");
   };
 
   // Manejar cambio en la decisión de renovación para una cobertura
@@ -397,14 +512,24 @@ const CambioVidaCancelacionModal = ({
       )
         ? datosActuales.cobertura_definida
         : COBERTURA_DEFINIDA.RETIRADO;
-      nuevo.set(coberturaId, {
+      const actualizado = {
         ...datosActuales,
         renovar: Boolean(renovar),
         fecha_retiro: renovar ? "" : datosActuales.fecha_retiro || "",
         cobertura_definida: renovar
           ? COBERTURA_DEFINIDA.CANCELADO
           : coberturaDefinidaRetiro,
-      });
+      };
+      nuevo.set(coberturaId, actualizado);
+
+      const dentalId = getDentalIdVinculadoASalud(coberturaId);
+      if (dentalId && coberturasSeleccionadas.has(dentalId)) {
+        const dentalCov = coberturas.find((c) => c.id === dentalId);
+        if (dentalCov) {
+          nuevo.set(dentalId, copiarDatosSaludADental(actualizado, dentalCov));
+        }
+      }
+
       return nuevo;
     });
   };
@@ -431,27 +556,33 @@ const CambioVidaCancelacionModal = ({
     const todasSeleccionadas = ids.every((id) => coberturasSeleccionadas.has(id));
 
     if (todasSeleccionadas) {
+      const idsRemover = new Set(ids);
+      idsDentalVinculadosASalud(ids).forEach((id) => idsRemover.add(id));
+
       setCoberturasSeleccionadas((prev) => {
         const nuevo = new Set(prev);
-        ids.forEach((id) => nuevo.delete(id));
+        idsRemover.forEach((id) => nuevo.delete(id));
         return nuevo;
       });
       setRenovacionCoberturas((prevRenov) => {
         const nuevoRenov = new Map(prevRenov);
-        ids.forEach((id) => nuevoRenov.delete(id));
+        idsRemover.forEach((id) => nuevoRenov.delete(id));
         return nuevoRenov;
       });
       return;
     }
 
+    const idsAgregar = new Set(ids);
+    idsDentalVinculadosASalud(ids).forEach((id) => idsAgregar.add(id));
+
     setCoberturasSeleccionadas((prev) => {
       const nuevo = new Set(prev);
-      ids.forEach((id) => nuevo.add(id));
+      idsAgregar.forEach((id) => nuevo.add(id));
       return nuevo;
     });
     setRenovacionCoberturas((prevRenov) => {
       const nuevoRenov = new Map(prevRenov);
-      ids.forEach((id) => {
+      idsAgregar.forEach((id) => {
         const cobertura = coberturas.find((c) => c.id === id);
         nuevoRenov.set(id, crearDatosInicialesCobertura(cobertura));
       });
@@ -806,7 +937,15 @@ const CambioVidaCancelacionModal = ({
     .sort((a, b) => {
       const aInferior = esBloqueSinCoberturaActiva(a) ? 1 : 0;
       const bInferior = esBloqueSinCoberturaActiva(b) ? 1 : 0;
-      return aInferior - bInferior;
+      if (aInferior !== bInferior) return aInferior - bInferior;
+
+      const clienteA = String(getClienteIdFromCobertura(a) ?? "");
+      const clienteB = String(getClienteIdFromCobertura(b) ?? "");
+      if (clienteA !== clienteB) return clienteA.localeCompare(clienteB);
+
+      const aDental = isDentalCoberturaTipo(a.cobertura_tipo) ? 1 : 0;
+      const bDental = isDentalCoberturaTipo(b.cobertura_tipo) ? 1 : 0;
+      return aDental - bDental;
     });
 
   const hayConPoliza = coberturasOrdenadas.some((c) => !esBloqueSinCoberturaActiva(c));
@@ -1029,6 +1168,11 @@ const CambioVidaCancelacionModal = ({
           </Alert>
         ) : (
           <>
+            <Alert variant="light" className="small py-2 mb-3 border">
+              <strong>Salud y Dental MS:</strong> al seleccionar la cobertura de salud de un miembro,
+              su Dental MS activo se incluye automáticamente. Puede cancelar solo Dental MS dejando
+              la salud activa. Dental MS también participa en renovación anual como producto independiente.
+            </Alert>
             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
               <div className="d-flex flex-wrap align-items-center gap-2">
                 {hayConPoliza && (
@@ -1181,6 +1325,8 @@ const CambioVidaCancelacionModal = ({
                     {coberturasOrdenadas.map((cobertura, index) => {
                       const coberturaId = cobertura.id;
                       const isSelected = coberturasSeleccionadas.has(coberturaId);
+                      const esDental = isDentalCoberturaTipo(cobertura.cobertura_tipo);
+                      const dentalVinculada = esDental && esDentalVinculadaASaludSeleccionada(coberturaId);
                       const esTomador = cobertura.parentesco?.toUpperCase() === "TOMADOR";
                       const soloRetiro = esSoloRetiro(cobertura);
                       const enBloqueInferior = esBloqueSinCoberturaActiva(cobertura);
@@ -1226,6 +1372,12 @@ const CambioVidaCancelacionModal = ({
                             <Form.Check
                               type="checkbox"
                               checked={isSelected}
+                              disabled={dentalVinculada}
+                              title={
+                                dentalVinculada
+                                  ? "Incluido automáticamente al procesar la cobertura de salud"
+                                  : undefined
+                              }
                               onChange={() => toggleCobertura(coberturaId)}
                             />
                           </td>
@@ -1234,6 +1386,12 @@ const CambioVidaCancelacionModal = ({
                               {cobertura.cliente?.nombre_completo || "-"}
                             </div>
                             <div className="d-flex align-items-center gap-1 mt-1 flex-wrap">
+                              <Badge
+                                bg={esDental ? "info" : "primary"}
+                                style={{ fontSize: "0.6rem" }}
+                              >
+                                {getEtiquetaProducto(cobertura)}
+                              </Badge>
                               <span className="text-muted" style={{ fontSize: "0.75rem" }}>
                                 {cobertura.parentesco || "-"}
                               </span>
@@ -1242,6 +1400,11 @@ const CambioVidaCancelacionModal = ({
                               )}
                               {soloRetiro && (
                                 <Badge bg="secondary" style={{ fontSize: "0.6rem" }}>SOLO RETIRO</Badge>
+                              )}
+                              {dentalVinculada && (
+                                <Badge bg="secondary" style={{ fontSize: "0.6rem" }}>
+                                  CON SALUD
+                                </Badge>
                               )}
                             </div>
                           </td>
@@ -1264,7 +1427,12 @@ const CambioVidaCancelacionModal = ({
                           )}
                           <td className="align-middle">
                             {isSelected ? (
-                              soloRetiro ? (
+                              dentalVinculada ? (
+                                <span className="small text-muted">
+                                  {datosRenovacion.renovar === true ? "Cancelar póliza" : "Retiro del grupo"}
+                                  {" "}(desde salud)
+                                </span>
+                              ) : soloRetiro ? (
                                 <span className="small text-danger fw-medium">Retiro</span>
                               ) : (
                                 <Form.Select
@@ -1292,7 +1460,17 @@ const CambioVidaCancelacionModal = ({
                             </Badge>
                           </td>
                         </tr>
-                        {isSelected && !usarDatosGlobales && (
+                        {isSelected && !usarDatosGlobales && dentalVinculada && (
+                          <tr className="cvc-detail-row">
+                            <td></td>
+                            <td colSpan={columnasDatos}>
+                              <span className="small text-muted">
+                                Fechas, motivos y observaciones se copian desde la cobertura de salud del mismo miembro.
+                              </span>
+                            </td>
+                          </tr>
+                        )}
+                        {isSelected && !usarDatosGlobales && !dentalVinculada && (
                           <tr className="cvc-detail-row">
                             <td></td>
                             <td colSpan={columnasDatos}>

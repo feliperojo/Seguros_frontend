@@ -1,0 +1,220 @@
+.pagos-mensuales {
+  background: #f8f9fb;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06);
+}
+
+.pagos-mensuales__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pagos-mensuales__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.pagos-mensuales__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+}
+
+.pagos-mensuales__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0.15rem 0 0;
+  max-width: 720px;
+  line-height: 1.45;
+}
+
+.pagos-mensuales__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.pagos-mensuales__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.pagos-mensuales__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.pagos-mensuales__section-title i {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.pagos-mensuales__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.pagos-mensuales__notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.875rem 1rem;
+  background: #eef4fb;
+  border: 1px solid #c5d9ed;
+  border-left: 4px solid #1a365d;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.pagos-mensuales__notice--warn {
+  background: #fffbeb;
+  border-color: #fde68a;
+  border-left-color: #b45309;
+  color: #78350f;
+}
+
+.pagos-mensuales__notice-icon {
+  color: #1a365d;
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.pagos-mensuales__notice--warn .pagos-mensuales__notice-icon {
+  color: #b45309;
+}
+
+.pagos-mensuales__btn-primary {
+  min-width: 140px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.pagos-mensuales__btn-primary:hover:not(:disabled) {
+  background: #0f2744;
+  border-color: #0f2744;
+}
+
+.pagos-mensuales__btn-primary:disabled {
+  opacity: 0.65;
+}
+
+.pagos-mensuales .form-control,
+.pagos-mensuales .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.pagos-mensuales .form-control:focus,
+.pagos-mensuales .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.12);
+}
+
+.pagos-mensuales__table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.pagos-mensuales__table {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+}
+
+.pagos-mensuales__table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.pagos-mensuales__table tbody td {
+  vertical-align: middle;
+  color: #334155;
+  border-color: #f1f5f9;
+}
+
+.pagos-mensuales__producto {
+  color: #1a365d;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.pagos-mensuales__link {
+  color: #1a365d;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pagos-mensuales__link:hover {
+  color: #0f2744;
+  text-decoration: underline;
+}
+
+.pagos-mensuales__badge-tomador {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #eef4fb !important;
+  color: #1a365d !important;
+  border: 1px solid #c5d9ed;
+}
+
+.pagos-mensuales__badge-estado {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.pagos-mensuales__summary {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.pagos-mensuales__summary strong {
+  color: #1a365d;
+}

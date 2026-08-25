@@ -136,7 +136,9 @@ const Dashboard = () => {
     detalleClientes: { clientes: 0, contactos: 0, empresas: 0, prospectos: 0, total: 0 },
     polizasActivas: { ...DEFAULT_POLIZAS_ACTIVAS },
     polizasCanceladas: 0,
-    polizasRetiradas: 0
+    polizasRetiradas: 0,
+    dentalMsActivo: 0,
+    dentalMsCancelado: 0,
   });
   const [kpiModalTipo, setKpiModalTipo] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -956,6 +958,44 @@ const handleOpenViewModal = (cliente) => {
                   <div>
                     <h6 className="stats-title">Coberturas Canceladas</h6>
                     <h3 className="stats-value">{estadisticas.polizasCanceladas}</h3>
+                  </div>
+                  <div className="stats-icon"><FaCalendarAlt /></div>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col>
+            <Card
+              className="dashboard-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("coberturas")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
+                  <div>
+                    <h6 className="stats-title">Dental MS Activo</h6>
+                    <h3 className="stats-value">{estadisticas.dentalMsActivo ?? 0}</h3>
+                  </div>
+                  <div className="stats-icon"><FaFileInvoiceDollar /></div>
+                </div>
+              </Card.Body>
+            </Card>
+          </Col>
+          <Col>
+            <Card
+              className="dashboard-card alert-card h-100 dashboard-card--clickable"
+              role="button"
+              tabIndex={0}
+              onClick={() => abrirKpiModal("canceladas")}
+              onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
+            >
+              <Card.Body className="d-flex align-items-center h-100">
+                <div className="d-flex justify-content-between align-items-center w-100">
+                  <div>
+                    <h6 className="stats-title">Dental MS Cancelado</h6>
+                    <h3 className="stats-value">{estadisticas.dentalMsCancelado ?? 0}</h3>
                   </div>
                   <div className="stats-icon"><FaCalendarAlt /></div>
                 </div>

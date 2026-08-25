@@ -1,44 +1,274 @@
-/* ListaClientes.css */
+/* ListaClientes.css — estilo institucional alineado al modal Dental MS */
 
 .lista-clientes-container {
-  padding: 20px;
-  width: 100%; /* Que tome el 100% del ancho disponible */
+  padding: 0 0 1.5rem;
+  width: 100%;
 }
 
-.page-title {
-  color: #1a3964;
+.lista-clientes {
+  background: #f8f9fb;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06);
+}
+
+.lista-clientes__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.lista-clientes__header-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.lista-clientes__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.lista-clientes__title {
+  font-size: 1.125rem;
   font-weight: 600;
-  font-size: 24px;
-  margin-bottom: 15px;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
 }
 
-.filter-container {
-  margin-bottom: 20px;
+.lista-clientes__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0.15rem 0 0;
+  line-height: 1.45;
+}
+
+.lista-clientes__btn-new {
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  white-space: nowrap;
+}
+
+.lista-clientes__btn-new:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+.lista-clientes__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.lista-clientes__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.lista-clientes__section--table {
+  padding: 1.125rem 1.25rem 1.25rem;
+  margin-bottom: 0;
+}
+
+.lista-clientes__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lista-clientes__section-title i,
+.lista-clientes__section-title svg {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.lista-clientes__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.lista-clientes .form-control,
+.lista-clientes .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.lista-clientes .form-control:focus,
+.lista-clientes .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.12);
+}
+
+.lista-clientes__btn-icon {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #fff;
+}
+
+.lista-clientes__btn-icon:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+  background: #f8fafc;
+}
+
+.lista-clientes__table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: auto;
 }
 
 .lista-clientes-table {
-  width: 100%; /* Que la tabla ocupe todo el ancho */
+  width: 100%;
   background-color: #fff;
-  border-radius: 8px;
-  overflow: hidden;
+  margin-bottom: 0;
+  font-size: 0.875rem;
 }
 
 .lista-clientes-table thead th {
-  background-color: #f8f9fa;
-  color: #495057;
-  font-weight: 600;
-  padding: 12px 15px;
-  border-bottom: 1px solid #dee2e6;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.75rem 0.875rem;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .lista-clientes-table tbody td {
-  padding: 12px 15px;
+  padding: 0.75rem 0.875rem;
   vertical-align: middle;
-  border-top: 1px solid #f2f2f2;
+  color: #334155;
+  border-top: 1px solid #f1f5f9;
 }
 
 .lista-clientes-table tbody tr:hover {
-  background-color: #f9fafc;
+  background-color: #fafcff;
+}
+
+.lista-clientes a.fw-semibold {
+  color: #1a365d;
+}
+
+.lista-clientes a.fw-semibold:hover {
+  color: #0f2744;
+  text-decoration: underline !important;
+}
+
+.lista-clientes__producto {
+  color: #1a365d;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.lista-clientes__actions .btn {
+  border-radius: 6px;
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #fff;
+}
+
+.lista-clientes__actions .btn:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+  background: #f8fafc;
+}
+
+.lista-clientes__actions .btn-outline-danger:hover {
+  border-color: #b91c1c;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.lista-clientes__pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.lista-clientes__summary {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.lista-clientes__summary strong {
+  color: #1a365d;
+}
+
+.lista-clientes .pagination .page-link {
+  color: #1a365d;
+  border-color: #e2e8f0;
+  font-size: 0.8125rem;
+}
+
+.lista-clientes .pagination .page-item.active .page-link {
+  background-color: #1a365d;
+  border-color: #1a365d;
+}
+
+.lista-clientes .pagination .page-link:hover {
+  background-color: #eef4fb;
+  border-color: #c5d9ed;
+  color: #0f2744;
+}
+
+.lista-clientes__empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.lista-clientes__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #eef4fb;
+  color: #1a365d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  margin-bottom: 1rem;
 }
 
 .sortable-header {
@@ -64,28 +294,34 @@
   font-size: 0.9rem;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .lista-clientes-table thead th,
-  .lista-clientes-table tbody td {
-      padding: 10px;
-  }
-
-  .page-title {
-      font-size: 22px;
-  }
-}
-
-
 .stacked-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
   max-width: 220px;
 }
-.stacked-item { line-height: 1.1; }
+
+.stacked-item {
+  line-height: 1.1;
+}
+
 .stacked-badge {
   font-size: 0.75rem;
   font-weight: 600;
-  padding: .35rem .5rem;
+  padding: 0.35rem 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .lista-clientes__header {
+    padding: 1rem;
+  }
+
+  .lista-clientes__body {
+    padding: 1rem;
+  }
+
+  .lista-clientes-table thead th,
+  .lista-clientes-table tbody td {
+    padding: 0.625rem;
+  }
 }

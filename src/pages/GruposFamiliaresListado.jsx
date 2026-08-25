@@ -390,6 +390,30 @@ useEffect(() => {
 
   const getCompaniaNombre = (grupo) => grupo.compania_nombre || "-";
 
+  const renderCoberturaCt = (grupo) => {
+    const resumen = Array.isArray(grupo.productos_resumen) ? grupo.productos_resumen : [];
+    if (resumen.length > 0) {
+      return (
+        <div className="small">
+          {resumen.map((p) => (
+            <div key={`${p.producto}-${p.compania}`}>
+              <span className="fw-semibold">{p.compania || p.producto}:</span>{" "}
+              {p.cobertura_ct || `${p.cobertura}-${p.taxes}`}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    return (
+      <>
+        <span className="badge rounded-circle bg-info text-white me-1">
+          {personasCoberturaParaListado(grupo)}
+        </span>
+        <span className="text-muted">en cobertura</span>
+      </>
+    );
+  };
+
   const getTomadorNombre = (grupo) => grupo.tomador_nombre || "Sin asignar";
 
   const totalFiltered = paginationMeta.total ?? 0;
@@ -526,7 +550,7 @@ useEffect(() => {
                         <th style={{ width: "2.5rem" }} aria-label="Expandir" />
                         <th>ID GF</th>
                         <th>TOMADOR</th>
-                        <th>P. COBERTURA</th>
+                        <th>C-T</th>
                         <th>P. TAXES</th>
                         <th>ASEGURADORA</th>
                         <th>RESPONSABLE</th>
@@ -563,12 +587,7 @@ useEffect(() => {
                           )}
                         </td>
                           <td>{getTomadorNombre(grupo)}</td>
-                          <td>
-                            <span className="badge rounded-circle bg-info text-white me-1">
-                              {personasCoberturaParaListado(grupo)}
-                            </span>
-                            <span className="text-muted">en cobertura</span>
-                          </td>
+                          <td>{renderCoberturaCt(grupo)}</td>
                           <td>{grupo.personas_taxes || "0"}</td>
                           <td>{getCompaniaNombre(grupo)}</td>
                           <td>

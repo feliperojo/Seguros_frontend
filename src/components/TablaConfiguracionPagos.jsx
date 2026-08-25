@@ -4,6 +4,17 @@ import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container 
 import apiRequest from "../services/api";
 import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
 import { renderClienteLink } from "../pages/ListaClientes";
+import {
+  COBERTURA_TIPO_DENTAL_MS,
+  isDentalCoberturaTipo,
+} from "../constants/coberturaTipos";
+import "./TablaConfiguracionPagos.css";
+
+const etiquetaProducto = (coberturaTipo) => {
+  if (isDentalCoberturaTipo(coberturaTipo)) return COBERTURA_TIPO_DENTAL_MS;
+  const tipo = String(coberturaTipo ?? "").trim();
+  return tipo || "Salud MS";
+};
 
 const TablaConfiguracionPagos = () => {
   const [loading, setLoading] = useState(false);
@@ -231,105 +242,228 @@ const TablaConfiguracionPagos = () => {
   }).sort((a, b) => (a.grupo_familiar_id || 0) - (b.grupo_familiar_id || 0));
 
   return (
+    <Container fluid className="mt-4 mb-4">
+      <div className="pagos-mensuales">
+        <div className="pagos-mensuales__header">
+          <div className="pagos-mensuales__header-icon" aria-hidden="true">
+            <i className="fas fa-file-invoice-dollar" />
+          </div>
+          <div>
+            <h2 className="pagos-mensuales__title">Generación de Pagos Mensuales</h2>
+            <p className="pagos-mensuales__subtitle">
+              Consulta los parámetros de cobro de las pólizas activas y genera los registros de pago
+              del mes seleccionado según el día de cobro de cada cobertura.
+            </p>
+          </div>
+        </div>
 
+        <div className="pagos-mensuales__body">
+          <div className="pagos-mensuales__section">
+            <div className="pagos-mensuales__section-title">
+              <i className="fas fa-filter" aria-hidden="true" />
+              Filtros y generación
+            </div>
+            <Row className="g-3 align-items-end">
+              <Col md={3}>
+                <div className="pagos-mensuales__label">Cliente</div>
+                <Form.Control
+                  placeholder="Filtrar por cliente"
+                  name="cliente"
+                  value={filtros.cliente}
+                  onChange={handleFiltroChange}
+                />
+              </Col>
+              <Col md={3}>
+                <div className="pagos-mensuales__label">Compañía</div>
+                <Form.Control
+                  placeholder="Filtrar por compañía"
+                  name="compania"
+                  value={filtros.compania}
+                  onChange={handleFiltroChange}
+                />
+              </Col>
+              <Col md={2}>
+                <div className="pagos-mensuales__label">Responsable</div>
+                <Form.Control
+                  placeholder="Filtrar por responsable"
+                  name="responsable"
+                  value={filtros.responsable}
+                  onChange={handleFiltroChange}
+                />
+              </Col>
+              <Col md={2}>
+                <div className="pagos-mensuales__label">Mes</div>
+                <Form.Select
+                  value={mesSeleccionado}
+                  onChange={(e) => setMesSeleccionado(e.target.value)}
+                >
+                  <option value="">Seleccionar mes</option>
+                  {[...Array(12)].map((_, i) => {
+                    const mes = new Date(0, i).toLocaleString("es", { month: "long" });
+                    const mesCapitalizado = mes.charAt(0).toUpperCase() + mes.slice(1);
+                    return (
+                      <option key={i + 1} value={String(i + 1).padStart(2, "0")}>
+                        {mesCapitalizado}
+                      </option>
+                    );
+                  })}
+                </Form.Select>
+              </Col>
+              <Col md={2} className="text-md-end">
+                <Button
+                  className="pagos-mensuales__btn-primary w-100"
+                  onClick={() => void confirmarGenerarCobros()}
+                  disabled={
+                    loading ||
+                    validandoPagosMes ||
+                    !mesSeleccionado ||
+                    polizasFiltradas.length === 0
+                  }
+                >
+                  {validandoPagosMes ? (
+                    <>
+                      <Spinner animation="border" size="sm" className="me-2" />
+                      Validando…
+                    </>
+                  ) : (
+                    "Generar pagos"
+                  )}
+                </Button>
+              </Col>
+            </Row>
+          </div>
 
+          {mesSeleccionado && (
+            <>
+              {infoPagosMes.loading ? (
+                <div className="pagos-mensuales__notice">
+                  <i className="fas fa-info-circle pagos-mensuales__notice-icon" aria-hidden="true" />
+                  <span>Comprobando pagos del mes…</span>
+                </div>
+              ) : infoPagosMes.exists === true ? (
+                <div className="pagos-mensuales__notice pagos-mensuales__notice--warn">
+                  <i className="fas fa-exclamation-triangle pagos-mensuales__notice-icon" aria-hidden="true" />
+                  <span>
+                    Ya existen pagos generados para el periodo{" "}
+                    <strong>{infoPagosMes.periodo}</strong>
+                    {infoPagosMes.count != null ? (
+                      <>
+                        {" "}
+                        ({infoPagosMes.count} registro
+                        {infoPagosMes.count !== 1 ? "s" : ""})
+                      </>
+                    ) : null}
+                    . No podrá generar de nuevo hasta usar otro mes.
+                  </span>
+                </div>
+              ) : infoPagosMes.exists === false ? (
+                <div className="pagos-mensuales__notice">
+                  <i className="fas fa-info-circle pagos-mensuales__notice-icon" aria-hidden="true" />
+                  <span>
+                    Periodo <strong>{infoPagosMes.periodo}</strong>: no hay pagos generados aún;
+                    puede continuar con la generación.
+                  </span>
+                </div>
+              ) : null}
+            </>
+          )}
 
-    <Container fluid className="mt-4">
-      <h2 className="text-primary">Generación de Pagos Mensuales</h2>
-      <p className="text-muted">
-        Consulta los parámetros de cobro configurados para las pólizas activas y genera automáticamente los registros de pago
-        del mes seleccionado según el día de cobro asignado a cada cliente.
-      </p>
-      <Row className="mb-3 align-items-end">
-        <Col md={3} lg={3} xl={3} xxl={3}>
-          <Form.Control
-            placeholder="Filtrar por cliente"
-            name="cliente"
-            value={filtros.cliente}
-            onChange={handleFiltroChange}
-          />
-        </Col>
-        <Col md={3} lg={3} xl={3} xxl={3}>
-          <Form.Control
-            placeholder="Filtrar por compañía"
-            name="compania"
-            value={filtros.compania}
-            onChange={handleFiltroChange}
-          />
-        </Col>
-        <Col md={2} lg={2} xl={2} xxl={2}>
-          <Form.Control
-            placeholder="Filtrar por responsable"
-            name="responsable"
-            value={filtros.responsable}
-            onChange={handleFiltroChange}
-          />
-        </Col>
-        <Col md={2} lg={2} xl={2} xxl={2}>
-         <Form.Select value={mesSeleccionado} onChange={(e) => setMesSeleccionado(e.target.value)}>
-            <option value="">Seleccionar mes</option>
-            {[...Array(12)].map((_, i) => {
-              const mes = new Date(0, i).toLocaleString("es", { month: "long" });
-              const mesCapitalizado = mes.charAt(0).toUpperCase() + mes.slice(1);
-              return (
-                <option key={i + 1} value={String(i + 1).padStart(2, "0")}>
-                  {mesCapitalizado}
-                </option>
-              );
-            })}
-          </Form.Select>
-        </Col>
+          {alerta.show && (
+            <Alert variant={alerta.variant} className="text-center mb-3">
+              {alerta.mensaje}
+            </Alert>
+          )}
 
-        <Col md={2} lg={2} xl={2} xxl={2} className="text-end">
-          <Button
-            variant="primary"
-            onClick={() => void confirmarGenerarCobros()}
-            disabled={loading || validandoPagosMes || !mesSeleccionado || polizasFiltradas.length === 0}
-          >
-            {validandoPagosMes ? (
-              <>
-                <Spinner animation="border" size="sm" className="me-2" />
-                Validando…
-              </>
+          <div className="pagos-mensuales__section mb-0">
+            <div className="pagos-mensuales__section-title">
+              <i className="fas fa-list" aria-hidden="true" />
+              Pólizas activas
+            </div>
+            <div className="pagos-mensuales__summary">
+              Mostrando <strong>{polizasFiltradas.length}</strong> de{" "}
+              <strong>{polizas.length}</strong> coberturas
+            </div>
+
+            {loading ? (
+              <div className="text-center py-5">
+                <Spinner animation="border" style={{ color: "#1a365d" }} />
+              </div>
             ) : (
-              "Generar pagos"
+              <div className="pagos-mensuales__table-wrap table-responsive">
+                <Table hover responsive="lg" className="pagos-mensuales__table w-100">
+                  <thead className="text-center">
+                    <tr>
+                      <th>ID GF</th>
+                      <th>ID Póliza</th>
+                      <th>Producto</th>
+                      <th>Cliente</th>
+                      <th>Pagador</th>
+                      <th>Compañía</th>
+                      <th>Precio</th>
+                      <th>Día de Pago</th>
+                      <th>Tipo de Pago</th>
+                      <th>Responsable</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {polizasFiltradas.map((p) => (
+                      <tr key={p.id}>
+                        <td>
+                          {p.grupo_familiar_id ? (
+                            <Link
+                              to={`/grupo_familiar/${p.grupo_familiar_id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="pagos-mensuales__link"
+                              title={`Ver grupo familiar #${p.grupo_familiar_id}`}
+                            >
+                              {p.grupo_familiar_id}
+                            </Link>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td>{p.codigo_poliza}</td>
+                        <td className="pagos-mensuales__producto">
+                          {etiquetaProducto(p.cobertura_tipo)}
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          {renderClienteLink(
+                            p.cliente?.id || p.cliente_id,
+                            p.cliente?.nombre_completo || "-"
+                          )}
+                          {p.parentesco === "TOMADOR" && (
+                            <Badge className="ms-2 pagos-mensuales__badge-tomador">Tomador</Badge>
+                          )}
+                        </td>
+                        <td>{p.pagador?.nombre_completo || "-"}</td>
+                        <td>{p.compania?.nombre || "-"}</td>
+                        <td>{p.precio ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
+                        <td className="text-center">{p.dia_pago || "-"}</td>
+                        <td className="text-center">{p.tipo_pago || "-"}</td>
+                        <td>{p.grupo_familiar?.responsable || "-"}</td>
+                        <td className="text-center">
+                          {p.activo ? (
+                            <Badge bg="success" className="pagos-mensuales__badge-estado">
+                              Activa
+                            </Badge>
+                          ) : (
+                            <Badge bg="secondary" className="pagos-mensuales__badge-estado">
+                              Cancelada
+                            </Badge>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
             )}
-          </Button>
-        </Col>
-      </Row>
-
-      {mesSeleccionado && (
-        <Row className="mb-2">
-          <Col md={12}>
-            {infoPagosMes.loading ? (
-              <small className="text-muted">Comprobando pagos del mes…</small>
-            ) : infoPagosMes.exists === true ? (
-              <Alert variant="warning" className="py-2 mb-0 small">
-                Ya existen pagos generados para el periodo{" "}
-                <strong>{infoPagosMes.periodo}</strong>
-                {infoPagosMes.count != null ? (
-                  <>
-                    {" "}
-                    ({infoPagosMes.count} registro{infoPagosMes.count !== 1 ? "s" : ""})
-                  </>
-                ) : null}
-                . No podrá generar de nuevo hasta usar otro mes (según reglas del sistema).
-              </Alert>
-            ) : infoPagosMes.exists === false ? (
-              <small className="text-muted">
-                Periodo <strong>{infoPagosMes.periodo}</strong>: no hay pagos generados aún; puede
-                continuar con la generación.
-              </small>
-            ) : null}
-          </Col>
-        </Row>
-      )}
-
-      {alerta.show && (
-        <Alert variant={alerta.variant} className="text-center">
-          {alerta.mensaje}
-        </Alert>
-      )}
+          </div>
+        </div>
+      </div>
 
       <Modal show={showPagosYaExistenModal} onHide={() => setShowPagosYaExistenModal(false)} centered>
         <Modal.Header closeButton>
@@ -350,7 +484,10 @@ const TablaConfiguracionPagos = () => {
           </p>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="primary" onClick={() => setShowPagosYaExistenModal(false)}>
+          <Button
+            className="pagos-mensuales__btn-primary"
+            onClick={() => setShowPagosYaExistenModal(false)}
+          >
             Entendido
           </Button>
         </Modal.Footer>
@@ -392,7 +529,7 @@ const TablaConfiguracionPagos = () => {
                           to={`/grupo_familiar/${item.grupo_familiar_id}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-decoration-none fw-semibold"
+                          className="pagos-mensuales__link"
                         >
                           {item.grupo_familiar_id}
                         </Link>
@@ -422,7 +559,10 @@ const TablaConfiguracionPagos = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="primary" onClick={() => setShowInconsistenciasModal(false)}>
+          <Button
+            className="pagos-mensuales__btn-primary"
+            onClick={() => setShowInconsistenciasModal(false)}
+          >
             Entendido
           </Button>
         </Modal.Footer>
@@ -433,84 +573,25 @@ const TablaConfiguracionPagos = () => {
           <Modal.Title>Confirmar generación de cobros</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          Está a punto de generar los registros de cobro para <strong>{polizasFiltradas.length}</strong> póliza(s) activas correspondientes al mes seleccionado.
+          Está a punto de generar los registros de cobro para{" "}
+          <strong>{polizasFiltradas.length}</strong> póliza(s) activas correspondientes al mes
+          seleccionado.
           <br />
           Estos registros se crearán en base a los parámetros configurados para cada póliza.
-          <br /><br />
+          <br />
+          <br />
           ¿Desea continuar con este proceso?
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>Cancelar</Button>
-          <Button variant="primary" onClick={handleGenerarCobros}>Generar</Button>
+          <Button variant="outline-secondary" onClick={() => setShowConfirmModal(false)}>
+            Cancelar
+          </Button>
+          <Button className="pagos-mensuales__btn-primary" onClick={handleGenerarCobros}>
+            Generar
+          </Button>
         </Modal.Footer>
       </Modal>
-
-      {loading ? (
-        <div className="text-center">
-          <Spinner animation="border" />
-        </div>
-      ) : (
-        <div className="table-responsive">
-          <Table striped bordered hover responsive="lg" className="shadow-sm w-100">
-            <thead className="table-light text-center">
-              <tr>
-                <th>ID GF</th>
-                <th>ID Póliza</th>
-                <th>Cliente</th>
-                <th>Pagador</th>
-                <th>Compañía</th>
-                <th>Precio</th>
-                <th>Día de Pago</th>
-                <th>Tipo de Pago</th>
-                <th>Responsable</th>
-                <th>Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {polizasFiltradas.map((p) => (
-                <tr key={p.id}>
-                  <td>
-                    {p.grupo_familiar_id ? (
-                      <Link
-                        to={`/grupo_familiar/${p.grupo_familiar_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-decoration-none fw-semibold"
-                        title={`Ver grupo familiar #${p.grupo_familiar_id}`}
-                      >
-                        {p.grupo_familiar_id}
-                      </Link>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td>{p.codigo_poliza}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>
-                    {renderClienteLink(
-                      p.cliente?.id || p.cliente_id,
-                      p.cliente?.nombre_completo || "-"
-                    )}
-                    {p.parentesco === "TOMADOR" && <Badge bg="primary" className="ms-2">Tomador</Badge>}
-                  </td>
-                  <td>{p.pagador?.nombre_completo || "-"}</td>
-                  <td>{p.compania?.nombre || "-"}</td>
-                  <td>{p.precio ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
-                  <td className="text-center">{p.dia_pago || "-"}</td>
-                  <td className="text-center">{p.tipo_pago || "-"}</td>
-                  <td>{p.grupo_familiar?.responsable || "-"}</td>
-                  <td className="text-center">
-                    {p.activo ? <Badge bg="success">Activa</Badge> : <Badge bg="secondary">Cancelada</Badge>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-
-        </div>
-      )}
     </Container>
-
   );
 };
 
