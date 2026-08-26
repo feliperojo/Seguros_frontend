@@ -387,12 +387,29 @@ const buildCoberturaPayloadFromSource = (
   return coberturaLimpia;
 };
 
+/**
+ * Tipo de la cobertura de Salud del miembro.
+ * Nunca propagar un label dental del "plan seleccionado" a la cobertura de salud.
+ * Si el tipo del miembro ya quedó corrupto como dental, restaurar a un tipo de salud.
+ */
+const resolveSaludCoberturaTipo = (memberTipo, productoCotizacion) => {
+  const label = productoCotizacion?.label;
+  if (label && isSaludCoberturaTipo(label)) {
+    return label;
+  }
+  if (memberTipo && isSaludCoberturaTipo(memberTipo)) {
+    return memberTipo;
+  }
+  // Slot de salud del miembro: no debe quedar como Dental MS.
+  return "SEGURO MEDICO OBAMA";
+};
+
 const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) => {
   const payloads = [];
 
   (members || []).forEach((m) => {
     if (m?.cliente_id && m?.cobertura_id) {
-      const saludTipo = productoCotizacion?.label || m.cobertura_tipo || "Plan de salud";
+      const saludTipo = resolveSaludCoberturaTipo(m.cobertura_tipo, productoCotizacion);
       payloads.push(
         buildCoberturaPayloadFromSource(
           m,
@@ -400,7 +417,8 @@ const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) 
           m.cobertura_id,
           m.cliente_id,
           saludTipo,
-          productoCotizacion
+          // Solo pasar productoCotizacion si es de salud; evita pisar tipo con "Plan Dental".
+          isSaludCoberturaTipo(productoCotizacion?.label) ? productoCotizacion : null
         )
       );
     }
@@ -453,15 +471,27 @@ const cloneEditSnapshot = (value) => {
 
 // ================== Función para obtener el producto desde coberturas ==================
 const getProductoFromCoberturas = (coberturas = []) => {
-  // Buscar el primer cobertura_tipo no vacío
-  const coberturaTipo = coberturas.find(c => c?.cobertura_tipo)?.cobertura_tipo;
-  
+  // El plan del GF es el de Salud. Dental MS es producto adjunto y no debe
+  // definir el "Plan seleccionado" (eso luego pisaba cobertura_tipo de todos al guardar).
+  const salud = (coberturas || []).find(
+    (c) => c?.cobertura_tipo && isSaludCoberturaTipo(c.cobertura_tipo)
+  );
+  const coberturaTipo =
+    salud?.cobertura_tipo ||
+    (coberturas || []).find(
+      (c) => c?.cobertura_tipo && !isDentalCoberturaTipo(c.cobertura_tipo)
+    )?.cobertura_tipo;
+
   if (!coberturaTipo) return null;
-  
+
   // Mapear el cobertura_tipo a un objeto producto similar al modal
   // Ajusta estos mapeos según tus productos reales
   const productosMap = {
     "Plan de salud": { label: "Plan de salud", color: "primary" },
+    "SEGURO MEDICO OBAMA": { label: "SEGURO MEDICO OBAMA", color: "primary" },
+    "Seguro médico": { label: "Seguro médico", color: "primary" },
+    "Seguro medico": { label: "Seguro medico", color: "primary" },
+    "SALUD": { label: "SALUD", color: "primary" },
     "Plan Dental": { label: "Plan Dental", color: "info" },
     "Plan de vida": { label: "Plan de vida", color: "danger" },
     "Plan de Descuentos": { label: "Plan de Descuentos", color: "warning" },
@@ -470,10 +500,10 @@ const getProductoFromCoberturas = (coberturas = []) => {
     "Seguro dental": { label: "Seguro dental", color: "info" },
     "Seguro de accidentes": { label: "Seguro de accidentes", color: "warning" },
   };
-  
-  return productosMap[coberturaTipo] || { 
-    label: coberturaTipo, 
-    color: "secondary" 
+
+  return productosMap[coberturaTipo] || {
+    label: coberturaTipo,
+    color: "secondary",
   };
 };
 
@@ -676,6 +706,16 @@ const mapCovToMemberBase = (cov, idx) => {
   };
 };
 
+const looksLikeDentalPlan = (c = {}) => {
+  const plan = String(c?.plan || "").toLowerCase();
+  return (
+    plan.includes("dental") ||
+    plan.includes("deltacare") ||
+    plan.includes("delta care") ||
+    plan.includes("delta dental")
+  );
+};
+
 const mapFullToMembers = (fullRaw) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
@@ -692,9 +732,30 @@ const mapFullToMembers = (fullRaw) => {
   let idx = 0;
 
   for (const [, covs] of byCliente) {
+    // Preferir tipo salud real. Si todos quedaron mal marcados como Dental MS,
+    // usar plan/metal para no tratar DeltaCare como la cobertura de salud.
     const saludCov =
-      covs.find((c) => isSaludCoberturaTipo(c.cobertura_tipo)) || covs[0];
-    const dentalCov = covs.find((c) => isDentalCoberturaTipo(c.cobertura_tipo));
+      covs.find((c) => isSaludCoberturaTipo(c.cobertura_tipo)) ||
+      covs.find(
+        (c) =>
+          !looksLikeDentalPlan(c) &&
+          (c.metal || c.red || (c.plan && String(c.plan).trim()))
+      ) ||
+      covs.find((c) => !looksLikeDentalPlan(c)) ||
+      covs[0];
+
+    const dentalCov =
+      covs.find(
+        (c) =>
+          c.id !== saludCov?.id &&
+          isDentalCoberturaTipo(c.cobertura_tipo) &&
+          looksLikeDentalPlan(c)
+      ) ||
+      covs.find(
+        (c) => c.id !== saludCov?.id && isDentalCoberturaTipo(c.cobertura_tipo)
+      ) ||
+      covs.find((c) => c.id !== saludCov?.id && looksLikeDentalPlan(c)) ||
+      null;
 
     const member = mapCovToMemberBase(saludCov, idx++);
 
@@ -1346,7 +1407,10 @@ const handleCreateMemberRemote = async (memberData) => {
     },
     parentesco: memberData.parentesco || memberData.tipo || "Tomador",
     cobertura: {
-      cobertura_tipo: productoCotizacion?.label || "Plan de salud",
+      cobertura_tipo: resolveSaludCoberturaTipo(
+        memberData.cobertura_tipo,
+        productoCotizacion
+      ),
       estado_cobertura: memberData.estado_cobertura || "Sí",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
       fecha_activacion: memberData.fecha_activacion 
@@ -1518,7 +1582,10 @@ const handleCreateMemberRemote = async (memberData) => {
       delete cliNuevo.id;
 
        let cov = mapCoberturaFromMember(m, id);
-       if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion?.label;
+       cov.cobertura_tipo = resolveSaludCoberturaTipo(
+         m.cobertura_tipo,
+         productoCotizacion
+       );
 
        await GrupoFamiliarService.appendMiembro(id, {
          request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
