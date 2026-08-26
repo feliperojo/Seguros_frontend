@@ -91,7 +91,10 @@ const CambioVidaCancelacionModal = ({
   const getEtiquetaProducto = (c = {}) =>
     isDentalCoberturaTipo(c?.cobertura_tipo)
       ? COBERTURA_TIPO_DENTAL_MS
-      : (c?.cobertura_tipo || "Salud MS");
+      : "Salud MS";
+
+  const getIconoProducto = (esDental) =>
+    esDental ? "fas fa-tooth" : "fas fa-shield-alt";
 
   const findDentalCoberturaForCliente = (clienteId, list = coberturas) => {
     if (!clienteId) return null;
@@ -1148,9 +1151,10 @@ const CambioVidaCancelacionModal = ({
                 <ul className="mb-0 ps-3">
                   <li>
                     <strong>Solo Dental:</strong> busque la fila con la etiqueta{" "}
-                    <em>Dental MS</em> (badge azul claro) del miembro y márquela
-                    sola — sin marcar la fila de salud. Luego elija Cancelar póliza
-                    o Retirar y confirme.
+                    <em>Dental MS</em> (badge celeste con icono de diente) del
+                    miembro y márquela sola — sin marcar la fila de{" "}
+                    <em>Salud MS</em> (badge navy con icono de escudo). Luego
+                    elija Cancelar póliza o Retirar y confirme.
                   </li>
                   <li>
                     <strong>Salud con Dental activo:</strong> al marcar la salud,
@@ -1410,10 +1414,16 @@ const CambioVidaCancelacionModal = ({
                                     ? "cvc-badge-producto--dental"
                                     : "cvc-badge-producto--salud"
                                 }`}
+                                title={
+                                  esDental
+                                    ? "Producto Dental MS"
+                                    : "Producto Salud MS"
+                                }
                               >
-                                {esDental && (
-                                  <i className="fas fa-tooth" aria-hidden="true" />
-                                )}
+                                <i
+                                  className={getIconoProducto(esDental)}
+                                  aria-hidden="true"
+                                />
                                 {getEtiquetaProducto(cobertura)}
                               </span>
                               <span className="cvc-member-meta">
