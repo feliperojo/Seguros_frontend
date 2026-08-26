@@ -1470,14 +1470,39 @@ const activeNormalized = useMemo(
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length, onDerivedCounts]
   );
 
-  const memberHasPlanData = useCallback((member = {}) => {
-    return [member.compania_id, member.plan, member.codigo_poliza, member.policy_number].some(
+  const memberHasPlanData = useCallback((source = {}) => {
+    return [source.compania_id, source.plan, source.codigo_poliza, source.policy_number].some(
       (value) => value != null && String(value).trim() !== ""
     );
   }, []);
 
   const buildHistorialPlanContext = useCallback(
-    (openedMember, openedIdx) => {
+    (openedMember, openedIdx, options = {}) => {
+      const isDental = options.product === "dental";
+      const dental = openedMember?.coberturaDental;
+
+      // Dental MS: archivar solo esa cobertura (datos de plan viven en coberturaDental).
+      // No reutilizar el bulk de salud: mezclaba IDs y hasPlanData de la cobertura de salud.
+      if (isDental && dental?.cobertura_id) {
+        return {
+          members: [
+            {
+              coberturaId: dental.cobertura_id,
+              memberIdx: openedIdx,
+              memberName:
+                openedMember.nombreCompleto ||
+                openedMember.nombre_completo ||
+                openedMember?.cliente?.nombre_completo ||
+                "Miembro",
+              parentesco: openedMember.parentesco || openedMember.tipo || "",
+              hasPlanData: memberHasPlanData(dental),
+            },
+          ],
+          initialCoberturaId: dental.cobertura_id,
+          allowBulkArchive: false,
+        };
+      }
+
       const fromTomador = isTomador(openedMember);
       const sourceMembers = fromTomador
         ? normalized.filter((member) => member.cobertura_id && member.activo !== false)
@@ -2780,10 +2805,9 @@ const activeNormalized = useMemo(
                               onClick={() =>
                                 setHistorialPlanModal({
                                   open: true,
-                                  ...buildHistorialPlanContext(
-                                    { ...m, cobertura_id: d.cobertura_id },
-                                    idx
-                                  ),
+                                  ...buildHistorialPlanContext(m, idx, {
+                                    product: "dental",
+                                  }),
                                 })
                               }
                             >
