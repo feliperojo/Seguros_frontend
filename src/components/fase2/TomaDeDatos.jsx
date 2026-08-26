@@ -795,6 +795,7 @@ const TomaDeDatos = ({
     members: [],
     initialCoberturaId: null,
     allowBulkArchive: false,
+    product: "salud",
   });
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
@@ -1500,6 +1501,7 @@ const activeNormalized = useMemo(
           ],
           initialCoberturaId: dental.cobertura_id,
           allowBulkArchive: false,
+          product: "dental",
         };
       }
 
@@ -1532,6 +1534,7 @@ const activeNormalized = useMemo(
         members,
         initialCoberturaId: openedMember.cobertura_id,
         allowBulkArchive: fromTomador && members.length > 1,
+        product: "salud",
       };
     },
     [normalized, memberHasPlanData]
@@ -3174,11 +3177,13 @@ const activeNormalized = useMemo(
             members: [],
             initialCoberturaId: null,
             allowBulkArchive: false,
+            product: "salud",
           })
         }
         members={historialPlanModal.members}
         initialCoberturaId={historialPlanModal.initialCoberturaId}
         allowBulkArchive={historialPlanModal.allowBulkArchive}
+        product={historialPlanModal.product || "salud"}
         readOnly={readOnly}
       />
     </div>

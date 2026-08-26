@@ -19,6 +19,7 @@ import {
   crearHistorialPlan,
   fetchHistorialPlan,
 } from "../../services/historialPlanCoberturaApi";
+import "../../styles/HistorialPlanCoberturaModal.css";
 
 const EMPTY_MANUAL_FORM = {
   compania_id: "",
@@ -75,7 +76,10 @@ const HistorialPlanCoberturaModal = ({
   initialCoberturaId = null,
   allowBulkArchive = false,
   readOnly = false,
+  /** "salud" | "dental" — dental no muestra Metal/Red */
+  product = "salud",
 }) => {
+  const esDental = product === "dental";
   const [selectedCoberturaId, setSelectedCoberturaId] = useState(null);
   const [historial, setHistorial] = useState([]);
   const [anioSeleccionado, setAnioSeleccionado] = useState(ANIO_ACTUAL);
@@ -118,11 +122,12 @@ const HistorialPlanCoberturaModal = ({
   }, [historial, anioSeleccionado]);
 
   const modalTitle = useMemo(() => {
+    const base = esDental ? "Historial de plan dental" : "Historial de plan";
     if (allowBulkArchive && members.length > 1) {
-      return "Historial de plan — Grupo familiar";
+      return `${base} — Grupo familiar`;
     }
-    return `Historial de plan${selectedMember?.memberName ? ` — ${selectedMember.memberName}` : ""}`;
-  }, [allowBulkArchive, members.length, selectedMember]);
+    return `${base}${selectedMember?.memberName ? ` — ${selectedMember.memberName}` : ""}`;
+  }, [allowBulkArchive, esDental, members.length, selectedMember]);
 
   const cargarHistorial = useCallback(async (coberturaId) => {
     if (!coberturaId) return;
@@ -304,8 +309,8 @@ const HistorialPlanCoberturaModal = ({
       const payload = {
         compania_id: manualForm.compania_id || null,
         plan: manualForm.plan.trim() || null,
-        metal: manualForm.metal || null,
-        red: manualForm.red || null,
+        metal: esDental ? null : manualForm.metal || null,
+        red: esDental ? null : manualForm.red || null,
         policy_number: manualForm.policy_number.trim() || null,
         codigo_poliza: manualForm.codigo_poliza.trim() || null,
         agente: manualForm.agente.trim() || null,
@@ -333,49 +338,52 @@ const HistorialPlanCoberturaModal = ({
   };
 
   return (
-    <>
-      <style>{`
-        .modal-historial-plan {
-          max-width: 95vw;
-          width: 1400px;
-        }
-        .modal-historial-plan .modal-content {
-          max-height: 92vh;
-        }
-        .modal-historial-plan .table {
-          font-size: 0.875rem;
-          margin-bottom: 0;
-        }
-        .modal-historial-plan .table th,
-        .modal-historial-plan .table td {
-          padding: 0.5rem 0.55rem;
-          vertical-align: middle;
-          white-space: nowrap;
-        }
-        .modal-historial-plan .table td:last-child {
-          white-space: normal;
-          min-width: 8rem;
-          max-width: 14rem;
-        }
-      `}</style>
       <Modal
         show={show}
         onHide={handleClose}
         size="xl"
         centered
         scrollable
-        dialogClassName="modal-historial-plan"
+        dialogClassName="hp-modal"
+        contentClassName="hp-modal__content"
       >
-      <Modal.Header closeButton>
-        <Modal.Title>{modalTitle}</Modal.Title>
+      <Modal.Header closeButton className="hp-modal__header">
+        <div className="hp-modal__header-main">
+          <div className="hp-modal__header-icon" aria-hidden="true">
+            <i className={esDental ? "fas fa-tooth" : "fas fa-history"} />
+          </div>
+          <div>
+            <Modal.Title className="hp-modal__title">{modalTitle}</Modal.Title>
+            <p className="hp-modal__subtitle">
+              {esDental
+                ? "Planes archivados y vigentes de Dental MS"
+                : "Planes archivados y vigentes de la cobertura de salud"}
+            </p>
+            <span
+              className={`hp-badge-producto ${
+                esDental ? "hp-badge-producto--dental" : "hp-badge-producto--salud"
+              }`}
+            >
+              {esDental ? "Dental MS" : "Salud MS"}
+            </span>
+          </div>
+        </div>
       </Modal.Header>
 
-      <Modal.Body>
-        {error && <Alert variant="danger">{error}</Alert>}
-        {success && <Alert variant="success">{success}</Alert>}
+      <Modal.Body className="hp-modal__body">
+        {error && (
+          <Alert variant="danger" className="hp-alert">
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success" className="hp-alert">
+            {success}
+          </Alert>
+        )}
 
         {members.length > 1 && (
-          <Nav variant="tabs" className="mb-3 flex-nowrap overflow-auto">
+          <Nav variant="tabs" className="hp-tabs flex-nowrap overflow-auto">
             {members.map((member) => (
               <Nav.Item key={member.coberturaId}>
                 <Nav.Link
@@ -396,12 +404,13 @@ const HistorialPlanCoberturaModal = ({
         )}
 
         {!readOnly && (
-          <div className="d-flex justify-content-end gap-2 mb-3 flex-wrap">
+          <div className="hp-toolbar">
             {!showArchivarForm && !showCrearForm ? (
               <>
                 <Button
                   variant="outline-success"
                   size="sm"
+                  className="hp-btn-create"
                   onClick={() => {
                     setShowCrearForm(true);
                     setShowArchivarForm(false);
@@ -413,6 +422,7 @@ const HistorialPlanCoberturaModal = ({
                 <Button
                   variant="outline-primary"
                   size="sm"
+                  className="hp-btn-archive"
                   onClick={() => {
                     setShowArchivarForm(true);
                     setShowCrearForm(false);
@@ -455,12 +465,12 @@ const HistorialPlanCoberturaModal = ({
         )}
 
         {showCrearForm && !readOnly && (
-          <Form onSubmit={handleCrearManual} className="border rounded p-3 mb-3 bg-light">
-            <h6 className="mb-3">
+          <Form onSubmit={handleCrearManual} className="hp-panel">
+            <div className="hp-panel__title">
               Crear registro manual de plan
               {selectedMember?.memberName ? ` — ${selectedMember.memberName}` : ""}
-            </h6>
-            <p className="text-muted small mb-3">
+            </div>
+            <p className="hp-panel__hint">
               Use esta opción para cargar planes anteriores que no se archivaron a tiempo.
               No modifica los datos vigentes de la cobertura.
             </p>
@@ -490,34 +500,38 @@ const HistorialPlanCoberturaModal = ({
                   onChange={(e) => updateManualField("agente", e.target.value)}
                 />
               </div>
-              <div className="col-md-3">
-                <Form.Label className="small mb-1">Metal</Form.Label>
-                <Form.Select
-                  size="sm"
-                  value={manualForm.metal}
-                  onChange={(e) => updateManualField("metal", e.target.value)}
-                >
-                  <option value="">Seleccione…</option>
-                  <option value="BRONCE">BRONCE</option>
-                  <option value="SILVER">SILVER</option>
-                  <option value="GOLD">GOLD</option>
-                  <option value="PLATINUM">PLATINUM</option>
-                </Form.Select>
-              </div>
-              <div className="col-md-3">
-                <Form.Label className="small mb-1">Red</Form.Label>
-                <Form.Select
-                  size="sm"
-                  value={manualForm.red}
-                  onChange={(e) => updateManualField("red", e.target.value)}
-                >
-                  <option value="">Seleccione…</option>
-                  <option value="HMO">HMO</option>
-                  <option value="EPO">EPO</option>
-                  <option value="PPO">PPO</option>
-                  <option value="POS">POS</option>
-                </Form.Select>
-              </div>
+              {!esDental && (
+                <>
+                  <div className="col-md-3">
+                    <Form.Label className="small mb-1">Metal</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={manualForm.metal}
+                      onChange={(e) => updateManualField("metal", e.target.value)}
+                    >
+                      <option value="">Seleccione…</option>
+                      <option value="BRONCE">BRONCE</option>
+                      <option value="SILVER">SILVER</option>
+                      <option value="GOLD">GOLD</option>
+                      <option value="PLATINUM">PLATINUM</option>
+                    </Form.Select>
+                  </div>
+                  <div className="col-md-3">
+                    <Form.Label className="small mb-1">Red</Form.Label>
+                    <Form.Select
+                      size="sm"
+                      value={manualForm.red}
+                      onChange={(e) => updateManualField("red", e.target.value)}
+                    >
+                      <option value="">Seleccione…</option>
+                      <option value="HMO">HMO</option>
+                      <option value="EPO">EPO</option>
+                      <option value="PPO">PPO</option>
+                      <option value="POS">POS</option>
+                    </Form.Select>
+                  </div>
+                </>
+              )}
               <div className="col-md-3">
                 <Form.Label className="small mb-1">Número ID</Form.Label>
                 <Form.Control
@@ -577,6 +591,7 @@ const HistorialPlanCoberturaModal = ({
                 type="submit"
                 variant="success"
                 size="sm"
+                className="hp-btn-submit hp-btn-submit--success"
                 disabled={creating || !selectedCoberturaId}
               >
                 {creating ? (
@@ -593,12 +608,12 @@ const HistorialPlanCoberturaModal = ({
         )}
 
         {showArchivarForm && !readOnly && (
-          <Form onSubmit={handleArchivar} className="border rounded p-3 mb-3 bg-light">
-            <h6 className="mb-3">
+          <Form onSubmit={handleArchivar} className="hp-panel">
+            <div className="hp-panel__title">
               {allowBulkArchive && members.length > 1
                 ? "Archivar planes del grupo"
                 : "Archivar datos del plan vigente"}
-            </h6>
+            </div>
             <div className="row g-3">
               <div className="col-12">
                 <Form.Check
@@ -672,6 +687,7 @@ const HistorialPlanCoberturaModal = ({
                 type="submit"
                 variant="primary"
                 size="sm"
+                className="hp-btn-submit"
                 disabled={
                   archiving ||
                   (!esAnulacion && !fechaExpiracion) ||
@@ -696,19 +712,19 @@ const HistorialPlanCoberturaModal = ({
         )}
 
         {loading ? (
-          <div className="text-center py-4">
+          <div className="hp-loading">
             <Spinner animation="border" size="sm" className="me-2" />
             Cargando historial…
           </div>
         ) : historial.length === 0 ? (
-          <p className="text-muted mb-0">
+          <div className="hp-empty">
             {selectedMember?.memberName
               ? `No hay planes archivados para ${selectedMember.memberName}.`
               : "No hay planes archivados para esta cobertura."}
-          </p>
+          </div>
         ) : (
           <>
-            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div className="hp-filter-bar">
               <div className="d-flex align-items-center gap-2">
                 <Form.Label className="small mb-0 text-nowrap">Año</Form.Label>
                 <Form.Select
@@ -725,32 +741,32 @@ const HistorialPlanCoberturaModal = ({
                   ))}
                 </Form.Select>
               </div>
-              <span className="small text-muted">
+              <span className="hp-chip">
                 {historialFiltrado.length} registro
                 {historialFiltrado.length !== 1 ? "s" : ""} en {anioSeleccionado}
                 {aniosDisponibles.length > 1
-                  ? ` · ${aniosDisponibles.length} años disponibles`
+                  ? ` · ${aniosDisponibles.length} años`
                   : ""}
               </span>
             </div>
 
             {historialFiltrado.length === 0 ? (
-              <p className="text-muted mb-0">
+              <div className="hp-empty">
                 No hay historial de plan para el año {anioSeleccionado}.
                 {aniosDisponibles.length > 0
                   ? " Seleccione otro año para ver registros anteriores."
                   : ""}
-              </p>
+              </div>
             ) : (
-              <div className="table-responsive">
-                <Table striped bordered hover size="sm" className="mb-0">
+              <div className="hp-table-wrap table-responsive">
+                <Table hover size="sm" className="hp-table">
                   <thead>
                     <tr>
                       <th style={{ width: "1%" }}>Origen</th>
                       <th>Compañía</th>
                       <th>Plan</th>
-                      <th>Metal</th>
-                      <th>Red</th>
+                      {!esDental && <th>Metal</th>}
+                      {!esDental && <th>Red</th>}
                       <th>Número ID</th>
                       <th>Código ID</th>
                       <th>Agente</th>
@@ -783,8 +799,8 @@ const HistorialPlanCoberturaModal = ({
                         </td>
                         <td>{item.compania?.nombre || "—"}</td>
                         <td>{item.plan || "—"}</td>
-                        <td>{item.metal || "—"}</td>
-                        <td>{item.red || "—"}</td>
+                        {!esDental && <td>{item.metal || "—"}</td>}
+                        {!esDental && <td>{item.red || "—"}</td>}
                         <td>{item.policy_number || item.codigo_poliza || "—"}</td>
                         <td>{item.codigo_poliza || "—"}</td>
                         <td>{item.agente || "—"}</td>
@@ -806,13 +822,12 @@ const HistorialPlanCoberturaModal = ({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
-        <Button variant="secondary" onClick={handleClose}>
+      <Modal.Footer className="hp-modal__footer">
+        <Button variant="secondary" className="hp-btn-close" onClick={handleClose}>
           Cerrar
         </Button>
       </Modal.Footer>
     </Modal>
-    </>
   );
 };
 
