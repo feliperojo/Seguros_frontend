@@ -48,8 +48,26 @@ export const emptyCoberturaDental = (saludMember = {}) => ({
   estado_cobertura: "Sí",
   ano_cobertura: saludMember.ano_cobertura || new Date().getFullYear(),
   elegibilidad: saludMember.elegibilidad || "",
+  agente: saludMember.agente || "",
+  tipo_pago: saludMember.tipo_pago || "",
+  dia_pago: saludMember.dia_pago ?? "",
+  pagador_id: saludMember.pagador_id ?? null,
   activo: true,
   vigente: true,
+});
+
+/** Campos de agente/pago a heredar de salud al crear Dental MS (editables después). */
+export const pickPagoFieldsFromSalud = (saludMember = {}) => ({
+  agente: saludMember.agente || "",
+  tipo_pago: saludMember.tipo_pago || "",
+  dia_pago:
+    saludMember.dia_pago === undefined || saludMember.dia_pago === null
+      ? ""
+      : String(saludMember.dia_pago),
+  pagador_id:
+    saludMember.pagador_id === undefined || saludMember.pagador_id === ""
+      ? null
+      : saludMember.pagador_id,
 });
 
 export { isDentalCoberturaTipo, isSaludCoberturaTipo, COBERTURA_TIPO_DENTAL_MS };

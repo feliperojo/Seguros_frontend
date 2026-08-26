@@ -2,12 +2,10 @@ import React, { useEffect, useRef, useState } from "react";
 import Sidebar from "../components/Sidebar";
 import "../styles/MainLayout.css";
 import apiRequest from "../services/api";
-import { Link, useNavigate } from "react-router-dom";
-import NotificationsDropdown from "../components/Tareas/NotificationsDropdown";
+import { useNavigate } from "react-router-dom";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import ResponderTareaAuditoriaModal from "../components/Tareas/ResponderTareaAuditoriaModal";
 import { getTask as getAuditoriaTask, listTasks as listAuditoriaTasks } from "../services/auditoriasTasksService";
-import DateTimeDisplay from "../components/DateTimeDisplay";
 
 const MainLayout = ({ children }) => {
   const [isOpen, setIsOpen] = useState(true);
@@ -353,23 +351,7 @@ const MainLayout = ({ children }) => {
     }
   };
 
-  return (
-    <div className="dashboard-container">
-      <div ref={sidebarRef}>
-        <Sidebar isOpen={isOpen} toggleSidebar={toggleSidebar} />
-      </div>
-      <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
-      <div className="topbar d-flex justify-content-between align-items-center gap-3 p-2">
-        {/* Fecha y Hora */}
-        <DateTimeDisplay />
-        
-        {/* ✅ Dropdown mejorado de notificaciones (reemplaza la campana simple) */}
-        {/* Muestra tanto notificaciones de menciones como tareas pendientes */}
-        <NotificationsDropdown 
-          currentUser={currentUser}
-          pendientes={pendientes}
-          loadingTask={loadingTarea}
-          onNotificationClick={async (notification) => {
+  const handleNotificationClick = async (notification) => {
             try {
               // ✅ Detectar si es una notificación de auditoría
               // El backend usa 'auditoria_task_id' (no 'audit_task_id')
@@ -609,10 +591,23 @@ const MainLayout = ({ children }) => {
               console.error("Error al procesar notificación:", error);
               navigate('/Herramientas/operaciones');
             }
+          };
+
+  return (
+    <div className="dashboard-container">
+      <div ref={sidebarRef}>
+        <Sidebar
+          isOpen={isOpen}
+          toggleSidebar={toggleSidebar}
+          notificationsProps={{
+            currentUser,
+            pendientes,
+            loadingTask: loadingTarea,
+            onNotificationClick: handleNotificationClick,
           }}
         />
       </div>
-
+      <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
         <div className="dashboard-content">{children}</div>
       </div>
 

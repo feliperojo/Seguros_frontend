@@ -17,6 +17,7 @@ import {
   isDentalCoberturaTipo,
   isSaludCoberturaTipo,
 } from "../../constants/coberturaTipos";
+import "../../styles/CambioVidaCancelacionModal.css";
 
 /**
  * CambioVidaCancelacionModal
@@ -54,6 +55,7 @@ const CambioVidaCancelacionModal = ({
   const [loading, setLoading] = useState(false);
   const [loadingCoberturas, setLoadingCoberturas] = useState(false);
   const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
   const [success, setSuccess] = useState(false);
 
   // Modo global opcional (aplicar mismos datos a varias coberturas)
@@ -258,6 +260,7 @@ const CambioVidaCancelacionModal = ({
     setNotaRetiroGlobal("");
     setCoberturaDefinidaGlobal(COBERTURA_DEFINIDA.RETIRADO);
     setError("");
+    setAviso("");
     setSuccess(false);
   };
 
@@ -405,17 +408,22 @@ const CambioVidaCancelacionModal = ({
 
     setLoadingCoberturas(true);
     setError("");
+    setAviso("");
 
     try {
       // Obtener el grupo familiar completo
       const grupoData = await GrupoFamiliarService.getFullById(grupoFamiliarId);
-      
-      // Extraer coberturas vigentes (activas)
-      const coberturasVigentes = (grupoData?.coberturas || []).filter(
-        (c) =>
-          (c.activo === true || c.activo === "true" || c.activo === 1) &&
-          !esInscripcionPendienteDeActivacion(c)
-      );
+
+      // Coberturas activas. Salud pendiente de activación se excluye (usa anulación).
+      // Dental MS activo siempre se lista: puede cancelarse solo aunque la fecha
+      // de activación sea futura (p. ej. cobertura ya vigente en ficha).
+      const coberturasVigentes = (grupoData?.coberturas || []).filter((c) => {
+        const activo =
+          c.activo === true || c.activo === "true" || c.activo === 1;
+        if (!activo) return false;
+        if (isDentalCoberturaTipo(c.cobertura_tipo)) return true;
+        return !esInscripcionPendienteDeActivacion(c);
+      });
 
       setCoberturas(coberturasVigentes);
     } catch (err) {
@@ -464,6 +472,7 @@ const CambioVidaCancelacionModal = ({
         return nuevoRenov;
       });
       setError("");
+      setAviso("");
       return;
     }
 
@@ -477,9 +486,11 @@ const CambioVidaCancelacionModal = ({
     };
 
     registrarSeleccion(cobertura);
-    if (isSaludCoberturaTipo(cobertura.cobertura_tipo)) {
-      const dental = findDentalCoberturaForCliente(getClienteIdFromCobertura(cobertura));
-      if (dental) registrarSeleccion(dental);
+    const dentalVinculado = isSaludCoberturaTipo(cobertura.cobertura_tipo)
+      ? findDentalCoberturaForCliente(getClienteIdFromCobertura(cobertura))
+      : null;
+    if (dentalVinculado) {
+      registrarSeleccion(dentalVinculado);
     }
 
     setCoberturasSeleccionadas((prev) => new Set([...prev, ...idsToAdd]));
@@ -489,6 +500,19 @@ const CambioVidaCancelacionModal = ({
       return nuevoRenov;
     });
     setError("");
+
+    if (dentalVinculado) {
+      const nombre = cobertura.cliente?.nombre_completo || "este miembro";
+      setAviso(
+        `${nombre} tiene Dental MS activo. Al procesar la salud, Dental MS también se cancelará o retirará. Si solo desea cancelar el dental, marque únicamente la fila Dental MS (dejando salud sin seleccionar).`
+      );
+    } else if (isDentalCoberturaTipo(cobertura.cobertura_tipo)) {
+      setAviso(
+        "Cancelación/retiro solo de Dental MS: la cobertura de salud del miembro no se modifica."
+      );
+    } else {
+      setAviso("");
+    }
   };
 
   // Manejar cambio en la decisión de renovación para una cobertura
@@ -569,6 +593,7 @@ const CambioVidaCancelacionModal = ({
         idsRemover.forEach((id) => nuevoRenov.delete(id));
         return nuevoRenov;
       });
+      setAviso("");
       return;
     }
 
@@ -588,6 +613,13 @@ const CambioVidaCancelacionModal = ({
       });
       return nuevoRenov;
     });
+    if (idsDentalVinculadosASalud(ids).size > 0) {
+      setAviso(
+        "Hay miembros con Dental MS activo: al procesar salud, Dental también se incluirá. Para cancelar solo Dental, marque únicamente esas filas."
+      );
+    } else {
+      setAviso("");
+    }
   };
 
   // Validar formulario (datos individuales por cobertura)
@@ -829,10 +861,34 @@ const CambioVidaCancelacionModal = ({
 
     setLoading(true);
     setError("");
+    setAviso("");
     setSuccess(false);
 
     try {
       const datosRenovacion = construirDatosRenovacion();
+
+      // Confirmación cuando hay cascada salud → dental
+      const saludCascada = Array.from(coberturasSeleccionadas)
+        .map((id) => {
+          const salud = coberturas.find((c) => c.id === id);
+          if (!salud || !isSaludCoberturaTipo(salud.cobertura_tipo)) return null;
+          const dentalId = getDentalIdVinculadoASalud(id);
+          if (!dentalId || !coberturasSeleccionadas.has(dentalId)) return null;
+          return salud.cliente?.nombre_completo || `Cobertura #${id}`;
+        })
+        .filter(Boolean);
+
+      if (saludCascada.length > 0) {
+        const ok = window.confirm(
+          `Al confirmar, también se cancelará o retirará Dental MS de:\n\n• ${saludCascada.join(
+            "\n• "
+          )}\n\nSi solo quiere cancelar Dental, cancele esta operación y marque únicamente la fila Dental MS.\n\n¿Desea continuar?`
+        );
+        if (!ok) {
+          setLoading(false);
+          return;
+        }
+      }
 
       // ✅ MODO LOCAL: Solo actualizar estado local, NO llamar al backend
       if (soloActualizarLocal && onUpdateLocal) {
@@ -932,6 +988,39 @@ const CambioVidaCancelacionModal = ({
     return esSoloRetiro(cobertura);
   }).length;
 
+  /** Resumen de selección Salud/Dental para avisos en UI (sin cambiar reglas). */
+  const seleccionDentalSolo = idsSeleccionados.filter((id) => {
+    const c = coberturas.find((x) => x.id === id);
+    return c && isDentalCoberturaTipo(c.cobertura_tipo);
+  });
+  const seleccionSalud = idsSeleccionados.filter((id) => {
+    const c = coberturas.find((x) => x.id === id);
+    return c && isSaludCoberturaTipo(c.cobertura_tipo);
+  });
+  const saludConDentalActivo = seleccionSalud
+    .map((id) => {
+      const salud = coberturas.find((c) => c.id === id);
+      const dentalId = getDentalIdVinculadoASalud(id);
+      const dental = dentalId ? coberturas.find((c) => c.id === dentalId) : null;
+      if (!salud || !dental) return null;
+      return {
+        saludId: id,
+        dentalId,
+        nombre:
+          salud.cliente?.nombre_completo ||
+          dental.cliente?.nombre_completo ||
+          `Cobertura #${id}`,
+      };
+    })
+    .filter(Boolean);
+  const haySoloDentalSeleccionado =
+    seleccionDentalSolo.length > 0 &&
+    seleccionSalud.length === 0;
+  const haySaludConDentalEnCascada = saludConDentalActivo.length > 0;
+  const totalDentalListado = coberturas.filter((c) =>
+    isDentalCoberturaTipo(c?.cobertura_tipo)
+  ).length;
+
   const coberturasOrdenadas = [...coberturas]
     .filter((c) => c && c.id)
     .sort((a, b) => {
@@ -996,157 +1085,42 @@ const CambioVidaCancelacionModal = ({
   const columnasDatos = hayAlgunaConFechaCancelacion ? 5 : 4;
 
   return (
-    <>
-      <style>{`
-        .modal-cambio-vida-cancelacion-dialog {
-          width: calc(100vw - 1rem) !important;
-          max-width: calc(100vw - 1rem) !important;
-          margin: 0.5rem auto !important;
-        }
-        @media (min-width: 576px) {
-          .modal-cambio-vida-cancelacion-dialog {
-            width: calc(100vw - 2rem) !important;
-            max-width: min(96vw, 1500px) !important;
-            margin: 1rem auto !important;
-          }
-        }
-        @media (min-width: 992px) {
-          .modal-cambio-vida-cancelacion-dialog {
-            width: min(94vw, 1500px) !important;
-            max-width: min(94vw, 1500px) !important;
-          }
-        }
-        .modal-cambio-vida-cancelacion-content {
-          max-height: calc(100dvh - 1rem);
-          display: flex;
-          flex-direction: column;
-        }
-        @media (min-width: 576px) {
-          .modal-cambio-vida-cancelacion-content {
-            max-height: calc(100dvh - 2rem);
-          }
-        }
-        .modal-cambio-vida-cancelacion-content .modal-body {
-          flex: 1 1 auto;
-          overflow-y: auto;
-          min-height: 0;
-          padding: 0.75rem 1rem;
-        }
-        @media (min-width: 768px) {
-          .modal-cambio-vida-cancelacion-content .modal-body {
-            padding: 1rem 1.25rem;
-          }
-        }
-        .cvc-table-wrap {
-          max-height: min(58dvh, 680px);
-          overflow: auto;
-          -webkit-overflow-scrolling: touch;
-        }
-        .cvc-table thead th {
-          font-size: 0.78rem;
-          font-weight: 600;
-          background: #f8f9fa;
-          border-bottom: 1px solid #dee2e6;
-          color: #495057;
-          white-space: nowrap;
-          position: sticky;
-          top: 0;
-          z-index: 2;
-        }
-        .cvc-table tbody td {
-          font-size: 0.85rem;
-          vertical-align: middle;
-        }
-        .cvc-row-selected {
-          background-color: #f0f7ff !important;
-        }
-        .cvc-detail-row td {
-          background: #fafbfc;
-          border-top: none;
-          padding: 0.5rem 0.75rem 0.75rem;
-        }
-        .cvc-detail-fields {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 0.65rem;
-          align-items: end;
-        }
-        @media (min-width: 576px) {
-          .cvc-detail-fields {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-        @media (min-width: 992px) {
-          .cvc-detail-fields {
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          }
-        }
-        .cvc-detail-fields .obs-col {
-          grid-column: 1 / -1;
-        }
-        .cvc-stat-chip {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.35rem;
-          padding: 0.2rem 0.55rem;
-          border-radius: 999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          background: #fff;
-          border: 1px solid #dee2e6;
-        }
-        .cvc-col-plan {
-          min-width: 140px;
-        }
-        .cvc-col-action {
-          min-width: 150px;
-        }
-        .cvc-col-fecha-cancel {
-          min-width: 110px;
-          white-space: nowrap;
-        }
-        @media (max-width: 575.98px) {
-          .cvc-col-estado {
-            display: none;
-          }
-          .cvc-member-name {
-            max-width: 160px;
-          }
-        }
-        @media (min-width: 576px) {
-          .cvc-member-name {
-            max-width: 320px;
-          }
-        }
-      `}</style>
       <Modal
         show={show}
         onHide={onClose}
         centered
         scrollable
         fullscreen="sm-down"
-        dialogClassName="modal-cambio-vida-cancelacion-dialog"
-        contentClassName="modal-cambio-vida-cancelacion-content"
+        dialogClassName="cvc-modal"
+        contentClassName="cvc-modal__content"
       >
-      <Modal.Header closeButton className="py-2 px-3 border-bottom">
-        <div className="w-100 d-flex justify-content-between align-items-center flex-wrap gap-2">
-          <div>
-            <Modal.Title className="fs-6 mb-0 fw-semibold">
-              Gestión de Cancelaciones y Retiros
-            </Modal.Title>
+      <Modal.Header closeButton className="cvc-modal__header">
+        <div className="cvc-modal__header-main">
+          <div className="cvc-modal__header-left">
+            <div className="cvc-modal__header-icon" aria-hidden="true">
+              <i className="fas fa-exchange-alt" />
+            </div>
+            <div>
+              <Modal.Title className="cvc-modal__title">
+                Gestión de Cancelaciones y Retiros
+              </Modal.Title>
+              <p className="cvc-modal__subtitle">
+                Cancelación de póliza o retiro del grupo por miembro
+              </p>
+            </div>
           </div>
           {totalSeleccionadas > 0 && (
             <div className="d-flex flex-wrap gap-2">
-              <span className="cvc-stat-chip text-primary">
+              <span className="cvc-stat-chip">
                 {totalSeleccionadas} seleccionada{totalSeleccionadas !== 1 ? "s" : ""}
               </span>
               {totalCancelaciones > 0 && (
-                <span className="cvc-stat-chip text-warning">
+                <span className="cvc-stat-chip cvc-stat-chip--cancel">
                   {totalCancelaciones} cancelación{totalCancelaciones !== 1 ? "es" : ""}
                 </span>
               )}
               {totalRetiros > 0 && (
-                <span className="cvc-stat-chip text-danger">
+                <span className="cvc-stat-chip cvc-stat-chip--retiro">
                   {totalRetiros} retiro{totalRetiros !== 1 ? "s" : ""}
                 </span>
               )}
@@ -1154,26 +1128,70 @@ const CambioVidaCancelacionModal = ({
           )}
         </div>
       </Modal.Header>
-      <Modal.Body>
+      <Modal.Body className="cvc-modal__body">
         <Form id="cvc-cancelacion-form" onSubmit={handleSubmit}>
         {loadingCoberturas ? (
-          <div className="text-center py-4">
+          <div className="cvc-loading">
             <Spinner animation="border" variant="primary" />
-            <p className="mt-2 text-muted">Cargando coberturas...</p>
+            <p className="mt-2 text-muted mb-0">Cargando coberturas...</p>
           </div>
         ) : coberturas.length === 0 ? (
-          <Alert variant="info">
-            <i className="fas fa-info-circle me-2"></i>
+          <Alert variant="info" className="cvc-alert">
+            <i className="fas fa-info-circle me-2" aria-hidden="true" />
             No hay coberturas vigentes disponibles para cancelar.
           </Alert>
         ) : (
           <>
-            <Alert variant="light" className="small py-2 mb-3 border">
-              <strong>Salud y Dental MS:</strong> al seleccionar la cobertura de salud de un miembro,
-              su Dental MS activo se incluye automáticamente. Puede cancelar solo Dental MS dejando
-              la salud activa. Dental MS también participa en renovación anual como producto independiente.
+            <Alert variant="light" className="cvc-alert cvc-alert--rules small py-2">
+              <div className="cvc-alert__title">Salud y Dental MS</div>
+              {totalDentalListado > 0 ? (
+                <ul className="mb-0 ps-3">
+                  <li>
+                    <strong>Solo Dental:</strong> busque la fila con la etiqueta{" "}
+                    <em>Dental MS</em> (badge azul claro) del miembro y márquela
+                    sola — sin marcar la fila de salud. Luego elija Cancelar póliza
+                    o Retirar y confirme.
+                  </li>
+                  <li>
+                    <strong>Salud con Dental activo:</strong> al marcar la salud,
+                    Dental MS se incluye automáticamente y se procesará junto con
+                    ella. No se puede desmarcar Dental mientras la salud esté
+                    seleccionada.
+                  </li>
+                </ul>
+              ) : (
+                <p className="mb-0">
+                  En este grupo no hay Dental MS activo listado. Si el miembro
+                  debería tener dental, revise en la ficha que la cobertura Dental
+                  MS esté activa y guardada.
+                </p>
+              )}
             </Alert>
-            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+
+            {haySoloDentalSeleccionado && (
+              <Alert variant="info" className="cvc-alert cvc-alert--dental small py-2">
+                Selección solo Dental MS: se cancelará/retirará el producto dental
+                sin afectar la cobertura de salud.
+              </Alert>
+            )}
+
+            {haySaludConDentalEnCascada && (
+              <Alert variant="warning" className="cvc-alert cvc-alert--cascade small py-2">
+                Hay salud seleccionada con Dental MS activo (
+                {saludConDentalActivo.map((x) => x.nombre).join(", ")}
+                ). Al confirmar, Dental también se cancelará o retirará. Si solo
+                desea cancelar Dental, quite la selección de salud y deje marcada
+                solo la fila Dental MS.
+              </Alert>
+            )}
+
+            {aviso && !haySaludConDentalEnCascada && !haySoloDentalSeleccionado && (
+              <Alert variant="secondary" className="cvc-alert small py-2">
+                {aviso}
+              </Alert>
+            )}
+
+            <div className="cvc-toolbar">
               <div className="d-flex flex-wrap align-items-center gap-2">
                 {hayConPoliza && (
                   <Button
@@ -1197,7 +1215,7 @@ const CambioVidaCancelacionModal = ({
             </div>
 
             {usarDatosGlobales && (
-              <div className="border rounded p-2 mb-2 bg-light">
+              <div className="cvc-global-panel">
                 <div className="row g-2 align-items-end">
                   {seleccionRequiereFechaCancelacion && (
                     <div className="col-md-3 col-6">
@@ -1292,7 +1310,7 @@ const CambioVidaCancelacionModal = ({
               </div>
             )}
 
-            <div className="table-responsive border rounded cvc-table-wrap">
+            <div className="table-responsive cvc-table-wrap">
               <Table hover size="sm" className="mb-0 cvc-table">
                 <thead>
                   <tr>
@@ -1343,7 +1361,7 @@ const CambioVidaCancelacionModal = ({
                       return (
                         <React.Fragment key={coberturaId}>
                           {mostrarSeparadorBloqueInferior && (
-                            <tr className="table-secondary">
+                            <tr className="cvc-row-separator">
                               <td className="text-center align-middle py-1">
                                 <Form.Check
                                   type="checkbox"
@@ -1353,20 +1371,20 @@ const CambioVidaCancelacionModal = ({
                                 />
                               </td>
                               <td colSpan={columnasDatos} className="py-1 px-2">
-                                <span className="small fw-semibold text-muted">
+                                <span className="cvc-row-separator__label">
                                   Sin cobertura activa o póliza cancelada
                                 </span>
                               </td>
                             </tr>
                           )}
                         <tr
-                          className={
-                            isSelected
-                              ? "cvc-row-selected"
-                              : esTomador
-                                ? "table-warning"
-                                : ""
-                          }
+                          className={[
+                            isSelected && "cvc-row-selected",
+                            esTomador && "cvc-row--tomador",
+                            esDental && !isSelected && "cvc-row--dental",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
                         >
                           <td className="text-center align-middle">
                             <Form.Check
@@ -1386,31 +1404,43 @@ const CambioVidaCancelacionModal = ({
                               {cobertura.cliente?.nombre_completo || "-"}
                             </div>
                             <div className="d-flex align-items-center gap-1 mt-1 flex-wrap">
-                              <Badge
-                                bg={esDental ? "info" : "primary"}
-                                style={{ fontSize: "0.6rem" }}
+                              <span
+                                className={`cvc-badge-producto ${
+                                  esDental
+                                    ? "cvc-badge-producto--dental"
+                                    : "cvc-badge-producto--salud"
+                                }`}
                               >
+                                {esDental && (
+                                  <i className="fas fa-tooth" aria-hidden="true" />
+                                )}
                                 {getEtiquetaProducto(cobertura)}
-                              </Badge>
-                              <span className="text-muted" style={{ fontSize: "0.75rem" }}>
+                              </span>
+                              <span className="cvc-member-meta">
                                 {cobertura.parentesco || "-"}
                               </span>
                               {esTomador && (
-                                <Badge bg="warning" text="dark" style={{ fontSize: "0.6rem" }}>TOMADOR</Badge>
+                                <span className="cvc-tag cvc-tag--tomador">TOMADOR</span>
                               )}
                               {soloRetiro && (
-                                <Badge bg="secondary" style={{ fontSize: "0.6rem" }}>SOLO RETIRO</Badge>
+                                <span className="cvc-tag cvc-tag--solo-retiro">SOLO RETIRO</span>
                               )}
                               {dentalVinculada && (
-                                <Badge bg="secondary" style={{ fontSize: "0.6rem" }}>
-                                  CON SALUD
-                                </Badge>
+                                <span className="cvc-tag cvc-tag--con-salud">CON SALUD</span>
+                              )}
+                              {esDental && !dentalVinculada && (
+                                <span className="cvc-tag cvc-tag--independiente">INDEPENDIENTE</span>
                               )}
                             </div>
+                            {esDental && !isSelected && (
+                              <div className="cvc-member-hint">
+                                Puede cancelarse solo, sin tocar la salud
+                              </div>
+                            )}
                           </td>
                           <td className="align-middle">
                             <div className="small fw-medium">{cobertura.plan || "-"}</div>
-                            <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+                            <div className="cvc-plan-sub">
                               {[cobertura.metal, cobertura.red, cobertura.codigo_poliza].filter(Boolean).join(" · ") || "-"}
                             </div>
                           </td>
@@ -1648,12 +1678,12 @@ const CambioVidaCancelacionModal = ({
               </div>
 
             {error && (
-              <Alert variant="danger" className="mt-2 mb-0 py-2 small">
+              <Alert variant="danger" className="cvc-alert mt-2 mb-0 py-2 small">
                 {error}
               </Alert>
             )}
             {success && (
-              <Alert variant="success" className="mt-2 mb-0 py-2 small">
+              <Alert variant="success" className="cvc-alert mt-2 mb-0 py-2 small">
                 Operación completada correctamente.
               </Alert>
             )}
@@ -1661,19 +1691,26 @@ const CambioVidaCancelacionModal = ({
         )}
         </Form>
       </Modal.Body>
-      <Modal.Footer className="py-2 px-3 d-flex justify-content-between flex-wrap gap-2">
-        <span className="text-muted small">
+      <Modal.Footer className="cvc-modal__footer d-flex justify-content-between flex-wrap gap-2">
+        <span className="cvc-modal__footer-note">
           {soloActualizarLocal
             ? "Los cambios se aplican localmente hasta guardar el grupo."
             : "Se registrará en el historial del grupo familiar."}
         </span>
         <div className="d-flex gap-2">
-          <Button variant="outline-secondary" size="sm" onClick={onClose} disabled={loading}>
+          <Button
+            variant="outline-secondary"
+            size="sm"
+            className="cvc-btn-cancel"
+            onClick={onClose}
+            disabled={loading}
+          >
             Cancelar
           </Button>
           <Button
             variant="primary"
             size="sm"
+            className="cvc-btn-confirm"
             type="submit"
             form="cvc-cancelacion-form"
             disabled={loading || coberturasSeleccionadas.size === 0}
@@ -1690,7 +1727,6 @@ const CambioVidaCancelacionModal = ({
         </div>
       </Modal.Footer>
     </Modal>
-    </>
   );
 };
 

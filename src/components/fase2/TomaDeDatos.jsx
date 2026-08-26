@@ -2887,24 +2887,6 @@ const activeNormalized = useMemo(
                               />
                             </ConfigField>
                           )}
-                          {shouldShowDentalField("metal") && (
-                            <ConfigField label="Metal">
-                              <select
-                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                name="metal"
-                                value={d.metal || ""}
-                                onChange={onDentalChange}
-                                disabled={isReadOnly}
-                              >
-                                <option value="">Seleccione…</option>
-                                {METAL_OPTIONS.map((opt) => (
-                                  <option key={opt} value={opt}>
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
-                            </ConfigField>
-                          )}
                           {shouldShowDentalField("estado_cobertura") && (
                             <ConfigField label="Cobertura">
                               <select

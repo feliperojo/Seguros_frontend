@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Modal, Form, Alert, Spinner, Badge } from "react-bootstrap";
 import CompanySelect from "../selects/CompanySelect";
@@ -10,12 +10,12 @@ import {
   COBERTURA_TIPO_DENTAL_MS,
   memberTieneSaludMsActiva,
 } from "../../constants/coberturaTipos";
-import { mapCoberturaApiToFields } from "../../utils/coberturaDental";
+import { mapCoberturaApiToFields, pickPagoFieldsFromSalud } from "../../utils/coberturaDental";
 import { extractCoberturaFromCreateResponse } from "../../utils/buildMemberFromClienteExistente";
 import { parseMoney } from "../../services/ingresos";
 import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
-import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
+import { TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 import "./AgregarDentalModal.css";
 
 const MSG_SIN_SALUD =
@@ -36,12 +36,16 @@ const emptyForm = () => ({
   policy_number: "",
   agente: "",
   plan: "",
-  metal: "",
   estado_cobertura: "Sí",
   tipo_pago: "",
   pagador_id: null,
   dia_pago: "",
   precio: "",
+});
+
+const buildFormFromSalud = (saludMember) => ({
+  ...emptyForm(),
+  ...pickPagoFieldsFromSalud(saludMember || {}),
 });
 
 const FieldLabel = ({ children, hint }) => (
@@ -90,7 +94,8 @@ export default function AgregarDentalModal({
 
   useEffect(() => {
     if (!open) return;
-    setForm(emptyForm());
+    const fuente = elegibles[0] || null;
+    setForm(buildFormFromSalud(fuente));
     setMemberIds({});
     setError("");
     setSelectedIds(new Set(elegibles.map(memberKey)));
@@ -104,6 +109,28 @@ export default function AgregarDentalModal({
       return next;
     });
   };
+
+  const lastPagoSyncKeyRef = useRef(null);
+
+  /** Con un solo miembro seleccionado, hereda agente/pago/pagador de su salud (sigue editable). */
+  useEffect(() => {
+    if (!open) {
+      lastPagoSyncKeyRef.current = null;
+      return;
+    }
+    if (selectedMembers.length !== 1) {
+      lastPagoSyncKeyRef.current = null;
+      return;
+    }
+    const fuente = selectedMembers[0];
+    const key = memberKey(fuente);
+    if (lastPagoSyncKeyRef.current === key) return;
+    lastPagoSyncKeyRef.current = key;
+    setForm((prev) => ({
+      ...prev,
+      ...pickPagoFieldsFromSalud(fuente),
+    }));
+  }, [open, selectedMembers]);
 
   const selectAll = () => {
     setSelectedIds(new Set(elegibles.map(memberKey)));
@@ -161,6 +188,7 @@ export default function AgregarDentalModal({
 
       for (const m of selectedMembers) {
         const cid = memberKey(m);
+        const desdeSalud = pickPagoFieldsFromSalud(m);
         const payload = {
           grupo_familiar_id: grupoFamiliarId,
           cliente_id: cid,
@@ -173,12 +201,17 @@ export default function AgregarDentalModal({
           policy_number: form.policy_number || "",
           fecha_activacion: form.fecha_activacion || null,
           compania_id: form.compania_id,
-          agente: form.agente || "",
+          agente: (form.agente || desdeSalud.agente || "").trim(),
           plan: form.plan || "",
-          metal: form.metal || "",
-          tipo_pago: form.tipo_pago || null,
-          pagador_id: form.pagador_id,
-          dia_pago: form.dia_pago || null,
+          tipo_pago: form.tipo_pago || desdeSalud.tipo_pago || null,
+          pagador_id:
+            form.pagador_id != null && form.pagador_id !== ""
+              ? form.pagador_id
+              : desdeSalud.pagador_id,
+          dia_pago:
+            form.dia_pago !== "" && form.dia_pago != null
+              ? form.dia_pago
+              : desdeSalud.dia_pago || null,
           precio: form.precio ? parseMoney(form.precio) : null,
           activo: true,
         };
@@ -190,7 +223,16 @@ export default function AgregarDentalModal({
           coberturaDental: {
             ...mapCoberturaApiToFields(cov || {}),
             compania_id: cov?.compania_id ?? form.compania_id ?? null,
-            pagador_id: cov?.pagador_id ?? form.pagador_id ?? null,
+            pagador_id:
+              cov?.pagador_id ??
+              form.pagador_id ??
+              desdeSalud.pagador_id ??
+              null,
+            agente: cov?.agente ?? form.agente ?? desdeSalud.agente ?? "",
+            tipo_pago:
+              cov?.tipo_pago ?? form.tipo_pago ?? desdeSalud.tipo_pago ?? null,
+            dia_pago:
+              cov?.dia_pago ?? form.dia_pago ?? desdeSalud.dia_pago ?? "",
             cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
             cobertura_id: cov?.id ?? res?.id ?? res?.data?.id,
           },
@@ -447,7 +489,7 @@ export default function AgregarDentalModal({
                     placeholder="Nombre del agente o broker"
                   />
                 </div>
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <FieldLabel>Plan</FieldLabel>
                   <Form.Control
                     name="plan"
@@ -456,18 +498,7 @@ export default function AgregarDentalModal({
                     placeholder="Nombre del plan dental"
                   />
                 </div>
-                <div className="col-md-4">
-                  <FieldLabel>Metal</FieldLabel>
-                  <Form.Select name="metal" value={form.metal} onChange={handleChange}>
-                    <option value="">Seleccione…</option>
-                    {METAL_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </Form.Select>
-                </div>
-                <div className="col-md-4">
+                <div className="col-md-6">
                   <FieldLabel>Precio ($)</FieldLabel>
                   <CoveragePriceInput
                     value={form.precio}

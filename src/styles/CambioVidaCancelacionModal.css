@@ -1,0 +1,443 @@
+/* Gestión de cancelaciones y retiros — estilo institucional */
+
+.modal-dialog.cvc-modal {
+  max-width: min(calc(100vw - 1.25rem), 1800px) !important;
+  width: min(calc(100vw - 1.25rem), 1800px) !important;
+  margin: 0.65rem auto;
+}
+
+.cvc-modal__content {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 39, 68, 0.18);
+  max-height: calc(100dvh - 1.25rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.cvc-modal__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  border-bottom: none;
+  padding: 0.95rem 1.25rem;
+}
+
+.cvc-modal__header .btn-close {
+  filter: invert(1) grayscale(1) brightness(2);
+  opacity: 0.85;
+}
+
+.cvc-modal__header-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+.cvc-modal__header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.cvc-modal__header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.cvc-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.cvc-modal__subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0.12rem 0 0;
+}
+
+.cvc-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  background: #f8f9fb;
+  padding: 1rem 1.25rem;
+}
+
+.cvc-modal__footer {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1.25rem;
+}
+
+.cvc-modal__footer-note {
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.cvc-stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #fff;
+}
+
+.cvc-stat-chip--cancel {
+  background: rgba(251, 191, 36, 0.22);
+  border-color: rgba(251, 191, 36, 0.45);
+}
+
+.cvc-stat-chip--retiro {
+  background: rgba(248, 113, 113, 0.2);
+  border-color: rgba(248, 113, 113, 0.4);
+}
+
+.cvc-alert {
+  border-radius: 10px;
+  font-size: 0.8125rem;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 0.65rem;
+}
+
+.cvc-alert--rules {
+  background: #fff;
+  border-color: #e2e8f0;
+  color: #334155;
+}
+
+.cvc-alert--rules .cvc-alert__title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f2744;
+  margin-bottom: 0.35rem;
+}
+
+.cvc-alert--dental {
+  background: rgba(14, 165, 233, 0.08);
+  border-color: rgba(14, 165, 233, 0.35);
+  color: #0369a1;
+}
+
+.cvc-alert--cascade {
+  background: #fffbeb;
+  border-color: #fcd34d;
+  color: #92400e;
+}
+
+.cvc-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.cvc-toolbar .btn-outline-secondary {
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.cvc-toolbar .btn-outline-secondary:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  color: #0f2744;
+}
+
+.cvc-toolbar .form-check-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.cvc-global-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem;
+  margin-bottom: 0.65rem;
+}
+
+.cvc-global-panel .form-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.cvc-global-panel .form-control,
+.cvc-global-panel .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.cvc-table-wrap {
+  max-height: min(58dvh, 680px);
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.cvc-table {
+  margin-bottom: 0;
+}
+
+.cvc-table thead th {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: #0f2744;
+  color: #fff;
+  border: none;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.55rem 0.5rem;
+  vertical-align: middle;
+}
+
+.cvc-table tbody td {
+  font-size: 0.8125rem;
+  vertical-align: middle;
+  border-color: #f1f5f9;
+  color: #334155;
+}
+
+.cvc-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.cvc-row-selected {
+  background-color: rgba(26, 54, 93, 0.06) !important;
+}
+
+.cvc-row--dental {
+  background: rgba(14, 165, 233, 0.04);
+}
+
+.cvc-row--dental.cvc-row-selected {
+  background: rgba(14, 165, 233, 0.1) !important;
+}
+
+.cvc-row--tomador {
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.cvc-row-separator td {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0;
+}
+
+.cvc-row-separator__label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.cvc-detail-row td {
+  background: #f8fafc;
+  border-top: none;
+  padding: 0.5rem 0.75rem 0.75rem;
+}
+
+.cvc-detail-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
+  align-items: end;
+}
+
+@media (min-width: 576px) {
+  .cvc-detail-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 992px) {
+  .cvc-detail-fields {
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  }
+}
+
+.cvc-detail-fields .obs-col {
+  grid-column: 1 / -1;
+}
+
+.cvc-detail-fields .form-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.cvc-detail-fields .form-control,
+.cvc-detail-fields .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.cvc-col-plan {
+  min-width: 140px;
+}
+
+.cvc-col-action {
+  min-width: 150px;
+}
+
+.cvc-col-fecha-cancel {
+  min-width: 110px;
+  white-space: nowrap;
+}
+
+.cvc-member-name {
+  color: #0f2744;
+  font-weight: 600;
+}
+
+.cvc-member-meta {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.cvc-member-hint {
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 0.25rem;
+}
+
+.cvc-plan-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.cvc-badge-producto {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cvc-badge-producto--salud {
+  background: #1a365d;
+  color: #fff;
+}
+
+.cvc-badge-producto--dental {
+  background: #0ea5e9;
+  color: #fff;
+}
+
+.cvc-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.12rem 0.38rem;
+  border-radius: 6px;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.cvc-tag--tomador {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.cvc-tag--solo-retiro {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.cvc-tag--con-salud {
+  background: #64748b;
+  color: #fff;
+}
+
+.cvc-tag--independiente {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.cvc-btn-cancel {
+  border-radius: 8px !important;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+}
+
+.cvc-btn-confirm {
+  border-radius: 8px !important;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: #1a365d !important;
+  border-color: #1a365d !important;
+}
+
+.cvc-btn-confirm:hover:not(:disabled) {
+  background: #0f2744 !important;
+  border-color: #0f2744 !important;
+}
+
+.cvc-loading {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #64748b;
+}
+
+@media (max-width: 575.98px) {
+  .cvc-col-estado {
+    display: none;
+  }
+
+  .cvc-member-name {
+    max-width: 160px;
+  }
+
+  .modal-dialog.cvc-modal {
+    max-width: calc(100vw - 0.5rem) !important;
+    width: calc(100vw - 0.5rem) !important;
+    margin: 0.25rem auto;
+  }
+}
+
+@media (min-width: 576px) {
+  .cvc-member-name {
+    max-width: 320px;
+  }
+}

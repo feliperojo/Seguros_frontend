@@ -47,7 +47,6 @@ export const DENTAL_COVERAGE_FIELD_KEYS = [
   "compania_id",
   "agente",
   "plan",
-  "metal",
   "estado_cobertura",
   "pagador_id",
   "tipo_pago",

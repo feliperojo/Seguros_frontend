@@ -337,7 +337,59 @@ export function ocultarPersonasCoberturaEnListado(grupo) {
   return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
 }
 
-/** Valor de P. COBERTURA solo para render del listado. */
+/** Conteos Salud/Dental activos para la columna S/D del listado. */
+export function personasSaludDentalParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) {
+    return { salud: 0, dental: 0, label: "0/0" };
+  }
+
+  let salud =
+    grupo?.personas_salud != null && grupo.personas_salud !== ""
+      ? Number(grupo.personas_salud) || 0
+      : null;
+  let dental =
+    grupo?.personas_dental != null && grupo.personas_dental !== ""
+      ? Number(grupo.personas_dental) || 0
+      : null;
+
+  if (salud === null || dental === null) {
+    const resumen = Array.isArray(grupo?.productos_resumen) ? grupo.productos_resumen : [];
+    const filaDental = resumen.find((p) =>
+      String(p?.producto || "")
+        .toLowerCase()
+        .includes("dental")
+    );
+    const filaSalud = resumen.find(
+      (p) =>
+        !String(p?.producto || "")
+          .toLowerCase()
+          .includes("dental")
+    );
+
+    if (dental === null) {
+      dental = filaDental?.cobertura != null ? Number(filaDental.cobertura) || 0 : 0;
+    }
+    if (salud === null) {
+      salud =
+        filaSalud?.cobertura != null
+          ? Number(filaSalud.cobertura) || 0
+          : Number(grupo?.personas_cobertura) || 0;
+    }
+  }
+
+  return {
+    salud,
+    dental,
+    label: `${salud}/${dental}`,
+  };
+}
+
+/** @deprecated Preferir personasSaludDentalParaListado. */
+export function personasDentalParaListado(grupo) {
+  return personasSaludDentalParaListado(grupo).dental;
+}
+
+/** @deprecated Preferir personasSaludDentalParaListado en el listado de GF. */
 export function personasCoberturaParaListado(grupo) {
   if (ocultarPersonasCoberturaEnListado(grupo)) return 0;
   return grupo?.personas_cobertura || 0;

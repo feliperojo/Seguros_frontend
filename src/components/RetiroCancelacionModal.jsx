@@ -4,6 +4,7 @@ import { FaCog } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { formatDateForDisplay } from "../utils/formatters";
 import { esInscripcionPendienteDeActivacion } from "../utils/coberturaAnulacion";
+import { isDentalCoberturaTipo } from "../constants/coberturaTipos";
 
 // Función helper para normalizar fechas a formato YYYY-MM-DD sin alterar la fecha
 const normalizeDate = (dateString) => {
@@ -176,11 +177,16 @@ const RetiroCancelacionModal = ({
 
   useEffect(() => {
     if (grupoFamiliar?.coberturas) {
-      const coberturasActivas = grupoFamiliar.coberturas.filter(
-        (c) =>
-          (c.estado_cobertura === "Activa" || c.activo === true) &&
-          !esInscripcionPendienteDeActivacion(c)
-      );
+      const coberturasActivas = grupoFamiliar.coberturas.filter((c) => {
+        const activa =
+          c.estado_cobertura === "Activa" ||
+          c.activo === true ||
+          c.activo === "true" ||
+          c.activo === 1;
+        if (!activa) return false;
+        if (isDentalCoberturaTipo(c.cobertura_tipo)) return true;
+        return !esInscripcionPendienteDeActivacion(c);
+      });
 
       const coberturasIniciales = coberturasActivas.map(c => ({
         ...c,

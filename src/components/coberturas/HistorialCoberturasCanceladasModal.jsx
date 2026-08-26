@@ -1,10 +1,38 @@
 // src/components/coberturas/HistorialCoberturasCanceladasModal.jsx
-import React, { useState, useEffect } from "react";
-import { Modal, Button, Table, Alert, Spinner, Badge, Form, Row, Col, Accordion, Card } from "react-bootstrap";
+import React, { useState, useEffect, useMemo } from "react";
+import { Modal, Button, Table, Alert, Spinner, Badge, Form, Row, Col } from "react-bootstrap";
 import { FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import {
+  COBERTURA_TIPO_DENTAL_MS,
+  isDentalCoberturaTipo,
+  isSaludCoberturaTipo,
+} from "../../constants/coberturaTipos";
+import "../../styles/HistorialCoberturasCanceladas.css";
+
+const stripHtmlTags = (html = "") =>
+  String(html ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getEtiquetaProductoHistorial = (item = {}) => {
+  const tipo = item?.cobertura_tipo ?? "";
+  if (isDentalCoberturaTipo(tipo)) {
+    return tipo.trim() || COBERTURA_TIPO_DENTAL_MS;
+  }
+  if (isSaludCoberturaTipo(tipo) && tipo.trim()) return tipo.trim();
+  return "Salud MS";
+};
+
+const badgeEstadoClase = (estado = "") => {
+  const norm = String(estado).toLowerCase();
+  if (norm === "cancelado") return "hcc-badge-estado hcc-badge-estado--cancelado";
+  if (norm === "retirado") return "hcc-badge-estado hcc-badge-estado--retirado";
+  return "hcc-badge-estado hcc-badge-estado--otro";
+};
 
 /**
  * HistorialCoberturasCanceladasModal
@@ -467,24 +495,67 @@ const HistorialCoberturasCanceladasModal = ({
     );
   };
 
+  const resumenProductos = useMemo(() => {
+    let dental = 0;
+    let salud = 0;
+    historial.forEach((item) => {
+      if (isDentalCoberturaTipo(item?.cobertura_tipo)) dental += 1;
+      else salud += 1;
+    });
+    return { dental, salud, total: historial.length };
+  }, [historial]);
+
+  const renderBadgeProducto = (item, { large = false } = {}) => {
+    const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
+    const label = getEtiquetaProductoHistorial(item);
+    return (
+      <span
+        className={`hcc-badge-producto ${
+          esDental ? "hcc-badge-producto--dental" : "hcc-badge-producto--salud"
+        }${large ? " px-2 py-1" : ""}`}
+        title={esDental ? "Cancelación o retiro del producto dental" : "Cancelación o retiro de salud"}
+      >
+        {esDental && <i className="fas fa-tooth" aria-hidden="true" />}
+        {label}
+      </span>
+    );
+  };
+
   // Renderizar información completa de la cobertura
   const renderCoberturaCompleta = (item) => {
+    const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
+
     return (
       <div className="row g-3">
+        {esDental && (
+          <Col md={12}>
+            <Alert variant="info" className="hcc-alert py-2 mb-0 small">
+              <i className="fas fa-tooth me-2" aria-hidden="true" />
+              Este registro corresponde a una <strong>cancelación o retiro de Dental MS</strong>.
+              La cobertura de salud del miembro no se ve afectada por este movimiento.
+            </Alert>
+          </Col>
+        )}
+
         {/* Información de la Cobertura */}
         <Col md={6}>
-          <Card className="h-100 border-primary">
-            <Card.Header className="bg-primary text-white">
-              <h6 className="mb-0">
-                <i className="fas fa-shield-alt me-2"></i>
-                Información de la Cobertura
-              </h6>
-            </Card.Header>
-            <Card.Body>
+          <div className="hcc-detail-card h-100">
+            <div className={`hcc-detail-card__header${esDental ? " hcc-detail-card__header--dental" : ""}`}>
+              <i className="fas fa-shield-alt me-2" aria-hidden="true" />
+              Información de la Cobertura
+              <span className="ms-2">{renderBadgeProducto(item)}</span>
+            </div>
+            <div className="hcc-detail-card__body">
               <div className="row g-2">
                 <div className="col-12">
                   <small className="text-muted">Numero ID:</small>
                   <div className="fw-semibold">{item?.codigo_poliza || "-"}</div>
+                </div>
+                <div className="col-12">
+                  <small className="text-muted">Producto:</small>
+                  <div className="fw-semibold mt-1">
+                    {renderBadgeProducto(item, { large: true })}
+                  </div>
                 </div>
                 <div className="col-12">
                   <small className="text-muted">Tipo de Cobertura:</small>
@@ -535,20 +606,18 @@ const HistorialCoberturasCanceladasModal = ({
                   <div className="fw-semibold">{item?.cobertura_id_original || "-"}</div>
                 </div>
               </div>
-            </Card.Body>
-          </Card>
+            </div>
+          </div>
         </Col>
 
         {/* Información de Fechas y Pagos */}
         <Col md={6}>
-          <Card className="h-100 border-info">
-            <Card.Header className="bg-info text-white">
-              <h6 className="mb-0">
-                <i className="fas fa-calendar-alt me-2"></i>
-                Fechas y Pagos
-              </h6>
-            </Card.Header>
-            <Card.Body>
+          <div className="hcc-detail-card h-100">
+            <div className="hcc-detail-card__header">
+              <i className="fas fa-calendar-alt me-2" aria-hidden="true" />
+              Fechas y Pagos
+            </div>
+            <div className="hcc-detail-card__body">
               <div className="row g-2">
                 <div className="col-6">
                   <small className="text-muted">Fecha de Activación:</small>
@@ -586,20 +655,18 @@ const HistorialCoberturasCanceladasModal = ({
                   </div>
                 </div>
               </div>
-            </Card.Body>
-          </Card>
+            </div>
+          </div>
         </Col>
 
         {/* Información de Cancelación */}
         <Col md={12}>
-          <Card className="border-warning">
-            <Card.Header className="bg-warning text-dark">
-              <h6 className="mb-0">
-                <i className="fas fa-exclamation-triangle me-2"></i>
-                Información de Cancelación
-              </h6>
-            </Card.Header>
-            <Card.Body>
+          <div className="hcc-detail-card">
+            <div className="hcc-detail-card__header hcc-detail-card__header--warning">
+              <i className="fas fa-exclamation-triangle me-2" aria-hidden="true" />
+              Información de Cancelación / Retiro
+            </div>
+            <div className="hcc-detail-card__body">
               <div className="row g-2">
                 <div className="col-md-4">
                   <small className="text-muted">Motivo de Cancelación:</small>
@@ -608,9 +675,15 @@ const HistorialCoberturasCanceladasModal = ({
                   </div>
                 </div>
                 <div className="col-md-4">
+                  <small className="text-muted">Producto afectado:</small>
+                  <div className="fw-semibold mt-1">
+                    {renderBadgeProducto(item, { large: true })}
+                  </div>
+                </div>
+                <div className="col-md-4">
                   <small className="text-muted">Acción Origen:</small>
                   <div className="fw-semibold">
-                    <Badge bg="secondary">
+                    <Badge bg="secondary" className="hcc-badge-origen">
                       {item?.accion_origen || "N/A"}
                     </Badge>
                   </div>
@@ -640,116 +713,109 @@ const HistorialCoberturasCanceladasModal = ({
                   </div>
                 </div>
               </div>
-            </Card.Body>
-          </Card>
+            </div>
+          </div>
         </Col>
       </div>
     );
   };
 
   return (
-    <>
-      <style>{`
-        .modal-historial-canceladas .modal-dialog {
-          max-width: 95vw;
-          width: 1400px;
-        }
-        .modal-historial-canceladas .modal-content {
-          max-height: 90vh;
-        }
-        .modal-historial-canceladas .modal-body {
-          max-height: calc(90vh - 120px);
-          overflow-y: auto;
-        }
-      `}</style>
-      <Modal 
-        show={show} 
-        onHide={onClose} 
-        size="xl" 
+      <Modal
+        show={show}
+        onHide={onClose}
+        size="xl"
         centered
-        dialogClassName="modal-historial-canceladas"
+        dialogClassName="hcc-modal"
       >
-        <Modal.Header closeButton>
-          <Modal.Title>
-            <i className="fas fa-history text-primary me-2"></i>
-            Historial de renovaciones
-            {soloAnioInicial && anioInicialStr
-              ? ` — ${anioInicialStr}`
-              : ""}
-          </Modal.Title>
-        </Modal.Header>        <Modal.Body>
+        <Modal.Header closeButton className="hcc-modal__header">
+          <div className="hcc-modal__header-main">
+            <div className="hcc-modal__header-icon" aria-hidden="true">
+              <i className="fas fa-history" />
+            </div>
+            <div>
+              <h5 className="hcc-modal__title">
+                Historial de cancelaciones y retiros
+                {soloAnioInicial && anioInicialStr ? ` — ${anioInicialStr}` : ""}
+              </h5>
+              <p className="hcc-modal__subtitle">
+                Registro de coberturas canceladas o retiradas del grupo familiar
+              </p>
+            </div>
+          </div>
+        </Modal.Header>
+        <Modal.Body className="hcc-modal__body">
         {/* Información del Grupo Familiar (Encabezado) */}
         {grupoFamiliarInfo && (
-          <Card className="mb-4 border-primary">
-            <Card.Header className="bg-primary text-white">
-              <h6 className="mb-0">
-                <i className="fas fa-users me-2"></i>
-                Información del Grupo Familiar
-              </h6>
-            </Card.Header>
-            <Card.Body>
-              <Row>
-                {grupoFamiliarInfo.responsable && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">Responsable:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.responsable}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.persona_contacto && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">Persona de Contacto:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.persona_contacto}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.ingreso_familiar_anual && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">Ingreso Familiar Anual:</small>
-                    <div className="fw-semibold">{formatearDinero(grupoFamiliarInfo.ingreso_familiar_anual)}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.personas_cobertura && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">Personas en Cobertura:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.personas_cobertura}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.personas_taxes && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">Personas en Taxes:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.personas_taxes}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.zip_code && (
-                  <Col md={4} className="mb-2">
-                    <small className="text-muted">ZIP Code:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.zip_code}</div>
-                  </Col>
-                )}
-                {grupoFamiliarInfo.nota && (
-                  <Col md={12} className="mb-2">
-                    <small className="text-muted">Nota:</small>
-                    <div className="fw-semibold">{grupoFamiliarInfo.nota}</div>
-                  </Col>
-                )}
-              </Row>
-            </Card.Body>
-          </Card>
+          <section className="hcc-section">
+            <div className="hcc-section__title">
+              <i className="fas fa-users" aria-hidden="true" />
+              Información del grupo familiar
+            </div>
+            <div className="hcc-info-grid">
+              {grupoFamiliarInfo.responsable && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">Responsable</div>
+                  <div className="hcc-info-item__value">{grupoFamiliarInfo.responsable}</div>
+                </div>
+              )}
+              {grupoFamiliarInfo.persona_contacto && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">Persona de contacto</div>
+                  <div className="hcc-info-item__value">{grupoFamiliarInfo.persona_contacto}</div>
+                </div>
+              )}
+              {grupoFamiliarInfo.ingreso_familiar_anual && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">Ingreso familiar anual</div>
+                  <div className="hcc-info-item__value">
+                    {formatearDinero(grupoFamiliarInfo.ingreso_familiar_anual)}
+                  </div>
+                </div>
+              )}
+              {grupoFamiliarInfo.personas_cobertura && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">Personas en cobertura</div>
+                  <div className="hcc-info-item__value">{grupoFamiliarInfo.personas_cobertura}</div>
+                </div>
+              )}
+              {grupoFamiliarInfo.personas_taxes && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">Personas en taxes</div>
+                  <div className="hcc-info-item__value">{grupoFamiliarInfo.personas_taxes}</div>
+                </div>
+              )}
+              {grupoFamiliarInfo.zip_code && (
+                <div className="hcc-info-item">
+                  <div className="hcc-info-item__label">ZIP code</div>
+                  <div className="hcc-info-item__value">{grupoFamiliarInfo.zip_code}</div>
+                </div>
+              )}
+              {grupoFamiliarInfo.nota && (
+                <div className="hcc-info-item" style={{ gridColumn: "1 / -1" }}>
+                  <div className="hcc-info-item__label">Nota</div>
+                  <div className="hcc-info-item__value">{stripHtmlTags(grupoFamiliarInfo.nota)}</div>
+                </div>
+              )}
+            </div>
+          </section>
         )}
 
         {/* Filtros */}
-        <div className="mb-4 p-3 bg-light rounded border">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h6 className="mb-0">
-              <i className="fas fa-filter text-primary me-2"></i>
+        <section className="hcc-section">
+          <div className="hcc-filters">
+            <div className="hcc-section__title mb-0 pb-0 border-0">
+              <i className="fas fa-filter" aria-hidden="true" />
               Filtros de búsqueda
-            </h6>
+            </div>
             {hayFiltrosActivos && (
               <Button
                 variant="outline-secondary"
                 size="sm"
+                className="hcc-filters__clear"
                 onClick={limpiarFiltros}
               >
-                <i className="fas fa-times me-1"></i>
+                <i className="fas fa-times me-1" aria-hidden="true" />
                 Limpiar filtros
               </Button>
             )}
@@ -826,7 +892,7 @@ const HistorialCoberturasCanceladasModal = ({
           {hayFiltrosActivos && (
             <div className="mt-2">
               <small className="text-muted">
-                <i className="fas fa-info-circle me-1"></i>
+                <i className="fas fa-info-circle me-1" aria-hidden="true" />
                 Filtros activos:{" "}
                 {filtroClienteId && (
                   <Badge bg="primary" className="me-1">
@@ -846,240 +912,237 @@ const HistorialCoberturasCanceladasModal = ({
               </small>
             </div>
           )}
-        </div>
+        </section>
 
         {loadingOpciones ? (
-          <div className="text-center py-2">
+          <div className="hcc-loading py-2">
             <Spinner animation="border" size="sm" variant="secondary" />
             <small className="text-muted ms-2">Cargando opciones...</small>
           </div>
         ) : null}
 
         {loading ? (
-          <div className="text-center py-4">
+          <div className="hcc-loading">
             <Spinner animation="border" variant="primary" />
-            <p className="mt-2 text-muted">Cargando historial...</p>
+            <p className="mt-2 text-muted mb-0">Cargando historial...</p>
           </div>
         ) : error ? (
-          <Alert variant="danger">
-            <i className="fas fa-exclamation-circle me-2"></i>
+          <Alert variant="danger" className="hcc-alert">
+            <i className="fas fa-exclamation-circle me-2" aria-hidden="true" />
             {error}
           </Alert>
         ) : historial.length === 0 ? (
-          <Alert variant="info">
-            <i className="fas fa-info-circle me-2"></i>
+          <Alert variant="info" className="hcc-alert">
+            <i className="fas fa-info-circle me-2" aria-hidden="true" />
             {hayFiltrosActivos
               ? "No se encontraron coberturas canceladas con los filtros seleccionados."
               : "No hay coberturas canceladas registradas en el historial."}
           </Alert>
         ) : (
-          <div className="table-responsive">
-            <Table bordered hover size="sm">
-              <thead className="table-light sticky-top">
-                <tr>
-                  <th width="40"></th>
-                  <th>Numero ID</th>
-                  <th>Cliente</th>
-                  <th>Parentesco</th>
-                  <th>Plan</th>
-                  <th>Fecha de expiración</th>
-                  <th>Fecha Retiro</th>
-                  <th>Estado</th>
-                  <th>Motivo Canc.</th>
-                  <th>Motivo Ret.</th>
-                  <th>Nota Canc.</th>
-                  <th>Nota Ret.</th>
-                  <th>Acción Origen</th>
-                  <th>Navegación</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historial.map((item, index) => {
-                  // Según la estructura del JSON, los datos están directamente en item
-                  const coberturaId = item?.id || `cobertura-${index}`;
-                  const isExpanded = filasExpandidas.has(coberturaId);
-                  const clienteInfo = item?.cliente_info;
-                  const anioItem = item?.ano_cobertura;
-                  const grupoIdNavegar =
-                    item?.grupo_familiar_id || grupoFamiliarId;
-                  
-                  // Extraer nombre del cliente desde cliente_info (ya viene como objeto)
-                  let nombreCliente = "-";
-                  if (clienteInfo && typeof clienteInfo === 'object') {
-                    nombreCliente = clienteInfo.nombre_completo || 
-                                   `${clienteInfo.primer_nombre || ""} ${clienteInfo.apellidos || ""}`.trim() ||
-                                   "-";
-                  }
-                  
-                  return (
-                    <React.Fragment key={coberturaId}>
-                      <tr 
-                        style={{ cursor: 'pointer' }}
-                        onClick={() => toggleFila(coberturaId)}
-                      >
-                        <td 
-                          style={{ textAlign: 'center', cursor: 'pointer' }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFila(coberturaId);
-                          }}
+          <>
+            <div className="hcc-chips">
+              <span className="hcc-chip hcc-chip--total">
+                Total: {resumenProductos.total}
+              </span>
+              {resumenProductos.salud > 0 && (
+                <span className="hcc-chip hcc-chip--salud">
+                  Salud: {resumenProductos.salud}
+                </span>
+              )}
+              {resumenProductos.dental > 0 && (
+                <span className="hcc-chip hcc-chip--dental">
+                  <i className="fas fa-tooth" aria-hidden="true" />
+                  Dental MS: {resumenProductos.dental}
+                </span>
+              )}
+            </div>
+
+            <div className="hcc-table-wrap table-responsive">
+              <Table className="hcc-table" hover size="sm">
+                <thead>
+                  <tr>
+                    <th style={{ width: 36 }} aria-label="Expandir" />
+                    <th>Producto</th>
+                    <th>Número ID</th>
+                    <th>Cliente</th>
+                    <th>Parentesco</th>
+                    <th>Plan</th>
+                    <th>F. expiración</th>
+                    <th>F. retiro</th>
+                    <th>Estado</th>
+                    <th>Motivo canc.</th>
+                    <th>Motivo ret.</th>
+                    <th>Nota canc.</th>
+                    <th>Nota ret.</th>
+                    <th>Acción origen</th>
+                    <th>Navegación</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {historial.map((item, index) => {
+                    const coberturaId = item?.id || `cobertura-${index}`;
+                    const isExpanded = filasExpandidas.has(coberturaId);
+                    const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
+                    const clienteInfo = item?.cliente_info;
+                    const anioItem = item?.ano_cobertura;
+                    const grupoIdNavegar =
+                      item?.grupo_familiar_id || grupoFamiliarId;
+
+                    let nombreCliente = "-";
+                    if (clienteInfo && typeof clienteInfo === "object") {
+                      nombreCliente =
+                        clienteInfo.nombre_completo ||
+                        `${clienteInfo.primer_nombre || ""} ${clienteInfo.apellidos || ""}`.trim() ||
+                        "-";
+                    }
+
+                    return (
+                      <React.Fragment key={coberturaId}>
+                        <tr
+                          className={`hcc-row--clickable${esDental ? " hcc-row--dental" : ""}${
+                            isExpanded ? " hcc-row--expanded" : ""
+                          }`}
+                          onClick={() => toggleFila(coberturaId)}
                         >
-                          {isExpanded ? (
-                            <FaChevronDown className="text-primary" />
-                          ) : (
-                            <FaChevronRight className="text-muted" />
-                          )}
-                        </td>
-                        <td>
-                          <strong>{item?.codigo_poliza || "-"}</strong>
-                        </td>
-                        <td>
-                          {nombreCliente}
-                          {item?.parentesco?.toUpperCase() === "TOMADOR" && (
-                            <Badge bg="warning" text="dark" className="ms-2">
-                              TOMADOR
+                          <td
+                            className="text-center"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFila(coberturaId);
+                            }}
+                          >
+                            {isExpanded ? (
+                              <FaChevronDown className="text-primary" />
+                            ) : (
+                              <FaChevronRight className="text-muted" />
+                            )}
+                          </td>
+                          <td>{renderBadgeProducto(item)}</td>
+                          <td>
+                            <strong>{item?.codigo_poliza || "-"}</strong>
+                          </td>
+                          <td>
+                            <div className="fw-semibold">{nombreCliente}</div>
+                            {item?.parentesco?.toUpperCase() === "TOMADOR" && (
+                              <Badge bg="warning" text="dark" className="mt-1" style={{ fontSize: "0.62rem" }}>
+                                TOMADOR
+                              </Badge>
+                            )}
+                          </td>
+                          <td>{item?.parentesco || "-"}</td>
+                          <td>{item?.plan || "-"}</td>
+                          <td>{formatearFecha(item?.fecha_cancelacion)}</td>
+                          <td>{formatearFecha(item?.fecha_retiro)}</td>
+                          <td>
+                            <span className={badgeEstadoClase(item?.cobertura_definida)}>
+                              {item?.cobertura_definida || "-"}
+                            </span>
+                          </td>
+                          <td>{item?.motivo_cancelacion || "-"}</td>
+                          <td>{item?.motivo_retiro || "-"}</td>
+                          <td>
+                            <small className="text-muted">{item?.nota_cancel || "-"}</small>
+                          </td>
+                          <td>
+                            <small className="text-muted">{item?.nota_retiro || "-"}</small>
+                          </td>
+                          <td>
+                            <Badge bg="secondary" className="hcc-badge-origen">
+                              {item?.accion_origen || "N/A"}
                             </Badge>
-                          )}
-                        </td>
-                        <td>{item?.parentesco || "-"}</td>
-                        <td>{item?.plan || "-"}</td>
-                        <td>
-                          {formatearFecha(item?.fecha_cancelacion)}
-                        </td>
-                        <td>
-                          {formatearFecha(item?.fecha_retiro)}
-                        </td>
-                        <td>
-                          <Badge bg={
-                            item?.cobertura_definida === "Cancelado" ? "warning" :
-                            item?.cobertura_definida === "Retirado" ? "secondary" :
-                            item?.cobertura_definida === "Terminado" ? "info" : "light"
-                          } text={item?.cobertura_definida === "Cancelado" ? "dark" : undefined}>
-                            {item?.cobertura_definida || "-"}
-                          </Badge>
-                        </td>
-                        <td>
-                          {item?.motivo_cancelacion || "-"}
-                        </td>
-                        <td>
-                          {item?.motivo_retiro || "-"}
-                        </td>
-                        <td>
-                          <small className="text-muted">
-                            {item?.nota_cancel || "-"}
-                          </small>
-                        </td>
-                        <td>
-                          <small className="text-muted">
-                            {item?.nota_retiro || "-"}
-                          </small>
-                        </td>
-                        <td>
-                          <Badge bg="secondary">
-                            {item?.accion_origen || "N/A"}
-                          </Badge>
-                        </td>
-                        <td onClick={(e) => e.stopPropagation()}>
-                          {grupoIdNavegar && anioItem ? (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              className="p-0 text-decoration-none"
-                              onClick={() => {
-                                onClose?.();
-                                navigate(
-                                  `/grupo_familiar/${grupoIdNavegar}?anio=${anioItem}`
-                                );
-                              }}
-                            >
-                              Ver grupo en {anioItem}
-                            </Button>
-                          ) : (
-                            <span className="text-muted small">—</span>
-                          )}
-                        </td>
-                      </tr>
-                      {/* Fila expandible con información completa */}
-                      {isExpanded && (
-                        <tr>
-                          <td colSpan="10" style={{ padding: 0, border: 'none' }}>
-                            <div className="bg-light p-4 border-top">
-                              {/* Información de la Cobertura */}
-                              {renderCoberturaCompleta(item, item)}
-                              
-                              {/* Información del Cliente */}
-                              {clienteInfo && (
-                                <div className="mt-4">
-                                  <Card className="border-success">
-                                    <Card.Header className="bg-success text-white">
-                                      <h6 className="mb-0">
-                                        <i className="fas fa-user me-2"></i>
-                                        Información del Cliente
-                                      </h6>
-                                    </Card.Header>
-                                    <Card.Body>
-                                      {renderClienteInfo(clienteInfo)}
-                                    </Card.Body>
-                                  </Card>
-                                </div>
-                              )}
-                            </div>
+                          </td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            {grupoIdNavegar && anioItem ? (
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="hcc-link-nav p-0"
+                                onClick={() => {
+                                  onClose?.();
+                                  navigate(
+                                    `/grupo_familiar/${grupoIdNavegar}?anio=${anioItem}`
+                                  );
+                                }}
+                              >
+                                Ver grupo en {anioItem}
+                              </Button>
+                            ) : (
+                              <span className="text-muted small">—</span>
+                            )}
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </Table>
-          </div>
-        )}
+                        {isExpanded && (
+                          <tr>
+                            <td colSpan={15} style={{ padding: 0, border: "none" }}>
+                              <div className="hcc-expand-panel">
+                                {renderCoberturaCompleta(item)}
 
-        {historial.length > 0 && (
-          <div className="mt-3">
-            <Badge bg="info">
-              Total: {historial.length} cobertura(s) cancelada(s)
-            </Badge>
-          </div>
+                                {clienteInfo && (
+                                  <div className="mt-3">
+                                    <div className="hcc-detail-card">
+                                      <div className="hcc-detail-card__header hcc-detail-card__header--client">
+                                        <i className="fas fa-user me-2" aria-hidden="true" />
+                                        Información del cliente
+                                      </div>
+                                      <div className="hcc-detail-card__body">
+                                        {renderClienteInfo(clienteInfo)}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            </div>
+          </>
         )}
       </Modal.Body>
-      <Modal.Footer className="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div className="text-muted small">
+      <Modal.Footer className="hcc-modal__footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div className="hcc-audit">
           {(() => {
             const infoAuditoria = obtenerInfoAuditoria();
             if (!infoAuditoria || !infoAuditoria.tieneInfo) {
               return (
                 <div className="d-flex align-items-center gap-2">
-                  <i className="fas fa-info-circle"></i>
+                  <i className="fas fa-info-circle" aria-hidden="true" />
                   <span>Información de auditoría no disponible</span>
                 </div>
               );
             }
-            
+
             return (
               <div className="d-flex align-items-center flex-wrap gap-3">
                 {infoAuditoria.usuario && infoAuditoria.usuario !== "Sistema" && (
                   <div className="d-flex align-items-center">
-                    <i className="fas fa-user text-primary me-1"></i>
-                    <span><strong>Procesado por:</strong> {infoAuditoria.usuario}</span>
+                    <i className="fas fa-user me-1" style={{ color: "#1a365d" }} aria-hidden="true" />
+                    <span>
+                      <strong>Procesado por:</strong> {infoAuditoria.usuario}
+                    </span>
                   </div>
                 )}
                 {infoAuditoria.fecha && (
                   <div className="d-flex align-items-center">
-                    <i className="fas fa-clock text-info me-1"></i>
-                    <span><strong>Fecha y hora:</strong> {formatearFechaHora(infoAuditoria.fecha)}</span>
+                    <i className="fas fa-clock me-1" style={{ color: "#64748b" }} aria-hidden="true" />
+                    <span>
+                      <strong>Fecha y hora:</strong> {formatearFechaHora(infoAuditoria.fecha)}
+                    </span>
                   </div>
                 )}
               </div>
             );
           })()}
         </div>
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" className="hcc-btn-close-modal" onClick={onClose}>
           Cerrar
         </Button>
       </Modal.Footer>
     </Modal>
-    </>
   );
 };
 

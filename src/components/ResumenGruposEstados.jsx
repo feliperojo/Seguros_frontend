@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Badge } from "react-bootstrap";
 import apiRequest from "../services/api";
 import { getEstadoGrupoConfig, ordenarResumenGrupos } from "../constants/estadosGrupoFamiliar";
 
@@ -124,52 +123,32 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
 
   return (
     <div className="resumen-estados-navbar">
-      <div className="d-flex flex-wrap align-items-center justify-content-center gap-3 py-3 px-4 estados-container">
+      <div className="estados-container">
         {estadosConDatos.map(({ key, valor, config, nombre }) => {
           const IconComponent = config.icon;
           const estaSeleccionado = isEstadoSeleccionado(key, nombre);
-          
+
           return (
-            <div 
-              key={key} 
-              className="d-flex align-items-center gap-2 estado-item"
+            <button
+              key={key}
+              type="button"
+              className={`estado-item${estaSeleccionado ? " is-selected" : ""}`}
               onClick={() => handleEstadoClick(key, nombre)}
-              style={{ 
-                borderLeft: `4px solid ${config.color}`,
-                paddingLeft: '14px',
-                paddingRight: '14px',
-                paddingTop: '8px',
-                paddingBottom: '8px',
-                cursor: onEstadoClick ? 'pointer' : 'default',
-                backgroundColor: estaSeleccionado ? `${config.color}20` : 'transparent',
-                boxShadow: estaSeleccionado ? `0 2px 4px ${config.color}40` : 'none'
-              }}
+              disabled={!onEstadoClick}
+              title={
+                estaSeleccionado
+                  ? "Quitar filtro de este estado"
+                  : `Filtrar por ${config.label}`
+              }
             >
-              <IconComponent 
-                style={{ 
-                  color: config.color,
-                  fontSize: '18px'
-                }} 
-              />
-              <span className="estado-label" style={{ color: '#495057', fontSize: '15px', fontWeight: '500' }}>
-                {config.label}:
+              <span className="estado-item__icon" aria-hidden="true">
+                <IconComponent />
               </span>
-              <Badge 
-                bg="light" 
-                text="dark"
-                style={{ 
-                  fontSize: '15px',
-                  fontWeight: '700',
-                  padding: '6px 12px',
-                  border: `1px solid ${config.color}30`,
-                  backgroundColor: estaSeleccionado ? `${config.color}25` : `${config.color}15`,
-                  minWidth: '40px',
-                  textAlign: 'center'
-                }}
-              >
-                {valor}
-              </Badge>
-            </div>
+              <span className="estado-item__text">
+                <span className="estado-item__label">{config.label}</span>
+                <span className="estado-item__count">{valor}</span>
+              </span>
+            </button>
           );
         })}
       </div>
