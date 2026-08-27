@@ -15,6 +15,7 @@ import { vigenteDesdeEstadoCobertura } from "../../utils/estadoPoliza";
 import {
   COBERTURA_TIPO_DENTAL_MS,
   isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
   isSaludCoberturaTipo,
 } from "../../constants/coberturaTipos";
 import "../../styles/CambioVidaCancelacionModal.css";
@@ -88,10 +89,11 @@ const CambioVidaCancelacionModal = ({
 
   const getClienteIdFromCobertura = (c = {}) => c?.cliente?.id ?? c?.cliente_id ?? null;
 
-  const getEtiquetaProducto = (c = {}) =>
-    isDentalCoberturaTipo(c?.cobertura_tipo)
-      ? COBERTURA_TIPO_DENTAL_MS
-      : "Salud MS";
+  const getEtiquetaProducto = (c = {}) => {
+    if (isDentalMsCoberturaTipo(c?.cobertura_tipo)) return COBERTURA_TIPO_DENTAL_MS;
+    const tipo = String(c?.cobertura_tipo || "").trim();
+    return tipo || "Salud MS";
+  };
 
   const getIconoProducto = (esDental) =>
     esDental ? "fas fa-tooth" : "fas fa-shield-alt";
@@ -102,7 +104,7 @@ const CambioVidaCancelacionModal = ({
       list.find(
         (c) =>
           getClienteIdFromCobertura(c) === clienteId &&
-          isDentalCoberturaTipo(c?.cobertura_tipo)
+          isDentalMsCoberturaTipo(c?.cobertura_tipo)
       ) || null
     );
   };

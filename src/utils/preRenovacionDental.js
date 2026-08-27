@@ -1,6 +1,6 @@
 import {
   COBERTURA_TIPO_DENTAL_MS,
-  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
 } from "../constants/coberturaTipos";
 
 export const getItemCoberturaTipo = (item = {}) =>
@@ -8,11 +8,15 @@ export const getItemCoberturaTipo = (item = {}) =>
   item?.cobertura?.cobertura_tipo ??
   null;
 
+/** Reglas de renovación/cascada solo para Dental MS (no Plan Dental privado). */
 export const isItemDental = (item = {}) =>
-  isDentalCoberturaTipo(getItemCoberturaTipo(item));
+  isDentalMsCoberturaTipo(getItemCoberturaTipo(item));
 
-export const etiquetaProductoItem = (item = {}) =>
-  isItemDental(item) ? COBERTURA_TIPO_DENTAL_MS : "Salud MS";
+export const etiquetaProductoItem = (item = {}) => {
+  if (isItemDental(item)) return COBERTURA_TIPO_DENTAL_MS;
+  const tipo = String(getItemCoberturaTipo(item) || "").trim();
+  return tipo || "Salud MS";
+};
 
 export const getItemClienteId = (item = {}) => {
   if (item?.tipo_item === "miembro_nuevo") {

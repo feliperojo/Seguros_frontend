@@ -1,15 +1,16 @@
 import {
   COBERTURA_TIPO_DENTAL_MS,
-  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
   isSaludCoberturaTipo,
 } from "../constants/coberturaTipos.js";
 
 export const getClienteIdFromCobertura = (c = {}) => c?.cliente?.id ?? c?.cliente_id ?? null;
 
-export const getEtiquetaProducto = (c = {}) =>
-  isDentalCoberturaTipo(c?.cobertura_tipo)
-    ? COBERTURA_TIPO_DENTAL_MS
-    : (c?.cobertura_tipo || "Salud MS");
+export const getEtiquetaProducto = (c = {}) => {
+  if (isDentalMsCoberturaTipo(c?.cobertura_tipo)) return COBERTURA_TIPO_DENTAL_MS;
+  const tipo = String(c?.cobertura_tipo || "").trim();
+  return tipo || "Salud MS";
+};
 
 export const findDentalCoberturaForCliente = (clienteId, coberturas = []) => {
   if (!clienteId) return null;
@@ -17,7 +18,7 @@ export const findDentalCoberturaForCliente = (clienteId, coberturas = []) => {
     coberturas.find(
       (c) =>
         getClienteIdFromCobertura(c) === clienteId &&
-        isDentalCoberturaTipo(c?.cobertura_tipo)
+        isDentalMsCoberturaTipo(c?.cobertura_tipo)
     ) || null
   );
 };
@@ -33,7 +34,7 @@ export const findSaludCoberturaForCliente = (clienteId, coberturas = []) => {
   );
 };
 
-/** IDs dental que deben incluirse al seleccionar coberturas de salud. */
+/** IDs dental MS que deben incluirse al seleccionar coberturas de salud. */
 export const idsDentalVinculadosASalud = (saludIds = [], coberturas = []) => {
   const extras = new Set();
   saludIds.forEach((id) => {
@@ -45,7 +46,7 @@ export const idsDentalVinculadosASalud = (saludIds = [], coberturas = []) => {
   return extras;
 };
 
-/** Al seleccionar salud, agregar dental; al deseleccionar salud, quitar dental vinculado. */
+/** Al seleccionar salud, agregar dental MS; al deseleccionar salud, quitar dental vinculado. */
 export const resolverToggleSeleccion = ({
   coberturaId,
   coberturas = [],
@@ -57,7 +58,7 @@ export const resolverToggleSeleccion = ({
   }
 
   if (seleccionados.has(coberturaId)) {
-    if (isDentalCoberturaTipo(cobertura.cobertura_tipo)) {
+    if (isDentalMsCoberturaTipo(cobertura.cobertura_tipo)) {
       const salud = findSaludCoberturaForCliente(getClienteIdFromCobertura(cobertura), coberturas);
       if (salud?.id && seleccionados.has(salud.id)) {
         return {
@@ -93,7 +94,7 @@ export const esDentalVinculadaASaludSeleccionada = (
   seleccionados = new Set()
 ) => {
   const dental = coberturas.find((c) => c.id === dentalId);
-  if (!dental) return false;
+  if (!dental || !isDentalMsCoberturaTipo(dental.cobertura_tipo)) return false;
   const salud = findSaludCoberturaForCliente(getClienteIdFromCobertura(dental), coberturas);
   return Boolean(salud?.id && seleccionados.has(salud.id));
 };

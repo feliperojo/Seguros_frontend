@@ -30,6 +30,8 @@ import { normalizeEstadoGrupoCodigo } from "../constants/estadosGrupoFamiliar";
 import {
   mapCoberturaApiToFields,
   isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoSaludMs,
   isSaludCoberturaTipo,
   COBERTURA_TIPO_DENTAL_MS,
 } from "../utils/coberturaDental";
@@ -471,16 +473,24 @@ const cloneEditSnapshot = (value) => {
 
 // ================== Función para obtener el producto desde coberturas ==================
 const getProductoFromCoberturas = (coberturas = []) => {
-  // El plan del GF es el de Salud. Dental MS es producto adjunto y no debe
-  // definir el "Plan seleccionado" (eso luego pisaba cobertura_tipo de todos al guardar).
-  const salud = (coberturas || []).find(
-    (c) => c?.cobertura_tipo && isSaludCoberturaTipo(c.cobertura_tipo)
+  // El plan del GF es el de Salud cuando hay Salud MS.
+  // Dental MS es producto adjunto y no debe definir el "Plan seleccionado".
+  // Productos privados (Plan Dental, Vision, etc.) sí definen el producto del GF.
+  const list = Array.isArray(coberturas) ? coberturas : [];
+  const salud = list.find(
+    (c) => c?.cobertura_tipo && isProductoSaludMs(c.cobertura_tipo)
+  );
+  const privada = list.find(
+    (c) =>
+      c?.cobertura_tipo &&
+      !isDentalMsCoberturaTipo(c.cobertura_tipo) &&
+      !isProductoSaludMs(c.cobertura_tipo)
   );
   const coberturaTipo =
     salud?.cobertura_tipo ||
-    (coberturas || []).find(
-      (c) => c?.cobertura_tipo && !isDentalCoberturaTipo(c.cobertura_tipo)
-    )?.cobertura_tipo;
+    privada?.cobertura_tipo ||
+    list.find((c) => c?.cobertura_tipo && !isDentalMsCoberturaTipo(c.cobertura_tipo))
+      ?.cobertura_tipo;
 
   if (!coberturaTipo) return null;
 
@@ -2249,7 +2259,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           readOnly={readOnly}
           canAdd={canAddMember}
           isProspecto={isProspecto}
-          defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
+          defaultCoberturaTipo={
+            productoCotizacion?.label ||
+            getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+            "Plan de salud"
+          }
           onCreateMemberRemote={handleCreateMemberRemote}
           onSaveCobertura={() => {}}
           onDerivedCounts={handleDerivedCounts}
@@ -2264,7 +2278,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 canAdd={canAddMember}
                 estadoActual={estadoActual}
                 estadoId={estadoIdActual}
-                defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
+                defaultCoberturaTipo={
+                  productoCotizacion?.label ||
+                  getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+                  "Plan de salud"
+                }   
                 isProspecto={isProspecto}                                       
                 onCreateMemberRemote={handleCreateMemberRemote}                      
                 onBlockedAddClick={() =>

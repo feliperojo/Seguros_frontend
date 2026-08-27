@@ -6,12 +6,12 @@ import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
 import { renderClienteLink } from "../pages/ListaClientes";
 import {
   COBERTURA_TIPO_DENTAL_MS,
-  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
 } from "../constants/coberturaTipos";
 import "./TablaConfiguracionPagos.css";
 
 const etiquetaProducto = (coberturaTipo) => {
-  if (isDentalCoberturaTipo(coberturaTipo)) return COBERTURA_TIPO_DENTAL_MS;
+  if (isDentalMsCoberturaTipo(coberturaTipo)) return COBERTURA_TIPO_DENTAL_MS;
   const tipo = String(coberturaTipo ?? "").trim();
   return tipo || "Salud MS";
 };

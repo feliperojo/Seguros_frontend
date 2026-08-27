@@ -13,11 +13,25 @@ export const COBERTURA_TIPOS_SALUD = [
 export const normalizeCoberturaTipo = (tipo = "") =>
   String(tipo ?? "").trim();
 
-export const isDentalCoberturaTipo = (tipo = "") => {
+/**
+ * Solo Dental MS (complemento de salud).
+ * No incluye Plan Dental privado ni otros productos independientes.
+ */
+export const isDentalMsCoberturaTipo = (tipo = "") => {
   const norm = normalizeCoberturaTipo(tipo).toLowerCase();
   if (!norm) return false;
   return (
     norm === COBERTURA_TIPO_DENTAL_MS.toLowerCase() ||
+    norm === "dentalms"
+  );
+};
+
+/** Cualquier cobertura dental (MS o Plan Dental privado). */
+export const isDentalCoberturaTipo = (tipo = "") => {
+  const norm = normalizeCoberturaTipo(tipo).toLowerCase();
+  if (!norm) return false;
+  return (
+    isDentalMsCoberturaTipo(norm) ||
     norm === "plan dental" ||
     norm === "seguro dental" ||
     norm === "dental" ||
@@ -25,8 +39,35 @@ export const isDentalCoberturaTipo = (tipo = "") => {
   );
 };
 
+/** No-dental (salud u otros productos privados: Vision, Vida, etc.). */
 export const isSaludCoberturaTipo = (tipo = "") =>
   !isDentalCoberturaTipo(tipo);
+
+/**
+ * Producto principal del GF es Salud MS → aplica "Agregar Dental MS".
+ * Plan Dental / Vision / Vida / Descuentos = productos privados independientes.
+ */
+export const isProductoSaludMs = (tipo = "") => {
+  const norm = normalizeCoberturaTipo(tipo);
+  if (!norm) return true;
+  if (isDentalCoberturaTipo(norm)) return false;
+  const lower = norm.toLowerCase();
+  if (
+    lower.includes("vision") ||
+    lower.includes("visión") ||
+    lower.includes("vida") ||
+    lower.includes("descuento")
+  ) {
+    return false;
+  }
+  return (
+    COBERTURA_TIPOS_SALUD.some((t) => t.toLowerCase() === lower) ||
+    lower.includes("salud") ||
+    lower.includes("medico") ||
+    lower.includes("médico") ||
+    lower.includes("obama")
+  );
+};
 
 /** Salud MS activa en el modelo de miembro (campos raíz) */
 export const memberTieneSaludMsActiva = (m = {}) => {

@@ -29,6 +29,7 @@ import CoberturaAnularButton from "./CoberturaAnularButton";
 import AgregarDentalModal from "./AgregarDentalModal";
 import {
   COBERTURA_TIPO_DENTAL_MS,
+  isProductoSaludMs,
 } from "../../constants/coberturaTipos";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 
@@ -3076,14 +3077,16 @@ const activeNormalized = useMemo(
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
               <i className="fas fa-copy me-1" /> Copiar
             </button>
-            <button
-              className="btn btn-outline-info btn-sm"
-              type="button"
-              onClick={() => setOpenDentalModal(true)}
-              title="Agregar cobertura Dental MS a miembros con Salud activa"
-            >
-              <i className="fas fa-tooth me-1" /> Agregar Dental MS
-            </button>
+            {isProductoSaludMs(defaultCoberturaTipo) && (
+              <button
+                className="btn btn-outline-info btn-sm"
+                type="button"
+                onClick={() => setOpenDentalModal(true)}
+                title="Agregar cobertura Dental MS a miembros con Salud activa"
+              >
+                <i className="fas fa-tooth me-1" /> Agregar Dental MS
+              </button>
+            )}
           </div>
         </div>
       )}

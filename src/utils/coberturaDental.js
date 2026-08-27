@@ -1,6 +1,8 @@
 import {
   COBERTURA_TIPO_DENTAL_MS,
   isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoSaludMs,
   isSaludCoberturaTipo,
 } from "../constants/coberturaTipos";
 
@@ -70,4 +72,10 @@ export const pickPagoFieldsFromSalud = (saludMember = {}) => ({
       : saludMember.pagador_id,
 });
 
-export { isDentalCoberturaTipo, isSaludCoberturaTipo, COBERTURA_TIPO_DENTAL_MS };
+export {
+  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoSaludMs,
+  isSaludCoberturaTipo,
+  COBERTURA_TIPO_DENTAL_MS,
+};
