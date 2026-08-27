@@ -69,6 +69,17 @@ export const isProductoSaludMs = (tipo = "") => {
   );
 };
 
+/**
+ * Producto privado independiente (Plan Dental, Vision, Vida, Descuentos).
+ * No incluye Salud MS ni Dental MS (complemento de salud).
+ */
+export const isProductoPrivadoIndependiente = (tipo = "") => {
+  const norm = normalizeCoberturaTipo(tipo);
+  if (!norm) return false;
+  if (isDentalMsCoberturaTipo(norm)) return false;
+  return !isProductoSaludMs(norm);
+};
+
 /** Salud MS activa en el modelo de miembro (campos raíz) */
 export const memberTieneSaludMsActiva = (m = {}) => {
   if (m.activo === false) return false;

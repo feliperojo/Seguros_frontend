@@ -76,6 +76,7 @@ export {
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,
   isProductoSaludMs,
+  isProductoPrivadoIndependiente,
   isSaludCoberturaTipo,
   COBERTURA_TIPO_DENTAL_MS,
 };

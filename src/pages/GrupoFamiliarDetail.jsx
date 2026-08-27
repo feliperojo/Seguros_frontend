@@ -31,6 +31,7 @@ import {
   mapCoberturaApiToFields,
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,
+  isProductoPrivadoIndependiente,
   isProductoSaludMs,
   isSaludCoberturaTipo,
   COBERTURA_TIPO_DENTAL_MS,
@@ -309,7 +310,7 @@ const buildCoberturaPayloadFromSource = (
   cobertura.cobertura_tipo = coberturaTipo;
 
   if (
-    isSaludCoberturaTipo(coberturaTipo) &&
+    isProductoSaludMs(productoCotizacion?.label) &&
     productoCotizacion?.label
   ) {
     cobertura.cobertura_tipo = productoCotizacion.label;
@@ -390,19 +391,36 @@ const buildCoberturaPayloadFromSource = (
 };
 
 /**
- * Tipo de la cobertura de Salud del miembro.
- * Nunca propagar un label dental del "plan seleccionado" a la cobertura de salud.
- * Si el tipo del miembro ya quedó corrupto como dental, restaurar a un tipo de salud.
+ * Tipo de la cobertura principal del miembro (slot raíz; no el Dental MS adjunto).
+ *
+ * - Producto privado (Plan Dental, Vision, Vida, Descuentos): respetar label / tipo del miembro.
+ * - Producto Salud MS: nunca dejar Dental MS en este slot; si quedó corrupto, restaurar a salud.
  */
 const resolveSaludCoberturaTipo = (memberTipo, productoCotizacion) => {
   const label = productoCotizacion?.label;
-  if (label && isSaludCoberturaTipo(label)) {
+
+  // GF de producto privado independiente → el slot principal ES ese producto.
+  if (label && isProductoPrivadoIndependiente(label)) {
+    if (memberTipo && isProductoPrivadoIndependiente(memberTipo)) {
+      return memberTipo;
+    }
     return label;
   }
-  if (memberTipo && isSaludCoberturaTipo(memberTipo)) {
+
+  // Flujo Salud MS: priorizar el producto / tipo de salud del miembro.
+  if (label && isProductoSaludMs(label)) {
+    return label;
+  }
+  if (memberTipo && isProductoSaludMs(memberTipo)) {
     return memberTipo;
   }
-  // Slot de salud del miembro: no debe quedar como Dental MS.
+
+  // Sin label MS pero el miembro ya es privado (p.ej. Plan Dental cargado desde BD).
+  if (memberTipo && isProductoPrivadoIndependiente(memberTipo)) {
+    return memberTipo;
+  }
+
+  // Slot de salud: no debe quedar como Dental MS u otro dental corrupto.
   return "SEGURO MEDICO OBAMA";
 };
 
@@ -419,8 +437,9 @@ const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) 
           m.cobertura_id,
           m.cliente_id,
           saludTipo,
-          // Solo pasar productoCotizacion si es de salud; evita pisar tipo con "Plan Dental".
-          isSaludCoberturaTipo(productoCotizacion?.label) ? productoCotizacion : null
+          // Solo en Salud MS: el label del producto pisa el tipo del slot principal.
+          // En productos privados no pasar el label (evita reescribir Plan Dental → salud).
+          isProductoSaludMs(productoCotizacion?.label) ? productoCotizacion : null
         )
       );
     }
