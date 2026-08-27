@@ -26,6 +26,10 @@ import {
   normalizeStatusMigratorioForSelect,
 } from "../../utils/clienteFieldNormalize";
 import { STATUS_MIGRATORIO_OPTIONS } from "../../constants/statusMigratorio";
+import {
+  COBERTURA_TIPO_DENTAL_MS,
+  isDentalCoberturaTipo,
+} from "../../constants/coberturaTipos";
 import { computeAnnual } from "../../services/ingresos";
 
 const TIPO_PAGO_OPTIONS = [
@@ -149,6 +153,9 @@ const PreRenovacionItemCard = ({
   attemptedConsolidar = false,
   onSaveStateChange,
   edicionBloqueada = false,
+  pagadorOptions = [],
+  alertaDentalSinSalud = false,
+  alertaCascadaSalud = false,
 }) => {
   const [renovar, setRenovar] = useState(Boolean(item?.renovar ?? true));
   const [datos, setDatos] = useState(() => ({
@@ -327,6 +334,11 @@ const PreRenovacionItemCard = ({
 
   const esMiembroNuevo = item?.tipo_item === "miembro_nuevo";
   const cobertura = item?.cobertura || {};
+  const coberturaTipo =
+    datos?.cobertura_tipo ?? cobertura?.cobertura_tipo ?? null;
+  const esDental = isDentalCoberturaTipo(coberturaTipo);
+  const etiquetaProducto = esDental ? COBERTURA_TIPO_DENTAL_MS : "Salud MS";
+  const iconoProducto = esDental ? "fas fa-tooth" : "fas fa-shield-alt";
   // Renovación normal: referencia en vivo = cobertura.cliente
   // Miembro nuevo de cliente existente: referencia en vivo = cliente_existente (BD)
   // Fallback: snapshot guardado en el borrador
@@ -543,11 +555,25 @@ const PreRenovacionItemCard = ({
   };
 
   return (
-    <div className="card shadow-sm">
+    <div
+      className={`card shadow-sm${esDental ? " border-info" : ""}`}
+      style={esDental ? { borderLeftWidth: "4px" } : undefined}
+    >
       <div className="card-header bg-light">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
           <div>
-            <div className="fw-semibold">{nombre}</div>
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <div className="fw-semibold">{nombre}</div>
+              <span
+                className={`badge ${esDental ? "bg-info" : "bg-primary"}`}
+                title={
+                  esDental ? "Producto Dental MS" : "Producto Salud MS"
+                }
+              >
+                <i className={`${iconoProducto} me-1`} aria-hidden="true" />
+                {etiquetaProducto}
+              </span>
+            </div>
             {esMiembroNuevo ? (
               <span className="badge bg-info text-white">
                 Miembro nuevo para {anioDestino}
@@ -588,7 +614,7 @@ const PreRenovacionItemCard = ({
                     className="form-check-label"
                     htmlFor={`pre-renovar-${item.id}`}
                   >
-                    Renovar a este miembro
+                    Renovar esta cobertura
                   </label>
                 </div>
                 {renderEstado("renovar")}
@@ -604,11 +630,26 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
+      {alertaDentalSinSalud && renovar && (
+        <div className="alert alert-danger rounded-0 mb-0 py-2">
+          <strong>Dental no se puede renovar sin salud.</strong> La cobertura
+          de Salud MS de este miembro está marcada para no renovar. Desmarca
+          Dental o marca Salud para renovar.
+        </div>
+      )}
+
+      {alertaCascadaSalud && !renovar && (
+        <div className="alert alert-warning rounded-0 mb-0 py-2">
+          <strong>Cascada:</strong> al no renovar Salud MS, Dental MS activo
+          del mismo miembro se retirará automáticamente al consolidar.
+        </div>
+      )}
+
       {!esMiembroNuevo && renovar && !cobertura.activo && (
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
           cancelada o retirada después de agregarse a esta pre-renovación. Revisa si
-          corresponde desmarcar &quot;Renovar a este miembro&quot;.
+          corresponde desmarcar &quot;Renovar esta cobertura&quot;.
         </div>
       )}
 
@@ -671,7 +712,9 @@ const PreRenovacionItemCard = ({
             Datos de la póliza para {anioDestino}
           </p>
           <div className="row g-2">
-            {TEXT_FIELDS.map(([field, label, type, col]) => (
+            {TEXT_FIELDS.filter(([field]) =>
+              esDental ? field !== "grupo" : true
+            ).map(([field, label, type, col]) => (
               <div className={col} key={field}>
                 <label className="form-label form-label-sm mb-1">
                   {label}
@@ -709,45 +752,96 @@ const PreRenovacionItemCard = ({
               </div>
             ))}
 
-            <div className="col-md-3">
-              <label className="form-label form-label-sm mb-1">Metal</label>
-              <select
-                className="form-select form-select-sm"
-                value={datos.metal || ""}
-                onChange={(e) =>
-                  cambiarDato("metal", e.target.value || null, true)
-                }
-                disabled={disabled}
-              >
-                <option value="">Seleccione…</option>
-                {optionsWithCurrent(METAL_OPTIONS, datos.metal).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              {renderEstado("metal")}
-            </div>
+            {!esDental && (
+              <>
+                <div className="col-md-3">
+                  <label className="form-label form-label-sm mb-1">Metal</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={datos.metal || ""}
+                    onChange={(e) =>
+                      cambiarDato("metal", e.target.value || null, true)
+                    }
+                    disabled={disabled}
+                  >
+                    <option value="">Seleccione…</option>
+                    {optionsWithCurrent(METAL_OPTIONS, datos.metal).map(
+                      (opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      )
+                    )}
+                  </select>
+                  {renderEstado("metal")}
+                </div>
 
-            <div className="col-md-3">
-              <label className="form-label form-label-sm mb-1">Red</label>
-              <select
-                className="form-select form-select-sm"
-                value={datos.red || ""}
-                onChange={(e) =>
-                  cambiarDato("red", e.target.value || null, true)
-                }
-                disabled={disabled}
-              >
-                <option value="">Seleccione…</option>
-                {optionsWithCurrent(RED_OPTIONS, datos.red).map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              {renderEstado("red")}
-            </div>
+                <div className="col-md-3">
+                  <label className="form-label form-label-sm mb-1">Red</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={datos.red || ""}
+                    onChange={(e) =>
+                      cambiarDato("red", e.target.value || null, true)
+                    }
+                    disabled={disabled}
+                  >
+                    <option value="">Seleccione…</option>
+                    {optionsWithCurrent(RED_OPTIONS, datos.red).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  {renderEstado("red")}
+                </div>
+              </>
+            )}
+
+            {esDental && (
+              <>
+                <div className="col-md-4">
+                  <label className="form-label form-label-sm mb-1">Agente</label>
+                  <input
+                    type="text"
+                    className="form-control form-control-sm"
+                    value={datos.agente ?? ""}
+                    onChange={(e) => cambiarDato("agente", e.target.value)}
+                    onBlur={() => guardarPendienteAhora("agente")}
+                    disabled={disabled}
+                    placeholder="Nombre del agente o broker"
+                  />
+                  {renderEstado("agente")}
+                </div>
+                <div className="col-md-4">
+                  <label className="form-label form-label-sm mb-1">Pagador</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={
+                      datos.pagador_id != null && datos.pagador_id !== ""
+                        ? String(datos.pagador_id)
+                        : ""
+                    }
+                    onChange={(e) =>
+                      cambiarDato(
+                        "pagador_id",
+                        e.target.value ? Number(e.target.value) : null,
+                        true
+                      )
+                    }
+                    disabled={disabled}
+                  >
+                    <option value="">Seleccione…</option>
+                    {pagadorOptions.map((opt) => (
+                      <option key={opt.id} value={String(opt.id)}>
+                        {opt.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  {renderEstado("pagador_id")}
+                </div>
+              </>
+            )}
 
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">Compañía</label>
@@ -876,6 +970,7 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
+      {!esDental && (
       <div className="card-body">
         <button
           type="button"
@@ -1563,6 +1658,7 @@ const PreRenovacionItemCard = ({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 };

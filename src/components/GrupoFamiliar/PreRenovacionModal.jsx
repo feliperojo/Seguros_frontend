@@ -17,6 +17,12 @@ import {
   estadoGestionBadge,
   etiquetaEstadoGestion,
 } from "../../utils/renovacionEstadoGestion";
+import {
+  buildPagadorOptionsFromItems,
+  findCascadasSaludNoRenovar,
+  findConflictosDentalSinSalud,
+  isItemDental,
+} from "../../utils/preRenovacionDental";
 
 const TIPOS_PARENTESCO = [
   "Tomador",
@@ -327,6 +333,15 @@ const PreRenovacionModal = ({
       const aTomador = isTomadorItem(a) ? 0 : 1;
       const bTomador = isTomadorItem(b) ? 0 : 1;
       if (aTomador !== bTomador) return aTomador - bTomador;
+
+      const na = String(nombreMiembro(a)).toLowerCase();
+      const nb = String(nombreMiembro(b)).toLowerCase();
+      if (na !== nb) return na.localeCompare(nb, "es");
+
+      const da = isItemDental(a) ? 1 : 0;
+      const db = isItemDental(b) ? 1 : 0;
+      if (da !== db) return da - db;
+
       return Number(a.id || 0) - Number(b.id || 0);
     });
     return list;
@@ -419,11 +434,16 @@ const PreRenovacionModal = ({
   );
 
   const defaultCoberturaTipo = useMemo(() => {
-    const desdeItem = items.find((item) => item?.datos_borrador?.cobertura_tipo)
-      ?.datos_borrador?.cobertura_tipo;
-    const desdeCobertura = items.find((item) => item?.cobertura?.cobertura_tipo)
-      ?.cobertura?.cobertura_tipo;
-    return desdeItem || desdeCobertura || "Plan de salud";
+    const saludItem = items.find(
+      (item) =>
+        !isItemDental(item) &&
+        (item?.datos_borrador?.cobertura_tipo || item?.cobertura?.cobertura_tipo)
+    );
+    return (
+      saludItem?.datos_borrador?.cobertura_tipo ||
+      saludItem?.cobertura?.cobertura_tipo ||
+      "Plan de salud"
+    );
   }, [items]);
 
   const handleAgregarPersonaNueva = async (e) => {
@@ -497,6 +517,41 @@ const PreRenovacionModal = ({
     [items]
   );
 
+  const conflictosDentalSinSalud = useMemo(
+    () => findConflictosDentalSinSalud(items, nombreMiembro),
+    [items]
+  );
+
+  const cascadasSaludNoRenovar = useMemo(
+    () => findCascadasSaludNoRenovar(items, nombreMiembro),
+    [items]
+  );
+
+  const idsDentalConflicto = useMemo(
+    () => new Set(conflictosDentalSinSalud.map((c) => Number(c.dental?.id))),
+    [conflictosDentalSinSalud]
+  );
+
+  const idsSaludCascada = useMemo(
+    () => new Set(cascadasSaludNoRenovar.map((c) => Number(c.salud?.id))),
+    [cascadasSaludNoRenovar]
+  );
+
+  const pagadorOptions = useMemo(
+    () => buildPagadorOptionsFromItems(items),
+    [items]
+  );
+
+  const resumenProductos = useMemo(() => {
+    let salud = 0;
+    let dental = 0;
+    items.forEach((item) => {
+      if (isItemDental(item)) dental += 1;
+      else salud += 1;
+    });
+    return { salud, dental };
+  }, [items]);
+
   const hayGuardadosPendientes =
     itemsConGuardadoPendiente.size > 0 || copiandoDatos;
   const puedeConsolidar =
@@ -504,6 +559,7 @@ const PreRenovacionModal = ({
     miembrosSinCodigo.length === 0 &&
     miembrosSinRetiro.length === 0 &&
     miembrosInactivosMarcadosRenovar.length === 0 &&
+    conflictosDentalSinSalud.length === 0 &&
     !hayGuardadosPendientes &&
     !loading &&
     !consolidando &&
@@ -598,7 +654,9 @@ const PreRenovacionModal = ({
                       />
                       Se renovarán{" "}
                       <strong>{miembrosARenovar.length}</strong>{" "}
-                      {miembrosARenovar.length === 1 ? "miembro" : "miembros"}
+                      {miembrosARenovar.length === 1
+                        ? "cobertura"
+                        : "coberturas"}
                       {miembrosARenovar.length > 0 && (
                         <span className="text-muted">
                           {" "}
@@ -613,8 +671,10 @@ const PreRenovacionModal = ({
                       />
                       Se omitirán{" "}
                       <strong>{miembrosAOmitir.length}</strong>{" "}
-                      {miembrosAOmitir.length === 1 ? "miembro" : "miembros"} — no
-                      se renovarán
+                      {miembrosAOmitir.length === 1
+                        ? "cobertura"
+                        : "coberturas"}{" "}
+                      — no se renovarán
                       {miembrosAOmitir.length > 0 && (
                         <span className="text-muted">
                           {" "}
@@ -623,6 +683,15 @@ const PreRenovacionModal = ({
                       )}
                     </li>
                   </ul>
+
+                  {cascadasSaludNoRenovar.length > 0 && (
+                    <div className="alert alert-warning py-2">
+                      <strong>Cascada dental:</strong> al no renovar Salud MS
+                      de{" "}
+                      {cascadasSaludNoRenovar.map((c) => c.nombre).join(", ")},
+                      Dental MS del mismo miembro se retirará automáticamente.
+                    </div>
+                  )}
 
                   <div className="form-check">
                     <input
@@ -890,6 +959,29 @@ const PreRenovacionModal = ({
                       </div>
                     )}
 
+                  {attemptedConsolidar &&
+                    conflictosDentalSinSalud.length > 0 && (
+                      <div className="alert alert-danger">
+                        <strong>Dental sin salud:</strong> no se puede renovar
+                        Dental MS sin renovar Salud MS del mismo miembro. Corrige:{" "}
+                        {conflictosDentalSinSalud
+                          .map((c) => c.nombre)
+                          .join(", ")}.
+                      </div>
+                    )}
+
+                  {!loading && resumenProductos.dental > 0 && (
+                    <div className="alert alert-info py-2 small">
+                      <i className="fas fa-info-circle me-1" aria-hidden="true" />
+                      Este lote incluye{" "}
+                      <strong>{resumenProductos.salud}</strong> Salud MS y{" "}
+                      <strong>{resumenProductos.dental}</strong> Dental MS.
+                      Dental solo se renueva si Salud del mismo miembro también
+                      se renueva. Si no renuevas Salud, Dental se retira en
+                      cascada.
+                    </div>
+                  )}
+
                   {hayGuardadosPendientes && (
                     <div className="alert alert-light border py-2 small">
                       Esperando a que terminen los cambios pendientes de
@@ -974,6 +1066,13 @@ const PreRenovacionModal = ({
                         attemptedConsolidar={attemptedConsolidar}
                         onSaveStateChange={handleSaveStateChange}
                         edicionBloqueada={edicionBloqueada}
+                        pagadorOptions={pagadorOptions}
+                        alertaDentalSinSalud={idsDentalConflicto.has(
+                          Number(item.id)
+                        )}
+                        alertaCascadaSalud={idsSaludCascada.has(
+                          Number(item.id)
+                        )}
                       />
                     ))}
                   </div>
@@ -1106,9 +1205,11 @@ const PreRenovacionModal = ({
                           ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
                           : miembrosInactivosMarcadosRenovar.length > 0
                             ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
-                            : hayGuardadosPendientes
-                              ? "Espera a que termine el autoguardado"
-                              : undefined
+                            : conflictosDentalSinSalud.length > 0
+                              ? `Dental sin salud renovando: ${conflictosDentalSinSalud.map((c) => c.nombre).join(", ")}`
+                              : hayGuardadosPendientes
+                                ? "Espera a que termine el autoguardado"
+                                : undefined
                     }
                   >
                     Consolidar ahora
