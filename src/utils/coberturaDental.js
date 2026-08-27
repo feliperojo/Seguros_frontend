@@ -2,6 +2,7 @@ import {
   COBERTURA_TIPO_DENTAL_MS,
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,
+  isProductoPrivadoIndependiente,
   isProductoSaludMs,
   isSaludCoberturaTipo,
 } from "../constants/coberturaTipos";
