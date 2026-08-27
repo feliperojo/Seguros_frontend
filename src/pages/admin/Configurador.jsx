@@ -67,6 +67,18 @@ const CLIENT_FIELD_DEFINITIONS = [
 
 const ALL_CLIENT_FIELD_KEYS = CLIENT_FIELD_DEFINITIONS.map((f) => f.key);
 
+// Acordeones de "Datos Cliente" configurables por tipo de producto (marcados = visibles)
+const CLIENT_ACCORDION_DEFINITIONS = [
+  { key: "datos_principales", label: "Datos Principales" },
+  { key: "estatus_migratorio", label: "Estatus migratorio" },
+  { key: "datos_contacto", label: "Datos de Contacto" },
+  { key: "direccion", label: "Dirección" },
+  { key: "empleo_ingreso", label: "Datos de Empleo e Ingreso" },
+  { key: "medios_pago", label: "Medios de Pago" },
+];
+
+const ALL_CLIENT_ACCORDION_KEYS = CLIENT_ACCORDION_DEFINITIONS.map((f) => f.key);
+
 /**
  * Normaliza la lista de usuarios desde la respuesta del backend (varias estructuras posibles).
  */
@@ -348,6 +360,14 @@ const Configurador = () => {
     return entry.enabledFields;
   };
 
+  const getEnabledClientAccordions = (tipo) => {
+    const entry = clientFieldsConfig[tipo];
+    if (!entry || !Array.isArray(entry.enabledAccordions)) {
+      return ALL_CLIENT_ACCORDION_KEYS;
+    }
+    return entry.enabledAccordions;
+  };
+
   const toggleClientField = (tipo, fieldKey) => {
     setSystemConfig((prev) => {
       const prevCfg = prev.client_fields_by_tipo || {};
@@ -374,13 +394,39 @@ const Configurador = () => {
     });
   };
 
+  const toggleClientAccordion = (tipo, accordionKey) => {
+    setSystemConfig((prev) => {
+      const prevCfg = prev.client_fields_by_tipo || {};
+      const entry = prevCfg[tipo] || {};
+
+      const currentArr = Array.isArray(entry.enabledAccordions)
+        ? entry.enabledAccordions
+        : ALL_CLIENT_ACCORDION_KEYS;
+
+      const nextArr = currentArr.includes(accordionKey)
+        ? currentArr.filter((k) => k !== accordionKey)
+        : [...currentArr, accordionKey];
+
+      return {
+        ...prev,
+        client_fields_by_tipo: {
+          ...prevCfg,
+          [tipo]: {
+            ...entry,
+            enabledAccordions: nextArr,
+          },
+        },
+      };
+    });
+  };
+
   const handleSaveClientFieldsConfig = async () => {
     const payload = systemConfig?.client_fields_by_tipo || {};
     setSavingClientFieldsConfig(true);
     try {
       await systemConfigService.put("client_fields_by_tipo", payload, "json");
       toast.success(
-        "Configuración de datos del cliente guardada correctamente."
+        "Configuración de datos del cliente (acordeones y campos) guardada correctamente."
       );
     } catch (err) {
       toast.error(
@@ -718,9 +764,9 @@ const Configurador = () => {
         </Card.Header>
         <Card.Body>
           <p className="text-muted small mb-3">
-            Marca qué campos <strong>se mostrarán</strong> en la sección{" "}
-            <strong>Datos Principales</strong> del cliente, según el tipo de
-            producto (cobertura_tipo). Solo afecta a la interfaz visual.
+            Marca qué <strong>acordeones</strong> y qué campos extra se
+            mostrarán en <strong>Datos Cliente</strong> del formulario, según el
+            tipo de producto (cobertura_tipo). Solo afecta a la interfaz visual.
           </p>
 
           {/* Reutilizamos el mismo selector de tipo de producto */}
@@ -742,9 +788,36 @@ const Configurador = () => {
             })}
           </div>
 
+          <Form.Group className="mb-4">
+            <Form.Label className="small fw-semibold text-muted">
+              Acordeones de Datos Cliente a mostrar para &quot;
+              {selectedCoverageTipo}&quot;
+            </Form.Label>
+            <div className="row">
+              {CLIENT_ACCORDION_DEFINITIONS.map((acc) => {
+                const isShown = getEnabledClientAccordions(
+                  selectedCoverageTipo
+                ).includes(acc.key);
+                return (
+                  <div key={acc.key} className="col-md-4 mb-2">
+                    <Form.Check
+                      type="checkbox"
+                      id={`client-acc-${selectedCoverageTipo}-${acc.key}`}
+                      label={acc.label}
+                      checked={isShown}
+                      onChange={() =>
+                        toggleClientAccordion(selectedCoverageTipo, acc.key)
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </Form.Group>
+
           <Form.Group className="mb-3">
             <Form.Label className="small fw-semibold text-muted">
-              Campos a mostrar de datos del cliente para &quot;
+              Campos extra dentro de Datos Principales para &quot;
               {selectedCoverageTipo}&quot;
             </Form.Label>
             <div className="row">

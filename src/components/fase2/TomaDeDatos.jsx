@@ -546,6 +546,16 @@ const COVERAGE_CONFIG_FIELD_KEYS = [
 /** Claves alineadas con Configurador → client_fields_by_tipo */
 const CLIENT_CONFIG_FIELD_KEYS = ["peso", "altura", "pulgadas"];
 
+/** Acordeones de Datos Cliente alineados con Configurador → enabledAccordions */
+const CLIENT_ACCORDION_KEYS = [
+  "datos_principales",
+  "estatus_migratorio",
+  "datos_contacto",
+  "direccion",
+  "empleo_ingreso",
+  "medios_pago",
+];
+
 const countVisibleConfigFields = (keys, shouldShow) =>
   keys.filter((key) => shouldShow(key)).length;
 
@@ -556,6 +566,15 @@ const resolveEnabledFields = (configByTipo, tipo, allKeys) => {
     return null;
   }
   return entry.enabledFields;
+};
+
+/** Sin config de acordeones → todos visibles; con array → respetar (incluso []). */
+const resolveEnabledAccordions = (configByTipo, tipo) => {
+  const entry = configByTipo?.[tipo];
+  if (!entry || !Array.isArray(entry.enabledAccordions)) {
+    return null;
+  }
+  return entry.enabledAccordions;
 };
 
 const shouldShowConfiguredField = (enabledFields, fieldKey) => {
@@ -1617,6 +1636,18 @@ const activeNormalized = useMemo(
     const shouldShowClientField = (fieldKey) =>
       shouldShowConfiguredField(visibleClientFields, fieldKey);
 
+    const visibleClientAccordions = resolveEnabledAccordions(
+      clientFieldConfig,
+      coberturaTipo
+    );
+
+    const shouldShowClientAccordion = (accordionKey) =>
+      shouldShowConfiguredField(visibleClientAccordions, accordionKey);
+
+    const hasAnyClientAccordion = CLIENT_ACCORDION_KEYS.some((key) =>
+      shouldShowClientAccordion(key)
+    );
+
     const visibleCoverageFieldCount = countVisibleConfigFields(
       COVERAGE_CONFIG_FIELD_KEYS,
       shouldShowCoverageField
@@ -1765,6 +1796,7 @@ const activeNormalized = useMemo(
             <div className="card-body px-4 pt-3 pb-4">
               <div className="d-flex flex-column gap-2">
                 {/* Datos Cliente */}
+                {hasAnyClientAccordion && (
                 <AccordionItem
                   id={`cliente-${itemId}`}
                   title="Datos Cliente"
@@ -1772,6 +1804,7 @@ const activeNormalized = useMemo(
                 >
                   <div className="d-flex flex-column gap-2">
                     {/* Principales */}
+                    {shouldShowClientAccordion("datos_principales") && (
                     <AccordionItem
                       id={`datos-principales-${itemId}`}
                       title="Datos Principales"
@@ -1929,8 +1962,10 @@ const activeNormalized = useMemo(
                               )}
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Estatus migratorio */}
+                    {shouldShowClientAccordion("estatus_migratorio") && (
                     <AccordionItem
                       id={`estatus-${itemId}`}
                       title="Estatus migratorio"
@@ -2038,8 +2073,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Contacto */}
+                    {shouldShowClientAccordion("datos_contacto") && (
                     <AccordionItem
                       id={`datos-contacto-${itemId}`}
                       title="Datos de Contacto"
@@ -2132,8 +2169,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Dirección */}
+                    {shouldShowClientAccordion("direccion") && (
                     <AccordionItem
                       id={`direccion-${itemId}`}
                       title="Dirección"
@@ -2142,8 +2181,10 @@ const activeNormalized = useMemo(
                               <AddressSection c={c} onChange={onChange} readOnly={isReadOnly} />
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Empleo e Ingreso */}
+                    {shouldShowClientAccordion("empleo_ingreso") && (
                     <AccordionItem
                       id={`empleo-ingreso-${itemId}`}
                       title="Datos de Empleo e Ingreso"
@@ -2301,8 +2342,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Medios de Pago */}
+                    {shouldShowClientAccordion("medios_pago") && (
                     <AccordionItem
                       id={`medios-pago-${itemId}`}
                       title="Medios de Pago"
@@ -2315,8 +2358,10 @@ const activeNormalized = useMemo(
                         />
                       )}
                     </AccordionItem>
+                    )}
                   </div>
                 </AccordionItem>
+                )}
 
                 {/* Datos Cobertura Salud */}
                 <AccordionItem
