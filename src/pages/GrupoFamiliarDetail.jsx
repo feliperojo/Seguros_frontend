@@ -2245,6 +2245,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
           grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
           anioConsultado={anioConsultado}
+          coberturaTipo={
+            productoCotizacion?.label ||
+            getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+            null
+          }
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(

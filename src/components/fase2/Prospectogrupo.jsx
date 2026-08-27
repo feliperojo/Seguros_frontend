@@ -1,5 +1,5 @@
 // src/components/fase2/Prospectogrupo.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { formatMoneyDisplay } from "../../services/ingresos";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import { FaFilePdf } from "react-icons/fa";
@@ -19,7 +19,20 @@ import ReactivacionCoberturasModal from "../coberturas/ReactivacionCoberturasMod
 import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
 import GroupTags from "../GroupTags";
 import GrupoNotaEditor from "../GrupoFamiliar/GrupoNotaEditor";
+import systemConfigService from "../../services/SystemConfigService";
 
+const resolveEnabledGroupHeaderFields = (configByTipo, tipo) => {
+  const entry = configByTipo?.[tipo];
+  if (!entry || !Array.isArray(entry.enabledFields)) {
+    return null; // sin config → mostrar todos
+  }
+  return entry.enabledFields;
+};
+
+const shouldShowGroupHeaderField = (enabledFields, fieldKey) => {
+  if (enabledFields === null) return true;
+  return enabledFields.includes(fieldKey);
+};
 
 const Prospectogrupo = ({
   formData = {},
@@ -31,6 +44,7 @@ const Prospectogrupo = ({
   estadoActual, // Estado actual del grupo familiar para validar visibilidad de botones
   grupo, // Grupo completo opcional para generar PDF de confirmación
   anioConsultado = null, // Año que se está consultando (para filtrar hist. renov. en modo histórico)
+  coberturaTipo = null, // Tipo de producto para ocultar campos del encabezado (solo visual)
 }) => {
   const [showGestion, setShowGestion] = useState(false);
   const [showComentarioModal, setShowComentarioModal] = useState(false);
@@ -50,6 +64,7 @@ const Prospectogrupo = ({
   const [pdfAutorizacionData, setPdfAutorizacionData] = useState(null);
   const [autorizacionLanguage, setAutorizacionLanguage] = useState("es");
   const [notasAutorizacionOpen, setNotasAutorizacionOpen] = useState(false);
+  const [groupHeaderFieldConfig, setGroupHeaderFieldConfig] = useState(null);
 
   const [driveUrl, setDriveUrl] = useState(formData?.drive_url || "");
 
@@ -59,6 +74,63 @@ const Prospectogrupo = ({
       setDriveUrl(formData.drive_url || "");
     }
   }, [formData?.drive_url]);
+
+  // Config visual del encabezado económico por tipo de producto
+  useEffect(() => {
+    let cancelled = false;
+    const loadConfig = async () => {
+      try {
+        const value = await systemConfigService
+          .get("group_header_fields_by_tipo")
+          .catch(() => null);
+        if (cancelled || !value || typeof value !== "object") return;
+        const byTipo = value.value !== undefined ? value.value : value;
+        setGroupHeaderFieldConfig(
+          typeof byTipo === "object" && byTipo !== null ? byTipo : value
+        );
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.error(
+            "Error cargando configuración de encabezado del grupo familiar",
+            err
+          );
+        }
+        if (!cancelled) setGroupHeaderFieldConfig(null);
+      }
+    };
+    loadConfig();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const resolvedCoberturaTipo =
+    coberturaTipo ||
+    formData?.cobertura_tipo ||
+    formData?.productoCotizacion?.label ||
+    null;
+
+  const visibleGroupHeaderFields = useMemo(
+    () =>
+      resolveEnabledGroupHeaderFields(
+        groupHeaderFieldConfig,
+        resolvedCoberturaTipo
+      ),
+    [groupHeaderFieldConfig, resolvedCoberturaTipo]
+  );
+
+  const showHeaderField = (fieldKey) =>
+    shouldShowGroupHeaderField(visibleGroupHeaderFields, fieldKey);
+
+  const showZipCode = showHeaderField("zip_code");
+  const showIngresoFamiliar = showHeaderField("ingreso_familiar");
+  const showPersonasCobertura = showHeaderField("personas_cobertura");
+  const showPersonasTaxes = showHeaderField("personas_taxes");
+  const showAnyEconomicField =
+    showZipCode ||
+    showIngresoFamiliar ||
+    showPersonasCobertura ||
+    showPersonasTaxes;
 
   // Resolver id de grupo desde distintas fuentes
   const resolvedGrupoId =
@@ -416,6 +488,7 @@ const Prospectogrupo = ({
       <div className="card mb-4 shadow-sm">
         <div className="card-body">
           <div className="row g-3">
+            {showZipCode && (
             <div className="col-md-6 col-lg-3">
               <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 ZIP Code
@@ -430,6 +503,8 @@ const Prospectogrupo = ({
                 style={{ fontSize: '0.9rem' }}
               />
             </div>
+            )}
+            {showIngresoFamiliar && (
             <div className="col-md-6 col-lg-3">
               <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 <i className="fas fa-dollar-sign text-success me-2"></i>
@@ -449,6 +524,8 @@ const Prospectogrupo = ({
                 Sumatoria de los ingresos de cada miembro sin fecha de retiro.
               </small>
             </div>
+            )}
+            {showPersonasCobertura && (
             <div className="col-md-6 col-lg-3">
               <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 <i className="fas fa-shield-alt text-primary me-2"></i>
@@ -467,6 +544,8 @@ const Prospectogrupo = ({
                 Se calcula con miembros en "Sí" y sin retiro.
               </small>
             </div>
+            )}
+            {showPersonasTaxes && (
             <div className="col-md-6 col-lg-3">
               <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
                 <i className="fas fa-users text-info me-2"></i>
@@ -485,8 +564,9 @@ const Prospectogrupo = ({
                 Se calcula con el número de miembros (cards).
               </small>
             </div>
+            )}
             <div className="col-12">
-              <div className="accordion mt-1" id="accordionNotasAutorizacion">
+              <div className={`accordion ${showAnyEconomicField ? "mt-1" : ""}`} id="accordionNotasAutorizacion">
                 <div className="accordion-item border rounded">
                   <h2 className="accordion-header" id="headingNotasAutorizacion">
                     <button

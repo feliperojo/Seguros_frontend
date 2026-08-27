@@ -608,7 +608,11 @@ useEffect(() => {
             {(productoCotizacion || grupoId) ? (
               <>
                 {/* 1) Captación + económicos */}
-                <Prospectogrupo formData={formData} onChange={handleInputChange} />
+                <Prospectogrupo
+                  formData={formData}
+                  onChange={handleInputChange}
+                  coberturaTipo={productoCotizacion?.label || null}
+                />
 
                 {/* 2) Miembros: tarjetas o acordeón según estado */}
                 {["PROSPECTO", "COTIZACION", "SEGUIMIENTO"].includes(
