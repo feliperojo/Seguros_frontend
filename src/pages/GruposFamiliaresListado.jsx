@@ -599,8 +599,8 @@ useEffect(() => {
                             <th style={{ width: "2.5rem" }} aria-label="Expandir" />
                             <th>ID GF</th>
                             <th>Tomador</th>
-                            <th title="Coberturas privadas activas (Vision, Plan Dental, etc.)">c.p</th>
-                            <th title="Miembros activos Salud MS / Dental MS">S/D</th>
+                            <th title="Coberturas privadas activas (Vision, Plan Dental, etc.)">C.Privado</th>
+                            <th title="Miembros activos Salud MS / Dental MS">Salud/Dental Ms</th>
                             <th>P. Taxes</th>
                             <th>Aseguradora</th>
                             <th>Proceso</th>
