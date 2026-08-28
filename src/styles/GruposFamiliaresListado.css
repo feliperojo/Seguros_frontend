@@ -179,7 +179,8 @@
   font-size: 0.8125rem;
 }
 
-.gf-listado__sd {
+.gf-listado__sd,
+.gf-listado__cp {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #0f2744;

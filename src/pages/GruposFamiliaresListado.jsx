@@ -21,6 +21,7 @@ import {
   labelEstadoGrupoParaDisplay,
   grupoFamiliarDeleteRequiereAdmin,
   personasSaludDentalParaListado,
+  personasPrivadasParaListado,
 } from "../constants/estadosGrupoFamiliar";
 import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
 import { Helmet } from "react-helmet-async";
@@ -412,10 +413,19 @@ useEffect(() => {
 
   const getCompaniaNombre = (grupo) => grupo.compania_nombre || "-";
 
+  const renderPersonasCP = (grupo) => {
+    const { privadas, label } = personasPrivadasParaListado(grupo);
+    return (
+      <span title={`Coberturas privadas: ${privadas}`} className="gf-listado__cp">
+        {label}
+      </span>
+    );
+  };
+
   const renderPersonasSD = (grupo) => {
     const { salud, dental, label } = personasSaludDentalParaListado(grupo);
     return (
-      <span title={`Salud: ${salud} · Dental: ${dental}`} className="gf-listado__sd">
+      <span title={`Salud MS: ${salud} · Dental MS: ${dental}`} className="gf-listado__sd">
         {label}
       </span>
     );
@@ -589,7 +599,8 @@ useEffect(() => {
                             <th style={{ width: "2.5rem" }} aria-label="Expandir" />
                             <th>ID GF</th>
                             <th>Tomador</th>
-                            <th title="Miembros activos Salud / Dental">S/D</th>
+                            <th title="Coberturas privadas activas (Vision, Plan Dental, etc.)">c.p</th>
+                            <th title="Miembros activos Salud MS / Dental MS">S/D</th>
                             <th>P. Taxes</th>
                             <th>Aseguradora</th>
                             <th>Proceso</th>
@@ -626,6 +637,7 @@ useEffect(() => {
                                     )}
                                   </td>
                                   <td>{getTomadorNombre(grupo)}</td>
+                                  <td>{renderPersonasCP(grupo)}</td>
                                   <td>{renderPersonasSD(grupo)}</td>
                                   <td>{grupo.personas_taxes || "0"}</td>
                                   <td>{getCompaniaNombre(grupo)}</td>
@@ -704,7 +716,7 @@ useEffect(() => {
                                 </tr>
                                 {estaExpandido && (
                                   <tr className="grupo-listado-acordeon-detalle">
-                                    <td colSpan={10} className="bg-white border-bottom p-3">
+                                    <td colSpan={11} className="bg-white border-bottom p-3">
                                       <GrupoFamiliarClasificadoDetalle
                                         grupoId={grupo.id}
                                         anio={

@@ -337,10 +337,27 @@ export function ocultarPersonasCoberturaEnListado(grupo) {
   return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
 }
 
-/** Conteos Salud/Dental activos para la columna S/D del listado. */
+/** Conteos de coberturas privadas activas para la columna c.p del listado. */
+export function personasPrivadasParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) {
+    return { privadas: 0, label: "—" };
+  }
+
+  const privadas =
+    grupo?.personas_privadas != null && grupo.personas_privadas !== ""
+      ? Number(grupo.personas_privadas) || 0
+      : 0;
+
+  return {
+    privadas,
+    label: privadas > 0 ? String(privadas) : "—",
+  };
+}
+
+/** Conteos Salud/Dental MS activos para la columna S/D del listado. */
 export function personasSaludDentalParaListado(grupo) {
   if (ocultarPersonasCoberturaEnListado(grupo)) {
-    return { salud: 0, dental: 0, label: "0/0" };
+    return { salud: 0, dental: 0, label: "—" };
   }
 
   let salud =
@@ -357,13 +374,13 @@ export function personasSaludDentalParaListado(grupo) {
     const filaDental = resumen.find((p) =>
       String(p?.producto || "")
         .toLowerCase()
-        .includes("dental")
+        .includes("dental ms")
     );
     const filaSalud = resumen.find(
       (p) =>
-        !String(p?.producto || "")
+        String(p?.producto || "")
           .toLowerCase()
-          .includes("dental")
+          .includes("salud")
     );
 
     if (dental === null) {
@@ -375,6 +392,10 @@ export function personasSaludDentalParaListado(grupo) {
           ? Number(filaSalud.cobertura) || 0
           : Number(grupo?.personas_cobertura) || 0;
     }
+  }
+
+  if (salud === 0 && dental === 0) {
+    return { salud: 0, dental: 0, label: "—" };
   }
 
   return {
