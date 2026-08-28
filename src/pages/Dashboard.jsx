@@ -115,6 +115,23 @@ function normalizeTareasOperativasResponse(res) {
   return [];
 }
 
+/** Tile de KPI — solo presentación */
+function DashboardKpiTile({ label, value, icon, tone = "primary", onClick, onKeyDown }) {
+  return (
+    <div
+      className={`dashboard-kpi-tile dashboard-kpi-tile--${tone}`}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+    >
+      <span className="dashboard-kpi-tile__icon" aria-hidden="true">{icon}</span>
+      <span className="dashboard-kpi-tile__label">{label}</span>
+      <span className="dashboard-kpi-tile__value">{value}</span>
+    </div>
+  );
+}
+
 const Dashboard = () => {
   const currentUser = JSON.parse(localStorage.getItem("user"));
   
@@ -871,14 +888,28 @@ const handleOpenViewModal = (cliente) => {
   }, [abrirKpiModal]);
 
   return (
-    <div className="dashboard-wrapper">
- <Helmet>
-      <title>Vantun/Panel Principal</title>
-    </Helmet>
+    <div className="dashboard-page">
+      <Helmet>
+        <title>Vantun/Panel Principal</title>
+      </Helmet>
+      <div className="dashboard-panel">
+        <div className="dashboard-panel__header">
+          <div className="dashboard-panel__header-main">
+            <div className="dashboard-panel__header-icon" aria-hidden="true">
+              <FaChartLine />
+            </div>
+            <div>
+              <h1 className="dashboard-panel__title">Panel Principal</h1>
+              <p className="dashboard-panel__subtitle">Resumen operativo, alertas y accesos rápidos</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-panel__body">
       {error && (
-        <Row className="mb-4">
+        <Row className="mb-3">
           <Col>
-            <Alert variant="danger" className="d-flex align-items-center">
+            <Alert variant="danger" className="d-flex align-items-center mb-0">
               <FaExclamationTriangle className="me-2" />
               <span>{error}</span>
             </Alert>
@@ -886,171 +917,90 @@ const handleOpenViewModal = (cliente) => {
         </Row>
       )}
 
-      <div className="section-container">
-        <Row className="stats-cards g-3 align-items-stretch row-cols-1 row-cols-sm-2 row-cols-xl-5">
-          <Col>
-            <Card
-              className="dashboard-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("clientes")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "clientes")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Total Clientes</h6>
-                    <h3 className="stats-value">{estadisticas.totalClientes}</h3>
-                  </div>
-                  <div className="stats-icon"><FaUsers /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("grupos")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "grupos")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Grupos Familiares</h6>
-                    <h3 className="stats-value">{estadisticas.totalGruposFamiliares}</h3>
-                  </div>
-                  <div className="stats-icon"><FaProjectDiagram /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("coberturas")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Estado de Coberturas</h6>
-                    <h3 className="stats-value">{estadisticas.polizasActivas.total}</h3>
-                  </div>
-                  <div className="stats-icon"><FaFileInvoiceDollar /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card alert-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("canceladas")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Coberturas Canceladas</h6>
-                    <h3 className="stats-value">{estadisticas.polizasCanceladas}</h3>
-                  </div>
-                  <div className="stats-icon"><FaCalendarAlt /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("coberturas")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Dental MS Activo</h6>
-                    <h3 className="stats-value">{estadisticas.dentalMsActivo ?? 0}</h3>
-                  </div>
-                  <div className="stats-icon"><FaFileInvoiceDollar /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card alert-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("canceladas")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Dental MS Cancelado</h6>
-                    <h3 className="stats-value">{estadisticas.dentalMsCancelado ?? 0}</h3>
-                  </div>
-                  <div className="stats-icon"><FaCalendarAlt /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-          <Col>
-            <Card
-              className="dashboard-card alert-card h-100 dashboard-card--clickable"
-              role="button"
-              tabIndex={0}
-              onClick={() => abrirKpiModal("retiradas")}
-              onKeyDown={(e) => manejarTeclaKpiCard(e, "retiradas")}
-            >
-              <Card.Body className="d-flex align-items-center h-100">
-                <div className="d-flex justify-content-between align-items-center w-100">
-                  <div>
-                    <h6 className="stats-title">Coberturas Retiradas</h6>
-                    <h3 className="stats-value">{estadisticas.polizasRetiradas}</h3>
-                  </div>
-                  <div className="stats-icon"><FaExclamationTriangle /></div>
-                </div>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
+      <div className="dashboard-panel__section dashboard-panel__section--kpis">
+        <p className="dashboard-kpi-group-label">Resumen general</p>
+        <div className="dashboard-kpi-grid dashboard-kpi-grid--4">
+          <DashboardKpiTile
+            label="Total Clientes"
+            value={estadisticas.totalClientes}
+            icon={<FaUsers />}
+            onClick={() => abrirKpiModal("clientes")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "clientes")}
+          />
+          <DashboardKpiTile
+            label="Grupos Familiares"
+            value={estadisticas.totalGruposFamiliares}
+            icon={<FaProjectDiagram />}
+            onClick={() => abrirKpiModal("grupos")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "grupos")}
+          />
+          <DashboardKpiTile
+            label="Estado de Coberturas"
+            value={estadisticas.polizasActivas.total}
+            icon={<FaFileInvoiceDollar />}
+            onClick={() => abrirKpiModal("coberturas")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
+          />
+          <DashboardKpiTile
+            label="Dental MS Activo"
+            value={estadisticas.dentalMsActivo ?? 0}
+            icon={<FaFileInvoiceDollar />}
+            tone="success"
+            onClick={() => abrirKpiModal("coberturas")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
+          />
+        </div>
+        <p className="dashboard-kpi-group-label dashboard-kpi-group-label--alert">Cancelaciones y retiros</p>
+        <div className="dashboard-kpi-grid dashboard-kpi-grid--3">
+          <DashboardKpiTile
+            label="Coberturas Canceladas"
+            value={estadisticas.polizasCanceladas}
+            icon={<FaCalendarAlt />}
+            tone="danger"
+            onClick={() => abrirKpiModal("canceladas")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
+          />
+          <DashboardKpiTile
+            label="Dental MS Cancelado"
+            value={estadisticas.dentalMsCancelado ?? 0}
+            icon={<FaCalendarAlt />}
+            tone="danger"
+            onClick={() => abrirKpiModal("canceladas")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
+          />
+          <DashboardKpiTile
+            label="Coberturas Retiradas"
+            value={estadisticas.polizasRetiradas}
+            icon={<FaExclamationTriangle />}
+            tone="danger"
+            onClick={() => abrirKpiModal("retiradas")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "retiradas")}
+          />
+        </div>
       </div>
 
 
       {/* Nuevos KPIs de Alertas */}
       {(preferenciasVisualizacion.mostrarCumpleanos || preferenciasVisualizacion.mostrarPagosPendientes || preferenciasVisualizacion.mostrarTareasVencidas) && (
-        <div className="section-container mt-4">
-          <div className="d-flex justify-content-between align-items-center mb-3">
-            <h5 className="section-title mb-0">Alertas y Recordatorios</h5>
-          </div>
+        <div className="dashboard-panel__section">
+          <h5 className="dashboard-panel__section-title">Alertas y Recordatorios</h5>
           
-          <Row className="g-3">
+          <div className="dashboard-widgets-grid">
             {/* KPI Cumpleaños */}
             {preferenciasVisualizacion.mostrarCumpleanos && (
-              <Col xl={6} md={12}>
-                <Card className="dashboard-card h-100">
-                  <Card.Body>
-                    <div className="d-flex justify-content-between align-items-start mb-3">
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="stats-icon" style={{ background: "rgba(255, 193, 7, 0.1)", color: "#ffc107" }}>
-                          <FaBirthdayCake />
-                        </div>
-                        <div>
-                          <h6 className="stats-title mb-0">Cumpleaños de Hoy</h6>
-                          <h3 className="stats-value" style={{ color: "#ffc107" }}>
-                            {loadingCumpleanos ? "..." : cumpleanosMes.length}
-                          </h3>
-                        </div>
-                      </div>
+              <div className="dashboard-widget dashboard-widget--warning">
+                <div className="dashboard-widget__head">
+                  <div className="dashboard-widget__head-main">
+                    <span className="dashboard-widget__icon" aria-hidden="true"><FaBirthdayCake /></span>
+                    <div>
+                      <span className="dashboard-widget__title">Cumpleaños de Hoy</span>
+                      <span className="dashboard-widget__count">
+                        {loadingCumpleanos ? "…" : cumpleanosMes.length}
+                      </span>
                     </div>
+                  </div>
+                </div>
+                <div className="dashboard-widget__body">
                     {loadingCumpleanos ? (
                       <div className="text-center py-3">
                         <div className="spinner-border spinner-border-sm text-warning" role="status">
@@ -1058,8 +1008,8 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : cumpleanosMes.length > 0 ? (
-                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--compact">
-                        <Table hover size="sm" className="mb-0">
+                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--compact">
+                        <Table hover size="sm" className="hcc-table mb-0 align-middle">
                           <thead>
                             <tr>
                               <th>Cliente</th>
@@ -1134,39 +1084,33 @@ const handleOpenViewModal = (cliente) => {
                         )}
                       </div>
                     ) : (
-                      <div className="text-center py-3 text-muted small">
+                      <div className="dashboard-empty-inline">
                         No hay cumpleaños hoy
                       </div>
                     )}
-                  </Card.Body>
-                </Card>
-              </Col>
+                </div>
+              </div>
             )}
 
             {/* KPI Pagos Pendientes */}
             {preferenciasVisualizacion.mostrarPagosPendientes && (
-              <Col xl={6} md={12}>
-                <Card className="dashboard-card alert-card h-100">
-                  <Card.Body>
-                    <div className="d-flex justify-content-between align-items-start mb-3">
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="stats-icon" style={{ background: "rgba(220, 53, 69, 0.1)", color: "#dc3545" }}>
-                          <FaMoneyBillWave />
-                        </div>
-                        <div>
-                          <h6 className="stats-title mb-0">Pagos Pendientes</h6>
-                          <h3 className="stats-value" style={{ color: "#dc3545" }}>
-                            {loadingPagos ? "..." : pagosPendientes.length}
-                          </h3>
-                        </div>
-                      </div>
-                      <div>
-                        <Form.Select
-                          size="sm"
-                          value={mesPagosSeleccionado}
-                          onChange={(e) => setMesPagosSeleccionado(e.target.value)}
-                          style={{ minWidth: "150px" }}
-                        >
+              <div className="dashboard-widget dashboard-widget--danger">
+                <div className="dashboard-widget__head">
+                  <div className="dashboard-widget__head-main">
+                    <span className="dashboard-widget__icon" aria-hidden="true"><FaMoneyBillWave /></span>
+                    <div>
+                      <span className="dashboard-widget__title">Pagos Pendientes</span>
+                      <span className="dashboard-widget__count">
+                        {loadingPagos ? "…" : pagosPendientes.length}
+                      </span>
+                    </div>
+                  </div>
+                  <Form.Select
+                    size="sm"
+                    value={mesPagosSeleccionado}
+                    onChange={(e) => setMesPagosSeleccionado(e.target.value)}
+                    className="dashboard-widget__select"
+                  >
                           {(() => {
                             const meses = [];
                             const hoy = new Date();
@@ -1184,8 +1128,8 @@ const handleOpenViewModal = (cliente) => {
                             return meses;
                           })()}
                         </Form.Select>
-                      </div>
-                    </div>
+                </div>
+                <div className="dashboard-widget__body">
                     {loadingPagos ? (
                       <div className="text-center py-3">
                         <div className="spinner-border spinner-border-sm text-danger" role="status">
@@ -1193,8 +1137,8 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : pagosPendientes.length > 0 ? (
-                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--compact">
-                        <Table hover size="sm" className="mb-0">
+                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--compact">
+                        <Table hover size="sm" className="hcc-table mb-0 align-middle">
                           <thead>
                             <tr>
                               <th>Cliente</th>
@@ -1230,33 +1174,30 @@ const handleOpenViewModal = (cliente) => {
                         )}
                       </div>
                     ) : (
-                      <div className="text-center py-3 text-muted small">
+                      <div className="dashboard-empty-inline">
                         No hay pagos pendientes para este mes
                       </div>
                     )}
-                  </Card.Body>
-                </Card>
-              </Col>
+                </div>
+              </div>
             )}
+          </div>
 
             {/* KPI Tareas Vencidas */}
             {preferenciasVisualizacion.mostrarTareasVencidas && (
-              <Col xl={12} md={12}>
-                <Card className="dashboard-card alert-card h-100">
-                  <Card.Body>
-                    <div className="d-flex justify-content-between align-items-start mb-3">
-                      <div className="d-flex align-items-center gap-2">
-                        <div className="stats-icon" style={{ background: "rgba(220, 53, 69, 0.1)", color: "#dc3545" }}>
-                          <FaExclamationTriangle />
-                        </div>
-                        <div>
-                          <h6 className="stats-title mb-0">Tareas vencidas (mis tareas)</h6>
-                          <h3 className="stats-value" style={{ color: "#dc3545" }}>
-                            {loadingTareasVencidas ? "..." : tareasVencidas.length}
-                          </h3>
-                        </div>
-                      </div>
+              <div className="dashboard-widget dashboard-widget--danger dashboard-widget--full">
+                <div className="dashboard-widget__head">
+                  <div className="dashboard-widget__head-main">
+                    <span className="dashboard-widget__icon" aria-hidden="true"><FaExclamationTriangle /></span>
+                    <div>
+                      <span className="dashboard-widget__title">Tareas vencidas (mis tareas)</span>
+                      <span className="dashboard-widget__count">
+                        {loadingTareasVencidas ? "…" : tareasVencidas.length}
+                      </span>
                     </div>
+                  </div>
+                </div>
+                <div className="dashboard-widget__body">
                     {loadingTareasVencidas ? (
                       <div className="text-center py-3">
                         <div className="spinner-border spinner-border-sm text-danger" role="status">
@@ -1264,8 +1205,8 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : tareasVencidas.length > 0 ? (
-                      <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--tasks">
-                        <Table hover size="sm" className="mb-0">
+                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--tasks">
+                        <Table hover size="sm" className="hcc-table mb-0 align-middle">
                           <thead>
                             <tr>
                               <th>ID</th>
@@ -1370,23 +1311,21 @@ const handleOpenViewModal = (cliente) => {
                         )}
                       </div>
                     ) : (
-                      <div className="text-center py-3 text-muted small">
+                      <div className="dashboard-empty-inline">
                         No tienes tareas vencidas
                       </div>
                     )}
-                  </Card.Body>
-                </Card>
-              </Col>
+                </div>
+              </div>
             )}
-          </Row>
         </div>
       )}
       {/* Sección Documentos Solicitados */}
       {preferenciasVisualizacion.mostrarDocumentosSolicitados && (
-        <div className="section-container table-section">
-          <div className="d-flex justify-content-between align-items-center mb-3">
+        <div className="dashboard-panel__section dashboard-panel__section--table">
+          <div className="dashboard-panel__section-head">
             <div className="d-flex align-items-center gap-3">
-              <h5 className="section-title mb-0">Documentos solicitados</h5>
+              <h5 className="dashboard-panel__section-title mb-0">Documentos solicitados</h5>
               <Form.Check
                 type="switch"
                 id="toggle-documentos"
@@ -1397,7 +1336,7 @@ const handleOpenViewModal = (cliente) => {
               />
             </div>
             <div>
-              <label className="me-2">Filtrar por:</label>
+              <span className="dashboard-panel__filter-label">Filtrar por:</span>
               <select className="form-select form-select-sm w-auto d-inline" value={filtroDias} onChange={handleChangeFiltroDias}>
                 <option value="15">15 días</option>
                 <option value="30">30 días</option>
@@ -1407,8 +1346,8 @@ const handleOpenViewModal = (cliente) => {
             </div>
           </div>
 
-  <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
-    <Table hover className="mb-0 table-borderless">
+  <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--panel">
+    <Table hover className="hcc-table mb-0 align-middle">
       <thead>
         <tr>
           <th>Cliente</th>
@@ -1465,41 +1404,32 @@ const handleOpenViewModal = (cliente) => {
       )}
 
 
-      <div className="section-container">
-        <h5 className="section-title">Acciones Rápidas</h5>
-        <Row className="g-3">
-          <Col lg={3} md={6}>
-            <Button as={Link} to="/clientes/crear" variant="primary" className="quick-action-btn">
-              <FaPlus /> Nuevo Cliente
-            </Button>
-          </Col>
-          <Col lg={3} md={6}>
-            <Button as={Link} to="/grupofamiliar/prospecto" variant="primary" className="quick-action-btn">
-              <FaPlus /> Nuevo Grupo Familiar
-            </Button>
-          </Col>
-          <Col lg={3} md={6}>
-            <Button disabled variant="outline-secondary" className="quick-action-btn">
-              <FaChartLine /> Ver Informes
-            </Button>
-          </Col>
-          <Col lg={3} md={6}>
-            <Button disabled variant="outline-secondary" className="quick-action-btn">
-              <FaCalendarAlt /> Ver Cancelaciones
-            </Button>
-          </Col>
-        </Row>
+      <div className="dashboard-panel__section dashboard-panel__section--actions">
+        <h5 className="dashboard-panel__section-title">Acciones Rápidas</h5>
+        <div className="dashboard-actions-grid">
+          <Button as={Link} to="/clientes/crear" variant="primary" className="quick-action-btn">
+            <FaPlus /> Nuevo Cliente
+          </Button>
+          <Button as={Link} to="/grupofamiliar/prospecto" variant="primary" className="quick-action-btn">
+            <FaPlus /> Nuevo Grupo Familiar
+          </Button>
+          <Button disabled variant="outline-secondary" className="quick-action-btn">
+            <FaChartLine /> Ver Informes
+          </Button>
+          <Button disabled variant="outline-secondary" className="quick-action-btn">
+            <FaCalendarAlt /> Ver Cancelaciones
+          </Button>
+        </div>
       </div>
 
       {/* Sección Clientes Recientes y Coberturas Canceladas */}
       {(preferenciasVisualizacion.mostrarClientesRecientes || preferenciasVisualizacion.mostrarPolizasCanceladas) && (
-      <Row className="mb-4 g-4 align-items-stretch">
+      <div className="dashboard-dual-grid">
       {preferenciasVisualizacion.mostrarClientesRecientes && (
-      <Col lg={6} className="h-100">
-      <div className="section-container table-section h-100">
-            <div className="d-flex justify-content-between align-items-center mb-3">
+      <div className="dashboard-panel__section dashboard-panel__section--table h-100">
+            <div className="dashboard-panel__section-head">
               <div className="d-flex align-items-center gap-2">
-                <h5 className="section-title mb-0">Clientes Recientes</h5>
+                <h5 className="dashboard-panel__section-title mb-0">Clientes Recientes</h5>
                 <Form.Check
                   type="switch"
                   id="toggle-clientes-recientes-inline"
@@ -1513,8 +1443,8 @@ const handleOpenViewModal = (cliente) => {
                 Ver todos <FaList className="ms-1" />
               </Link>
             </div>
-            <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
-              <Table hover className="mb-0 table-borderless">
+            <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--panel">
+              <Table hover className="hcc-table mb-0 align-middle">
                 <thead>
                   <tr>
                     <th>Nombre</th>
@@ -1566,15 +1496,13 @@ const handleOpenViewModal = (cliente) => {
               </Table>
             </div>
           </div>
-        </Col>
       )}
 
       {preferenciasVisualizacion.mostrarPolizasCanceladas && (
-        <Col lg={6} className="h-100">
-        <div className="section-container table-section h-100">
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <div className="d-flex align-items-center gap-2">
-                <h5 className="section-title mb-0">Coberturas Canceladas y Retiradas</h5>
+        <div className="dashboard-panel__section dashboard-panel__section--table h-100">
+            <div className="dashboard-panel__section-head">
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <h5 className="dashboard-panel__section-title mb-0">Coberturas Canceladas y Retiradas</h5>
                 <Form.Check
                   type="switch"
                   id="toggle-polizas-canceladas-inline"
@@ -1619,13 +1547,13 @@ const handleOpenViewModal = (cliente) => {
                 </Form.Select>
               </div>
             </div>
-            <div className="mb-2 small text-muted">
+            <div className="dashboard-panel__summary">
               Mes seleccionado: <strong>{resumenCoberturasMes.total}</strong> registros
               {" "}(<strong>{resumenCoberturasMes.cancelados}</strong> cancelados,{" "}
               <strong>{resumenCoberturasMes.retiros}</strong> retiros)
             </div>
-            <div className="table-responsive dashboard-report-scroll dashboard-report-scroll--panel">
-              <Table hover className="mb-0 table-borderless">
+            <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--panel">
+              <Table hover className="hcc-table mb-0 align-middle">
                 <thead>
                   <tr>
                     <th>Nombre</th>
@@ -1674,24 +1602,22 @@ const handleOpenViewModal = (cliente) => {
               </Table>
             </div>
           </div>
-        </Col>
       )}
-      </Row>
+      </div>
       )}
       
       {/* Sección Calendario de Tareas */}
       {preferenciasVisualizacion.mostrarCalendario && (
-      <div className="section-container mt-4">
-  <Card>
-    <Card.Header className="bg-primary text-white d-flex justify-content-between align-items-center">
+      <div className="dashboard-panel__section dashboard-panel__section--flush">
+  <Card className="dashboard-calendar">
+    <Card.Header className="d-flex justify-content-between align-items-center">
       <span><FaCalendarAlt className="me-2" /> Calendario de Tareas</span>
       <Form.Check
         type="switch"
         id="toggle-calendario-inline"
         checked={preferenciasVisualizacion.mostrarCalendario}
         onChange={() => togglePreferencia('mostrarCalendario')}
-        className="small text-white"
-        style={{ filter: 'brightness(1.2)' }}
+        className="small"
       />
     </Card.Header>
     <Card.Body>
@@ -1711,10 +1637,10 @@ const handleOpenViewModal = (cliente) => {
       )}
 
       {/* Configuración de Preferencias - Al final, ancho completo */}
-      <div className="section-container mt-4">
-        <Card>
+      <div className="dashboard-panel__section dashboard-panel__section--flush">
+        <Card className="dashboard-config">
           <Card.Header 
-            className="bg-light d-flex justify-content-between align-items-center"
+            className="d-flex justify-content-between align-items-center"
             style={{ cursor: 'pointer' }}
             onClick={() => setShowConfigAccordion(!showConfigAccordion)}
           >
@@ -1825,6 +1751,9 @@ const handleOpenViewModal = (cliente) => {
             </Card.Body>
           )}
         </Card>
+      </div>
+
+        </div>
       </div>
 
       
