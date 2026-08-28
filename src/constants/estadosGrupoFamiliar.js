@@ -472,7 +472,6 @@ export const FILTRO_PRODUCTO_LISTADO_OPCIONES = [
   { value: "todos", label: "Todos los productos" },
   { value: "salud", label: "Salud" },
   { value: "dental_ms", label: "Dental MS" },
-  { value: "ambos", label: "Salud y Dental MS" },
   { value: "dental_privado", label: "Dental privado" },
   { value: "vision", label: "Visión" },
   { value: "descuentos", label: "Plan de descuentos" },
@@ -485,7 +484,7 @@ export const FILTRO_PRODUCTO_LISTADO_VALORES = FILTRO_PRODUCTO_LISTADO_OPCIONES.
 
 export function normalizarFiltroProductoListado(value) {
   const raw = String(value || "").toLowerCase();
-  if (raw === "dental") return "dental_ms";
+  if (raw === "dental" || raw === "ambos") return "dental_ms";
   return FILTRO_PRODUCTO_LISTADO_VALORES.includes(raw) ? raw : "todos";
 }
 
