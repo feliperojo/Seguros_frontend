@@ -6,6 +6,9 @@ import {
   FaUserCheck,
   FaClipboardList,
 } from "react-icons/fa";
+import {
+  isProductoPrivadoIndependiente,
+} from "./coberturaTipos";
 
 export const ESTADOS_GRUPO_CONFIG = {
   cotizacion: {
@@ -337,7 +340,45 @@ export function ocultarPersonasCoberturaEnListado(grupo) {
   return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
 }
 
-/** Conteos de coberturas privadas activas para la columna c.p del listado. */
+function parseProductoTiposGrupo(grupo) {
+  const producto = String(grupo?.producto || "").trim();
+  if (!producto || producto === "-") return [];
+  return producto.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+function tiposProductoGrupo(grupo) {
+  const fromProducto = parseProductoTiposGrupo(grupo);
+  if (fromProducto.length > 0) return fromProducto;
+
+  if (Array.isArray(grupo?.coberturaTipos) && grupo.coberturaTipos.length > 0) {
+    return grupo.coberturaTipos;
+  }
+
+  return [
+    ...new Set(
+      (grupo?.coberturas || [])
+        .map((c) => String(c?.cobertura_tipo || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+}
+
+/** GF cuyo producto principal es privado (Vision, Plan Dental, etc.), no Salud MS. */
+export function esGrupoPlanPrivado(grupo) {
+  const privadas = Number(grupo?.personas_privadas);
+  if (privadas > 0) return true;
+
+  const salud = Number(grupo?.personas_salud);
+  const dental = Number(grupo?.personas_dental);
+  if (salud > 0 || dental > 0) return false;
+
+  const tipos = tiposProductoGrupo(grupo);
+  if (tipos.length === 0) return false;
+
+  return tipos.every((t) => isProductoPrivadoIndependiente(t));
+}
+
+/** Conteos de coberturas privadas activas para la columna C.Privado del listado. */
 export function personasPrivadasParaListado(grupo) {
   if (ocultarPersonasCoberturaEnListado(grupo)) {
     return { privadas: 0, label: "—" };
@@ -354,7 +395,7 @@ export function personasPrivadasParaListado(grupo) {
   };
 }
 
-/** Conteos Salud/Dental MS activos para la columna S/D del listado. */
+/** Conteos Salud/Dental MS activos para la columna Salud/Dental Ms del listado. */
 export function personasSaludDentalParaListado(grupo) {
   if (ocultarPersonasCoberturaEnListado(grupo)) {
     return { salud: 0, dental: 0, label: "—" };
@@ -403,6 +444,16 @@ export function personasSaludDentalParaListado(grupo) {
     dental,
     label: `${salud}/${dental}`,
   };
+}
+
+/** Personas en taxes: los planes privados no aplican; mostrar — en el listado. */
+export function personasTaxesParaListado(grupo) {
+  if (esGrupoPlanPrivado(grupo)) {
+    return { taxes: 0, label: "—" };
+  }
+
+  const taxes = Number(grupo?.personas_taxes) || 0;
+  return { taxes, label: String(taxes) };
 }
 
 /** @deprecated Preferir personasSaludDentalParaListado. */

@@ -22,6 +22,7 @@ import {
   grupoFamiliarDeleteRequiereAdmin,
   personasSaludDentalParaListado,
   personasPrivadasParaListado,
+  personasTaxesParaListado,
 } from "../constants/estadosGrupoFamiliar";
 import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
 import { Helmet } from "react-helmet-async";
@@ -431,6 +432,15 @@ useEffect(() => {
     );
   };
 
+  const renderPersonasTaxes = (grupo) => {
+    const { taxes, label } = personasTaxesParaListado(grupo);
+    return (
+      <span title={`Personas en taxes: ${taxes}`} className="gf-listado__taxes">
+        {label}
+      </span>
+    );
+  };
+
   const getTomadorNombre = (grupo) => grupo.tomador_nombre || "Sin asignar";
 
   const totalFiltered = paginationMeta.total ?? 0;
@@ -639,7 +649,7 @@ useEffect(() => {
                                   <td>{getTomadorNombre(grupo)}</td>
                                   <td>{renderPersonasCP(grupo)}</td>
                                   <td>{renderPersonasSD(grupo)}</td>
-                                  <td>{grupo.personas_taxes || "0"}</td>
+                                  <td>{renderPersonasTaxes(grupo)}</td>
                                   <td>{getCompaniaNombre(grupo)}</td>
                                   <td>
                                     {grupo.id ? (

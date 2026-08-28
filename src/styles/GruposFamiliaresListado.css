@@ -180,7 +180,8 @@
 }
 
 .gf-listado__sd,
-.gf-listado__cp {
+.gf-listado__cp,
+.gf-listado__taxes {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   color: #0f2744;
