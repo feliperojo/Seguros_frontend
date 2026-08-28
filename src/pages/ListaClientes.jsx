@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
-  Card, Table, Form, InputGroup, Button, Badge,
+  Table, Form, InputGroup, Button, Badge,
   Spinner, Pagination, Toast, ToastContainer
 } from "react-bootstrap";
 import {
@@ -454,7 +454,7 @@ const ListaClientes = () => {
     return (
       <div className="stacked-list">
         {tipos.map((tipo) => (
-          <div key={tipo} className="stacked-item">
+          <div key={tipo} className="stacked-item lista-clientes__producto">
             {tipo}
           </div>
         ))}
@@ -784,38 +784,45 @@ const ListaClientes = () => {
     // Estado de carga
     if (loading) {
       return (
-        <Card>
-          <Card.Body>
-            <div className="text-center p-5">
-              <Spinner animation="border" variant="primary" role="status">
-                <span className="visually-hidden">Cargando...</span>
-              </Spinner>
-              <p className="mt-3 text-muted">Cargando clientes...</p>
-            </div>
-          </Card.Body>
-        </Card>
+        <div className="lista-clientes__section lista-clientes__section--table mb-0">
+          <div className="lista-clientes__section-title">
+            <FaUsers />
+            Resultados
+          </div>
+          <div className="text-center py-5">
+            <Spinner animation="border" style={{ color: "#1a365d" }} role="status">
+              <span className="visually-hidden">Cargando...</span>
+            </Spinner>
+            <p className="mt-3 text-muted small mb-0">Cargando clientes...</p>
+          </div>
+        </div>
       );
     }
 
     // Estado de error
     if (error) {
       return (
-        <Card>
-          <Card.Body>
-            <div className="alert alert-danger d-flex align-items-center" role="alert">
-              <FaInfoCircle className="me-2" size={20} />
-              <div>
-                <strong>Error al cargar clientes</strong>
-                <div className="small mt-1">{error}</div>
-              </div>
+        <div className="lista-clientes__section lista-clientes__section--table mb-0">
+          <div className="lista-clientes__section-title">
+            <FaUsers />
+            Resultados
+          </div>
+          <div className="alert alert-danger d-flex align-items-center mb-3" role="alert">
+            <FaInfoCircle className="me-2" size={20} />
+            <div>
+              <strong>Error al cargar clientes</strong>
+              <div className="small mt-1">{error}</div>
             </div>
-            <div className="text-center mt-3">
-              <Button variant="primary" onClick={fetchClientes}>
-                Reintentar
-              </Button>
-            </div>
-          </Card.Body>
-        </Card>
+          </div>
+          <div className="text-center">
+            <Button
+              onClick={fetchClientes}
+              style={{ background: "#1a365d", borderColor: "#1a365d" }}
+            >
+              Reintentar
+            </Button>
+          </div>
+        </div>
       );
     }
 
@@ -825,129 +832,140 @@ const ListaClientes = () => {
                         Object.values(activeFilters).some(v => v);
 
       return (
-        <Card>
-          <Card.Body>
-            <div className="text-center p-5">
-              <FaSearch size={48} className="text-muted mb-3 opacity-50" />
-              <h5 className="mb-2">No se encontraron clientes</h5>
-              <p className="text-muted mb-3">
-                {hasFilters
-                  ? "No hay clientes que coincidan con los criterios de búsqueda seleccionados."
-                  : "No hay clientes registrados en el sistema."}
-              </p>
-              {hasFilters && (
-                <Button variant="outline-primary" onClick={clearAllFilters}>
-                  Limpiar filtros
-                </Button>
-              )}
+        <div className="lista-clientes__section lista-clientes__section--table mb-0">
+          <div className="lista-clientes__section-title">
+            <FaUsers />
+            Resultados
+          </div>
+          <div className="lista-clientes__empty">
+            <div className="lista-clientes__empty-icon">
+              <FaSearch />
             </div>
-          </Card.Body>
-        </Card>
+            <h5 className="mb-2" style={{ color: "#1a365d", fontSize: "1rem" }}>
+              No se encontraron clientes
+            </h5>
+            <p className="text-muted mb-3 small">
+              {hasFilters
+                ? "No hay clientes que coincidan con los criterios de búsqueda seleccionados."
+                : "No hay clientes registrados en el sistema."}
+            </p>
+            {hasFilters && (
+              <Button
+                variant="outline-secondary"
+                className="lista-clientes__btn-icon"
+                onClick={clearAllFilters}
+              >
+                Limpiar filtros
+              </Button>
+            )}
+          </div>
+        </div>
       );
     }
 
     // Tabla con datos
     return (
-      <>
-        <Card>
-          <Card.Body className="p-0">
-            <div className="table-responsive">
-              <Table hover className="lista-clientes-table mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th className="fw-semibold">ID</th>
-                    <th className="fw-semibold">Nombre Completo</th>
-                    <th className="fw-semibold">Estado</th>
-                    <th className="fw-semibold">Fecha Nacimiento</th>
-                    <th className="fw-semibold">Código Postal</th>
-                    <th className="fw-semibold">Parentesco</th>
-                    <th className="fw-semibold">Teléfono</th>
-                    <th className="fw-semibold">Proceso</th>
-                    <th className="fw-semibold">Producto</th>
-                    <th className="text-center fw-semibold">Acciones</th>
+      <div className="lista-clientes__section lista-clientes__section--table mb-0">
+        <div className="lista-clientes__section-title">
+          <FaUsers />
+          Resultados
+        </div>
+        <div className="lista-clientes__table-wrap table-responsive">
+          <Table hover className="lista-clientes-table mb-0">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre Completo</th>
+                <th>Estado</th>
+                <th>Fecha Nacimiento</th>
+                <th>Código Postal</th>
+                <th>Parentesco</th>
+                <th>Teléfono</th>
+                <th>Proceso</th>
+                <th>Producto</th>
+                <th className="text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentItems.map((cliente) => {
+                const grupos = cliente.grupos || [];
+                const unico = grupos.length === 1 ? grupos[0] : null;
+
+                return (
+                  <tr key={cliente.id}>
+                    <td>
+                      <span className="text-muted">{cliente.id || "N/A"}</span>
+                    </td>
+                    <td>
+                      {renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}
+                    </td>
+                    <td>
+                      <Badge
+                        bg={estadoClienteToVariant(cliente.estado_cliente)}
+                        className="fw-normal"
+                      >
+                        {labelEstadoCliente(cliente.estado_cliente)}
+                      </Badge>
+                    </td>
+                    <td>{formatDate(cliente.fecha_nacimiento)}</td>
+                    <td>{cliente.codigo_postal || <span className="text-muted">—</span>}</td>
+                    <td>{getParentesco(cliente)}</td>
+                    <td>{getTelefonoPrincipal(cliente) || <span className="text-muted">—</span>}</td>
+                    <td>
+                      <ProcesoCell grupos={grupos} />
+                    </td>
+                    <td>{renderProductosCell(cliente)}</td>
+                    <td className="text-center">
+                      <div className="btn-group lista-clientes__actions" role="group">
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={() =>
+                            handleOpenViewModal(cliente, unico?.id || cliente.grupo_familiar_id)
+                          }
+                          title="Ver detalles del cliente"
+                          aria-label="Ver detalles del cliente"
+                        >
+                          <FaEye />
+                        </Button>
+                        <Button
+                          variant="outline-secondary"
+                          size="sm"
+                          onClick={() => handleOpenEditModal(cliente)}
+                          title="Editar cliente"
+                          aria-label="Editar cliente"
+                        >
+                          <FaEdit />
+                        </Button>
+                        <Button
+                          variant="outline-danger"
+                          size="sm"
+                          onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
+                          title="Eliminar cliente"
+                          aria-label="Eliminar cliente"
+                        >
+                          <FaTrashAlt />
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {currentItems.map(cliente => {
-                    const grupos = cliente.grupos || [];
-                    const unico = grupos.length === 1 ? grupos[0] : null;
+                );
+              })}
+            </tbody>
+          </Table>
+        </div>
 
-                    return (
-                      <tr key={cliente.id}>
-                        <td>
-                          <span className="text-muted">{cliente.id || "N/A"}</span>
-                        </td>
-                        <td>
-                          {renderClienteLink(cliente.id, cliente.nombre_completo || "Sin nombre")}
-                        </td>
-                        <td>
-                          <Badge
-                            bg={estadoClienteToVariant(cliente.estado_cliente)}
-                            className="fw-normal"
-                          >
-                            {labelEstadoCliente(cliente.estado_cliente)}
-                          </Badge>
-                        </td>
-                        <td>{formatDate(cliente.fecha_nacimiento)}</td>
-                        <td>{cliente.codigo_postal || <span className="text-muted">—</span>}</td>
-                        <td>{getParentesco(cliente)}</td>
-                        <td>{getTelefonoPrincipal(cliente) || <span className="text-muted">—</span>}</td>
-                        <td>
-                          <ProcesoCell grupos={grupos} />
-                        </td>
-                        <td>{renderProductosCell(cliente)}</td>
-                        <td className="text-center">
-                          <div className="btn-group" role="group">
-                            <Button
-                              variant="outline-primary"
-                              size="sm"
-                              onClick={() => handleOpenViewModal(cliente, unico?.id || cliente.grupo_familiar_id)}
-                              className="border-end-0"
-                              title="Ver detalles del cliente"
-                              aria-label="Ver detalles del cliente"
-                            >
-                              <FaEye />
-                            </Button>
-                            <Button
-                              variant="outline-success"
-                              size="sm"
-                              onClick={() => handleOpenEditModal(cliente)}
-                              className="border-end-0"
-                              title="Editar cliente"
-                              aria-label="Editar cliente"
-                            >
-                              <FaEdit />
-                            </Button>
-                            <Button
-                              variant="outline-danger"
-                              size="sm"
-                              onClick={() => handleDelete(cliente.id, cliente.nombre_completo)}
-                              title="Eliminar cliente"
-                              aria-label="Eliminar cliente"
-                            >
-                              <FaTrashAlt />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </div>
-          </Card.Body>
-        </Card>
-
-        {/* Controles de paginación */}
-        <div className="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-3">
+        <div className="lista-clientes__pagination">
           <div className="d-flex align-items-center gap-2 flex-wrap">
-            <span className="text-muted small">
-              <FaUsers className="me-1" />
-              Mostrando <strong>{indexOfFirstItem + 1}</strong> - <strong>{Math.min(indexOfLastItem, filteredClientes.length)}</strong> de <strong>{filteredClientes.length}</strong> cliente{filteredClientes.length !== 1 ? 's' : ''}
+            <span className="lista-clientes__summary">
+              Mostrando <strong>{indexOfFirstItem + 1}</strong> -{" "}
+              <strong>{Math.min(indexOfLastItem, filteredClientes.length)}</strong> de{" "}
+              <strong>{filteredClientes.length}</strong> cliente
+              {filteredClientes.length !== 1 ? "s" : ""}
             </span>
             <span className="text-muted">|</span>
             <div className="d-flex align-items-center gap-2">
-              <label htmlFor="items-per-page" className="text-muted small mb-0">
+              <label htmlFor="items-per-page" className="lista-clientes__label mb-0">
                 Mostrar:
               </label>
               <Form.Select
@@ -958,7 +976,7 @@ const ListaClientes = () => {
                   setCurrentPage(1);
                 }}
                 size="sm"
-                style={{ width: '90px' }}
+                style={{ width: "90px" }}
                 aria-label="Items por página"
               >
                 <option value={10}>10</option>
@@ -976,7 +994,7 @@ const ListaClientes = () => {
           </div>
           <Pagination className="mb-0">{renderPaginationItems()}</Pagination>
         </div>
-      </>
+      </div>
     );
   };
 
@@ -986,33 +1004,38 @@ const ListaClientes = () => {
 
   return (
     <div className="lista-clientes-container">
-      {/* Header con título y botón de nuevo cliente */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h1 className="page-title mb-1">Listado general</h1>
-          <p className="text-muted small mb-0">
-            Gestiona y visualiza todos los clientes del sistema
-          </p>
+      <div className="lista-clientes">
+        <div className="lista-clientes__header">
+          <div className="lista-clientes__header-main">
+            <div className="lista-clientes__header-icon" aria-hidden="true">
+              <FaUsers />
+            </div>
+            <div>
+              <h1 className="lista-clientes__title">Listado general</h1>
+              <p className="lista-clientes__subtitle">
+                Gestiona y visualiza todos los clientes del sistema
+              </p>
+            </div>
+          </div>
+          <Button
+            as={Link}
+            to="/clientes/crear"
+            className="lista-clientes__btn-new d-flex align-items-center"
+          >
+            <FaUserPlus className="me-2" />
+            Nuevo Cliente
+          </Button>
         </div>
-        <Button 
-          variant="primary" 
-          as={Link} 
-          to="/clientes/crear" 
-          className="d-flex align-items-center"
-        >
-          <FaUserPlus className="me-2" />
-          Nuevo Cliente
-        </Button>
-      </div>
 
-      {/* Panel de búsqueda y filtros */}
-      <Card className="mb-4 shadow-sm">
-        <Card.Body>
-          <div className="filter-container">
+        <div className="lista-clientes__body">
+          <div className="lista-clientes__section">
+            <div className="lista-clientes__section-title">
+              <FaFilter />
+              Búsqueda y filtros
+            </div>
             <div className="row g-3">
-              {/* Campo de búsqueda */}
               <div className="col-md-6">
-                <label htmlFor="search-input" className="form-label small text-muted mb-1">
+                <label htmlFor="search-input" className="lista-clientes__label">
                   Buscar cliente
                 </label>
                 <InputGroup>
@@ -1024,23 +1047,23 @@ const ListaClientes = () => {
                     aria-label="Buscar cliente"
                   />
                   {searchTerm && (
-                    <Button 
-                      variant="outline-secondary" 
+                    <Button
+                      variant="outline-secondary"
+                      className="lista-clientes__btn-icon"
                       onClick={clearSearch}
                       aria-label="Limpiar búsqueda"
                     >
                       <FaTimes />
                     </Button>
                   )}
-                  <Button variant="outline-secondary" disabled>
+                  <Button variant="outline-secondary" className="lista-clientes__btn-icon" disabled>
                     <FaSearch />
                   </Button>
                 </InputGroup>
               </div>
 
-              {/* Selector de estado del proceso */}
               <div className="col-md-3">
-                <label htmlFor="status-filter" className="form-label small text-muted mb-1">
+                <label htmlFor="status-filter" className="lista-clientes__label">
                   Estado del proceso
                 </label>
                 <Form.Select
@@ -1059,15 +1082,12 @@ const ListaClientes = () => {
                 </Form.Select>
               </div>
 
-              {/* Botones de acción */}
-              <div className="col-md-3">
-               
-                <div className="d-flex gap-2">
-                  <div className="position-relative flex-grow-1" ref={filterRef}>
-                    {/* Espacio reservado para filtros adicionales futuros */}
-                  </div>
-                  <Button 
-                    variant="outline-secondary" 
+              <div className="col-md-3 d-flex align-items-end">
+                <div className="d-flex gap-2 w-100 justify-content-md-end">
+                  <div className="position-relative flex-grow-1" ref={filterRef} />
+                  <Button
+                    variant="outline-secondary"
+                    className="lista-clientes__btn-icon"
                     title="Exportar lista de clientes"
                     aria-label="Exportar"
                   >
@@ -1077,16 +1097,13 @@ const ListaClientes = () => {
               </div>
             </div>
 
-            {/* Píldoras de filtros activos */}
             {renderActiveFiltersPills()}
           </div>
-        </Card.Body>
-      </Card>
 
-      {/* Tabla de clientes */}
-      {renderClientesTable()}
+          {renderClientesTable()}
+        </div>
+      </div>
 
-      {/* Modales */}
       <EditClienteModal
         show={showEditModal}
         onHide={() => setShowEditModal(false)}
@@ -1102,13 +1119,12 @@ const ListaClientes = () => {
         grupoFamiliarId={clienteToView?.grupoFamiliarId}
       />
 
-      {/* Toast de notificaciones */}
       <ToastContainer className="p-3" position="top-end">
-        <Toast 
-          show={showToast} 
-          onClose={() => setShowToast(false)} 
-          delay={3000} 
-          autohide 
+        <Toast
+          show={showToast}
+          onClose={() => setShowToast(false)}
+          delay={3000}
+          autohide
           bg={toastVariant}
         >
           <Toast.Header closeButton={true}>

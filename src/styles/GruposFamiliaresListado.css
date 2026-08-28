@@ -1,188 +1,421 @@
-/* GruposFamiliaresListado.css */
+/* GruposFamiliaresListado.css — estilo institucional alineado al modal Dental MS */
+
+.gf-listado-container {
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+}
+
+.gf-listado {
+  background: #f8f9fb;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06);
+}
+
+.gf-listado__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.gf-listado__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.gf-listado__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+}
+
+.gf-listado__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0.15rem 0 0;
+  line-height: 1.45;
+  max-width: 720px;
+}
+
+.gf-listado__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+.gf-listado__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.gf-listado__section--table {
+  margin-bottom: 0;
+}
+
+.gf-listado__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gf-listado__section-title svg {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.gf-listado__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+}
+
+.gf-listado .form-control,
+.gf-listado .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.gf-listado .form-control:focus,
+.gf-listado .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.12);
+}
+
+.gf-listado__btn-icon {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #fff;
+}
+
+.gf-listado__btn-icon:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+  background: #f8fafc;
+}
+
+.gf-listado__summary {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-bottom: 0.75rem;
+}
+
+.gf-listado__summary strong {
+  color: #1a365d;
+}
+
+.gf-listado__table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: auto;
+}
+
+.gf-listado__table {
+  margin-bottom: 0;
+  font-size: 0.875rem;
+}
+
+.gf-listado__table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  vertical-align: middle;
+  padding: 0.75rem 0.875rem;
+}
+
+.gf-listado__table tbody td {
+  vertical-align: middle;
+  color: #334155;
+  border-color: #f1f5f9;
+  padding: 0.75rem 0.875rem;
+}
+
+.gf-listado__table tbody tr:hover {
+  background-color: #fafcff;
+}
+
+.gf-listado__table a {
+  color: #1a365d;
+  font-weight: 600;
+}
+
+.gf-listado__table a:hover {
+  color: #0f2744;
+  text-decoration: underline !important;
+}
+
+.gf-listado__producto {
+  color: #1a365d;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.gf-listado__sd,
+.gf-listado__cp,
+.gf-listado__taxes {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #0f2744;
+  letter-spacing: 0.02em;
+}
+
+.gf-listado__badge-responsable {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: #1a365d !important;
+  color: #fff !important;
+  border: 1px solid #0f2744;
+}
+
+.gf-listado__actions .btn {
+  border-radius: 6px;
+  border-color: #cbd5e1;
+  color: #475569;
+  background: #fff;
+}
+
+.gf-listado__actions .btn:hover {
+  border-color: #1a365d;
+  color: #1a365d;
+  background: #f8fafc;
+}
+
+.gf-listado__actions .btn-outline-danger:hover {
+  border-color: #b91c1c;
+  color: #b91c1c;
+  background: #fef2f2;
+}
+
+.gf-listado__empty {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
 
 /* Estilo para botones de acción en la tabla */
 .btn-icon-action {
-    background: transparent;
-    border: none;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    margin: 0 2px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 4px;
-    transition: all 0.2s;
+  background: transparent;
+  border: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-icon-action:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.btn-icon-action:focus {
+  box-shadow: none;
+  outline: none;
+}
+
+.btn-icon-action i {
+  font-size: 16px;
+}
+
+.badge.rounded-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
+}
+
+.badge.rounded-pill {
+  font-weight: normal;
+  padding: 5px 8px;
+}
+
+.dropdown-menu {
+  font-size: 0.875rem;
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-item {
+  padding: 0.5rem 1rem;
+}
+
+.dropdown-item:active {
+  background-color: #f8f9fa;
+  color: inherit;
+}
+
+.dropdown-item.text-danger:active {
+  background-color: #fee2e2;
+  color: #dc3545;
+}
+
+/* Resumen por estado — chips institucionales */
+.gf-listado .resumen-estados-navbar {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+  width: 100%;
+}
+
+.resumen-estados-navbar .estados-container {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 0.5rem;
+  padding: 0;
+  min-height: 0;
+}
+
+.resumen-estados-navbar .estado-item {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.55rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-left: 3px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.resumen-estados-navbar .estado-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  border-left-color: #94a3b8;
+  box-shadow: 0 1px 3px rgba(15, 39, 68, 0.06);
+}
+
+.resumen-estados-navbar .estado-item.is-selected {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  border-left-color: #1a365d;
+  box-shadow: 0 0 0 1px rgba(26, 54, 93, 0.08);
+}
+
+.resumen-estados-navbar .estado-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 0.7rem;
+}
+
+.resumen-estados-navbar .estado-item.is-selected .estado-item__icon {
+  background: #1a365d;
+  color: #fff;
+}
+
+.resumen-estados-navbar .estado-item__text {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.resumen-estados-navbar .estado-item__label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resumen-estados-navbar .estado-item__count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f2744;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.resumen-estados-navbar .estado-item.is-selected .estado-item__label {
+  color: #1a365d;
+}
+
+.resumen-estados-navbar .estado-item.is-selected .estado-item__count {
+  color: #0f2744;
+}
+
+@media (max-width: 1200px) {
+  .resumen-estados-navbar .estados-container {
+    grid-template-columns: repeat(8, minmax(7.5rem, 1fr));
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
   }
-  
-  .btn-icon-action:hover {
-    background-color: rgba(0, 0, 0, 0.05);
-  }
-  
-  .btn-icon-action:focus {
-    box-shadow: none;
-    outline: none;
-  }
-  
-  .btn-icon-action i {
-    font-size: 16px;
-  }
-  
-  /* Estilos para el círculo de personas en cobertura */
-  .badge.rounded-circle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 0;
-    font-size: 12px;
-  }
-  
-  /* Estilos para los estados */
-  .badge.rounded-pill {
-    font-weight: normal;
-    padding: 5px 8px;
-  }
-  
-  /* Ajuste del espaciado en la tabla */
-  .table th {
-    font-weight: 600;
-    font-size: 0.85rem;
-    color: #495057;
-  }
-  
-  .table td {
-    vertical-align: middle;
-    padding: 0.75rem;
-  }
-  
-  /* Estilos específicos del dropdown */
-  .dropdown-menu {
-    font-size: 0.875rem;
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
-    border: 1px solid rgba(0, 0, 0, 0.1);
-  }
-  
-  .dropdown-item {
-    padding: 0.5rem 1rem;
-  }
-  
-  .dropdown-item:active {
-    background-color: #f8f9fa;
-    color: inherit;
-  }
-  
-  .dropdown-item.text-danger:active {
-    background-color: #fee2e2;
-    color: #dc3545;
+}
+
+@media (max-width: 768px) {
+  .gf-listado__header {
+    padding: 1rem;
   }
 
-  /* Estilos para la barra de resumen de estados */
-  .resumen-estados-navbar {
-    background-color: #ffffff;
-    border: 1px solid #e9ecef;
-    border-radius: 10px;
-    margin-bottom: 20px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-    width: 100%;
+  .gf-listado__body {
+    padding: 1rem;
   }
 
   .resumen-estados-navbar .estados-container {
-    min-height: 60px;
+    gap: 0.4rem;
   }
 
   .resumen-estados-navbar .estado-item {
-    transition: all 0.2s ease;
-    border-radius: 6px;
-    flex: 0 0 auto;
-    white-space: nowrap;
+    padding: 0.5rem 0.55rem;
   }
 
-  .resumen-estados-navbar .estado-item:hover {
-    background-color: #f8f9fa;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  .resumen-estados-navbar .estado-item__label {
+    font-size: 0.65rem;
   }
 
-  .resumen-estados-navbar .estado-label {
-    white-space: nowrap;
+  .resumen-estados-navbar .estado-item__count {
+    font-size: 0.8rem;
   }
-
-  /* Responsive para tablets */
-  @media (max-width: 992px) {
-    .resumen-estados-navbar .estados-container {
-      gap: 12px !important;
-    }
-    
-    .resumen-estados-navbar .estado-item {
-      padding-left: 12px !important;
-      padding-right: 12px !important;
-      padding-top: 6px !important;
-      padding-bottom: 6px !important;
-    }
-  }
-
-  /* Responsive para móviles */
-  @media (max-width: 768px) {
-    .resumen-estados-navbar {
-      margin-bottom: 15px;
-    }
-
-    .resumen-estados-navbar .estados-container {
-      gap: 10px !important;
-      padding: 12px !important;
-      min-height: auto;
-    }
-    
-    .resumen-estados-navbar .estado-item {
-      padding-left: 10px !important;
-      padding-right: 10px !important;
-      padding-top: 6px !important;
-      padding-bottom: 6px !important;
-      border-left-width: 3px !important;
-    }
-
-    .resumen-estados-navbar .estado-item svg {
-      font-size: 16px !important;
-    }
-    
-    .resumen-estados-navbar .estado-label {
-      font-size: 13px !important;
-    }
-
-    .resumen-estados-navbar .estado-item .badge {
-      font-size: 13px !important;
-      padding: 4px 10px !important;
-      min-width: 35px !important;
-    }
-  }
-
-  /* Responsive para móviles pequeños */
-  @media (max-width: 576px) {
-    .resumen-estados-navbar .estados-container {
-      gap: 8px !important;
-      padding: 10px !important;
-    }
-    
-    .resumen-estados-navbar .estado-item {
-      padding-left: 8px !important;
-      padding-right: 8px !important;
-      padding-top: 5px !important;
-      padding-bottom: 5px !important;
-    }
-
-    .resumen-estados-navbar .estado-item svg {
-      font-size: 14px !important;
-    }
-    
-    .resumen-estados-navbar .estado-label {
-      font-size: 12px !important;
-    }
-
-    .resumen-estados-navbar .estado-item .badge {
-      font-size: 12px !important;
-      padding: 3px 8px !important;
-      min-width: 30px !important;
-    }
-  }
+}

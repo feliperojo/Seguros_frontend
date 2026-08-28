@@ -5,6 +5,7 @@ import apiRequest from "../services/api";
 import { FichaClienteContext } from "../context/fichaClienteContext";
 import Sidebar from "../components/Sidebar";
 import "../styles/MainLayout.css";
+import "../styles/FichaClienteGeneral.css";
 
 // ===== NUEVO: Ruta absoluta a la lista de clientes =====
 const LISTA_CLIENTES_PATH = "/Clientes/lista"; // cámbiala a "/clientes/lista" si tu ruta es minúscula
@@ -218,40 +219,49 @@ export default function FichaClienteLayout() {
         <div className={`main-content ${isSidebarOpen ? "expanded" : "collapsed"}`}>
           <div className="dashboard-content">
             <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
-              <div className="text-center mb-2">
-                <h5 className="mb-0 text-primary fw-semibold">{titulo}</h5>
-              </div>
-
-              <div className="d-flex justify-content-center flex-wrap gap-2 pb-2 border-bottom mb-3">
-                {TABS.map((t) => {
-                  const isClientes = t.id === "clientes";
-                  const to = isClientes ? LISTA_CLIENTES_PATH : (t.id === "" ? "." : t.id);
-                  return (
-                    <NavLink
-                      key={t.id}
-                      to={to}
-                      end={t.id === "" && !isClientes} // mantiene end solo para "General"
-                      className={({ isActive }) =>
-                        "btn btn-sm " + (isActive ? "btn-secondary" : "btn-light border")
-                      }
-                    >
-                      {t.label}
-                    </NavLink>
-                  );
-                })}
-              </div>
-
-              {loading && <div className="alert alert-info">Cargando cliente…</div>}
-              {error && (
-                <div className="alert alert-danger d-flex justify-content-between align-items-center">
-                  <div>{error}</div>
-                  <button className="btn btn-sm btn-light" onClick={fetchCliente}>
-                    Reintentar
-                  </button>
+              <div className="ficha-layout">
+                <div className="ficha-layout__header">
+                  <h1 className="ficha-layout__title">{titulo}</h1>
+                  <p className="ficha-layout__subtitle">Ficha del cliente</p>
                 </div>
-              )}
 
-              {!loading && !error && <Outlet />}
+                <div className="ficha-layout__tabs">
+                  {TABS.map((t) => {
+                    const isClientes = t.id === "clientes";
+                    const to = isClientes
+                      ? LISTA_CLIENTES_PATH
+                      : t.id === ""
+                      ? "."
+                      : t.id;
+                    return (
+                      <NavLink
+                        key={t.id}
+                        to={to}
+                        end={t.id === "" && !isClientes}
+                        className={({ isActive }) =>
+                          "ficha-layout__tab" + (isActive ? " is-active" : "")
+                        }
+                      >
+                        {t.label}
+                      </NavLink>
+                    );
+                  })}
+                </div>
+
+                <div className="ficha-layout__content">
+                  {loading && <div className="alert alert-info mb-0">Cargando cliente…</div>}
+                  {error && (
+                    <div className="alert alert-danger d-flex justify-content-between align-items-center mb-0">
+                      <div>{error}</div>
+                      <button className="btn btn-sm btn-light" onClick={fetchCliente}>
+                        Reintentar
+                      </button>
+                    </div>
+                  )}
+
+                  {!loading && !error && <Outlet />}
+                </div>
+              </div>
             </div>
           </div>
         </div>

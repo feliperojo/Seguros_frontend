@@ -1,0 +1,374 @@
+.agregar-dental-modal .modal-dialog {
+  max-width: 920px;
+}
+
+.agregar-dental-modal .modal-content {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 24px 48px rgba(15, 39, 68, 0.18);
+}
+
+.agregar-dental-modal__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  border: none;
+}
+
+.agregar-dental-modal__header .btn-close {
+  filter: invert(1) grayscale(1);
+  opacity: 0.85;
+}
+
+.agregar-dental-modal__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.agregar-dental-modal__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+}
+
+.agregar-dental-modal__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0.15rem 0 0;
+}
+
+.agregar-dental-modal__body {
+  padding: 1.5rem 1.75rem;
+  background: #f8f9fb;
+}
+
+.agregar-dental-modal__notice {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.875rem 1rem;
+  background: #eef4fb;
+  border: 1px solid #c5d9ed;
+  border-left: 4px solid #1a365d;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.agregar-dental-modal__notice-icon {
+  color: #1a365d;
+  font-size: 1rem;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.agregar-dental-modal__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.agregar-dental-modal__section:last-child {
+  margin-bottom: 0;
+}
+
+.agregar-dental-modal__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.agregar-dental-modal__section-title i {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.agregar-dental-modal__label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.01em;
+}
+
+.agregar-dental-modal__label-hint {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.agregar-dental-modal__field-readonly {
+  background: #f1f5f9 !important;
+  border-color: #e2e8f0 !important;
+  color: #475569;
+  cursor: default;
+}
+
+.agregar-dental-modal__inherited-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #1a365d;
+  background: #eef4fb;
+  border: 1px solid #c5d9ed;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  margin-left: 0.5rem;
+  vertical-align: middle;
+}
+
+.agregar-dental-modal__section--members {
+  border-color: #c5d9ed;
+  background: linear-gradient(180deg, #fafcff 0%, #fff 100%);
+}
+
+.agregar-dental-modal__section-desc {
+  font-size: 0.8125rem;
+  color: #64748b;
+  line-height: 1.45;
+  max-width: 640px;
+}
+
+.agregar-dental-modal__selection-summary {
+  display: flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: #475569;
+  margin-bottom: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  background: #f1f5f9;
+  border-radius: 8px;
+}
+
+.agregar-dental-modal__members-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.agregar-dental-modal__member-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agregar-dental-modal__member-card--selected {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 1px rgba(26, 54, 93, 0.1);
+}
+
+.agregar-dental-modal__member-card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  padding: 0.75rem 1rem;
+}
+
+.agregar-dental-modal__member-check {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}
+
+.agregar-dental-modal__member-check .form-check-input {
+  margin-top: 0.2rem;
+}
+
+.agregar-dental-modal__member-check .form-check-label {
+  cursor: pointer;
+  padding-left: 0.25rem;
+}
+
+.agregar-dental-modal__salud-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.agregar-dental-modal__member-card-body {
+  padding: 0 1rem 0.875rem 2.5rem;
+  border-top: 1px dashed #e2e8f0;
+  margin-top: 0;
+  padding-top: 0.75rem;
+}
+
+.agregar-dental-modal__inherited-label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+  margin-bottom: 0.2rem;
+}
+
+.agregar-dental-modal__inherited-value {
+  font-size: 0.8125rem;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+
+.agregar-dental-modal__member-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9375rem;
+}
+
+.agregar-dental-modal__copy-toggle {
+  padding: 0.875rem 1rem;
+  background: #fafbfc;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  margin-bottom: 0;
+}
+
+.agregar-dental-modal__copy-panel {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.agregar-dental-modal__member-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  margin-bottom: 0.5rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.agregar-dental-modal__member-row--selected {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 1px rgba(26, 54, 93, 0.08);
+  background: #fafcff;
+}
+
+.agregar-dental-modal__member-row .form-check {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.agregar-dental-modal__member-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.agregar-dental-modal__member-role {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.agregar-dental-modal__member-id-input {
+  width: 180px;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
+}
+
+.agregar-dental-modal__footer {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 1rem 1.5rem;
+  gap: 0.75rem;
+}
+
+.agregar-dental-modal__btn-cancel {
+  min-width: 100px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+}
+
+.agregar-dental-modal__btn-save {
+  min-width: 160px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.5rem 1.5rem;
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.agregar-dental-modal__btn-save:hover:not(:disabled) {
+  background: #0f2744;
+  border-color: #0f2744;
+}
+
+.agregar-dental-modal__btn-save:disabled {
+  opacity: 0.65;
+}
+
+.agregar-dental-modal__empty-state {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.agregar-dental-modal__empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #fef3c7;
+  color: #b45309;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  margin-bottom: 1rem;
+}
+
+.agregar-dental-modal .form-control,
+.agregar-dental-modal .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.agregar-dental-modal .form-control:focus,
+.agregar-dental-modal .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.12);
+}

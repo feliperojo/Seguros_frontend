@@ -13,11 +13,12 @@ import SincronizarContactos from "../components/SincronizarContactos";
 import { useAuth } from "../context/AuthContext";
 import { useHasPermission } from "../hooks/useHasPermission";
 import DateTimeDisplay from "./DateTimeDisplay";
+import NotificationsDropdown from "./Tareas/NotificationsDropdown";
 import { usersService } from "../services/adminApi";
 import { getExtensions } from "../services/ringCentralIntegrationApi";
 
 
-const Sidebar = ({ isOpen, toggleSidebar }) => {
+const Sidebar = ({ isOpen, toggleSidebar, notificationsProps = null }) => {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const { user } = useAuth();
   const userName = user?.name || storedUser?.name || "Usuario";
@@ -174,12 +175,28 @@ const Sidebar = ({ isOpen, toggleSidebar }) => {
         </div>
       )}
 
-      {/* Fecha y Hora */}
-      {isOpen && (
-        <div className="sidebar-datetime-container">
-          <DateTimeDisplay />
-        </div>
-      )}
+      {/* Fecha / hora + notificaciones */}
+      <div
+        className={`sidebar-notifications ${isOpen ? "" : "sidebar-notifications--collapsed"}`}
+      >
+        {isOpen && (
+          <div className="sidebar-datetime-container">
+            <DateTimeDisplay />
+          </div>
+        )}
+        {notificationsProps && (
+          <div className="sidebar-notifications__bell">
+            <NotificationsDropdown
+              currentUser={notificationsProps.currentUser}
+              pendientes={notificationsProps.pendientes}
+              loadingTask={notificationsProps.loadingTask}
+              onNotificationClick={notificationsProps.onNotificationClick}
+              onNotificationsChange={notificationsProps.onNotificationsChange}
+              menuPlacement="sidebar"
+            />
+          </div>
+        )}
+      </div>
 
       {/* Navegación */}
       <nav>

@@ -1,19 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Badge, Button, Card, Col, Form, Row, Spinner, Table } from "react-bootstrap";
+import { Alert, Badge, Button, Col, Form, Row, Spinner, Table } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
-import { FaExclamationTriangle, FaFileInvoiceDollar, FaSearch, FaSync } from "react-icons/fa";
+import {
+  FaExclamationTriangle,
+  FaFileInvoiceDollar,
+  FaFilter,
+  FaSearch,
+  FaSync,
+  FaTable,
+} from "react-icons/fa";
 import { Link, useSearchParams } from "react-router-dom";
 import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
+import {
+  FILTRO_PRODUCTO_LISTADO_OPCIONES,
+  normalizarFiltroProductoListado,
+} from "../constants/estadosGrupoFamiliar";
+import {
+  claseBadgeProductoCobertura,
+  etiquetaProductoCobertura,
+} from "../constants/coberturaTipos";
 import { getReporteCoberturasCanceladasRetiradas } from "../services/reportesService";
 import { fetchCompanies } from "../services/companies";
 import { formatDateMMDDYYYY } from "../utils/formatters";
 import { badgeCoberturaDefinida, COBERTURA_DEFINIDA } from "../utils/coberturaDefinida";
+import "../styles/HistorialCoberturasCanceladas.css";
+import "../styles/ReporteCoberturasCanceladasRetiradas.css";
 
 const DEFAULT_FILTERS = {
   page: 1,
   per_page: 25,
   tipo: "todos",
+  producto: "todos",
   search: "",
   date_from: "",
   date_to: "",
@@ -72,7 +90,6 @@ const formatDate = (value) => {
   return formatted || "—";
 };
 
-/** Badge del estado elegido en el modal; fallback por tipo de fórmula. */
 const badgeEstadoReporte = (row) => {
   const label = String(row?.estado || row?.cobertura_definida || "").trim();
   if (!label) {
@@ -92,7 +109,6 @@ const badgeEstadoReporte = (row) => {
     };
   }
 
-  // Registros antiguos sin cobertura_definida (Cancelada / Retirada)
   const lower = label.toLowerCase();
   return {
     text: label,
@@ -131,11 +147,25 @@ const renderClienteLink = (clienteId, label) => {
   );
 };
 
+const renderProducto = (row) => {
+  const tipo = row?.cobertura_tipo ?? row?.producto ?? "";
+  const label = etiquetaProductoCobertura(tipo);
+  return (
+    <span
+      className={`hcc-badge-producto ${claseBadgeProductoCobertura(tipo)}`}
+      title={label}
+    >
+      {label}
+    </span>
+  );
+};
+
 const ReporteCoberturasCanceladasRetiradasPage = () => {
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState(() => ({
     ...DEFAULT_FILTERS,
     tipo: searchParams.get("tipo") || DEFAULT_FILTERS.tipo,
+    producto: normalizarFiltroProductoListado(searchParams.get("producto")),
   }));
   const [searchInput, setSearchInput] = useState("");
   const [data, setData] = useState([]);
@@ -155,6 +185,7 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
     if (!params.mes) delete params.mes;
     if (!params.anio) delete params.anio;
     if (!params.motivo_cancelacion) delete params.motivo_cancelacion;
+    if (!params.producto || params.producto === "todos") delete params.producto;
     return params;
   }, [filters]);
 
@@ -211,6 +242,14 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
     setFilters((prev) => ({ ...prev, page: 1, search: searchInput.trim() }));
   };
 
+  const handleFilterChange = (key, value) => {
+    setFilters((prev) => ({ ...prev, page: 1, [key]: value }));
+  };
+
+  const handleProductoChange = (value) => {
+    handleFilterChange("producto", normalizarFiltroProductoListado(value));
+  };
+
   const handleSort = (column) => {
     setFilters((prev) => {
       const sameColumn = prev.sort_by === column;
@@ -228,248 +267,305 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
     return filters.sort_dir === "asc" ? " ↑" : " ↓";
   };
 
+  const limpiarFiltros = () => {
+    setSearchInput("");
+    setFilters({
+      ...DEFAULT_FILTERS,
+      tipo: searchParams.get("tipo") || DEFAULT_FILTERS.tipo,
+    });
+  };
+
   return (
-    <div className="container-fluid py-4">
+    <div className="container-fluid ccr-report-container">
       <Helmet>
         <title>Coberturas Canceladas y Retiradas</title>
       </Helmet>
 
-      <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-        <div>
-          <h2 className="mb-1 d-flex align-items-center gap-2">
-            <FaFileInvoiceDollar className="text-primary" />
-            Coberturas Canceladas y Retiradas
-          </h2>
-          <p className="text-muted mb-0">
-            Historial completo de cancelaciones y retiros. Cancelados: fecha de
-            cancelación y estado Cancelado. Retiros: estado Retirado o Terminado.{" "}
-            <Link to="/">Volver al panel principal</Link>
-          </p>
+      <div className="ccr-report">
+        <div className="ccr-report__header">
+          <div className="ccr-report__header-main">
+            <div className="ccr-report__header-icon" aria-hidden="true">
+              <FaFileInvoiceDollar />
+            </div>
+            <div>
+              <h1 className="ccr-report__title">Coberturas Canceladas y Retiradas</h1>
+              <p className="ccr-report__subtitle mb-0">
+                Historial completo de cancelaciones y retiros. Cancelados: fecha de cancelación y
+                estado Cancelado. Retiros: estado Retirado o Terminado.{" "}
+                <Link to="/">Volver al panel principal</Link>
+              </p>
+            </div>
+          </div>
+          <div className="ccr-report__header-actions">
+            <span className="ccr-report__chip-resumen">
+              Total: {resumen.total} · {resumen.cancelados} cancelados · {resumen.retiros} retiros
+            </span>
+            <Button variant="light" size="sm" onClick={loadReport} disabled={loading}>
+              <FaSync className={loading ? "fa-spin me-1" : "me-1"} />
+              Actualizar
+            </Button>
+          </div>
         </div>
-        <Button variant="outline-primary" onClick={loadReport} disabled={loading}>
-          <FaSync className={loading ? "spin" : ""} /> Actualizar
-        </Button>
-      </div>
 
-      {error && (
-        <Alert variant="danger" className="d-flex align-items-center">
-          <FaExclamationTriangle className="me-2" />
-          {error}
-        </Alert>
-      )}
+        <div className="ccr-report__body">
+          {error && (
+            <Alert variant="danger" className="d-flex align-items-center mb-3">
+              <FaExclamationTriangle className="me-2" />
+              {error}
+            </Alert>
+          )}
 
-      <Card className="mb-4">
-        <Card.Body>
-          <Row className="g-3 align-items-end">
-            <Col md={3}>
-              <Form.Label>Tipo</Form.Label>
-              <Form.Select
-                value={filters.tipo}
-                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, tipo: e.target.value }))}
-              >
-                <option value="todos">Todos</option>
-                <option value="cancelados">Cancelados</option>
-                <option value="retiros">Retiros</option>
-              </Form.Select>
-            </Col>
-            <Col md={3}>
-              <Form.Label>Desde</Form.Label>
-              <DateInputWithCalendar
-                valueIso={filters.date_from}
-                onChangeIso={(iso) =>
-                  setFilters((prev) => ({ ...prev, page: 1, date_from: iso || "" }))
-                }
-              />
-            </Col>
-            <Col md={3}>
-              <Form.Label>Hasta</Form.Label>
-              <DateInputWithCalendar
-                valueIso={filters.date_to}
-                onChangeIso={(iso) =>
-                  setFilters((prev) => ({ ...prev, page: 1, date_to: iso || "" }))
-                }
-                minIso={filters.date_from || undefined}
-              />
-            </Col>
-            <Col md={3}>
-              <Form onSubmit={handleSearch}>
-                <Form.Label>Buscar por nombre</Form.Label>
-                <div className="d-flex gap-2">
-                  <Form.Control
-                    placeholder="Nombre del cliente"
-                    value={searchInput}
-                    onChange={(e) => setSearchInput(e.target.value)}
-                  />
-                  <Button type="submit" variant="primary">
-                    <FaSearch />
-                  </Button>
-                </div>
-              </Form>
-            </Col>
-            <Col md={3}>
-              <Form.Label>Compañía</Form.Label>
-              <Form.Select
-                value={filters.compania_id}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, page: 1, compania_id: e.target.value }))
-                }
-              >
-                <option value="">Todas</option>
-                {companies.map((comp) => (
-                  <option key={comp.id} value={comp.id}>
-                    {comp.nombre}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md={3}>
-              <Form.Label>Mes de cancelación</Form.Label>
-              <Form.Select
-                value={filters.mes}
-                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, mes: e.target.value }))}
-              >
-                <option value="">Todos</option>
-                {MESES_CANCELACION.map((mes) => (
-                  <option key={mes.value} value={mes.value}>
-                    {mes.label}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md={2}>
-              <Form.Label>Año</Form.Label>
-              <Form.Select
-                value={filters.anio}
-                onChange={(e) => setFilters((prev) => ({ ...prev, page: 1, anio: e.target.value }))}
-              >
-                <option value="">Todos</option>
-                {aniosCancelacion.map((anio) => (
-                  <option key={anio} value={anio}>
-                    {anio}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
-            <Col md={4}>
-              <Form.Label>Motivo de cancelación</Form.Label>
-              <Form.Select
-                value={filters.motivo_cancelacion}
-                onChange={(e) =>
-                  setFilters((prev) => ({ ...prev, page: 1, motivo_cancelacion: e.target.value }))
-                }
-              >
-                <option value="">Todos</option>
-                {MOTIVOS_CANCELACION.map((motivo) => (
-                  <option key={motivo} value={motivo}>
-                    {motivo}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
+          <div className="ccr-report__section">
+            <div className="ccr-report__section-title">
+              <FaFilter aria-hidden="true" />
+              Filtros
+            </div>
+            <Row className="g-3 align-items-end">
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Tipo</div>
+                <Form.Select
+                  value={filters.tipo}
+                  onChange={(e) => handleFilterChange("tipo", e.target.value)}
+                >
+                  <option value="todos">Todos</option>
+                  <option value="cancelados">Cancelados</option>
+                  <option value="retiros">Retiros</option>
+                </Form.Select>
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Producto</div>
+                <Form.Select
+                  value={filters.producto}
+                  onChange={(e) => handleProductoChange(e.target.value)}
+                  aria-label="Filtrar por producto"
+                >
+                  {FILTRO_PRODUCTO_LISTADO_OPCIONES.map((opcion) => (
+                    <option key={opcion.value} value={opcion.value}>
+                      {opcion.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Desde</div>
+                <DateInputWithCalendar
+                  valueIso={filters.date_from}
+                  onChangeIso={(iso) => handleFilterChange("date_from", iso || "")}
+                />
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Hasta</div>
+                <DateInputWithCalendar
+                  valueIso={filters.date_to}
+                  onChangeIso={(iso) => handleFilterChange("date_to", iso || "")}
+                  minIso={filters.date_from || undefined}
+                />
+              </Col>
+              <Col md={6} lg={4}>
+                <Form onSubmit={handleSearch}>
+                  <div className="ccr-report__label">Buscar por nombre</div>
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      placeholder="Nombre del cliente"
+                      value={searchInput}
+                      onChange={(e) => setSearchInput(e.target.value)}
+                    />
+                    <Button type="submit" variant="primary">
+                      <FaSearch />
+                    </Button>
+                  </div>
+                </Form>
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Compañía</div>
+                <Form.Select
+                  value={filters.compania_id}
+                  onChange={(e) => handleFilterChange("compania_id", e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {companies.map((comp) => (
+                    <option key={comp.id} value={comp.id}>
+                      {comp.nombre}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={6} lg={2}>
+                <div className="ccr-report__label">Mes cancelación</div>
+                <Form.Select
+                  value={filters.mes}
+                  onChange={(e) => handleFilterChange("mes", e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {MESES_CANCELACION.map((mes) => (
+                    <option key={mes.value} value={mes.value}>
+                      {mes.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={6} lg={2}>
+                <div className="ccr-report__label">Año</div>
+                <Form.Select
+                  value={filters.anio}
+                  onChange={(e) => handleFilterChange("anio", e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {aniosCancelacion.map((anio) => (
+                    <option key={anio} value={anio}>
+                      {anio}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={12} lg={5}>
+                <div className="ccr-report__label">Motivo de cancelación</div>
+                <Form.Select
+                  value={filters.motivo_cancelacion}
+                  onChange={(e) => handleFilterChange("motivo_cancelacion", e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {MOTIVOS_CANCELACION.map((motivo) => (
+                    <option key={motivo} value={motivo}>
+                      {motivo}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={12} lg={2} className="ms-lg-auto">
+                <Button
+                  type="button"
+                  variant="outline-secondary"
+                  className="w-100"
+                  onClick={limpiarFiltros}
+                >
+                  Limpiar
+                </Button>
+              </Col>
+            </Row>
+          </div>
 
-      <div className="mb-3 small text-muted">
-        Total: <strong>{resumen.total}</strong> registros (
-        <strong>{resumen.cancelados}</strong> cancelados,{" "}
-        <strong>{resumen.retiros}</strong> retiros)
-      </div>
+          <div className="ccr-report__summary">
+            Mostrando <strong>{data.length}</strong> de <strong>{meta.total ?? 0}</strong>{" "}
+            registros filtrados
+          </div>
 
-      <Card>
-        <Card.Body className="p-0">
-          <div className="table-responsive">
-            <Table hover className="mb-0 align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th role="button" onClick={() => handleSort("grupo_familiar_id")}>
-                    GF{sortIcon("grupo_familiar_id")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("nombre")}>
-                    Nombre{sortIcon("nombre")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("compania")}>
-                    Compañía{sortIcon("compania")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("codigo_poliza")}>
-                    Numero ID{sortIcon("codigo_poliza")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("fecha_activacion")}>
-                    Fecha de activación{sortIcon("fecha_activacion")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("fecha_cancelacion")}>
-                    Fecha de expiración{sortIcon("fecha_cancelacion")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("fecha_retiro")}>
-                    Fecha de retiro{sortIcon("fecha_retiro")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("concepto")}>
-                    Concepto{sortIcon("concepto")}
-                  </th>
-                  <th role="button" onClick={() => handleSort("motivo")}>
-                    Motivo{sortIcon("motivo")}
-                  </th>
-                  <th className="text-end" role="button" onClick={() => handleSort("tipo")}>
-                    Estado{sortIcon("tipo")}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
+          <div className="ccr-report__section ccr-report__section--table">
+            <div className="ccr-report__section-title px-3 pt-3 mb-0 border-0">
+              <FaTable aria-hidden="true" />
+              Resultados
+            </div>
+            <div className="ccr-report__table-wrap hcc-table-wrap border-0 rounded-0">
+              <Table hover className="hcc-table mb-0 align-middle">
+                <thead>
                   <tr>
-                    <td colSpan={10} className="text-center py-5">
-                      <Spinner animation="border" size="sm" className="me-2" />
-                      Cargando informe...
-                    </td>
+                    <th
+                      className="ccr-report__sortable"
+                      onClick={() => handleSort("grupo_familiar_id")}
+                    >
+                      GF{sortIcon("grupo_familiar_id")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("nombre")}>
+                      Nombre{sortIcon("nombre")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("producto")}>
+                      Producto{sortIcon("producto")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("compania")}>
+                      Compañía{sortIcon("compania")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("codigo_poliza")}>
+                      Numero ID{sortIcon("codigo_poliza")}
+                    </th>
+                    <th
+                      className="ccr-report__sortable"
+                      onClick={() => handleSort("fecha_activacion")}
+                    >
+                      Fecha activación{sortIcon("fecha_activacion")}
+                    </th>
+                    <th
+                      className="ccr-report__sortable"
+                      onClick={() => handleSort("fecha_cancelacion")}
+                    >
+                      Fecha expiración{sortIcon("fecha_cancelacion")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("fecha_retiro")}>
+                      Fecha retiro{sortIcon("fecha_retiro")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("concepto")}>
+                      Concepto{sortIcon("concepto")}
+                    </th>
+                    <th className="ccr-report__sortable" onClick={() => handleSort("motivo")}>
+                      Motivo{sortIcon("motivo")}
+                    </th>
+                    <th
+                      className="text-end ccr-report__sortable"
+                      onClick={() => handleSort("tipo")}
+                    >
+                      Estado{sortIcon("tipo")}
+                    </th>
                   </tr>
-                ) : data.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="text-center text-muted py-5">
-                      No hay coberturas para los filtros seleccionados
-                    </td>
-                  </tr>
-                ) : (
-                  data.map((row) => (
-                    <tr key={`${row.id}-${row.fecha_cancelacion || ""}-${row.fecha_retiro || ""}-${row.tipo}`}>
-                      <td>{renderGrupoLink(row.grupo_familiar_id)}</td>
-                      <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
-                      <td>{row.compania || "—"}</td>
-                      <td>{row.codigo_poliza || "—"}</td>
-                      <td>{formatDate(row.fecha_activacion)}</td>
-                      <td>{formatDate(row.fecha_cancelacion)}</td>
-                      <td>{formatDate(row.fecha_retiro)}</td>
-                      <td>{row.concepto || "—"}</td>
-                      <td>{row.motivo || "—"}</td>
-                      <td className="text-end">
-                        {(() => {
-                          const badge = badgeEstadoReporte(row);
-                          return (
-                            <Badge bg={badge.bg} text={badge.textColor} pill>
-                              {badge.text}
-                            </Badge>
-                          );
-                        })()}
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={11} className="text-center py-5">
+                        <Spinner animation="border" size="sm" className="me-2" />
+                        Cargando informe...
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </Table>
+                  ) : data.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="ccr-report__empty">
+                        No hay coberturas para los filtros seleccionados
+                      </td>
+                    </tr>
+                  ) : (
+                    data.map((row) => (
+                      <tr
+                        key={`${row.id}-${row.fecha_cancelacion || ""}-${row.fecha_retiro || ""}-${row.tipo}`}
+                      >
+                        <td>{renderGrupoLink(row.grupo_familiar_id)}</td>
+                        <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
+                        <td>{renderProducto(row)}</td>
+                        <td>{row.compania || "—"}</td>
+                        <td>{row.codigo_poliza || "—"}</td>
+                        <td>{formatDate(row.fecha_activacion)}</td>
+                        <td>{formatDate(row.fecha_cancelacion)}</td>
+                        <td>{formatDate(row.fecha_retiro)}</td>
+                        <td>{row.concepto || "—"}</td>
+                        <td>{row.motivo || "—"}</td>
+                        <td className="text-end">
+                          {(() => {
+                            const badge = badgeEstadoReporte(row);
+                            return (
+                              <Badge bg={badge.bg} text={badge.textColor} pill>
+                                {badge.text}
+                              </Badge>
+                            );
+                          })()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </div>
           </div>
-        </Card.Body>
-      </Card>
 
-      {!loading && meta.total > 0 && (
-        <div className="mt-3">
-          <Pagination
-            currentPage={meta.page}
-            totalPages={meta.last_page}
-            onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
-            totalItems={meta.total}
-            itemsPerPage={meta.per_page}
-          />
+          {!loading && meta.total > 0 && (
+            <div className="mt-3">
+              <Pagination
+                currentPage={meta.page}
+                totalPages={meta.last_page}
+                onPageChange={(page) => setFilters((prev) => ({ ...prev, page }))}
+                totalItems={meta.total}
+                itemsPerPage={meta.per_page}
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };

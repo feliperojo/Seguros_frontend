@@ -21,6 +21,8 @@ const NotificationsDropdown = ({
   loadingTask = false,
   onNotificationClick,
   onNotificationsChange,
+  /** "topbar" (default): menú bajo la campana alineado a la derecha. "sidebar": abre hacia la derecha del sidebar. */
+  menuPlacement = "topbar",
 }) => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showReadSection, setShowReadSection] = useState(false);
@@ -397,16 +399,26 @@ const NotificationsDropdown = ({
             className="position-absolute bg-white rounded shadow-lg border"
             style={{
               width: '400px',
+              maxWidth: 'min(400px, calc(100vw - 24px))',
               maxHeight: '600px',
-              zIndex: 10000, // Z-index muy alto para estar por encima de todo
+              zIndex: 10000,
               overflow: 'hidden',
               boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
-              top: '100%',
-              right: '0',
-              marginTop: '8px',
-              position: 'absolute' // Asegurar que sea absolute
+              ...(menuPlacement === 'sidebar'
+                ? {
+                    top: 0,
+                    left: '100%',
+                    marginLeft: '8px',
+                    right: 'auto',
+                  }
+                : {
+                    top: '100%',
+                    right: 0,
+                    marginTop: '8px',
+                  }),
+              position: 'absolute',
             }}
-            onClick={(e) => e.stopPropagation()} // Prevenir cierre al hacer clic dentro
+            onClick={(e) => e.stopPropagation()}
           >
           {/* Header del dropdown */}
           <div

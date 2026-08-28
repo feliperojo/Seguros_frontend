@@ -5,6 +5,7 @@ import { Link } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
 import { formatDateMMDDYYYY } from "../../utils/formatters";
+import { esGrupoPlanPrivado } from "../../constants/estadosGrupoFamiliar";
 import { clasificarGrupoFamiliar } from "../../utils/grupoFamiliarClasificacion";
 
 const CATEGORIAS_ORDEN = [
@@ -317,7 +318,9 @@ export default function GrupoFamiliarClasificadoDetalle({
           {clasificado.personas_cobertura || 0} en cobertura
         </Badge>
         <Badge bg="secondary">
-          {clasificado.personas_taxes || 0} en taxes
+          {esGrupoPlanPrivado(clasificado)
+            ? "— en taxes"
+            : `${clasificado.personas_taxes || 0} en taxes`}
         </Badge>
       </div>
 

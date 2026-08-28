@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
+import { isDentalCoberturaTipo } from "../../constants/coberturaTipos";
 
 /** ProductosButtons
  *  Muestra coberturas con estado "Grupo Familiar" y abre la ficha al hacer click.
@@ -18,7 +19,7 @@ export default function ProductosButtons({
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState(null);
 
-  const Btn = ({ left, cobertura, gfId, estadoGrupo, onClick, loading }) => (
+  const Btn = ({ left, iconClass, cobertura, gfId, estadoGrupo, onClick, loading }) => (
     <button
       type="button"
       onClick={onClick}
@@ -26,7 +27,12 @@ export default function ProductosButtons({
       className="btn btn-light border w-100 text-dark py-2 rounded-1 shadow-sm d-flex align-items-center justify-content-between"
       style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
     >
-      <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3">
+      <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3 d-flex align-items-center gap-2">
+        <i
+          className={iconClass}
+          aria-hidden="true"
+          style={{ color: "#1a365d", width: "1rem", textAlign: "center" }}
+        />
         {left}
       </span>
       <CoberturaEstadoGfBadges
@@ -75,10 +81,12 @@ export default function ProductosButtons({
                 "Grupo Familiar";
               const loading = loadingId === gfId;
               const coberturaEstado = resolveCobertura?.(c) ?? c;
+              const esDental = isDentalCoberturaTipo(c?.cobertura_tipo);
               return (
                 <div className="col-md-12" key={c.id}>
                   <Btn
                     left={c.cobertura_tipo || "Sin tipo"}
+                    iconClass={esDental ? "fas fa-tooth" : "fas fa-heartbeat"}
                     cobertura={coberturaEstado}
                     gfId={gfId}
                     estadoGrupo={estadoGrupo}

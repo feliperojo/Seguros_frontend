@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, Fragment } from "react";
 import {
-  Container, Card, Table, Badge, Button,
+  Container, Table, Badge, Button,
   Form, InputGroup, Dropdown, Modal
 } from "react-bootstrap";
 import Pagination from "../components/Pagination";
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport,
-  FaChevronDown, FaChevronUp,
+  FaChevronDown, FaChevronUp, FaUsers, FaChartBar,
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -20,8 +20,13 @@ import GrupoFamiliarClasificadoDetalle from "../components/GrupoFamiliar/GrupoFa
 import {
   labelEstadoGrupoParaDisplay,
   grupoFamiliarDeleteRequiereAdmin,
-  personasCoberturaParaListado,
+  personasSaludDentalParaListado,
+  personasPrivadasParaListado,
+  personasTaxesParaListado,
+  FILTRO_PRODUCTO_LISTADO_OPCIONES,
+  normalizarFiltroProductoListado,
 } from "../constants/estadosGrupoFamiliar";
+import { ordenarEtiquetasProductoListado } from "../constants/coberturaTipos";
 import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
 import { Helmet } from "react-helmet-async";
 
@@ -63,6 +68,9 @@ const GruposFamiliaresListado = () => {
     ];
     return validos.includes(fromUrl) ? fromUrl : "Todos los estados";
   });
+  const [selectedProducto, setSelectedProducto] = useState(() =>
+    normalizarFiltroProductoListado(searchParams.get("producto"))
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
@@ -144,6 +152,19 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     setCurrentPage(1);
   };
 
+  const handleProductoChange = (value) => {
+    const next = normalizarFiltroProductoListado(value);
+    setSelectedProducto(next);
+    const params = new URLSearchParams(searchParams);
+    if (next === "todos") {
+      params.delete("producto");
+    } else {
+      params.set("producto", next);
+    }
+    setSearchParams(params, { replace: true });
+    setCurrentPage(1);
+  };
+
   const etiquetaAnio = (year) => {
     if (year === ANIO_ACTUAL) return " (actual)";
     if (year > ANIO_ACTUAL) return " (futuro)";
@@ -184,7 +205,7 @@ useEffect(() => {
   useEffect(() => {
     fetchGrupos();
     setGruposExpandidos(new Set());
-  }, [selectedStatus, debouncedSearch, currentPage, anioSeleccionado]);
+  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, anioSeleccionado]);
 
   const toggleGrupoExpandido = (grupoId) => {
     setGruposExpandidos((prev) => {
@@ -198,7 +219,7 @@ useEffect(() => {
   // Volver a la primera página al cambiar búsqueda o filtro de estado
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedStatus]);
+  }, [searchTerm, selectedStatus, selectedProducto]);
 
   // Función para mapear el código del estado al formato que espera el endpoint
   const mapearEstadoParaEndpoint = (codigoEstado) => {
@@ -244,6 +265,10 @@ useEffect(() => {
       // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
       if (anioSeleccionado !== ANIO_ACTUAL) {
         params.set("anio", String(anioSeleccionado));
+      }
+
+      if (selectedProducto && selectedProducto !== "todos") {
+        params.set("producto", selectedProducto);
       }
 
       const response = await apiRequest(
@@ -386,9 +411,37 @@ useEffect(() => {
   };
 
 
-  const getProductoNombre = (grupo) => grupo.producto || "-";
+  const getProductoNombre = (grupo) =>
+    ordenarEtiquetasProductoListado(grupo.producto || "-");
 
   const getCompaniaNombre = (grupo) => grupo.compania_nombre || "-";
+
+  const renderPersonasCP = (grupo) => {
+    const { privadas, label } = personasPrivadasParaListado(grupo);
+    return (
+      <span title={`Coberturas privadas: ${privadas}`} className="gf-listado__cp">
+        {label}
+      </span>
+    );
+  };
+
+  const renderPersonasSD = (grupo) => {
+    const { salud, dental, label } = personasSaludDentalParaListado(grupo);
+    return (
+      <span title={`Salud MS: ${salud} · Dental MS: ${dental}`} className="gf-listado__sd">
+        {label}
+      </span>
+    );
+  };
+
+  const renderPersonasTaxes = (grupo) => {
+    const { taxes, label } = personasTaxesParaListado(grupo);
+    return (
+      <span title={`Personas en taxes: ${taxes}`} className="gf-listado__taxes">
+        {label}
+      </span>
+    );
+  };
 
   const getTomadorNombre = (grupo) => grupo.tomador_nombre || "Sin asignar";
 
@@ -420,265 +473,296 @@ useEffect(() => {
   };
 
   return (
-    
-    <Container fluid className="py-4">
-       <Helmet>
-              <title>Vantun/List Grupo Familiar</title>
-            </Helmet>
-      
-      {/* Título y descripción */}
-      <div className="mb-4">
-        <h3 className="mb-2 fw-bold text-dark">Grupos Familiares</h3>
-        <p className="text-muted mb-0" style={{ fontSize: '0.95rem', lineHeight: '1.5' }}>
-          Gestión y administración de grupos familiares asegurados en su cartera de seguros de vida.
-        </p>
-      </div>
+    <Container fluid className="gf-listado-container py-3">
+      <Helmet>
+        <title>Vantun/List Grupo Familiar</title>
+      </Helmet>
 
-      {/* Barra de resumen de estados */}
-      <ResumenGruposEstados 
-        onEstadoClick={handleEstadoClickFromResumen}
-        estadoSeleccionado={selectedStatus}
-      />
+      <div className="gf-listado">
+        <div className="gf-listado__header">
+          <div className="gf-listado__header-icon" aria-hidden="true">
+            <FaUsers />
+          </div>
+          <div>
+            <h1 className="gf-listado__title">Grupos Familiares</h1>
+            <p className="gf-listado__subtitle">
+              Gestión y administración de grupos familiares asegurados en su cartera de seguros.
+            </p>
+          </div>
+        </div>
 
-      <Card className="shadow-sm mb-4">
-        <Card.Body>
-          <div className="d-flex flex-column flex-md-row gap-3 mb-4">
-            <div className="flex-grow-1">
-              <InputGroup>
-                <Form.Control
-                  placeholder="Buscar por ID, tomador o persona de contacto..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-                <Button variant="outline-secondary">
-                  <FaSearch />
-                </Button>
-              </InputGroup>
+        <div className="gf-listado__body">
+          <div className="gf-listado__section">
+            <div className="gf-listado__section-title">
+              <FaChartBar />
+              Resumen por estado
             </div>
-            <div style={{ minWidth: "200px" }}>
-              <Form.Select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-              >
-                <option value="Todos los estados">Todos los estados</option>
-                <option value="prospecto">Prospecto</option>
-                <option value="cotizacion">Cotización</option>
-                <option value="seguimiento">Seguimiento</option>
-                <option value="toma_datos">Toma de Datos</option>
-                <option value="inscripcion_ini">Inscripción / Confirmación</option>
-                <option value="grupo_familiar_activo">Grupo Familiar (activos)</option>
-                <option value="grupo_familiar_inactivo">Grupo Familiar (inactivos)</option>
-                <option value="grupo_familiar">Grupo Familiar (todos)</option>
-                <option value="descartado">Descartado</option>
-              </Form.Select>
-            </div>
-            <div style={{ minWidth: "140px" }}>
-              <Form.Select
-                size="sm"
-                style={{ minWidth: "7rem", height: "100%" }}
-                value={anioSeleccionado}
-                onChange={(e) => handleAnioChange(e.target.value)}
-                aria-label="Año del plan"
-              >
-                {aniosDisponibles.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                    {etiquetaAnio(year)}
-                  </option>
-                ))}
-              </Form.Select>
-            </div>
-            <div>
-              <Button variant="outline-secondary">
-                <FaFilter className="me-2" />
-                Filtros
-              </Button>
-            </div>
+            <ResumenGruposEstados
+              onEstadoClick={handleEstadoClickFromResumen}
+              estadoSeleccionado={selectedStatus}
+            />
           </div>
 
-          {loading ? (
-            <div className="text-center py-5">
-              <div className="spinner-border text-primary" role="status">
-                <span className="visually-hidden">Cargando...</span>
-              </div>
-              <p className="mt-3">Cargando grupos familiares...</p>
+          <div className="gf-listado__section gf-listado__section--table">
+            <div className="gf-listado__section-title">
+              <FaFilter />
+              Búsqueda y resultados
             </div>
-          ) : (
-            <>
-              {grupos.length === 0 ? (
-                <div className="text-center py-5">
-                  <p className="text-muted mb-0">No se encontraron grupos familiares</p>
-                </div>
-              ) : (
-                <>
-                <div className="d-flex justify-content-between align-items-center mb-3 text-muted small">
-                  <span>
-                    Mostrando {rangeStart}–{rangeEnd} de {totalFiltered} grupo{totalFiltered !== 1 ? "s" : ""}
-                  </span>
-                  {totalPages > 1 && (
-                    <span>Página {safeCurrentPage} de {totalPages}</span>
-                  )}
-                </div>
-                <div className="table-responsive">
-                  <Table hover className="align-middle">
-                    <thead>
-                      <tr>
-                        <th style={{ width: "2.5rem" }} aria-label="Expandir" />
-                        <th>ID GF</th>
-                        <th>TOMADOR</th>
-                        <th>P. COBERTURA</th>
-                        <th>P. TAXES</th>
-                        <th>ASEGURADORA</th>
-                        <th>RESPONSABLE</th>
-                        <th>PROCESO</th>
-                        <th>PRODUCTO</th>
-                        <th className="text-center">ACCIONES</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {grupos.map((grupo) => {
-                        const estaExpandido = gruposExpandidos.has(grupo.id);
-                        return (
-                        <Fragment key={grupo.id}>
-                        <tr
-                          className={estaExpandido ? "table-active" : undefined}
-                          style={{ cursor: "pointer" }}
-                          onClick={() => toggleGrupoExpandido(grupo.id)}
-                        >
-                          <td className="text-muted">
-                            {estaExpandido ? <FaChevronUp /> : <FaChevronDown />}
-                          </td>
-                  <td>
-                          {grupo.id ? (
-                            <Link
-                              to={buildDetallePath(grupo.id)}
-                              className="text-decoration-none"
-                              title="Ver detalle del grupo"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {grupo.id}
-                            </Link>
-                          ) : (
-                            "Sin asignar"
-                          )}
-                        </td>
-                          <td>{getTomadorNombre(grupo)}</td>
-                          <td>
-                            <span className="badge rounded-circle bg-info text-white me-1">
-                              {personasCoberturaParaListado(grupo)}
-                            </span>
-                            <span className="text-muted">en cobertura</span>
-                          </td>
-                          <td>{grupo.personas_taxes || "0"}</td>
-                          <td>{getCompaniaNombre(grupo)}</td>
-                          <td>
-                            <Badge
-                              pill
-                              bg="primary"
-                            >
-                              {grupo.responsable || "Sin responsable"}
-                            </Badge>
-                          </td>
-                          <td>
-                            {grupo.id ? (
-                              <Link
-                                to={buildDetallePath(grupo.id)}
-                                className="text-decoration-none text-dark fw-bold"
-                                title="Ver detalle del grupo"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {getGrupoEstado(grupo).estado}
-                              </Link>
-                            ) : (
-                              <span className="fw-bold">
-                                {getGrupoEstado(grupo).estado}
-                              </span>
-                            )}
-                          </td>
-                          <td>{getProductoNombre(grupo)}</td>
 
-                          <td>
-                            <div className="d-flex justify-content-center gap-2">
-                              {false && (
-                                <Button
-                                  variant="outline-primary"
-                                  size="sm"
-                                  onClick={() => handleOpenViewModal(grupo)}
-                                  title="Ver detalles"
-                                >
-                                  <FaEye />
-                                </Button>
-                              )}
-                              {false && (
-                                <Button
-                                  variant="outline-success"
-                                  size="sm"
-                                  onClick={() => handleOpenEditModal(grupo)}
-                                  title="Editar grupo familiar"
-                                >
-                                  <FaEdit />
-                                </Button>
-                              )}
-                              <Button
-                                variant="outline-danger"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(grupo);
-                                }}
-                                title="Eliminar grupo familiar"
-                              >
-                                <FaTrashAlt />
-                              </Button>
-                              <Button
-                                variant="outline-primary"
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setGrupoFamiliarId(grupo.id);
-                                  setShowDocumentosModal(true);
-                                }}
-                              >
-                                <FaFile />
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                        {estaExpandido && (
-                          <tr className="grupo-listado-acordeon-detalle">
-                            <td colSpan={10} className="bg-white border-bottom p-3">
-                              <GrupoFamiliarClasificadoDetalle
-                                grupoId={grupo.id}
-                                anio={
-                                  anioSeleccionado !== ANIO_ACTUAL
-                                    ? anioSeleccionado
-                                    : null
-                                }
-                                detallePath={buildDetallePath(grupo.id)}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                        </Fragment>
-                        );
-                      })}
-                    </tbody>
-                  </Table>
-                </div>
-                <div className="d-flex justify-content-center mt-4">
-                  <Pagination
-                    currentPage={safeCurrentPage}
-                    totalPages={totalPages}
-                    onPageChange={setCurrentPage}
-                    disabled={loading}
+            <div className="d-flex flex-column flex-md-row gap-3 mb-3 align-items-md-end">
+              <div className="flex-grow-1">
+                <div className="gf-listado__label">Buscar</div>
+                <InputGroup>
+                  <Form.Control
+                    placeholder="Buscar por ID, tomador o persona de contacto..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
                   />
+                  <Button variant="outline-secondary" className="gf-listado__btn-icon">
+                    <FaSearch />
+                  </Button>
+                </InputGroup>
+              </div>
+              <div style={{ minWidth: "200px" }}>
+                <div className="gf-listado__label">Estado</div>
+                <Form.Select
+                  value={selectedStatus}
+                  onChange={(e) => setSelectedStatus(e.target.value)}
+                >
+                  <option value="Todos los estados">Todos los estados</option>
+                  <option value="prospecto">Prospecto</option>
+                  <option value="cotizacion">Cotización</option>
+                  <option value="seguimiento">Seguimiento</option>
+                  <option value="toma_datos">Toma de Datos</option>
+                  <option value="inscripcion_ini">Inscripción / Confirmación</option>
+                  <option value="grupo_familiar_activo">Grupo Familiar (activos)</option>
+                  <option value="grupo_familiar_inactivo">Grupo Familiar (inactivos)</option>
+                  <option value="grupo_familiar">Grupo Familiar (todos)</option>
+                  <option value="descartado">Descartado</option>
+                </Form.Select>
+              </div>
+              <div style={{ minWidth: "140px" }}>
+                <div className="gf-listado__label">Año del plan</div>
+                <Form.Select
+                  value={anioSeleccionado}
+                  onChange={(e) => handleAnioChange(e.target.value)}
+                  aria-label="Año del plan"
+                >
+                  {aniosDisponibles.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                      {etiquetaAnio(year)}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div style={{ minWidth: "200px" }}>
+                <div className="gf-listado__label">Producto</div>
+                <Form.Select
+                  value={selectedProducto}
+                  onChange={(e) => handleProductoChange(e.target.value)}
+                  aria-label="Filtrar por producto"
+                >
+                  {FILTRO_PRODUCTO_LISTADO_OPCIONES.map((opcion) => (
+                    <option key={opcion.value} value={opcion.value}>
+                      {opcion.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div>
+                <Button variant="outline-secondary" className="gf-listado__btn-icon">
+                  <FaFilter className="me-2" />
+                  Filtros
+                </Button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="text-center py-5">
+                <div className="spinner-border" style={{ color: "#1a365d" }} role="status">
+                  <span className="visually-hidden">Cargando...</span>
                 </div>
-                </>
-              )}
-            </>
-          )}
-        </Card.Body>
-      </Card>
+                <p className="mt-3 text-muted small mb-0">Cargando grupos familiares...</p>
+              </div>
+            ) : (
+              <>
+                {grupos.length === 0 ? (
+                  <div className="gf-listado__empty">
+                    No se encontraron grupos familiares
+                  </div>
+                ) : (
+                  <>
+                    <div className="d-flex justify-content-between align-items-center gf-listado__summary">
+                      <span>
+                        Mostrando <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> de{" "}
+                        <strong>{totalFiltered}</strong> grupo
+                        {totalFiltered !== 1 ? "s" : ""}
+                      </span>
+                      {totalPages > 1 && (
+                        <span>
+                          Página {safeCurrentPage} de {totalPages}
+                        </span>
+                      )}
+                    </div>
+                    <div className="gf-listado__table-wrap table-responsive">
+                      <Table hover className="align-middle gf-listado__table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: "2.5rem" }} aria-label="Expandir" />
+                            <th>ID GF</th>
+                            <th>Tomador</th>
+                            <th title="Coberturas privadas activas (Vision, Plan Dental, etc.)">C.Privado</th>
+                            <th title="Miembros activos Salud MS / Dental MS">Salud/Dental Ms</th>
+                            <th>P. Taxes</th>
+                            <th>Aseguradora</th>
+                            <th>Proceso</th>
+                            <th>Producto</th>
+                            <th>Responsable</th>
+                            <th className="text-center">Acciones</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grupos.map((grupo) => {
+                            const estaExpandido = gruposExpandidos.has(grupo.id);
+                            return (
+                              <Fragment key={grupo.id}>
+                                <tr
+                                  className={estaExpandido ? "table-active" : undefined}
+                                  style={{ cursor: "pointer" }}
+                                  onClick={() => toggleGrupoExpandido(grupo.id)}
+                                >
+                                  <td className="text-muted">
+                                    {estaExpandido ? <FaChevronUp /> : <FaChevronDown />}
+                                  </td>
+                                  <td>
+                                    {grupo.id ? (
+                                      <Link
+                                        to={buildDetallePath(grupo.id)}
+                                        className="text-decoration-none"
+                                        title="Ver detalle del grupo"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {grupo.id}
+                                      </Link>
+                                    ) : (
+                                      "Sin asignar"
+                                    )}
+                                  </td>
+                                  <td>{getTomadorNombre(grupo)}</td>
+                                  <td>{renderPersonasCP(grupo)}</td>
+                                  <td>{renderPersonasSD(grupo)}</td>
+                                  <td>{renderPersonasTaxes(grupo)}</td>
+                                  <td>{getCompaniaNombre(grupo)}</td>
+                                  <td>
+                                    {grupo.id ? (
+                                      <Link
+                                        to={buildDetallePath(grupo.id)}
+                                        className="text-decoration-none fw-bold"
+                                        title="Ver detalle del grupo"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {getGrupoEstado(grupo).estado}
+                                      </Link>
+                                    ) : (
+                                      <span className="fw-bold">
+                                        {getGrupoEstado(grupo).estado}
+                                      </span>
+                                    )}
+                                  </td>
+                                  <td>
+                                    <span className="gf-listado__producto">
+                                      {getProductoNombre(grupo)}
+                                    </span>
+                                  </td>
+                                  <td>
+                                    <Badge pill className="gf-listado__badge-responsable">
+                                      {grupo.responsable || "Sin responsable"}
+                                    </Badge>
+                                  </td>
+                                  <td>
+                                    <div className="d-flex justify-content-center gap-2 gf-listado__actions">
+                                      {false && (
+                                        <Button
+                                          variant="outline-primary"
+                                          size="sm"
+                                          onClick={() => handleOpenViewModal(grupo)}
+                                          title="Ver detalles"
+                                        >
+                                          <FaEye />
+                                        </Button>
+                                      )}
+                                      {false && (
+                                        <Button
+                                          variant="outline-success"
+                                          size="sm"
+                                          onClick={() => handleOpenEditModal(grupo)}
+                                          title="Editar grupo familiar"
+                                        >
+                                          <FaEdit />
+                                        </Button>
+                                      )}
+                                      <Button
+                                        variant="outline-danger"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDelete(grupo);
+                                        }}
+                                        title="Eliminar grupo familiar"
+                                      >
+                                        <FaTrashAlt />
+                                      </Button>
+                                      <Button
+                                        variant="outline-secondary"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setGrupoFamiliarId(grupo.id);
+                                          setShowDocumentosModal(true);
+                                        }}
+                                      >
+                                        <FaFile />
+                                      </Button>
+                                    </div>
+                                  </td>
+                                </tr>
+                                {estaExpandido && (
+                                  <tr className="grupo-listado-acordeon-detalle">
+                                    <td colSpan={11} className="bg-white border-bottom p-3">
+                                      <GrupoFamiliarClasificadoDetalle
+                                        grupoId={grupo.id}
+                                        anio={
+                                          anioSeleccionado !== ANIO_ACTUAL
+                                            ? anioSeleccionado
+                                            : null
+                                        }
+                                        detallePath={buildDetallePath(grupo.id)}
+                                      />
+                                    </td>
+                                  </tr>
+                                )}
+                              </Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </Table>
+                    </div>
+                    <div className="d-flex justify-content-center mt-4">
+                      <Pagination
+                        currentPage={safeCurrentPage}
+                        totalPages={totalPages}
+                        onPageChange={setCurrentPage}
+                        disabled={loading}
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       <SuperAdminPasswordModal
         show={showAdminPasswordModal}
@@ -742,9 +826,6 @@ useEffect(() => {
         onHide={() => setShowDocumentosModal(false)}
         grupoFamiliarId={grupoFamiliarId} // Pasar el ID del grupo familiar
       />
-
-
-
     </Container>
   );
 };

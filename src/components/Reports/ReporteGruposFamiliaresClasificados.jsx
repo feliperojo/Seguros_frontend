@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   Container,
-  Card,
   Table,
   Badge,
   Button,
@@ -21,13 +20,15 @@ import {
   FaCheckCircle,
   FaTimesCircle,
   FaUserSlash,
-  FaExclamationTriangle
+  FaExclamationTriangle,
+  FaChartBar,
 } from "react-icons/fa";
 import apiRequest from "../../services/api";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
 import { esGrupoEnFlujoCotizacion } from "../../constants/estadosGrupoFamiliar";
+import "../../styles/ReporteGruposFamiliaresClasificados.css";
 
 /**
  * Utilidad para verificar si una fecha está vacía o no válida
@@ -555,23 +556,14 @@ const ReporteGruposFamiliaresClasificados = () => {
     const Icon = estadoInfo?.icon || FaUsers;
 
     return (
-      <Card key={categoria} className="mb-3 border-start border-4" style={{
-        borderLeftColor: estadoInfo?.variant === "success" ? "#198754" :
-                        estadoInfo?.variant === "danger" ? "#dc3545" :
-                        estadoInfo?.variant === "warning" ? "#ffc107" :
-                        estadoInfo?.variant === "secondary" ? "#6c757d" : "#0dcaf0"
-      }}>
-        <Card.Header className="d-flex align-items-center justify-content-between bg-light">
-          <div className="d-flex align-items-center gap-2">
-            <Icon className={`text-${estadoInfo?.variant || "info"}`} />
-            <strong>{estadoInfo?.label || categoria}</strong>
-            <Badge bg={estadoInfo?.variant || "info"} className="ms-2">
-              {miembros.length}
-            </Badge>
-          </div>
-        </Card.Header>
-        <Card.Body>
-          <Table responsive hover size="sm">
+      <div key={categoria} className={`rgfc__categoria rgfc__categoria--${categoria}`}>
+        <div className="rgfc__categoria-header">
+          <Icon aria-hidden="true" />
+          <strong>{estadoInfo?.label || categoria}</strong>
+          <span className="rgfc__badge rgfc__badge--count">{miembros.length}</span>
+        </div>
+        <div className="table-responsive">
+          <Table responsive hover size="sm" className="rgfc__categoria-table align-middle">
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -595,16 +587,14 @@ const ReporteGruposFamiliaresClasificados = () => {
                       {miembro.cliente?.nombre_completo || "Sin nombre"}
                     </Link>
                     {miembro.parentesco?.toUpperCase() === "TOMADOR" && (
-                      <Badge bg="warning" text="dark" className="ms-2">
-                        TOMADOR
-                      </Badge>
+                      <span className="rgfc__badge rgfc__badge--tomador ms-2">TOMADOR</span>
                     )}
                   </td>
                   <td>{miembro.parentesco || "-"}</td>
                   <td>
-                    <Badge bg={miembro.estadoClasificado.variant}>
+                    <span className="rgfc__badge rgfc__badge--estado">
                       {miembro.estado_cobertura || "Sin definir"}
-                    </Badge>
+                    </span>
                   </td>
                   <td>{miembro.cobertura_tipo || "-"}</td>
                   <td>{miembro.compania?.nombre || "-"}</td>
@@ -629,17 +619,37 @@ const ReporteGruposFamiliaresClasificados = () => {
               ))}
             </tbody>
           </Table>
-        </Card.Body>
-      </Card>
+        </div>
+      </div>
     );
   };
 
   if (loading) {
     return (
-      <Container fluid className="py-4">
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" />
-          <p className="mt-3">Cargando grupos familiares...</p>
+      <Container fluid className="rgfc-container py-3">
+        <Helmet>
+          <title>Vantun/Reporte Grupos Familiares Clasificados</title>
+        </Helmet>
+        <div className="rgfc">
+          <div className="rgfc__header">
+            <div className="rgfc__header-main">
+              <div className="rgfc__header-icon" aria-hidden="true">
+                <FaUsers />
+              </div>
+              <div>
+                <h1 className="rgfc__title">Reporte de Grupos Familiares Clasificados</h1>
+                <p className="rgfc__subtitle">
+                  Vista detallada de grupos familiares y sus miembros clasificados por estado de cobertura
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="rgfc__body">
+            <div className="rgfc__loading">
+              <Spinner animation="border" />
+              <p className="mt-3 mb-0">Cargando grupos familiares...</p>
+            </div>
+          </div>
         </div>
       </Container>
     );
@@ -647,36 +657,49 @@ const ReporteGruposFamiliaresClasificados = () => {
 
   if (error) {
     return (
-      <Container fluid className="py-4">
+      <Container fluid className="rgfc-container py-3">
         <Alert variant="danger">{error}</Alert>
       </Container>
     );
   }
 
+  const totalMiembros = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.total, 0);
+  const totalActivos = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.activos_con_cobertura, 0);
+  const totalCotizacion = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cotizacion, 0);
+  const totalCancelados = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cancelados, 0);
+  const totalRetirados = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.retirados, 0);
+
   return (
-    <Container fluid className="py-4">
+    <Container fluid className="rgfc-container py-3">
       <Helmet>
         <title>Vantun/Reporte Grupos Familiares Clasificados</title>
       </Helmet>
 
-      {/* Encabezado */}
-      <div className="mb-4">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <div>
-            <h3 className="mb-2 fw-bold text-dark">Reporte de Grupos Familiares Clasificados</h3>
-            <p className="text-muted mb-0">
-              Vista detallada de grupos familiares y sus miembros clasificados por estado de cobertura
-            </p>
+      <div className="rgfc">
+        <div className="rgfc__header">
+          <div className="rgfc__header-main">
+            <div className="rgfc__header-icon" aria-hidden="true">
+              <FaUsers />
+            </div>
+            <div>
+              <h1 className="rgfc__title">Reporte de Grupos Familiares Clasificados</h1>
+              <p className="rgfc__subtitle">
+                Vista detallada de grupos familiares y sus miembros clasificados por estado de cobertura
+              </p>
+            </div>
           </div>
-          <Button variant="outline-primary" className="d-flex align-items-center gap-2">
+          <Button className="rgfc__btn-export d-flex align-items-center gap-2">
             <FaFileExport />
             Exportar
           </Button>
         </div>
 
-        {/* Filtros */}
-        <Card className="mb-4">
-          <Card.Body>
+        <div className="rgfc__body">
+          <div className="rgfc__section">
+            <div className="rgfc__section-title">
+              <FaSearch />
+              Filtros
+            </div>
             <Row className="g-3">
               <Col md={12} lg={5}>
                 <InputGroup>
@@ -723,231 +746,221 @@ const ReporteGruposFamiliaresClasificados = () => {
                 </Form.Select>
               </Col>
             </Row>
-          </Card.Body>
-        </Card>
+          </div>
+
+          <div className="rgfc__section">
+            <div className="rgfc__section-title">
+              <FaChartBar />
+              Resumen
+            </div>
+            <div className="rgfc__kpis">
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Total Grupos</span>
+                <span className="rgfc__kpi-value">{gruposFiltrados.length}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Total Miembros</span>
+                <span className="rgfc__kpi-value">{totalMiembros}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Activos con Cobertura</span>
+                <span className="rgfc__kpi-value">{totalActivos}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Cotización</span>
+                <span className="rgfc__kpi-value">{totalCotizacion}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Cancelados</span>
+                <span className="rgfc__kpi-value">{totalCancelados}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Retirados</span>
+                <span className="rgfc__kpi-value">{totalRetirados}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="rgfc__section" style={{ marginBottom: 0 }}>
+            <div className="rgfc__section-title">
+              <FaUsers />
+              Grupos familiares
+            </div>
+
+            {gruposFiltrados.length === 0 ? (
+              <div className="rgfc__empty">No se encontraron grupos familiares</div>
+            ) : (
+              <div className="rgfc__grupos">
+                {gruposFiltrados.map((grupo) => {
+                  const estaExpandido = gruposExpandidos.has(grupo.id);
+                  const coberturaTipos = getCoberturaTiposGrupo(grupo);
+                  return (
+                    <div
+                      key={grupo.id}
+                      className={`rgfc__grupo${estaExpandido ? " is-open" : ""}`}
+                    >
+                      <div
+                        className="rgfc__grupo-header"
+                        onClick={() => toggleGrupo(grupo.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleGrupo(grupo.id);
+                          }
+                        }}
+                      >
+                        <div className="rgfc__grupo-main">
+                          <Link
+                            to={`/grupo_familiar/${grupo.id}`}
+                            className="rgfc__grupo-id"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Grupo ID: {grupo.id}
+                          </Link>
+                          <span className="rgfc__badge rgfc__badge--tomador">
+                            {getTomadorNombre(grupo)}
+                          </span>
+                          {coberturaTipos.length > 0 ? (
+                            coberturaTipos.map((tipo) => (
+                              <span key={tipo} className="rgfc__badge rgfc__badge--producto">
+                                {tipo}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="rgfc__badge rgfc__badge--producto">Sin producto</span>
+                          )}
+                          <span className="rgfc__badge rgfc__badge--meta">
+                            {grupo.personas_cobertura || 0} en cobertura
+                          </span>
+                          <span className="rgfc__badge rgfc__badge--meta">
+                            {grupo.personas_taxes || 0} en taxes
+                          </span>
+                        </div>
+                        <div className="rgfc__grupo-end">
+                          <span className="rgfc__badge rgfc__badge--responsable">
+                            {grupo.responsable || "Sin responsable"}
+                          </span>
+                          <span className="rgfc__grupo-chevron" aria-hidden="true">
+                            {estaExpandido ? <FaChevronUp /> : <FaChevronDown />}
+                          </span>
+                        </div>
+                      </div>
+
+                      {estaExpandido && (
+                        <div className="rgfc__grupo-body">
+                          <div className="rgfc__grupo-stats">
+                            <div className="rgfc__grupo-stat">
+                              <span>Total Miembros</span>
+                              <strong>{grupo.estadisticas.total}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Activos</span>
+                              <strong>{grupo.estadisticas.activos_con_cobertura}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Cotización</span>
+                              <strong>{grupo.estadisticas.cotizacion}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Cancelados</span>
+                              <strong>{grupo.estadisticas.cancelados}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Retirados</span>
+                              <strong>{grupo.estadisticas.retirados}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Sin Cobertura</span>
+                              <strong>{grupo.estadisticas.sin_cobertura}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Otros</span>
+                              <strong>{grupo.estadisticas.otros_estados}</strong>
+                            </div>
+                          </div>
+
+                          <div className="rgfc__meta-row">
+                            <p className="mb-0">
+                              <strong>Estado:</strong>
+                              <span className="rgfc__badge rgfc__badge--estado">
+                                {grupo.estado_actual_catalogo?.estado_nombre ||
+                                  grupo.estado ||
+                                  "Sin estado"}
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="rgfc__tags">
+                            <strong>Etiquetas:</strong>
+                            {(() => {
+                              const tags = getTags(grupo);
+                              return tags.length > 0 ? (
+                                tags.map((tag, index) => {
+                                  const tagColor = tag.color || "#6c757d";
+                                  return (
+                                    <Badge
+                                      key={tag.key || index}
+                                      style={{
+                                        backgroundColor: tagColor,
+                                        color: getTextColor(tagColor),
+                                        padding: "0.35em 0.65em",
+                                        border: "none",
+                                      }}
+                                    >
+                                      {tag.label}
+                                    </Badge>
+                                  );
+                                })
+                              ) : (
+                                <span className="text-muted small">Sin etiquetas</span>
+                              );
+                            })()}
+                          </div>
+
+                          <div>
+                            {renderCategoriaMiembros(
+                              "activos_con_cobertura",
+                              grupo.porCategoria.activos_con_cobertura,
+                              grupo.id
+                            )}
+                            {renderCategoriaMiembros(
+                              "cotizacion",
+                              grupo.porCategoria.cotizacion,
+                              grupo.id
+                            )}
+                            {renderCategoriaMiembros(
+                              "cancelados",
+                              grupo.porCategoria.cancelados,
+                              grupo.id
+                            )}
+                            {renderCategoriaMiembros(
+                              "retirados",
+                              grupo.porCategoria.retirados,
+                              grupo.id
+                            )}
+                            {renderCategoriaMiembros(
+                              "sin_cobertura",
+                              grupo.porCategoria.sin_cobertura,
+                              grupo.id
+                            )}
+                            {renderCategoriaMiembros(
+                              "otros_estados",
+                              grupo.porCategoria.otros_estados,
+                              grupo.id
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* Resumen general */}
-      <Card className="mb-4 bg-light">
-        <Card.Body>
-          <Row className="text-center">
-            <Col>
-              <h5 className="text-muted mb-1">Total Grupos</h5>
-              <h3 className="fw-bold">{gruposFiltrados.length}</h3>
-            </Col>
-            <Col>
-              <h5 className="text-muted mb-1">Total Miembros</h5>
-              <h3 className="fw-bold">
-                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.total, 0)}
-              </h3>
-            </Col>
-            <Col>
-              <h5 className="text-success mb-1">Activos con Cobertura</h5>
-              <h3 className="fw-bold text-success">
-                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.activos_con_cobertura, 0)}
-              </h3>
-            </Col>
-            <Col>
-              <h5 className="text-warning mb-1">Cotización</h5>
-              <h3 className="fw-bold text-warning">
-                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cotizacion, 0)}
-              </h3>
-            </Col>
-            <Col>
-              <h5 className="text-danger mb-1">Cancelados</h5>
-              <h3 className="fw-bold text-danger">
-                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cancelados, 0)}
-              </h3>
-            </Col>
-            <Col>
-              <h5 className="text-secondary mb-1">Retirados</h5>
-              <h3 className="fw-bold text-secondary">
-                {gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.retirados, 0)}
-              </h3>
-            </Col>
-          </Row>
-        </Card.Body>
-      </Card>
-
-      {/* Lista de grupos */}
-      {gruposFiltrados.length === 0 ? (
-        <Card>
-          <Card.Body className="text-center py-5">
-            <p className="text-muted mb-0">No se encontraron grupos familiares</p>
-          </Card.Body>
-        </Card>
-      ) : (
-        gruposFiltrados.map((grupo) => {
-          const estaExpandido = gruposExpandidos.has(grupo.id);
-          const coberturaTipos = getCoberturaTiposGrupo(grupo);
-          return (
-            <Card key={grupo.id} className="mb-3">
-              <Card.Header
-                onClick={() => toggleGrupo(grupo.id)}
-                style={{ cursor: "pointer" }}
-                className="d-flex justify-content-between align-items-center"
-              >
-                <div className="d-flex align-items-center gap-3">
-                  <Link
-                    to={`/grupo_familiar/${grupo.id}`}
-                    className="text-decoration-none fw-bold"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Grupo ID: {grupo.id}
-                  </Link>
-                  <Badge bg="primary">{getTomadorNombre(grupo)}</Badge>
-                  {coberturaTipos.length > 0 ? (
-                    coberturaTipos.map((tipo) => (
-                      <Badge key={tipo} bg="dark">
-                        {tipo}
-                      </Badge>
-                    ))
-                  ) : (
-                    <Badge bg="dark">Sin producto</Badge>
-                  )}
-                  <Badge bg="info">
-                    {grupo.personas_cobertura || 0} en cobertura
-                  </Badge>
-                  <Badge bg="secondary">
-                    {grupo.personas_taxes || 0} en taxes
-                  </Badge>
-                </div>
-                <div className="d-flex align-items-center gap-2">
-                  {estaExpandido ? (
-                    <FaChevronUp />
-                  ) : (
-                    <FaChevronDown />
-                  )}
-                </div>
-              </Card.Header>
-              {estaExpandido && (
-                <Card.Body>
-                {/* Estadísticas del grupo */}
-                <Row className="mb-4">
-                  <Col md={12}>
-                    <Card className="bg-light">
-                      <Card.Body>
-                        <Row className="text-center">
-                          <Col>
-                            <small className="text-muted d-block">Total Miembros</small>
-                            <strong>{grupo.estadisticas.total}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-success d-block">Activos</small>
-                            <strong className="text-success">{grupo.estadisticas.activos_con_cobertura}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-warning d-block">Cotización</small>
-                            <strong className="text-warning">{grupo.estadisticas.cotizacion}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-danger d-block">Cancelados</small>
-                            <strong className="text-danger">{grupo.estadisticas.cancelados}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-secondary d-block">Retirados</small>
-                            <strong className="text-secondary">{grupo.estadisticas.retirados}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-warning d-block">Sin Cobertura</small>
-                            <strong className="text-warning">{grupo.estadisticas.sin_cobertura}</strong>
-                          </Col>
-                          <Col>
-                            <small className="text-info d-block">Otros</small>
-                            <strong className="text-info">{grupo.estadisticas.otros_estados}</strong>
-                          </Col>
-                        </Row>
-                      </Card.Body>
-                    </Card>
-                  </Col>
-                </Row>
-
-                {/* Información general del grupo */}
-                <Row className="mb-4">
-                  <Col md={12}>
-                    <div className="d-flex align-items-center gap-3 flex-wrap mb-2">
-                      <p className="mb-0">
-                        <strong>Responsable:</strong> 
-                        <Badge bg="primary" className="ms-2">
-                          {grupo.responsable || "Sin asignar"}
-                        </Badge>
-                      </p>
-                      <p className="mb-0">
-                        <strong>Estado:</strong> 
-                        <Badge bg="info" className="ms-2">
-                          {grupo.estado_actual_catalogo?.estado_nombre || grupo.estado || "Sin estado"}
-                        </Badge>
-                      </p>
-                    </div>
-                    {/* Etiquetas */}
-                    <div className="d-flex align-items-center gap-2 flex-wrap">
-                      <strong className="me-2">Etiquetas:</strong>
-                      {(() => {
-                        const tags = getTags(grupo);
-                        return tags.length > 0 ? (
-                          tags.map((tag, index) => {
-                            const tagColor = tag.color || "#6c757d";
-                            return (
-                              <Badge
-                                key={tag.key || index}
-                                style={{
-                                  backgroundColor: tagColor,
-                                  color: getTextColor(tagColor),
-                                  padding: "0.35em 0.65em",
-                                  border: "none"
-                                }}
-                              >
-                                {tag.label}
-                              </Badge>
-                            );
-                          })
-                        ) : (
-                          <span className="text-muted small">Sin etiquetas</span>
-                        );
-                      })()}
-                    </div>
-                  </Col>
-                </Row>
-
-                {/* Miembros clasificados por categoría */}
-                <div>
-                  {renderCategoriaMiembros(
-                    "activos_con_cobertura",
-                    grupo.porCategoria.activos_con_cobertura,
-                    grupo.id
-                  )}
-                  {renderCategoriaMiembros(
-                    "cotizacion",
-                    grupo.porCategoria.cotizacion,
-                    grupo.id
-                  )}
-                  {renderCategoriaMiembros(
-                    "cancelados",
-                    grupo.porCategoria.cancelados,
-                    grupo.id
-                  )}
-                  {renderCategoriaMiembros(
-                    "retirados",
-                    grupo.porCategoria.retirados,
-                    grupo.id
-                  )}
-                  {renderCategoriaMiembros(
-                    "sin_cobertura",
-                    grupo.porCategoria.sin_cobertura,
-                    grupo.id
-                  )}
-                  {renderCategoriaMiembros(
-                    "otros_estados",
-                    grupo.porCategoria.otros_estados,
-                    grupo.id
-                  )}
-                </div>
-                </Card.Body>
-              )}
-            </Card>
-          );
-        })
-      )}
     </Container>
   );
 };

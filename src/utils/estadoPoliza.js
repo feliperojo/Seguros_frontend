@@ -1,4 +1,5 @@
 import { parseApiDateToLocalDate } from "./formatters";
+import { isDentalCoberturaTipo, isSaludCoberturaTipo } from "../constants/coberturaTipos";
 
 const toValidId = (v) => {
   const n = Number(v);
@@ -17,41 +18,89 @@ const toTime = (s) => {
 };
 
 /**
- * Selecciona la cobertura del cliente dentro de un grupo (misma lógica que el resumen de ficha).
+ * Pool de coberturas del cliente dentro de un grupo familiar.
  */
-export function resolverCoberturaClienteEnGrupo(coberturas, grupoId, clienteId) {
+function buildPoolCoberturasClienteEnGrupo(coberturas, grupoId, clienteId) {
   const selectedId = toValidId(grupoId);
   const list = Array.isArray(coberturas) ? coberturas : [];
-  if (!selectedId || list.length === 0) return null;
+  if (!selectedId || list.length === 0) return [];
 
   const delGrupo = list.filter(
     (c) => toValidId(c?.grupo_familiar_id ?? c?.grupo_familiar?.id) === selectedId
   );
-  if (delGrupo.length === 0) return null;
+  if (delGrupo.length === 0) return [];
 
   const clienteIdLocal = toValidId(clienteId);
   const delCliente = clienteIdLocal
     ? delGrupo.filter((c) => toValidId(c?.cliente?.id ?? c?.cliente_id) === clienteIdLocal)
     : [];
 
-  const pool = delCliente.length > 0 ? delCliente : delGrupo;
+  return delCliente.length > 0 ? delCliente : delGrupo;
+}
 
-  const vigente = pool.find((c) => toBoolFlag(c?.vigente, false));
+/**
+ * Elige la cobertura más representativa de un pool (vigente > cancelada > retirada > primera).
+ */
+export function pickBestCoberturaFromPool(pool) {
+  const list = Array.isArray(pool) ? pool.filter(Boolean) : [];
+  if (list.length === 0) return null;
+
+  const vigente = list.find((c) => toBoolFlag(c?.vigente, false));
   if (vigente) return vigente;
 
-  const conCancel = pool
+  const conCancel = list
     .map((c) => ({ c, t: toTime(c?.fecha_cancelacion) }))
     .filter((x) => x.t != null)
     .sort((a, b) => b.t - a.t)[0]?.c;
   if (conCancel) return conCancel;
 
-  const conRetiro = pool
+  const conRetiro = list
     .map((c) => ({ c, t: toTime(c?.fecha_retiro) }))
     .filter((x) => x.t != null)
     .sort((a, b) => b.t - a.t)[0]?.c;
   if (conRetiro) return conRetiro;
 
-  return pool[0];
+  return list[0];
+}
+
+/**
+ * Selecciona la cobertura del cliente dentro de un grupo (misma lógica que el resumen de ficha).
+ */
+export function resolverCoberturaClienteEnGrupo(coberturas, grupoId, clienteId) {
+  return pickBestCoberturaFromPool(
+    buildPoolCoberturasClienteEnGrupo(coberturas, grupoId, clienteId)
+  );
+}
+
+/**
+ * Resuelve coberturas de salud y dental del cliente en el grupo (pueden coexistir).
+ * @returns {{ salud: object|null, dental: object|null, productos: Array<{key:string,cobertura:object}> }}
+ */
+export function resolverCoberturasProductoClienteEnGrupo(coberturas, grupoId, clienteId) {
+  const pool = buildPoolCoberturasClienteEnGrupo(coberturas, grupoId, clienteId);
+  const salud = pickBestCoberturaFromPool(
+    pool.filter((c) => isSaludCoberturaTipo(c?.cobertura_tipo))
+  );
+  const dental = pickBestCoberturaFromPool(
+    pool.filter((c) => isDentalCoberturaTipo(c?.cobertura_tipo))
+  );
+
+  const productos = [];
+  if (salud) productos.push({ key: "salud", cobertura: salud });
+  if (dental) productos.push({ key: "dental", cobertura: dental });
+
+  // Si el pool tiene coberturas pero ninguna clasificó (tipo raro), conservar una genérica
+  if (productos.length === 0) {
+    const fallback = pickBestCoberturaFromPool(pool);
+    if (fallback) {
+      productos.push({
+        key: isDentalCoberturaTipo(fallback?.cobertura_tipo) ? "dental" : "salud",
+        cobertura: fallback,
+      });
+    }
+  }
+
+  return { salud, dental, productos };
 }
 
 export function getCoberturasFromGrupoFull(grupoFull) {

@@ -35,6 +35,16 @@ export const capitalizeWords = (s = "") => {
 export const stripNulls = (obj = {}) =>
   Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== null && v !== undefined));
 
+/** Precio de cobertura → decimal API (acepta formato es-CO de CoveragePriceInput). */
+const precioToDecimal = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "number") {
+    return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+  }
+  const n = parseMoney(String(v));
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+};
+
 export const mapGrupoFromForm = (f = {}) => {
 
   const persona_contacto = buildPersonaContacto(f.nombre, f.apellidos);
@@ -349,7 +359,7 @@ export const mapCoberturaFromMember = (m = {}, grupoId) => {
     codigo_poliza: m.codigo_poliza || "",
     policy_number: m.policy_number || "",
     elegibilidad: m.elegibilidad || "",
-    precio: m.precio ?? null,
+    precio: precioToDecimal(m.precio),
     tipo_pago: m.tipo_pago || null,
     compania_id: m.compania_id || null,
     agente: m.agente || "",

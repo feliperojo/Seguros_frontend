@@ -29,6 +29,7 @@ import SystemConfigSection, {
 // Tipos de producto (cobertura_tipo) soportados en el formulario de Grupo Familiar
 const COVERAGE_PRODUCT_TYPES = [
   "Plan de salud",
+  "Dental MS",
   "Plan Dental",
   "Plan de vida",
   "Plan de Descuentos",
@@ -65,6 +66,30 @@ const CLIENT_FIELD_DEFINITIONS = [
 ];
 
 const ALL_CLIENT_FIELD_KEYS = CLIENT_FIELD_DEFINITIONS.map((f) => f.key);
+
+// Acordeones de "Datos Cliente" configurables por tipo de producto (marcados = visibles)
+const CLIENT_ACCORDION_DEFINITIONS = [
+  { key: "datos_principales", label: "Datos Principales" },
+  { key: "estatus_migratorio", label: "Estatus migratorio" },
+  { key: "datos_contacto", label: "Datos de Contacto" },
+  { key: "direccion", label: "Dirección" },
+  { key: "empleo_ingreso", label: "Datos de Empleo e Ingreso" },
+  { key: "medios_pago", label: "Medios de Pago" },
+];
+
+const ALL_CLIENT_ACCORDION_KEYS = CLIENT_ACCORDION_DEFINITIONS.map((f) => f.key);
+
+// Campos del encabezado del Grupo Familiar configurables por tipo de producto (marcados = visibles)
+const GROUP_HEADER_FIELD_DEFINITIONS = [
+  { key: "zip_code", label: "ZIP Code" },
+  { key: "ingreso_familiar", label: "Ingreso Familiar" },
+  { key: "personas_cobertura", label: "Personas en Cobertura" },
+  { key: "personas_taxes", label: "Personas en Taxes" },
+];
+
+const ALL_GROUP_HEADER_FIELD_KEYS = GROUP_HEADER_FIELD_DEFINITIONS.map(
+  (f) => f.key
+);
 
 /**
  * Normaliza la lista de usuarios desde la respuesta del backend (varias estructuras posibles).
@@ -108,6 +133,8 @@ const Configurador = () => {
   );
   const [savingCoverageConfig, setSavingCoverageConfig] = useState(false);
   const [savingClientFieldsConfig, setSavingClientFieldsConfig] =
+    useState(false);
+  const [savingGroupHeaderConfig, setSavingGroupHeaderConfig] =
     useState(false);
 
   const canEdit = useHasPermission("users.edit");
@@ -347,6 +374,14 @@ const Configurador = () => {
     return entry.enabledFields;
   };
 
+  const getEnabledClientAccordions = (tipo) => {
+    const entry = clientFieldsConfig[tipo];
+    if (!entry || !Array.isArray(entry.enabledAccordions)) {
+      return ALL_CLIENT_ACCORDION_KEYS;
+    }
+    return entry.enabledAccordions;
+  };
+
   const toggleClientField = (tipo, fieldKey) => {
     setSystemConfig((prev) => {
       const prevCfg = prev.client_fields_by_tipo || {};
@@ -373,13 +408,39 @@ const Configurador = () => {
     });
   };
 
+  const toggleClientAccordion = (tipo, accordionKey) => {
+    setSystemConfig((prev) => {
+      const prevCfg = prev.client_fields_by_tipo || {};
+      const entry = prevCfg[tipo] || {};
+
+      const currentArr = Array.isArray(entry.enabledAccordions)
+        ? entry.enabledAccordions
+        : ALL_CLIENT_ACCORDION_KEYS;
+
+      const nextArr = currentArr.includes(accordionKey)
+        ? currentArr.filter((k) => k !== accordionKey)
+        : [...currentArr, accordionKey];
+
+      return {
+        ...prev,
+        client_fields_by_tipo: {
+          ...prevCfg,
+          [tipo]: {
+            ...entry,
+            enabledAccordions: nextArr,
+          },
+        },
+      };
+    });
+  };
+
   const handleSaveClientFieldsConfig = async () => {
     const payload = systemConfig?.client_fields_by_tipo || {};
     setSavingClientFieldsConfig(true);
     try {
       await systemConfigService.put("client_fields_by_tipo", payload, "json");
       toast.success(
-        "Configuración de datos del cliente guardada correctamente."
+        "Configuración de datos del cliente (acordeones y campos) guardada correctamente."
       );
     } catch (err) {
       toast.error(
@@ -388,6 +449,66 @@ const Configurador = () => {
       );
     } finally {
       setSavingClientFieldsConfig(false);
+    }
+  };
+
+  // === Configuración visual del encabezado del Grupo Familiar por tipo de producto ===
+  const groupHeaderFieldsConfig =
+    systemConfig?.group_header_fields_by_tipo || {};
+
+  const getEnabledGroupHeaderFields = (tipo) => {
+    const entry = groupHeaderFieldsConfig[tipo];
+    if (!entry || !Array.isArray(entry.enabledFields)) {
+      return ALL_GROUP_HEADER_FIELD_KEYS;
+    }
+    return entry.enabledFields;
+  };
+
+  const toggleGroupHeaderField = (tipo, fieldKey) => {
+    setSystemConfig((prev) => {
+      const prevCfg = prev.group_header_fields_by_tipo || {};
+      const entry = prevCfg[tipo] || {};
+
+      const currentArr = Array.isArray(entry.enabledFields)
+        ? entry.enabledFields
+        : ALL_GROUP_HEADER_FIELD_KEYS;
+
+      const nextArr = currentArr.includes(fieldKey)
+        ? currentArr.filter((k) => k !== fieldKey)
+        : [...currentArr, fieldKey];
+
+      return {
+        ...prev,
+        group_header_fields_by_tipo: {
+          ...prevCfg,
+          [tipo]: {
+            ...entry,
+            enabledFields: nextArr,
+          },
+        },
+      };
+    });
+  };
+
+  const handleSaveGroupHeaderFieldsConfig = async () => {
+    const payload = systemConfig?.group_header_fields_by_tipo || {};
+    setSavingGroupHeaderConfig(true);
+    try {
+      await systemConfigService.put(
+        "group_header_fields_by_tipo",
+        payload,
+        "json"
+      );
+      toast.success(
+        "Configuración del encabezado del grupo familiar guardada correctamente."
+      );
+    } catch (err) {
+      toast.error(
+        err?.message ||
+          "Error al guardar configuración del encabezado del grupo familiar"
+      );
+    } finally {
+      setSavingGroupHeaderConfig(false);
     }
   };
 
@@ -717,9 +838,9 @@ const Configurador = () => {
         </Card.Header>
         <Card.Body>
           <p className="text-muted small mb-3">
-            Marca qué campos <strong>se mostrarán</strong> en la sección{" "}
-            <strong>Datos Principales</strong> del cliente, según el tipo de
-            producto (cobertura_tipo). Solo afecta a la interfaz visual.
+            Marca qué <strong>acordeones</strong> y qué campos extra se
+            mostrarán en <strong>Datos Cliente</strong> del formulario, según el
+            tipo de producto (cobertura_tipo). Solo afecta a la interfaz visual.
           </p>
 
           {/* Reutilizamos el mismo selector de tipo de producto */}
@@ -741,9 +862,36 @@ const Configurador = () => {
             })}
           </div>
 
+          <Form.Group className="mb-4">
+            <Form.Label className="small fw-semibold text-muted">
+              Acordeones de Datos Cliente a mostrar para &quot;
+              {selectedCoverageTipo}&quot;
+            </Form.Label>
+            <div className="row">
+              {CLIENT_ACCORDION_DEFINITIONS.map((acc) => {
+                const isShown = getEnabledClientAccordions(
+                  selectedCoverageTipo
+                ).includes(acc.key);
+                return (
+                  <div key={acc.key} className="col-md-4 mb-2">
+                    <Form.Check
+                      type="checkbox"
+                      id={`client-acc-${selectedCoverageTipo}-${acc.key}`}
+                      label={acc.label}
+                      checked={isShown}
+                      onChange={() =>
+                        toggleClientAccordion(selectedCoverageTipo, acc.key)
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </Form.Group>
+
           <Form.Group className="mb-3">
             <Form.Label className="small fw-semibold text-muted">
-              Campos a mostrar de datos del cliente para &quot;
+              Campos extra dentro de Datos Principales para &quot;
               {selectedCoverageTipo}&quot;
             </Form.Label>
             <div className="row">
@@ -781,6 +929,83 @@ const Configurador = () => {
               </>
             ) : (
               "Guardar configuración de datos del cliente"
+            )}
+          </Button>
+        </Card.Body>
+      </Card>
+
+      {/* Configuración del encabezado del Grupo Familiar por tipo de producto */}
+      <Card className="mb-4">
+        <Card.Header className="d-flex align-items-center gap-2">
+          <FaCogs />
+          <span>Encabezado del grupo familiar por tipo de producto</span>
+        </Card.Header>
+        <Card.Body>
+          <p className="text-muted small mb-3">
+            Marca qué campos del <strong>encabezado económico</strong> se
+            mostrarán en <strong>Información del Grupo Familiar</strong>, según
+            el tipo de producto. Solo afecta a la visualización; el cálculo y
+            guardado siguen igual.
+          </p>
+
+          <div className="mb-3 d-flex flex-wrap gap-2">
+            {COVERAGE_PRODUCT_TYPES.map((tipo) => {
+              const isActive = selectedCoverageTipo === tipo;
+              return (
+                <Button
+                  key={tipo}
+                  type="button"
+                  variant={isActive ? "primary" : "outline-secondary"}
+                  size="sm"
+                  className="d-flex flex-column align-items-start px-3 py-2"
+                  onClick={() => setSelectedCoverageTipo(tipo)}
+                >
+                  <span className="fw-semibold small">{tipo}</span>
+                </Button>
+              );
+            })}
+          </div>
+
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-semibold text-muted">
+              Campos del encabezado a mostrar para &quot;
+              {selectedCoverageTipo}&quot;
+            </Form.Label>
+            <div className="row">
+              {GROUP_HEADER_FIELD_DEFINITIONS.map((field) => {
+                const isShown = getEnabledGroupHeaderFields(
+                  selectedCoverageTipo
+                ).includes(field.key);
+                return (
+                  <div key={field.key} className="col-md-4 mb-2">
+                    <Form.Check
+                      type="checkbox"
+                      id={`group-header-${selectedCoverageTipo}-${field.key}`}
+                      label={field.label}
+                      checked={isShown}
+                      onChange={() =>
+                        toggleGroupHeaderField(selectedCoverageTipo, field.key)
+                      }
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </Form.Group>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleSaveGroupHeaderFieldsConfig}
+            disabled={savingGroupHeaderConfig}
+          >
+            {savingGroupHeaderConfig ? (
+              <>
+                <Spinner animation="border" size="sm" className="me-2" />
+                Guardando...
+              </>
+            ) : (
+              "Guardar configuración del encabezado"
             )}
           </Button>
         </Card.Body>

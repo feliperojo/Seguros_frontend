@@ -6,6 +6,9 @@ import {
   FaUserCheck,
   FaClipboardList,
 } from "react-icons/fa";
+import {
+  isProductoPrivadoIndependiente,
+} from "./coberturaTipos";
 
 export const ESTADOS_GRUPO_CONFIG = {
   cotizacion: {
@@ -337,10 +340,152 @@ export function ocultarPersonasCoberturaEnListado(grupo) {
   return ESTADOS_GRUPO_CODIGOS_OCULTAR_COBERTURA_LISTADO.includes(codigo);
 }
 
-/** Valor de P. COBERTURA solo para render del listado. */
+function parseProductoTiposGrupo(grupo) {
+  const producto = String(grupo?.producto || "").trim();
+  if (!producto || producto === "-") return [];
+  return producto.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+function tiposProductoGrupo(grupo) {
+  const fromProducto = parseProductoTiposGrupo(grupo);
+  if (fromProducto.length > 0) return fromProducto;
+
+  if (Array.isArray(grupo?.coberturaTipos) && grupo.coberturaTipos.length > 0) {
+    return grupo.coberturaTipos;
+  }
+
+  return [
+    ...new Set(
+      (grupo?.coberturas || [])
+        .map((c) => String(c?.cobertura_tipo || "").trim())
+        .filter(Boolean)
+    ),
+  ];
+}
+
+/** GF cuyo producto principal es privado (Vision, Plan Dental, etc.), no Salud MS. */
+export function esGrupoPlanPrivado(grupo) {
+  const privadas = Number(grupo?.personas_privadas);
+  if (privadas > 0) return true;
+
+  const salud = Number(grupo?.personas_salud);
+  const dental = Number(grupo?.personas_dental);
+  if (salud > 0 || dental > 0) return false;
+
+  const tipos = tiposProductoGrupo(grupo);
+  if (tipos.length === 0) return false;
+
+  return tipos.every((t) => isProductoPrivadoIndependiente(t));
+}
+
+/** Conteos de coberturas privadas activas para la columna C.Privado del listado. */
+export function personasPrivadasParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) {
+    return { privadas: 0, label: "—" };
+  }
+
+  const privadas =
+    grupo?.personas_privadas != null && grupo.personas_privadas !== ""
+      ? Number(grupo.personas_privadas) || 0
+      : 0;
+
+  return {
+    privadas,
+    label: privadas > 0 ? String(privadas) : "—",
+  };
+}
+
+/** Conteos Salud/Dental MS activos para la columna Salud/Dental Ms del listado. */
+export function personasSaludDentalParaListado(grupo) {
+  if (ocultarPersonasCoberturaEnListado(grupo)) {
+    return { salud: 0, dental: 0, label: "—" };
+  }
+
+  let salud =
+    grupo?.personas_salud != null && grupo.personas_salud !== ""
+      ? Number(grupo.personas_salud) || 0
+      : null;
+  let dental =
+    grupo?.personas_dental != null && grupo.personas_dental !== ""
+      ? Number(grupo.personas_dental) || 0
+      : null;
+
+  if (salud === null || dental === null) {
+    const resumen = Array.isArray(grupo?.productos_resumen) ? grupo.productos_resumen : [];
+    const filaDental = resumen.find((p) =>
+      String(p?.producto || "")
+        .toLowerCase()
+        .includes("dental ms")
+    );
+    const filaSalud = resumen.find(
+      (p) =>
+        String(p?.producto || "")
+          .toLowerCase()
+          .includes("salud")
+    );
+
+    if (dental === null) {
+      dental = filaDental?.cobertura != null ? Number(filaDental.cobertura) || 0 : 0;
+    }
+    if (salud === null) {
+      salud =
+        filaSalud?.cobertura != null
+          ? Number(filaSalud.cobertura) || 0
+          : Number(grupo?.personas_cobertura) || 0;
+    }
+  }
+
+  if (salud === 0 && dental === 0) {
+    return { salud: 0, dental: 0, label: "—" };
+  }
+
+  return {
+    salud,
+    dental,
+    label: `${salud}/${dental}`,
+  };
+}
+
+/** Personas en taxes: los planes privados no aplican; mostrar — en el listado. */
+export function personasTaxesParaListado(grupo) {
+  if (esGrupoPlanPrivado(grupo)) {
+    return { taxes: 0, label: "—" };
+  }
+
+  const taxes = Number(grupo?.personas_taxes) || 0;
+  return { taxes, label: String(taxes) };
+}
+
+/** @deprecated Preferir personasSaludDentalParaListado. */
+export function personasDentalParaListado(grupo) {
+  return personasSaludDentalParaListado(grupo).dental;
+}
+
+/** @deprecated Preferir personasSaludDentalParaListado en el listado de GF. */
 export function personasCoberturaParaListado(grupo) {
   if (ocultarPersonasCoberturaEnListado(grupo)) return 0;
   return grupo?.personas_cobertura || 0;
+}
+
+/** Opciones del filtro de producto en el listado de grupos familiares. */
+export const FILTRO_PRODUCTO_LISTADO_OPCIONES = [
+  { value: "todos", label: "Todos los productos" },
+  { value: "salud", label: "Salud" },
+  { value: "dental_ms", label: "Dental MS" },
+  { value: "dental_privado", label: "Dental privado" },
+  { value: "vision", label: "Visión" },
+  { value: "descuentos", label: "Plan de descuentos" },
+  { value: "vida", label: "Plan de vida" },
+];
+
+export const FILTRO_PRODUCTO_LISTADO_VALORES = FILTRO_PRODUCTO_LISTADO_OPCIONES.map(
+  (o) => o.value
+).filter((v) => v !== "todos");
+
+export function normalizarFiltroProductoListado(value) {
+  const raw = String(value || "").toLowerCase();
+  if (raw === "dental" || raw === "ambos") return "dental_ms";
+  return FILTRO_PRODUCTO_LISTADO_VALORES.includes(raw) ? raw : "todos";
 }
 
 export function ordenarResumenGrupos(resumenEstados = []) {

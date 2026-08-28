@@ -1,0 +1,355 @@
+/* Ficha de cliente — estilo institucional */
+
+@keyframes ficha-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.ficha-page {
+  padding-bottom: 1.5rem;
+}
+
+.ficha-shell {
+  background: transparent;
+  border-radius: 0;
+  overflow: visible;
+  border: none;
+  box-shadow: none;
+}
+
+.ficha-shell__body {
+  padding: 0;
+}
+
+.ficha-shell__body--flush {
+  padding: 0;
+}
+
+.ficha-section--toolbar {
+  margin-bottom: 0.85rem;
+}
+
+.ficha-section--birthday {
+  border-color: #fbbf24;
+  background: #fffbeb;
+}
+
+.ficha-toolbar__title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f2744;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ficha-toolbar__subtitle {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 0.2rem;
+}
+
+.ficha-shell__birthday {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #fbbf24;
+  color: #0f2744;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.ficha-section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.85rem;
+}
+
+.ficha-section:last-child {
+  margin-bottom: 0;
+}
+
+.ficha-section__title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.ficha-section__title i,
+.ficha-section__title svg {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.ficha-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+}
+
+.ficha-fields--one {
+  grid-template-columns: 1fr;
+}
+
+.ficha-field label,
+.ficha-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.15rem;
+}
+
+.ficha-value {
+  font-size: 0.875rem;
+  color: #0f2744;
+  font-weight: 500;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.ficha-value--muted {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.ficha-value--danger {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.ficha-value--birthday {
+  color: #b45309;
+  font-weight: 700;
+  animation: ficha-pulse 2s infinite;
+}
+
+.ficha-alert {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.ficha-tags {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+/* Cards de producto (salud / dental) — una debajo de la otra */
+.ficha-poliza-productos {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.ficha-poliza-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.85rem 1rem;
+  min-width: 0;
+}
+
+.ficha-poliza-card__header {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ficha-poliza-card__icon {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.9rem;
+  color: #fff;
+  background: #1a365d;
+}
+
+.ficha-poliza-card--dental .ficha-poliza-card__icon {
+  background: #0f2744;
+}
+
+.ficha-poliza-card__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f2744;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.ficha-poliza-card__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 0.75rem;
+}
+
+.ficha-poliza-card__fields .ficha-poliza-field--full {
+  grid-column: 1 / -1;
+}
+
+/* Bloques Productos / Cotizaciones / Descartados dentro del resumen */
+.ficha-stack .card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: none;
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+}
+
+.ficha-stack .card-body {
+  padding: 1rem 1.1rem;
+}
+
+.ficha-stack .card-body > h6 {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: left !important;
+}
+
+.ficha-stack .btn.btn-light.border {
+  border-radius: 8px !important;
+  border-color: #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #0f2744 !important;
+  box-shadow: none !important;
+}
+
+.ficha-stack .btn.btn-light.border:hover {
+  border-color: #cbd5e1 !important;
+  background: #f1f5f9 !important;
+}
+
+/* Columna de tareas */
+.ficha-aside .card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.ficha-aside .card-header,
+.ficha-aside .card-body > h6,
+.ficha-aside .card-title {
+  font-size: 0.6875rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b !important;
+}
+
+/* Layout wrapper (tabs + título) */
+.ficha-layout {
+  background: #f8f9fb;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06);
+  margin-bottom: 1rem;
+}
+
+.ficha-layout__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.15rem 1.35rem 1rem;
+  text-align: left;
+}
+
+.ficha-layout__title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.ficha-layout__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ficha-layout__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ficha-layout__tab {
+  border-radius: 8px !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  padding: 0.35rem 0.7rem !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+  text-decoration: none !important;
+}
+
+.ficha-layout__tab:hover {
+  border-color: #cbd5e1 !important;
+  color: #1a365d !important;
+  background: #f1f5f9 !important;
+}
+
+.ficha-layout__tab.is-active,
+.ficha-layout__tab.active {
+  background: #1a365d !important;
+  border-color: #1a365d !important;
+  color: #fff !important;
+}
+
+.ficha-layout__content {
+  padding: 1rem 1rem 1.25rem;
+  background: #f8f9fb;
+}
+
+@media (max-width: 768px) {
+  .ficha-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .ficha-poliza-card__fields {
+    grid-template-columns: 1fr;
+  }
+}

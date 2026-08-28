@@ -27,6 +27,15 @@ import {
 import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
 import { estadoClienteDesdeProcesoGrupo } from "../utils/clasificacionClienteProceso";
 import { normalizeEstadoGrupoCodigo } from "../constants/estadosGrupoFamiliar";
+import {
+  mapCoberturaApiToFields,
+  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoPrivadoIndependiente,
+  isProductoSaludMs,
+  isSaludCoberturaTipo,
+  COBERTURA_TIPO_DENTAL_MS,
+} from "../utils/coberturaDental";
 
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
@@ -281,91 +290,177 @@ const memberTieneRetiroOCancelacion = (m = {}) =>
   m.motivo_retiro !== undefined ||
   m.cobertura_definida !== undefined;
 
-const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) =>
-  (members || [])
-    .filter((m) => m?.cliente_id && m?.cobertura_id)
-    .map((m) => {
-      const cobertura = mapCoberturaFromMember(m, grupoId);
-      cobertura.id = m.cobertura_id;
-      cobertura.cliente_id = m.cliente_id;
+const buildCoberturaPayloadFromSource = (
+  source,
+  grupoId,
+  coberturaId,
+  clienteId,
+  coberturaTipo,
+  productoCotizacion
+) => {
+  const memberLike = {
+    ...source,
+    cobertura_id: coberturaId,
+    cliente_id: clienteId,
+    cobertura_tipo: coberturaTipo,
+  };
+  const cobertura = mapCoberturaFromMember(memberLike, grupoId);
+  cobertura.id = coberturaId;
+  cobertura.cliente_id = clienteId;
+  cobertura.cobertura_tipo = coberturaTipo;
 
-      if (productoCotizacion?.label) {
-        cobertura.cobertura_tipo = productoCotizacion.label;
-      }
+  if (
+    isProductoSaludMs(productoCotizacion?.label) &&
+    productoCotizacion?.label
+  ) {
+    cobertura.cobertura_tipo = productoCotizacion.label;
+  }
 
-      if (!memberTieneRetiroOCancelacion(m)) {
-        COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
-          delete cobertura[campo];
-        });
-        return stripNulls(cobertura);
-      }
-
-      if (m.fecha_cancelacion !== undefined) {
-        cobertura.fecha_cancelacion = cleanDate(m.fecha_cancelacion);
-        if (m.nota_cancel !== undefined) {
-          cobertura.nota_cancel = (m.nota_cancel || "").trim() || null;
-        } else if (m.fecha_cancelacion) {
-          cobertura.nota_cancel = null;
-        }
-        if (m.motivo_cancelacion !== undefined) {
-          cobertura.motivo_cancelacion = (m.motivo_cancelacion || "").trim() || null;
-        } else if (m.fecha_cancelacion) {
-          cobertura.motivo_cancelacion = null;
-        }
-      }
-
-      if (m.fecha_retiro !== undefined) {
-        cobertura.fecha_retiro = cleanDate(m.fecha_retiro);
-        if (m.nota_retiro !== undefined) {
-          cobertura.nota_retiro = (m.nota_retiro || "").trim() || null;
-        } else if (m.fecha_retiro) {
-          cobertura.nota_retiro = null;
-        }
-        if (m.motivo_retiro !== undefined) {
-          cobertura.motivo_retiro = (m.motivo_retiro || "").trim() || null;
-        } else if (m.fecha_retiro) {
-          cobertura.motivo_retiro = null;
-        }
-      }
-
-      if (m.cobertura_definida !== undefined) {
-        cobertura.cobertura_definida = (m.cobertura_definida || "").trim() || null;
-      }
-
-      const valoresProtegidos = {};
-      COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
-        if (cobertura[campo] !== undefined) {
-          valoresProtegidos[campo] = cobertura[campo];
-        } else {
-          if (campo === "nota_cancel" && cobertura.fecha_cancelacion) {
-            valoresProtegidos[campo] = null;
-          }
-          if (campo === "nota_retiro" && cobertura.fecha_retiro) {
-            valoresProtegidos[campo] = null;
-          }
-          if (campo === "motivo_cancelacion" && cobertura.fecha_cancelacion) {
-            valoresProtegidos[campo] = null;
-          }
-          if (campo === "motivo_retiro" && cobertura.fecha_retiro) {
-            valoresProtegidos[campo] = null;
-          }
-        }
-      });
-
-      if (valoresProtegidos.activo === undefined) {
-        valoresProtegidos.activo = true;
-      }
-      if (valoresProtegidos.vigente === undefined) {
-        valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
-      }
-
-      const coberturaLimpia = stripNulls(cobertura);
-      Object.keys(valoresProtegidos).forEach((campo) => {
-        coberturaLimpia[campo] = valoresProtegidos[campo];
-      });
-
-      return coberturaLimpia;
+  if (!memberTieneRetiroOCancelacion(source)) {
+    COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
+      delete cobertura[campo];
     });
+    return stripNulls(cobertura);
+  }
+
+  if (source.fecha_cancelacion !== undefined) {
+    cobertura.fecha_cancelacion = cleanDate(source.fecha_cancelacion);
+    if (source.nota_cancel !== undefined) {
+      cobertura.nota_cancel = (source.nota_cancel || "").trim() || null;
+    } else if (source.fecha_cancelacion) {
+      cobertura.nota_cancel = null;
+    }
+    if (source.motivo_cancelacion !== undefined) {
+      cobertura.motivo_cancelacion = (source.motivo_cancelacion || "").trim() || null;
+    } else if (source.fecha_cancelacion) {
+      cobertura.motivo_cancelacion = null;
+    }
+  }
+
+  if (source.fecha_retiro !== undefined) {
+    cobertura.fecha_retiro = cleanDate(source.fecha_retiro);
+    if (source.nota_retiro !== undefined) {
+      cobertura.nota_retiro = (source.nota_retiro || "").trim() || null;
+    } else if (source.fecha_retiro) {
+      cobertura.nota_retiro = null;
+    }
+    if (source.motivo_retiro !== undefined) {
+      cobertura.motivo_retiro = (source.motivo_retiro || "").trim() || null;
+    } else if (source.fecha_retiro) {
+      cobertura.motivo_retiro = null;
+    }
+  }
+
+  if (source.cobertura_definida !== undefined) {
+    cobertura.cobertura_definida = (source.cobertura_definida || "").trim() || null;
+  }
+
+  const valoresProtegidos = {};
+  COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
+    if (cobertura[campo] !== undefined) {
+      valoresProtegidos[campo] = cobertura[campo];
+    } else {
+      if (campo === "nota_cancel" && cobertura.fecha_cancelacion) {
+        valoresProtegidos[campo] = null;
+      }
+      if (campo === "nota_retiro" && cobertura.fecha_retiro) {
+        valoresProtegidos[campo] = null;
+      }
+      if (campo === "motivo_cancelacion" && cobertura.fecha_cancelacion) {
+        valoresProtegidos[campo] = null;
+      }
+      if (campo === "motivo_retiro" && cobertura.fecha_retiro) {
+        valoresProtegidos[campo] = null;
+      }
+    }
+  });
+
+  if (valoresProtegidos.activo === undefined) {
+    valoresProtegidos.activo = true;
+  }
+  if (valoresProtegidos.vigente === undefined) {
+    valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
+  }
+
+  const coberturaLimpia = stripNulls(cobertura);
+  Object.keys(valoresProtegidos).forEach((campo) => {
+    coberturaLimpia[campo] = valoresProtegidos[campo];
+  });
+
+  return coberturaLimpia;
+};
+
+/**
+ * Tipo de la cobertura principal del miembro (slot raíz; no el Dental MS adjunto).
+ *
+ * - Producto privado (Plan Dental, Vision, Vida, Descuentos): respetar label / tipo del miembro.
+ * - Producto Salud MS: nunca dejar Dental MS en este slot; si quedó corrupto, restaurar a salud.
+ */
+const resolveSaludCoberturaTipo = (memberTipo, productoCotizacion) => {
+  const label = productoCotizacion?.label;
+
+  // GF de producto privado independiente → el slot principal ES ese producto.
+  if (label && isProductoPrivadoIndependiente(label)) {
+    if (memberTipo && isProductoPrivadoIndependiente(memberTipo)) {
+      return memberTipo;
+    }
+    return label;
+  }
+
+  // Flujo Salud MS: priorizar el producto / tipo de salud del miembro.
+  if (label && isProductoSaludMs(label)) {
+    return label;
+  }
+  if (memberTipo && isProductoSaludMs(memberTipo)) {
+    return memberTipo;
+  }
+
+  // Sin label MS pero el miembro ya es privado (p.ej. Plan Dental cargado desde BD).
+  if (memberTipo && isProductoPrivadoIndependiente(memberTipo)) {
+    return memberTipo;
+  }
+
+  // Slot de salud: no debe quedar como Dental MS u otro dental corrupto.
+  return "SEGURO MEDICO OBAMA";
+};
+
+const buildCoberturasPayloadForMembers = (members, grupoId, productoCotizacion) => {
+  const payloads = [];
+
+  (members || []).forEach((m) => {
+    if (m?.cliente_id && m?.cobertura_id) {
+      const saludTipo = resolveSaludCoberturaTipo(m.cobertura_tipo, productoCotizacion);
+      payloads.push(
+        buildCoberturaPayloadFromSource(
+          m,
+          grupoId,
+          m.cobertura_id,
+          m.cliente_id,
+          saludTipo,
+          // Solo en Salud MS: el label del producto pisa el tipo del slot principal.
+          // En productos privados no pasar el label (evita reescribir Plan Dental → salud).
+          isProductoSaludMs(productoCotizacion?.label) ? productoCotizacion : null
+        )
+      );
+    }
+
+    const dental = m?.coberturaDental;
+    if (dental?.cobertura_id && m?.cliente_id) {
+      payloads.push(
+        buildCoberturaPayloadFromSource(
+          { ...dental, parentesco: m.parentesco, tipo: m.tipo },
+          grupoId,
+          dental.cobertura_id,
+          m.cliente_id,
+          COBERTURA_TIPO_DENTAL_MS,
+          null
+        )
+      );
+    }
+  });
+
+  return payloads;
+};
 
 const buildFullUpdatePayloadParts = (formData, members, grupoId, productoCotizacion) => {
   const grupoPayload = stripNulls(mapGrupoFromForm(formData));
@@ -397,15 +492,35 @@ const cloneEditSnapshot = (value) => {
 
 // ================== Función para obtener el producto desde coberturas ==================
 const getProductoFromCoberturas = (coberturas = []) => {
-  // Buscar el primer cobertura_tipo no vacío
-  const coberturaTipo = coberturas.find(c => c?.cobertura_tipo)?.cobertura_tipo;
-  
+  // El plan del GF es el de Salud cuando hay Salud MS.
+  // Dental MS es producto adjunto y no debe definir el "Plan seleccionado".
+  // Productos privados (Plan Dental, Vision, etc.) sí definen el producto del GF.
+  const list = Array.isArray(coberturas) ? coberturas : [];
+  const salud = list.find(
+    (c) => c?.cobertura_tipo && isProductoSaludMs(c.cobertura_tipo)
+  );
+  const privada = list.find(
+    (c) =>
+      c?.cobertura_tipo &&
+      !isDentalMsCoberturaTipo(c.cobertura_tipo) &&
+      !isProductoSaludMs(c.cobertura_tipo)
+  );
+  const coberturaTipo =
+    salud?.cobertura_tipo ||
+    privada?.cobertura_tipo ||
+    list.find((c) => c?.cobertura_tipo && !isDentalMsCoberturaTipo(c.cobertura_tipo))
+      ?.cobertura_tipo;
+
   if (!coberturaTipo) return null;
-  
+
   // Mapear el cobertura_tipo a un objeto producto similar al modal
   // Ajusta estos mapeos según tus productos reales
   const productosMap = {
     "Plan de salud": { label: "Plan de salud", color: "primary" },
+    "SEGURO MEDICO OBAMA": { label: "SEGURO MEDICO OBAMA", color: "primary" },
+    "Seguro médico": { label: "Seguro médico", color: "primary" },
+    "Seguro medico": { label: "Seguro medico", color: "primary" },
+    "SALUD": { label: "SALUD", color: "primary" },
     "Plan Dental": { label: "Plan Dental", color: "info" },
     "Plan de vida": { label: "Plan de vida", color: "danger" },
     "Plan de Descuentos": { label: "Plan de Descuentos", color: "warning" },
@@ -414,10 +529,10 @@ const getProductoFromCoberturas = (coberturas = []) => {
     "Seguro dental": { label: "Seguro dental", color: "info" },
     "Seguro de accidentes": { label: "Seguro de accidentes", color: "warning" },
   };
-  
-  return productosMap[coberturaTipo] || { 
-    label: coberturaTipo, 
-    color: "secondary" 
+
+  return productosMap[coberturaTipo] || {
+    label: coberturaTipo,
+    color: "secondary",
   };
 };
 
@@ -525,162 +640,165 @@ const mapFullToForm = (fullRaw) => {
 
 
 // API FULL -> members para ProspectoDatos/TomaDeDatos (con campos raíz)
-const mapFullToMembers = (fullRaw) => {
-  const g = unwrapFull(fullRaw);
-  const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
-  const date10 = (v) => (v ? String(v).slice(0, 10) : "");
-  
-  return coberturas.map((cov, idx) => {
-    const cli = cov?.cliente || {};
-    const primer  = formatDisplayName((cli.primer_nombre  || "").trim());
-    const segundo = formatDisplayName((cli.segundo_nombre || "").trim());
-    const apell   = formatDisplayName((cli.apellidos      || "").trim());
-    const fecha   = cli.fecha_nacimiento || "";
-    const edad    = calcAge(fecha);
-    const nombreCompleto = formatDisplayName(
-      cli.nombre_completo || [primer, segundo, apell].filter(Boolean).join(" ")
-    );
+const mapCovToMemberBase = (cov, idx) => {
+  const cli = cov?.cliente || {};
+  const primer = formatDisplayName((cli.primer_nombre || "").trim());
+  const segundo = formatDisplayName((cli.segundo_nombre || "").trim());
+  const apell = formatDisplayName((cli.apellidos || "").trim());
+  const fecha = cli.fecha_nacimiento || "";
+  const edad = calcAge(fecha);
+  const nombreCompleto = formatDisplayName(
+    cli.nombre_completo || [primer, segundo, apell].filter(Boolean).join(" ")
+  );
+  const covFields = mapCoberturaApiToFields(cov);
 
-    return {
-      // -------- raíz (lo que usa el acordeón) --------
-      id: cli.id ?? idx + 1,
-      cliente_id: cli.id ?? null,
-      cobertura_id: cov.id ?? null,
-
-      // datos "cliente" copiados a raíz para edición inline
+  return {
+    id: cli.id ?? idx + 1,
+    cliente_id: cli.id ?? null,
+    ...covFields,
+    parentesco: cov.parentesco || "Tomador",
+    tipo: cov.parentesco || "Tomador",
+    primer_nombre: primer,
+    segundo_nombre: segundo,
+    apellidos: apell,
+    nombreCompleto,
+    genero: cli.genero || "",
+    fecha_nacimiento: fecha,
+    edad,
+    idioma: cli.idioma || "",
+    pais_origen: cli.pais_origen || "",
+    peso: cli.peso || "",
+    altura: cli.altura || "",
+    pulgadas: cli.pulgadas || "",
+    ingreso_anual: cli.ingreso_anual || "",
+    nota: cli.nota || "",
+    periodo_ingreso: cli.periodo_ingreso || "",
+    ingreso_por_periodo: cli.ingreso_por_periodo || "",
+    tipo_ingreso: cli.tipo_ingreso || "",
+    actividad_economica: cli.actividad_economica || "",
+    empleador: cli.empleador || "",
+    telefono_empleador: cli.telefono_empleador || "",
+    nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
+    periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
+    ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
+    ingreso_ocasional_anual: hydrateIngresoOcasionalAnual(cli),
+    cliente: {
+      id: cli.id ?? null,
       primer_nombre: primer,
       segundo_nombre: segundo,
       apellidos: apell,
-      nombreCompleto,
+      nombre_completo: nombreCompleto,
       genero: cli.genero || "",
       fecha_nacimiento: fecha,
       edad,
       idioma: cli.idioma || "",
       pais_origen: cli.pais_origen || "",
-      // Campos antropométricos
       peso: cli.peso || "",
       altura: cli.altura || "",
       pulgadas: cli.pulgadas || "",
-      ingreso_anual: cli.ingreso_anual || "",
+      telefono: cli.telefono || "",
+      secundario: cli.secundario || "",
+      whatsapp_num: cli.whatsapp_num || "",
+      email: cli.email || "",
       nota: cli.nota || "",
-      periodo_ingreso: cli.periodo_ingreso || "",
-      ingreso_por_periodo: cli.ingreso_por_periodo || "",
+      telefonos: resolveClienteTelefonos(cli, "us"),
+      direccion: cli.direccion || "",
+      calle: cli.calle || "",
+      apto: cli.apto || "",
+      ciudad: cli.ciudad || "",
+      estado: cli.estado || "",
+      codigo_postal: cli.codigo_postal || "",
+      condado: cli.condado || "",
+      dir_correspondencia: cli.dir_correspondencia || "",
+      social: cli.social || "",
+      status: cli.status || "",
+      auscis: cli.auscis || "",
+      tarjeta_numero: cli.tarjeta_numero || "",
+      fecha_emision: cli.fecha_emision || "",
+      fecha_expiracion: cli.fecha_expiracion || "",
+      categoria: cli.categoria || "",
       tipo_ingreso: cli.tipo_ingreso || "",
       actividad_economica: cli.actividad_economica || "",
       empleador: cli.empleador || "",
       telefono_empleador: cli.telefono_empleador || "",
+      periodo_ingreso: cli.periodo_ingreso || "",
+      ingreso_por_periodo: cli.ingreso_por_periodo || "",
+      ingreso_anual: cli.ingreso_anual || "",
       nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
       periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
       ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
       ingreso_ocasional_anual: hydrateIngresoOcasionalAnual(cli),
+      whatsapp: !!cli.whatsapp,
+      telegram: !!cli.telegram,
+      texto_sms: !!cli.texto_sms,
+    },
+  };
+};
 
-      // metadatos de cobertura
-      parentesco: cov.parentesco || "Tomador",
-      tipo: cov.parentesco || "Tomador",
-      estado_cobertura: cov.estado_cobertura || "Sí",
-      cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
-      ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),
-      fecha_activacion: date10(cov.fecha_activacion ?? cov.fechaActivacion ?? null),
-      fecha_creacion_cobertura: date10(cov.created_at ?? cov.fecha_creacion ?? null),
-      plan: cov.plan ?? null,
-      metal: cov.metal ?? null,
-      red: cov.red ?? null,
-      codigo_poliza: cov.codigo_poliza ?? cov.id_poliza ?? "",
-      policy_number: cov.policy_number ?? "",
-      elegibilidad: cov.elegibilidad ?? "",
-      precio: cov.precio ?? "",
-      tipo_pago: cov.tipo_pago ?? null,
-      dia_pago: cov.dia_pago ?? "",
-      nota_cancel: cov.nota_cancel ?? "",
-      grupo: cov.grupo ?? "",
-      compania_id: cov.compania_id ?? null,
-      agente: cov.agente ?? "",
-      pagador_id:  cov.pagador_id  ?? null,
-      fecha_cancelacion: date10(cov.fecha_cancelacion ?? cov.fechaCancelacion ?? null),
-      fecha_retiro: date10(cov.fecha_retiro ?? cov.fechaRetiro ?? null),
-      fecha_anulacion: date10(cov.fecha_anulacion ?? cov.fechaAnulacion ?? null),
-      motivo_anulacion: cov.motivo_anulacion ?? "",
-      nota_anulacion: cov.nota_anulacion ?? "",
-      nota_retiro: cov.nota_retiro ?? "",
-      motivo_cancelacion: cov.motivo_cancelacion ?? "",
-      motivo_retiro: cov.motivo_retiro ?? "",
-      fue_renovado: !!cov.fue_renovado,
-      cobertura_definida: cov.cobertura_definida ?? "",
-      // Campo para filtrar coberturas inactivas
-      // Si viene del backend, usarlo; si no, asumir true (activo por defecto)
-      activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
-      // Campo vigente: preservar valor del backend
-      vigente: cov.vigente !== undefined && cov.vigente !== null ? cov.vigente : true,
+const looksLikeDentalPlan = (c = {}) => {
+  const plan = String(c?.plan || "").toLowerCase();
+  return (
+    plan.includes("dental") ||
+    plan.includes("deltacare") ||
+    plan.includes("delta care") ||
+    plan.includes("delta dental")
+  );
+};
 
+const mapFullToMembers = (fullRaw) => {
+  const g = unwrapFull(fullRaw);
+  const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
 
-      // -------- también mantenemos el objeto cliente completo --------
-      cliente: {
-        id: cli.id ?? null,
-        primer_nombre: primer,
-        segundo_nombre: segundo,
-        apellidos: apell,
-        nombre_completo: nombreCompleto,
-        genero: cli.genero || "",
-        fecha_nacimiento: fecha,
-        edad,
-        idioma: cli.idioma || "",
-        pais_origen: cli.pais_origen || "",
-        // Campos antropométricos
-        peso: cli.peso || "",
-        altura: cli.altura || "",
-        pulgadas: cli.pulgadas || "",
-
-        // contacto
-        telefono: cli.telefono || "",
-        secundario: cli.secundario || "",
-        whatsapp_num: cli.whatsapp_num || "",
-        email: cli.email || "",
-        nota: cli.nota || "",
-
-
-     // si no trae, lo reconstruimos desde legacy para que el componente funcione ya.
-             // ✅ Hidratar con ISO + indicativo cuando ya vienen en arreglo (tu BD actual)
-       // ✅ soporta string JSON o array; si sigue vacío, cae a legacy
-       telefonos: resolveClienteTelefonos(cli, "us"),
-
-        // dirección
-        direccion: cli.direccion || "",
-        calle: cli.calle || "",
-        apto: cli.apto || "",
-        ciudad: cli.ciudad || "",
-        estado: cli.estado || "",
-        codigo_postal: cli.codigo_postal || "",
-        condado: cli.condado || "",
-        dir_correspondencia: cli.dir_correspondencia || "",
-
-        // migratorio
-        social: cli.social || "",
-        status: cli.status || "",
-        auscis: cli.auscis || "",
-        tarjeta_numero: cli.tarjeta_numero || "",
-        fecha_emision: cli.fecha_emision || "",
-        fecha_expiracion: cli.fecha_expiracion || "",
-        categoria: cli.categoria || "",
-
-        // empleo/ingreso
-        tipo_ingreso: cli.tipo_ingreso || "",
-        actividad_economica: cli.actividad_economica || "",
-        empleador: cli.empleador || "",
-        telefono_empleador: cli.telefono_empleador || "",
-        periodo_ingreso: cli.periodo_ingreso || "",
-        ingreso_por_periodo: cli.ingreso_por_periodo || "",
-        ingreso_anual: cli.ingreso_anual || "",
-        nota_ingreso_ocasional: cli.nota_ingreso_ocasional || "",
-        periodo_ingreso_ocasional: cli.periodo_ingreso_ocasional || "",
-        ingreso_por_periodo_ocasional: cli.ingreso_por_periodo_ocasional || "",
-        ingreso_ocasional_anual: hydrateIngresoOcasionalAnual(cli),
-
-        whatsapp: !!cli.whatsapp,
-        telegram: !!cli.telegram,
-        texto_sms: !!cli.texto_sms,
-      },
-    };
+  const byCliente = new Map();
+  coberturas.forEach((cov) => {
+    const cid = cov?.cliente?.id ?? cov?.cliente_id;
+    if (!cid) return;
+    if (!byCliente.has(cid)) byCliente.set(cid, []);
+    byCliente.get(cid).push(cov);
   });
+
+  const members = [];
+  let idx = 0;
+
+  for (const [, covs] of byCliente) {
+    // Preferir tipo salud real. Si todos quedaron mal marcados como Dental MS,
+    // usar plan/metal para no tratar DeltaCare como la cobertura de salud.
+    const saludCov =
+      covs.find((c) => isSaludCoberturaTipo(c.cobertura_tipo)) ||
+      covs.find(
+        (c) =>
+          !looksLikeDentalPlan(c) &&
+          (c.metal || c.red || (c.plan && String(c.plan).trim()))
+      ) ||
+      covs.find((c) => !looksLikeDentalPlan(c)) ||
+      covs[0];
+
+    const dentalCov =
+      covs.find(
+        (c) =>
+          c.id !== saludCov?.id &&
+          isDentalCoberturaTipo(c.cobertura_tipo) &&
+          looksLikeDentalPlan(c)
+      ) ||
+      covs.find(
+        (c) => c.id !== saludCov?.id && isDentalCoberturaTipo(c.cobertura_tipo)
+      ) ||
+      covs.find((c) => c.id !== saludCov?.id && looksLikeDentalPlan(c)) ||
+      null;
+
+    const member = mapCovToMemberBase(saludCov, idx++);
+
+    if (dentalCov) {
+      member.coberturaDental = {
+        ...mapCoberturaApiToFields(dentalCov),
+        cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
+      };
+    }
+
+    members.push(member);
+  }
+
+  return members;
 };
 
 const buildNombreCompleto = (o = {}) =>
@@ -757,103 +875,81 @@ const [grupoVersion, setGrupoVersion] = useState(null);
       grupoData
     });
 
-    // Actualizar familyMembers con los cambios de retiro/cancelación
+    const formatDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        return dateStr;
+      }
+      try {
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return null;
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+      } catch {
+        return null;
+      }
+    };
+
+    const patchFromDatos = (prev = {}, datos = {}) => ({
+      fecha_cancelacion:
+        datos.fecha_cancelacion !== undefined
+          ? formatDate(datos.fecha_cancelacion)
+          : prev.fecha_cancelacion,
+      fecha_retiro: formatDate(datos.fecha_retiro),
+      nota_cancel: datos.nota_cancel ?? prev.nota_cancel ?? null,
+      nota_retiro: datos.nota_retiro ?? prev.nota_retiro ?? null,
+      activo: datos.activo !== undefined ? datos.activo : prev.activo,
+      vigente: datos.vigente !== undefined ? datos.vigente : prev.vigente,
+      estado_cobertura: datos.estado_cobertura || prev.estado_cobertura,
+      motivo_cancelacion: datos.motivo_cancelacion ?? prev.motivo_cancelacion ?? null,
+      motivo_retiro: datos.motivo_retiro ?? prev.motivo_retiro ?? null,
+      cobertura_definida: datos.cobertura_definida ?? prev.cobertura_definida ?? null,
+    });
+
     setFamilyMembers((prevMembers) => {
       if (!Array.isArray(prevMembers)) return prevMembers;
-      
+
       return prevMembers.map((member) => {
-        // Buscar si esta cobertura tiene cambios de retiro/cancelación
-        // Buscar por cobertura_id (prioritario) o por cliente_id
-        const datosCobertura = datosRenovacion.find(
-          datos => {
-            // Comparar por cobertura_id si existe
-            if (datos.cobertura_id && member.cobertura_id) {
-              return datos.cobertura_id === member.cobertura_id;
-            }
-            // Si no, comparar por cliente_id
-            if (datos.cliente_id && member.cliente_id) {
-              return datos.cliente_id === member.cliente_id;
-            }
-            return false;
-          }
+        const datosSalud = datosRenovacion.find(
+          (datos) =>
+            datos.cobertura_id &&
+            member.cobertura_id &&
+            datos.cobertura_id === member.cobertura_id
+        );
+        const datosDental = datosRenovacion.find(
+          (datos) =>
+            datos.cobertura_id &&
+            member.coberturaDental?.cobertura_id &&
+            datos.cobertura_id === member.coberturaDental.cobertura_id
         );
 
-        if (datosCobertura) {
-          console.log("✅ [handleRetiroUpdateLocal] Actualizando miembro:", {
-            cobertura_id: member.cobertura_id,
-            cliente_id: member.cliente_id,
-            cambios: {
-              fecha_cancelacion: datosCobertura.fecha_cancelacion,
-              fecha_retiro: datosCobertura.fecha_retiro,
-              activo: datosCobertura.activo,
-              vigente: datosCobertura.vigente,
-              estado_cobertura: datosCobertura.estado_cobertura,
-            }
-          });
+        if (!datosSalud && !datosDental) return member;
 
-          // Formatear fechas a formato YYYY-MM-DD si vienen como string ISO
-          const formatDate = (dateStr) => {
-            if (!dateStr) return null;
-            if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-              return dateStr;
-            }
-            try {
-              const d = new Date(dateStr);
-              if (isNaN(d.getTime())) return null;
-              const year = d.getFullYear();
-              const month = String(d.getMonth() + 1).padStart(2, "0");
-              const day = String(d.getDate()).padStart(2, "0");
-              return `${year}-${month}-${day}`;
-            } catch {
-              return null;
-            }
+        let memberActualizado = { ...member };
+
+        if (datosSalud) {
+          memberActualizado = {
+            ...memberActualizado,
+            ...patchFromDatos(member, datosSalud),
           };
-
-          // Retiro: si no viene fecha_cancelacion en el payload, no tocarla (vacía o llena).
-          const fechaCancelacionNueva =
-            datosCobertura.fecha_cancelacion !== undefined
-              ? formatDate(datosCobertura.fecha_cancelacion)
-              : member.fecha_cancelacion;
-
-          // Actualizar los campos de retiro/cancelación en el miembro
-          const memberActualizado = {
-            ...member,
-            fecha_cancelacion: fechaCancelacionNueva,
-            fecha_retiro: formatDate(datosCobertura.fecha_retiro),
-            nota_cancel: datosCobertura.nota_cancel ?? member.nota_cancel ?? null,
-            nota_retiro: datosCobertura.nota_retiro || null,
-            activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.activo,
-            vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.vigente,
-            estado_cobertura: datosCobertura.estado_cobertura || member.estado_cobertura,
-            motivo_cancelacion: datosCobertura.motivo_cancelacion ?? member.motivo_cancelacion ?? null,
-            motivo_retiro: datosCobertura.motivo_retiro ?? null,
-            cobertura_definida: datosCobertura.cobertura_definida ?? member.cobertura_definida ?? null,
-          };
-
-          // También actualizar en el objeto cobertura si existe
           if (member.cobertura) {
             memberActualizado.cobertura = {
               ...member.cobertura,
-              fecha_cancelacion:
-                datosCobertura.fecha_cancelacion !== undefined
-                  ? formatDate(datosCobertura.fecha_cancelacion)
-                  : member.cobertura.fecha_cancelacion,
-              fecha_retiro: formatDate(datosCobertura.fecha_retiro),
-              nota_cancel: datosCobertura.nota_cancel ?? member.cobertura.nota_cancel ?? null,
-              nota_retiro: datosCobertura.nota_retiro || null,
-              activo: datosCobertura.activo !== undefined ? datosCobertura.activo : member.cobertura.activo,
-              vigente: datosCobertura.vigente !== undefined ? datosCobertura.vigente : member.cobertura.vigente,
-              estado_cobertura: datosCobertura.estado_cobertura || member.cobertura.estado_cobertura,
-              motivo_cancelacion: datosCobertura.motivo_cancelacion ?? member.cobertura.motivo_cancelacion ?? null,
-              motivo_retiro: datosCobertura.motivo_retiro || null,
-              cobertura_definida: datosCobertura.cobertura_definida ?? member.cobertura.cobertura_definida ?? null,
+              ...patchFromDatos(member.cobertura, datosSalud),
             };
           }
-
-          return memberActualizado;
         }
 
-        return member;
+        if (datosDental && member.coberturaDental) {
+          memberActualizado.coberturaDental = {
+            ...member.coberturaDental,
+            ...patchFromDatos(member.coberturaDental, datosDental),
+          };
+        }
+
+        return memberActualizado;
       });
     });
 
@@ -1340,7 +1436,10 @@ const handleCreateMemberRemote = async (memberData) => {
     },
     parentesco: memberData.parentesco || memberData.tipo || "Tomador",
     cobertura: {
-      cobertura_tipo: productoCotizacion?.label || "Plan de salud",
+      cobertura_tipo: resolveSaludCoberturaTipo(
+        memberData.cobertura_tipo,
+        productoCotizacion
+      ),
       estado_cobertura: memberData.estado_cobertura || "Sí",
       ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
       fecha_activacion: memberData.fecha_activacion 
@@ -1512,7 +1611,10 @@ const handleCreateMemberRemote = async (memberData) => {
       delete cliNuevo.id;
 
        let cov = mapCoberturaFromMember(m, id);
-       if (productoCotizacion?.label) cov.cobertura_tipo = productoCotizacion?.label;
+       cov.cobertura_tipo = resolveSaludCoberturaTipo(
+         m.cobertura_tipo,
+         productoCotizacion
+       );
 
        await GrupoFamiliarService.appendMiembro(id, {
          request_id: crypto?.randomUUID?.() ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
@@ -2162,6 +2264,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           estadoActual={estadoActual} // Pasar estado actual para validar visibilidad de botones
           grupo={grupoCompleto} // Pasar grupo completo para generar PDF de confirmación
           anioConsultado={anioConsultado}
+          coberturaTipo={
+            productoCotizacion?.label ||
+            getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+            null
+          }
         />
         
         {["TOMA_DATOS", "INSCRIPCION_INI", "GRUPO_FAMILIAR"].includes(
@@ -2176,7 +2283,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           readOnly={readOnly}
           canAdd={canAddMember}
           isProspecto={isProspecto}
-          defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}
+          defaultCoberturaTipo={
+            productoCotizacion?.label ||
+            getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+            "Plan de salud"
+          }
           onCreateMemberRemote={handleCreateMemberRemote}
           onSaveCobertura={() => {}}
           onDerivedCounts={handleDerivedCounts}
@@ -2191,7 +2302,11 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 canAdd={canAddMember}
                 estadoActual={estadoActual}
                 estadoId={estadoIdActual}
-                defaultCoberturaTipo={productoCotizacion?.label || "Plan de salud"}   
+                defaultCoberturaTipo={
+                  productoCotizacion?.label ||
+                  getProductoFromCoberturas(formData?.coberturas || [])?.label ||
+                  "Plan de salud"
+                }   
                 isProspecto={isProspecto}                                       
                 onCreateMemberRemote={handleCreateMemberRemote}                      
                 onBlockedAddClick={() =>

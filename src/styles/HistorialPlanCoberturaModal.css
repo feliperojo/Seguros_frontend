@@ -1,0 +1,337 @@
+/* Historial de plan (salud / dental) — estilo institucional */
+
+.modal-dialog.hp-modal {
+  max-width: min(calc(100vw - 1.25rem), 1800px) !important;
+  width: min(calc(100vw - 1.25rem), 1800px) !important;
+  margin: 0.65rem auto;
+}
+
+.hp-modal__content {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 39, 68, 0.18);
+  max-height: calc(100dvh - 1.25rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.hp-modal__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  border-bottom: none;
+  padding: 0.95rem 1.25rem;
+}
+
+.hp-modal__header .btn-close {
+  filter: invert(1) grayscale(1) brightness(2);
+  opacity: 0.85;
+}
+
+.hp-modal__header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  width: 100%;
+  padding-right: 0.5rem;
+}
+
+.hp-modal__header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.hp-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.hp-modal__subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0.12rem 0 0;
+}
+
+.hp-badge-producto {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.hp-badge-producto--salud {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.hp-badge-producto--dental {
+  background: rgba(14, 165, 233, 0.95);
+  color: #fff;
+}
+
+.hp-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  background: #f8f9fb;
+  padding: 1rem 1.25rem;
+}
+
+.hp-modal__footer {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1.25rem;
+}
+
+.hp-alert {
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+
+.hp-tabs {
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 0.85rem !important;
+  gap: 0.15rem;
+}
+
+.hp-tabs .nav-link {
+  border: none !important;
+  border-radius: 8px 8px 0 0 !important;
+  color: #64748b !important;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem !important;
+  background: transparent !important;
+}
+
+.hp-tabs .nav-link:hover {
+  color: #0f2744 !important;
+  background: #f1f5f9 !important;
+}
+
+.hp-tabs .nav-link.active {
+  color: #0f2744 !important;
+  background: #fff !important;
+  box-shadow: inset 0 -2px 0 #1a365d;
+}
+
+.hp-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+
+.hp-btn-create {
+  border-radius: 8px !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-color: #86efac !important;
+  color: #166534 !important;
+}
+
+.hp-btn-create:hover {
+  background: #f0fdf4 !important;
+  border-color: #4ade80 !important;
+  color: #14532d !important;
+}
+
+.hp-btn-archive {
+  border-radius: 8px !important;
+  font-size: 0.78rem;
+  font-weight: 600;
+  border-color: #94a3b8 !important;
+  color: #1a365d !important;
+}
+
+.hp-btn-archive:hover {
+  background: #f1f5f9 !important;
+  border-color: #1a365d !important;
+  color: #0f2744 !important;
+}
+
+.hp-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.85rem;
+}
+
+.hp-panel__title {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #0f2744;
+  margin-bottom: 0.35rem;
+}
+
+.hp-panel__hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-bottom: 0.85rem;
+}
+
+.hp-panel .form-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.hp-panel .form-control,
+.hp-panel .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.hp-btn-submit {
+  border-radius: 8px !important;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: #1a365d !important;
+  border-color: #1a365d !important;
+}
+
+.hp-btn-submit:hover:not(:disabled) {
+  background: #0f2744 !important;
+  border-color: #0f2744 !important;
+}
+
+.hp-btn-submit--success {
+  background: #166534 !important;
+  border-color: #166534 !important;
+}
+
+.hp-btn-submit--success:hover:not(:disabled) {
+  background: #14532d !important;
+  border-color: #14532d !important;
+}
+
+.hp-btn-close {
+  border-radius: 8px !important;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  background: #64748b !important;
+  border: none !important;
+}
+
+.hp-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+.hp-filter-bar .form-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 0;
+}
+
+.hp-filter-bar .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.hp-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #0f2744;
+  color: #fff;
+}
+
+.hp-table-wrap {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: auto;
+  background: #fff;
+}
+
+.hp-table {
+  margin-bottom: 0;
+  font-size: 0.8125rem;
+}
+
+.hp-table thead th {
+  background: #0f2744;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: none;
+  padding: 0.55rem 0.5rem;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.hp-table tbody td {
+  vertical-align: middle;
+  padding: 0.5rem 0.55rem;
+  border-color: #f1f5f9;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.hp-table tbody td:last-child {
+  white-space: normal;
+  min-width: 8rem;
+  max-width: 14rem;
+}
+
+.hp-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.hp-empty,
+.hp-loading {
+  text-align: center;
+  padding: 1.75rem 1rem;
+  color: #64748b;
+  font-size: 0.875rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+
+@media (max-width: 575.98px) {
+  .modal-dialog.hp-modal {
+    max-width: calc(100vw - 0.5rem) !important;
+    width: calc(100vw - 0.5rem) !important;
+    margin: 0.25rem auto;
+  }
+}

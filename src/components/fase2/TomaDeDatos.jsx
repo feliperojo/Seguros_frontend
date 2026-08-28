@@ -23,8 +23,16 @@ import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
 import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
+import CoveragePriceInput from "../common/CoveragePriceInput";
 import CoberturaDeleteButton from "./CoberturaDeleteButton";
 import CoberturaAnularButton from "./CoberturaAnularButton";
+import AgregarDentalModal from "./AgregarDentalModal";
+import {
+  COBERTURA_TIPO_DENTAL_MS,
+  isProductoPrivadoIndependiente,
+  isProductoSaludMs,
+} from "../../constants/coberturaTipos";
+import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
@@ -539,6 +547,16 @@ const COVERAGE_CONFIG_FIELD_KEYS = [
 /** Claves alineadas con Configurador → client_fields_by_tipo */
 const CLIENT_CONFIG_FIELD_KEYS = ["peso", "altura", "pulgadas"];
 
+/** Acordeones de Datos Cliente alineados con Configurador → enabledAccordions */
+const CLIENT_ACCORDION_KEYS = [
+  "datos_principales",
+  "estatus_migratorio",
+  "datos_contacto",
+  "direccion",
+  "empleo_ingreso",
+  "medios_pago",
+];
+
 const countVisibleConfigFields = (keys, shouldShow) =>
   keys.filter((key) => shouldShow(key)).length;
 
@@ -549,6 +567,15 @@ const resolveEnabledFields = (configByTipo, tipo, allKeys) => {
     return null;
   }
   return entry.enabledFields;
+};
+
+/** Sin config de acordeones → todos visibles; con array → respetar (incluso []). */
+const resolveEnabledAccordions = (configByTipo, tipo) => {
+  const entry = configByTipo?.[tipo];
+  if (!entry || !Array.isArray(entry.enabledAccordions)) {
+    return null;
+  }
+  return entry.enabledAccordions;
 };
 
 const shouldShowConfiguredField = (enabledFields, fieldKey) => {
@@ -783,11 +810,13 @@ const TomaDeDatos = ({
   const [editingMember, setEditingMember] = useState(null);
   const [openExistente, setOpenExistente] = useState(false);
   const [openCopy, setOpenCopy] = useState(false);
+  const [openDentalModal, setOpenDentalModal] = useState(false);
   const [historialPlanModal, setHistorialPlanModal] = useState({
     open: false,
     members: [],
     initialCoberturaId: null,
     allowBulkArchive: false,
+    product: "salud",
   });
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
@@ -1010,6 +1039,40 @@ const activeNormalized = useMemo(
       (prev ?? []).map((m, i) => (i === idx ? { ...m, ...patch } : m))
     );
   };
+
+  const patchDental = (idx, patch) => {
+    setFamilyMembers(prev =>
+      (prev ?? []).map((m, i) =>
+        i === idx
+          ? {
+              ...m,
+              coberturaDental: {
+                cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
+                ...(m.coberturaDental || {}),
+                ...patch,
+              },
+            }
+          : m
+      )
+    );
+  };
+
+  const handleDentalCreated = useCallback(
+    (results = []) => {
+      if (!results.length) return;
+      setFamilyMembers((prev) => {
+        const next = [...(prev || [])];
+        results.forEach(({ cliente_id, coberturaDental }) => {
+          const idx = next.findIndex((m) => m.cliente_id === cliente_id);
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], coberturaDental };
+          }
+        });
+        return next;
+      });
+    },
+    [setFamilyMembers]
+  );
 
   const patchCliente = (idx, patch) => {
     setFamilyMembers(prev =>
@@ -1261,6 +1324,18 @@ const activeNormalized = useMemo(
     return isCliente ? patchCliente(idx, patch) : patchRoot(idx, patch);
   };
 
+  const onChangeDentalFactory = (idx) => (e) => {
+    const { name, value, type, checked } = e.target;
+    let v = type === "checkbox" ? !!checked : value;
+    if (name === "pagador_id") {
+      v = value === "OTRO" || value === "" || value == null
+        ? null
+        : Number.isNaN(Number(value)) ? null : Number(value);
+    }
+    if (MONEY_FIELDS.has(name)) v = sanitizeMoneyInput(v);
+    patchDental(idx, { [name]: v });
+  };
+
   const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
     const src = (familyMembers || []).find(m => (m.id ?? m.cliente_id) === sourceId);
     if (!src || !esElegibleParaCopiarEntreMiembros(src)) return;
@@ -1417,14 +1492,40 @@ const activeNormalized = useMemo(
     [grupoFamiliarId, normalized, setFamilyMembers, familyMembers?.length, onDerivedCounts]
   );
 
-  const memberHasPlanData = useCallback((member = {}) => {
-    return [member.compania_id, member.plan, member.codigo_poliza, member.policy_number].some(
+  const memberHasPlanData = useCallback((source = {}) => {
+    return [source.compania_id, source.plan, source.codigo_poliza, source.policy_number].some(
       (value) => value != null && String(value).trim() !== ""
     );
   }, []);
 
   const buildHistorialPlanContext = useCallback(
-    (openedMember, openedIdx) => {
+    (openedMember, openedIdx, options = {}) => {
+      const isDental = options.product === "dental";
+      const dental = openedMember?.coberturaDental;
+
+      // Dental MS: archivar solo esa cobertura (datos de plan viven en coberturaDental).
+      // No reutilizar el bulk de salud: mezclaba IDs y hasPlanData de la cobertura de salud.
+      if (isDental && dental?.cobertura_id) {
+        return {
+          members: [
+            {
+              coberturaId: dental.cobertura_id,
+              memberIdx: openedIdx,
+              memberName:
+                openedMember.nombreCompleto ||
+                openedMember.nombre_completo ||
+                openedMember?.cliente?.nombre_completo ||
+                "Miembro",
+              parentesco: openedMember.parentesco || openedMember.tipo || "",
+              hasPlanData: memberHasPlanData(dental),
+            },
+          ],
+          initialCoberturaId: dental.cobertura_id,
+          allowBulkArchive: false,
+          product: "dental",
+        };
+      }
+
       const fromTomador = isTomador(openedMember);
       const sourceMembers = fromTomador
         ? normalized.filter((member) => member.cobertura_id && member.activo !== false)
@@ -1454,6 +1555,7 @@ const activeNormalized = useMemo(
         members,
         initialCoberturaId: openedMember.cobertura_id,
         allowBulkArchive: fromTomador && members.length > 1,
+        product: "salud",
       };
     },
     [normalized, memberHasPlanData]
@@ -1515,6 +1617,8 @@ const activeNormalized = useMemo(
     const coberturaTipo =
       m.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
 
+    const esProductoPrivadoCard = isProductoPrivadoIndependiente(coberturaTipo);
+
     // Config visual de campos de cobertura por tipo (system_config.coverage_fields_by_tipo).
     // enabledFields = lista de campos a MOSTRAR para ese tipo.
     const visibleCoverageFields = resolveEnabledFields(
@@ -1534,6 +1638,18 @@ const activeNormalized = useMemo(
 
     const shouldShowClientField = (fieldKey) =>
       shouldShowConfiguredField(visibleClientFields, fieldKey);
+
+    const visibleClientAccordions = resolveEnabledAccordions(
+      clientFieldConfig,
+      coberturaTipo
+    );
+
+    const shouldShowClientAccordion = (accordionKey) =>
+      shouldShowConfiguredField(visibleClientAccordions, accordionKey);
+
+    const hasAnyClientAccordion = CLIENT_ACCORDION_KEYS.some((key) =>
+      shouldShowClientAccordion(key)
+    );
 
     const visibleCoverageFieldCount = countVisibleConfigFields(
       COVERAGE_CONFIG_FIELD_KEYS,
@@ -1656,16 +1772,20 @@ const activeNormalized = useMemo(
                     <div className="small text-muted">
                       Género: {normalizeGeneroForSelect(c.genero ?? m.genero ?? "") || "—"}
                     </div>
-                    <div className="small">
-                      Grupo:{" "}
-                      <span className={`badge ${badgeClass}`}>
-                        {grupoValor || "—"}
-                      </span>
-                    </div>
-                    <div className="small text-muted mt-1">
-                      Ingreso total:{" "}
-                      <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
-                    </div>
+                    {!esProductoPrivadoCard && (
+                      <>
+                        <div className="small">
+                          Grupo:{" "}
+                          <span className={`badge ${badgeClass}`}>
+                            {grupoValor || "—"}
+                          </span>
+                        </div>
+                        <div className="small text-muted mt-1">
+                          Ingreso total:{" "}
+                          <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
+                        </div>
+                      </>
+                    )}
                     {m.fecha_creacion_cobertura && (
                       <div className="small text-muted mt-1" style={{ whiteSpace: "nowrap" }}>
                         Enrolamiento:{" "}
@@ -1683,6 +1803,7 @@ const activeNormalized = useMemo(
             <div className="card-body px-4 pt-3 pb-4">
               <div className="d-flex flex-column gap-2">
                 {/* Datos Cliente */}
+                {hasAnyClientAccordion && (
                 <AccordionItem
                   id={`cliente-${itemId}`}
                   title="Datos Cliente"
@@ -1690,6 +1811,7 @@ const activeNormalized = useMemo(
                 >
                   <div className="d-flex flex-column gap-2">
                     {/* Principales */}
+                    {shouldShowClientAccordion("datos_principales") && (
                     <AccordionItem
                       id={`datos-principales-${itemId}`}
                       title="Datos Principales"
@@ -1847,8 +1969,10 @@ const activeNormalized = useMemo(
                               )}
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Estatus migratorio */}
+                    {shouldShowClientAccordion("estatus_migratorio") && (
                     <AccordionItem
                       id={`estatus-${itemId}`}
                       title="Estatus migratorio"
@@ -1956,8 +2080,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Contacto */}
+                    {shouldShowClientAccordion("datos_contacto") && (
                     <AccordionItem
                       id={`datos-contacto-${itemId}`}
                       title="Datos de Contacto"
@@ -2050,8 +2176,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Dirección */}
+                    {shouldShowClientAccordion("direccion") && (
                     <AccordionItem
                       id={`direccion-${itemId}`}
                       title="Dirección"
@@ -2060,8 +2188,10 @@ const activeNormalized = useMemo(
                               <AddressSection c={c} onChange={onChange} readOnly={isReadOnly} />
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Empleo e Ingreso */}
+                    {shouldShowClientAccordion("empleo_ingreso") && (
                     <AccordionItem
                       id={`empleo-ingreso-${itemId}`}
                       title="Datos de Empleo e Ingreso"
@@ -2219,8 +2349,10 @@ const activeNormalized = useMemo(
                               </div>
                       </div>
                     </AccordionItem>
+                    )}
 
                     {/* Medios de Pago */}
+                    {shouldShowClientAccordion("medios_pago") && (
                     <AccordionItem
                       id={`medios-pago-${itemId}`}
                       title="Medios de Pago"
@@ -2233,13 +2365,15 @@ const activeNormalized = useMemo(
                         />
                       )}
                     </AccordionItem>
+                    )}
                   </div>
                 </AccordionItem>
+                )}
 
-                {/* Datos Cobertura */}
+                {/* Datos Cobertura Salud */}
                 <AccordionItem
                   id={`cobertura-${itemId}`}
-                  title="Datos Cobertura"
+                  title="Datos de cobertura Salud"
                   icon={<i className="fas fa-shield-alt" />}
                 >
                   <div>
@@ -2460,10 +2594,11 @@ const activeNormalized = useMemo(
                                   disabled={isReadOnly}
                                 >
                                   <option value="">Seleccione…</option>
-                                  <option value="BRONCE">BRONCE</option>
-                                  <option value="SILVER">SILVER</option>
-                                  <option value="GOLD">GOLD</option>
-                                  <option value="PLATINUM">PLATINUM</option>
+                                  {METAL_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
                                 </select>
                               </ConfigField>
                             )}
@@ -2535,11 +2670,11 @@ const activeNormalized = useMemo(
                                   disabled={isReadOnly}
                                 >
                                   <option value="">Seleccione…</option>
-                                  <option value="DEBITO AUTOMATICO">
-                                    DEBITO AUTOMATICO
-                                  </option>
-                                  <option value="CTE PAGA">CTE PAGA</option>
-                                  <option value="MES A MES">MES A MES</option>
+                                  {TIPO_PAGO_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt}>
+                                      {opt}
+                                    </option>
+                                  ))}
                                 </select>
                               </ConfigField>
                             )}
@@ -2559,15 +2694,14 @@ const activeNormalized = useMemo(
 
                             {shouldShowCoverageField("precio") && (
                               <ConfigField label="Precio ($)">
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  name="precio"
+                                <CoveragePriceInput
+                                  size="sm"
                                   value={m.precio ?? ""}
-                                  onChange={onChange}
+                                  onChange={(next) =>
+                                    patchRoot(idx, { precio: next })
+                                  }
                                   disabled={isReadOnly}
-                                  placeholder="0.00"
+                                  className="form-control form-control-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                 />
                               </ConfigField>
                             )}
@@ -2692,6 +2826,286 @@ const activeNormalized = useMemo(
                       )}
                   </div>
                 </AccordionItem>
+
+                {/* Datos Cobertura Dental MS */}
+                {m.coberturaDental?.cobertura_id && (() => {
+                  const d = m.coberturaDental;
+                  const onDentalChange = onChangeDentalFactory(idx);
+                  const dentalTipo = COBERTURA_TIPO_DENTAL_MS;
+                  const visibleDentalFields = resolveEnabledFields(
+                    coverageFieldConfig,
+                    dentalTipo,
+                    COVERAGE_CONFIG_FIELD_KEYS
+                  );
+                  const shouldShowDentalField = (fieldKey) =>
+                    shouldShowConfiguredField(visibleDentalFields, fieldKey);
+                  const dentalEstado = d.estado_cobertura || "—";
+                  const dentalDefinida = d.cobertura_definida || d.fecha_cancelacion ? "Cancelada" : "Activa";
+
+                  return (
+                    <AccordionItem
+                      id={`cobertura-dental-${itemId}`}
+                      title={`Datos de cobertura Dental — ${dentalDefinida}`}
+                      icon={<i className="fas fa-tooth" />}
+                    >
+                      <div>
+                        <p className="text-muted small">
+                          Dental MS — {dentalEstado}
+                          {d.fecha_cancelacion ? ` (cancelada ${d.fecha_cancelacion})` : ""}
+                        </p>
+                        {d.cobertura_id && (
+                          <div className="d-flex justify-content-end mb-2">
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() =>
+                                setHistorialPlanModal({
+                                  open: true,
+                                  ...buildHistorialPlanContext(m, idx, {
+                                    product: "dental",
+                                  }),
+                                })
+                              }
+                            >
+                              <i className="fas fa-history me-1" />
+                              Historial de plan dental
+                            </button>
+                          </div>
+                        )}
+                        <ConfigurableFieldsGrid>
+                          {shouldShowDentalField("codigo_poliza") && (
+                            <ConfigField label="Numero ID">
+                              <input
+                                className="form-control form-control-sm"
+                                name="codigo_poliza"
+                                value={d.codigo_poliza || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("fecha_activacion") && (
+                            <ConfigField label="Fecha de activación">
+                              <DateInputWithCalendar
+                                size="sm"
+                                valueIso={(d.fecha_activacion || "").slice(0, 10)}
+                                onChangeIso={(iso) =>
+                                  onChangeDentalFactory(idx)({
+                                    target: {
+                                      name: "fecha_activacion",
+                                      value: iso,
+                                      type: "text",
+                                    },
+                                  })
+                                }
+                                disabled={isReadOnly}
+                                inputName="fecha_activacion"
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("ano_cobertura") && (
+                            <ConfigField label="Año de cobertura">
+                              <input
+                                className="form-control form-control-sm bg-light"
+                                name="ano_cobertura"
+                                value={d.ano_cobertura || ""}
+                                readOnly
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("elegibilidad") && (
+                            <ConfigField label="Elegibilidad">
+                              <input
+                                className="form-control form-control-sm bg-light"
+                                name="elegibilidad"
+                                value={d.elegibilidad || ""}
+                                readOnly
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("compania_id") && (
+                            <ConfigField label="Compañía">
+                              <CompanySelect
+                                name="compania_id"
+                                companies={companies}
+                                value={d.compania_id ?? d.compania?.id ?? ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly || companiesLoading}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("policy_number") && (
+                            <ConfigField label="Código ID">
+                              <input
+                                className="form-control form-control-sm"
+                                name="policy_number"
+                                value={d.policy_number || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("agente") && (
+                            <ConfigField label="Agente">
+                              <input
+                                className="form-control form-control-sm"
+                                name="agente"
+                                value={d.agente || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("plan") && (
+                            <ConfigField label="Plan">
+                              <input
+                                className="form-control form-control-sm"
+                                name="plan"
+                                value={d.plan || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("estado_cobertura") && (
+                            <ConfigField label="Cobertura">
+                              <select
+                                className="form-select form-select-sm"
+                                name="estado_cobertura"
+                                value={d.estado_cobertura || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                {opcionesEstadoCoberturaPorProceso(estadoActual, d.estado_cobertura).map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("pagador_id") && (
+                            <ConfigField label="Pagador">
+                              <PayerSelect
+                                options={payerOptionsWithOther}
+                                value={
+                                  d.pagador_id === undefined ||
+                                  d.pagador_id === null ||
+                                  d.pagador_id === ""
+                                    ? "OTRO"
+                                    : String(d.pagador_id)
+                                }
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("tipo_pago") && (
+                            <ConfigField label="Tipo de Pago">
+                              <select
+                                className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                name="tipo_pago"
+                                value={d.tipo_pago || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              >
+                                <option value="">Seleccione…</option>
+                                {TIPO_PAGO_OPTIONS.map((opt) => (
+                                  <option key={opt} value={opt}>
+                                    {opt}
+                                  </option>
+                                ))}
+                              </select>
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("dia_pago") && (
+                            <ConfigField label="Día de pago">
+                              <input
+                                className="form-control form-control-sm"
+                                name="dia_pago"
+                                value={d.dia_pago || ""}
+                                onChange={onDentalChange}
+                                disabled={isReadOnly}
+                              />
+                            </ConfigField>
+                          )}
+                          {shouldShowDentalField("precio") && (
+                            <ConfigField label="Precio ($)">
+                              <CoveragePriceInput
+                                size="sm"
+                                value={d.precio ?? ""}
+                                onChange={(next) => patchDental(idx, { precio: next })}
+                                disabled={isReadOnly}
+                                className="form-control form-control-sm"
+                              />
+                            </ConfigField>
+                          )}
+                          {d.fecha_cancelacion && (
+                            <>
+                              <ConfigField label="Fecha de expiración">
+                                <MdyDashDateInput
+                                  size="sm"
+                                  valueIso={(d.fecha_cancelacion || "").slice(0, 10)}
+                                  disabled
+                                  title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
+                                  onChangeIso={() => {}}
+                                />
+                              </ConfigField>
+                              <ConfigField label="Vigente">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300"
+                                  name="vigente"
+                                  value={d.vigente === true || d.vigente === "true" || d.vigente === 1 ? "true" : "false"}
+                                  disabled
+                                  title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
+                                >
+                                  <option value="true">Sí</option>
+                                  <option value="false">No</option>
+                                </select>
+                              </ConfigField>
+                            </>
+                          )}
+                          {d.fecha_retiro && (
+                            <>
+                              <ConfigField label="Fecha de Retiro">
+                                <MdyDashDateInput
+                                  size="sm"
+                                  valueIso={(d.fecha_retiro || "").slice(0, 10)}
+                                  disabled
+                                  title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
+                                  onChangeIso={() => {}}
+                                />
+                              </ConfigField>
+                              <ConfigField label="Activo">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300"
+                                  name="activo"
+                                  value={d.activo === true || d.activo === "true" || d.activo === 1 ? "true" : "false"}
+                                  disabled
+                                  title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
+                                >
+                                  <option value="true">Sí</option>
+                                  <option value="false">No</option>
+                                </select>
+                              </ConfigField>
+                            </>
+                          )}
+                          {(d.nota_retiro || d.nota_cancel) && (
+                            <ConfigField label="Nota de Retiro">
+                              <input
+                                className="form-control form-control-sm"
+                                name="nota_retiro"
+                                value={d.nota_retiro ?? d.nota_cancel ?? ""}
+                                readOnly
+                                disabled
+                                title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
+                              />
+                            </ConfigField>
+                          )}
+                        </ConfigurableFieldsGrid>
+                      </div>
+                    </AccordionItem>
+                  );
+                })()}
               </div>
             </div>
           </div>
@@ -2715,6 +3129,16 @@ const activeNormalized = useMemo(
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
               <i className="fas fa-copy me-1" /> Copiar
             </button>
+            {isProductoSaludMs(defaultCoberturaTipo) && (
+              <button
+                className="btn btn-outline-info btn-sm"
+                type="button"
+                onClick={() => setOpenDentalModal(true)}
+                title="Agregar cobertura Dental MS a miembros con Salud activa"
+              >
+                <i className="fas fa-tooth me-1" /> Agregar Dental MS
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2792,6 +3216,14 @@ const activeNormalized = useMemo(
         defaultCoberturaTipo={defaultCoberturaTipo}
       />
 
+      <AgregarDentalModal
+        open={openDentalModal}
+        onClose={() => setOpenDentalModal(false)}
+        members={normalized}
+        grupoFamiliarId={grupoFamiliarId}
+        onDentalCreated={handleDentalCreated}
+      />
+
       <HistorialPlanCoberturaModal
         show={historialPlanModal.open}
         onClose={() =>
@@ -2800,11 +3232,13 @@ const activeNormalized = useMemo(
             members: [],
             initialCoberturaId: null,
             allowBulkArchive: false,
+            product: "salud",
           })
         }
         members={historialPlanModal.members}
         initialCoberturaId={historialPlanModal.initialCoberturaId}
         allowBulkArchive={historialPlanModal.allowBulkArchive}
+        product={historialPlanModal.product || "salud"}
         readOnly={readOnly}
       />
     </div>
