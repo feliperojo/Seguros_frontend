@@ -80,6 +80,35 @@ export const isProductoPrivadoIndependiente = (tipo = "") => {
   return !isProductoSaludMs(norm);
 };
 
+/** Salud MS → Dental MS → privados → otros (listado de GF). */
+export const prioridadOrdenListadoProducto = (tipo = "") => {
+  if (isProductoSaludMs(tipo)) return 10;
+  if (isDentalMsCoberturaTipo(tipo)) return 20;
+  if (isProductoPrivadoIndependiente(tipo)) return 30;
+  return 40;
+};
+
+export const ordenarEtiquetasProductoListado = (producto = "") => {
+  const raw = String(producto ?? "").trim();
+  if (!raw || raw === "-") return raw || "-";
+
+  const partes = raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (partes.length <= 1) return partes[0] || "-";
+
+  return partes
+    .sort((a, b) => {
+      const pa = prioridadOrdenListadoProducto(a);
+      const pb = prioridadOrdenListadoProducto(b);
+      if (pa !== pb) return pa - pb;
+      return a.localeCompare(b, "es", { sensitivity: "base" });
+    })
+    .join(", ");
+};
+
 /** Salud MS activa en el modelo de miembro (campos raíz) */
 export const memberTieneSaludMsActiva = (m = {}) => {
   if (m.activo === false) return false;

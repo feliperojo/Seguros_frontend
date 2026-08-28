@@ -23,8 +23,10 @@ import {
   personasSaludDentalParaListado,
   personasPrivadasParaListado,
   personasTaxesParaListado,
+  FILTRO_PRODUCTO_LISTADO_OPCIONES,
+  normalizarFiltroProductoListado,
 } from "../constants/estadosGrupoFamiliar";
-import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
+import { ordenarEtiquetasProductoListado } from "../constants/coberturaTipos";
 import { Helmet } from "react-helmet-async";
 
 
@@ -65,11 +67,9 @@ const GruposFamiliaresListado = () => {
     ];
     return validos.includes(fromUrl) ? fromUrl : "Todos los estados";
   });
-  const [selectedProducto, setSelectedProducto] = useState(() => {
-    const fromUrl = (searchParams.get("producto") || "").toLowerCase();
-    const validos = ["salud", "dental", "ambos"];
-    return validos.includes(fromUrl) ? fromUrl : "todos";
-  });
+  const [selectedProducto, setSelectedProducto] = useState(() =>
+    normalizarFiltroProductoListado(searchParams.get("producto"))
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
@@ -152,7 +152,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   };
 
   const handleProductoChange = (value) => {
-    const next = String(value || "todos").toLowerCase();
+    const next = normalizarFiltroProductoListado(value);
     setSelectedProducto(next);
     const params = new URLSearchParams(searchParams);
     if (next === "todos") {
@@ -410,7 +410,8 @@ useEffect(() => {
   };
 
 
-  const getProductoNombre = (grupo) => grupo.producto || "-";
+  const getProductoNombre = (grupo) =>
+    ordenarEtiquetasProductoListado(grupo.producto || "-");
 
   const getCompaniaNombre = (grupo) => grupo.compania_nombre || "-";
 
@@ -554,17 +555,18 @@ useEffect(() => {
                   ))}
                 </Form.Select>
               </div>
-              <div style={{ minWidth: "160px" }}>
+              <div style={{ minWidth: "200px" }}>
                 <div className="gf-listado__label">Producto</div>
                 <Form.Select
                   value={selectedProducto}
                   onChange={(e) => handleProductoChange(e.target.value)}
                   aria-label="Filtrar por producto"
                 >
-                  <option value="todos">Todos los productos</option>
-                  <option value="salud">Salud</option>
-                  <option value="dental">Dental MS</option>
-                  <option value="ambos">Salud y Dental</option>
+                  {FILTRO_PRODUCTO_LISTADO_OPCIONES.map((opcion) => (
+                    <option key={opcion.value} value={opcion.value}>
+                      {opcion.label}
+                    </option>
+                  ))}
                 </Form.Select>
               </div>
               <div>

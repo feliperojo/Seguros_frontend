@@ -467,6 +467,28 @@ export function personasCoberturaParaListado(grupo) {
   return grupo?.personas_cobertura || 0;
 }
 
+/** Opciones del filtro de producto en el listado de grupos familiares. */
+export const FILTRO_PRODUCTO_LISTADO_OPCIONES = [
+  { value: "todos", label: "Todos los productos" },
+  { value: "salud", label: "Salud" },
+  { value: "dental_ms", label: "Dental MS" },
+  { value: "ambos", label: "Salud y Dental MS" },
+  { value: "dental_privado", label: "Dental privado" },
+  { value: "vision", label: "Visión" },
+  { value: "descuentos", label: "Plan de descuentos" },
+  { value: "vida", label: "Plan de vida" },
+];
+
+export const FILTRO_PRODUCTO_LISTADO_VALORES = FILTRO_PRODUCTO_LISTADO_OPCIONES.map(
+  (o) => o.value
+).filter((v) => v !== "todos");
+
+export function normalizarFiltroProductoListado(value) {
+  const raw = String(value || "").toLowerCase();
+  if (raw === "dental") return "dental_ms";
+  return FILTRO_PRODUCTO_LISTADO_VALORES.includes(raw) ? raw : "todos";
+}
+
 export function ordenarResumenGrupos(resumenEstados = []) {
   const estadosProcesados = Array.isArray(resumenEstados)
     ? resumenEstados.map((item) => ({
