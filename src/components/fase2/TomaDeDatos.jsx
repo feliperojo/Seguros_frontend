@@ -29,6 +29,7 @@ import CoberturaAnularButton from "./CoberturaAnularButton";
 import AgregarDentalModal from "./AgregarDentalModal";
 import {
   COBERTURA_TIPO_DENTAL_MS,
+  isProductoPrivadoIndependiente,
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
@@ -1616,6 +1617,8 @@ const activeNormalized = useMemo(
     const coberturaTipo =
       m.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
 
+    const esProductoPrivadoCard = isProductoPrivadoIndependiente(coberturaTipo);
+
     // Config visual de campos de cobertura por tipo (system_config.coverage_fields_by_tipo).
     // enabledFields = lista de campos a MOSTRAR para ese tipo.
     const visibleCoverageFields = resolveEnabledFields(
@@ -1769,16 +1772,20 @@ const activeNormalized = useMemo(
                     <div className="small text-muted">
                       Género: {normalizeGeneroForSelect(c.genero ?? m.genero ?? "") || "—"}
                     </div>
-                    <div className="small">
-                      Grupo:{" "}
-                      <span className={`badge ${badgeClass}`}>
-                        {grupoValor || "—"}
-                      </span>
-                    </div>
-                    <div className="small text-muted mt-1">
-                      Ingreso total:{" "}
-                      <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
-                    </div>
+                    {!esProductoPrivadoCard && (
+                      <>
+                        <div className="small">
+                          Grupo:{" "}
+                          <span className={`badge ${badgeClass}`}>
+                            {grupoValor || "—"}
+                          </span>
+                        </div>
+                        <div className="small text-muted mt-1">
+                          Ingreso total:{" "}
+                          <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
+                        </div>
+                      </>
+                    )}
                     {m.fecha_creacion_cobertura && (
                       <div className="small text-muted mt-1" style={{ whiteSpace: "nowrap" }}>
                         Enrolamiento:{" "}

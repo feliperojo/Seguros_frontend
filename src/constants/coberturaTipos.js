@@ -109,6 +109,18 @@ export const ordenarEtiquetasProductoListado = (producto = "") => {
     .join(", ");
 };
 
+export const etiquetaProductoCobertura = (tipo = "") => {
+  const norm = normalizeCoberturaTipo(tipo);
+  if (norm) return norm;
+  return "Salud MS";
+};
+
+export const claseBadgeProductoCobertura = (tipo = "") => {
+  if (isDentalMsCoberturaTipo(tipo)) return "hcc-badge-producto--dental";
+  if (isProductoPrivadoIndependiente(tipo)) return "hcc-badge-producto--privado";
+  return "hcc-badge-producto--salud";
+};
+
 /** Salud MS activa en el modelo de miembro (campos raíz) */
 export const memberTieneSaludMsActiva = (m = {}) => {
   if (m.activo === false) return false;

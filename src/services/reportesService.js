@@ -267,6 +267,9 @@ const buildCoberturasCanceladasRetiradasQueryParams = (params) => {
   if (params.mes) queryParams.append("mes", params.mes);
   if (params.anio) queryParams.append("anio", params.anio);
   if (params.compania_id) queryParams.append("compania_id", params.compania_id);
+  if (params.producto && params.producto !== "todos") {
+    queryParams.append("producto", params.producto);
+  }
   if (params.motivo_cancelacion) queryParams.append("motivo_cancelacion", params.motivo_cancelacion);
   if (params.sort_by) {
     queryParams.append("sort_by", params.sort_by);
