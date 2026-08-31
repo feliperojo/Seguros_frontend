@@ -88,6 +88,7 @@ export const buildDeltaCambiosFromPayloads = ({
 /**
  * En legacy el backend solo permite vaciar campos de cobertura si vienen en `_dirty_fields`.
  * Reutiliza el diff ya calculado (mismo criterio que modo delta) y lo adjunta al payload completo.
+ * También reinyecta valores null del diff que stripNulls hubiera omitido (p. ej. precio).
  */
 export const attachCoberturaDirtyFieldsForLegacy = (
   coberturasPayload = [],
@@ -100,24 +101,37 @@ export const attachCoberturaDirtyFieldsForLegacy = (
     return coberturasPayload;
   }
 
-  const dirtyById = new Map(
+  const cambioById = new Map(
     coberturasCambios
       .filter((c) => c?.id != null && Array.isArray(c._dirty_fields) && c._dirty_fields.length > 0)
-      .map((c) => [Number(c.id), c._dirty_fields]),
+      .map((c) => [Number(c.id), c]),
   );
 
-  if (dirtyById.size === 0) {
+  if (cambioById.size === 0) {
     return coberturasPayload;
   }
 
   return coberturasPayload.map((cobertura) => {
-    const dirtyFields = dirtyById.get(Number(cobertura?.id));
-    if (!dirtyFields) {
+    const cambio = cambioById.get(Number(cobertura?.id));
+    if (!cambio) {
       return cobertura;
     }
-    return {
+
+    const merged = {
       ...cobertura,
-      _dirty_fields: dirtyFields,
+      _dirty_fields: cambio._dirty_fields,
     };
+
+    (cambio._dirty_fields || []).forEach((field) => {
+      if (
+        cambio.campos &&
+        Object.prototype.hasOwnProperty.call(cambio.campos, field) &&
+        merged[field] === undefined
+      ) {
+        merged[field] = cambio.campos[field] ?? null;
+      }
+    });
+
+    return merged;
   });
 };

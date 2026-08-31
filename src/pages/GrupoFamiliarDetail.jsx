@@ -279,6 +279,19 @@ const COBERTURA_CAMPOS_PROTEGIDOS = [
   "vigente",
 ];
 
+/**
+ * stripNulls elimina precio:null y el backend conserva el valor anterior.
+ * Si el usuario vació el campo, hay que enviar null explícitamente.
+ */
+const finalizeCoberturaPayload = (cobertura = {}) => {
+  const precio = cobertura.precio;
+  const cleaned = stripNulls(cobertura);
+  if (precio === null) {
+    cleaned.precio = null;
+  }
+  return cleaned;
+};
+
 const memberTieneRetiroOCancelacion = (m = {}) =>
   m.fecha_cancelacion !== undefined ||
   m.fecha_retiro !== undefined ||
@@ -320,7 +333,7 @@ const buildCoberturaPayloadFromSource = (
     COBERTURA_CAMPOS_PROTEGIDOS.forEach((campo) => {
       delete cobertura[campo];
     });
-    return stripNulls(cobertura);
+    return finalizeCoberturaPayload(cobertura);
   }
 
   if (source.fecha_cancelacion !== undefined) {
@@ -382,7 +395,7 @@ const buildCoberturaPayloadFromSource = (
     valoresProtegidos.vigente = !cobertura.fecha_cancelacion;
   }
 
-  const coberturaLimpia = stripNulls(cobertura);
+  const coberturaLimpia = finalizeCoberturaPayload(cobertura);
   Object.keys(valoresProtegidos).forEach((campo) => {
     coberturaLimpia[campo] = valoresProtegidos[campo];
   });
