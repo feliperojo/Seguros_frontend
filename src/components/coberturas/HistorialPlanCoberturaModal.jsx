@@ -76,7 +76,7 @@ const HistorialPlanCoberturaModal = ({
   initialCoberturaId = null,
   allowBulkArchive = false,
   readOnly = false,
-  /** "salud" | "dental" — dental no muestra Metal/Red */
+  /** "salud" | "dental" — dental no muestra Metal/Red ni Código ID */
   product = "salud",
 }) => {
   const esDental = product === "dental";
@@ -312,7 +312,7 @@ const HistorialPlanCoberturaModal = ({
         metal: esDental ? null : manualForm.metal || null,
         red: esDental ? null : manualForm.red || null,
         policy_number: manualForm.policy_number.trim() || null,
-        codigo_poliza: manualForm.codigo_poliza.trim() || null,
+        codigo_poliza: esDental ? null : manualForm.codigo_poliza.trim() || null,
         agente: manualForm.agente.trim() || null,
         precio: manualForm.precio !== "" ? Number(manualForm.precio) : null,
         fecha_activacion: manualForm.fecha_activacion || null,
@@ -540,14 +540,16 @@ const HistorialPlanCoberturaModal = ({
                   onChange={(e) => updateManualField("policy_number", e.target.value)}
                 />
               </div>
-              <div className="col-md-3">
-                <Form.Label className="small mb-1">Código ID</Form.Label>
-                <Form.Control
-                  size="sm"
-                  value={manualForm.codigo_poliza}
-                  onChange={(e) => updateManualField("codigo_poliza", e.target.value)}
-                />
-              </div>
+              {!esDental && (
+                <div className="col-md-3">
+                  <Form.Label className="small mb-1">Código ID</Form.Label>
+                  <Form.Control
+                    size="sm"
+                    value={manualForm.codigo_poliza}
+                    onChange={(e) => updateManualField("codigo_poliza", e.target.value)}
+                  />
+                </div>
+              )}
               <div className="col-md-3">
                 <Form.Label className="small mb-1">Precio ($)</Form.Label>
                 <Form.Control
@@ -768,7 +770,7 @@ const HistorialPlanCoberturaModal = ({
                       {!esDental && <th>Metal</th>}
                       {!esDental && <th>Red</th>}
                       <th>Número ID</th>
-                      <th>Código ID</th>
+                      {!esDental && <th>Código ID</th>}
                       <th>Agente</th>
                       <th>Precio ($)</th>
                       <th>Activación</th>
@@ -801,8 +803,12 @@ const HistorialPlanCoberturaModal = ({
                         <td>{item.plan || "—"}</td>
                         {!esDental && <td>{item.metal || "—"}</td>}
                         {!esDental && <td>{item.red || "—"}</td>}
-                        <td>{item.policy_number || item.codigo_poliza || "—"}</td>
-                        <td>{item.codigo_poliza || "—"}</td>
+                        <td>
+                          {esDental
+                            ? item.policy_number || "—"
+                            : item.policy_number || item.codigo_poliza || "—"}
+                        </td>
+                        {!esDental && <td>{item.codigo_poliza || "—"}</td>}
                         <td>{item.agente || "—"}</td>
                         <td>{formatPrecio(item.precio)}</td>
                         <td>{formatDate(item.fecha_activacion)}</td>
