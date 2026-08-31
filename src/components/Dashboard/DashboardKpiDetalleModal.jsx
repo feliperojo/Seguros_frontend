@@ -124,7 +124,9 @@ export default function DashboardKpiDetalleModal({
     clientes: "Detalle de Clientes",
     grupos: "Detalle de Grupos Familiares",
     coberturas: "Detalle — Estado de Coberturas",
+    dental_ms: "Detalle — Coberturas Dental MS",
     canceladas: "Coberturas Canceladas",
+    dental_ms_cancelado: "Detalle — Dental MS Cancelado",
     retiradas: "Coberturas Retiradas",
   };
 
@@ -132,6 +134,7 @@ export default function DashboardKpiDetalleModal({
     clientes: "/clientes/lista",
     grupos: "/grupofamiliar/lista",
     canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
+    dental_ms_cancelado: "/informes/coberturas-canceladas-retiradas?tipo=cancelados&producto=dental_ms",
     retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
   };
 
@@ -245,6 +248,29 @@ export default function DashboardKpiDetalleModal({
       );
     }
 
+    if (tipo === "dental_ms") {
+      const totalDentalMs = estadisticas?.dentalMsActivo ?? 0;
+      return (
+        <>
+          <p className="dashboard-kpi-detalle-intro">
+            Coberturas con tipo de producto <strong>Dental MS</strong> registradas en el sistema
+            (todas las existentes, no solo las activas). No incluye Plan Dental privado.
+          </p>
+          <div className="dashboard-kpi-detalle-hero" style={{ color: "#059669" }}>
+            {totalDentalMs}
+          </div>
+          <div className="dashboard-kpi-detalle-list">
+            <DetalleFila
+              label="Coberturas Dental MS"
+              valor={totalDentalMs}
+              color="#059669"
+              descripcion="cobertura_tipo = Dental MS"
+            />
+          </div>
+        </>
+      );
+    }
+
     if (tipo === "canceladas") {
       return (
         <>
@@ -259,6 +285,29 @@ export default function DashboardKpiDetalleModal({
               valor={estadisticas?.polizasCanceladas ?? 0}
               color="#ea4335"
               descripcion="fecha_cancelacion + estado Cancelado"
+            />
+          </div>
+        </>
+      );
+    }
+
+    if (tipo === "dental_ms_cancelado") {
+      const totalDentalCancelado = estadisticas?.dentalMsCancelado ?? 0;
+      return (
+        <>
+          <p className="dashboard-kpi-detalle-intro">
+            Coberturas <strong>Dental MS</strong> con fecha de cancelación y estado{" "}
+            <strong>Cancelado</strong>.
+          </p>
+          <div className="dashboard-kpi-detalle-hero dashboard-kpi-detalle-hero--alert">
+            {totalDentalCancelado}
+          </div>
+          <div className="dashboard-kpi-detalle-list">
+            <DetalleFila
+              label="Dental MS Cancelado"
+              valor={totalDentalCancelado}
+              color="#ea4335"
+              descripcion="Dental MS + fecha_cancelacion + estado Cancelado"
             />
           </div>
         </>

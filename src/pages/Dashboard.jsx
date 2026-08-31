@@ -942,12 +942,12 @@ const handleOpenViewModal = (cliente) => {
             onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
           />
           <DashboardKpiTile
-            label="Dental MS Activo"
+            label="Coberturas Dental MS"
             value={estadisticas.dentalMsActivo ?? 0}
             icon={<FaFileInvoiceDollar />}
             tone="success"
-            onClick={() => abrirKpiModal("coberturas")}
-            onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
+            onClick={() => abrirKpiModal("dental_ms")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "dental_ms")}
           />
         </div>
         <p className="dashboard-kpi-group-label dashboard-kpi-group-label--alert">Cancelaciones y retiros</p>
@@ -965,8 +965,8 @@ const handleOpenViewModal = (cliente) => {
             value={estadisticas.dentalMsCancelado ?? 0}
             icon={<FaCalendarAlt />}
             tone="danger"
-            onClick={() => abrirKpiModal("canceladas")}
-            onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
+            onClick={() => abrirKpiModal("dental_ms_cancelado")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "dental_ms_cancelado")}
           />
           <DashboardKpiTile
             label="Coberturas Retiradas"

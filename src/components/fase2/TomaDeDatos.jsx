@@ -2935,7 +2935,7 @@ const activeNormalized = useMemo(
                             </ConfigField>
                           )}
                           {shouldShowDentalField("policy_number") && (
-                            <ConfigField label="Código ID">
+                            <ConfigField label="Número ID">
                               <input
                                 className="form-control form-control-sm"
                                 name="policy_number"
