@@ -37,6 +37,7 @@ import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaField
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
+import { filterCompaniesForProducto } from "../../services/companies";
 import {
   puedeEditarParentescoOEliminarCobertura,
   opcionesEstadoCoberturaPorProceso,
@@ -2927,7 +2928,14 @@ const activeNormalized = useMemo(
                             <ConfigField label="Compañía">
                               <CompanySelect
                                 name="compania_id"
-                                companies={companies}
+                                companies={filterCompaniesForProducto(
+                                  companies,
+                                  "dental_ms",
+                                  {
+                                    includeId: d.compania_id ?? d.compania?.id,
+                                    soloActivas: true,
+                                  }
+                                )}
                                 value={d.compania_id ?? d.compania?.id ?? ""}
                                 onChange={onDentalChange}
                                 disabled={isReadOnly || companiesLoading}
