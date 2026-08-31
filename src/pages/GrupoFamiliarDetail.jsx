@@ -852,6 +852,8 @@ const [grupoVersion, setGrupoVersion] = useState(null);
     useState(false);
   const esAnioPasado = periodoRelativo === "pasado";
 
+  // Presencia al abrir el grupo (informativo: quién lo está visualizando).
+  // El guardado usa payload legacy completo; la presencia no debe cambiar el modo de save.
   const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
     registrarPresencia: !loading && Boolean(id) && !esAnioPasado,
     activo: !esAnioPasado && (isEditing || saving),
@@ -1696,40 +1698,24 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           })
         : {};
 
-      const hayCambiosDelta = Object.keys(cambios).length > 0;
-      const otrosEditores = (presenciaAlGuardar?.editores ?? []).length > 0;
-      const hayAlertaConcurrencia = Boolean(presenciaAlGuardar?.alerta || otrosEditores);
-      // Delta solo con concurrencia real. Sin ella se envía el payload legacy completo
-      // (si siempre mandamos `cambios`, el backend podía ignorar clientes/coberturas).
-      const useDeltaSave = Boolean(editBaseline && hayCambiosDelta && hayAlertaConcurrencia);
+      // Banner de presencia = solo informativo. Guardado siempre legacy completo
+      // (evitar modo delta por “alguien está viendo”, que incompleta el 1.er Guardar).
+      const coberturasParaEnviar = attachCoberturaDirtyFieldsForLegacy(
+        coberturasPayload,
+        cambios.coberturas,
+      );
 
-      // En legacy, marcar campos de cobertura realmente editados (_dirty_fields) para que
-      // el backend permita vaciarlos (p. ej. Codigo de ID / policy_number). Sin esto,
-      // la protección anti-borrado conserva el valor anterior.
-      const coberturasParaEnviar = useDeltaSave
-        ? coberturasPayload
-        : attachCoberturaDirtyFieldsForLegacy(
-            coberturasPayload,
-            cambios.coberturas,
-          );
-
-      let finalPayload = {
+      const finalPayload = {
         ...grupoPayload,
         clientes: clientesPayload,
         coberturas: coberturasParaEnviar,
         grupo_version: grupoVersion,
       };
 
-      if (useDeltaSave) {
-        finalPayload.modo = "delta";
-        finalPayload.cambios = cambios;
-      }
-
       console.log("🚀 [handleSave] Payload FINAL que se envía al backend (fullUpdate):", {
         grupoId: id,
-        modo: useDeltaSave ? "delta" : "legacy",
-        hayAlertaConcurrencia,
-        incluyeCambiosDelta: useDeltaSave,
+        modo: "legacy",
+        presenciaInformativa: Boolean(presenciaAlGuardar?.alerta),
         grupoPayload: {
           ...grupoPayload,
           tags: grupoPayload.tags ? 
@@ -1767,13 +1753,25 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
       await reload();
       showToast("success", alsoAdvance ? "Guardado y etapa actualizada" : "Actualización exitosa", "");
     } catch (e) {
+      // Este es el aviso amarillo al pulsar Guardar (toast), distinto del banner al abrir.
       if (e?.response?.code === "VERSION_CONFLICT") {
+        const conflictData = e?.response?.data?.data ?? e?.response?.data ?? {};
+        const versionActual =
+          conflictData?.grupo_version_actual ??
+          conflictData?.grupo_version ??
+          null;
+        if (versionActual) {
+          setGrupoVersion(versionActual);
+        }
+        if (e?.response?.data?.meta?.edicion) {
+          applyEdicionMeta(e.response.data.meta);
+        }
+        // No hacer reload(): borraba el formulario y obligaba a reescribir todo.
         showToast(
           "warning",
-          "Conflicto de versión",
-          e?.message || "Otro usuario guardó cambios. Recarga el formulario e intenta de nuevo."
+          "No se pudo guardar",
+          "Otro usuario guardó cambios justo antes. Tus datos siguen en pantalla: pulsa Guardar otra vez."
         );
-        await reload();
         return;
       }
       showToast("danger", "Error al actualizar", e?.message || "No se pudo guardar los cambios.");

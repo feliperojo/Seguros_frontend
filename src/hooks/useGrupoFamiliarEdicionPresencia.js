@@ -15,8 +15,10 @@ const EMPTY_EDICION = {
 
 /**
  * Presencia en grupo familiar.
- * - registrarPresencia / activo: heartbeat mientras la pantalla está abierta.
+ * - registrarPresencia / activo: heartbeat mientras la pantalla está abierta
+ *   (banner informativo de quién tiene el grupo abierto).
  * - Polling frecuente + refresh al recuperar foco para alertas tempranas.
+ * - No bloquea el guardado; el conflicto al Guardar se maneja aparte (grupo_version).
  */
 export default function useGrupoFamiliarEdicionPresencia(
   grupoFamiliarId,
