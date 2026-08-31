@@ -65,6 +65,7 @@ import PermissionsList from "./pages/admin/PermissionsList";
 import AuditLogsList from "./pages/admin/AuditLogsList";
 import UserSessionsReport from "./pages/admin/UserSessionsReport";
 import OperationalConceptsAdmin from "./pages/admin/OperationalConceptsAdmin";
+import CompaniasAdmin from "./pages/admin/CompaniasAdmin";
 import Configurador from "./pages/admin/Configurador";
 import RenovacionesEstadoPage from "./pages/admin/RenovacionesEstadoPage";
 
@@ -205,6 +206,14 @@ const App = () => {
           path="/admin/operational-concepts"
           element={
             <OperationalConceptsAdmin />
+          }
+        />
+        <Route
+          path="/admin/companias"
+          element={
+            <PermissionRoute permission="users.view">
+              <CompaniasAdmin />
+            </PermissionRoute>
           }
         />
         <Route

@@ -1,0 +1,389 @@
+/* Compañías admin — estilo institucional */
+
+.cmp-admin-container {
+  width: 100%;
+  max-width: 100%;
+  padding-top: 0.75rem;
+  padding-bottom: 1.5rem;
+  box-sizing: border-box;
+}
+
+.cmp-admin {
+  width: 100%;
+  max-width: 100%;
+  background: #f8f9fb;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 39, 68, 0.06);
+}
+
+.cmp-admin__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cmp-admin__header-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.cmp-admin__header-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.cmp-admin__title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+}
+
+.cmp-admin__subtitle {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0.15rem 0 0;
+  line-height: 1.45;
+  max-width: 640px;
+}
+
+.cmp-admin__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cmp-admin__chip {
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+}
+
+.cmp-admin__chip--dental {
+  background: rgba(14, 165, 233, 0.28);
+}
+
+.cmp-admin__btn-header {
+  background: #fff !important;
+  color: #0f2744 !important;
+  border: none !important;
+  font-weight: 600;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.cmp-admin__btn-header:hover {
+  background: #f1f5f9 !important;
+  color: #0f2744 !important;
+}
+
+.cmp-admin__btn-ghost {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+  font-weight: 600;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.cmp-admin__btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  color: #fff !important;
+}
+
+.cmp-admin__body {
+  padding: 1.25rem 1.5rem 1.5rem;
+  width: 100%;
+}
+
+.cmp-admin__section {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.cmp-admin__section--table {
+  margin-bottom: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.cmp-admin__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cmp-admin__section-title svg {
+  color: #1a365d;
+  font-size: 0.75rem;
+}
+
+.cmp-admin__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.cmp-admin .form-control,
+.cmp-admin .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.875rem;
+}
+
+.cmp-admin .form-control:focus,
+.cmp-admin .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 0.2rem rgba(26, 54, 93, 0.12);
+}
+
+.cmp-admin .btn-primary {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.cmp-admin .btn-primary:hover {
+  background: #0f2744;
+  border-color: #0f2744;
+}
+
+.cmp-admin .btn-outline-secondary {
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+.cmp-admin .btn-outline-secondary:hover {
+  background: #f8fafc;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.cmp-admin__summary {
+  font-size: 0.8125rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+
+.cmp-admin__summary strong {
+  color: #0f2744;
+}
+
+.cmp-admin__table-wrap {
+  overflow-x: auto;
+  width: 100%;
+}
+
+.cmp-admin__empty,
+.cmp-admin__loading {
+  text-align: center;
+  color: #64748b;
+  padding: 2.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.cmp-admin .alert {
+  border-radius: 10px;
+  font-size: 0.875rem;
+}
+
+.cmp-admin__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.cmp-admin__badge--ok {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.cmp-admin__badge--off {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.cmp-admin__badge--dental {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.cmp-admin__badge--inactive {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.cmp-admin__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.cmp-admin__actions .btn {
+  border-radius: 8px;
+}
+
+.cmp-admin__actions .btn-outline-primary {
+  color: #1a365d;
+  border-color: #cbd5e1;
+}
+
+.cmp-admin__actions .btn-outline-primary:hover {
+  background: #1a365d;
+  border-color: #1a365d;
+  color: #fff;
+}
+
+/* Modal institucional */
+.cmp-admin-modal .modal-content {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 39, 68, 0.18);
+}
+
+.cmp-admin-modal__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  border-bottom: none;
+  padding: 1rem 1.25rem;
+}
+
+.cmp-admin-modal__header .btn-close {
+  filter: invert(1) grayscale(1) brightness(2);
+  opacity: 0.85;
+}
+
+.cmp-admin-modal__header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cmp-admin-modal__header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cmp-admin-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+}
+
+.cmp-admin-modal__subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0.12rem 0 0;
+}
+
+.cmp-admin-modal__body {
+  background: #f8f9fb;
+  padding: 1.25rem;
+}
+
+.cmp-admin-modal__panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 1rem 1.125rem;
+}
+
+.cmp-admin-modal__label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.cmp-admin-modal__switches {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+.cmp-admin-modal__hint {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.85rem;
+  line-height: 1.45;
+}
+
+.cmp-admin-modal__footer {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1.25rem;
+}
+
+.cmp-admin-modal .btn-primary {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.cmp-admin-modal .btn-primary:hover {
+  background: #0f2744;
+  border-color: #0f2744;
+}
+
+@media (max-width: 767.98px) {
+  .cmp-admin__header {
+    padding: 1rem;
+  }
+
+  .cmp-admin__body {
+    padding: 1rem;
+  }
+
+  .cmp-admin__section {
+    padding: 1rem;
+  }
+}

@@ -5,7 +5,7 @@ import {
   FaTools, FaChevronDown, FaChevronRight, FaUserPlus, FaList, FaFile, FaTags,
   FaCalendarAlt, FaChartBar, FaPlus, FaFileImport, FaFileExport, FaCogs, FaChartLine, FaMoneyCheckAlt, FaSyncAlt, FaFileInvoiceDollar,
   FaUserShield, FaShieldAlt, FaKey, FaHistory, FaFileAlt, FaClipboardCheck, FaBirthdayCake, FaTasks, FaPhone, FaClock,
-  FaBook, FaColumns, FaCreditCard, FaExchangeAlt, FaBan, FaUserSlash
+  FaBook, FaColumns, FaCreditCard, FaExchangeAlt, FaBan, FaUserSlash, FaBuilding
 } from "react-icons/fa";
 import "../styles/Sidebar.css";
 import logo from "../assets/tampa.jpg";
@@ -455,6 +455,9 @@ const Sidebar = ({ isOpen, toggleSidebar, notificationsProps = null }) => {
                 </Link>
                 <Link to="/admin/configurador" className={`submenu-link ${isActive('/admin/configurador') ? 'active' : ''}`}>
                   <FaCogs /> Configurador
+                </Link>
+                <Link to="/admin/companias" className={`submenu-link ${isActive('/admin/companias') ? 'active' : ''}`}>
+                  <FaBuilding /> Compañías
                 </Link>
               </div>
             )}

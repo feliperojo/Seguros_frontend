@@ -1,7 +1,8 @@
 /* eslint-disable react/prop-types */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import useCompanies from "../../hooks/useCompanies";
+import { filterCompaniesForProducto } from "../../services/companies";
 import LanguageSelect from "../selects/LanguageSelect";
 import MdyDashDateInput from "../common/MdyDashDateInput";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
@@ -162,7 +163,7 @@ const PreRenovacionItemCard = ({
     ...(item?.datos_borrador || {}),
     cliente: { ...(item?.datos_borrador?.cliente || {}) },
   }));
-  const { companies, loading: companiesLoading } = useCompanies();
+  const { companies: allCompanies, loading: companiesLoading } = useCompanies();
   const [contactoAbierto, setContactoAbierto] = useState(false);
   const [copiarDir, setCopiarDir] = useState(false);
   const [estadosGuardado, setEstadosGuardado] = useState({});
@@ -337,6 +338,23 @@ const PreRenovacionItemCard = ({
   const coberturaTipo =
     datos?.cobertura_tipo ?? cobertura?.cobertura_tipo ?? null;
   const esDental = isDentalCoberturaTipo(coberturaTipo);
+  const companies = useMemo(
+    () =>
+      filterCompaniesForProducto(
+        allCompanies,
+        esDental ? "dental_ms" : null,
+        {
+          includeId: datos?.compania_id ?? cobertura?.compania_id,
+          soloActivas: esDental,
+        }
+      ),
+    [
+      allCompanies,
+      esDental,
+      datos?.compania_id,
+      cobertura?.compania_id,
+    ]
+  );
   const etiquetaProducto = esDental ? COBERTURA_TIPO_DENTAL_MS : "Salud MS";
   const iconoProducto = esDental ? "fas fa-tooth" : "fas fa-shield-alt";
   // Renovación normal: referencia en vivo = cobertura.cliente

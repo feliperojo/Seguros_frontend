@@ -95,7 +95,11 @@ const HistorialPlanCoberturaModal = ({
   const [nota, setNota] = useState("");
   const [esAnulacion, setEsAnulacion] = useState(false);
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
-  const { companies } = useCompanies();
+  const { companies } = useCompanies({
+    producto: esDental ? "dental_ms" : null,
+    includeId: manualForm.compania_id,
+    soloActivas: Boolean(esDental),
+  });
 
   const membersWithPlan = useMemo(
     () => members.filter((m) => m.hasPlanData !== false && m.coberturaId),

@@ -68,7 +68,11 @@ export default function AgregarDentalModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const { companies, loading: companiesLoading } = useCompanies();
+  const { companies, loading: companiesLoading } = useCompanies({
+    producto: "dental_ms",
+    includeId: form.compania_id,
+    soloActivas: true,
+  });
   const payerOptions = useMemo(
     () => [
       ...buildPayerOptions(members || []),
