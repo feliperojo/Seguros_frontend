@@ -46,7 +46,8 @@ export const buildEdicionMensaje = (edicion) => {
 };
 
 /**
- * Banner no invasivo: avisa si otro usuario está editando el grupo familiar.
+ * Banner no invasivo al abrir el grupo: avisa si otro usuario lo tiene abierto.
+ * No bloquea el guardado (eso lo maneja el toast de conflicto al Guardar).
  */
 const GrupoFamiliarEdicionAlerta = ({ edicion }) => {
   const mensaje = buildEdicionMensaje(edicion);
@@ -69,7 +70,7 @@ const GrupoFamiliarEdicionAlerta = ({ edicion }) => {
         <div>{mensaje}</div>
         {!inactivo && (
           <div className="text-muted mt-1" style={{ fontSize: "0.82rem" }}>
-            Solo se guardarán los campos que modifiques en este formulario.
+            Es solo informativo: puedes seguir editando y guardar con normalidad.
           </div>
         )}
       </div>

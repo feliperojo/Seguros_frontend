@@ -436,12 +436,12 @@ export default function AgregarDentalModal({
               </h3>
               <div className="row g-3">
                 <div className="col-md-6">
-                  <FieldLabel>Código ID</FieldLabel>
+                  <FieldLabel>Número ID</FieldLabel>
                   <Form.Control
                     name="policy_number"
                     value={form.policy_number}
                     onChange={handleChange}
-                    placeholder="Identificador adicional de póliza"
+                    placeholder="Número ID de la póliza"
                   />
                 </div>
                 <div className="col-md-6">
