@@ -32,6 +32,11 @@ import {
   isDentalCoberturaTipo,
 } from "../../constants/coberturaTipos";
 import { computeAnnual } from "../../services/ingresos";
+import {
+  hasBorradorClienteField,
+  isBorradorClienteCleared,
+  normalizeClienteBorradorValue,
+} from "../../utils/preRenovacionCopy";
 
 const TIPO_PAGO_OPTIONS = [
   "DEBITO AUTOMATICO",
@@ -273,11 +278,13 @@ const PreRenovacionItemCard = ({
   };
 
   const cambiarCliente = (field, value, inmediato = false) => {
+    const normalized =
+      typeof value === "string" ? normalizeClienteBorradorValue(value) : value;
     setDatos((prev) => ({
       ...prev,
-      cliente: { ...(prev.cliente || {}), [field]: value },
+      cliente: { ...(prev.cliente || {}), [field]: normalized },
     }));
-    const cambios = { cliente: { [field]: value } };
+    const cambios = { cliente: { [field]: normalized } };
     const key = `cliente.${field}`;
     if (inmediato) {
       guardarCambio(cambios, key);
@@ -287,11 +294,17 @@ const PreRenovacionItemCard = ({
   };
 
   const cambiarClienteCampos = (campos, key, inmediato = false) => {
+    const normalized = Object.fromEntries(
+      Object.entries(campos).map(([k, v]) => [
+        k,
+        typeof v === "string" ? normalizeClienteBorradorValue(v) : v,
+      ])
+    );
     setDatos((prev) => ({
       ...prev,
-      cliente: { ...(prev.cliente || {}), ...campos },
+      cliente: { ...(prev.cliente || {}), ...normalized },
     }));
-    const cambios = { cliente: { ...campos } };
+    const cambios = { cliente: { ...normalized } };
     if (inmediato) {
       guardarCambio(cambios, key);
     } else {
@@ -429,12 +442,48 @@ const PreRenovacionItemCard = ({
     !String(datos.motivo_retiro ?? "").trim();
   const disabled = bloqueado || edicionBloqueada;
 
+  const limpiarClienteParaRenovacion = (field) => {
+    cambiarCliente(field, null, true);
+  };
+
+  const renderClienteBorradorHint = (field, actual, { skipClear = false } = {}) => {
+    if (isBorradorClienteCleared(draftCliente, field)) {
+      return (
+        <div className="form-text text-warning-emphasis">
+          Se dejará vacío al consolidar.
+        </div>
+      );
+    }
+
+    const hasActual =
+      actual !== null && actual !== undefined && actual !== "";
+
+    if (!hasBorradorClienteField(draftCliente, field) && hasActual && !skipClear) {
+      return (
+        <div className="d-flex flex-wrap align-items-center gap-2">
+          <span className="form-text mb-0">Actual: {String(actual)}</span>
+          {!disabled && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm p-0 align-baseline"
+              onClick={() => limpiarClienteParaRenovacion(field)}
+            >
+              Quitar para renovación
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    if (hasActual) {
+      return <div className="form-text">Actual: {String(actual)}</div>;
+    }
+
+    return <div className="form-text">Sin valor actual</div>;
+  };
+
   const renderClienteSelectField = (field, label, options, normalizeFn) => {
     const actual = clienteActual[field];
-    const help =
-      actual !== null && actual !== undefined && actual !== ""
-        ? `Actual: ${actual}`
-        : "Sin valor actual";
     const key = `cliente.${field}`;
     const rawValue = datos.cliente?.[field];
     const selectValue = normalizeFn
@@ -460,7 +509,7 @@ const PreRenovacionItemCard = ({
             </option>
           ))}
         </select>
-        <div className="form-text">{help}</div>
+        {renderClienteBorradorHint(field, actual)}
         {renderEstado(key)}
       </div>
     );
@@ -469,11 +518,6 @@ const PreRenovacionItemCard = ({
   const renderClienteTextField = (field, label, type) => {
     const actual = clienteActual[field];
     const esNombreCalculado = field === "nombre_completo";
-    const help = esNombreCalculado
-      ? "Se calcula automáticamente"
-      : actual !== null && actual !== undefined && actual !== ""
-        ? `Actual: ${actual}`
-        : "Sin valor actual";
     const key = `cliente.${field}`;
 
     if (type === "date") {
@@ -481,10 +525,8 @@ const PreRenovacionItemCard = ({
         actual !== null && actual !== undefined && actual !== ""
           ? formatDateForDisplay(actual)
           : null;
-      const help =
-        actualFmt && actualFmt !== "-"
-          ? `Actual: ${actualFmt}`
-          : "Sin valor actual";
+      const actualDisplay =
+        actualFmt && actualFmt !== "-" ? actualFmt : actual;
       const valueIso = toDateInput(datos.cliente?.[field]);
       const DateComponent =
         field === "fecha_nacimiento" ? MdyDashDateInput : DateInputWithCalendar;
@@ -500,7 +542,11 @@ const PreRenovacionItemCard = ({
             disabled={disabled}
             onChangeIso={(iso) => cambiarCliente(field, iso || null, true)}
           />
-          <div className="form-text">{help}</div>
+          {esNombreCalculado ? (
+            <div className="form-text">Se calcula automáticamente</div>
+          ) : (
+            renderClienteBorradorHint(field, actualDisplay)
+          )}
           {renderEstado(key)}
         </div>
       );
@@ -548,7 +594,11 @@ const PreRenovacionItemCard = ({
           disabled={disabled || esNombreCalculado}
           readOnly={esNombreCalculado}
         />
-        <div className="form-text">{help}</div>
+        {esNombreCalculado ? (
+          <div className="form-text">Se calcula automáticamente</div>
+        ) : (
+          renderClienteBorradorHint(field, actual)
+        )}
         {renderEstado(key)}
       </div>
     );
@@ -1041,11 +1091,6 @@ const PreRenovacionItemCard = ({
                 const actual = clienteActual[field];
                 const key = `cliente.${field}`;
                 const esDireccionCalculada = field === "direccion";
-                const help = esDireccionCalculada
-                  ? "Se calcula automáticamente"
-                  : actual !== null && actual !== undefined && actual !== ""
-                    ? `Actual: ${actual}`
-                    : "Sin valor actual";
 
                 if (field === "dir_correspondencia") {
                   return (
@@ -1066,7 +1111,7 @@ const PreRenovacionItemCard = ({
                             onBlur={() => guardarPendienteAhora(key)}
                             disabled={disabled}
                           />
-                          <div className="form-text">{help}</div>
+                          {renderClienteBorradorHint(field, actual)}
                           {renderEstado(key)}
                         </div>
                         <div className="col-md-3 d-flex align-items-center pb-4">
@@ -1147,7 +1192,11 @@ const PreRenovacionItemCard = ({
                       disabled={disabled || esDireccionCalculada}
                       readOnly={esDireccionCalculada}
                     />
-                    <div className="form-text">{help}</div>
+                    {esDireccionCalculada ? (
+                      <div className="form-text">Se calcula automáticamente</div>
+                    ) : (
+                      renderClienteBorradorHint(field, actual)
+                    )}
                     {renderEstado(key)}
                   </div>
                 );
@@ -1246,7 +1295,7 @@ const PreRenovacionItemCard = ({
                         className="form-select form-select-sm"
                         placeholder="Seleccione…"
                       />
-                      <div className="form-text">{help}</div>
+                      {renderClienteBorradorHint(field, actual)}
                       {renderEstado(key)}
                     </div>
                   );
@@ -1275,7 +1324,7 @@ const PreRenovacionItemCard = ({
                       onBlur={() => guardarPendienteAhora(key)}
                       disabled={disabled}
                     />
-                    <div className="form-text">{help}</div>
+                    {renderClienteBorradorHint(field, actual)}
                     {renderEstado(key)}
                   </div>
                 );
@@ -1285,13 +1334,12 @@ const PreRenovacionItemCard = ({
             <div className="text-muted small fw-semibold mb-2">Empleo e ingreso</div>
             <div className="row g-2">
               {(() => {
-                const valorEmpleo = (field) =>
-                  datos.cliente?.[field] ?? clienteActual[field] ?? "";
-                const helpEmpleo = (field) => {
-                  const actual = clienteActual[field];
-                  return actual !== null && actual !== undefined && actual !== ""
-                    ? `Actual: ${actual}`
-                    : "Sin valor actual";
+                const valorEmpleo = (field) => {
+                  if (hasBorradorClienteField(draftCliente, field)) {
+                    const v = draftCliente[field];
+                    return v === null || v === undefined ? "" : v;
+                  }
+                  return clienteActual[field] ?? "";
                 };
                 const moneyValue = (field) => {
                   const v = datos.cliente?.[field];
@@ -1327,7 +1375,7 @@ const PreRenovacionItemCard = ({
                           </option>
                         ))}
                       </select>
-                      <div className="form-text">{helpEmpleo("tipo_ingreso")}</div>
+                      <div className="form-text">{renderClienteBorradorHint("tipo_ingreso", clienteActual.tipo_ingreso)}</div>
                       {renderEstado("cliente.tipo_ingreso")}
                     </div>
 
@@ -1349,7 +1397,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("actividad_economica")}
+                        {renderClienteBorradorHint(
+                          "actividad_economica",
+                          clienteActual.actividad_economica
+                        )}
                       </div>
                       {renderEstado("cliente.actividad_economica")}
                     </div>
@@ -1372,7 +1423,7 @@ const PreRenovacionItemCard = ({
                         onBlur={() => guardarPendienteAhora("cliente.empleador")}
                         disabled={disabled}
                       />
-                      <div className="form-text">{helpEmpleo("empleador")}</div>
+                      <div className="form-text">{renderClienteBorradorHint("empleador", clienteActual.empleador)}</div>
                       {renderEstado("cliente.empleador")}
                     </div>
 
@@ -1396,7 +1447,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("telefono_empleador")}
+                        {renderClienteBorradorHint(
+                          "telefono_empleador",
+                          clienteActual.telefono_empleador
+                        )}
                       </div>
                       {renderEstado("cliente.telefono_empleador")}
                     </div>
@@ -1437,7 +1491,10 @@ const PreRenovacionItemCard = ({
                         ))}
                       </select>
                       <div className="form-text">
-                        {helpEmpleo("periodo_ingreso")}
+                        {renderClienteBorradorHint(
+                          "periodo_ingreso",
+                          clienteActual.periodo_ingreso
+                        )}
                       </div>
                       {renderEstado("cliente.periodo_ingreso")}
                     </div>
@@ -1476,7 +1533,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("ingreso_por_periodo")}
+                        {renderClienteBorradorHint(
+                          "ingreso_por_periodo",
+                          clienteActual.ingreso_por_periodo
+                        )}
                       </div>
                       {renderEstado("cliente.ingreso_por_periodo")}
                     </div>
@@ -1505,7 +1565,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("ingreso_anual")}
+                        {renderClienteBorradorHint(
+                          "ingreso_anual",
+                          clienteActual.ingreso_anual
+                        )}
                       </div>
                       {renderEstado("cliente.ingreso_anual")}
                     </div>
@@ -1533,7 +1596,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("nota_ingreso_ocasional")}
+                        {renderClienteBorradorHint(
+                          "nota_ingreso_ocasional",
+                          clienteActual.nota_ingreso_ocasional
+                        )}
                       </div>
                       {renderEstado("cliente.nota_ingreso_ocasional")}
                     </div>
@@ -1574,7 +1640,10 @@ const PreRenovacionItemCard = ({
                         ))}
                       </select>
                       <div className="form-text">
-                        {helpEmpleo("periodo_ingreso_ocasional")}
+                        {renderClienteBorradorHint(
+                          "periodo_ingreso_ocasional",
+                          clienteActual.periodo_ingreso_ocasional
+                        )}
                       </div>
                       {renderEstado("cliente.periodo_ingreso_ocasional")}
                     </div>
@@ -1615,7 +1684,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("ingreso_por_periodo_ocasional")}
+                        {renderClienteBorradorHint(
+                          "ingreso_por_periodo_ocasional",
+                          clienteActual.ingreso_por_periodo_ocasional
+                        )}
                       </div>
                       {renderEstado("cliente.ingreso_por_periodo_ocasional")}
                     </div>
@@ -1646,7 +1718,10 @@ const PreRenovacionItemCard = ({
                         disabled={disabled}
                       />
                       <div className="form-text">
-                        {helpEmpleo("ingreso_ocasional_anual")}
+                        {renderClienteBorradorHint(
+                          "ingreso_ocasional_anual",
+                          clienteActual.ingreso_ocasional_anual
+                        )}
                       </div>
                       {renderEstado("cliente.ingreso_ocasional_anual")}
                     </div>
@@ -1666,7 +1741,7 @@ const PreRenovacionItemCard = ({
                         onBlur={() => guardarPendienteAhora("cliente.empresa")}
                         disabled={disabled}
                       />
-                      <div className="form-text">{helpEmpleo("empresa")}</div>
+                      <div className="form-text">{renderClienteBorradorHint("empresa", clienteActual.empresa)}</div>
                       {renderEstado("cliente.empresa")}
                     </div>
                   </>

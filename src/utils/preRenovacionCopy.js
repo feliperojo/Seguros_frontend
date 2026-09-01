@@ -18,6 +18,19 @@ const ADDRESS_FIELDS = [
 const hasOwn = (obj, key) =>
   obj != null && Object.prototype.hasOwnProperty.call(obj, key);
 
+/** El borrador incluye explícitamente este campo (aunque sea null). */
+export const hasBorradorClienteField = (clienteDraft, field) =>
+  hasOwn(clienteDraft, field);
+
+/** Campo marcado para quedar vacío al consolidar. */
+export const isBorradorClienteCleared = (clienteDraft, field) =>
+  hasBorradorClienteField(clienteDraft, field) &&
+  (clienteDraft[field] === null || clienteDraft[field] === "");
+
+/** Normaliza vacío de texto a null en el borrador de cliente. */
+export const normalizeClienteBorradorValue = (value) =>
+  value === "" ? null : value;
+
 /** Parentesco del ítem de borrador (renovación o miembro nuevo). */
 export const parentescoOfItem = (item) => {
   if (item?.tipo_item === "miembro_nuevo") {
