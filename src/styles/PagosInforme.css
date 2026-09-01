@@ -1,0 +1,211 @@
+/* Informe de pagos por año — estilo institucional (gf-listado) */
+
+.pagos-informe .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.pagos-informe__table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.pagos-informe .gf-listado__table {
+  min-width: 1200px;
+}
+
+.pagos-informe .gf-listado__table thead th {
+  text-align: center;
+}
+
+.pagos-informe .gf-listado__table thead th.pagos-informe__col-fija {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: 1px 0 0 #e2e8f0;
+}
+
+.pagos-informe .gf-listado__table tbody td.pagos-informe__col-fija {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+  box-shadow: 1px 0 0 #f1f5f9;
+}
+
+.pagos-informe .gf-listado__table tbody tr:hover td.pagos-informe__col-fija {
+  background: #fafcff;
+}
+
+.pagos-informe__col-mes {
+  min-width: 88px;
+  max-width: 110px;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0.5rem 0.35rem !important;
+}
+
+.pagos-informe__col-mes-header {
+  font-size: 0.625rem !important;
+  letter-spacing: 0.06em;
+  padding: 0.65rem 0.35rem !important;
+}
+
+.pagos-informe__celda-vacia {
+  color: #94a3b8;
+  font-size: 0.8125rem;
+}
+
+.pagos-informe__celda {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.pagos-informe__estado {
+  display: inline-block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pagos-informe__estado--pendiente {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.pagos-informe__estado--procesando {
+  background: #eff6ff;
+  color: #1a365d;
+  border-color: #bfdbfe;
+}
+
+.pagos-informe__estado--pagado {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.pagos-informe__estado--cancelado {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.pagos-informe__monto {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #0f2744;
+  font-variant-numeric: tabular-nums;
+}
+
+.pagos-informe__fecha-estado {
+  font-size: 0.6rem;
+  color: #64748b;
+  line-height: 1.2;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+.pagos-informe__situacion {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pagos-informe__situacion--riesgo {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.pagos-informe__situacion--mora {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.pagos-informe__situacion--al-dia {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.pagos-informe__loading {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.pagos-informe__loading .spinner-border {
+  color: #1a365d;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.pagos-informe__alert {
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.pagos-informe__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.pagos-informe__page-indicator {
+  font-size: 0.8125rem;
+  color: #64748b;
+  font-weight: 600;
+  padding: 0 0.5rem;
+}
+
+.pagos-informe__leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.pagos-informe__leyenda-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pagos-informe__leyenda-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.pagos-informe__leyenda-dot--pendiente { background: #cbd5e1; }
+.pagos-informe__leyenda-dot--procesando { background: #93c5fd; }
+.pagos-informe__leyenda-dot--pagado { background: #6ee7b7; }
+.pagos-informe__leyenda-dot--riesgo { background: #fca5a5; }

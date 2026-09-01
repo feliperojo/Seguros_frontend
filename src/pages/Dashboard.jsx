@@ -1008,7 +1008,7 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : cumpleanosMes.length > 0 ? (
-                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--compact">
+                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--alerts">
                         <Table hover size="sm" className="hcc-table mb-0 align-middle">
                           <thead>
                             <tr>
@@ -1019,7 +1019,7 @@ const handleOpenViewModal = (cliente) => {
                             </tr>
                           </thead>
                           <tbody>
-                            {cumpleanosMes.slice(0, 10).map((cliente) => {
+                            {cumpleanosMes.map((cliente) => {
                               // Parsear fecha de nacimiento correctamente para evitar problemas de zona horaria
                               let fechaNac;
                               if (cliente.fecha_nacimiento) {
@@ -1077,11 +1077,6 @@ const handleOpenViewModal = (cliente) => {
                             })}
                           </tbody>
                         </Table>
-                        {cumpleanosMes.length > 10 && (
-                          <div className="text-center mt-2">
-                            <small className="text-muted">+{cumpleanosMes.length - 10} más</small>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="dashboard-empty-inline">
@@ -1137,7 +1132,7 @@ const handleOpenViewModal = (cliente) => {
                         </div>
                       </div>
                     ) : pagosPendientes.length > 0 ? (
-                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--compact">
+                      <div className="hcc-table-wrap dashboard-report-scroll dashboard-report-scroll--alerts">
                         <Table hover size="sm" className="hcc-table mb-0 align-middle">
                           <thead>
                             <tr>
@@ -1147,7 +1142,7 @@ const handleOpenViewModal = (cliente) => {
                             </tr>
                           </thead>
                           <tbody>
-                            {pagosPendientes.slice(0, 10).map((pago) => {
+                            {pagosPendientes.map((pago) => {
                               const fechaPago = pago.fecha_pago ? new Date(pago.fecha_pago) : null;
                               return (
                                 <tr key={pago.id}>
@@ -1167,11 +1162,6 @@ const handleOpenViewModal = (cliente) => {
                             })}
                           </tbody>
                         </Table>
-                        {pagosPendientes.length > 10 && (
-                          <div className="text-center mt-2">
-                            <small className="text-muted">+{pagosPendientes.length - 10} más</small>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="dashboard-empty-inline">

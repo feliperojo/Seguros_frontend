@@ -1,0 +1,113 @@
+/* Reporte grupos inactivos — estilo institucional (gf-listado) */
+
+.rgi-report .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.rgi-report__loading {
+  text-align: center;
+  color: #64748b;
+  padding: 2.5rem 1rem;
+  font-size: 0.875rem;
+}
+
+.rgi-report__loading .spinner-border {
+  color: #1a365d;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-right: 0.5rem;
+}
+
+.rgi-report__alert {
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.rgi-report__filters-actions {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+}
+
+.rgi-report__tipo {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.rgi-report__tipo--cancelados {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.rgi-report__tipo--retirados {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.rgi-report__tipo--mixtos {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.rgi-report__tipo--default {
+  background: #f8fafc;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.rgi-report__coberturas {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.rgi-report__coberturas-total {
+  font-weight: 700;
+  color: #0f2744;
+}
+
+.rgi-report__coberturas-canc {
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.rgi-report__coberturas-ret {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.rgi-report__estado-proceso {
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+.rgi-report__pagination {
+  margin-top: 1rem;
+}
+
+.rgi-report .pagination .page-link {
+  border-color: #e2e8f0;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.rgi-report .pagination .page-item.active .page-link {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.rgi-report .pagination .page-link:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #1a365d;
+}

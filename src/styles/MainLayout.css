@@ -164,7 +164,7 @@
 /* Topbar */
 .topbar {
   background: #ffffff;
-  border-bottom: 1px solid #e6e6e6;
+  border-bottom: 1px solid #e2e8f0;
   padding: 12px 20px;
   display: flex;
   justify-content: space-between;
@@ -184,17 +184,17 @@
 }
 
 .main-content.expanded {
-  margin-left: 250px;
+  margin-left: var(--sidebar-width-expanded, 260px);
 }
 
 .main-content.collapsed {
-  margin-left: 80px;
+  margin-left: var(--sidebar-width-collapsed, 70px);
 }
 
 /* Responsive design */
 @media screen and (max-width: 768px) {
   .main-content.expanded {
-    margin-left: 80px;
+    margin-left: var(--sidebar-width-collapsed, 70px);
   }
   
   .tarea-alerta-button {

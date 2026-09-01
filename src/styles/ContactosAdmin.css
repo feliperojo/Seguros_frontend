@@ -1,0 +1,127 @@
+/* Contactos admin — estilo institucional (gf-listado) */
+
+.contactos-admin .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.contactos-admin__panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.contactos-admin__panel-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f2744;
+  margin: 0;
+}
+
+.contactos-admin__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.contactos-admin__btn-secondary {
+  border-radius: 8px !important;
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+  background: #fff !important;
+  font-weight: 600;
+  font-size: 0.8125rem;
+}
+
+.contactos-admin__btn-secondary:hover {
+  border-color: #1a365d !important;
+  color: #1a365d !important;
+  background: #f8fafc !important;
+}
+
+.contactos-admin__btn-primary {
+  background: #1a365d !important;
+  border-color: #0f2744 !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.contactos-admin__btn-primary:hover:not(:disabled) {
+  background: #0f2744 !important;
+  border-color: #0f2744 !important;
+  color: #fff !important;
+}
+
+.contactos-admin__btn-primary:disabled {
+  opacity: 0.65;
+}
+
+.contactos-admin__btn-open {
+  border-radius: 6px;
+  border-color: #cbd5e1;
+  color: #1a365d;
+  background: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.contactos-admin__btn-open:hover {
+  border-color: #1a365d;
+  background: #eff6ff;
+  color: #0f2744;
+}
+
+.contactos-admin__table-scroll {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.contactos-admin__toggle-btn {
+  border-radius: 8px !important;
+  font-size: 0.8125rem !important;
+  font-weight: 600 !important;
+}
+
+.contactos-admin__readonly-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.contactos-admin__alert-readonly {
+  border-radius: 8px;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  font-size: 0.8125rem;
+}
+
+.contactos-admin .form-text {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.contactos-admin__links-note {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.75rem;
+}
+
+@media (max-width: 991px) {
+  .contactos-admin__panel-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contactos-admin__actions {
+    width: 100%;
+  }
+
+  .contactos-admin__actions .btn {
+    flex: 1;
+  }
+}

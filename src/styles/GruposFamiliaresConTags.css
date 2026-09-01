@@ -1,0 +1,98 @@
+/* Listado de grupos y etiquetas — estilo institucional (gf-listado) */
+
+.gf-tags .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.gf-tags__loading {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.gf-tags__loading .spinner-border {
+  color: #1a365d;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.gf-tags__estado {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gf-tags__estado--secondary {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.gf-tags__estado--warning {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.gf-tags__estado--success {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.gf-tags__estado--danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.gf-tags__estado--info {
+  background: #ecfeff;
+  color: #0e7490;
+  border-color: #a5f3fc;
+}
+
+.gf-tags__estado--primary {
+  background: #eff6ff;
+  color: #1a365d;
+  border-color: #bfdbfe;
+}
+
+.gf-tags__tags-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.gf-tags__tag-chip {
+  font-size: 0.6875rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  font-weight: 600;
+  display: inline-block;
+  white-space: nowrap;
+  max-width: 100%;
+  line-height: 1.25;
+}
+
+.gf-tags__sin-etiquetas {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.gf-tags__tomador {
+  color: #334155;
+  font-size: 0.875rem;
+}
