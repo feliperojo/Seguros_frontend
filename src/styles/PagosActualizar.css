@@ -1,0 +1,115 @@
+/* Actualización de pagos — estilo institucional (gf-listado) */
+
+.pagos-actualizar .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.pagos-actualizar__estado {
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  text-align: center;
+  cursor: pointer;
+  min-width: 130px;
+  padding-top: 0.35rem;
+  padding-bottom: 0.35rem;
+}
+
+.pagos-actualizar__estado--pendiente {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.pagos-actualizar__estado--procesando {
+  background: #eff6ff;
+  color: #1a365d;
+  border-color: #bfdbfe;
+}
+
+.pagos-actualizar__estado--pagado {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.pagos-actualizar__estado:focus {
+  box-shadow: 0 0 0 3px rgba(26, 54, 93, 0.12);
+}
+
+.pagos-actualizar__monto {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #0f2744;
+  white-space: nowrap;
+}
+
+.pagos-actualizar__tipo-pago {
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+.pagos-actualizar__loading {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.pagos-actualizar__loading .spinner-border {
+  color: #1a365d;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.75rem;
+}
+
+.pagos-actualizar__alert {
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.pagos-actualizar__table-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.pagos-actualizar__btn-medios {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  color: #1a365d;
+  background: #fff;
+}
+
+.pagos-actualizar__btn-medios:hover:not(:disabled) {
+  border-color: #1a365d;
+  background: #eff6ff;
+  color: #0f2744;
+}
+
+.pagos-actualizar__btn-medios:disabled {
+  opacity: 0.45;
+}
+
+.pagos-actualizar__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.pagos-actualizar__page-indicator {
+  font-size: 0.8125rem;
+  color: #64748b;
+  font-weight: 600;
+  padding: 0 0.5rem;
+}

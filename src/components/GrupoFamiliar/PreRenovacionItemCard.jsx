@@ -32,6 +32,7 @@ import {
   isDentalCoberturaTipo,
 } from "../../constants/coberturaTipos";
 import { computeAnnual } from "../../services/ingresos";
+import MediosPagoSection from "../MediosPagoSection";
 import {
   hasBorradorClienteField,
   isBorradorClienteCleared,
@@ -394,6 +395,16 @@ const PreRenovacionItemCard = ({
       ""
     );
   };
+
+  const clienteIdMediosPago =
+    cobertura?.cliente_id ??
+    cobertura?.cliente?.id ??
+    clienteActual?.id ??
+    item?.datos_borrador?.cliente_id_existente ??
+    item?.cliente_existente?.id ??
+    null;
+
+  const direccionClienteMediosPago = resolverDireccionCliente();
 
   const draftCliente = datos.cliente || {};
   const hasDraftTelefonos = Array.isArray(draftCliente.telefonos);
@@ -1747,6 +1758,27 @@ const PreRenovacionItemCard = ({
                   </>
                 );
               })()}
+            </div>
+
+            <div className="border-top mt-4 pt-1">
+              {clienteIdMediosPago ? (
+                <MediosPagoSection
+                  clienteId={clienteIdMediosPago}
+                  isOpen={contactoAbierto}
+                  clienteDireccion={direccionClienteMediosPago}
+                />
+              ) : (
+                <>
+                  <div className="text-muted small fw-semibold mb-2">
+                    Medios de pago
+                  </div>
+                  <div className="text-muted small">
+                    Este miembro aún no tiene un cliente vinculado en el sistema.
+                    Los medios de pago se podrán administrar después de consolidar
+                    o al vincular un cliente existente.
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -1,6 +1,13 @@
 // src/pages/ContactosAdmin.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
+import {
+  FaAddressBook,
+  FaSearch,
+  FaLink,
+  FaTable,
+} from "react-icons/fa";
 import apiRequest from "../services/api";
 import { formatPhone334 } from "../utils/formatters";
 import useToast from "../hooks/useToast";
@@ -11,6 +18,8 @@ import LanguageSelect from "../components/selects/LanguageSelect";
 import TelefonosPro from "../components/fase2/TelefonosPro";
 import { resolveClienteTelefonos } from "../utils/phone-mappers";
 import FormDireccion from "../components/FormDireccion";
+import "../styles/GruposFamiliaresListado.css";
+import "../styles/ContactosAdmin.css";
 
 // Rutas base de navegación (ajústalas a tu router real)
 // ⬇️ ya lo tienes
@@ -464,373 +473,447 @@ export default function ContactosAdmin() {
   /* ===================== render ===================== */
 
   return (
-    <div className="container-fluid py-3">
-      <div className="row g-3">
-        {/* === Columna izquierda: listado === */}
-        <div className="col-lg-5">
-          <div className="card">
-            <div className="card-body">
-              <h5 className="mb-3">Directorio de Contactos</h5>
+    <div className="container-fluid gf-listado-container contactos-admin py-3">
+      <Helmet>
+        <title>Vantun / Contactos</title>
+      </Helmet>
 
-              <div className="mb-2">
-                <input
-                  className="form-control form-control-sm"
-                  placeholder="Buscar por nombre…"
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              </div>
-
-              <div className="table-responsive" style={{ maxHeight: 420, overflow: "auto" }}>
-                <table className="table table-sm align-middle">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Nombre</th>
-                      <th>Tipo</th>
-                      <th>Teléfono</th>
-                      <th style={{ width: 80 }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {loadingList ? (
-                      <tr>
-                        <td colSpan={4} className="text-center text-muted py-3">
-                          Cargando…
-                        </td>
-                      </tr>
-                    ) : rows.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="text-center text-muted py-3">
-                          Sin resultados.
-                        </td>
-                      </tr>
-                    ) : (
-                      rows.map((r) => {
-                        const firstPhone = formatearTelefonoCompleto(r);
-                        return (
-                          <tr key={r.id}>
-                            <td className="fw-semibold">{r.nombre_completo}</td>
-                            <td>{r.estado_cliente || "—"}</td>
-                            <td>{firstPhone}</td>
-                            <td className="text-end">
-                              <button
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={() => loadContact(r.id)}
-                              >
-                                Abrir
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+      <div className="gf-listado">
+        <div className="gf-listado__header gf-listado__header--split">
+          <div className="gf-listado__header-main">
+            <div className="gf-listado__header-icon" aria-hidden="true">
+              <FaAddressBook />
+            </div>
+            <div>
+              <h1 className="gf-listado__title">Contactos</h1>
+              <p className="gf-listado__subtitle">
+                Directorio de personas y empresas de contacto. Busque, cree y
+                edite información de contacto asociada a clientes y grupos.
+              </p>
             </div>
           </div>
         </div>
 
-        {/* === Columna derecha: edición === */}
-        <div className="col-lg-7">
-          <div className="card mb-3">
-            <div className="card-body">
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div className="d-flex align-items-center gap-2">
-                  <h5 className="mb-0">{model.id ? "Editar Cliente" : "Crear Nuevo Contacto"}</h5>
-                  {esCliente && (
-                    <span className="badge bg-warning text-dark">
-                      Solo lectura
-                    </span>
-                  )}
-                </div>
-                <div className="btn-group">
-                  <button className="btn btn-outline-secondary btn-sm" onClick={resetForm}>
-                    Nuevo / Limpiar
-                  </button>
-                  <button 
-                    className="btn btn-primary btn-sm" 
-                    onClick={save} 
-                    disabled={!canSave || saving || esCliente}
-                    title={esCliente ? "Los clientes no pueden ser editados desde aquí" : ""}
-                  >
-                    {saving ? "Guardando…" : model.id ? "Guardar" : "Crear"}
-                  </button>
-                </div>
-              </div>
-              {esCliente && (
-                <div className="alert alert-warning alert-sm py-2 px-3 mb-3">
-                  <small><strong>Nota:</strong> Los clientes no pueden ser editados desde aquí. Use el botón "Nuevo / Limpiar" para crear un nuevo contacto.</small>
-                </div>
-              )}
-
-              <div className="row g-3">
-                {/* Selector de tipo de contacto */}
-                <div className="col-12">
-                  <label className="form-label small">Tipo de Contacto *</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={model.tipo_contacto}
-                    onChange={(e) => setField("tipo_contacto", e.target.value)}
-                    disabled={!!model.id || esCliente} // No permitir cambiar tipo si ya existe o es cliente
-                  >
-                    <option value="persona">Persona</option>
-                    <option value="empresa">Empresa</option>
-                  </select>
-                  {model.id && (
-                    <small className="form-text text-muted">
-                      El tipo no puede cambiarse una vez creado el contacto
-                    </small>
-                  )}
+        <div className="gf-listado__body">
+          <div className="row g-3">
+            {/* === Columna izquierda: listado === */}
+            <div className="col-lg-5">
+              <div className="gf-listado__section gf-listado__section--table h-100">
+                <div className="gf-listado__section-title">
+                  <FaTable aria-hidden="true" />
+                  Directorio de contactos
                 </div>
 
-                {/* Campos para Persona */}
-                {esPersona && (
-                  <>
-                    <div className="col-md-6">
-                      <label className="form-label small">Nombres</label>
-                      <input
-                        className="form-control form-control-sm"
-                        value={model.nombres}
-                        onChange={(e) => setField("nombres", e.target.value)}
-                        placeholder="Primer y segundo nombre"
-                        disabled={esCliente}
-                        readOnly={esCliente}
-                      />
-                    </div>
-                    <div className="col-md-6">
-                      <label className="form-label small">Apellidos</label>
-                      <input
-                        className="form-control form-control-sm"
-                        value={model.apellidos}
-                        onChange={(e) => setField("apellidos", e.target.value)}
-                        placeholder="Apellidos"
-                        disabled={esCliente}
-                        readOnly={esCliente}
-                      />
-                    </div>
-                    <div className="col-md-12">
-                      <label className="form-label small">Nombre Completo</label>
-                      <input
-                        className="form-control form-control-sm bg-light"
-                        value={model.nombre_completo}
-                        readOnly
-                        placeholder="Se genera automáticamente"
-                      />
-                      <small className="form-text text-muted">
-                        Se genera automáticamente a partir de nombres y apellidos
-                      </small>
-                    </div>
-                  </>
-                )}
-
-                {/* Campos para Empresa */}
-                {esEmpresa && (
-                  <div className="col-md-12">
-                    <label className="form-label small">Nombre Comercial / Razón Social *</label>
-                    <input
-                      className="form-control form-control-sm"
-                      value={model.nombre_completo}
-                      onChange={(e) => setField("nombre_completo", e.target.value)}
-                      placeholder="Ingrese el nombre de la empresa"
-                      required
-                      disabled={esCliente}
-                      readOnly={esCliente}
-                    />
-                    <small className="form-text text-muted">
-                      Este será el nombre comercial de la empresa
-                    </small>
-                  </div>
-                )}
-
-                <div className="col-md-4">
-                  <label className="form-label small">Idioma</label>
-                  <LanguageSelect
-                    name="idioma"
-                    value={model.idioma || ""}
-                    onChange={(e) => setField("idioma", e.target.value)}
-                    includeEmpty
-                    includeOther
-                    getValue={(l) => l.name}   // o (l) => l.code si prefieres guardar el code
-                    getLabel={(l) => l.name}
-                    className="form-select form-select-sm"
-                    placeholder="Seleccione"
-                    disabled={esCliente}
-                  />
-                </div>
-
-                <div className="col-md-8">
-                  <label className="form-label small">Nota</label>
+                <div className="gf-listado__label">Buscar</div>
+                <div className="input-group mb-3">
                   <input
-                    className="form-control form-control-sm"
-                    value={model.nota || ""}
-                    onChange={(e) => setField("nota", e.target.value)}
-                    disabled={esCliente}
-                    readOnly={esCliente}
+                    className="form-control"
+                    placeholder="Buscar por nombre…"
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
                   />
+                  <button
+                    type="button"
+                    className="btn btn-outline-secondary gf-listado__btn-icon"
+                    aria-label="Buscar"
+                  >
+                    <FaSearch />
+                  </button>
                 </div>
 
-                {/* Botón para agregar/mostrar Teléfonos */}
-                <div className="col-12">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <label className="form-label small mb-0">Teléfonos</label>
-                    {!esCliente && (
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${showTelefonos ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                        onClick={() => setShowTelefonos(!showTelefonos)}
-                      >
-                        <i className={`bi ${showTelefonos ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
-                        {showTelefonos ? 'Ocultar' : 'Agregar Teléfono'}
-                      </button>
-                    )}
-                  </div>
-                  {showTelefonos && (
-                    <div className="mt-2">
-                      <TelefonosPro
-                        value={model.telefonos}
-                        onChange={(list) => setField("telefonos", list)}
-                        readOnly={esCliente}
-                        uiPreset="clean"
-                        countrySelectWidth={200}
-                        formatByCountry
-                      />
-                      {(!model.telefonos || model.telefonos.length === 0) && (
-                        <div className="text-muted small mt-2">Sin teléfonos.</div>
-                      )}
-                    </div>
-                  )}
-                  {!showTelefonos && model.telefonos && model.telefonos.length > 0 && (
-                    <div className="text-muted small mt-1">
-                      {model.telefonos.length} teléfono(s) registrado(s)
-                    </div>
-                  )}
-                </div>
-
-                {/* Botón para agregar/mostrar Dirección */}
-                <div className="col-12 mt-3">
-                  <div className="d-flex justify-content-between align-items-center mb-2">
-                    <label className="form-label small mb-0">Dirección</label>
-                    {!esCliente && (
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${showDireccion ? 'btn-outline-secondary' : 'btn-outline-primary'}`}
-                        onClick={() => setShowDireccion(!showDireccion)}
-                      >
-                        <i className={`bi ${showDireccion ? 'bi-chevron-up' : 'bi-chevron-down'} me-1`}></i>
-                        {showDireccion ? 'Ocultar' : 'Agregar Dirección'}
-                      </button>
-                    )}
-                  </div>
-                  {showDireccion && (
-                    <div className="mt-2 border-top pt-3">
-                      <FormDireccion
-                        formData={model.direccion || empty.direccion}
-                        onChange={handleDireccionChange}
-                        editable={!esCliente}
-                        hideCorrespondencia={true}
-                      />
-                    </div>
-                  )}
-                  {!showDireccion && model.direccion && (model.direccion.calle || model.direccion.ciudad) && (
-                    <div className="text-muted small mt-1">
-                      Dirección registrada: {[model.direccion.calle, model.direccion.ciudad].filter(Boolean).join(', ') || 'Dirección registrada'}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* vínculos - solo mostrar si el contacto ya existe */}
-          {model.id && (
-            <div className="card">
-              <div className="card-body">
-                <h6 className="mb-2">Grupos familiares asociados</h6>
-                {loadingLinks ? (
-                  <div className="text-muted">Cargando…</div>
-                ) : links.length === 0 ? (
-                  <div className="text-muted">Sin vínculos.</div>
-                ) : (
-                <div className="table-responsive">
-                  <table className="table table-sm">
-                    <thead className="table-light">
+                <div className="gf-listado__table-wrap contactos-admin__table-scroll">
+                  <table className="table align-middle gf-listado__table mb-0">
+                    <thead>
                       <tr>
-                        <th>ID GF</th>
-                        <th>Cliente</th>
-                        <th>Relación</th>
-                        <th>¿Pertenece GF?</th>
-                        <th>Nota</th>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Teléfono</th>
+                        <th className="text-end" style={{ width: 88 }}>
+                          Acción
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
-  {links.map((v) => {
-    const gfId = v.grupo_familiar_id;
-    const clienteId = v.cliente_id;
-    const clienteNombre =
-      v.cliente?.nombre_completo?.trim?.() ||
-      v.cliente_nombre ||
-      "—";
-
-    return (
-      <tr
-        key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}
-      >
-        {/* 🔗 ID del Grupo Familiar */}
-        <td>
-          {gfId ? (
-            <a
-              href={`/grupo_familiar/${gfId}`}
-              className="text-decoration-none link-primary fw-semibold"
-              target="_blank"
-              rel="noreferrer"
-              title={`Abrir ficha del grupo familiar #${gfId}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {gfId}
-            </a>
-          ) : (
-            "—"
-          )}
-        </td>
-
-        {/* 🔗 Nombre del Cliente */}
-        <td>
-          {clienteId ? (
-            <a
-              href={`/clientes/${clienteId}/ficha`}
-              className="text-decoration-none link-primary fw-semibold"
-              target="_blank"
-              rel="noreferrer"
-              title={`Abrir ficha del cliente ${clienteNombre}`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {clienteNombre}
-            </a>
-          ) : (
-            clienteNombre
-          )}
-        </td>
-
-        {/* Resto de columnas */}
-        <td>{v.relacion || "—"}</td>
-        <td>{v.pertenece_al_grupo ? "Sí" : "No"}</td>
-        <td>{v.nota || "—"}</td>
-      </tr>
-    );
-  })}
-</tbody>
-
-
+                      {loadingList ? (
+                        <tr>
+                          <td colSpan={4} className="text-center text-muted py-4">
+                            Cargando…
+                          </td>
+                        </tr>
+                      ) : rows.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="text-center gf-listado__empty py-4">
+                            {q.trim().length >= 2
+                              ? "Sin resultados."
+                              : "Escriba al menos 2 caracteres para buscar."}
+                          </td>
+                        </tr>
+                      ) : (
+                        rows.map((r) => {
+                          const firstPhone = formatearTelefonoCompleto(r);
+                          return (
+                            <tr key={r.id}>
+                              <td className="fw-semibold">{r.nombre_completo}</td>
+                              <td>
+                                <span className="text-muted small">
+                                  {r.estado_cliente || "—"}
+                                </span>
+                              </td>
+                              <td>{firstPhone}</td>
+                              <td className="text-end">
+                                <button
+                                  type="button"
+                                  className="btn btn-sm contactos-admin__btn-open"
+                                  onClick={() => loadContact(r.id)}
+                                >
+                                  Abrir
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
                   </table>
-                </div>
-              )}
-                <div className="form-text">
-                  * Solo lectura aquí. La asociación se gestiona en la ficha del cliente/grupo.
                 </div>
               </div>
             </div>
-          )}
+
+            {/* === Columna derecha: edición === */}
+            <div className="col-lg-7">
+              <div className="gf-listado__section mb-3">
+                <div className="contactos-admin__panel-head">
+                  <div className="d-flex align-items-center gap-2 flex-wrap">
+                    <h2 className="contactos-admin__panel-title">
+                      {model.id ? "Editar contacto" : "Crear nuevo contacto"}
+                    </h2>
+                    {esCliente && (
+                      <span className="badge bg-warning text-dark contactos-admin__readonly-badge">
+                        Solo lectura
+                      </span>
+                    )}
+                  </div>
+                  <div className="contactos-admin__actions">
+                    <button
+                      type="button"
+                      className="btn btn-sm contactos-admin__btn-secondary"
+                      onClick={resetForm}
+                    >
+                      Nuevo / Limpiar
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm contactos-admin__btn-primary"
+                      onClick={save}
+                      disabled={!canSave || saving || esCliente}
+                      title={
+                        esCliente
+                          ? "Los clientes no pueden ser editados desde aquí"
+                          : ""
+                      }
+                    >
+                      {saving ? "Guardando…" : model.id ? "Guardar" : "Crear"}
+                    </button>
+                  </div>
+                </div>
+
+                {esCliente && (
+                  <div className="alert contactos-admin__alert-readonly py-2 px-3 mb-3">
+                    <small>
+                      <strong>Nota:</strong> Los clientes no pueden editarse desde
+                      aquí. Use &quot;Nuevo / Limpiar&quot; para crear un contacto
+                      nuevo.
+                    </small>
+                  </div>
+                )}
+
+                <div className="row g-3">
+                  {/* Selector de tipo de contacto */}
+                  <div className="col-12">
+                    <label className="gf-listado__label">Tipo de contacto *</label>
+                    <select
+                      className="form-select form-select-sm"
+                      value={model.tipo_contacto}
+                      onChange={(e) => setField("tipo_contacto", e.target.value)}
+                      disabled={!!model.id || esCliente}
+                    >
+                      <option value="persona">Persona</option>
+                      <option value="empresa">Empresa</option>
+                    </select>
+                    {model.id && (
+                      <small className="form-text">
+                        El tipo no puede cambiarse una vez creado el contacto
+                      </small>
+                    )}
+                  </div>
+
+                  {/* Campos para Persona */}
+                  {esPersona && (
+                    <>
+                      <div className="col-md-6">
+                        <label className="gf-listado__label">Nombres</label>
+                        <input
+                          className="form-control form-control-sm"
+                          value={model.nombres}
+                          onChange={(e) => setField("nombres", e.target.value)}
+                          placeholder="Primer y segundo nombre"
+                          disabled={esCliente}
+                          readOnly={esCliente}
+                        />
+                      </div>
+                      <div className="col-md-6">
+                        <label className="gf-listado__label">Apellidos</label>
+                        <input
+                          className="form-control form-control-sm"
+                          value={model.apellidos}
+                          onChange={(e) => setField("apellidos", e.target.value)}
+                          placeholder="Apellidos"
+                          disabled={esCliente}
+                          readOnly={esCliente}
+                        />
+                      </div>
+                      <div className="col-md-12">
+                        <label className="gf-listado__label">Nombre completo</label>
+                        <input
+                          className="form-control form-control-sm bg-light"
+                          value={model.nombre_completo}
+                          readOnly
+                          placeholder="Se genera automáticamente"
+                        />
+                        <small className="form-text">
+                          Se genera automáticamente a partir de nombres y apellidos
+                        </small>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Campos para Empresa */}
+                  {esEmpresa && (
+                    <div className="col-md-12">
+                      <label className="gf-listado__label">
+                        Nombre comercial / razón social *
+                      </label>
+                      <input
+                        className="form-control form-control-sm"
+                        value={model.nombre_completo}
+                        onChange={(e) => setField("nombre_completo", e.target.value)}
+                        placeholder="Ingrese el nombre de la empresa"
+                        required
+                        disabled={esCliente}
+                        readOnly={esCliente}
+                      />
+                      <small className="form-text">
+                        Este será el nombre comercial de la empresa
+                      </small>
+                    </div>
+                  )}
+
+                  <div className="col-md-4">
+                    <label className="gf-listado__label">Idioma</label>
+                    <LanguageSelect
+                      name="idioma"
+                      value={model.idioma || ""}
+                      onChange={(e) => setField("idioma", e.target.value)}
+                      includeEmpty
+                      includeOther
+                      getValue={(l) => l.name}
+                      getLabel={(l) => l.name}
+                      className="form-select form-select-sm"
+                      placeholder="Seleccione"
+                      disabled={esCliente}
+                    />
+                  </div>
+
+                  <div className="col-md-8">
+                    <label className="gf-listado__label">Nota</label>
+                    <input
+                      className="form-control form-control-sm"
+                      value={model.nota || ""}
+                      onChange={(e) => setField("nota", e.target.value)}
+                      disabled={esCliente}
+                      readOnly={esCliente}
+                    />
+                  </div>
+
+                  {/* Teléfonos */}
+                  <div className="col-12">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <label className="gf-listado__label mb-0">Teléfonos</label>
+                      {!esCliente && (
+                        <button
+                          type="button"
+                          className={`btn btn-sm contactos-admin__toggle-btn ${
+                            showTelefonos
+                              ? "btn-outline-secondary"
+                              : "btn-outline-primary"
+                          }`}
+                          onClick={() => setShowTelefonos(!showTelefonos)}
+                        >
+                          <i
+                            className={`bi ${
+                              showTelefonos ? "bi-chevron-up" : "bi-chevron-down"
+                            } me-1`}
+                          />
+                          {showTelefonos ? "Ocultar" : "Agregar teléfono"}
+                        </button>
+                      )}
+                    </div>
+                    {showTelefonos && (
+                      <div className="mt-2">
+                        <TelefonosPro
+                          value={model.telefonos}
+                          onChange={(list) => setField("telefonos", list)}
+                          readOnly={esCliente}
+                          uiPreset="clean"
+                          countrySelectWidth={200}
+                          formatByCountry
+                        />
+                        {(!model.telefonos || model.telefonos.length === 0) && (
+                          <div className="text-muted small mt-2">Sin teléfonos.</div>
+                        )}
+                      </div>
+                    )}
+                    {!showTelefonos && model.telefonos && model.telefonos.length > 0 && (
+                      <div className="form-text mt-1">
+                        {model.telefonos.length} teléfono(s) registrado(s)
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dirección */}
+                  <div className="col-12 mt-1">
+                    <div className="d-flex justify-content-between align-items-center mb-2">
+                      <label className="gf-listado__label mb-0">Dirección</label>
+                      {!esCliente && (
+                        <button
+                          type="button"
+                          className={`btn btn-sm contactos-admin__toggle-btn ${
+                            showDireccion
+                              ? "btn-outline-secondary"
+                              : "btn-outline-primary"
+                          }`}
+                          onClick={() => setShowDireccion(!showDireccion)}
+                        >
+                          <i
+                            className={`bi ${
+                              showDireccion ? "bi-chevron-up" : "bi-chevron-down"
+                            } me-1`}
+                          />
+                          {showDireccion ? "Ocultar" : "Agregar dirección"}
+                        </button>
+                      )}
+                    </div>
+                    {showDireccion && (
+                      <div className="mt-2 border-top pt-3">
+                        <FormDireccion
+                          formData={model.direccion || empty.direccion}
+                          onChange={handleDireccionChange}
+                          editable={!esCliente}
+                          hideCorrespondencia={true}
+                        />
+                      </div>
+                    )}
+                    {!showDireccion &&
+                      model.direccion &&
+                      (model.direccion.calle || model.direccion.ciudad) && (
+                        <div className="form-text mt-1">
+                          Dirección registrada:{" "}
+                          {[model.direccion.calle, model.direccion.ciudad]
+                            .filter(Boolean)
+                            .join(", ") || "Dirección registrada"}
+                        </div>
+                      )}
+                  </div>
+                </div>
+              </div>
+
+              {/* vínculos - solo mostrar si el contacto ya existe */}
+              {model.id && (
+                <div className="gf-listado__section">
+                  <div className="gf-listado__section-title">
+                    <FaLink aria-hidden="true" />
+                    Grupos familiares asociados
+                  </div>
+
+                  {loadingLinks ? (
+                    <div className="text-muted small">Cargando…</div>
+                  ) : links.length === 0 ? (
+                    <div className="gf-listado__empty py-3">Sin vínculos.</div>
+                  ) : (
+                    <div className="gf-listado__table-wrap table-responsive">
+                      <table className="table table-sm align-middle gf-listado__table mb-0">
+                        <thead>
+                          <tr>
+                            <th>ID GF</th>
+                            <th>Cliente</th>
+                            <th>Relación</th>
+                            <th>¿Pertenece GF?</th>
+                            <th>Nota</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {links.map((v) => {
+                            const gfId = v.grupo_familiar_id;
+                            const clienteId = v.cliente_id;
+                            const clienteNombre =
+                              v.cliente?.nombre_completo?.trim?.() ||
+                              v.cliente_nombre ||
+                              "—";
+
+                            return (
+                              <tr
+                                key={`${v.id}-${v.contacto_id}-${v.grupo_familiar_id}-${v.cliente_id}`}
+                              >
+                                <td>
+                                  {gfId ? (
+                                    <a
+                                      href={`/grupo_familiar/${gfId}`}
+                                      className="text-decoration-none"
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title={`Abrir ficha del grupo familiar #${gfId}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {gfId}
+                                    </a>
+                                  ) : (
+                                    "—"
+                                  )}
+                                </td>
+                                <td>
+                                  {clienteId ? (
+                                    <a
+                                      href={`/clientes/${clienteId}/ficha`}
+                                      className="text-decoration-none"
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title={`Abrir ficha del cliente ${clienteNombre}`}
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      {clienteNombre}
+                                    </a>
+                                  ) : (
+                                    clienteNombre
+                                  )}
+                                </td>
+                                <td>{v.relacion || "—"}</td>
+                                <td>{v.pertenece_al_grupo ? "Sí" : "No"}</td>
+                                <td>{v.nota || "—"}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="contactos-admin__links-note">
+                    * Solo lectura aquí. La asociación se gestiona en la ficha del
+                    cliente o del grupo.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
-  Badge,
   Button,
-  Card,
   Col,
+  Container,
   Form,
   InputGroup,
   Row,
@@ -12,12 +11,14 @@ import {
   Table,
 } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
-import { FaSearch, FaSync, FaUserSlash } from "react-icons/fa";
+import { FaSearch, FaSyncAlt, FaUserSlash, FaFilter, FaTable } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
 import apiRequest from "../services/api";
 import { formatDateMMDDYYYY } from "../utils/formatters";
+import "../styles/GruposFamiliaresListado.css";
+import "../styles/ReporteGruposInactivos.css";
 
 const DEFAULT_FILTERS = {
   page: 1,
@@ -42,13 +43,13 @@ const formatFecha = (value) => formatDateMMDDYYYY(value) || "—";
 const badgeTipo = (tipo) => {
   switch (tipo) {
     case "todos_cancelados":
-      return { bg: "danger", text: "Todos cancelados" };
+      return { text: "Todos cancelados", className: "rgi-report__tipo--cancelados" };
     case "todos_retirados":
-      return { bg: "secondary", text: "Todos retirados" };
+      return { text: "Todos retirados", className: "rgi-report__tipo--retirados" };
     case "mixtos":
-      return { bg: "warning", text: "Cancelados y retirados", textColor: "dark" };
+      return { text: "Cancelados y retirados", className: "rgi-report__tipo--mixtos" };
     default:
-      return { bg: "light", text: tipo || "—", textColor: "dark" };
+      return { text: tipo || "—", className: "rgi-report__tipo--default" };
   }
 };
 
@@ -118,59 +119,82 @@ export default function ReporteGruposInactivosPage() {
     setFilters((prev) => ({ ...prev, page: 1, [key]: value }));
   };
 
+  const limpiarFiltros = () => {
+    setSearchInput("");
+    setFilters(DEFAULT_FILTERS);
+  };
+
   return (
-    <>
+    <Container fluid className="gf-listado-container py-3 rgi-report">
       <Helmet>
         <title>Vantun / Grupos inactivos</title>
       </Helmet>
 
-      <div className="container-fluid py-3">
-        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-          <div>
-            <h4 className="mb-1 d-flex align-items-center gap-2">
-              <FaUserSlash className="text-secondary" />
-              Reporte de grupos inactivos
-            </h4>
-            <div className="text-muted small">
-              Grupos donde todas las coberturas están canceladas y/o retiradas (sin pólizas
-              vigentes).
+      <div className="gf-listado">
+        <div className="gf-listado__header gf-listado__header--split">
+          <div className="gf-listado__header-main">
+            <div className="gf-listado__header-icon" aria-hidden="true">
+              <FaUserSlash />
+            </div>
+            <div>
+              <h1 className="gf-listado__title">Reporte de grupos inactivos</h1>
+              <p className="gf-listado__subtitle">
+                Grupos donde todas las coberturas están canceladas y/o retiradas (sin pólizas
+                vigentes).
+              </p>
             </div>
           </div>
-          <div className="d-flex align-items-center gap-2">
-            <Badge bg="secondary" className="fs-6 px-3 py-2">
+          <div className="gf-listado__header-actions">
+            <span className="gf-listado__chip">
               Total: {resumen.total ?? 0}
-            </Badge>
+            </span>
             <Button
-              variant="outline-secondary"
               size="sm"
+              className="gf-listado__btn-ghost"
               onClick={loadData}
               disabled={loading}
             >
-              <FaSync className={loading ? "fa-spin me-1" : "me-1"} />
+              <FaSyncAlt className={loading ? "fa-spin me-1" : "me-1"} />
               Actualizar
             </Button>
           </div>
         </div>
 
-        <Card className="mb-3 border-0 shadow-sm">
-          <Card.Body>
+        <div className="gf-listado__body">
+          {error && (
+            <Alert variant="danger" className="rgi-report__alert">
+              {error}
+            </Alert>
+          )}
+
+          <div className="gf-listado__section">
+            <div className="gf-listado__section-title">
+              <FaFilter aria-hidden="true" />
+              Filtros
+            </div>
+
             <Form onSubmit={applySearch}>
-              <Row className="g-2 align-items-end">
-                <Col md={4}>
-                  <Form.Label className="small text-muted mb-1">Buscar</Form.Label>
+              <Row className="g-3 align-items-end">
+                <Col xs={12} lg={4}>
+                  <div className="gf-listado__label">Buscar</div>
                   <InputGroup>
                     <Form.Control
                       placeholder="ID, tomador o responsable…"
                       value={searchInput}
                       onChange={(e) => setSearchInput(e.target.value)}
                     />
-                    <Button type="submit" variant="primary">
+                    <Button
+                      type="submit"
+                      variant="outline-secondary"
+                      className="gf-listado__btn-icon"
+                      aria-label="Buscar"
+                    >
                       <FaSearch />
                     </Button>
                   </InputGroup>
                 </Col>
-                <Col md={3}>
-                  <Form.Label className="small text-muted mb-1">Tipo</Form.Label>
+                <Col xs={12} sm={6} lg={3}>
+                  <div className="gf-listado__label">Tipo</div>
                   <Form.Select
                     value={filters.tipo}
                     onChange={(e) => onChangeFilter("tipo", e.target.value)}
@@ -182,60 +206,63 @@ export default function ReporteGruposInactivosPage() {
                     ))}
                   </Form.Select>
                 </Col>
-                <Col md={2}>
-                  <Form.Label className="small text-muted mb-1">Desde</Form.Label>
+                <Col xs={12} sm={6} md={4} lg={2}>
+                  <div className="gf-listado__label">Desde</div>
                   <DateInputWithCalendar
                     valueIso={filters.date_from}
                     onChangeIso={(iso) => onChangeFilter("date_from", iso || "")}
                   />
                 </Col>
-                <Col md={2}>
-                  <Form.Label className="small text-muted mb-1">Hasta</Form.Label>
+                <Col xs={12} sm={6} md={4} lg={2}>
+                  <div className="gf-listado__label">Hasta</div>
                   <DateInputWithCalendar
                     valueIso={filters.date_to}
                     onChangeIso={(iso) => onChangeFilter("date_to", iso || "")}
                     minIso={filters.date_from || undefined}
                   />
                 </Col>
-                <Col md={1}>
-                  <Button
-                    type="button"
-                    variant="outline-secondary"
-                    className="w-100"
-                    onClick={() => {
-                      setSearchInput("");
-                      setFilters(DEFAULT_FILTERS);
-                    }}
-                  >
-                    Limpiar
-                  </Button>
+                <Col xs={12} sm={6} md={4} lg={1} className="ms-lg-auto">
+                  <div className="rgi-report__filters-actions">
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      className="gf-listado__btn-icon w-100"
+                      onClick={limpiarFiltros}
+                    >
+                      Limpiar
+                    </Button>
+                  </div>
                 </Col>
               </Row>
             </Form>
-          </Card.Body>
-        </Card>
+          </div>
 
-        {error && (
-          <Alert variant="danger" className="mb-3">
-            {error}
-          </Alert>
-        )}
+          <div className="gf-listado__section gf-listado__section--table">
+            <div className="gf-listado__section-title">
+              <FaTable aria-hidden="true" />
+              Resultados
+            </div>
 
-        <Card className="border-0 shadow-sm">
-          <Card.Body className="p-0">
+            {!loading && meta.total > 0 && (
+              <div className="gf-listado__summary">
+                Mostrando <strong>{data.length}</strong> de{" "}
+                <strong>{meta.total ?? 0}</strong> registros
+              </div>
+            )}
+
             {loading ? (
-              <div className="text-center py-5">
-                <Spinner animation="border" size="sm" className="me-2" />
+              <div className="rgi-report__loading">
+                <Spinner animation="border" size="sm" role="status" />
                 Cargando grupos inactivos…
               </div>
             ) : data.length === 0 ? (
-              <div className="text-center text-muted py-5">
+              <div className="gf-listado__empty">
                 No hay grupos familiares inactivos con los filtros actuales.
               </div>
             ) : (
-              <div className="table-responsive">
-                <Table hover className="mb-0 align-middle">
-                  <thead className="table-light">
+              <div className="gf-listado__table-wrap">
+                <Table hover className="gf-listado__table mb-0 align-middle">
+                  <thead>
                     <tr>
                       <th>GF</th>
                       <th>Tomador</th>
@@ -254,7 +281,6 @@ export default function ReporteGruposInactivosPage() {
                           <td>
                             <Link
                               to={GRUPO_PATH(row.id)}
-                              className="fw-semibold text-decoration-none"
                               title={`Abrir grupo #${row.id}`}
                             >
                               {row.id}
@@ -267,21 +293,28 @@ export default function ReporteGruposInactivosPage() {
                               : row.persona_contacto || "—"}
                           </td>
                           <td>{row.responsable || "—"}</td>
-                          <td>{row.estado || "—"}</td>
-                          <td>
-                            <Badge bg={badge.bg} text={badge.textColor}>
-                              {row.tipo_label || badge.text}
-                            </Badge>
+                          <td className="rgi-report__estado-proceso">
+                            {row.estado || "—"}
                           </td>
-                          <td className="text-nowrap">
-                            <span title="Total / canceladas / retiradas">
-                              {row.total_coberturas ?? 0}
+                          <td>
+                            <span className={`rgi-report__tipo ${badge.className}`}>
+                              {row.tipo_label || badge.text}
+                            </span>
+                          </td>
+                          <td>
+                            <span
+                              className="rgi-report__coberturas"
+                              title="Total / canceladas / retiradas"
+                            >
+                              <span className="rgi-report__coberturas-total">
+                                {row.total_coberturas ?? 0}
+                              </span>
                               <span className="text-muted"> · </span>
-                              <span className="text-danger">
+                              <span className="rgi-report__coberturas-canc">
                                 {row.total_canceladas ?? 0} canc.
                               </span>
                               <span className="text-muted"> · </span>
-                              <span className="text-secondary">
+                              <span className="rgi-report__coberturas-ret">
                                 {row.total_retiradas ?? 0} ret.
                               </span>
                             </span>
@@ -296,21 +329,21 @@ export default function ReporteGruposInactivosPage() {
                 </Table>
               </div>
             )}
-          </Card.Body>
-        </Card>
-
-        {!loading && meta.total > 0 && (
-          <div className="mt-3">
-            <Pagination
-              currentPage={meta.page}
-              totalPages={meta.last_page}
-              onPageChange={(p) => setFilters((prev) => ({ ...prev, page: p }))}
-              totalItems={meta.total}
-              itemsPerPage={meta.per_page}
-            />
           </div>
-        )}
+
+          {!loading && meta.total > 0 && (
+            <div className="rgi-report__pagination">
+              <Pagination
+                currentPage={meta.page}
+                totalPages={meta.last_page}
+                onPageChange={(p) => setFilters((prev) => ({ ...prev, page: p }))}
+                totalItems={meta.total}
+                itemsPerPage={meta.per_page}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </Container>
   );
 }
