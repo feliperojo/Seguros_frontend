@@ -32,8 +32,8 @@ import { useAuth } from "../../context/AuthContext";
 import { usersService, rolesService } from "../../services/adminApi";
 import UserForm from "../../components/admin/UserForm";
 import UserRolesModal from "../../components/admin/UserRolesModal";
-import "../styles/GruposFamiliaresListado.css";
-import "../styles/UsersList.css";
+import "../../styles/GruposFamiliaresListado.css";
+import "../../styles/UsersList.css";
 
 const getUserOnline = (user, isPresenceLive, onlineUserIds) => (
   isPresenceLive

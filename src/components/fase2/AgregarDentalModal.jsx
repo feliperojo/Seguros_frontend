@@ -40,7 +40,6 @@ const emptyForm = () => ({
   tipo_pago: "",
   pagador_id: null,
   dia_pago: "",
-  precio: "",
 });
 
 const buildFormFromSalud = (saludMember) => ({
@@ -65,6 +64,7 @@ export default function AgregarDentalModal({
   const [form, setForm] = useState(emptyForm);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [memberIds, setMemberIds] = useState({});
+  const [memberPrecios, setMemberPrecios] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -101,6 +101,7 @@ export default function AgregarDentalModal({
     const fuente = elegibles[0] || null;
     setForm(buildFormFromSalud(fuente));
     setMemberIds({});
+    setMemberPrecios({});
     setError("");
     setSelectedIds(new Set(elegibles.map(memberKey)));
   }, [open, elegibles]);
@@ -153,8 +154,11 @@ export default function AgregarDentalModal({
     setForm((prev) => ({ ...prev, [name]: v }));
   };
 
-  const handlePrecioChange = (nextValue) => {
-    setForm((prev) => ({ ...prev, precio: nextValue }));
+  const handleMemberPrecioChange = (memberId, nextValue) => {
+    setMemberPrecios((prev) => ({
+      ...prev,
+      [memberId]: nextValue,
+    }));
   };
 
   const handleSave = async () => {
@@ -216,7 +220,7 @@ export default function AgregarDentalModal({
             form.dia_pago !== "" && form.dia_pago != null
               ? form.dia_pago
               : desdeSalud.dia_pago || null,
-          precio: form.precio ? parseMoney(form.precio) : null,
+          precio: memberPrecios[cid] ? parseMoney(memberPrecios[cid]) : null,
           activo: true,
         };
 
@@ -383,7 +387,7 @@ export default function AgregarDentalModal({
                       {selected && (
                         <div className="agregar-dental-modal__member-card-body">
                           <div className="row g-2 align-items-end">
-                            <div className="col-md-5">
+                            <div className="col-md-4">
                               <FieldLabel>Número de ID</FieldLabel>
                               <Form.Control
                                 size="sm"
@@ -398,7 +402,7 @@ export default function AgregarDentalModal({
                                 aria-label={`Número de ID para ${fullName(m)}`}
                               />
                             </div>
-                            <div className="col-md-3">
+                            <div className="col-md-2">
                               <span className="agregar-dental-modal__inherited-label">
                                 Año cobertura
                               </span>
@@ -406,13 +410,23 @@ export default function AgregarDentalModal({
                                 {m.ano_cobertura || "—"}
                               </div>
                             </div>
-                            <div className="col-md-4">
+                            <div className="col-md-3">
                               <span className="agregar-dental-modal__inherited-label">
                                 Elegibilidad
                               </span>
                               <div className="agregar-dental-modal__inherited-value">
                                 {m.elegibilidad || "—"}
                               </div>
+                            </div>
+                            <div className="col-md-3">
+                              <FieldLabel>Precio ($)</FieldLabel>
+                              <CoveragePriceInput
+                                value={memberPrecios[id] || ""}
+                                onChange={(nextValue) => handleMemberPrecioChange(id, nextValue)}
+                                className="form-control"
+                                size="sm"
+                                name={`precio-${id}`}
+                              />
                             </div>
                           </div>
                         </div>
@@ -426,10 +440,9 @@ export default function AgregarDentalModal({
             <div className="agregar-dental-modal__notice" role="note">
               <i className="fas fa-info-circle agregar-dental-modal__notice-icon" />
               <span>
-                Los datos del plan (compañía, plan, precio, etc.) se aplican a todos los
-                miembros seleccionados. Verifique bajo qué miembro está registrado el precio
-                total ante la aseguradora. El <strong>Número de ID</strong> es individual por
-                persona.
+                Los datos del plan (compañía, plan, agente, etc.) se aplican a todos los
+                miembros seleccionados. El <strong>Número de ID</strong> y el{" "}
+                <strong>Precio ($)</strong> son individuales por persona.
               </span>
             </div>
 
@@ -500,14 +513,6 @@ export default function AgregarDentalModal({
                     value={form.plan}
                     onChange={handleChange}
                     placeholder="Nombre del plan dental"
-                  />
-                </div>
-                <div className="col-md-6">
-                  <FieldLabel>Precio ($)</FieldLabel>
-                  <CoveragePriceInput
-                    value={form.precio}
-                    onChange={handlePrecioChange}
-                    className="form-control"
                   />
                 </div>
               </div>
