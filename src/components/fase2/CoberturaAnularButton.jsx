@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { Modal, Button, Form, Alert } from "react-bootstrap";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { getCoberturaId } from "../../utils/coberturas";
-import { puedeAnularInscripcion } from "../../utils/coberturaAnulacion";
+import {
+  puedeAnularInscripcion,
+  puedeAnularInscripcionCobertura,
+} from "../../utils/coberturaAnulacion";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 
 const MOTIVOS = [
@@ -22,10 +25,12 @@ const todayIso = () => {
 
 export default function CoberturaAnularButton({
   member,
+  coverage = null,
   estadoActual,
   readOnly = false,
   onAnulada,
   className = "btn btn-outline-warning btn-sm me-2",
+  productLabel = "",
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +39,15 @@ export default function CoberturaAnularButton({
   const [motivo, setMotivo] = useState("");
   const [nota, setNota] = useState("");
 
-  if (!puedeAnularInscripcion(member, { estadoActual, readOnly })) {
+  const canAnular = coverage
+    ? puedeAnularInscripcionCobertura(coverage, {
+        estadoActual,
+        readOnly,
+        member,
+      })
+    : puedeAnularInscripcion(member, { estadoActual, readOnly });
+
+  if (!canAnular) {
     return null;
   }
 
@@ -64,7 +77,7 @@ export default function CoberturaAnularButton({
   };
 
   const handleConfirm = async () => {
-    const covId = getCoberturaId(member);
+    const covId = coverage?.cobertura_id ?? getCoberturaId(member);
     if (!covId) {
       setError("No se encontró la cobertura a anular.");
       return;
@@ -124,8 +137,9 @@ export default function CoberturaAnularButton({
         <Modal.Body>
           {error && <Alert variant="danger">{error}</Alert>}
           <p className="mb-3">
-            <strong>{nombre}</strong> nunca tuvo cobertura activa. Se anulará
-            la inscripción y <strong>no</strong> quedará como retiro.
+            <strong>{nombre}</strong> nunca tuvo cobertura activa
+            {productLabel ? ` (${productLabel})` : ""}. Se anulará la inscripción
+            y <strong>no</strong> quedará como retiro.
           </p>
           <Form.Group className="mb-3">
             <Form.Label>Fecha de anulación</Form.Label>
