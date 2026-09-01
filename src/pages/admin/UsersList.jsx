@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from "react";
 import {
-  Card,
+  Container,
   Table,
   Form,
   InputGroup,
   Button,
-  Badge,
   Spinner,
   Pagination,
   Alert,
+  Row,
+  Col,
 } from "react-bootstrap";
+import { Helmet } from "react-helmet-async";
 import {
   FaSearch,
   FaEdit,
@@ -20,6 +22,9 @@ import {
   FaKey,
   FaToggleOn,
   FaToggleOff,
+  FaUsers,
+  FaSyncAlt,
+  FaTable,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useHasPermission } from "../../hooks/useHasPermission";
@@ -27,6 +32,30 @@ import { useAuth } from "../../context/AuthContext";
 import { usersService, rolesService } from "../../services/adminApi";
 import UserForm from "../../components/admin/UserForm";
 import UserRolesModal from "../../components/admin/UserRolesModal";
+import "../../styles/GruposFamiliaresListado.css";
+import "../../styles/UsersList.css";
+
+const getUserOnline = (user, isPresenceLive, onlineUserIds) => (
+  isPresenceLive
+    ? Boolean(onlineUserIds?.has(Number(user.id)))
+    : Boolean(user.is_online)
+);
+
+/** last_login_at solo cambia al iniciar sesión; last_seen_at refleja actividad reciente (heartbeat). */
+const getConnectionSubtext = (user, isOnline) => {
+  if (isOnline) {
+    return user.last_seen_at
+      ? `Activa ahora · ${user.last_seen_at}`
+      : "Activa ahora";
+  }
+  if (user.last_seen_at) {
+    return `Últ. actividad: ${user.last_seen_at}`;
+  }
+  if (user.last_login_at) {
+    return `Últ. inicio de sesión: ${user.last_login_at}`;
+  }
+  return null;
+};
 
 const UsersList = () => {
   const { onlineUserIds, isPresenceLive } = useAuth();
@@ -57,7 +86,6 @@ const UsersList = () => {
     loadRoles();
   }, [currentPage, searchTerm, statusFilter, roleFilter]);
 
-  // Refresca la lista periódicamente para reflejar quién está conectado ahora mismo.
   useEffect(() => {
     const intervalId = setInterval(() => {
       if (!document.hidden) {
@@ -80,34 +108,27 @@ const UsersList = () => {
       };
 
       const response = await usersService.list(params);
-      
-      // Manejar diferentes estructuras de respuesta del backend
+
       let usersData = [];
       let totalCount = 0;
-      
-      // Log para debugging
+
       if (import.meta.env.DEV) {
         console.log("📥 Respuesta del backend:", {
           response,
           type: typeof response,
           isArray: Array.isArray(response),
-          keys: response && typeof response === 'object' ? Object.keys(response) : null,
+          keys: response && typeof response === "object" ? Object.keys(response) : null,
         });
       }
-      
-      // Estructura: { data: { data: [...], pagination: {...} }, message: "...", success: true }
+
       if (response && response.data) {
-        // Verificar si response.data tiene una propiedad 'data' (estructura anidada)
         if (response.data.data && Array.isArray(response.data.data)) {
-          // Estructura anidada: { data: { data: [...], pagination: {...} } }
           usersData = response.data.data;
           totalCount = response.data.pagination?.total || response.data.pagination?.total_count || usersData.length;
         } else if (Array.isArray(response.data)) {
-          // Estructura simple: { data: [...] }
           usersData = response.data;
           totalCount = response.meta?.total || response.meta?.total_count || response.pagination?.total || usersData.length;
         } else {
-          // Intentar encontrar un array en response.data
           const possibleArrays = Object.values(response.data).filter(Array.isArray);
           if (possibleArrays.length > 0) {
             usersData = possibleArrays[0];
@@ -115,15 +136,12 @@ const UsersList = () => {
           }
         }
       } else if (Array.isArray(response)) {
-        // Si la respuesta es directamente un array
         usersData = response;
         totalCount = response.length;
       } else if (response && response.users) {
-        // Si la respuesta tiene estructura { users: [...] }
         usersData = Array.isArray(response.users) ? response.users : [];
         totalCount = response.meta?.total || response.pagination?.total || response.total || usersData.length;
-      } else if (response && typeof response === 'object') {
-        // Intentar encontrar un array en cualquier propiedad
+      } else if (response && typeof response === "object") {
         const possibleArrays = Object.values(response).filter(Array.isArray);
         if (possibleArrays.length > 0) {
           usersData = possibleArrays[0];
@@ -133,58 +151,42 @@ const UsersList = () => {
           usersData = [];
         }
       } else {
-        // Fallback: intentar usar la respuesta directamente si es un array
         usersData = Array.isArray(response) ? response : [];
         totalCount = usersData.length;
       }
-      
-      // Asegurar que siempre sea un array
+
       if (!Array.isArray(usersData)) {
         console.warn("⚠️ La respuesta de usuarios no es un array:", response);
         usersData = [];
       }
-      
-      // Normalizar los datos: convertir is_active (booleano) a status (string)
-      const normalizedUsers = usersData.map(user => ({
+
+      const normalizedUsers = usersData.map((user) => ({
         ...user,
-        // Si tiene is_active pero no status, convertir is_active a status
         status: user.status || (user.is_active ? "active" : "inactive"),
-        // Mantener is_active para compatibilidad
-        is_active: user.is_active !== undefined ? user.is_active : (user.status === "active")
+        is_active: user.is_active !== undefined ? user.is_active : (user.status === "active"),
       }));
-      
+
       setUsers(normalizedUsers);
       setTotal(totalCount || normalizedUsers.length);
-      
-      // Log para debugging
+
       if (import.meta.env.DEV) {
         console.log("✅ Usuarios cargados:", {
           count: normalizedUsers.length,
           total: totalCount,
-          structure: response,
-          normalizedUsers: normalizedUsers.slice(0, 2), // Primeros 2 para no saturar la consola
         });
       }
     } catch (err) {
-      const errorMessage = err.response?.status === 403 
+      const errorMessage = err.response?.status === 403
         ? "No tienes permisos para ver usuarios. Contacta al administrador."
         : err.message || "Error al cargar usuarios";
-      
+
       setError(errorMessage);
       toast.error(errorMessage);
-      
-      // Log para debugging
+
       if (import.meta.env.DEV) {
-        console.error("❌ Error cargando usuarios:", {
-          error: err,
-          status: err.response?.status,
-          url: err.response?.url,
-          message: err.message,
-          response: err.response,
-        });
+        console.error("❌ Error cargando usuarios:", err);
       }
-      
-      // Si hay error, asegurar que users sea un array vacío
+
       setUsers([]);
       setTotal(0);
     } finally {
@@ -262,26 +264,6 @@ const UsersList = () => {
     }
   };
 
-  const handleResetPassword = async (user) => {
-    if (
-      !window.confirm(
-        `¿Estás seguro de resetear la contraseña de ${user.name}? Se enviará una nueva contraseña por email.`
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setActionLoading(`reset-${user.id}`);
-      await usersService.resetPassword(user.id);
-      toast.success("Contraseña reseteada. Se envió un email al usuario.");
-    } catch (err) {
-      toast.error(err.message || "Error al resetear contraseña");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
   const handleEdit = (user) => {
     setSelectedUser(user);
     setShowUserForm(true);
@@ -312,275 +294,339 @@ const UsersList = () => {
   const totalPages = Math.ceil(total / perPage);
 
   return (
-    <div className="container-fluid py-4">
-      <Card>
-        <Card.Header className="d-flex justify-content-between align-items-center">
-          <h4 className="mb-0">
-            <FaUserPlus className="me-2" />
-            Administración de Usuarios
-          </h4>
-          <Button
-            variant="primary"
-            onClick={() => {
-              setSelectedUser(null);
-              setShowUserForm(true);
-            }}
-            disabled={!canCreate}
-            title={canCreate ? "Crear Usuario" : "No tienes permisos para crear usuarios"}
-          >
-            <FaUserPlus className="me-2" />
-            Crear Usuario
-          </Button>
-        </Card.Header>
-        <Card.Body>
-          <Form onSubmit={handleSearch} className="mb-4">
-            <div className="row g-3">
-              <div className="col-md-4">
-                <InputGroup>
-                  <InputGroup.Text>
-                    <FaSearch />
-                  </InputGroup.Text>
-                  <Form.Control
-                    type="text"
-                    placeholder="Buscar por nombre o email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </InputGroup>
-              </div>
-              <div className="col-md-3">
-                <Form.Select
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="">Todos los estados</option>
-                  <option value="active">Activos</option>
-                  <option value="inactive">Inactivos</option>
-                </Form.Select>
-              </div>
-              <div className="col-md-3">
-                <Form.Select
-                  value={roleFilter}
-                  onChange={(e) => {
-                    setRoleFilter(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                >
-                  <option value="">Todos los roles</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </Form.Select>
-              </div>
-              <div className="col-md-2">
-                <Button type="submit" variant="outline-primary" className="w-100">
-                  <FaFilter className="me-2" />
-                  Filtrar
-                </Button>
-              </div>
+    <Container fluid className="gf-listado-container py-3 users-admin">
+      <Helmet>
+        <title>Vantun / Administración de usuarios</title>
+      </Helmet>
+
+      <div className="gf-listado">
+        <div className="gf-listado__header gf-listado__header--split">
+          <div className="gf-listado__header-main">
+            <div className="gf-listado__header-icon" aria-hidden="true">
+              <FaUsers />
             </div>
-          </Form>
+            <div>
+              <h1 className="gf-listado__title">Administración de Usuarios</h1>
+              <p className="gf-listado__subtitle">
+                Gestiona cuentas, roles y estado de conexión del equipo.
+              </p>
+            </div>
+          </div>
+          <div className="gf-listado__header-actions">
+            <span className="gf-listado__chip">
+              {loading ? "Cargando…" : `${total} usuario${total !== 1 ? "s" : ""}`}
+            </span>
+            <Button
+              size="sm"
+              className="gf-listado__btn-ghost"
+              onClick={loadUsers}
+              disabled={loading}
+            >
+              <FaSyncAlt className={loading ? "fa-spin me-1" : "me-1"} />
+              Actualizar
+            </Button>
+            <Button
+              size="sm"
+              className="users-admin__btn-create"
+              onClick={() => {
+                setSelectedUser(null);
+                setShowUserForm(true);
+              }}
+              disabled={!canCreate}
+              title={canCreate ? "Crear usuario" : "No tienes permisos para crear usuarios"}
+            >
+              <FaUserPlus className="me-1" />
+              Crear usuario
+            </Button>
+          </div>
+        </div>
+
+        <div className="gf-listado__body">
+          <div className="gf-listado__section">
+            <div className="gf-listado__section-title">
+              <FaFilter aria-hidden="true" />
+              Filtros
+            </div>
+
+            <Form onSubmit={handleSearch}>
+              <Row className="g-3 align-items-end">
+                <Col xs={12} md={6} lg={4}>
+                  <div className="gf-listado__label">Buscar</div>
+                  <InputGroup>
+                    <Form.Control
+                      type="text"
+                      placeholder="Buscar por nombre o email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                    <Button
+                      type="submit"
+                      variant="outline-secondary"
+                      className="gf-listado__btn-icon"
+                      aria-label="Filtrar"
+                    >
+                      <FaSearch />
+                    </Button>
+                  </InputGroup>
+                </Col>
+                <Col xs={12} sm={6} lg={3}>
+                  <div className="gf-listado__label">Estado</div>
+                  <Form.Select
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value="">Todos los estados</option>
+                    <option value="active">Activos</option>
+                    <option value="inactive">Inactivos</option>
+                  </Form.Select>
+                </Col>
+                <Col xs={12} sm={6} lg={3}>
+                  <div className="gf-listado__label">Rol</div>
+                  <Form.Select
+                    value={roleFilter}
+                    onChange={(e) => {
+                      setRoleFilter(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value="">Todos los roles</option>
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.id}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col xs={12} sm={6} lg={2}>
+                  <Button type="submit" variant="outline-secondary" className="gf-listado__btn-icon w-100">
+                    <FaFilter className="me-1" />
+                    Filtrar
+                  </Button>
+                </Col>
+              </Row>
+            </Form>
+          </div>
 
           {error && (
-            <Alert variant="danger" dismissible onClose={() => setError(null)}>
+            <Alert variant="danger" className="users-admin__alert" dismissible onClose={() => setError(null)}>
               {error}
             </Alert>
           )}
 
-          {loading ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" role="status">
-                <span className="visually-hidden">Cargando...</span>
-              </Spinner>
+          <div className="gf-listado__section gf-listado__section--table">
+            <div className="gf-listado__section-title">
+              <FaTable aria-hidden="true" />
+              Usuarios
             </div>
-          ) : !Array.isArray(users) || users.length === 0 ? (
-            <Alert variant="info" className="text-center">
-              No se encontraron usuarios
-            </Alert>
-          ) : (
-            <>
-              <div className="table-responsive">
-                <Table striped bordered hover>
-                  <thead>
-                    <tr>
-                      <th>ID</th>
-                      <th>Nombre</th>
-                      <th>Email</th>
-                      <th>Roles</th>
-                      <th>Estado</th>
-                      <th>Conexión</th>
-                      <th>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Array.isArray(users) && users.length > 0 ? (
-                      users.map((user) => (
-                        <tr key={user.id}>
-                          <td>{user.id}</td>
-                          <td>{user.name}</td>
-                          <td>{user.email}</td>
-                          <td>
-                            {user.roles && user.roles.length > 0 ? (
-                              <div className="d-flex flex-wrap gap-1">
-                                {user.roles.map((role) => (
-                                  <Badge key={role.id} bg="secondary">
-                                    {role.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-muted">Sin roles</span>
-                            )}
-                          </td>
-                          <td>
-                            <Badge bg={user.status === "active" ? "success" : "secondary"}>
-                              {user.status === "active" ? "Activo" : "Inactivo"}
-                            </Badge>
-                          </td>
-                          <td>
-                            {(() => {
-                              const isOnline = isPresenceLive
-                                ? Boolean(onlineUserIds?.has(Number(user.id)))
-                                : Boolean(user.is_online);
-                              return (
-                                <>
-                                  <Badge bg={isOnline ? "success" : "secondary"}>
-                                    {isOnline ? "En línea" : "Desconectado"}
-                                  </Badge>
-                                  {user.last_login_at && (
-                                    <div className="text-muted small mt-1">
-                                      Últ. acceso: {user.last_login_at}
-                                    </div>
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </td>
-                          <td>
-                            <div className="d-flex gap-2">
-                              <Button
-                                variant="info"
-                                size="sm"
-                                onClick={() => handleView(user)}
-                                title="Ver detalles"
-                              >
-                                <FaEye />
-                              </Button>
-                              <Button
-                                variant="warning"
-                                size="sm"
-                                onClick={() => handleEdit(user)}
-                                title={canEdit ? "Editar" : "Ver detalles (sin permisos para editar)"}
-                                disabled={actionLoading === user.id || !canEdit}
-                              >
-                                <FaEdit />
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => handleAssignRoles(user)}
-                                title={canAssignRoles ? "Asignar roles" : "Ver roles (sin permisos para modificar)"}
-                                disabled={actionLoading === user.id || !canAssignRoles}
-                              >
-                                <FaKey />
-                              </Button>
-                              <Button
-                                variant={user.status === "active" ? "danger" : "success"}
-                                size="sm"
-                                onClick={() => handleToggleStatus(user)}
-                                title={
-                                  canToggleStatus 
-                                    ? (user.status === "active" ? "Desactivar" : "Activar")
-                                    : "Ver estado (sin permisos para modificar)"
-                                }
-                                disabled={actionLoading === user.id || !canToggleStatus}
-                              >
-                                {actionLoading === user.id ? (
-                                  <Spinner size="sm" />
-                                ) : user.status === "active" ? (
-                                  <FaToggleOff />
-                                ) : (
-                                  <FaToggleOn />
-                                )}
-                              </Button>
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleDelete(user)}
-                                title={canDelete ? "Eliminar" : "Eliminar (sin permisos)"}
-                                disabled={actionLoading === user.id || !canDelete}
-                              >
-                                {actionLoading === user.id ? (
-                                  <Spinner size="sm" />
-                                ) : (
-                                  <FaTrashAlt />
-                                )}
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td colSpan={7} className="text-center text-muted">
-                          No hay usuarios para mostrar
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </Table>
-              </div>
 
-              {totalPages > 1 && (
-                <div className="d-flex justify-content-center mt-4">
-                  <Pagination>
-                    <Pagination.First
-                      onClick={() => setCurrentPage(1)}
-                      disabled={currentPage === 1}
-                    />
-                    <Pagination.Prev
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                      disabled={currentPage === 1}
-                    />
-                    {[...Array(totalPages)].map((_, i) => {
-                      const page = i + 1;
-                      if (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 2 && page <= currentPage + 2)
-                      ) {
+            {!loading && users.length > 0 && (
+              <div className="gf-listado__summary">
+                Página <strong>{currentPage}</strong> de <strong>{Math.max(totalPages, 1)}</strong>
+                {" · "}
+                <strong>{users.length}</strong> en esta página
+              </div>
+            )}
+
+            {loading ? (
+              <div className="users-admin__loading">
+                <Spinner animation="border" role="status" />
+                <div className="mt-2">Cargando usuarios…</div>
+              </div>
+            ) : !Array.isArray(users) || users.length === 0 ? (
+              <div className="gf-listado__empty">No se encontraron usuarios</div>
+            ) : (
+              <>
+                <div className="gf-listado__table-wrap">
+                  <Table hover className="gf-listado__table mb-0 align-middle">
+                    <thead>
+                      <tr>
+                        <th>ID</th>
+                        <th>Nombre</th>
+                        <th>Email</th>
+                        <th>Roles</th>
+                        <th>Estado</th>
+                        <th>Conexión</th>
+                        <th>Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => {
+                        const isOnline = getUserOnline(user, isPresenceLive, onlineUserIds);
+                        const connectionSubtext = getConnectionSubtext(user, isOnline);
+
                         return (
-                          <Pagination.Item
-                            key={page}
-                            active={page === currentPage}
-                            onClick={() => setCurrentPage(page)}
-                          >
-                            {page}
-                          </Pagination.Item>
+                          <tr key={user.id}>
+                            <td>{user.id}</td>
+                            <td className="gf-listado__producto">{user.name}</td>
+                            <td>{user.email}</td>
+                            <td>
+                              {user.roles && user.roles.length > 0 ? (
+                                <div className="d-flex flex-wrap gap-1">
+                                  {user.roles.map((role) => (
+                                    <span key={role.id} className="users-admin__rol">
+                                      {role.name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted small">Sin roles</span>
+                              )}
+                            </td>
+                            <td>
+                              <span
+                                className={`users-admin__estado ${
+                                  user.status === "active"
+                                    ? "users-admin__estado--activo"
+                                    : "users-admin__estado--inactivo"
+                                }`}
+                              >
+                                {user.status === "active" ? "Activo" : "Inactivo"}
+                              </span>
+                            </td>
+                            <td>
+                              <span
+                                className={`users-admin__conexion ${
+                                  isOnline
+                                    ? "users-admin__conexion--online"
+                                    : "users-admin__conexion--offline"
+                                }`}
+                              >
+                                {isOnline ? "En línea" : "Desconectado"}
+                              </span>
+                              {connectionSubtext && (
+                                <div className="users-admin__conexion-meta">
+                                  {connectionSubtext}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <div className="users-admin__acciones">
+                                <button
+                                  type="button"
+                                  className="users-admin__btn-accion"
+                                  onClick={() => handleView(user)}
+                                  title="Ver detalles"
+                                  aria-label="Ver detalles"
+                                  disabled={!canView}
+                                >
+                                  <FaEye />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="users-admin__btn-accion users-admin__btn-accion--edit"
+                                  onClick={() => handleEdit(user)}
+                                  title={canEdit ? "Editar" : "Sin permisos para editar"}
+                                  aria-label="Editar"
+                                  disabled={actionLoading === user.id || !canEdit}
+                                >
+                                  {actionLoading === user.id ? <Spinner size="sm" /> : <FaEdit />}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="users-admin__btn-accion"
+                                  onClick={() => handleAssignRoles(user)}
+                                  title={canAssignRoles ? "Asignar roles" : "Sin permisos"}
+                                  aria-label="Asignar roles"
+                                  disabled={actionLoading === user.id || !canAssignRoles}
+                                >
+                                  <FaKey />
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`users-admin__btn-accion ${
+                                    user.status === "active"
+                                      ? "users-admin__btn-accion--toggle-off"
+                                      : "users-admin__btn-accion--toggle-on"
+                                  }`}
+                                  onClick={() => handleToggleStatus(user)}
+                                  title={
+                                    canToggleStatus
+                                      ? (user.status === "active" ? "Desactivar" : "Activar")
+                                      : "Sin permisos"
+                                  }
+                                  aria-label="Cambiar estado"
+                                  disabled={actionLoading === user.id || !canToggleStatus}
+                                >
+                                  {actionLoading === user.id ? (
+                                    <Spinner size="sm" />
+                                  ) : user.status === "active" ? (
+                                    <FaToggleOff />
+                                  ) : (
+                                    <FaToggleOn />
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="users-admin__btn-accion users-admin__btn-accion--delete"
+                                  onClick={() => handleDelete(user)}
+                                  title={canDelete ? "Eliminar" : "Sin permisos"}
+                                  aria-label="Eliminar"
+                                  disabled={actionLoading === user.id || !canDelete}
+                                >
+                                  {actionLoading === user.id ? (
+                                    <Spinner size="sm" />
+                                  ) : (
+                                    <FaTrashAlt />
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
                         );
-                      }
-                      return null;
-                    })}
-                    <Pagination.Next
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                    />
-                    <Pagination.Last
-                      onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage === totalPages}
-                    />
-                  </Pagination>
+                      })}
+                    </tbody>
+                  </Table>
                 </div>
-              )}
-            </>
-          )}
-        </Card.Body>
-      </Card>
+
+                {totalPages > 1 && (
+                  <div className="users-admin__pagination">
+                    <Pagination>
+                      <Pagination.First
+                        onClick={() => setCurrentPage(1)}
+                        disabled={currentPage === 1}
+                      />
+                      <Pagination.Prev
+                        onClick={() => setCurrentPage(currentPage - 1)}
+                        disabled={currentPage === 1}
+                      />
+                      {[...Array(totalPages)].map((_, i) => {
+                        const page = i + 1;
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 2 && page <= currentPage + 2)
+                        ) {
+                          return (
+                            <Pagination.Item
+                              key={page}
+                              active={page === currentPage}
+                              onClick={() => setCurrentPage(page)}
+                            >
+                              {page}
+                            </Pagination.Item>
+                          );
+                        }
+                        return null;
+                      })}
+                      <Pagination.Next
+                        onClick={() => setCurrentPage(currentPage + 1)}
+                        disabled={currentPage === totalPages}
+                      />
+                      <Pagination.Last
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={currentPage === totalPages}
+                      />
+                    </Pagination>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       {showUserForm && (
         <UserForm
@@ -598,9 +644,8 @@ const UsersList = () => {
           user={selectedUser}
         />
       )}
-    </div>
+    </Container>
   );
 };
 
 export default UsersList;
-
