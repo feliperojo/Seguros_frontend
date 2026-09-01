@@ -1,0 +1,170 @@
+/* Administración de usuarios — estilo institucional (gf-listado) */
+
+.users-admin .gf-listado__body {
+  background: #f8f9fb;
+}
+
+.users-admin__btn-create {
+  background: #fff !important;
+  color: #0f2744 !important;
+  border: none !important;
+  font-weight: 600;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+}
+
+.users-admin__btn-create:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+  color: #0f2744 !important;
+}
+
+.users-admin__btn-create:disabled {
+  opacity: 0.55;
+}
+
+.users-admin__estado {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.users-admin__estado--activo {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.users-admin__estado--inactivo {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+
+.users-admin__conexion {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.users-admin__conexion--online {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.users-admin__conexion--offline {
+  background: #f1f5f9;
+  color: #64748b;
+  border-color: #e2e8f0;
+}
+
+.users-admin__conexion-meta {
+  font-size: 0.6875rem;
+  color: #64748b;
+  margin-top: 0.35rem;
+  line-height: 1.35;
+}
+
+.users-admin__rol {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1a365d;
+  border: 1px solid #bfdbfe;
+}
+
+.users-admin__acciones {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.users-admin__btn-accion {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #475569;
+}
+
+.users-admin__btn-accion:hover:not(:disabled) {
+  background: #f8fafc;
+  border-color: #1a365d;
+  color: #1a365d;
+}
+
+.users-admin__btn-accion--edit:hover:not(:disabled) {
+  background: #fffbeb;
+  border-color: #b45309;
+  color: #b45309;
+}
+
+.users-admin__btn-accion--toggle-on:hover:not(:disabled) {
+  background: #ecfdf5;
+  border-color: #047857;
+  color: #047857;
+}
+
+.users-admin__btn-accion--toggle-off:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.users-admin__btn-accion--delete:hover:not(:disabled) {
+  background: #fef2f2;
+  border-color: #b91c1c;
+  color: #b91c1c;
+}
+
+.users-admin__btn-accion:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.users-admin__pagination {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.users-admin__pagination .pagination .page-link {
+  border-color: #e2e8f0;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.users-admin__pagination .pagination .page-item.active .page-link {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.users-admin__alert {
+  border-radius: 8px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.users-admin__loading {
+  text-align: center;
+  padding: 3rem 1.5rem;
+  color: #64748b;
+}
+
+.users-admin__loading .spinner-border {
+  color: #1a365d;
+}
