@@ -23,13 +23,19 @@ const esActivoFalse = (v) => v === false || v === "false" || v === 0 || v === "0
 /**
  * True si una cobertura (salud en raíz o dental anidada) puede anularse
  * (GF terminado, fecha futura, sin retiro ni anulación previa).
+ * `permitirTomador`: true para Dental MS (el tomador sí puede anular dental).
  */
 export function puedeAnularInscripcionCobertura(
   coverage = {},
-  { estadoActual = null, readOnly = false, member = null } = {}
+  {
+    estadoActual = null,
+    readOnly = false,
+    member = null,
+    permitirTomador = false,
+  } = {}
 ) {
   if (readOnly) return false;
-  if (isTomador(member ?? coverage)) return false;
+  if (!permitirTomador && isTomador(member ?? coverage)) return false;
   if (!esGrupoFamiliarTerminado(estadoActual)) return false;
   if (esActivoFalse(coverage.activo)) return false;
   if (tieneFechaAnulacion(coverage)) return false;
@@ -66,6 +72,7 @@ export function puedeAnularInscripcionDental(
     estadoActual,
     readOnly,
     member,
+    permitirTomador: true,
   });
 }
 

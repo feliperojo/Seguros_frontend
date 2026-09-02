@@ -31,6 +31,8 @@ export default function CoberturaAnularButton({
   onAnulada,
   className = "btn btn-outline-warning btn-sm me-2",
   productLabel = "",
+  /** Dental MS: el tomador sí puede anular. Salud: no. */
+  permitirTomador = false,
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,6 +46,7 @@ export default function CoberturaAnularButton({
         estadoActual,
         readOnly,
         member,
+        permitirTomador,
       })
     : puedeAnularInscripcion(member, { estadoActual, readOnly });
 

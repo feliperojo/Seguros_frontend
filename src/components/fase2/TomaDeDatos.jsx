@@ -2922,6 +2922,7 @@ const activeNormalized = useMemo(
                               readOnly={isDentalReadOnly}
                               onAnulada={handleDentalAnulada}
                               productLabel="Dental MS"
+                              permitirTomador
                               className="btn btn-outline-warning btn-sm"
                             />
                             <button
