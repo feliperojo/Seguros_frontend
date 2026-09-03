@@ -28,6 +28,10 @@ import CoberturaDeleteButton from "./CoberturaDeleteButton";
 import CoberturaAnularButton from "./CoberturaAnularButton";
 import AgregarDentalModal from "./AgregarDentalModal";
 import {
+  esCoberturaAnulada,
+  esInscripcionPendienteDeActivacion,
+} from "../../utils/coberturaAnulacion";
+import {
   COBERTURA_TIPO_DENTAL_MS,
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
@@ -1029,6 +1033,41 @@ const activeNormalized = useMemo(
     [setFamilyMembers]
   );
 
+  const handleDentalAnulada = useCallback(
+    (member, data = {}) => {
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((m) => {
+          const sameMember = member?.id != null && m.id === member.id;
+          const sameCliente =
+            member?.cliente_id != null && m.cliente_id === member.cliente_id;
+          if (!sameMember && !sameCliente) return m;
+          return {
+            ...m,
+            coberturaDental: {
+              ...(m.coberturaDental || {}),
+              activo: false,
+              vigente: false,
+              fecha_anulacion:
+                data.fecha_anulacion ?? m.coberturaDental?.fecha_anulacion,
+              motivo_anulacion:
+                data.motivo_anulacion ?? m.coberturaDental?.motivo_anulacion,
+              nota_anulacion:
+                data.nota_anulacion ?? m.coberturaDental?.nota_anulacion,
+              cobertura_definida: "Anulado",
+            },
+          };
+        })
+      );
+      if (data.personas_taxes != null || data.personas_cobertura != null) {
+        onDerivedCounts?.({
+          taxes: data.personas_taxes,
+          cobertura: data.personas_cobertura,
+        });
+      }
+    },
+    [setFamilyMembers, onDerivedCounts]
+  );
+
   const handleAdd = () => {
     if (!canAdd) return onBlockedAddClick?.();
     setEditingMember(null);
@@ -1071,6 +1110,36 @@ const activeNormalized = useMemo(
         });
         return next;
       });
+    },
+    [setFamilyMembers]
+  );
+
+  /**
+   * Callback para cuando se reabre una inscripción Dental MS anulada.
+   * Limpia los campos de anulación en el estado local para reflejar que volvió a Vigente.
+   */
+  const handleDentalReabierta = useCallback(
+    (selectedModalMember, data = {}) => {
+      const coberturaId = selectedModalMember?.coberturaId;
+      if (!coberturaId) return;
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((m) => {
+          if (m.coberturaDental?.cobertura_id !== coberturaId) return m;
+          return {
+            ...m,
+            coberturaDental: {
+              ...(m.coberturaDental || {}),
+              fecha_anulacion: null,
+              motivo_anulacion: null,
+              nota_anulacion: null,
+              activo: true,
+              vigente: data.vigente ?? true,
+              estado_cobertura: data.estado_cobertura || m.coberturaDental?.estado_cobertura || "Sí",
+              cobertura_definida: "Vigente",
+            },
+          };
+        })
+      );
     },
     [setFamilyMembers]
   );
@@ -1519,6 +1588,8 @@ const activeNormalized = useMemo(
                 "Miembro",
               parentesco: openedMember.parentesco || openedMember.tipo || "",
               hasPlanData: memberHasPlanData(dental),
+              // Indica al modal que es una cobertura dental anulada → flujo especial
+              esAnulada: Boolean(dental.fecha_anulacion),
             },
           ],
           initialCoberturaId: dental.cobertura_id,
@@ -2374,10 +2445,24 @@ const activeNormalized = useMemo(
                 {/* Datos Cobertura Salud */}
                 <AccordionItem
                   id={`cobertura-${itemId}`}
-                  title="Datos de cobertura Salud"
+                  title={
+                    esCoberturaAnulada(m)
+                      ? "Datos de cobertura Salud — Anulada (historial)"
+                      : "Datos de cobertura Salud"
+                  }
                   icon={<i className="fas fa-shield-alt" />}
                 >
                   <div>
+                      {esCoberturaAnulada(m) && (
+                        <div className="alert alert-secondary py-2 px-3 small mb-3">
+                          Inscripción anulada
+                          {m.fecha_anulacion
+                            ? ` el ${formatDateForDisplay(m.fecha_anulacion)}`
+                            : ""}
+                          . No está activa ni se renueva; queda como historial.
+                          Campos bloqueados.
+                        </div>
+                      )}
                       {m.cobertura_id && (
                         <div className="d-flex justify-content-end mb-2">
                           <button
@@ -2841,21 +2926,74 @@ const activeNormalized = useMemo(
                   const shouldShowDentalField = (fieldKey) =>
                     shouldShowConfiguredField(visibleDentalFields, fieldKey);
                   const dentalEstado = d.estado_cobertura || "—";
-                  const dentalDefinida = d.cobertura_definida || d.fecha_cancelacion ? "Cancelada" : "Activa";
+                  const dentalPendienteActivacion =
+                    !d.fecha_cancelacion &&
+                    esInscripcionPendienteDeActivacion(d);
+                  const anioPendienteDental = String(
+                    d.fecha_activacion || d.ano_cobertura || ""
+                  ).slice(0, 4);
+                  const dentalDefinidaNorm = String(d.cobertura_definida || "").trim().toLowerCase();
+                  const dentalDefinida =
+                    d.fecha_anulacion || dentalDefinidaNorm === "anulado"
+                      ? "Anulada"
+                      : d.fecha_cancelacion ||
+                          dentalDefinidaNorm === "cancelado" ||
+                          dentalDefinidaNorm === "cancelada"
+                        ? "Cancelada"
+                        : dentalPendienteActivacion
+                          ? "Pendiente de activación"
+                          : "Activa";
+                  const isDentalReadOnly =
+                    isReadOnly ||
+                    !!d.fecha_anulacion ||
+                    String(d.cobertura_definida || "").toLowerCase() === "anulado";
 
                   return (
                     <AccordionItem
                       id={`cobertura-dental-${itemId}`}
-                      title={`Datos de cobertura Dental — ${dentalDefinida}`}
+                      title={`Datos de cobertura Dental — ${
+                        dentalDefinida === "Anulada"
+                          ? "Anulada (historial)"
+                          : dentalDefinida
+                      }`}
                       icon={<i className="fas fa-tooth" />}
                     >
                       <div>
+                        {esCoberturaAnulada(d) && (
+                          <div className="alert alert-secondary py-2 px-3 small mb-3">
+                            Para reactivarla, abra el{" "}
+                            <strong>Historial de plan dental</strong>, archive
+                            el plan anulado y luego use{" "}
+                            <strong>Reabrir inscripción</strong>.
+                          </div>
+                        )}
                         <p className="text-muted small">
-                          Dental MS — {dentalEstado}
-                          {d.fecha_cancelacion ? ` (cancelada ${d.fecha_cancelacion})` : ""}
+                          Dental MS —{" "}
+                          {dentalPendienteActivacion
+                            ? `Pendiente de activación${
+                                anioPendienteDental
+                                  ? ` en el ${anioPendienteDental}`
+                                  : ""
+                              }`
+                            : dentalEstado}
+                          {d.fecha_anulacion
+                            ? ` (anulada ${String(d.fecha_anulacion).slice(0, 10)})`
+                            : d.fecha_cancelacion
+                              ? ` (cancelada ${d.fecha_cancelacion})`
+                              : ""}
                         </p>
                         {d.cobertura_id && (
-                          <div className="d-flex justify-content-end mb-2">
+                          <div className="d-flex justify-content-end gap-2 mb-2">
+                            <CoberturaAnularButton
+                              member={m}
+                              coverage={d}
+                              estadoActual={estadoActual}
+                              readOnly={isDentalReadOnly}
+                              onAnulada={handleDentalAnulada}
+                              productLabel="Dental MS"
+                              permitirTomador
+                              className="btn btn-outline-warning btn-sm"
+                            />
                             <button
                               type="button"
                               className="btn btn-outline-secondary btn-sm"
@@ -2881,15 +3019,29 @@ const activeNormalized = useMemo(
                                 name="codigo_poliza"
                                 value={d.codigo_poliza || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
                           {shouldShowDentalField("fecha_activacion") && (
-                            <ConfigField label="Fecha de activación">
+                            <ConfigField
+                              label="Fecha de activación"
+                              labelWarning={
+                                dentalPendienteActivacion
+                                  ? `Este plan aún no está activo: pendiente de activación${
+                                      anioPendienteDental
+                                        ? ` en el ${anioPendienteDental}`
+                                        : ""
+                                    }.`
+                                  : null
+                              }
+                            >
                               <DateInputWithCalendar
                                 size="sm"
+                                highlightWarning={dentalPendienteActivacion}
                                 valueIso={(d.fecha_activacion || "").slice(0, 10)}
+                                minIso="1900-01-01"
+                                maxIso="2099-12-31"
                                 onChangeIso={(iso) =>
                                   onChangeDentalFactory(idx)({
                                     target: {
@@ -2899,7 +3051,7 @@ const activeNormalized = useMemo(
                                     },
                                   })
                                 }
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                                 inputName="fecha_activacion"
                               />
                             </ConfigField>
@@ -2938,7 +3090,7 @@ const activeNormalized = useMemo(
                                 )}
                                 value={d.compania_id ?? d.compania?.id ?? ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly || companiesLoading}
+                                disabled={isDentalReadOnly || companiesLoading}
                               />
                             </ConfigField>
                           )}
@@ -2949,7 +3101,7 @@ const activeNormalized = useMemo(
                                 name="policy_number"
                                 value={d.policy_number || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
@@ -2960,7 +3112,7 @@ const activeNormalized = useMemo(
                                 name="agente"
                                 value={d.agente || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
@@ -2971,7 +3123,7 @@ const activeNormalized = useMemo(
                                 name="plan"
                                 value={d.plan || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
@@ -2982,7 +3134,7 @@ const activeNormalized = useMemo(
                                 name="estado_cobertura"
                                 value={d.estado_cobertura || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               >
                                 <option value="">Seleccione…</option>
                                 {opcionesEstadoCoberturaPorProceso(estadoActual, d.estado_cobertura).map((opt) => (
@@ -3003,7 +3155,7 @@ const activeNormalized = useMemo(
                                     : String(d.pagador_id)
                                 }
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
@@ -3014,7 +3166,7 @@ const activeNormalized = useMemo(
                                 name="tipo_pago"
                                 value={d.tipo_pago || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               >
                                 <option value="">Seleccione…</option>
                                 {TIPO_PAGO_OPTIONS.map((opt) => (
@@ -3032,7 +3184,7 @@ const activeNormalized = useMemo(
                                 name="dia_pago"
                                 value={d.dia_pago || ""}
                                 onChange={onDentalChange}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                               />
                             </ConfigField>
                           )}
@@ -3042,7 +3194,7 @@ const activeNormalized = useMemo(
                                 size="sm"
                                 value={d.precio ?? ""}
                                 onChange={(next) => patchDental(idx, { precio: next })}
-                                disabled={isReadOnly}
+                                disabled={isDentalReadOnly}
                                 className="form-control form-control-sm"
                               />
                             </ConfigField>
@@ -3108,6 +3260,39 @@ const activeNormalized = useMemo(
                                 title="Este campo solo puede ser modificado por procesos de retiro/cancelación"
                               />
                             </ConfigField>
+                          )}
+                          {d.fecha_anulacion && (
+                            <>
+                              <ConfigField label="Fecha de anulación">
+                                <MdyDashDateInput
+                                  size="sm"
+                                  valueIso={(d.fecha_anulacion || "").slice(0, 10)}
+                                  disabled
+                                  title="Inscripción dental anulada antes de activarse"
+                                  onChangeIso={() => {}}
+                                />
+                              </ConfigField>
+                              {d.motivo_anulacion && (
+                                <ConfigField label="Motivo de anulación">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={d.motivo_anulacion}
+                                    disabled
+                                    readOnly
+                                  />
+                                </ConfigField>
+                              )}
+                              {d.nota_anulacion && (
+                                <ConfigField label="Nota de anulación">
+                                  <input
+                                    className="form-control form-control-sm"
+                                    value={d.nota_anulacion}
+                                    disabled
+                                    readOnly
+                                  />
+                                </ConfigField>
+                              )}
+                            </>
                           )}
                         </ConfigurableFieldsGrid>
                       </div>
@@ -3248,6 +3433,7 @@ const activeNormalized = useMemo(
         allowBulkArchive={historialPlanModal.allowBulkArchive}
         product={historialPlanModal.product || "salud"}
         readOnly={readOnly}
+        onReabierta={handleDentalReabierta}
       />
     </div>
   );

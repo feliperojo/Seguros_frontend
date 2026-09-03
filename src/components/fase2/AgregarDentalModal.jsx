@@ -11,6 +11,7 @@ import {
   memberTieneSaludMsActiva,
 } from "../../constants/coberturaTipos";
 import { mapCoberturaApiToFields, pickPagoFieldsFromSalud } from "../../utils/coberturaDental";
+import { esCoberturaAnulada } from "../../utils/coberturaAnulacion";
 import { extractCoberturaFromCreateResponse } from "../../utils/buildMemberFromClienteExistente";
 import { parseMoney } from "../../services/ingresos";
 import useCompanies from "../../hooks/useCompanies";
@@ -86,7 +87,8 @@ export default function AgregarDentalModal({
       (members || []).filter(
         (m) =>
           memberTieneSaludMsActiva(m) &&
-          !m?.coberturaDental?.cobertura_id
+          (!m?.coberturaDental?.cobertura_id ||
+            esCoberturaAnulada(m.coberturaDental))
       ),
     [members]
   );
