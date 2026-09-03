@@ -85,7 +85,7 @@ const CambioVidaCancelacionModal = ({
   ];
 
   // Motivos de retiro (lista distinta a cancelación)
-  const motivosRetiro = ["TAXES POR SEPARADO"];
+  const motivosRetiro = ["TAXES POR SEPARADO", "TAXES EN OTRO GF"];
 
   const getClienteIdFromCobertura = (c = {}) => c?.cliente?.id ?? c?.cliente_id ?? null;
 
