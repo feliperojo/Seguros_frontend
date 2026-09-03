@@ -12,6 +12,11 @@ export function tieneFechaAnulacion(m = {}) {
   return hasFecha(m.fecha_anulacion ?? m?.cobertura?.fecha_anulacion);
 }
 
+export function esCoberturaAnulada(c = {}) {
+  if (tieneFechaAnulacion(c)) return true;
+  return String(c.cobertura_definida || "").trim().toLowerCase() === "anulado";
+}
+
 const isTomador = (m = {}) => {
   const v1 = String(m.tipo || "").toLowerCase();
   const v2 = String(m.parentesco || "").toLowerCase();

@@ -294,6 +294,16 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     );
   },
 
+  reabrirAnulacionDental: async (coberturaId, headers = {}) => {
+    if (!coberturaId) throw new Error("Cobertura ID es requerido para reabrir.");
+    return await apiRequest(
+      `${BASE_COB}/${coberturaId}/reabrir-anulacion-dental`,
+      "POST",
+      {},
+      headers
+    );
+  },
+
   updateCobertura: async (coberturaId, payload, headers = {}) => {
     if (!coberturaId) throw new Error("Cobertura ID es requerido para actualizar.");
     return await apiRequest(`${BASE_COB}/${coberturaId}`, "PUT", payload, headers);

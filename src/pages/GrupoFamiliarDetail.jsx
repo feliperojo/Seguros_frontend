@@ -46,6 +46,70 @@ const formatFechaCorta = (value) => {
   return s || "—";
 };
 
+const etiquetaProductoCierre = (tipo = "") => {
+  const raw = String(tipo || "").trim();
+  if (!raw) return "Salud MS";
+  if (isDentalMsCoberturaTipo(raw)) return "Dental MS";
+  if (isDentalCoberturaTipo(raw)) return raw;
+  if (isProductoPrivadoIndependiente(raw)) return raw;
+  if (isProductoSaludMs(raw) || isSaludCoberturaTipo(raw)) {
+    return raw || "Salud MS";
+  }
+  return raw;
+};
+
+const claseBadgeProductoCierre = (tipo = "") => {
+  if (isDentalCoberturaTipo(tipo)) return "bg-info text-dark";
+  if (isProductoPrivadoIndependiente(tipo)) return "bg-secondary";
+  return "bg-primary";
+};
+
+const etiquetaEventoRetiro = (retiro = {}) => {
+  switch (retiro.tipo_evento) {
+    case "retiro":
+      return "Retiro del grupo";
+    case "cancelacion":
+      return "Cancelación de póliza";
+    case "retiro_cancelacion":
+      return "Retiro y cancelación";
+    default:
+      return "Cierre de cobertura";
+  }
+};
+
+/** Salud primero y Dental MS del mismo cliente debajo. */
+const ordenarItemsCierrePorProducto = (items = []) => {
+  if (!Array.isArray(items) || items.length <= 1) return items || [];
+
+  const dentales = [];
+  const anclas = [];
+  items.forEach((item) => {
+    if (isDentalCoberturaTipo(item?.cobertura_tipo)) dentales.push(item);
+    else anclas.push(item);
+  });
+
+  const usados = new Set();
+  const out = [];
+
+  anclas.forEach((salud) => {
+    out.push(salud);
+    const clienteId = Number(salud?.cliente_id);
+    dentales.forEach((d) => {
+      if (usados.has(d?.cobertura_id)) return;
+      if (clienteId && Number(d?.cliente_id) === clienteId) {
+        usados.add(d.cobertura_id);
+        out.push(d);
+      }
+    });
+  });
+
+  dentales.forEach((d) => {
+    if (!usados.has(d?.cobertura_id)) out.push(d);
+  });
+
+  return out;
+};
+
 // ================== Helpers ==================
 
 // --- Helpers de etapas (ajusta si tu flujo no es lineal) ---
@@ -786,17 +850,26 @@ const mapFullToMembers = (fullRaw) => {
       covs.find((c) => !looksLikeDentalPlan(c)) ||
       covs[0];
 
-    const dentalCov =
-      covs.find(
+    const dentales = covs.filter((c) => c.id !== saludCov?.id);
+    const dentalActivo =
+      dentales.find(
         (c) =>
-          c.id !== saludCov?.id &&
           isDentalCoberturaTipo(c.cobertura_tipo) &&
-          looksLikeDentalPlan(c)
+          looksLikeDentalPlan(c) &&
+          !c.fecha_anulacion
       ) ||
-      covs.find(
-        (c) => c.id !== saludCov?.id && isDentalCoberturaTipo(c.cobertura_tipo)
+      dentales.find(
+        (c) => isDentalCoberturaTipo(c.cobertura_tipo) && !c.fecha_anulacion
       ) ||
-      covs.find((c) => c.id !== saludCov?.id && looksLikeDentalPlan(c)) ||
+      dentales.find((c) => looksLikeDentalPlan(c) && !c.fecha_anulacion);
+    const dentalCov =
+      dentalActivo ||
+      dentales.find(
+        (c) =>
+          isDentalCoberturaTipo(c.cobertura_tipo) && looksLikeDentalPlan(c)
+      ) ||
+      dentales.find((c) => isDentalCoberturaTipo(c.cobertura_tipo)) ||
+      dentales.find((c) => looksLikeDentalPlan(c)) ||
       null;
 
     const member = mapCovToMemberBase(saludCov, idx++);
@@ -2172,91 +2245,233 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               )}
               {!cierreLoading && !cierreError && cierreAnio && (
                 <>
-                  <h6 className="fw-semibold text-danger mb-2">Retiros / cierres</h6>
-                  {(cierreAnio.retiros || []).length === 0 ? (
-                    <p className="text-muted small">No hubo retiros registrados este año.</p>
-                  ) : (
-                    <ul className="list-group mb-4">
-                      {(cierreAnio.retiros || []).map((retiro, idx) => (
-                        <li
-                          key={`${retiro.cobertura_id || "r"}-${idx}`}
-                          className="list-group-item"
-                        >
-                          <div className="fw-semibold">
-                            {retiro.cliente_nombre || `Cobertura #${retiro.cobertura_id}`}
-                          </div>
-                          <div className="small text-muted">
-                            Fecha: {formatFechaCorta(retiro.fecha_retiro || retiro.fecha_cancelacion)}
-                            {retiro.motivo_cancelacion
-                              ? ` · Motivo: ${retiro.motivo_cancelacion}`
-                              : ""}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  <div className="mb-4">
+                    <h6 className="fw-semibold text-danger mb-1">
+                      Quiénes salieron del grupo
+                    </h6>
+                    <p className="text-muted small mb-2">
+                      Miembros que se retiraron o cancelaron su cobertura durante{" "}
+                      {anioConsultado}. No incluye a quienes solo se renovaron al
+                      año siguiente.
+                    </p>
+                    {(cierreAnio.retiros || []).length === 0 ? (
+                      <p className="text-muted small mb-0">
+                        No hubo retiros ni cancelaciones fuera de renovación.
+                      </p>
+                    ) : (
+                      <ul className="list-group">
+                        {ordenarItemsCierrePorProducto(cierreAnio.retiros || []).map(
+                          (retiro, idx) => {
+                            const producto = etiquetaProductoCierre(
+                              retiro.cobertura_tipo
+                            );
+                            const motivo =
+                              retiro.motivo_retiro ||
+                              retiro.motivo_cancelacion ||
+                              "";
+                            return (
+                              <li
+                                key={`${retiro.cobertura_id || "r"}-${idx}`}
+                                className="list-group-item"
+                              >
+                                <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                  <span className="fw-semibold">
+                                    {retiro.cliente_nombre ||
+                                      `Cobertura #${retiro.cobertura_id}`}
+                                  </span>
+                                  <span
+                                    className={`badge ${claseBadgeProductoCierre(
+                                      retiro.cobertura_tipo
+                                    )}`}
+                                  >
+                                    {producto}
+                                  </span>
+                                  <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                    {etiquetaEventoRetiro(retiro)}
+                                  </span>
+                                  {retiro.parentesco && (
+                                    <span className="badge bg-light text-dark border">
+                                      {retiro.parentesco}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="small text-muted">
+                                  Fecha:{" "}
+                                  {formatFechaCorta(
+                                    retiro.fecha_retiro ||
+                                      retiro.fecha_cancelacion
+                                  )}
+                                  {retiro.plan ? ` · Plan: ${retiro.plan}` : ""}
+                                  {motivo ? ` · Motivo: ${motivo}` : ""}
+                                </div>
+                              </li>
+                            );
+                          }
+                        )}
+                      </ul>
+                    )}
+                  </div>
 
-                  <h6 className="fw-semibold text-success mb-2">Renovaciones</h6>
-                  {cierreAnio.sin_proceso_renovacion_formal ? (
-                    <div className="alert alert-info mb-0">
-                      Este año no tiene un proceso de renovación formal registrado.
-                    </div>
-                  ) : (
-                    <div className="row g-3">
-                      <div className="col-md-4">
-                        <div className="border rounded p-3 h-100">
-                          <div className="fw-semibold mb-2 text-success">Renovadas</div>
-                          {(cierreAnio.renovaciones?.renovadas || []).length === 0 ? (
-                            <p className="text-muted small mb-0">Ninguna</p>
-                          ) : (
-                            <ul className="list-unstyled mb-0 small">
-                              {(cierreAnio.renovaciones?.renovadas || []).map((item, idx) => (
-                                <li key={`ren-${item.cobertura_id}-${idx}`} className="mb-2">
-                                  <div className="fw-semibold">{item.cliente_nombre || `#${item.cobertura_id}`}</div>
-                                  {item.detalle && <div className="text-muted">{item.detalle}</div>}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
+                  <div>
+                    <h6 className="fw-semibold text-success mb-1">
+                      Renovación al año siguiente
+                    </h6>
+                    <p className="text-muted small mb-2">
+                      Resultado del proceso de renovación de {anioConsultado}: qué
+                      coberturas (Salud, Dental MS u otros) pasaron al año
+                      siguiente y cuáles no.
+                    </p>
+                    {cierreAnio.sin_proceso_renovacion_formal ? (
+                      <div className="alert alert-info mb-0">
+                        Este año no tiene un proceso de renovación formal
+                        registrado.
                       </div>
-                      <div className="col-md-4">
-                        <div className="border rounded p-3 h-100">
-                          <div className="fw-semibold mb-2 text-secondary">Omitidas</div>
-                          {(cierreAnio.renovaciones?.omitidas || []).length === 0 ? (
-                            <p className="text-muted small mb-0">Ninguna</p>
-                          ) : (
-                            <ul className="list-unstyled mb-0 small">
-                              {(cierreAnio.renovaciones?.omitidas || []).map((item, idx) => (
-                                <li key={`omit-${item.cobertura_id}-${idx}`} className="mb-2">
-                                  <div className="fw-semibold">{item.cliente_nombre || `#${item.cobertura_id}`}</div>
-                                  {item.detalle && <div className="text-muted">{item.detalle}</div>}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                      {(cierreAnio.renovaciones?.con_error || []).length > 0 && (
+                    ) : (
+                      <div className="row g-3">
                         <div className="col-md-4">
-                          <div className="border border-danger rounded p-3 h-100 bg-danger-subtle">
-                            <div className="fw-semibold mb-2 text-danger">
-                              <i className="fas fa-exclamation-circle me-1" />
-                              Con error
+                          <div className="border rounded p-3 h-100">
+                            <div className="fw-semibold mb-2 text-success">
+                              Renovadas
                             </div>
-                            <ul className="list-unstyled mb-0 small">
-                              {(cierreAnio.renovaciones?.con_error || []).map((item, idx) => (
-                                <li key={`err-${item.cobertura_id}-${idx}`} className="mb-2">
-                                  <div className="fw-semibold">{item.cliente_nombre || `#${item.cobertura_id}`}</div>
-                                  {item.detalle && <div className="text-danger">{item.detalle}</div>}
-                                </li>
-                              ))}
-                            </ul>
+                            {(cierreAnio.renovaciones?.renovadas || []).length ===
+                            0 ? (
+                              <p className="text-muted small mb-0">Ninguna</p>
+                            ) : (
+                              <ul className="list-unstyled mb-0 small">
+                                {ordenarItemsCierrePorProducto(
+                                  cierreAnio.renovaciones?.renovadas || []
+                                ).map((item, idx) => (
+                                  <li
+                                    key={`ren-${item.cobertura_id}-${idx}`}
+                                    className="mb-3"
+                                  >
+                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                      <span className="fw-semibold">
+                                        {item.cliente_nombre ||
+                                          `#${item.cobertura_id}`}
+                                      </span>
+                                      <span
+                                        className={`badge ${claseBadgeProductoCierre(
+                                          item.cobertura_tipo
+                                        )}`}
+                                      >
+                                        {etiquetaProductoCierre(
+                                          item.cobertura_tipo
+                                        )}
+                                      </span>
+                                    </div>
+                                    {item.plan && (
+                                      <div className="text-muted">
+                                        Plan: {item.plan}
+                                      </div>
+                                    )}
+                                    {item.detalle && (
+                                      <div className="text-muted">
+                                        {item.detalle}
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
                           </div>
                         </div>
-                      )}
-                    </div>
-                  )}
+                        <div className="col-md-4">
+                          <div className="border rounded p-3 h-100">
+                            <div className="fw-semibold mb-2 text-secondary">
+                              No renovadas
+                            </div>
+                            <p className="text-muted small mb-2">
+                              Se marcaron para no renovar en el proceso.
+                            </p>
+                            {(cierreAnio.renovaciones?.omitidas || []).length ===
+                            0 ? (
+                              <p className="text-muted small mb-0">Ninguna</p>
+                            ) : (
+                              <ul className="list-unstyled mb-0 small">
+                                {ordenarItemsCierrePorProducto(
+                                  cierreAnio.renovaciones?.omitidas || []
+                                ).map((item, idx) => (
+                                  <li
+                                    key={`omit-${item.cobertura_id}-${idx}`}
+                                    className="mb-3"
+                                  >
+                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                      <span className="fw-semibold">
+                                        {item.cliente_nombre ||
+                                          `#${item.cobertura_id}`}
+                                      </span>
+                                      <span
+                                        className={`badge ${claseBadgeProductoCierre(
+                                          item.cobertura_tipo
+                                        )}`}
+                                      >
+                                        {etiquetaProductoCierre(
+                                          item.cobertura_tipo
+                                        )}
+                                      </span>
+                                    </div>
+                                    {item.plan && (
+                                      <div className="text-muted">
+                                        Plan: {item.plan}
+                                      </div>
+                                    )}
+                                    {item.detalle && (
+                                      <div className="text-muted">
+                                        {item.detalle}
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </div>
+                        </div>
+                        {(cierreAnio.renovaciones?.con_error || []).length >
+                          0 && (
+                          <div className="col-md-4">
+                            <div className="border border-danger rounded p-3 h-100 bg-danger-subtle">
+                              <div className="fw-semibold mb-2 text-danger">
+                                <i className="fas fa-exclamation-circle me-1" />
+                                Con error
+                              </div>
+                              <ul className="list-unstyled mb-0 small">
+                                {ordenarItemsCierrePorProducto(
+                                  cierreAnio.renovaciones?.con_error || []
+                                ).map((item, idx) => (
+                                  <li
+                                    key={`err-${item.cobertura_id}-${idx}`}
+                                    className="mb-3"
+                                  >
+                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                      <span className="fw-semibold">
+                                        {item.cliente_nombre ||
+                                          `#${item.cobertura_id}`}
+                                      </span>
+                                      <span
+                                        className={`badge ${claseBadgeProductoCierre(
+                                          item.cobertura_tipo
+                                        )}`}
+                                      >
+                                        {etiquetaProductoCierre(
+                                          item.cobertura_tipo
+                                        )}
+                                      </span>
+                                    </div>
+                                    {item.detalle && (
+                                      <div className="text-danger">
+                                        {item.detalle}
+                                      </div>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>

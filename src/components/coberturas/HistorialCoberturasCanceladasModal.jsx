@@ -34,6 +34,125 @@ const badgeEstadoClase = (estado = "") => {
   return "hcc-badge-estado hcc-badge-estado--otro";
 };
 
+const fechaOrdenHistorial = (item = {}) => {
+  const raw =
+    item?.fecha_retiro ||
+    item?.fecha_cancelacion ||
+    item?.created_at ||
+    "";
+  return String(raw).slice(0, 10);
+};
+
+const esRenovacionAnualHistorial = (item = {}) => {
+  const origen = String(item?.accion_origen || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return origen.includes("renovacion anual");
+};
+
+const clienteIdHistorial = (item = {}) => {
+  const id =
+    item?.cliente_id ??
+    item?.cliente_info?.id ??
+    item?.cliente?.id ??
+    null;
+  return id == null || id === "" ? null : Number(id);
+};
+
+/**
+ * Orden del historial:
+ * 1) Renovación Anual primero; el resto después, cronológico.
+ * 2) Dental MS debajo de la salud del mismo cliente (mismo año si aplica).
+ */
+const ordenarHistorialAgrupado = (items = []) => {
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  const dentales = [];
+  const anclas = [];
+
+  items.forEach((item) => {
+    if (isDentalCoberturaTipo(item?.cobertura_tipo)) dentales.push(item);
+    else anclas.push(item);
+  });
+
+  const compararAncla = (a, b) => {
+    const aRen = esRenovacionAnualHistorial(a) ? 0 : 1;
+    const bRen = esRenovacionAnualHistorial(b) ? 0 : 1;
+    if (aRen !== bRen) return aRen - bRen;
+
+    const fa = fechaOrdenHistorial(a);
+    const fb = fechaOrdenHistorial(b);
+    if (fa && fb && fa !== fb) return fa < fb ? -1 : 1;
+    if (fa && !fb) return -1;
+    if (!fa && fb) return 1;
+
+    return Number(a?.id || 0) - Number(b?.id || 0);
+  };
+
+  const scoreMatchDental = (salud, dental) => {
+    let score = 0;
+    const anioSalud = String(salud?.ano_cobertura ?? "").trim();
+    const anioDental = String(dental?.ano_cobertura ?? "").trim();
+    if (anioSalud && anioDental && anioSalud === anioDental) score += 4;
+
+    const origenSalud = String(salud?.accion_origen || "").trim().toLowerCase();
+    const origenDental = String(dental?.accion_origen || "").trim().toLowerCase();
+    if (origenSalud && origenDental && origenSalud === origenDental) score += 2;
+
+    const fSalud = fechaOrdenHistorial(salud);
+    const fDental = fechaOrdenHistorial(dental);
+    if (fSalud && fDental && fSalud === fDental) score += 1;
+
+    return score;
+  };
+
+  const usadosDental = new Set();
+  const tomarDentalesDe = (salud) => {
+    const clienteId = clienteIdHistorial(salud);
+    if (clienteId == null) return [];
+
+    const candidatos = dentales
+      .filter((d) => {
+        if (usadosDental.has(d?.id)) return false;
+        return clienteIdHistorial(d) === clienteId;
+      })
+      .map((d) => ({ d, score: scoreMatchDental(salud, d) }))
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return compararAncla(a.d, b.d);
+      });
+
+    // Si hay varios dentales del mismo cliente, solo adjuntar los que
+    // realmente encajan (mismo año/origen) o, si ninguno puntúa, el mejor.
+    const conMatch = candidatos.filter((c) => c.score > 0);
+    const elegidos = (conMatch.length > 0 ? conMatch : candidatos.slice(0, 1)).map(
+      (c) => c.d
+    );
+
+    elegidos.forEach((d) => {
+      if (d?.id != null) usadosDental.add(d.id);
+    });
+
+    return elegidos.sort(compararAncla);
+  };
+
+  const resultado = [];
+  anclas.sort(compararAncla).forEach((salud) => {
+    resultado.push(salud);
+    resultado.push(...tomarDentalesDe(salud));
+  });
+
+  // Dentales sin salud pareja: mismo orden Renovación Anual → cronológico
+  dentales
+    .filter((d) => d?.id == null || !usadosDental.has(d.id))
+    .sort(compararAncla)
+    .forEach((d) => resultado.push(d));
+
+  return resultado;
+};
+
 /**
  * HistorialCoberturasCanceladasModal
  * 
@@ -495,15 +614,20 @@ const HistorialCoberturasCanceladasModal = ({
     );
   };
 
+  const historialOrdenado = useMemo(
+    () => ordenarHistorialAgrupado(historial),
+    [historial]
+  );
+
   const resumenProductos = useMemo(() => {
     let dental = 0;
     let salud = 0;
-    historial.forEach((item) => {
+    historialOrdenado.forEach((item) => {
       if (isDentalCoberturaTipo(item?.cobertura_tipo)) dental += 1;
       else salud += 1;
     });
-    return { dental, salud, total: historial.length };
-  }, [historial]);
+    return { dental, salud, total: historialOrdenado.length };
+  }, [historialOrdenado]);
 
   const renderBadgeProducto = (item, { large = false } = {}) => {
     const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
@@ -979,7 +1103,7 @@ const HistorialCoberturasCanceladasModal = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {historial.map((item, index) => {
+                  {historialOrdenado.map((item, index) => {
                     const coberturaId = item?.id || `cobertura-${index}`;
                     const isExpanded = filasExpandidas.has(coberturaId);
                     const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);

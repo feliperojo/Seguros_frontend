@@ -19,6 +19,7 @@ import {
   crearHistorialPlan,
   fetchHistorialPlan,
 } from "../../services/historialPlanCoberturaApi";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import "../../styles/HistorialPlanCoberturaModal.css";
 
 const EMPTY_MANUAL_FORM = {
@@ -71,13 +72,15 @@ const getAnioHistorial = (item) => {
 const HistorialPlanCoberturaModal = ({
   show,
   onClose,
-  /** @type {{ coberturaId: number, memberIdx: number, memberName: string, parentesco?: string, hasPlanData?: boolean }[]} */
+  /** @type {{ coberturaId: number, memberIdx: number, memberName: string, parentesco?: string, hasPlanData?: boolean, esAnulada?: boolean }[]} */
   members = [],
   initialCoberturaId = null,
   allowBulkArchive = false,
   readOnly = false,
   /** "salud" | "dental" — dental no muestra Metal/Red ni Código ID */
   product = "salud",
+  /** Solo Dental MS: actualiza la ficha al reabrir una inscripción anulada. */
+  onReabierta = null,
 }) => {
   const esDental = product === "dental";
   const [selectedCoberturaId, setSelectedCoberturaId] = useState(null);
@@ -94,6 +97,7 @@ const HistorialPlanCoberturaModal = ({
   const [fechaExpiracion, setFechaExpiracion] = useState("");
   const [nota, setNota] = useState("");
   const [esAnulacion, setEsAnulacion] = useState(false);
+  const [reabriendo, setReabriendo] = useState(false);
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
   const { companies } = useCompanies({
     producto: esDental ? "dental_ms" : null,
@@ -110,6 +114,17 @@ const HistorialPlanCoberturaModal = ({
     () => members.find((m) => m.coberturaId === selectedCoberturaId) ?? null,
     [members, selectedCoberturaId]
   );
+
+  const esDentalAnulada = Boolean(esDental && selectedMember?.esAnulada);
+  const tieneSnapshotAnulacion = useMemo(
+    () => historial.some((item) => Boolean(item?.es_anulacion)),
+    [historial]
+  );
+  const puedeReabrirDental =
+    esDentalAnulada &&
+    !readOnly &&
+    (tieneSnapshotAnulacion || selectedMember?.hasPlanData === false);
+  const formEsAnulacion = esDentalAnulada || esAnulacion;
 
   const aniosDisponibles = useMemo(() => {
     const years = new Set();
@@ -176,6 +191,7 @@ const HistorialPlanCoberturaModal = ({
     setFechaExpiracion("");
     setNota("");
     setEsAnulacion(false);
+    setReabriendo(false);
     setSuccess("");
     setError("");
 
@@ -224,13 +240,14 @@ const HistorialPlanCoberturaModal = ({
   };
 
   const archivarCobertura = async (coberturaId) => {
+    const forzarAnulacion = esDentalAnulada;
     const payload = {
-      es_anulacion: esAnulacion,
+      es_anulacion: forzarAnulacion || esAnulacion,
       nota: nota.trim() || undefined,
       limpiar_campos: false,
     };
 
-    if (!esAnulacion) {
+    if (!payload.es_anulacion) {
       payload.vigente_hasta = fechaExpiracion;
       payload.fecha_expiracion = fechaExpiracion;
     }
@@ -240,7 +257,8 @@ const HistorialPlanCoberturaModal = ({
 
   const handleArchivar = async (e) => {
     e.preventDefault();
-    if (!esAnulacion && !fechaExpiracion) return;
+    const archivarComoAnulacion = esDentalAnulada || esAnulacion;
+    if (!archivarComoAnulacion && !fechaExpiracion) return;
 
     const targets = allowBulkArchive
       ? membersWithPlan.filter((m) => selectedForArchive.has(m.coberturaId))
@@ -275,10 +293,10 @@ const HistorialPlanCoberturaModal = ({
       if (archivados > 0) {
         setSuccess(
           archivados === 1
-            ? esAnulacion
+            ? esAnulacion || esDentalAnulada
               ? "Plan archivado por anulación correctamente."
               : "Plan archivado correctamente."
-            : esAnulacion
+            : esAnulacion || esDentalAnulada
               ? `${archivados} planes archivados por anulación correctamente.`
               : `${archivados} planes archivados correctamente.`
         );
@@ -337,6 +355,32 @@ const HistorialPlanCoberturaModal = ({
     }
   };
 
+  const handleReabrirDental = async () => {
+    if (!selectedCoberturaId || !puedeReabrirDental) return;
+
+    setReabriendo(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await GrupoFamiliarService.reabrirAnulacionDental(
+        selectedCoberturaId
+      );
+      const data = res?.data ?? res;
+      setSuccess(
+        res?.message || "Inscripción Dental MS reabierta correctamente."
+      );
+      onReabierta?.(selectedMember, data);
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          err?.message ||
+          "No fue posible reabrir la inscripción Dental MS."
+      );
+    } finally {
+      setReabriendo(false);
+    }
+  };
+
   const handleClose = () => {
     onClose();
   };
@@ -386,6 +430,27 @@ const HistorialPlanCoberturaModal = ({
           </Alert>
         )}
 
+        {esDentalAnulada && !readOnly && !loading && (
+          <Alert
+            variant={puedeReabrirDental ? "success" : "warning"}
+            className="hp-alert"
+          >
+            {puedeReabrirDental ? (
+              <>
+                El plan anulado ya está en el historial. Puede{" "}
+                <strong>reabrir la inscripción Dental MS</strong> sobre esta
+                misma cobertura.
+              </>
+            ) : (
+              <>
+                Esta inscripción Dental MS está anulada. Archive el plan por
+                anulación para habilitar <strong>Reabrir inscripción</strong>.
+                No cree una cobertura nueva.
+              </>
+            )}
+          </Alert>
+        )}
+
         {members.length > 1 && (
           <Nav variant="tabs" className="hp-tabs flex-nowrap overflow-auto">
             {members.map((member) => (
@@ -430,16 +495,38 @@ const HistorialPlanCoberturaModal = ({
                   onClick={() => {
                     setShowArchivarForm(true);
                     setShowCrearForm(false);
-                    setEsAnulacion(false);
+                    setEsAnulacion(esDentalAnulada);
                     setFechaExpiracion("");
                     setNota("");
                   }}
                 >
                   <i className="fas fa-archive me-1" />
-                  {allowBulkArchive && members.length > 1
-                    ? "Archivar planes"
-                    : "Archivar plan actual"}
+                  {esDentalAnulada
+                    ? "Archivar plan anulado"
+                    : allowBulkArchive && members.length > 1
+                      ? "Archivar planes"
+                      : "Archivar plan actual"}
                 </Button>
+                {puedeReabrirDental && (
+                  <Button
+                    variant="success"
+                    size="sm"
+                    onClick={handleReabrirDental}
+                    disabled={reabriendo}
+                  >
+                    {reabriendo ? (
+                      <>
+                        <Spinner animation="border" size="sm" className="me-1" />
+                        Reabriendo…
+                      </>
+                    ) : (
+                      <>
+                        <i className="fas fa-redo me-1" />
+                        Reabrir inscripción
+                      </>
+                    )}
+                  </Button>
+                )}
               </>
             ) : showCrearForm ? (
               <Button
@@ -626,19 +713,22 @@ const HistorialPlanCoberturaModal = ({
                   type="checkbox"
                   id="archivar-es-anulacion"
                   label="Archivar por anulación (sin fecha de expiración)"
-                  checked={esAnulacion}
+                  checked={formEsAnulacion}
+                  disabled={esDentalAnulada}
                   onChange={(e) => {
+                    if (esDentalAnulada) return;
                     const checked = e.target.checked;
                     setEsAnulacion(checked);
                     if (checked) setFechaExpiracion("");
                   }}
                 />
                 <Form.Text className="text-muted d-block">
-                  Marque esta opción cuando el plan se archiva porque la cobertura fue anulada.
-                  En ese caso no aplica fecha de expiración.
+                  {esDentalAnulada
+                    ? "Obligatorio: esta cobertura Dental MS está anulada. El archivo queda sin fecha de expiración."
+                    : "Marque esta opción cuando el plan se archiva porque la cobertura fue anulada. En ese caso no aplica fecha de expiración."}
                 </Form.Text>
               </div>
-              {!esAnulacion && (
+              {!formEsAnulacion && (
                 <div className="col-md-6">
                   <Form.Label className="small mb-1">Fecha de expiración *</Form.Label>
                   <DateInputWithCalendar
@@ -648,14 +738,14 @@ const HistorialPlanCoberturaModal = ({
                   />
                 </div>
               )}
-              <div className={esAnulacion ? "col-md-12" : "col-md-6"}>
+              <div className={formEsAnulacion ? "col-md-12" : "col-md-6"}>
                 <Form.Label className="small mb-1">Nota</Form.Label>
                 <Form.Control
                   size="sm"
                   value={nota}
                   onChange={(e) => setNota(e.target.value)}
                   placeholder={
-                    esAnulacion
+                    formEsAnulacion
                       ? "Ej. Cobertura anulada"
                       : "Ej. Cambio de compañía"
                   }
@@ -696,7 +786,7 @@ const HistorialPlanCoberturaModal = ({
                 className="hp-btn-submit"
                 disabled={
                   archiving ||
-                  (!esAnulacion && !fechaExpiracion) ||
+                  (!formEsAnulacion && !fechaExpiracion) ||
                   (allowBulkArchive && members.length > 1
                     ? selectedForArchive.size === 0
                     : !selectedCoberturaId)

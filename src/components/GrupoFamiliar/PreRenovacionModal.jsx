@@ -950,14 +950,16 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
-                  {attemptedConsolidar &&
-                    miembrosInactivosMarcadosRenovar.length > 0 && (
-                      <div className="alert alert-warning">
-                        Desmarca <strong>Renovar</strong> (cobertura ya
-                        inactiva) para:{" "}
-                        {miembrosInactivosMarcadosRenovar.join(", ")}.
-                      </div>
-                    )}
+                  {miembrosInactivosMarcadosRenovar.length > 0 && (
+                    <div className="alert alert-warning">
+                      Hay coberturas ya <strong>inactivas</strong> (anuladas,
+                      retiradas o canceladas) marcadas para renovar:{" "}
+                      {miembrosInactivosMarcadosRenovar.join(", ")}. Desmarca{" "}
+                      <strong>Renovar esta cobertura</strong> o vuelve a abrir
+                      la pre-renovación para sincronizarlas. Mientras estén
+                      marcadas, no se puede consolidar.
+                    </div>
+                  )}
 
                   {attemptedConsolidar &&
                     conflictosDentalSinSalud.length > 0 && (

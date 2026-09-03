@@ -28,6 +28,10 @@ import CoberturaDeleteButton from "./CoberturaDeleteButton";
 import CoberturaAnularButton from "./CoberturaAnularButton";
 import AgregarDentalModal from "./AgregarDentalModal";
 import {
+  esCoberturaAnulada,
+  esInscripcionPendienteDeActivacion,
+} from "../../utils/coberturaAnulacion";
+import {
   COBERTURA_TIPO_DENTAL_MS,
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
@@ -1110,6 +1114,36 @@ const activeNormalized = useMemo(
     [setFamilyMembers]
   );
 
+  /**
+   * Callback para cuando se reabre una inscripción Dental MS anulada.
+   * Limpia los campos de anulación en el estado local para reflejar que volvió a Vigente.
+   */
+  const handleDentalReabierta = useCallback(
+    (selectedModalMember, data = {}) => {
+      const coberturaId = selectedModalMember?.coberturaId;
+      if (!coberturaId) return;
+      setFamilyMembers((prev) =>
+        (prev ?? []).map((m) => {
+          if (m.coberturaDental?.cobertura_id !== coberturaId) return m;
+          return {
+            ...m,
+            coberturaDental: {
+              ...(m.coberturaDental || {}),
+              fecha_anulacion: null,
+              motivo_anulacion: null,
+              nota_anulacion: null,
+              activo: true,
+              vigente: data.vigente ?? true,
+              estado_cobertura: data.estado_cobertura || m.coberturaDental?.estado_cobertura || "Sí",
+              cobertura_definida: "Vigente",
+            },
+          };
+        })
+      );
+    },
+    [setFamilyMembers]
+  );
+
   const patchCliente = (idx, patch) => {
     setFamilyMembers(prev =>
       (prev ?? []).map((m, i) => {
@@ -1554,6 +1588,8 @@ const activeNormalized = useMemo(
                 "Miembro",
               parentesco: openedMember.parentesco || openedMember.tipo || "",
               hasPlanData: memberHasPlanData(dental),
+              // Indica al modal que es una cobertura dental anulada → flujo especial
+              esAnulada: Boolean(dental.fecha_anulacion),
             },
           ],
           initialCoberturaId: dental.cobertura_id,
@@ -2409,10 +2445,24 @@ const activeNormalized = useMemo(
                 {/* Datos Cobertura Salud */}
                 <AccordionItem
                   id={`cobertura-${itemId}`}
-                  title="Datos de cobertura Salud"
+                  title={
+                    esCoberturaAnulada(m)
+                      ? "Datos de cobertura Salud — Anulada (historial)"
+                      : "Datos de cobertura Salud"
+                  }
                   icon={<i className="fas fa-shield-alt" />}
                 >
                   <div>
+                      {esCoberturaAnulada(m) && (
+                        <div className="alert alert-secondary py-2 px-3 small mb-3">
+                          Inscripción anulada
+                          {m.fecha_anulacion
+                            ? ` el ${formatDateForDisplay(m.fecha_anulacion)}`
+                            : ""}
+                          . No está activa ni se renueva; queda como historial.
+                          Campos bloqueados.
+                        </div>
+                      )}
                       {m.cobertura_id && (
                         <div className="d-flex justify-content-end mb-2">
                           <button
@@ -2877,18 +2927,18 @@ const activeNormalized = useMemo(
                     shouldShowConfiguredField(visibleDentalFields, fieldKey);
                   const dentalEstado = d.estado_cobertura || "—";
                   const dentalPendienteActivacion =
-                    String(d.estado_cobertura || "")
-                      .trim()
-                      .toLowerCase() === "sí" &&
                     !d.fecha_cancelacion &&
-                    !d.fecha_retiro &&
-                    !d.fecha_anulacion &&
-                    isFechaActivacionPendiente(d.fecha_activacion);
+                    esInscripcionPendienteDeActivacion(d);
+                  const anioPendienteDental = String(
+                    d.fecha_activacion || d.ano_cobertura || ""
+                  ).slice(0, 4);
+                  const dentalDefinidaNorm = String(d.cobertura_definida || "").trim().toLowerCase();
                   const dentalDefinida =
-                    d.fecha_anulacion ||
-                    String(d.cobertura_definida || "").toLowerCase() === "anulado"
+                    d.fecha_anulacion || dentalDefinidaNorm === "anulado"
                       ? "Anulada"
-                      : d.cobertura_definida || d.fecha_cancelacion
+                      : d.fecha_cancelacion ||
+                          dentalDefinidaNorm === "cancelado" ||
+                          dentalDefinidaNorm === "cancelada"
                         ? "Cancelada"
                         : dentalPendienteActivacion
                           ? "Pendiente de activación"
@@ -2901,12 +2951,31 @@ const activeNormalized = useMemo(
                   return (
                     <AccordionItem
                       id={`cobertura-dental-${itemId}`}
-                      title={`Datos de cobertura Dental — ${dentalDefinida}`}
+                      title={`Datos de cobertura Dental — ${
+                        dentalDefinida === "Anulada"
+                          ? "Anulada (historial)"
+                          : dentalDefinida
+                      }`}
                       icon={<i className="fas fa-tooth" />}
                     >
                       <div>
+                        {esCoberturaAnulada(d) && (
+                          <div className="alert alert-secondary py-2 px-3 small mb-3">
+                            Para reactivarla, abra el{" "}
+                            <strong>Historial de plan dental</strong>, archive
+                            el plan anulado y luego use{" "}
+                            <strong>Reabrir inscripción</strong>.
+                          </div>
+                        )}
                         <p className="text-muted small">
-                          Dental MS — {dentalEstado}
+                          Dental MS —{" "}
+                          {dentalPendienteActivacion
+                            ? `Pendiente de activación${
+                                anioPendienteDental
+                                  ? ` en el ${anioPendienteDental}`
+                                  : ""
+                              }`
+                            : dentalEstado}
                           {d.fecha_anulacion
                             ? ` (anulada ${String(d.fecha_anulacion).slice(0, 10)})`
                             : d.fecha_cancelacion
@@ -2959,7 +3028,11 @@ const activeNormalized = useMemo(
                               label="Fecha de activación"
                               labelWarning={
                                 dentalPendienteActivacion
-                                  ? "Este plan aún no está activo: la fecha de activación es posterior a hoy."
+                                  ? `Este plan aún no está activo: pendiente de activación${
+                                      anioPendienteDental
+                                        ? ` en el ${anioPendienteDental}`
+                                        : ""
+                                    }.`
                                   : null
                               }
                             >
@@ -3360,6 +3433,7 @@ const activeNormalized = useMemo(
         allowBulkArchive={historialPlanModal.allowBulkArchive}
         product={historialPlanModal.product || "salud"}
         readOnly={readOnly}
+        onReabierta={handleDentalReabierta}
       />
     </div>
   );
