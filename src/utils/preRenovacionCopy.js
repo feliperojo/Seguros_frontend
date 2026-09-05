@@ -115,7 +115,6 @@ export const itemToCopyMember = (item) => {
     "tipo_pago",
     "dia_pago",
     "estado_cobertura",
-    "ano_cobertura",
     "fecha_activacion",
     "precio",
     "grupo",
@@ -142,6 +141,10 @@ export const buildCopyPatchForItem = (
   );
 
   fieldKeys.forEach((key) => {
+    // El año destino lo fija la consolidación; no se copia entre miembros.
+    if (key === "ano_cobertura") {
+      return;
+    }
     if (
       soloDireccion &&
       !CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA.includes(key)
