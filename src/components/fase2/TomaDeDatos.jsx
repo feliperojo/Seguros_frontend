@@ -41,7 +41,7 @@ import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaField
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
 import useCompanies from "../../hooks/useCompanies";
-import { filterCompaniesForProducto } from "../../services/companies";
+import { filterCompaniesForProducto, resolveProductoKeyFromCoberturaTipo } from "../../services/companies";
 import {
   puedeEditarParentescoOEliminarCobertura,
   opcionesEstadoCoberturaPorProceso,
@@ -2442,13 +2442,17 @@ const activeNormalized = useMemo(
                 </AccordionItem>
                 )}
 
-                {/* Datos Cobertura Salud */}
+                {/* Datos Cobertura (Salud MS o producto privado: Plan Dental, Vision, etc.) */}
                 <AccordionItem
                   id={`cobertura-${itemId}`}
                   title={
                     esCoberturaAnulada(m)
-                      ? "Datos de cobertura Salud — Anulada (historial)"
-                      : "Datos de cobertura Salud"
+                      ? esProductoPrivadoCard
+                        ? `Datos de cobertura ${coberturaTipo} — Anulada (historial)`
+                        : "Datos de cobertura Salud — Anulada (historial)"
+                      : esProductoPrivadoCard
+                        ? `Datos de cobertura ${coberturaTipo}`
+                        : "Datos de cobertura Salud"
                   }
                   icon={<i className="fas fa-shield-alt" />}
                 >
@@ -2618,7 +2622,14 @@ const activeNormalized = useMemo(
                             {shouldShowCoverageField("compania_id") && (
                               <ConfigField label="Compañía">
                                 <CompanySelect
-                                  companies={companies}
+                                  companies={filterCompaniesForProducto(
+                                    companies,
+                                    resolveProductoKeyFromCoberturaTipo(coberturaTipo),
+                                    {
+                                      includeId: m.compania_id ?? m.compania?.id,
+                                      soloActivas: true,
+                                    }
+                                  )}
                                   value={m.compania_id ?? m.compania?.id ?? ""}
                                   onChange={onChange}
                                   disabled={isReadOnly || companiesLoading}
@@ -2940,9 +2951,11 @@ const activeNormalized = useMemo(
                           dentalDefinidaNorm === "cancelado" ||
                           dentalDefinidaNorm === "cancelada"
                         ? "Cancelada"
-                        : dentalPendienteActivacion
-                          ? "Pendiente de activación"
-                          : "Activa";
+                        : d.fue_renovado
+                          ? "Renovada"
+                          : dentalPendienteActivacion
+                            ? "Pendiente de activación"
+                            : "Activa";
                   const isDentalReadOnly =
                     isReadOnly ||
                     !!d.fecha_anulacion ||
@@ -2969,16 +2982,22 @@ const activeNormalized = useMemo(
                         )}
                         <p className="text-muted small">
                           Dental MS —{" "}
-                          {dentalPendienteActivacion
-                            ? `Pendiente de activación${
-                                anioPendienteDental
-                                  ? ` en el ${anioPendienteDental}`
+                          {d.fue_renovado
+                            ? `Renovada${
+                                d.fecha_retiro
+                                  ? ` ${String(d.fecha_retiro).slice(0, 10)}`
                                   : ""
                               }`
-                            : dentalEstado}
+                            : dentalPendienteActivacion
+                              ? `Pendiente de activación${
+                                  anioPendienteDental
+                                    ? ` en el ${anioPendienteDental}`
+                                    : ""
+                                }`
+                              : dentalEstado}
                           {d.fecha_anulacion
                             ? ` (anulada ${String(d.fecha_anulacion).slice(0, 10)})`
-                            : d.fecha_cancelacion
+                            : !d.fue_renovado && d.fecha_cancelacion
                               ? ` (cancelada ${d.fecha_cancelacion})`
                               : ""}
                         </p>

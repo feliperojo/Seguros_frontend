@@ -253,6 +253,29 @@
   color: #b91c1c;
 }
 
+.cmp-admin__product-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.cmp-admin__prod-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border-radius: 6px;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  background: #ecfdf5;
+  color: #047857;
+  white-space: nowrap;
+}
+
+.cmp-admin__prod-chip--dental {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
 .cmp-admin__actions {
   display: flex;
   gap: 0.35rem;
@@ -349,6 +372,18 @@
   flex-direction: column;
   gap: 0.65rem;
   margin-top: 0.25rem;
+}
+
+.cmp-admin-modal__switches--grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 1rem;
+}
+
+@media (max-width: 480px) {
+  .cmp-admin-modal__switches--grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .cmp-admin-modal__hint {
