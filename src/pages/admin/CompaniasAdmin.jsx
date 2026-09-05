@@ -26,32 +26,45 @@ import {
   createCompany,
   updateCompany,
   deleteCompany,
+  COMPANIA_PRODUCTOS,
 } from "../../services/companies";
 import "../../styles/HistorialCoberturasCanceladas.css";
 import "../../styles/CompaniasAdmin.css";
 
-const emptyForm = () => ({
-  nombre: "",
-  nota: "",
-  status: true,
-  aplica_salud: true,
-  aplica_dental_ms: false,
-});
+const emptyForm = () => {
+  const form = {
+    nombre: "",
+    nota: "",
+    status: true,
+  };
+  COMPANIA_PRODUCTOS.forEach((p) => {
+    form[p.flag] = p.defaultOn;
+  });
+  return form;
+};
 
 const isTruthyFlag = (value) => value !== false && value !== 0 && value !== "0";
 
-const StatusBadge = ({ ok, okLabel = "Sí", offLabel = "No", variant = "ok" }) => (
-  <span
-    className={`cmp-admin__badge ${
-      ok
-        ? variant === "dental"
-          ? "cmp-admin__badge--dental"
-          : "cmp-admin__badge--ok"
-        : "cmp-admin__badge--off"
-    }`}
-  >
-    {ok ? okLabel : offLabel}
-  </span>
+const ProductosBadges = ({ item }) => (
+  <div className="cmp-admin__product-badges">
+    {COMPANIA_PRODUCTOS.map((p) => {
+      const on =
+        p.key === "dental_ms"
+          ? Boolean(item[p.flag])
+          : isTruthyFlag(item[p.flag]);
+      if (!on) return null;
+      return (
+        <span
+          key={p.key}
+          className={`cmp-admin__prod-chip ${
+            p.key === "dental_ms" ? "cmp-admin__prod-chip--dental" : ""
+          }`}
+        >
+          {p.short}
+        </span>
+      );
+    })}
+  </div>
 );
 
 const CompaniasAdmin = () => {
@@ -59,7 +72,7 @@ const CompaniasAdmin = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterDental, setFilterDental] = useState("todos");
+  const [filterProducto, setFilterProducto] = useState("todos");
   const [filterEstado, setFilterEstado] = useState("todos");
   const [showForm, setShowForm] = useState(false);
   const [selected, setSelected] = useState(null);
@@ -96,13 +109,21 @@ const CompaniasAdmin = () => {
 
   const handleEdit = (item) => {
     setSelected(item);
-    setFormData({
+    const next = {
       nombre: item.nombre || "",
       nota: item.nota || "",
       status: isTruthyFlag(item.status),
-      aplica_salud: isTruthyFlag(item.aplica_salud),
-      aplica_dental_ms: Boolean(item.aplica_dental_ms),
+    };
+    COMPANIA_PRODUCTOS.forEach((p) => {
+      if (p.key === "dental_ms") {
+        next[p.flag] = Boolean(item[p.flag]);
+      } else if (item[p.flag] === undefined || item[p.flag] === null) {
+        next[p.flag] = p.defaultOn;
+      } else {
+        next[p.flag] = isTruthyFlag(item[p.flag]);
+      }
     });
+    setFormData(next);
     setFormErrors({});
     setShowForm(true);
   };
@@ -145,9 +166,10 @@ const CompaniasAdmin = () => {
       nombre,
       nota: formData.nota.trim(),
       status: Boolean(formData.status),
-      aplica_salud: Boolean(formData.aplica_salud),
-      aplica_dental_ms: Boolean(formData.aplica_dental_ms),
     };
+    COMPANIA_PRODUCTOS.forEach((p) => {
+      payload[p.flag] = Boolean(formData[p.flag]);
+    });
 
     try {
       setSaving(true);
@@ -192,17 +214,24 @@ const CompaniasAdmin = () => {
           .toLowerCase()
           .includes(q);
 
-      let matchesDental = true;
-      if (filterDental === "si") matchesDental = Boolean(item.aplica_dental_ms);
-      if (filterDental === "no") matchesDental = !item.aplica_dental_ms;
+      let matchesProducto = true;
+      if (filterProducto !== "todos") {
+        const meta = COMPANIA_PRODUCTOS.find((p) => p.key === filterProducto);
+        if (meta) {
+          matchesProducto =
+            meta.key === "dental_ms"
+              ? Boolean(item[meta.flag])
+              : isTruthyFlag(item[meta.flag]);
+        }
+      }
 
       let matchesEstado = true;
       if (filterEstado === "activas") matchesEstado = isTruthyFlag(item.status);
       if (filterEstado === "inactivas") matchesEstado = !isTruthyFlag(item.status);
 
-      return matchesSearch && matchesDental && matchesEstado;
+      return matchesSearch && matchesProducto && matchesEstado;
     });
-  }, [items, searchTerm, filterDental, filterEstado]);
+  }, [items, searchTerm, filterProducto, filterEstado]);
 
   const totalDental = useMemo(
     () => items.filter((i) => Boolean(i.aplica_dental_ms)).length,
@@ -211,7 +240,7 @@ const CompaniasAdmin = () => {
 
   const limpiarFiltros = () => {
     setSearchTerm("");
-    setFilterDental("todos");
+    setFilterProducto("todos");
     setFilterEstado("todos");
   };
 
@@ -226,8 +255,9 @@ const CompaniasAdmin = () => {
             <div>
               <h1 className="cmp-admin__title">Compañías</h1>
               <p className="cmp-admin__subtitle">
-                Administre aseguradoras y defina a qué productos aplican (Salud /
-                Dental MS). Sin listas quemadas en código.
+                Administre aseguradoras y defina a qué productos aplican (Salud,
+                Dental MS, Plan Dental, Vision, Vida, Descuentos). Sin listas
+                quemadas en código.
               </p>
             </div>
           </div>
@@ -279,15 +309,18 @@ const CompaniasAdmin = () => {
                 </InputGroup>
               </Col>
               <Col xs={12} sm={6} lg={3}>
-                <div className="cmp-admin__label">Dental MS</div>
+                <div className="cmp-admin__label">Producto</div>
                 <Form.Select
-                  value={filterDental}
-                  onChange={(e) => setFilterDental(e.target.value)}
-                  aria-label="Filtrar Dental MS"
+                  value={filterProducto}
+                  onChange={(e) => setFilterProducto(e.target.value)}
+                  aria-label="Filtrar por producto"
                 >
-                  <option value="todos">Todas</option>
-                  <option value="si">Solo con Dental MS</option>
-                  <option value="no">Sin Dental MS</option>
+                  <option value="todos">Todos</option>
+                  {COMPANIA_PRODUCTOS.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
                 </Form.Select>
               </Col>
               <Col xs={12} sm={6} lg={2}>
@@ -343,15 +376,13 @@ const CompaniasAdmin = () => {
                       <th>Nombre</th>
                       <th>Nota</th>
                       <th>Estado</th>
-                      <th>Salud</th>
-                      <th>Dental MS</th>
+                      <th>Productos</th>
                       <th style={{ width: 110 }}>Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.map((item) => {
                       const activa = isTruthyFlag(item.status);
-                      const salud = isTruthyFlag(item.aplica_salud);
                       return (
                         <tr key={item.id}>
                           <td className="fw-semibold">{item.nombre}</td>
@@ -368,13 +399,7 @@ const CompaniasAdmin = () => {
                             </span>
                           </td>
                           <td>
-                            <StatusBadge ok={salud} />
-                          </td>
-                          <td>
-                            <StatusBadge
-                              ok={Boolean(item.aplica_dental_ms)}
-                              variant="dental"
-                            />
+                            <ProductosBadges item={item} />
                           </td>
                           <td>
                             <div className="cmp-admin__actions">
@@ -468,8 +493,8 @@ const CompaniasAdmin = () => {
                   placeholder="Observación opcional"
                 />
               </Form.Group>
-              <div className="cmp-admin-modal__label">Configuración</div>
-              <div className="cmp-admin-modal__switches">
+              <div className="cmp-admin-modal__label">Estado</div>
+              <div className="cmp-admin-modal__switches mb-3">
                 <Form.Check
                   type="switch"
                   id="compania-status"
@@ -479,34 +504,29 @@ const CompaniasAdmin = () => {
                     setFormData((p) => ({ ...p, status: e.target.checked }))
                   }
                 />
-                <Form.Check
-                  type="switch"
-                  id="compania-salud"
-                  label="Aplica a Salud"
-                  checked={formData.aplica_salud}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      aplica_salud: e.target.checked,
-                    }))
-                  }
-                />
-                <Form.Check
-                  type="switch"
-                  id="compania-dental"
-                  label="Aplica a Dental MS"
-                  checked={formData.aplica_dental_ms}
-                  onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      aplica_dental_ms: e.target.checked,
-                    }))
-                  }
-                />
+              </div>
+              <div className="cmp-admin-modal__label">Productos a los que aplica</div>
+              <div className="cmp-admin-modal__switches cmp-admin-modal__switches--grid">
+                {COMPANIA_PRODUCTOS.map((prod) => (
+                  <Form.Check
+                    key={prod.key}
+                    type="switch"
+                    id={`compania-${prod.key}`}
+                    label={prod.label}
+                    checked={Boolean(formData[prod.flag])}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        [prod.flag]: e.target.checked,
+                      }))
+                    }
+                  />
+                ))}
               </div>
               <p className="cmp-admin-modal__hint">
-                En coberturas Dental MS solo se listarán las compañías con “Aplica
-                a Dental MS” activo.
+                En cada producto solo se listarán las compañías con el switch
+                correspondiente activo. Dental MS sigue siendo opt-in; el resto
+                inicia activo para no romper coberturas existentes.
               </p>
             </div>
           </Modal.Body>

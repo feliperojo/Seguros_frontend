@@ -11,7 +11,7 @@ const sortCompaniesByName = (list = []) =>
   );
 
 /**
- * @param {{ producto?: 'dental_ms'|'salud'|null, includeId?: number|string|null, soloActivas?: boolean }} [options]
+ * @param {{ producto?: 'dental_ms'|'salud'|'plan_dental'|'vision'|'vida'|'descuentos'|null, includeId?: number|string|null, soloActivas?: boolean }} [options]
  */
 export default function useCompanies(options = {}) {
   const {

@@ -100,9 +100,9 @@ const HistorialPlanCoberturaModal = ({
   const [reabriendo, setReabriendo] = useState(false);
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
   const { companies } = useCompanies({
-    producto: esDental ? "dental_ms" : null,
+    producto: esDental ? "dental_ms" : "salud",
     includeId: manualForm.compania_id,
-    soloActivas: Boolean(esDental),
+    soloActivas: true,
   });
 
   const membersWithPlan = useMemo(

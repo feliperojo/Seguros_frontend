@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import useCompanies from "../../hooks/useCompanies";
-import { filterCompaniesForProducto } from "../../services/companies";
+import { filterCompaniesForProducto, resolveProductoKeyFromCoberturaTipo } from "../../services/companies";
 import LanguageSelect from "../selects/LanguageSelect";
 import MdyDashDateInput from "../common/MdyDashDateInput";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
@@ -353,19 +353,16 @@ const PreRenovacionItemCard = ({
   const coberturaTipo =
     datos?.cobertura_tipo ?? cobertura?.cobertura_tipo ?? null;
   const esDental = isDentalCoberturaTipo(coberturaTipo);
+  const productoCompania = resolveProductoKeyFromCoberturaTipo(coberturaTipo);
   const companies = useMemo(
     () =>
-      filterCompaniesForProducto(
-        allCompanies,
-        esDental ? "dental_ms" : null,
-        {
-          includeId: datos?.compania_id ?? cobertura?.compania_id,
-          soloActivas: esDental,
-        }
-      ),
+      filterCompaniesForProducto(allCompanies, productoCompania, {
+        includeId: datos?.compania_id ?? cobertura?.compania_id,
+        soloActivas: true,
+      }),
     [
       allCompanies,
-      esDental,
+      productoCompania,
       datos?.compania_id,
       cobertura?.compania_id,
     ]
@@ -964,14 +961,15 @@ const PreRenovacionItemCard = ({
               <DateInputWithCalendar
                 size="sm"
                 valueIso={toDateInput(datos.fecha_activacion)}
-                minIso="1900-01-01"
-                maxIso="2099-12-31"
+                minIso={`${anioDestino}-01-01`}
+                maxIso={`${anioDestino}-12-31`}
                 disabled={disabled}
                 onChangeIso={(iso) =>
                   cambiarDato("fecha_activacion", iso || null, true)
                 }
               />
               {renderEstado("fecha_activacion")}
+              <div className="form-text">Debe pertenecer a {anioDestino}.</div>
             </div>
 
             <div className="col-md-4">
@@ -1025,26 +1023,15 @@ const PreRenovacionItemCard = ({
               </label>
               <input
                 type="number"
-                min="2000"
-                max="2100"
                 className="form-control form-control-sm"
-                value={
-                  datos.ano_cobertura != null && datos.ano_cobertura !== ""
-                    ? datos.ano_cobertura
-                    : anioDestino
-                }
-                placeholder={String(anioDestino)}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  cambiarDato(
-                    "ano_cobertura",
-                    raw === "" ? null : Number(raw)
-                  );
-                }}
-                onBlur={() => guardarPendienteAhora("ano_cobertura")}
-                disabled={disabled}
+                value={anioDestino}
+                readOnly
+                disabled
+                title="El año de cobertura lo fija la consolidación al año destino"
               />
-              {renderEstado("ano_cobertura")}
+              <div className="form-text">
+                Fijo al año destino {anioDestino} al consolidar.
+              </div>
             </div>
           </div>
         </div>
