@@ -128,10 +128,25 @@ const CompaniasAdmin = () => {
     setShowForm(true);
   };
 
+  const handleInactivate = async (item) => {
+    try {
+      setActionLoading(item.id);
+      await updateCompany(item.id, { status: false });
+      toast.success(`Compañía "${item.nombre}" inactivada correctamente`);
+      await loadItems();
+    } catch (err) {
+      toast.error(
+        err.response?.data?.message || err.message || "Error al inactivar"
+      );
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const handleDelete = async (item) => {
     if (
       !window.confirm(
-        `¿Eliminar la compañía "${item.nombre}"? Si tiene coberturas asociadas no se podrá eliminar.`
+        `¿Eliminar la compañía "${item.nombre}"?\n\nSi está asociada a una cobertura no se podrá eliminar; en ese caso solo podrá inactivarla.`
       )
     ) {
       return;
@@ -141,11 +156,27 @@ const CompaniasAdmin = () => {
       setActionLoading(item.id);
       await deleteCompany(item.id);
       toast.success("Compañía eliminada correctamente");
-      loadItems();
+      await loadItems();
     } catch (err) {
-      toast.error(
-        err.response?.data?.message || err.message || "Error al eliminar"
-      );
+      const payload = err.response?.data || {};
+      const msg =
+        payload.message || err.message || "Error al eliminar la compañía";
+      const canInactivate =
+        payload.code === "COMPANIA_ASOCIADA_COBERTURA" ||
+        payload.can_inactivate === true ||
+        /cobertura|inactivar/i.test(String(msg));
+
+      toast.error(msg);
+
+      if (canInactivate && isTruthyFlag(item.status)) {
+        const inactivar = window.confirm(
+          `${msg}\n\n¿Desea inactivar la compañía "${item.nombre}" ahora?`
+        );
+        if (inactivar) {
+          await handleInactivate(item);
+          return;
+        }
+      }
     } finally {
       setActionLoading(null);
     }
@@ -373,6 +404,7 @@ const CompaniasAdmin = () => {
                 <Table hover className="hcc-table mb-0 align-middle">
                   <thead>
                     <tr>
+                      <th style={{ width: 72 }}>ID</th>
                       <th>Nombre</th>
                       <th>Nota</th>
                       <th>Estado</th>
@@ -385,6 +417,7 @@ const CompaniasAdmin = () => {
                       const activa = isTruthyFlag(item.status);
                       return (
                         <tr key={item.id}>
+                          <td className="text-muted font-monospace">{item.id}</td>
                           <td className="fw-semibold">{item.nombre}</td>
                           <td className="text-muted">{item.nota || "—"}</td>
                           <td>
