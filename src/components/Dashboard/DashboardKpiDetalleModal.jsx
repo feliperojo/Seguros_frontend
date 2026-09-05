@@ -124,7 +124,7 @@ export default function DashboardKpiDetalleModal({
     clientes: "Detalle de Clientes",
     grupos: "Detalle de Grupos Familiares",
     coberturas: "Detalle — Estado de Coberturas",
-    dental_ms: "Detalle — Coberturas Dental MS",
+    otros_productos: "Detalle — Otros productos",
     canceladas: "Coberturas Canceladas",
     dental_ms_cancelado: "Detalle — Dental MS Cancelado",
     retiradas: "Coberturas Retiradas",
@@ -248,23 +248,41 @@ export default function DashboardKpiDetalleModal({
       );
     }
 
-    if (tipo === "dental_ms") {
-      const totalDentalMs = estadisticas?.dentalMsActivo ?? 0;
+    if (tipo === "otros_productos") {
+      const otros = estadisticas?.otrosProductos || {};
+      const dentalMs = otros.dental_ms ?? estadisticas?.dentalMsActivo ?? 0;
+      const vision = otros.vision ?? 0;
+      const planDental = otros.plan_dental ?? 0;
+      const totalOtros =
+        otros.total ?? dentalMs + vision + planDental;
+
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Coberturas con tipo de producto <strong>Dental MS</strong> registradas en el sistema
-            (todas las existentes, no solo las activas). No incluye Plan Dental privado.
+            Productos distintos de Salud MS registrados en el sistema (todas las
+            existentes, no solo las activas), discriminados por tipo.
           </p>
           <div className="dashboard-kpi-detalle-hero" style={{ color: "#059669" }}>
-            {totalDentalMs}
+            {totalOtros}
           </div>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
-              label="Coberturas Dental MS"
-              valor={totalDentalMs}
+              label="Dental MS"
+              valor={dentalMs}
               color="#059669"
               descripcion="cobertura_tipo = Dental MS"
+            />
+            <DetalleFila
+              label="Vision"
+              valor={vision}
+              color="#0d9488"
+              descripcion="cobertura_tipo = Vision"
+            />
+            <DetalleFila
+              label="Plan Dental"
+              valor={planDental}
+              color="#0891b2"
+              descripcion="Plan Dental privado (sin Dental MS)"
             />
           </div>
         </>

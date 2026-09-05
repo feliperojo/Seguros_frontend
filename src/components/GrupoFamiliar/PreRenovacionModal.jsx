@@ -51,6 +51,13 @@ const formatHistorialFecha = (value) => {
   });
 };
 
+/** Año YYYY de una fecha ISO/YYYY-MM-DD, o null si no se puede leer. */
+const anioDeFecha = (value) => {
+  if (value == null || value === "") return null;
+  const match = String(value).trim().match(/^(\d{4})/);
+  return match ? Number(match[1]) : null;
+};
+
 const nombreMiembro = (item) =>
   item?.tipo_item === "miembro_nuevo"
     ? item?.datos_borrador?.cliente?.nombre_completo ||
@@ -488,6 +495,24 @@ const PreRenovacionModal = ({
     [items]
   );
 
+  const miembrosConFechaFueraDeAnio = useMemo(
+    () =>
+      items
+        .filter((item) => {
+          if (!item?.renovar && item?.tipo_item !== "miembro_nuevo") {
+            return false;
+          }
+          const fecha = item?.datos_borrador?.fecha_activacion;
+          if (fecha == null || String(fecha).trim() === "") {
+            return false;
+          }
+          const anio = anioDeFecha(fecha);
+          return anio == null || anio !== Number(anioDestino);
+        })
+        .map(nombreMiembro),
+    [items, anioDestino]
+  );
+
   const miembrosSinRetiro = useMemo(
     () =>
       items
@@ -559,6 +584,7 @@ const PreRenovacionModal = ({
     miembrosSinCodigo.length === 0 &&
     miembrosSinRetiro.length === 0 &&
     miembrosInactivosMarcadosRenovar.length === 0 &&
+    miembrosConFechaFueraDeAnio.length === 0 &&
     conflictosDentalSinSalud.length === 0 &&
     !hayGuardadosPendientes &&
     !loading &&
@@ -942,6 +968,15 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
+                  {attemptedConsolidar &&
+                    miembrosConFechaFueraDeAnio.length > 0 && (
+                      <div className="alert alert-warning">
+                        La <strong>fecha de activación</strong> debe pertenecer
+                        al año {anioDestino} en:{" "}
+                        {miembrosConFechaFueraDeAnio.join(", ")}.
+                      </div>
+                    )}
+
                   {attemptedConsolidar && miembrosSinRetiro.length > 0 && (
                     <div className="alert alert-warning">
                       Completa la{" "}
@@ -1203,15 +1238,17 @@ const PreRenovacionModal = ({
                     title={
                       miembrosSinCodigo.length > 0
                         ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
-                        : miembrosSinRetiro.length > 0
-                          ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
-                          : miembrosInactivosMarcadosRenovar.length > 0
-                            ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
-                            : conflictosDentalSinSalud.length > 0
-                              ? `Dental sin salud renovando: ${conflictosDentalSinSalud.map((c) => c.nombre).join(", ")}`
-                              : hayGuardadosPendientes
-                                ? "Espera a que termine el autoguardado"
-                                : undefined
+                        : miembrosConFechaFueraDeAnio.length > 0
+                          ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
+                          : miembrosSinRetiro.length > 0
+                            ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
+                            : miembrosInactivosMarcadosRenovar.length > 0
+                              ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
+                              : conflictosDentalSinSalud.length > 0
+                                ? `Dental sin salud renovando: ${conflictosDentalSinSalud.map((c) => c.nombre).join(", ")}`
+                                : hayGuardadosPendientes
+                                  ? "Espera a que termine el autoguardado"
+                                  : undefined
                     }
                   >
                     Consolidar ahora

@@ -36,6 +36,13 @@ const DEFAULT_POLIZAS_ACTIVAS = {
   total: 0,
 };
 
+const DEFAULT_OTROS_PRODUCTOS = {
+  dental_ms: 0,
+  vision: 0,
+  plan_dental: 0,
+  total: 0,
+};
+
 function normalizePolizasActivas(value) {
   if (typeof value === "number") {
     return { ...DEFAULT_POLIZAS_ACTIVAS, total: value, si: value };
@@ -44,6 +51,13 @@ function normalizePolizasActivas(value) {
     return { ...DEFAULT_POLIZAS_ACTIVAS, ...value };
   }
   return DEFAULT_POLIZAS_ACTIVAS;
+}
+
+function normalizeOtrosProductos(value) {
+  if (value && typeof value === "object") {
+    return { ...DEFAULT_OTROS_PRODUCTOS, ...value };
+  }
+  return DEFAULT_OTROS_PRODUCTOS;
 }
 
 /** Nombre legible del cliente para filas de requerimientos/documentos (API puede variar forma y profundidad). */
@@ -156,6 +170,7 @@ const Dashboard = () => {
     polizasRetiradas: 0,
     dentalMsActivo: 0,
     dentalMsCancelado: 0,
+    otrosProductos: { ...DEFAULT_OTROS_PRODUCTOS },
   });
   const [kpiModalTipo, setKpiModalTipo] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -683,6 +698,7 @@ const Dashboard = () => {
       setEstadisticas({
         ...(resEstadisticas || {}),
         polizasActivas: normalizePolizasActivas(resEstadisticas?.polizasActivas),
+        otrosProductos: normalizeOtrosProductos(resEstadisticas?.otrosProductos),
         detalleClientes: resEstadisticas?.detalleClientes || {
           clientes: totalClientesEstadoCliente ?? resEstadisticas?.totalClientes ?? 0,
           contactos: 0,
@@ -942,12 +958,12 @@ const handleOpenViewModal = (cliente) => {
             onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
           />
           <DashboardKpiTile
-            label="Coberturas Dental MS"
-            value={estadisticas.dentalMsActivo ?? 0}
+            label="Otros productos"
+            value={estadisticas.otrosProductos?.total ?? 0}
             icon={<FaFileInvoiceDollar />}
             tone="success"
-            onClick={() => abrirKpiModal("dental_ms")}
-            onKeyDown={(e) => manejarTeclaKpiCard(e, "dental_ms")}
+            onClick={() => abrirKpiModal("otros_productos")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "otros_productos")}
           />
         </div>
         <p className="dashboard-kpi-group-label dashboard-kpi-group-label--alert">Cancelaciones y retiros</p>

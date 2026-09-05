@@ -60,8 +60,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
 
   if (!color) {
     if (fueRenovado) {
-      // Color del estado real (no azul de “renovación”)
-      color = hasCancel ? "#ffc107" : "#6c757d";
+      // Renovación anual: distinto de un retiro operativo.
+      color = hasCancel ? "#ffc107" : "#0d6efd";
     } else if (hasAnulacion) {
       color = "#fd7e14"; // naranja — anulado, nunca se activó
     } else if (hasRetiro) {
@@ -98,7 +98,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   let label = "";
 
   if (fueRenovado) {
-    label = hasCancel ? "Cancelado - Renovado" : "Retirado - Renovado";
+    // Tras consolidar, el año origen se cerró por renovación (no es un retiro operativo).
+    label = hasCancel ? "Cancelado - Renovado" : "Renovado";
   } else if (hasAnulacion) {
     label = "Anulado";
   } else if (hasRetiro) {
@@ -132,7 +133,10 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   /* ================== FECHA A MOSTRAR ================== */
   let dateLabel = "";
 
-  if (hasAnulacion && fechaAnulacion) {
+  if (fueRenovado && (fechaRetiro || fechaCancelacion)) {
+    // Cierre del año origen por renovación (o cancelación + renovación).
+    dateLabel = `${shortDate(fechaRetiro || fechaCancelacion)}`;
+  } else if (hasAnulacion && fechaAnulacion) {
     dateLabel = `${shortDate(fechaAnulacion)}`;
   } else if (hasRetiro && fechaRetiro) {
     // 👇 prioridad total cuando está retirado
