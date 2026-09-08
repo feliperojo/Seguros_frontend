@@ -7,8 +7,15 @@ export const ESTADOS_GESTION_OPTIONS = [
   { value: "renovado_automatico", label: "Renovado Aut.", bg: "success" },
   { value: "anulado", label: "Anulado", bg: "danger" },
   { value: "no_renovara", label: "No renovará", bg: "dark" },
+  { value: "terminado", label: "Terminado", bg: "secondary" },
   { value: "consolidado", label: "Consolidado", bg: "success" },
 ];
+
+/** No generan año destino: solo cierran el año fiscal de origen. */
+export const ESTADOS_GESTION_CIERRE_SIN_DESTINO = ["no_renovara", "terminado"];
+
+export const esEstadoGestionCierreSinDestino = (estado) =>
+  ESTADOS_GESTION_CIERRE_SIN_DESTINO.includes(estado);
 
 /** Opciones elegibles a mano. "consolidado" en gestión es legacy (ya no se asigna al consolidar). */
 export const ESTADOS_GESTION_EDITABLES = ESTADOS_GESTION_OPTIONS.filter(

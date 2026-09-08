@@ -4,8 +4,87 @@ import { Form, Button, Table, InputGroup, Alert, Spinner } from "react-bootstrap
 import apiRequest from "../services/api";
 import { formatPhone334, formatDateForDisplay } from "../utils/formatters";
 import { getListFromApi } from "../utils/apiResponse";
+import { derivarEstadoPoliza, estadoPolizaBadgeVariant } from "../utils/estadoPoliza";
 
-const ClienteExistente = ({ onClienteSeleccionado }) => {
+const ETIQUETA_ESTADO_PRODUCTO = {
+  Vigente: "Activo",
+  "Sin cobertura": "No",
+  "Póliza Cancelada": "Cancelado",
+  Retirada: "Retirado",
+};
+
+const extraerCoberturasCliente = (cliente) => {
+  if (Array.isArray(cliente?.coberturas)) return cliente.coberturas;
+  if (
+    cliente?.cobertura_tipo ||
+    cliente?.vigente ||
+    cliente?.activo ||
+    cliente?.estado_cobertura ||
+    cliente?.cobertura_definida
+  ) {
+    return [{
+      cobertura_tipo: cliente.cobertura_tipo,
+      vigente: cliente.vigente,
+      activo: cliente.activo,
+      estado_cobertura: cliente.estado_cobertura,
+      cobertura_definida: cliente.cobertura_definida,
+      fecha_cancelacion: cliente.fecha_cancelacion,
+      fecha_retiro: cliente.fecha_retiro,
+      fecha_anulacion: cliente.fecha_anulacion,
+    }];
+  }
+  return [];
+};
+
+const resolverEstadoProducto = (cobertura) => {
+  const { estado } = derivarEstadoPoliza(cobertura);
+  const variant = estadoPolizaBadgeVariant(estado);
+  const clase =
+    variant === "success"
+      ? "text-success"
+      : variant === "warning"
+        ? "text-warning"
+        : variant === "danger"
+          ? "text-danger"
+          : "text-muted";
+
+  return {
+    estado,
+    etiqueta: ETIQUETA_ESTADO_PRODUCTO[estado] || estado || "Sin estado",
+    clase,
+  };
+};
+
+const normalizarEstadoProducto = (valor) =>
+  String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+const esTerminadoORetirado = (cobertura) => {
+  const { estado, etiqueta } = resolverEstadoProducto(cobertura);
+  return [estado, etiqueta].some((valor) => {
+    const norm = normalizarEstadoProducto(valor);
+    return norm === "terminado" || norm === "retirado" || norm === "retirada";
+  });
+};
+
+const resolverAccionAgregar = (coberturas, { permitirTraslado = false } = {}) => {
+  if (!coberturas.length || permitirTraslado) {
+    return { puedeAgregar: true, motivo: "" };
+  }
+
+  const puedeAgregar = coberturas.every(esTerminadoORetirado);
+  return {
+    puedeAgregar,
+    motivo: puedeAgregar
+      ? ""
+      : "Solo se puede agregar si el producto está Terminado o Retirado.",
+  };
+};
+
+const ClienteExistente = ({ onClienteSeleccionado, contexto = "grupo" }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -221,24 +300,16 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                   <th>Estado Cliente</th>
                   <th>Teléfono</th>
                   <th>Fecha de Nacimiento</th>
-                  <th>Producto / Vigencia</th>
+                  <th>Producto</th>
                   <th>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {getCurrentPageClients().map((cliente) => {
-                  // Soporta uno o varios registros de cobertura
-                  const coberturas = Array.isArray(cliente.coberturas)
-                    ? cliente.coberturas
-                    : (cliente.cobertura_tipo || cliente.vigente || cliente.activo)
-                    ? [{
-                        cobertura_tipo: cliente.cobertura_tipo,
-                        vigente: cliente.vigente,
-                        activo: cliente.activo,
-                        fecha_cancelacion: cliente.fecha_cancelacion,
-                        fecha_retiro: cliente.fecha_retiro,
-                      }]
-                    : [];
+                  const coberturas = extraerCoberturasCliente(cliente);
+                  const { puedeAgregar, motivo } = resolverAccionAgregar(coberturas, {
+                    permitirTraslado: contexto === "pre_renovacion",
+                  });
 
                   return (
                     <tr key={cliente.id}>
@@ -253,20 +324,18 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                           <div className="d-flex flex-column gap-1 small">
                             {coberturas.map((cob, idx) => {
                               const producto = cob.cobertura_tipo || "-";
-                              const esActiva = cob.vigente || cob.activo;
-                              const textoVigencia = esActiva
-                                ? "Activa"
-                                : cob.fecha_cancelacion || cob.fecha_retiro
-                                ? "Finalizada"
-                                : "Sin estado";
+                              const { etiqueta, clase } = resolverEstadoProducto(cob);
 
                               return (
-                                <div key={idx} className="d-flex align-items-center">
-                                  <span className="badge bg-light text-dark me-2">
+                                <div
+                                  key={cob.id ?? idx}
+                                  className="d-flex align-items-center flex-wrap gap-1"
+                                >
+                                  <span className="badge bg-light text-dark">
                                     {producto}
                                   </span>
-                                  <span className={esActiva ? "text-success" : "text-muted"}>
-                                    {textoVigencia}
+                                  <span className={clase}>
+                                    {etiqueta}
                                   </span>
                                 </div>
                               );
@@ -275,9 +344,22 @@ const ClienteExistente = ({ onClienteSeleccionado }) => {
                         )}
                       </td>
                       <td>
-                        <Button variant="success" size="sm" onClick={() => onClienteSeleccionado?.(cliente)}>
-                          <i className="bi bi-plus-circle me-1"></i> Agregar
-                        </Button>
+                        <span
+                          className="d-inline-block"
+                          title={!puedeAgregar ? motivo : undefined}
+                        >
+                          <Button
+                            variant="success"
+                            size="sm"
+                            disabled={!puedeAgregar}
+                            onClick={() => {
+                              if (!puedeAgregar) return;
+                              onClienteSeleccionado?.(cliente);
+                            }}
+                          >
+                            <i className="bi bi-plus-circle me-1"></i> Agregar
+                          </Button>
+                        </span>
                       </td>
                     </tr>
                   );

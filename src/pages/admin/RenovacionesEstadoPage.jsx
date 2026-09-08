@@ -225,7 +225,8 @@ const RenovacionesEstadoPage = () => {
               <h1 className="gf-listado__title">Estado de renovaciones</h1>
               <p className="gf-listado__subtitle">
                 Vista administrativa del estado de renovación de cada grupo
-                familiar para el año destino seleccionado.
+                familiar con Plan de salud para el año destino seleccionado.
+                Los productos privados no entran en pre-renovación ni renovación.
               </p>
             </div>
           </div>

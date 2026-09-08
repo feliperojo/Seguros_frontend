@@ -38,6 +38,7 @@ import {
   isBorradorClienteCleared,
   normalizeClienteBorradorValue,
 } from "../../utils/preRenovacionCopy";
+import "../../styles/PreRenovacionModal.css";
 
 const TIPO_PAGO_OPTIONS = [
   "DEBITO AUTOMATICO",
@@ -63,7 +64,8 @@ const MOTIVOS_RETIRO_NO_RENOVACION = [
   "SE CANCELO POR FALTA DE PAGO (MORA)",
   "NO REALIZO EL PAGO INICIAL",
   "TAXES POR SEPARADO",
-  "TAXES EN OTRO GF",
+    "TAXES EN OTRO GF",
+  "TRASLADO A OTRO GRUPO FAMILIAR",
   "OTRO",
 ];
 
@@ -376,22 +378,36 @@ const PreRenovacionItemCard = ({
     ? item?.cliente_existente || item?.datos_borrador?.cliente || {}
     : cobertura?.cliente || {};
 
+  const pickParteDireccion = (field, overrides = {}) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, field)) {
+      const v = overrides[field];
+      return v == null ? "" : v;
+    }
+    const draft = datos.cliente || {};
+    if (isBorradorClienteCleared(draft, field)) return "";
+    if (hasBorradorClienteField(draft, field)) {
+      return draft[field] ?? "";
+    }
+    return clienteActual[field] ?? "";
+  };
+
   const resolverDireccionCliente = (overrides = {}) => {
     const base = {
-      calle: datos.cliente?.calle ?? clienteActual.calle,
-      apto: datos.cliente?.apto ?? clienteActual.apto,
-      ciudad: datos.cliente?.ciudad ?? clienteActual.ciudad,
-      condado: datos.cliente?.condado ?? clienteActual.condado,
-      estado: datos.cliente?.estado ?? clienteActual.estado,
-      codigo_postal: datos.cliente?.codigo_postal ?? clienteActual.codigo_postal,
-      ...overrides,
+      calle: pickParteDireccion("calle", overrides),
+      apto: pickParteDireccion("apto", overrides),
+      ciudad: pickParteDireccion("ciudad", overrides),
+      condado: pickParteDireccion("condado", overrides),
+      estado: pickParteDireccion("estado", overrides),
+      codigo_postal: pickParteDireccion("codigo_postal", overrides),
     };
-    return (
-      buildDireccion(base) ||
-      datos.cliente?.direccion ||
-      clienteActual.direccion ||
-      ""
-    );
+    const armada = buildDireccion(base);
+    if (armada) return armada;
+    const draft = datos.cliente || {};
+    if (isBorradorClienteCleared(draft, "direccion")) return "";
+    if (hasBorradorClienteField(draft, "direccion")) {
+      return draft.direccion || "";
+    }
+    return clienteActual.direccion || "";
   };
 
   const clienteIdMediosPago =
@@ -450,16 +466,82 @@ const PreRenovacionItemCard = ({
     requiereRetiro &&
     !String(datos.motivo_retiro ?? "").trim();
   const disabled = bloqueado || edicionBloqueada;
+  const campoClienteVacio = (field) =>
+    isBorradorClienteCleared(draftCliente, field);
+
+  const placeholderActual = (field, actual, fallback = "") => {
+    if (campoClienteVacio(field)) return "";
+    if (actual != null && actual !== "") return String(actual);
+    return fallback;
+  };
+
+  const classInputCliente = (field, extra = "") =>
+    ["form-control", "form-control-sm", campoClienteVacio(field) ? "pr-field--cleared" : "", extra]
+      .filter(Boolean)
+      .join(" ");
+
+  const classSelectCliente = (field, extra = "") =>
+    ["form-select", "form-select-sm", campoClienteVacio(field) ? "pr-field--cleared" : "", extra]
+      .filter(Boolean)
+      .join(" ");
+
+  const aplicarCampoCliente = (field, value) => {
+    if (DIRECCION_FORMULA_FIELDS.has(field)) {
+      const direccionCalculada = resolverDireccionCliente({ [field]: value });
+      const campos = { [field]: value, direccion: direccionCalculada };
+      if (copiarDir) campos.dir_correspondencia = direccionCalculada;
+      cambiarClienteCampos(campos, `cliente.${field}`, true);
+      return;
+    }
+    if (NOMBRE_FORMULA_FIELDS.has(field)) {
+      const pickNombre = (f) => {
+        if (f === field) return value == null ? "" : value;
+        if (isBorradorClienteCleared(draftCliente, f)) return "";
+        if (hasBorradorClienteField(draftCliente, f)) {
+          return draftCliente[f] ?? "";
+        }
+        return clienteActual[f] ?? "";
+      };
+      cambiarClienteCampos(
+        {
+          [field]: value,
+          nombre_completo: buildNombreCompleto({
+            primer_nombre: pickNombre("primer_nombre"),
+            segundo_nombre: pickNombre("segundo_nombre"),
+            apellidos: pickNombre("apellidos"),
+          }),
+        },
+        `cliente.${field}`,
+        true
+      );
+      return;
+    }
+    cambiarCliente(field, value, true);
+  };
 
   const limpiarClienteParaRenovacion = (field) => {
-    cambiarCliente(field, null, true);
+    aplicarCampoCliente(field, null);
+  };
+
+  const restaurarClienteParaRenovacion = (field, actual) => {
+    const value = actual === undefined || actual === "" ? null : actual;
+    aplicarCampoCliente(field, value);
   };
 
   const renderClienteBorradorHint = (field, actual, { skipClear = false } = {}) => {
-    if (isBorradorClienteCleared(draftCliente, field)) {
+    if (campoClienteVacio(field)) {
       return (
-        <div className="form-text text-warning-emphasis">
-          Se dejará vacío al consolidar.
+        <div className="pr-field-hint pr-field-hint--cleared">
+          <span>Se dejará vacío al consolidar.</span>
+          {!disabled && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm p-0"
+              onClick={() => restaurarClienteParaRenovacion(field, actual)}
+            >
+              Restaurar
+            </button>
+          )}
         </div>
       );
     }
@@ -469,7 +551,7 @@ const PreRenovacionItemCard = ({
 
     if (!hasBorradorClienteField(draftCliente, field) && hasActual && !skipClear) {
       return (
-        <div className="d-flex flex-wrap align-items-center gap-2">
+        <div className="pr-field-hint">
           <span className="form-text mb-0">Actual: {String(actual)}</span>
           {!disabled && (
             <button
@@ -506,7 +588,7 @@ const PreRenovacionItemCard = ({
       <div className="col-md-4" key={field}>
         <label className="form-label form-label-sm mb-1">{label}</label>
         <select
-          className="form-select form-select-sm"
+          className={classSelectCliente(field)}
           value={selectValue}
           onChange={(e) => cambiarCliente(field, e.target.value || null, true)}
           disabled={disabled}
@@ -549,6 +631,8 @@ const PreRenovacionItemCard = ({
             minIso="1900-01-01"
             maxIso="2099-12-31"
             disabled={disabled}
+            className={campoClienteVacio(field) ? "pr-field--cleared" : ""}
+            placeholder={campoClienteVacio(field) ? "" : undefined}
             onChangeIso={(iso) => cambiarCliente(field, iso || null, true)}
           />
           {esNombreCalculado ? (
@@ -567,9 +651,9 @@ const PreRenovacionItemCard = ({
         <input
           type={type}
           step={type === "number" ? "0.01" : undefined}
-          className="form-control form-control-sm"
+          className={classInputCliente(field)}
           value={datos.cliente?.[field] ?? ""}
-          placeholder={String(actual ?? "")}
+          placeholder={placeholderActual(field, actual)}
           onChange={(e) => {
             if (esNombreCalculado) return;
             const raw = e.target.value;
@@ -632,17 +716,14 @@ const PreRenovacionItemCard = ({
   };
 
   return (
-    <div
-      className={`card shadow-sm${esDental ? " border-info" : ""}`}
-      style={esDental ? { borderLeftWidth: "4px" } : undefined}
-    >
-      <div className="card-header bg-light">
+    <div className={`pr-item${esDental ? " pr-item--dental" : ""}`}>
+      <div className="pr-item__header">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
           <div>
             <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-              <div className="fw-semibold">{nombre}</div>
+              <div className="pr-item__name">{nombre}</div>
               <span
-                className={`badge ${esDental ? "bg-info" : "bg-primary"}`}
+                className={`badge pr-item__badge ${esDental ? "bg-info" : "bg-primary"}`}
                 title={
                   esDental ? "Producto Dental MS" : "Producto Salud MS"
                 }
@@ -730,8 +811,16 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
+      {requiereRetiro && datos.motivo_retiro === "TRASLADO A OTRO GRUPO FAMILIAR" && (
+        <div className="alert alert-info rounded-0 mb-0 py-2">
+          Este miembro ya está reservado en otro grupo para el año destino.
+          Aquí se cierra el año en curso; no se genera póliza nueva en este
+          grupo.
+        </div>
+      )}
+
       {requiereRetiro && (
-        <div className="card-body border-bottom">
+        <div className="pr-item__body border-bottom">
           <p className="small text-muted mb-3">
             Este miembro no se renovará. Prepara los datos obligatorios del retiro.
           </p>
@@ -784,8 +873,8 @@ const PreRenovacionItemCard = ({
       )}
 
       {mostrarPoliza && (
-        <div className="card-body border-bottom">
-          <p className="small text-muted mb-3">
+        <div className="pr-item__body border-bottom">
+          <p className="pr-item__section-title">
             Datos de la póliza para {anioDestino}
           </p>
           <div className="row g-2">
@@ -1038,10 +1127,10 @@ const PreRenovacionItemCard = ({
       )}
 
       {!esDental && (
-      <div className="card-body">
+      <div className="pr-item__body">
         <button
           type="button"
-          className="btn btn-link p-0 text-decoration-none"
+          className="btn btn-link p-0 text-decoration-none pr-toggle-contacto"
           onClick={() => setContactoAbierto((prev) => !prev)}
           aria-expanded={contactoAbierto}
         >
@@ -1049,12 +1138,12 @@ const PreRenovacionItemCard = ({
             className={`fas fa-chevron-${contactoAbierto ? "up" : "down"} me-2`}
             aria-hidden="true"
           />
-          Datos de contacto para {anioDestino} (opcional)
+          Información del cliente
         </button>
 
         {contactoAbierto && (
           <div className="mt-2">
-            <div className="text-muted small fw-semibold mb-2">Datos principales</div>
+            <div className="pr-item__section-title">Datos principales</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_PRINCIPALES.map(([field, label, type]) => {
                 if (field === "genero") {
@@ -1069,7 +1158,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Estatus migratorio</div>
+            <div className="pr-item__section-title">Estatus migratorio</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_MIGRATORIO.map(([field, label, type]) => {
                 if (field === "status") {
@@ -1084,7 +1173,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Dirección</div>
+            <div className="pr-item__section-title">Dirección</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_DIRECCION.map(([field, label, type]) => {
                 const actual = clienteActual[field];
@@ -1101,9 +1190,9 @@ const PreRenovacionItemCard = ({
                           </label>
                           <input
                             type={type}
-                            className="form-control form-control-sm"
+                            className={classInputCliente(field)}
                             value={datos.cliente?.[field] ?? ""}
-                            placeholder={String(actual ?? "")}
+                            placeholder={placeholderActual(field, actual)}
                             onChange={(e) =>
                               cambiarCliente(field, e.target.value)
                             }
@@ -1152,9 +1241,17 @@ const PreRenovacionItemCard = ({
                     <input
                       type={type}
                       step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
-                      value={datos.cliente?.[field] ?? ""}
-                      placeholder={String(actual ?? "")}
+                      className={classInputCliente(field)}
+                      value={
+                        esDireccionCalculada
+                          ? resolverDireccionCliente()
+                          : (datos.cliente?.[field] ?? "")
+                      }
+                      placeholder={
+                        esDireccionCalculada
+                          ? ""
+                          : placeholderActual(field, actual)
+                      }
                       onChange={(e) => {
                         if (esDireccionCalculada) return;
                         const raw = e.target.value;
@@ -1202,7 +1299,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Datos de contacto</div>
+            <div className="pr-item__section-title">Datos de contacto</div>
             <div className="row g-2 mb-3">
               <div className="col-12">
                 <label className="form-label form-label-sm mb-1">Teléfonos</label>
@@ -1291,7 +1388,7 @@ const PreRenovacionItemCard = ({
                           cambiarCliente(field, e.target.value || null, true)
                         }
                         disabled={disabled}
-                        className="form-select form-select-sm"
+                        className={classSelectCliente(field)}
                         placeholder="Seleccione…"
                       />
                       {renderClienteBorradorHint(field, actual)}
@@ -1306,9 +1403,9 @@ const PreRenovacionItemCard = ({
                     <input
                       type={type}
                       step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
+                      className={classInputCliente(field)}
                       value={datos.cliente?.[field] ?? ""}
-                      placeholder={String(actual ?? "")}
+                      placeholder={placeholderActual(field, actual)}
                       onChange={(e) => {
                         const raw = e.target.value;
                         cambiarCliente(
@@ -1330,7 +1427,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Empleo e ingreso</div>
+            <div className="pr-item__section-title">Empleo e ingreso</div>
             <div className="row g-2">
               {(() => {
                 const valorEmpleo = (field) => {
@@ -1353,7 +1450,7 @@ const PreRenovacionItemCard = ({
                         Tipo de ingreso
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("tipo_ingreso")}
                         value={datos.cliente?.tipo_ingreso ?? ""}
                         onChange={(e) =>
                           cambiarCliente(
@@ -1384,9 +1481,12 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("actividad_economica")}
                         value={datos.cliente?.actividad_economica ?? ""}
-                        placeholder={String(clienteActual.actividad_economica ?? "")}
+                        placeholder={placeholderActual(
+                          "actividad_economica",
+                          clienteActual.actividad_economica
+                        )}
                         onChange={(e) =>
                           cambiarCliente("actividad_economica", e.target.value)
                         }
@@ -1410,12 +1510,13 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("empleador")}
                         value={datos.cliente?.empleador ?? ""}
-                        placeholder={
-                          String(clienteActual.empleador ?? "") ||
+                        placeholder={placeholderActual(
+                          "empleador",
+                          clienteActual.empleador,
                           "Nombre de la empresa"
-                        }
+                        )}
                         onChange={(e) =>
                           cambiarCliente("empleador", e.target.value)
                         }
@@ -1432,10 +1533,11 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("telefono_empleador")}
                         value={datos.cliente?.telefono_empleador ?? ""}
-                        placeholder={String(
-                          clienteActual.telefono_empleador ?? ""
+                        placeholder={placeholderActual(
+                          "telefono_empleador",
+                          clienteActual.telefono_empleador
                         )}
                         onChange={(e) =>
                           cambiarCliente("telefono_empleador", e.target.value)
@@ -1459,7 +1561,7 @@ const PreRenovacionItemCard = ({
                         Periodo de ingreso
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("periodo_ingreso")}
                         value={datos.cliente?.periodo_ingreso ?? ""}
                         onChange={(e) => {
                           const value = e.target.value || null;
@@ -1506,10 +1608,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_por_periodo")}
                         value={moneyValue("ingreso_por_periodo")}
-                        placeholder={String(
-                          clienteActual.ingreso_por_periodo ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_por_periodo",
+                          clienteActual.ingreso_por_periodo
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1548,9 +1651,12 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_anual")}
                         value={moneyValue("ingreso_anual")}
-                        placeholder={String(clienteActual.ingreso_anual ?? "")}
+                        placeholder={placeholderActual(
+                          "ingreso_anual",
+                          clienteActual.ingreso_anual
+                        )}
                         onChange={(e) => {
                           const raw = e.target.value;
                           cambiarCliente(
@@ -1578,10 +1684,11 @@ const PreRenovacionItemCard = ({
                       </label>
                       <textarea
                         rows={2}
-                        className="form-control form-control-sm"
+                        className={classInputCliente("nota_ingreso_ocasional")}
                         value={datos.cliente?.nota_ingreso_ocasional ?? ""}
-                        placeholder={String(
-                          clienteActual.nota_ingreso_ocasional ?? ""
+                        placeholder={placeholderActual(
+                          "nota_ingreso_ocasional",
+                          clienteActual.nota_ingreso_ocasional
                         )}
                         onChange={(e) =>
                           cambiarCliente(
@@ -1608,7 +1715,7 @@ const PreRenovacionItemCard = ({
                         Periodo de ingreso ocasional
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("periodo_ingreso_ocasional")}
                         value={datos.cliente?.periodo_ingreso_ocasional ?? ""}
                         onChange={(e) => {
                           const value = e.target.value || null;
@@ -1655,10 +1762,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_por_periodo_ocasional")}
                         value={moneyValue("ingreso_por_periodo_ocasional")}
-                        placeholder={String(
-                          clienteActual.ingreso_por_periodo_ocasional ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_por_periodo_ocasional",
+                          clienteActual.ingreso_por_periodo_ocasional
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1699,10 +1807,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_ocasional_anual")}
                         value={moneyValue("ingreso_ocasional_anual")}
-                        placeholder={String(
-                          clienteActual.ingreso_ocasional_anual ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_ocasional_anual",
+                          clienteActual.ingreso_ocasional_anual
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1731,9 +1840,12 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("empresa")}
                         value={datos.cliente?.empresa ?? ""}
-                        placeholder={String(clienteActual.empresa ?? "")}
+                        placeholder={placeholderActual(
+                          "empresa",
+                          clienteActual.empresa
+                        )}
                         onChange={(e) =>
                           cambiarCliente("empresa", e.target.value)
                         }
@@ -1757,7 +1869,7 @@ const PreRenovacionItemCard = ({
                 />
               ) : (
                 <>
-                  <div className="text-muted small fw-semibold mb-2">
+                  <div className="pr-item__section-title">
                     Medios de pago
                   </div>
                   <div className="text-muted small">

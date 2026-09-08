@@ -37,12 +37,32 @@ const COBERTURA_ITEMS = [
     activo: true,
     vigente: false,
   },
+];
+
+const CANCELADAS_PRODUCTO_ITEMS = [
   {
-    key: "cotizacion",
-    label: "Cotización",
-    color: "#f9ab00",
-    descripcion: "Grupo familiar en flujo de cotización (estados 1–4)",
-    activo: true,
+    key: "salud",
+    label: "Plan Salud",
+    color: "#ea4335",
+    descripcion: "Producto Salud MS",
+  },
+  {
+    key: "dental_ms",
+    label: "Dental MS",
+    color: "#c5221f",
+    descripcion: "cobertura_tipo = Dental MS",
+  },
+  {
+    key: "vision",
+    label: "Vision",
+    color: "#d93025",
+    descripcion: "cobertura_tipo = Vision",
+  },
+  {
+    key: "plan_dental",
+    label: "Dental Privado",
+    color: "#a50e0e",
+    descripcion: "Plan Dental privado",
   },
 ];
 
@@ -124,9 +144,9 @@ export default function DashboardKpiDetalleModal({
     clientes: "Detalle de Clientes",
     grupos: "Detalle de Grupos Familiares",
     coberturas: "Detalle — Estado de Coberturas",
-    otros_productos: "Detalle — Otros productos",
+    cotizacion: "Detalle — Cotizaciones",
+    otros_productos: "Detalle — Otras coberturas",
     canceladas: "Coberturas Canceladas",
-    dental_ms_cancelado: "Detalle — Dental MS Cancelado",
     retiradas: "Coberturas Retiradas",
   };
 
@@ -134,7 +154,6 @@ export default function DashboardKpiDetalleModal({
     clientes: "/clientes/lista",
     grupos: "/grupofamiliar/lista",
     canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
-    dental_ms_cancelado: "/informes/coberturas-canceladas-retiradas?tipo=cancelados&producto=dental_ms",
     retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
   };
 
@@ -227,7 +246,9 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Pólizas con <strong>activo = true</strong>, clasificadas por estado de cobertura.
+            Solo <strong>producto Salud</strong>. Pólizas con{" "}
+            <strong>activo = true</strong>, clasificadas por estado de cobertura
+            (fuera de flujo de cotización).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {COBERTURA_ITEMS.map(({ key, label, color, descripcion, activo, vigente }) => (
@@ -237,13 +258,34 @@ export default function DashboardKpiDetalleModal({
                 valor={polizasActivas[key] ?? 0}
                 color={color}
                 descripcion={descripcion}
-                criterios={vigente != null ? { activo, vigente } : { activo }}
+                criterios={{ activo, vigente }}
               />
             ))}
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">
             Total: <strong>{polizasActivas.total ?? 0}</strong>
           </p>
+        </>
+      );
+    }
+
+    if (tipo === "cotizacion") {
+      const totalCotizacion = estadisticas?.polizasCotizacion ?? 0;
+      return (
+        <>
+          <p className="dashboard-kpi-detalle-intro">
+            Coberturas con <strong>activo = true</strong> cuyo grupo familiar
+            está en flujo de cotización (estados 1–4: Prospecto → Toma de Datos).
+          </p>
+          <div className="dashboard-kpi-detalle-list">
+            <DetalleFila
+              label="Cotización"
+              valor={totalCotizacion}
+              color="#f9ab00"
+              descripcion="Grupo familiar en flujo de cotización (estados 1–4)"
+              criterios={{ activo: true }}
+            />
+          </div>
         </>
       );
     }
@@ -282,7 +324,7 @@ export default function DashboardKpiDetalleModal({
               label="Plan Dental"
               valor={planDental}
               color="#0891b2"
-              descripcion="Plan Dental privado (sin Dental MS)"
+              descripcion="Plan Dental privado"
             />
           </div>
         </>
@@ -290,44 +332,39 @@ export default function DashboardKpiDetalleModal({
     }
 
     if (tipo === "canceladas") {
+      const porProducto = estadisticas?.canceladasPorProducto || {};
+      const totalCanceladas = estadisticas?.polizasCanceladas ?? porProducto.total ?? 0;
+      const otrosCanceladas = porProducto.otros ?? 0;
+
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
             Pólizas con <strong>fecha de cancelación</strong> y estado{" "}
-            <strong>Cancelado</strong> (el elegido al retirar o cancelar).
-            Retiros en Retirado o Terminado no entran aquí.
+            <strong>Cancelado</strong> (el elegido al retirar o cancelar),
+            discriminadas por producto. Retiros en Retirado o Terminado no entran aquí.
           </p>
           <div className="dashboard-kpi-detalle-list">
-            <DetalleFila
-              label="Canceladas"
-              valor={estadisticas?.polizasCanceladas ?? 0}
-              color="#ea4335"
-              descripcion="fecha_cancelacion + estado Cancelado"
-            />
+            {CANCELADAS_PRODUCTO_ITEMS.map(({ key, label, color, descripcion }) => (
+              <DetalleFila
+                key={key}
+                label={label}
+                valor={porProducto[key] ?? 0}
+                color={color}
+                descripcion={descripcion}
+              />
+            ))}
+            {otrosCanceladas > 0 && (
+              <DetalleFila
+                label="Otros"
+                valor={otrosCanceladas}
+                color="#9aa0a6"
+                descripcion="Otros tipos de cobertura"
+              />
+            )}
           </div>
-        </>
-      );
-    }
-
-    if (tipo === "dental_ms_cancelado") {
-      const totalDentalCancelado = estadisticas?.dentalMsCancelado ?? 0;
-      return (
-        <>
-          <p className="dashboard-kpi-detalle-intro">
-            Coberturas <strong>Dental MS</strong> con fecha de cancelación y estado{" "}
-            <strong>Cancelado</strong>.
+          <p className="dashboard-kpi-detalle-total mt-3 mb-0">
+            Total: <strong>{totalCanceladas}</strong>
           </p>
-          <div className="dashboard-kpi-detalle-hero dashboard-kpi-detalle-hero--alert">
-            {totalDentalCancelado}
-          </div>
-          <div className="dashboard-kpi-detalle-list">
-            <DetalleFila
-              label="Dental MS Cancelado"
-              valor={totalDentalCancelado}
-              color="#ea4335"
-              descripcion="Dental MS + fecha_cancelacion + estado Cancelado"
-            />
-          </div>
         </>
       );
     }

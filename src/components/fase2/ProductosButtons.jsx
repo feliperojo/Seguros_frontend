@@ -1,25 +1,38 @@
 // ProductosButtons.jsx
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import CoberturaEstadoGfBadges from "./CoberturaEstadoGfBadges";
-import { isDentalCoberturaTipo } from "../../constants/coberturaTipos";
+import {
+  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoSaludMs,
+} from "../../constants/coberturaTipos";
 
 /** ProductosButtons
  *  Muestra coberturas con estado "Grupo Familiar" y abre la ficha al hacer click.
+ *  Salud + Dental MS del mismo GF se consolidan en una sola fila (logo dental sin label).
  */
 export default function ProductosButtons({
   className = "",
   coberturas = [],
   resolveCobertura,
   onSelectCobertura = () => {},
-  prefetch = true,                          // 👈 hace GET del grupo antes de navegar
-  toFichaPath = (gfId) => `/grupo_familiar/${gfId}`, // 👈 ruta por defecto
+  prefetch = true,
+  toFichaPath = (gfId) => `/grupo_familiar/${gfId}`,
 }) {
   const navigate = useNavigate();
   const [loadingId, setLoadingId] = useState(null);
 
-  const Btn = ({ left, iconClass, cobertura, gfId, estadoGrupo, onClick, loading }) => (
+  const Btn = ({
+    icons = [],
+    label,
+    cobertura,
+    gfId,
+    estadoGrupo,
+    onClick,
+    loading,
+  }) => (
     <button
       type="button"
       onClick={onClick}
@@ -28,12 +41,18 @@ export default function ProductosButtons({
       style={{ fontSize: "0.9rem", backgroundColor: "#f8f9fa" }}
     >
       <span className="fw-semibold text-start flex-grow-1 text-truncate pe-3 d-flex align-items-center gap-2">
-        <i
-          className={iconClass}
-          aria-hidden="true"
-          style={{ color: "#1a365d", width: "1rem", textAlign: "center" }}
-        />
-        {left}
+        <span className="d-inline-flex align-items-center gap-1 flex-shrink-0">
+          {icons.map(({ className: iconClass, title }) => (
+            <i
+              key={`${iconClass}-${title}`}
+              className={iconClass}
+              aria-hidden="true"
+              title={title}
+              style={{ color: "#1a365d", width: "1rem", textAlign: "center" }}
+            />
+          ))}
+        </span>
+        {label}
       </span>
       <CoberturaEstadoGfBadges
         cobertura={cobertura}
@@ -44,27 +63,103 @@ export default function ProductosButtons({
     </button>
   );
 
-  const filtradas = (coberturas || []).filter(
-    (c) => c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre === "Grupo Familiar"
+  const filtradas = useMemo(
+    () =>
+      (coberturas || []).filter(
+        (c) =>
+          c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ===
+          "Grupo Familiar"
+      ),
+    [coberturas]
   );
 
+  /** Una fila por GF para salud+dental; resto de productos en filas propias. */
+  const filasProducto = useMemo(() => {
+    const byGf = new Map();
+
+    for (const c of filtradas) {
+      const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? null;
+      const key = gfId != null ? String(gfId) : `cov-${c?.id}`;
+      if (!byGf.has(key)) byGf.set(key, { gfId, items: [] });
+      byGf.get(key).items.push(c);
+    }
+
+    const filas = [];
+
+    for (const { gfId, items } of byGf.values()) {
+      const salud = items.find((c) => isProductoSaludMs(c?.cobertura_tipo));
+      const dental = items.find((c) => isDentalMsCoberturaTipo(c?.cobertura_tipo));
+      const resto = items.filter(
+        (c) => c !== salud && c !== dental
+      );
+
+      if (salud || dental) {
+        const principal = salud ?? dental;
+        const icons = [];
+        if (salud) {
+          icons.push({
+            className: "fas fa-heartbeat",
+            title: salud.cobertura_tipo || "Plan de salud",
+          });
+        }
+        if (dental) {
+          icons.push({ className: "fas fa-tooth", title: "Dental MS" });
+        }
+
+        filas.push({
+          key: `gf-${gfId ?? principal?.id}-salud-dental`,
+          gfId,
+          principal,
+          coberturaEstadoSource: salud ?? dental,
+          estadoGrupo:
+            principal?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ??
+            "Grupo Familiar",
+          icons,
+          label: salud
+            ? salud.cobertura_tipo || "Plan de salud"
+            : dental?.cobertura_tipo || "Dental MS",
+        });
+      }
+
+      for (const c of resto) {
+        const esDental = isDentalCoberturaTipo(c?.cobertura_tipo);
+        filas.push({
+          key: `gf-${gfId}-cov-${c.id}`,
+          gfId,
+          principal: c,
+          coberturaEstadoSource: c,
+          estadoGrupo:
+            c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ??
+            "Grupo Familiar",
+          icons: [
+            {
+              className: esDental ? "fas fa-tooth" : "fas fa-heartbeat",
+              title: c.cobertura_tipo || "Sin tipo",
+            },
+          ],
+          label: c.cobertura_tipo || "Sin tipo",
+        });
+      }
+    }
+
+    return filas;
+  }, [filtradas]);
+
   const handleOpenFicha = async (c) => {
-    onSelectCobertura?.(c); // conserva tu flujo actual
+    onSelectCobertura?.(c);
     const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id;
     if (!gfId) return;
 
     try {
       setLoadingId(gfId);
       if (prefetch) {
-        // Idempotente: solo asegura que existe/carga; ignora el retorno
         await GrupoFamiliarService.getFullById(gfId);
       }
     } catch (e) {
-      // si falla el prefetch igual navegamos; el componente de ficha se encargará
       console.warn("Prefetch GF falló:", e?.message || e);
     } finally {
       setLoadingId(null);
-      navigate(toFichaPath(gfId)); // 👉 redirección a la ficha
+      navigate(toFichaPath(gfId));
     }
   };
 
@@ -72,26 +167,23 @@ export default function ProductosButtons({
     <div className={`card ${className}`}>
       <div className="card-body">
         <h6 className="text-center fw-semibold mb-3">Productos</h6>
-        {filtradas.length ? (
+        {filasProducto.length ? (
           <div className="row g-2">
-            {filtradas.map((c) => {
-              const gfId = c?.grupo_familiar?.id ?? c?.grupo_familiar_id ?? "-";
-              const estadoGrupo =
-                c?.grupo_familiar?.estado_actual_catalogo?.estado_nombre ??
-                "Grupo Familiar";
-              const loading = loadingId === gfId;
-              const coberturaEstado = resolveCobertura?.(c) ?? c;
-              const esDental = isDentalCoberturaTipo(c?.cobertura_tipo);
+            {filasProducto.map((fila) => {
+              const loading = fila.gfId != null && loadingId === fila.gfId;
+              const coberturaEstado =
+                resolveCobertura?.(fila.coberturaEstadoSource) ??
+                fila.coberturaEstadoSource;
               return (
-                <div className="col-md-12" key={c.id}>
+                <div className="col-md-12" key={fila.key}>
                   <Btn
-                    left={c.cobertura_tipo || "Sin tipo"}
-                    iconClass={esDental ? "fas fa-tooth" : "fas fa-heartbeat"}
+                    icons={fila.icons}
+                    label={fila.label}
                     cobertura={coberturaEstado}
-                    gfId={gfId}
-                    estadoGrupo={estadoGrupo}
+                    gfId={fila.gfId ?? "-"}
+                    estadoGrupo={fila.estadoGrupo}
                     loading={loading}
-                    onClick={() => handleOpenFicha(c)}
+                    onClick={() => handleOpenFicha(fila.principal)}
                   />
                 </div>
               );
