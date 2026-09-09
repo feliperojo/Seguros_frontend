@@ -9,6 +9,7 @@ import {
   FaBriefcase, FaCreditCard, FaPassport, FaCalendarAlt
 } from "react-icons/fa";
 import MediosPagoTablas from "./MediosPagoTablas";
+import { formatDateForDisplay } from "../utils/formatters";
 
 const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fullscreenMode = false }) => {
 
@@ -264,7 +265,11 @@ const DetalleClienteModal = ({ show, onHide, clienteData, grupoFamiliarId, fulls
                     </ListGroup.Item>
                     <ListGroup.Item>
                       <small className="text-muted d-block">Fecha de Nacimiento</small>
-                      <strong>{formatDate(clienteData.fecha_nacimiento)}</strong>
+                      <strong>
+                        {clienteData.fecha_nacimiento
+                          ? formatDateForDisplay(clienteData.fecha_nacimiento)
+                          : <NotAvailable />}
+                      </strong>
                     </ListGroup.Item>
                     <ListGroup.Item>
                     <div className="d-flex justify-content-between">

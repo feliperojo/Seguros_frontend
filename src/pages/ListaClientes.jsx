@@ -15,6 +15,7 @@ import apiRequest from "../services/api";
 import EditClienteModal from "../components/EditClienteModal";
 import DetalleClienteModal from "../components/DetalleClienteModal";
 import { labelEstadoGrupoParaDisplay } from "../constants/estadosGrupoFamiliar";
+import { formatDateForDisplay } from "../utils/formatters";
 
 // ============================================================================
 // CONSTANTES Y HELPERS
@@ -397,26 +398,6 @@ const ListaClientes = () => {
   // ========================================================================
   // FUNCIONES DE UTILIDAD
   // ========================================================================
-
-  /**
-   * Formatea una fecha a formato local
-   * Maneja correctamente fechas ISO (YYYY-MM-DD) para evitar problemas de zona horaria
-   * @param {string} dateString - Fecha en formato string
-   * @returns {string} Fecha formateada o "No registrado"
-   */
-  const formatDate = (dateString) => {
-    if (!dateString) return "No registrado";
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString;
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const year = date.getFullYear();
-      return `${month}-${day}-${year}`;
-    } catch {
-      return dateString;
-    }
-  };
 
   /**
    * Obtiene el parentesco del cliente
@@ -907,7 +888,11 @@ const ListaClientes = () => {
                         {labelEstadoCliente(cliente.estado_cliente)}
                       </Badge>
                     </td>
-                    <td>{formatDate(cliente.fecha_nacimiento)}</td>
+                    <td>
+                      {cliente.fecha_nacimiento
+                        ? formatDateForDisplay(cliente.fecha_nacimiento)
+                        : "No registrado"}
+                    </td>
                     <td>{cliente.codigo_postal || <span className="text-muted">—</span>}</td>
                     <td>{getParentesco(cliente)}</td>
                     <td>{getTelefonoPrincipal(cliente) || <span className="text-muted">—</span>}</td>
