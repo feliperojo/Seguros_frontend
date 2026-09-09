@@ -4,6 +4,7 @@ import { Modal, Button, Spinner, Alert } from "react-bootstrap";
 import { getSubmissionStatus } from "../services/SignatureService";
 import useToast from "../hooks/useToast";
 import DocusealForm from "./DocusealForm";
+import "../styles/GfModal.css";
 
 /**
  * Modal para mostrar la firma embebida de DocuSeal.
@@ -56,7 +57,7 @@ const DocuSealSignerModal = ({ open, onClose, embedSrc, submissionId, onComplete
 
   return (
     <div
-      className="modal fade show d-block overflow-auto"
+      className="modal fade show d-block overflow-auto gf-modal"
       style={{
         backgroundColor: "rgba(0,0,0,0.5)",
         zIndex: 1055,
@@ -66,7 +67,7 @@ const DocuSealSignerModal = ({ open, onClose, embedSrc, submissionId, onComplete
       tabIndex="-1"
     >
       <div
-        className="modal-dialog modal-dialog-centered modal-dialog-scrollable"
+        className="modal-dialog modal-dialog-centered modal-dialog-scrollable gf-modal"
         style={{
           maxWidth: "min(96vw, 1200px)",
           width: "100%",
@@ -77,11 +78,11 @@ const DocuSealSignerModal = ({ open, onClose, embedSrc, submissionId, onComplete
         }}
       >
         <div
-          className="modal-content d-flex flex-column"
+          className="modal-content gf-modal__content d-flex flex-column"
           style={{ maxHeight: "calc(100vh - 2rem)" }}
         >
-          <div className="modal-header flex-shrink-0">
-            <h5 className="modal-title">
+          <div className="modal-header gf-modal__header flex-shrink-0">
+            <h5 className="modal-title gf-modal__title">
               <i className="bi bi-file-earmark-sign me-2"></i>
               Firma del Documento
             </h5>
@@ -133,7 +134,7 @@ const DocuSealSignerModal = ({ open, onClose, embedSrc, submissionId, onComplete
             )}
           </div>
 
-          <div className="modal-footer flex-shrink-0">
+          <div className="modal-footer gf-modal__footer flex-shrink-0">
             {submissionId && (
               <Button
                 variant="outline-info"

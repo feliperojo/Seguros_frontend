@@ -5,6 +5,7 @@ import apiRequest from "../../services/api";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CopiarDatosModal from "../fase2/CopiarDatosModal";
 import MemberModal from "../fase2/MemberModal";
+import AgregarDentalModal from "../fase2/AgregarDentalModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
 import "../../styles/PreRenovacionModal.css";
 import { pickClienteParaBorrador } from "../../utils/clienteFieldGroups";
@@ -24,8 +25,14 @@ import {
   buildPagadorOptionsFromItems,
   findCascadasSaludNoRenovar,
   findConflictosDentalSinSalud,
+  isItemAltaEnLote,
   isItemDental,
+  itemsSaludElegiblesParaDental,
+  itemSaludToDentalMember,
 } from "../../utils/preRenovacionDental";
+import { isProductoSaludMs } from "../../constants/coberturaTipos";
+import systemConfigService from "../../services/SystemConfigService";
+import { parseSystemConfigByTipo } from "../../utils/coverageFieldConfig";
 
 const formatHistorialFecha = (value) => {
   if (!value) return "—";
@@ -48,9 +55,12 @@ const anioDeFecha = (value) => {
 };
 
 const nombreMiembro = (item) =>
-  item?.tipo_item === "miembro_nuevo"
+  isItemAltaEnLote(item)
     ? item?.datos_borrador?.cliente?.nombre_completo ||
-      `Miembro nuevo #${item?.id || "?"}`
+      item?.cliente_existente?.nombre_completo ||
+      (item?.tipo_item === "producto_nuevo"
+        ? `Dental MS #${item?.id || "?"}`
+        : `Miembro nuevo #${item?.id || "?"}`)
     : item?.cobertura?.cliente?.nombre_completo ||
       `Cobertura #${item?.cobertura_id || "?"}`;
 
@@ -92,7 +102,9 @@ const PreRenovacionModal = ({
   const [showMemberModal, setShowMemberModal] = useState(false);
   const [agregandoMiembro, setAgregandoMiembro] = useState(false);
   const [showCopiarDatos, setShowCopiarDatos] = useState(false);
+  const [showDentalModal, setShowDentalModal] = useState(false);
   const [copiandoDatos, setCopiandoDatos] = useState(false);
+  const [coverageFieldConfig, setCoverageFieldConfig] = useState(null);
   const [cardsRevision, setCardsRevision] = useState(0);
   const [estadoGestionDraft, setEstadoGestionDraft] = useState("");
   const [notaEstadoGestion, setNotaEstadoGestion] = useState("");
@@ -113,6 +125,7 @@ const PreRenovacionModal = ({
     setShowClienteExistente(false);
     setShowMemberModal(false);
     setShowCopiarDatos(false);
+    setShowDentalModal(false);
     setCardsRevision(0);
     setEstadoGestionDraft("");
     setNotaEstadoGestion("");
@@ -138,6 +151,15 @@ const PreRenovacionModal = ({
         if (active) setLoading(false);
       }
     })();
+
+    systemConfigService
+      .get("coverage_fields_by_tipo")
+      .then((raw) => {
+        if (active) setCoverageFieldConfig(parseSystemConfigByTipo(raw));
+      })
+      .catch(() => {
+        if (active) setCoverageFieldConfig(null);
+      });
 
     return () => {
       active = false;
@@ -233,20 +255,24 @@ const PreRenovacionModal = ({
     );
   }, []);
 
-  const handleItemRemoved = useCallback((itemId) => {
+  const handleItemRemoved = useCallback((itemIds) => {
+    const ids = (Array.isArray(itemIds) ? itemIds : [itemIds])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+    const idSet = new Set(ids);
     setLote((prev) =>
       prev
         ? {
             ...prev,
             items: (prev.items || []).filter(
-              (item) => Number(item.id) !== Number(itemId)
+              (item) => !idSet.has(Number(item.id))
             ),
           }
         : prev
     );
     setItemsConGuardadoPendiente((prev) => {
       const next = new Set(prev);
-      next.delete(itemId);
+      ids.forEach((id) => next.delete(id));
       return next;
     });
   }, []);
@@ -478,6 +504,52 @@ const PreRenovacionModal = ({
     [agregarMiembroAlLote, defaultCoberturaTipo]
   );
 
+  const miembrosElegiblesDental = useMemo(
+    () =>
+      itemsSaludElegiblesParaDental(items).map((item) =>
+        itemSaludToDentalMember(item, anioDestino)
+      ),
+    [items, anioDestino]
+  );
+
+  const handleCreateDentalEnLote = useCallback(
+    async ({ member, payload }) => {
+      if (!lote?.id || !grupoFamiliarId) {
+        throw new Error("No hay pre-renovación abierta.");
+      }
+      const response = await apiRequest(
+        `/grupo_familiar/${grupoFamiliarId}/pre-renovacion/${lote.id}/productos`,
+        "POST",
+        {
+          miembro_origen_item_id: member?.item_id ?? member?.id,
+          cobertura_tipo: payload?.cobertura_tipo,
+          parentesco: payload?.parentesco,
+          codigo_poliza: payload?.codigo_poliza,
+          policy_number: payload?.policy_number,
+          compania_id: payload?.compania_id,
+          plan: payload?.plan,
+          elegibilidad: payload?.elegibilidad,
+          precio: payload?.precio,
+          fecha_activacion: payload?.fecha_activacion,
+          estado_cobertura: payload?.estado_cobertura,
+          tipo_pago: payload?.tipo_pago,
+          dia_pago: payload?.dia_pago,
+          agente: payload?.agente,
+          pagador_id: payload?.pagador_id,
+          cliente_id_existente: member?.cliente_id || null,
+        }
+      );
+      const nuevoItem = response?.data ?? response;
+      setLote((prev) =>
+        prev
+          ? { ...prev, items: [...(prev.items || []), nuevoItem] }
+          : prev
+      );
+      return nuevoItem;
+    },
+    [lote?.id, grupoFamiliarId]
+  );
+
   const miembrosARenovar = useMemo(
     () => items.filter((item) => Boolean(item?.renovar)),
     [items]
@@ -504,7 +576,7 @@ const PreRenovacionModal = ({
     () =>
       items
         .filter((item) => {
-          if (!item?.renovar && item?.tipo_item !== "miembro_nuevo") {
+          if (!item?.renovar && !isItemAltaEnLote(item)) {
             return false;
           }
           const fecha = item?.datos_borrador?.fecha_activacion;
@@ -525,10 +597,7 @@ const PreRenovacionModal = ({
           const requiereRetiro =
             !item?.renovar && Boolean(item?.cobertura?.activo);
           if (!requiereRetiro) return false;
-          return (
-            !String(item?.datos_borrador?.fecha_retiro ?? "").trim() ||
-            !String(item?.datos_borrador?.motivo_retiro ?? "").trim()
-          );
+          return !String(item?.datos_borrador?.motivo_retiro ?? "").trim();
         })
         .map(nombreMiembro),
     [items]
@@ -1103,7 +1172,8 @@ const PreRenovacionModal = ({
                       <strong>{resumenProductos.dental}</strong> Dental MS.
                       Dental solo se renueva si Salud del mismo miembro también
                       se renueva. Si no renuevas Salud, Dental se retira en
-                      cascada.
+                      cascada. Puedes agregar Dental MS nuevo para {anioDestino}
+                      y quitarlo del borrador si te arrepientes.
                     </div>
                   )}
 
@@ -1177,6 +1247,24 @@ const PreRenovacionModal = ({
                           <i className="fas fa-copy me-1" aria-hidden="true" />
                           Copiar
                         </button>
+                        {isProductoSaludMs(defaultCoberturaTipo) && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-info btn-sm"
+                            onClick={() => setShowDentalModal(true)}
+                            disabled={
+                              consolidando ||
+                              edicionBloqueada ||
+                              agregandoMiembro ||
+                              copiandoDatos ||
+                              !lote?.id
+                            }
+                            title={`Agregar Dental MS ${anioDestino} a miembros que renuevan Salud y aún no tienen dental`}
+                          >
+                            <i className="fas fa-tooth me-1" aria-hidden="true" />
+                            Agregar Dental MS
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1187,6 +1275,7 @@ const PreRenovacionModal = ({
                         key={`${item.id}-${cardsRevision}`}
                         item={item}
                         anioDestino={anioDestino}
+                        anioOrigen={anioOrigen}
                         onItemUpdated={handleItemUpdated}
                         onItemRemoved={handleItemRemoved}
                         attemptedConsolidar={attemptedConsolidar}
@@ -1199,6 +1288,7 @@ const PreRenovacionModal = ({
                         alertaCascadaSalud={idsSaludCascada.has(
                           Number(item.id)
                         )}
+                        coverageFieldConfig={coverageFieldConfig}
                       />
                     ))}
                   </div>
@@ -1253,7 +1343,7 @@ const PreRenovacionModal = ({
         className="modal-backdrop fade show"
         style={{ zIndex: 1060 }}
         onClick={() => {
-          if (showMemberModal || showClienteExistente || showCopiarDatos) return;
+          if (showMemberModal || showClienteExistente || showCopiarDatos || showDentalModal) return;
           handleClose();
         }}
       />
@@ -1289,6 +1379,19 @@ const PreRenovacionModal = ({
         defaultSourceId={tomadorSourceId}
         zIndex={1080}
         onApply={applyCopySelection}
+      />
+
+      <AgregarDentalModal
+        open={showDentalModal}
+        onClose={() => setShowDentalModal(false)}
+        members={miembrosElegiblesDental}
+        grupoFamiliarId={grupoFamiliarId}
+        anioDestino={anioDestino}
+        zIndex={1095}
+        subtitle={`Dental MS para la pre-renovación ${anioDestino}. Se guarda en el borrador; no se aplica hasta consolidar.`}
+        emptyDescription="Solo aparecen miembros con Salud MS marcada para renovar (o miembros nuevos) que aún no tienen Dental MS en este lote."
+        createDentalCoverage={handleCreateDentalEnLote}
+        onDentalCreated={() => setShowDentalModal(false)}
       />
     </>
   );

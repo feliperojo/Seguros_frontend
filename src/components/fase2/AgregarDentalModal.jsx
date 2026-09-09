@@ -17,6 +17,12 @@ import { parseMoney } from "../../services/ingresos";
 import useCompanies from "../../hooks/useCompanies";
 import { buildPayerOptions } from "../../utils/payers";
 import { TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
+import systemConfigService from "../../services/SystemConfigService";
+import {
+  parseSystemConfigByTipo,
+  resolveEnabledFields,
+  shouldShowConfiguredField,
+} from "../../utils/coverageFieldConfig";
 import "./AgregarDentalModal.css";
 
 const MSG_SIN_SALUD =
@@ -29,7 +35,11 @@ const fullName = (m) =>
   [m?.primer_nombre, m?.segundo_nombre, m?.apellidos].filter(Boolean).join(" ") ||
   "Sin nombre";
 
-const memberKey = (m) => m.cliente_id ?? m.id;
+const memberKey = (m) => {
+  if (m?.item_id != null && m.item_id !== "") return `item-${m.item_id}`;
+  const cid = m?.cliente_id ?? m?.id;
+  return cid == null ? "" : String(cid);
+};
 
 const emptyForm = () => ({
   fecha_activacion: "",
@@ -61,6 +71,11 @@ export default function AgregarDentalModal({
   members = [],
   grupoFamiliarId,
   onDentalCreated,
+  createDentalCoverage,
+  anioDestino,
+  zIndex = 1095,
+  subtitle,
+  emptyDescription,
 }) {
   const [form, setForm] = useState(emptyForm);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
@@ -68,6 +83,30 @@ export default function AgregarDentalModal({
   const [memberPrecios, setMemberPrecios] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [coverageFieldConfig, setCoverageFieldConfig] = useState(null);
+
+  const visibleCoverageFields = useMemo(
+    () => resolveEnabledFields(coverageFieldConfig, COBERTURA_TIPO_DENTAL_MS),
+    [coverageFieldConfig]
+  );
+  const showField = (fieldKey) =>
+    shouldShowConfiguredField(visibleCoverageFields, fieldKey);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    systemConfigService
+      .get("coverage_fields_by_tipo")
+      .then((raw) => {
+        if (!cancelled) setCoverageFieldConfig(parseSystemConfigByTipo(raw));
+      })
+      .catch(() => {
+        if (!cancelled) setCoverageFieldConfig(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const { companies, loading: companiesLoading } = useCompanies({
     producto: "dental_ms",
@@ -166,7 +205,7 @@ export default function AgregarDentalModal({
   const handleSave = async () => {
     setError("");
 
-    if (!grupoFamiliarId) {
+    if (!grupoFamiliarId && !createDentalCoverage) {
       setError("No se encontró el grupo familiar.");
       return;
     }
@@ -182,9 +221,11 @@ export default function AgregarDentalModal({
       return;
     }
 
-    const idsPendientes = selectedMembers.filter(
-      (m) => !(memberIds[memberKey(m)] || "").trim()
-    );
+    const idsPendientes = showField("codigo_poliza")
+      ? selectedMembers.filter(
+          (m) => !(memberIds[memberKey(m)] || "").trim()
+        )
+      : [];
     if (idsPendientes.length) {
       const ok = window.confirm(
         "Verifique e ingrese el Número de ID correspondiente a cada miembro seleccionado."
@@ -202,10 +243,13 @@ export default function AgregarDentalModal({
         const payload = {
           grupo_familiar_id: grupoFamiliarId,
           cliente_id: cid,
+          miembro_origen_item_id: m.item_id ?? m.id,
           parentesco: m.parentesco || m.tipo || "Tomador",
           cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
           estado_cobertura: form.estado_cobertura || "Sí",
-          ano_cobertura: String(m.ano_cobertura || new Date().getFullYear()),
+          ano_cobertura: String(
+            anioDestino || m.ano_cobertura || new Date().getFullYear()
+          ),
           elegibilidad: m.elegibilidad || "",
           codigo_poliza: (memberIds[cid] || "").trim(),
           policy_number: form.policy_number || "",
@@ -225,6 +269,12 @@ export default function AgregarDentalModal({
           precio: memberPrecios[cid] ? parseMoney(memberPrecios[cid]) : null,
           activo: true,
         };
+
+        if (createDentalCoverage) {
+          const created = await createDentalCoverage({ member: m, payload });
+          results.push(created ?? { cliente_id: cid, payload });
+          continue;
+        }
 
         const res = await apiRequest("cobertura/create", "POST", payload);
         const cov = extractCoberturaFromCreateResponse(res);
@@ -272,6 +322,9 @@ export default function AgregarDentalModal({
       centered
       backdrop="static"
       dialogClassName="agregar-dental-modal"
+      className="agregar-dental-modal-root"
+      backdropClassName="agregar-dental-modal-backdrop"
+      style={{ zIndex }}
     >
       <Modal.Header closeButton className="agregar-dental-modal__header">
         <div className="d-flex align-items-center gap-3 w-100">
@@ -281,7 +334,8 @@ export default function AgregarDentalModal({
           <div>
             <h2 className="agregar-dental-modal__title">Nueva cobertura Dental MS</h2>
             <p className="agregar-dental-modal__subtitle">
-              Registro de póliza dental complementaria al plan de salud del grupo familiar
+              {subtitle ||
+                "Registro de póliza dental complementaria al plan de salud del grupo familiar"}
             </p>
           </div>
         </div>
@@ -295,8 +349,8 @@ export default function AgregarDentalModal({
             </div>
             <h6 className="fw-semibold text-dark mb-2">Sin miembros elegibles</h6>
             <p className="text-muted small mb-0 mx-auto" style={{ maxWidth: 420 }}>
-              Solo pueden registrarse personas con cobertura de Salud MS activa (estado Sí,
-              vigente) que aún no cuenten con Dental MS en este grupo familiar.
+              {emptyDescription ||
+                "Solo pueden registrarse personas con cobertura de Salud MS activa (estado Sí, vigente) que aún no cuenten con Dental MS en este grupo familiar."}
             </p>
           </div>
         ) : (
@@ -389,47 +443,62 @@ export default function AgregarDentalModal({
                       {selected && (
                         <div className="agregar-dental-modal__member-card-body">
                           <div className="row g-2 align-items-end">
-                            <div className="col-md-4">
-                              <FieldLabel>Número de ID</FieldLabel>
-                              <Form.Control
-                                size="sm"
-                                placeholder="Número de póliza + dígitos de miembro"
-                                value={memberIds[id] || ""}
-                                onChange={(e) =>
-                                  setMemberIds((prev) => ({
-                                    ...prev,
-                                    [id]: e.target.value,
-                                  }))
-                                }
-                                aria-label={`Número de ID para ${fullName(m)}`}
-                              />
-                            </div>
-                            <div className="col-md-2">
-                              <span className="agregar-dental-modal__inherited-label">
-                                Año cobertura
-                              </span>
-                              <div className="agregar-dental-modal__inherited-value">
-                                {m.ano_cobertura || "—"}
+                            {showField("codigo_poliza") && (
+                              <div className="col-md-3">
+                                <FieldLabel>Número de ID</FieldLabel>
+                                <Form.Control
+                                  size="sm"
+                                  placeholder="Número de póliza + dígitos de miembro"
+                                  value={memberIds[id] || ""}
+                                  onChange={(e) =>
+                                    setMemberIds((prev) => ({
+                                      ...prev,
+                                      [id]: e.target.value,
+                                    }))
+                                  }
+                                  aria-label={`Número de ID para ${fullName(m)}`}
+                                />
                               </div>
-                            </div>
-                            <div className="col-md-3">
-                              <span className="agregar-dental-modal__inherited-label">
-                                Elegibilidad
-                              </span>
-                              <div className="agregar-dental-modal__inherited-value">
-                                {m.elegibilidad || "—"}
+                            )}
+                            {showField("fecha_activacion") && (
+                              <div className="col-md-3">
+                                <FieldLabel>Fecha de activación</FieldLabel>
+                                <DateInputWithCalendar
+                                  valueIso={(form.fecha_activacion || "").slice(0, 10)}
+                                  onChangeIso={(iso) =>
+                                    setForm((prev) => ({
+                                      ...prev,
+                                      fecha_activacion: iso || "",
+                                    }))
+                                  }
+                                  inputName="fecha_activacion"
+                                />
                               </div>
-                            </div>
-                            <div className="col-md-3">
-                              <FieldLabel>Precio ($)</FieldLabel>
-                              <CoveragePriceInput
-                                value={memberPrecios[id] || ""}
-                                onChange={(nextValue) => handleMemberPrecioChange(id, nextValue)}
-                                className="form-control"
-                                size="sm"
-                                name={`precio-${id}`}
-                              />
-                            </div>
+                            )}
+                            {showField("elegibilidad") && (
+                              <div className="col-md-3">
+                                <span className="agregar-dental-modal__inherited-label">
+                                  Elegibilidad
+                                </span>
+                                <div className="agregar-dental-modal__inherited-value">
+                                  {m.elegibilidad || "—"}
+                                </div>
+                              </div>
+                            )}
+                            {showField("precio") && (
+                              <div className="col-md-3">
+                                <FieldLabel>Precio ($)</FieldLabel>
+                                <CoveragePriceInput
+                                  value={memberPrecios[id] || ""}
+                                  onChange={(nextValue) =>
+                                    handleMemberPrecioChange(id, nextValue)
+                                  }
+                                  className="form-control"
+                                  size="sm"
+                                  name={`precio-${id}`}
+                                />
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -448,40 +517,14 @@ export default function AgregarDentalModal({
               </span>
             </div>
 
-            <section className="agregar-dental-modal__section">
-              <h3 className="agregar-dental-modal__section-title">
-                <i className="fas fa-id-card" />
-                Identificación de póliza
-              </h3>
-              <div className="row g-3">
-                <div className="col-md-6">
-                  <FieldLabel>Número ID</FieldLabel>
-                  <Form.Control
-                    name="policy_number"
-                    value={form.policy_number}
-                    onChange={handleChange}
-                    placeholder="Número ID de la póliza"
-                  />
-                </div>
-                <div className="col-md-6">
-                  <FieldLabel>Fecha de activación</FieldLabel>
-                  <DateInputWithCalendar
-                    valueIso={(form.fecha_activacion || "").slice(0, 10)}
-                    onChangeIso={(iso) =>
-                      setForm((prev) => ({ ...prev, fecha_activacion: iso || "" }))
-                    }
-                    inputName="fecha_activacion"
-                  />
-                </div>
-              </div>
-            </section>
-
+            {(showField("compania_id") || showField("agente") || showField("plan")) && (
             <section className="agregar-dental-modal__section">
               <h3 className="agregar-dental-modal__section-title">
                 <i className="fas fa-building" />
                 Aseguradora y plan
               </h3>
               <div className="row g-3">
+                {showField("compania_id") && (
                 <div className="col-md-6">
                   <FieldLabel>Compañía</FieldLabel>
                   <CompanySelect
@@ -499,6 +542,8 @@ export default function AgregarDentalModal({
                     </div>
                   )}
                 </div>
+                )}
+                {showField("agente") && (
                 <div className="col-md-6">
                   <FieldLabel>Agente</FieldLabel>
                   <Form.Control
@@ -508,6 +553,8 @@ export default function AgregarDentalModal({
                     placeholder="Nombre del agente o broker"
                   />
                 </div>
+                )}
+                {showField("plan") && (
                 <div className="col-md-6">
                   <FieldLabel>Plan</FieldLabel>
                   <Form.Control
@@ -517,15 +564,19 @@ export default function AgregarDentalModal({
                     placeholder="Nombre del plan dental"
                   />
                 </div>
+                )}
               </div>
             </section>
+            )}
 
+            {(showField("tipo_pago") || showField("pagador_id") || showField("dia_pago")) && (
             <section className="agregar-dental-modal__section">
               <h3 className="agregar-dental-modal__section-title">
                 <i className="fas fa-credit-card" />
                 Información de pago
               </h3>
               <div className="row g-3">
+                {showField("tipo_pago") && (
                 <div className="col-md-4">
                   <FieldLabel>Tipo de pago</FieldLabel>
                   <Form.Select name="tipo_pago" value={form.tipo_pago} onChange={handleChange}>
@@ -537,6 +588,8 @@ export default function AgregarDentalModal({
                     ))}
                   </Form.Select>
                 </div>
+                )}
+                {showField("pagador_id") && (
                 <div className="col-md-4">
                   <FieldLabel>Pagador</FieldLabel>
                   <PayerSelect
@@ -552,6 +605,8 @@ export default function AgregarDentalModal({
                     className="form-select"
                   />
                 </div>
+                )}
+                {showField("dia_pago") && (
                 <div className="col-md-4">
                   <FieldLabel>Día de pago</FieldLabel>
                   <Form.Control
@@ -562,8 +617,10 @@ export default function AgregarDentalModal({
                     inputMode="numeric"
                   />
                 </div>
+                )}
               </div>
             </section>
+            )}
           </>
         )}
       </Modal.Body>

@@ -2,6 +2,14 @@
   max-width: 920px;
 }
 
+.modal-backdrop.agregar-dental-modal-backdrop {
+  z-index: 1090;
+}
+
+.agregar-dental-modal-root {
+  z-index: 1095;
+}
+
 .agregar-dental-modal .modal-content {
   border: none;
   border-radius: 12px;

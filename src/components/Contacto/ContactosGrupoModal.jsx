@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import apiRequest from "../../services/api";
 import ContactoCard from "./ContactoCard";
+import "../../styles/GfModal.css";
 
 const ContactosGrupoModal = ({ show, onHide, grupoFamiliarId, readOnly = true }) => {
   const [contactos, setContactos] = useState([]);
@@ -45,16 +46,16 @@ const ContactosGrupoModal = ({ show, onHide, grupoFamiliarId, readOnly = true })
     <>
       {/* MODAL */}
       <div
-        className="modal fade show"
+        className="modal fade show gf-modal"
         style={{ display: "block" }}
         tabIndex="-1"
         role="dialog"
         aria-modal="true"
       >
-        <div className="modal-dialog modal-dialog-centered modal-lg" role="document">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Contactos relacionados al grupo familiar</h5>
+        <div className="modal-dialog modal-dialog-centered modal-lg gf-modal gf-modal--lg" role="document">
+          <div className="modal-content gf-modal__content">
+            <div className="modal-header gf-modal__header">
+              <h5 className="modal-title gf-modal__title">Contactos relacionados al grupo familiar</h5>
               <button
                 type="button"
                 className="btn-close"
@@ -63,7 +64,7 @@ const ContactosGrupoModal = ({ show, onHide, grupoFamiliarId, readOnly = true })
               ></button>
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body gf-modal__body">
               {loading && <p>Cargando contactos...</p>}
 
               {!loading && contactos.length === 0 && (
@@ -84,7 +85,7 @@ const ContactosGrupoModal = ({ show, onHide, grupoFamiliarId, readOnly = true })
                 ))}
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer gf-modal__footer">
               <button type="button" className="btn btn-secondary" onClick={onHide}>
                 Cerrar
               </button>

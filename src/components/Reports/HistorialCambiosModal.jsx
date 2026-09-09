@@ -13,6 +13,7 @@ import {
   CLIENTE_FIELDS_CONTACTO,
   CLIENTE_FIELDS_EMPLEO,
 } from "../../utils/clienteFieldGroups";
+import "../../styles/GfModal.css";
 
 // ==================== CONSTANTES ====================
 
@@ -1972,13 +1973,13 @@ export default function HistorialCambiosModal({
   return (
     <>
       <div
-        className="modal fade show"
+        className="modal fade show gf-modal"
         tabIndex="-1"
         role="dialog"
         style={{ display: "block", zIndex: 1060 }}
       >
         <div
-          className="modal-dialog modal-xl modal-dialog-centered"
+          className="modal-dialog modal-xl modal-dialog-centered gf-modal gf-modal--xl"
           role="document"
           style={{
             maxWidth: "min(1800px, 98vw)",
@@ -1989,18 +1990,16 @@ export default function HistorialCambiosModal({
           }}
         >
           <div
-            className="modal-content"
+            className="modal-content gf-modal__content"
             style={{
-              border: "none",
-              boxShadow: "0 0.5rem 1rem rgba(0, 0, 0, 0.15)",
               height: "100%",
               maxHeight: "100%",
               display: "flex",
               flexDirection: "column",
             }}
           >
-            <div className="modal-header border-bottom" style={{ backgroundColor: "#2c3e50", color: "#ffffff", padding: "0.85rem 1.5rem", flexShrink: 0 }}>
-              <h5 className="modal-title" style={{ fontWeight: "600", fontSize: "1.1rem", margin: 0 }}>
+            <div className="modal-header gf-modal__header" style={{ flexShrink: 0 }}>
+              <h5 className="modal-title gf-modal__title">
                 Historial de Cambios
                 {isGrupo && (
                   <span className="badge bg-light text-dark ms-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
@@ -2182,12 +2181,11 @@ export default function HistorialCambiosModal({
               )}
             </div>
 
-            <div className="modal-footer border-top" style={{ padding: "0.75rem 1.5rem", flexShrink: 0 }}>
+            <div className="modal-footer gf-modal__footer" style={{ flexShrink: 0 }}>
               <button
                 type="button"
-                className="btn btn-dark btn-sm"
+                className="btn btn-primary btn-sm"
                 onClick={onClose}
-                style={{ minWidth: "100px", fontWeight: "500", padding: "0.5rem 1rem" }}
               >
                 Cerrar
               </button>

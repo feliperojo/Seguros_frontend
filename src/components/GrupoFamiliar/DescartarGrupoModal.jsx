@@ -4,6 +4,7 @@ import {
   MOTIVOS_DESCARTE_GRUPO,
   buildDescartePayload,
 } from "../../constants/motivosDescarteGrupo";
+import "../../styles/GfModal.css";
 
 /**
  * Modal profesional para descartar un grupo familiar en etapa de prospecto.
@@ -58,12 +59,14 @@ export default function DescartarGrupoModal({
       centered
       backdrop="static"
       size="md"
+      dialogClassName="gf-modal gf-modal--sm"
+      contentClassName="gf-modal__content"
     >
-      <Modal.Header closeButton={!loading}>
-        <Modal.Title className="fs-5">Descartar grupo familiar</Modal.Title>
+      <Modal.Header closeButton={!loading} className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">Descartar grupo familiar</Modal.Title>
       </Modal.Header>
 
-      <Modal.Body>
+      <Modal.Body className="gf-modal__body">
         <p className="text-muted small mb-3">
           Esta acción cambiará el proceso a <strong>Descartado</strong>. Indique
           el motivo para dejar trazabilidad en el historial del grupo.
@@ -131,7 +134,7 @@ export default function DescartarGrupoModal({
         </Alert>
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button
           variant="outline-secondary"
           disabled={loading}

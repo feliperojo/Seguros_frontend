@@ -37,6 +37,7 @@ import {
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
+import "../../styles/GrupoFamiliarDetail.css";
 
 // Hooks
 import { deriveCounts } from "../../utils/groupCounters";
@@ -243,34 +244,31 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
   };
 
   return (
-    <div className="border rounded mb-2 bg-white">
+    <div className="gf-detalle__acc-item">
       <button
         type="button"
         id={`accordion-btn-${id}`}
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-100 border-0 px-3 py-2 d-flex align-items-center justify-content-between text-start ${
-          isOpen ? "bg-primary bg-opacity-10 text-primary" : "bg-light text-body"
-        }`}
+        className={`gf-detalle__acc-toggle ${isOpen ? "is-open" : ""}`}
         aria-expanded={isOpen}
         aria-controls={`accordion-panel-${id}`}
       >
         <div className="d-flex align-items-center gap-2">
           {icon && (
-            <span className={isOpen ? "text-primary" : "text-secondary"}>{icon}</span>
+            <span className="gf-detalle__acc-toggle-icon">{icon}</span>
           )}
-          <span className={`small ${isOpen ? "fw-semibold" : "fw-medium"}`}>{title}</span>
+          <span>{title}</span>
         </div>
         <i
-          className="fas fa-chevron-down small text-secondary"
+          className="fas fa-chevron-down gf-detalle__acc-chevron"
           style={{
             transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-            transition: "transform 0.2s ease",
           }}
         />
       </button>
 
       {isOpen && (
-        <div id={`accordion-panel-${id}`} className="px-3 pt-2 pb-3 border-top">
+        <div id={`accordion-panel-${id}`} className="gf-detalle__acc-panel">
           {renderChildren()}
         </div>
       )}
@@ -605,7 +603,7 @@ const ConfigurableFieldsGrid = ({ children, minWidth = 220, className = "" }) =>
 
 const Field = ({ label, labelHint, labelWarning, children, className = "col-md-6" }) => (
   <div className={className}>
-    <label className="form-label small fw-semibold text-muted d-flex align-items-center gap-1 mb-1">
+    <label className="gf-detalle__field-label">
       <span>{label}</span>
       {labelHint ? (
         <OverlayTrigger
@@ -1734,26 +1732,22 @@ const activeNormalized = useMemo(
 
         return (
           <div 
-            className={`card shadow-sm mb-3 overflow-visible ${isInactive ? 'border-warning' : ''}`} 
+            className={`gf-detalle__member-card overflow-visible ${isInactive ? 'gf-detalle__member-card--inactive' : ''}`} 
             key={itemId}
             style={isInactive ? { 
-              border: '2px solid #ffc107',
               position: 'relative'
             } : {}}
           >
             {/* Indicador de alerta para coberturas inactivas */}
             {isInactive && (
-              <div 
-                className="position-absolute top-0 start-0 bg-warning text-dark px-3 py-2 rounded-bottom-end shadow-sm"
-                style={{ zIndex: 10, borderBottom: '2px solid #ff9800', borderRight: '2px solid #ff9800' }}
-              >
+              <div className="gf-detalle__member-inactive-banner">
                 <i className="fas fa-exclamation-triangle me-2"></i>
                 <small className="fw-bold">Retirado del Grupo Familiar</small>
               </div>
             )}
             {/* Header */}
-            <div className={`card-header border-0 px-4 py-3 bg-white`}>
-              <div className="d-flex align-items-center position-relative" style={{ minHeight: 64 }}>
+            <div className="gf-detalle__member-header">
+              <div className="gf-detalle__member-header-row" style={{ minHeight: 64 }}>
                 <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
                   <div className="d-flex align-items-center gap-2">
                     <span className={`badge bg-${getTypeColor(m.tipo)}`}>
@@ -1799,8 +1793,7 @@ const activeNormalized = useMemo(
                   {clienteId ? (
                     <span
                       role="button"
-                      className="fw-semibold text-primary text-decoration-none"
-                      style={{ cursor: 'pointer' }}
+                      className="gf-detalle__member-name-btn"
                       title={`Abrir ficha del cliente #${clienteId}`}
                       onClick={(e) => {
                         e.preventDefault();
@@ -1811,7 +1804,7 @@ const activeNormalized = useMemo(
                       {fullName(m)}
                     </span>
                   ) : (
-                    <span className="fw-semibold text-dark">{fullName(m)}</span>
+                    <span className="gf-detalle__member-name-static">{fullName(m)}</span>
                   )}
                 </div>
 
@@ -1834,36 +1827,36 @@ const activeNormalized = useMemo(
                     readOnly={isReadOnly}
                     onAnulada={handleAnulada}
                   />
-                  <div className="text-start me-3">
-                    <div className="small">
-                      <span className="text-muted">Edad: </span>
-                      <span className="fw-semibold text-muted">
+                  <div className="gf-detalle__member-meta me-3">
+                    <div>
+                      <span>Edad: </span>
+                      <strong>
                         {c.edad ?? m.edad ?? "N/A"}
-                      </span>
+                      </strong>
                     </div>
-                    <div className="small text-muted">
+                    <div>
                       Género: {normalizeGeneroForSelect(c.genero ?? m.genero ?? "") || "—"}
                     </div>
                     {!esProductoPrivadoCard && (
                       <>
-                        <div className="small">
+                        <div>
                           Grupo:{" "}
                           <span className={`badge ${badgeClass}`}>
                             {grupoValor || "—"}
                           </span>
                         </div>
-                        <div className="small text-muted mt-1">
+                        <div className="mt-1">
                           Ingreso total:{" "}
-                          <span className="fw-semibold text-muted">{ingresoTotalLabel}</span>
+                          <strong>{ingresoTotalLabel}</strong>
                         </div>
                       </>
                     )}
                     {m.fecha_creacion_cobertura && (
-                      <div className="small text-muted mt-1" style={{ whiteSpace: "nowrap" }}>
+                      <div className="mt-1" style={{ whiteSpace: "nowrap" }}>
                         Enrolamiento:{" "}
-                        <span className="fw-semibold text-muted">
+                        <strong>
                           {formatDateForDisplay(m.fecha_creacion_cobertura) || "—"}
-                        </span>
+                        </strong>
                       </div>
                     )}
                   </div>
@@ -1872,7 +1865,7 @@ const activeNormalized = useMemo(
             </div>
 
             {/* Acordeones */}
-            <div className="card-body px-4 pt-3 pb-4">
+            <div className="gf-detalle__member-body">
               <div className="d-flex flex-column gap-2">
                 {/* Datos Cliente */}
                 {hasAnyClientAccordion && (
@@ -3325,17 +3318,17 @@ const activeNormalized = useMemo(
   };
 
   return (
-    <div className="container-fluid p-0">
+    <div className="container-fluid p-0 gf-detalle__toma">
       {!readOnly && (
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h5 className="mb-0"><i className="fas fa-users me-2" /> Miembros</h5>
+        <div className="gf-detalle__toma-toolbar">
+          <h5 className="gf-detalle__toma-toolbar-title"><i className="fas fa-users me-2" /> Miembros</h5>
           <div className="btn-group">
             {canAdd ? (
-              <button className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={handleAdd}>Añadir</button>
             ) : (
-              <button className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
+              <button type="button" className="btn btn-primary btn-sm" disabled onClick={() => onBlockedAddClick?.()}>Añadir</button>
             )}
-            <button className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
+            <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => setOpenExistente(true)}>
               <i className="fas fa-users me-1" /> Miembros existentes
             </button>
             <button className="btn btn-outline-secondary btn-sm" type="button" onClick={() => setOpenCopy(true)}>
@@ -3360,10 +3353,10 @@ const activeNormalized = useMemo(
 
       {/* Sección de Miembros Retirados */}
       {inactiveMembers.length > 0 && (
-        <div className="mt-4 mb-3">
+        <div className="gf-detalle__retirados">
           <div className="d-flex justify-content-between align-items-center mb-3">
             <div className="d-flex align-items-center gap-2">
-              <h6 className="mb-0 text-muted">
+              <h6 className="gf-detalle__retirados-title">
                 <i className="fas fa-users-slash me-2"></i>
                 {inactiveMembers.some((x) => x.m?.fecha_anulacion)
                   ? `Miembros retirados / anulados (${inactiveMembers.length})`

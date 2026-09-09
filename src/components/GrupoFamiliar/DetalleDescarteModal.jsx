@@ -1,6 +1,7 @@
 import React from "react";
 import { Alert, Button, Modal, Spinner } from "react-bootstrap";
 import { labelMotivoDescarte } from "../../constants/motivosDescarteGrupo";
+import "../../styles/GfModal.css";
 
 function parseMetadata(raw) {
   if (!raw) return null;
@@ -45,12 +46,12 @@ export default function DetalleDescarteModal({
     (registro?.created_by_name || registro?.usuario || "").trim() || null;
 
   return (
-    <Modal show={show} onHide={onHide} centered size="md">
-      <Modal.Header closeButton>
-        <Modal.Title className="fs-5">Detalle del descarte</Modal.Title>
+    <Modal show={show} onHide={onHide} centered size="md" dialogClassName="gf-modal gf-modal--sm" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">Detalle del descarte</Modal.Title>
       </Modal.Header>
 
-      <Modal.Body>
+      <Modal.Body className="gf-modal__body">
         {loading ? (
           <div className="text-center py-4">
             <Spinner animation="border" size="sm" className="me-2" />
@@ -107,7 +108,7 @@ export default function DetalleDescarteModal({
         )}
       </Modal.Body>
 
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button variant="secondary" onClick={onHide}>
           Cerrar
         </Button>

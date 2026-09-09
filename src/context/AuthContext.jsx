@@ -49,6 +49,36 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Si apiRequest borra el token por 401, sincronizar el contexto y salir al login
+  // (evita quedarse en pantallas “logueadas” fallando en bucle con alerts).
+  useEffect(() => {
+    const clearClientSession = () => {
+      localStorage.removeItem("auth_token");
+      localStorage.removeItem("user");
+      localStorage.removeItem("roles");
+      localStorage.removeItem("permissions");
+      localStorage.removeItem("app_settings");
+      setUser(null);
+      setRoles([]);
+      setPermissions([]);
+      setAppSettings(null);
+      setIsAuthenticated(false);
+      setLoading(false);
+    };
+
+    const onSessionExpired = () => {
+      clearClientSession();
+      if (window.location.pathname !== "/login") {
+        navigate("/login", { replace: true });
+      }
+    };
+
+    window.addEventListener("auth:session-expired", onSessionExpired);
+    return () => {
+      window.removeEventListener("auth:session-expired", onSessionExpired);
+    };
+  }, [navigate]);
+
   // Heartbeat de presencia: mientras haya sesión activa, avisa periódicamente al backend
   // que el usuario sigue conectado (alimenta la columna "Conexión" en Administración de Usuarios).
   useEffect(() => {

@@ -8,6 +8,7 @@ import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import { extractMentionedUserIds } from "../../utils/mentions";
 import { getCurrentTimeHm } from "../../utils/formatters";
+import "../../styles/GfModal.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 const getAuthToken = () => localStorage.getItem("auth_token");
@@ -885,12 +886,12 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered>
-      <Modal.Header closeButton className="border-bottom">
-        <Modal.Title className="fw-normal">Nueva Tarea</Modal.Title>
+    <Modal show={show} onHide={onHide} size="lg" centered dialogClassName="gf-modal gf-modal--lg" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">Nueva Tarea</Modal.Title>
       </Modal.Header>
 
-      <Modal.Body>
+      <Modal.Body className="gf-modal__body">
         {(toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)) && (
           <div className="mb-3">
             <span className="badge bg-secondary">
@@ -1558,7 +1559,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         </Form.Group>
       </Modal.Body>
 
-      <Modal.Footer className="border-top">
+      <Modal.Footer className="gf-modal__footer">
         <Button type="button" variant="outline-secondary" onClick={onHide} disabled={loading}>
           Cancelar
         </Button>

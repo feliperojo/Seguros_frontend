@@ -31,6 +31,7 @@ import {
   esProcesoInicialGrupoFamiliar,
   opcionesEstadoCoberturaPorProceso,
 } from "../../constants/estadosGrupoFamiliar";
+import "../../styles/GrupoFamiliarDetail.css";
 
 
 /* ---------- Helpers de UI ---------- */
@@ -317,23 +318,15 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full px-4 py-3 flex items-center justify-between text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:ring-offset-1 rounded-lg transition-all duration-200 shadow-sm ${
-          isOpen 
-            ? "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200" 
-            : "bg-gray-50 text-gray-700 hover:bg-gray-100 hover:text-gray-800 border border-gray-200"
-        }`}
+        className={`gf-detalle__accordion-toggle ${isOpen ? "is-open" : ""}`}
         aria-expanded={isOpen}
       >
-        <span className={`text-sm ${isOpen ? "font-semibold" : "font-medium"}`}>
-          Datos del {member.tipo || "Miembro"}
-        </span>
+        <span>{`Datos del ${member.tipo || "Miembro"}`}</span>
         <svg
-          className={`w-4 h-4 transition-all duration-200 ${
-            isOpen ? "transform rotate-180 text-blue-500" : "text-gray-500"
-          }`}
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -346,18 +339,18 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
 
       {/* Contenido del acordeón */}
       <div
-        className={`overflow-hidden transition-all duration-300 ease-in-out ${
-          isOpen ? "max-h-[2000px] opacity-100 mt-2" : "max-h-0 opacity-0"
+        className={`gf-detalle__accordion-panel ${
+          isOpen ? "is-open" : "is-closed"
         }`}
       >
-        <div className="px-4 py-4 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div className="gf-detalle__member-form">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Primer Nombre
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                className="gf-detalle__field gf-detalle__field--capitalize"
                 value={member.primer_nombre || ""}
                 disabled={readOnly}
                 onChange={handleName("primer_nombre", onChange)}
@@ -366,11 +359,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Segundo nombre
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                className="gf-detalle__field gf-detalle__field--capitalize"
                 value={member.segundo_nombre || ""}
                 disabled={readOnly}
                 onChange={handleName("segundo_nombre", onChange)}
@@ -379,11 +372,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Apellidos
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                className="gf-detalle__field gf-detalle__field--capitalize"
                 value={member.apellidos || ""}
                 disabled={readOnly}
                 onChange={handleName("apellidos", onChange)}
@@ -392,11 +385,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Idioma
               </label>
               <select
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="gf-detalle__field"
                 value={resolveIdiomaName(member.idioma ?? member?.cliente?.idioma ?? "")}
                 disabled={readOnly}
                 onChange={(e) => {
@@ -419,11 +412,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 País de Origen
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed capitalize"
+                className="gf-detalle__field gf-detalle__field--capitalize"
                 value={member.pais_origen ?? member?.cliente?.pais_origen ?? ""}
                 disabled={readOnly}
                 onChange={(e) => {
@@ -441,7 +434,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Fecha de Nacimiento
               </label>
               <MdyDashDateInput
@@ -457,22 +450,22 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Edad
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-50 cursor-not-allowed shadow-sm"
+                className="gf-detalle__field gf-detalle__field--readonly"
                 disabled
                 value={member.edad ?? ""}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Género
               </label>
               <select
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="gf-detalle__field"
                 value={normalizeGeneroForSelect(member.genero || member?.cliente?.genero || "")}
                 disabled={readOnly}
                 onChange={handle("genero")}
@@ -485,11 +478,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Ingreso Anual
               </label>
               <input
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="gf-detalle__field"
                 inputMode="decimal"
                 value={
                   readOnly
@@ -505,11 +498,11 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 ¿Está en Cobertura?
               </label>
               <select
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="gf-detalle__field"
                 value={member.estado_cobertura || ""}
                 disabled={readOnly}
                 onChange={handle("estado_cobertura")}
@@ -526,7 +519,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Teléfonos
               </label>
               <TelefonosPro
@@ -548,7 +541,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="gf-detalle__label" style={{ marginBottom: "0.5rem" }}>
                 Medio de Comunicación Principal
               </label>
               <div className="d-flex flex-wrap gap-3">
@@ -600,11 +593,12 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
 
             <div className="md:col-span-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="gf-detalle__label">
                 Nota
               </label>
               <textarea
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 focus:border-blue-500 transition-all duration-200 shadow-sm disabled:bg-gray-100 disabled:cursor-not-allowed resize-y min-h-[80px]"
+                className="gf-detalle__field"
+                style={{ resize: "vertical", minHeight: 80 }}
                 value={member.nota || ""}
                 disabled={readOnly}
                 onChange={handle("nota")}
@@ -613,7 +607,7 @@ const MemberAccordionForm = ({ member, readOnly, onChange, estadoActual }) => {
             </div>
           </div>
 
-          <div className="mt-4 text-sm text-gray-600">
+          <div className="mt-4 text-sm" style={{ color: "#64748b" }}>
             Los cambios se guardarán con el botón <strong>Guardar</strong> del formulario principal.
           </div>
         </div>
@@ -880,15 +874,15 @@ const sortedMembers = familyMembers
   /* --------------------------- Render --------------------------- */
   return (
     <>
-      <div className="card mb-4">
-      <div className="card-header d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">
+      <div className="gf-detalle__section">
+      <div className="gf-detalle__section-header">
+                  <h5 className="gf-detalle__section-title">
                     <i className="fas fa-users me-2" />
                     Añadir Miembros
                   </h5>
 
                   {!readOnly && (
-                    <div className="d-flex gap-2">
+                    <div className="d-flex gap-2 gf-detalle__members-header-actions">
                       {/* Botón “Añadir” (NUEVO cliente) */}
                       {canAdd ? (
                         <button
@@ -947,10 +941,10 @@ const sortedMembers = familyMembers
                 </div>
 
 
-        <div className="card-body">
+        <div className="gf-detalle__section-body">
           {familyMembers.length === 0 ? (
-            <div className="text-center text-muted py-4">
-              <i className="fas fa-users fa-3x mb-3 opacity-50" />
+            <div className="gf-detalle__members-empty">
+              <i className="fas fa-users fa-3x" />
               <p>No hay miembros agregados. Haz clic en "Añadir" para comenzar.</p>
             </div>
           ) : (
@@ -974,9 +968,9 @@ const sortedMembers = familyMembers
 
                 return (
                   <div key={uniqueKey} className="col-md-12 mb-3">
-                  <div className="card border">
-                    <div className="card-body">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
+                  <div className="gf-detalle__member-card">
+                    <div className="gf-detalle__member-card-body">
+                      <div className="gf-detalle__member-top">
                         <div className="d-flex align-items-center gap-2">
                           <span className={`badge bg-${getTypeColor(member.tipo)}`}>
                             {member.tipo}
@@ -1012,11 +1006,8 @@ const sortedMembers = familyMembers
 
                       </div>
 
-                      <div className="d-flex align-items-center">
-                        <div
-                          className="me-3 d-flex align-items-center justify-content-center"
-                          style={{ width: 50 }}
-                        >
+                      <div className="gf-detalle__member-identity gf-detalle__member-header-row">
+                        <div className="gf-detalle__member-avatar">
                           <UserCoverageIcon
                             status={member.estado_cobertura}
                             estadoProceso={estadoActual}
@@ -1035,24 +1026,24 @@ const sortedMembers = familyMembers
                               // rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()} // no interferir con otros handlers
                             >
-                              <h6 className="mb-1 text-primary">{nombre}</h6>
+                              <h6 className="gf-detalle__member-name">{nombre}</h6>
                             </Link>
                           ) : (
-                            <h6 className="mb-1">{nombre}</h6>
+                            <h6 className="gf-detalle__member-name">{nombre}</h6>
                           )}
                         </div>
 
-                        <div className="text-end" style={{ minWidth: 180 }}>
-                          <small className="text-muted d-block">
+                        <div className="gf-detalle__member-meta">
+                          <span className="d-block">
                             Edad: {getMemberEdad(member) || ""}
-                          </small>
-                          <small className="text-muted d-block">
+                          </span>
+                          <span className="d-block">
                             Género: {getMemberGenero(member) || ""}
-                          </small>
+                          </span>
                           {!ocultarEstadoCobertura && (
-                            <small className="text-muted d-block">
+                            <span className="d-block">
                               Cobertura: {member.estado_cobertura}
-                            </small>
+                            </span>
                           )}
                         </div>
                       </div>

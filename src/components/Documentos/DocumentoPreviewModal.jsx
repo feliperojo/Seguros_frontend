@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Modal, Button, Spinner } from "react-bootstrap";
 import { obtenerTipoVistaPrevia } from "./archivoPreviewUtils";
+import "../../styles/GfModal.css";
 
 const DocumentoPreviewModal = ({ show, onHide, archivo, url, loading }) => {
   const [errorCarga, setErrorCarga] = useState(false);
@@ -16,16 +17,16 @@ const DocumentoPreviewModal = ({ show, onHide, archivo, url, loading }) => {
   const nombre = archivo.nombre_original || "Vista previa";
 
   return (
-    <Modal show={show} onHide={handleClose} size="xl" centered>
-      <Modal.Header closeButton>
-        <Modal.Title className="text-truncate" style={{ maxWidth: "90%" }}>
-          {tipo === "imagen" && <i className="fas fa-image me-2 text-primary" />}
-          {tipo === "pdf" && <i className="fas fa-file-pdf me-2 text-danger" />}
-          {tipo === "otro" && <i className="fas fa-file me-2 text-secondary" />}
+    <Modal show={show} onHide={handleClose} size="xl" centered dialogClassName="gf-modal gf-modal--xl" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title text-truncate" style={{ maxWidth: "90%" }}>
+          {tipo === "imagen" && <i className="fas fa-image me-2" />}
+          {tipo === "pdf" && <i className="fas fa-file-pdf me-2" />}
+          {tipo === "otro" && <i className="fas fa-file me-2" />}
           {nombre}
         </Modal.Title>
       </Modal.Header>
-      <Modal.Body style={{ minHeight: "300px" }}>
+      <Modal.Body className="gf-modal__body" style={{ minHeight: "300px" }}>
         {loading ? (
           <div className="text-center py-5">
             <Spinner animation="border" />
@@ -77,7 +78,7 @@ const DocumentoPreviewModal = ({ show, onHide, archivo, url, loading }) => {
           </div>
         )}
       </Modal.Body>
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button variant="secondary" onClick={handleClose}>
           Cerrar
         </Button>

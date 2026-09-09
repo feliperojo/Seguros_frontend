@@ -2,6 +2,7 @@ import {
   CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
   soloPermiteCopiarDireccion,
 } from "./estadoPoliza";
+import { isItemAltaEnLote } from "./preRenovacionDental";
 
 /** Misma lista que CopiarDatosModal (dirección en cliente). */
 const ADDRESS_FIELDS = [
@@ -33,7 +34,7 @@ export const normalizeClienteBorradorValue = (value) =>
 
 /** Parentesco del ítem de borrador (renovación o miembro nuevo). */
 export const parentescoOfItem = (item) => {
-  if (item?.tipo_item === "miembro_nuevo") {
+  if (isItemAltaEnLote(item)) {
     return item?.datos_borrador?.parentesco || "";
   }
   return item?.cobertura?.parentesco || item?.datos_borrador?.parentesco || "";
@@ -50,7 +51,7 @@ export const clienteEfectivoOfItem = (item) => {
       ? item.datos_borrador.cliente
       : {};
   const base =
-    item?.tipo_item === "miembro_nuevo"
+    isItemAltaEnLote(item)
       ? item?.cliente_existente || {}
       : item?.cobertura?.cliente || {};
   return { ...base, ...datosCli };
@@ -78,7 +79,7 @@ export const pickCoberturaField = (item, key) => {
  */
 export const itemElegibleParaCopiarEnBorrador = (item) => {
   if (!item) return false;
-  if (item.tipo_item === "miembro_nuevo") return true;
+  if (isItemAltaEnLote(item)) return true;
   return Boolean(item.renovar);
 };
 

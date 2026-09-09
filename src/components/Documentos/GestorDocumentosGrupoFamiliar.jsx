@@ -9,6 +9,7 @@ import TrashList from "./TrashList";
 import DocumentoPreviewModal from "./DocumentoPreviewModal";
 import SuperAdminPasswordModal from "./SuperAdminPasswordModal";
 import useCanManageDocumentTrash from "../../hooks/useCanManageDocumentTrash";
+import "../../styles/GfModal.css";
 import {
   getCurrentYear,
   requiresSuperPasswordForFolder,
@@ -1005,14 +1006,14 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
   };
 
   return (
-    <Modal show={show} onHide={onHide} size="xl" centered>
-      <Modal.Header closeButton>
-        <Modal.Title>
+    <Modal show={show} onHide={onHide} size="xl" centered dialogClassName="gf-modal gf-modal--xl" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">
           <i className="fas fa-folder-open me-2"></i>
           Gestor de Documentos del Grupo Familiar
         </Modal.Title>
       </Modal.Header>
-      <Modal.Body style={{ minHeight: "500px" }}>
+      <Modal.Body className="gf-modal__body" style={{ minHeight: "500px" }}>
         {canManageTrash && (
           <div className="d-flex justify-content-end mb-3">
             <div className="btn-group">
@@ -1100,7 +1101,7 @@ const GestorDocumentosGrupoFamiliar = ({ show, onHide, grupoFamiliarId }) => {
         </div>
         )}
       </Modal.Body>
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button variant="secondary" onClick={onHide}>
           Cerrar
         </Button>

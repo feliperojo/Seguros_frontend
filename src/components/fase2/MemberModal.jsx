@@ -6,6 +6,7 @@ import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import apiRequest from "../../services/api";
 import { getListFromApi } from "../../utils/apiResponse";
 import { opcionesEstadoCoberturaPorProceso } from "../../constants/estadosGrupoFamiliar";
+import "../../styles/GfModal.css";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -378,14 +379,14 @@ export default function MemberModalCreate({
 
   return (
     <div
-      className="modal fade show d-block"
+      className="modal fade show d-block gf-modal"
       style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex }}
     >
-      <div className="modal-dialog modal-lg">
-        <div className="modal-content">
+      <div className="modal-dialog modal-lg gf-modal gf-modal--lg">
+        <div className="modal-content gf-modal__content">
 
-          <div className="modal-header">
-            <h5 className="modal-title">{title}</h5>
+          <div className="modal-header gf-modal__header">
+            <h5 className="modal-title gf-modal__title">{title}</h5>
             <button className="btn-close" onClick={onClose} />
           </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
+import "../../styles/GfModal.css";
 
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
@@ -171,16 +172,16 @@ export default function ClienteExistenteModal({
   };
 
   return (
-    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)", zIndex: 1075}}>
-      <div className="modal-dialog modal-xl">
-        <div className="modal-content">
+    <div className="modal fade show d-block gf-modal" style={{backgroundColor:"rgba(0,0,0,0.5)", zIndex: 1075}}>
+      <div className="modal-dialog modal-xl gf-modal gf-modal--xl">
+        <div className="modal-content gf-modal__content">
 
-          <div className="modal-header">
-            <h5 className="modal-title">Agregar cliente existente</h5>
+          <div className="modal-header gf-modal__header">
+            <h5 className="modal-title gf-modal__title">Agregar cliente existente</h5>
             <button className="btn-close" onClick={onClose}/>
           </div>
 
-          <div className="modal-body">
+          <div className="modal-body gf-modal__body">
             <div className="row g-2 align-items-center mb-3">
               <div className="col-auto">
                 <label className="form-label mb-0">Tipo <span className="text-danger">*</span></label>
@@ -228,7 +229,7 @@ export default function ClienteExistenteModal({
             />
           </div>
 
-          <div className="modal-footer">
+          <div className="modal-footer gf-modal__footer">
             <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cerrar</button>
           </div>
 

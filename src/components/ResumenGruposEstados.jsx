@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import apiRequest from "../services/api";
 import { getEstadoGrupoConfig, ordenarResumenGrupos } from "../constants/estadosGrupoFamiliar";
 
@@ -6,42 +6,41 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
   const [resumenEstados, setResumenEstados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
-  const cargandoRef = useRef(false); // Para evitar múltiples llamadas simultáneas
 
   useEffect(() => {
-    // Evitar múltiples llamadas simultáneas
-    if (cargandoRef.current) {
-      return;
-    }
+    let cancelled = false;
 
     const cargarResumen = async () => {
-      cargandoRef.current = true;
       setCargando(true);
       setError(null);
       try {
         const res = await apiRequest("estados/resumen-grupos", "GET");
+        if (cancelled) return;
         // El endpoint devuelve un array de objetos
         const datos = res?.data || res || [];
-        
+
         // Validar que sea un array
         if (!Array.isArray(datos)) {
           console.warn("El endpoint no devolvió un array:", datos);
           setResumenEstados([]);
           return;
         }
-        
+
         setResumenEstados(datos);
       } catch (err) {
+        if (cancelled || err?.response?.status === 401) return;
         console.error("Error al cargar resumen de grupos por estado:", err);
         setError("Error al cargar el resumen de grupos");
         setResumenEstados([]);
       } finally {
-        setCargando(false);
-        cargandoRef.current = false;
+        if (!cancelled) setCargando(false);
       }
     };
 
     cargarResumen();
+    return () => {
+      cancelled = true;
+    };
   }, []); // Solo se ejecuta una vez al montar
 
   // Ordenar estados según un orden lógico

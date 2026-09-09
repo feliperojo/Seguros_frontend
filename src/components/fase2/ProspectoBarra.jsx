@@ -136,8 +136,8 @@ const ProspectoBarra = ({
   };
 
   return (
-    <div className="mb-4">
-      <div className="d-flex justify-content-between align-items-center mb-3">
+    <div className="gf-detalle__stepper">
+      <div className="gf-detalle__stepper-row">
         <div className="flex-grow-1">
           <ul className="progressbar d-flex justify-content-between list-unstyled mb-0">
             {STEPS.map((s, idx) => {
@@ -190,6 +190,7 @@ const ProspectoBarra = ({
           </ul>
         </div>
         {puedeDescartar && (
+          <div className="gf-detalle__stepper-actions">
           <button
             type="button"
             className="btn btn-outline-danger ms-3"
@@ -199,8 +200,10 @@ const ProspectoBarra = ({
             <i className="fas fa-times-circle me-2"></i>
             Marcar como Descartado
           </button>
+          </div>
         )}
         {puedeReactivarSeguimiento && (
+          <div className="gf-detalle__stepper-actions">
           <button
             type="button"
             className="btn btn-outline-primary ms-3"
@@ -210,6 +213,7 @@ const ProspectoBarra = ({
             <i className="fas fa-undo me-2"></i>
             Reactivar en Seguimiento
           </button>
+          </div>
         )}
       </div>
 

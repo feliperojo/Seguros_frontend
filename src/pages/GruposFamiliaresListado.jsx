@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, Fragment } from "react";
 import {
   Container, Table, Badge, Button,
-  Form, InputGroup, Dropdown, Modal
+  Form, InputGroup, Dropdown, Modal, Alert
 } from "react-bootstrap";
 import Pagination from "../components/Pagination";
 import {
@@ -37,6 +37,27 @@ const ITEMS_PER_PAGE = 50;
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIOS_BASE = [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3];
 
+const mapearEstadoParaEndpoint = (codigoEstado) => {
+  const estadoMap = {
+    prospecto: "PROSPECTO",
+    cotizacion: "COTIZACION",
+    seguimiento: "SEGUIMIENTO",
+    toma_datos: "TOMA_DATOS",
+    inscripcion_ini: "INSCRIPCION_INI",
+    grupo_familiar: "GRUPO_FAMILIAR",
+    grupo_familiar_activo: "GRUPO_FAMILIAR_ACTIVO",
+    grupo_familiar_inactivo: "GRUPO_FAMILIAR_INACTIVO",
+    descartado: "DESCARTADO",
+  };
+
+  if (codigoEstado === codigoEstado.toUpperCase()) {
+    return codigoEstado;
+  }
+
+  const codigoLower = codigoEstado.toLowerCase();
+  return estadoMap[codigoLower] || codigoEstado.toUpperCase();
+};
+
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -45,6 +66,7 @@ const GruposFamiliaresListado = () => {
   // Estados
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [paginationMeta, setPaginationMeta] = useState({
@@ -90,6 +112,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
   const [mostrarInactivas, setMostrarInactivas] = useState(false);
   const [gruposExpandidos, setGruposExpandidos] = useState(() => new Set());
   const location = useLocation();
+  const [listadoReloadKey, setListadoReloadKey] = useState(0);
 
   // Año actual + 3 anteriores como base; se enriquecen con años ya creados en BD (incluye futuros).
   const [aniosDisponibles, setAniosDisponibles] = useState(ANIOS_BASE);
@@ -201,11 +224,86 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Cargar grupos al cambiar filtros, búsqueda, página o año
+  // Cargar grupos al cambiar filtros, búsqueda, página o año.
+  // Ignora respuestas obsoletas (filtros rápidos / Strict Mode) para no mostrar alertas fantasma.
   useEffect(() => {
+    let cancelled = false;
+
+    const fetchGrupos = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(currentPage));
+        params.set("per_page", String(ITEMS_PER_PAGE));
+
+        if (selectedStatus !== "Todos los estados") {
+          params.set("estado", mapearEstadoParaEndpoint(selectedStatus));
+        }
+
+        if (debouncedSearch.trim()) {
+          params.set("search", debouncedSearch.trim());
+        }
+
+        // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
+        if (anioSeleccionado !== ANIO_ACTUAL) {
+          params.set("anio", String(anioSeleccionado));
+        }
+
+        if (selectedProducto && selectedProducto !== "todos") {
+          params.set("producto", selectedProducto);
+        }
+
+        const response = await apiRequest(
+          `grupo_familiar/grupos-familiares-listado?${params.toString()}`,
+          "GET"
+        );
+
+        if (cancelled) return;
+
+        if (response && response.status === "success" && Array.isArray(response.data)) {
+          setGrupos(response.data);
+          setPaginationMeta(response.meta || {
+            total: response.data.length,
+            last_page: 1,
+            per_page: ITEMS_PER_PAGE,
+            page: currentPage,
+          });
+        } else {
+          setGrupos([]);
+          setPaginationMeta({
+            total: 0,
+            last_page: 1,
+            per_page: ITEMS_PER_PAGE,
+            page: 1,
+          });
+        }
+      } catch (error) {
+        if (cancelled || error?.response?.status === 401) return;
+        console.error("Error al cargar grupos familiares:", error);
+        setGrupos([]);
+        setPaginationMeta({
+          total: 0,
+          last_page: 1,
+          per_page: ITEMS_PER_PAGE,
+          page: 1,
+        });
+        setLoadError(
+          error?.message ||
+            "Error al cargar los grupos familiares. Por favor, intente nuevamente."
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     fetchGrupos();
     setGruposExpandidos(new Set());
-  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, anioSeleccionado]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, anioSeleccionado, listadoReloadKey]);
 
   const toggleGrupoExpandido = (grupoId) => {
     setGruposExpandidos((prev) => {
@@ -221,85 +319,8 @@ useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, selectedStatus, selectedProducto]);
 
-  // Función para mapear el código del estado al formato que espera el endpoint
-  const mapearEstadoParaEndpoint = (codigoEstado) => {
-    // Mapeo de códigos en minúsculas a códigos en mayúsculas que espera el API
-    const estadoMap = {
-      "prospecto": "PROSPECTO",
-      "cotizacion": "COTIZACION",
-      "seguimiento": "SEGUIMIENTO",
-      "toma_datos": "TOMA_DATOS",
-      "inscripcion_ini": "INSCRIPCION_INI",
-      "grupo_familiar": "GRUPO_FAMILIAR",
-      "grupo_familiar_activo": "GRUPO_FAMILIAR_ACTIVO",
-      "grupo_familiar_inactivo": "GRUPO_FAMILIAR_INACTIVO",
-      "descartado": "DESCARTADO"
-    };
-    
-    // Si el código ya está en mayúsculas, devolverlo tal cual
-    if (codigoEstado === codigoEstado.toUpperCase()) {
-      return codigoEstado;
-    }
-    
-    // Convertir a mayúsculas y buscar en el mapa
-    const codigoLower = codigoEstado.toLowerCase();
-    return estadoMap[codigoLower] || codigoEstado.toUpperCase();
-  };
-
-  // Función para cargar grupos
-  const fetchGrupos = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("page", String(currentPage));
-      params.set("per_page", String(ITEMS_PER_PAGE));
-
-      if (selectedStatus !== "Todos los estados") {
-        params.set("estado", mapearEstadoParaEndpoint(selectedStatus));
-      }
-
-      if (debouncedSearch.trim()) {
-        params.set("search", debouncedSearch.trim());
-      }
-
-      // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
-      if (anioSeleccionado !== ANIO_ACTUAL) {
-        params.set("anio", String(anioSeleccionado));
-      }
-
-      if (selectedProducto && selectedProducto !== "todos") {
-        params.set("producto", selectedProducto);
-      }
-
-      const response = await apiRequest(
-        `grupo_familiar/grupos-familiares-listado?${params.toString()}`,
-        "GET"
-      );
-
-      if (response && response.status === "success" && Array.isArray(response.data)) {
-        setGrupos(response.data);
-        setPaginationMeta(response.meta || {
-          total: response.data.length,
-          last_page: 1,
-          per_page: ITEMS_PER_PAGE,
-          page: currentPage,
-        });
-      } else {
-        setGrupos([]);
-        setPaginationMeta({
-          total: 0,
-          last_page: 1,
-          per_page: ITEMS_PER_PAGE,
-          page: 1,
-        });
-      }
-    } catch (error) {
-      console.error("Error al cargar grupos familiares:", error);
-      alert("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Recarga manual (p. ej. tras eliminar o botón reintentar)
+  const fetchGrupos = () => setListadoReloadKey((k) => k + 1);
 
 
   // Añade esta función después de getCompaniaNombre o getTomadorNombre
@@ -577,6 +598,23 @@ useEffect(() => {
                 </Button>
               </div>
             </div>
+
+            {loadError && (
+              <Alert
+                variant="warning"
+                className="d-flex justify-content-between align-items-center gap-3"
+              >
+                <span>{loadError}</span>
+                <Button
+                  variant="outline-warning"
+                  size="sm"
+                  onClick={() => fetchGrupos()}
+                  disabled={loading}
+                >
+                  Reintentar
+                </Button>
+              </Alert>
+            )}
 
             {loading ? (
               <div className="text-center py-5">
