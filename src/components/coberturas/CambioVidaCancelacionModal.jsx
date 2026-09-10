@@ -651,19 +651,11 @@ const CambioVidaCancelacionModal = ({
           setError("El motivo de cancelación es requerido en el modo global.");
           return false;
         }
-        if (!notaCancelGlobal || String(notaCancelGlobal).trim().length === 0) {
-          setError("Las observaciones de cancelación son requeridas en el modo global.");
-          return false;
-        }
       }
 
       if (algunaRetiro) {
         if (!motivoRetiroGlobal) {
           setError("El motivo de retiro es requerido en el modo global.");
-          return false;
-        }
-        if (!notaRetiroGlobal || String(notaRetiroGlobal).trim().length === 0) {
-          setError("Las observaciones de retiro son requeridas en el modo global.");
           return false;
         }
         if (!OPCIONES_COBERTURA_RETIRO.includes(coberturaDefinidaGlobal)) {
@@ -727,18 +719,12 @@ const CambioVidaCancelacionModal = ({
       }
 
       const motivoCancel = datos.motivo_cancelacion;
-      const notaCancel = datos.nota_cancel;
       const motivoRetiro = datos.motivo_retiro;
-      const notaRetiro = datos.nota_retiro;
       const definida = datos.cobertura_definida;
 
       if (requiereCamposCancelacion(cobertura, datos)) {
         if (!motivoCancel) {
           setError(`${nombre}: el motivo de cancelación es requerido.`);
-          return false;
-        }
-        if (!notaCancel || String(notaCancel).trim().length === 0) {
-          setError(`${nombre}: las observaciones de cancelación son requeridas.`);
           return false;
         }
       }
@@ -750,10 +736,6 @@ const CambioVidaCancelacionModal = ({
         }
         if (!motivoRetiro) {
           setError(`${nombre}: el motivo de retiro es requerido.`);
-          return false;
-        }
-        if (!notaRetiro || String(notaRetiro).trim().length === 0) {
-          setError(`${nombre}: las observaciones de retiro son requeridas.`);
           return false;
         }
       }
@@ -1264,7 +1246,7 @@ const CambioVidaCancelacionModal = ({
                         </Form.Select>
                       </div>
                       <div className="col-md-3 col-6">
-                        <Form.Label className="small mb-1">Obs. cancelación *</Form.Label>
+                        <Form.Label className="small mb-1">Obs. cancelación</Form.Label>
                         <Form.Control
                           size="sm"
                           value={notaCancelGlobal}
@@ -1302,7 +1284,7 @@ const CambioVidaCancelacionModal = ({
                         </Form.Select>
                       </div>
                       <div className="col-md-3 col-12">
-                        <Form.Label className="small mb-1">Obs. retiro *</Form.Label>
+                        <Form.Label className="small mb-1">Obs. retiro</Form.Label>
                         <Form.Control
                           size="sm"
                           value={notaRetiroGlobal}
@@ -1601,7 +1583,7 @@ const CambioVidaCancelacionModal = ({
                                     </div>
                                     <div>
                                       <Form.Label className="small mb-1">
-                                        Obs. cancelación <span className="text-danger">*</span>
+                                        Obs. cancelación
                                       </Form.Label>
                                       <Form.Control
                                         size="sm"
@@ -1665,7 +1647,7 @@ const CambioVidaCancelacionModal = ({
                                     </div>
                                     <div>
                                       <Form.Label className="small mb-1">
-                                        Obs. retiro <span className="text-danger">*</span>
+                                        Obs. retiro
                                       </Form.Label>
                                       <Form.Control
                                         size="sm"
