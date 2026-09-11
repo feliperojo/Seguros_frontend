@@ -82,7 +82,8 @@ export const isProductoPrivadoIndependiente = (tipo = "") => {
 
 /**
  * Clave de producto para conflictos al agregar a un GF.
- * Salud MS y privados distintos no se bloquean entre sí.
+ * Cada privado es independiente: Plan Dental, Vision, Plan de vida, Plan de Descuentos.
+ * Tener uno activo no bloquea agregar otro distinto (ni Salud MS).
  */
 export const claveProductoConflicto = (tipo = "") => {
   const norm = normalizeCoberturaTipo(tipo);
@@ -94,10 +95,15 @@ export const claveProductoConflicto = (tipo = "") => {
   if (lower.includes("vida")) return "vida";
   if (lower.includes("descuento")) return "descuentos";
   if (lower.includes("dental")) return "plan_dental";
+  // Cualquier otro privado futuro: clave propia por label.
+  if (isProductoPrivadoIndependiente(norm)) return `privado:${lower}`;
   return lower;
 };
 
-/** true si ambos tipos son el mismo producto de negocio (conflicto al agregar). */
+/**
+ * true si ambos tipos son el mismo producto de negocio (conflicto al agregar).
+ * Aplica por igual a Salud MS y a todos los productos privados.
+ */
 export const sonMismoProductoParaConflicto = (tipoA, tipoB) => {
   const a = claveProductoConflicto(tipoA);
   const b = claveProductoConflicto(tipoB);

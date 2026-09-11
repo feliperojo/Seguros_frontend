@@ -94,7 +94,8 @@ const esCoberturaActivaVigente = (cobertura = {}) => {
 
 /**
  * Puede agregar si no hay cobertura activa del MISMO producto destino.
- * Tener Salud MS activa no bloquea agregar a Plan Dental privado (y viceversa).
+ * Aplica a todos los privados (Plan Dental, Vision, Vida, Descuentos) y a Salud MS:
+ * tener otro producto activo distinto no bloquea.
  */
 const resolverAccionAgregar = (
   coberturas,

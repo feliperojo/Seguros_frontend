@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
-import { sonMismoProductoParaConflicto } from "../../constants/coberturaTipos";
+import {
+  isProductoPrivadoIndependiente,
+  sonMismoProductoParaConflicto,
+} from "../../constants/coberturaTipos";
 import "../../styles/GfModal.css";
 
 const TYPE_COLOR = {
@@ -11,6 +14,17 @@ const TYPE_COLOR = {
   "Abuelo/a": "warning", "Suegro/a": "warning", "Tio/a": "warning", "Sobrino/a": "warning",
 };
 const TIPOS = ["Tomador","Conyuge","Hijo/a","Hermano","Padre","Madre","Nieto","Abuelo/a","Suegro/a","Tio/a","Sobrino/a"];
+
+/** Badge visual del producto criterio (privados + salud). */
+const badgeClassProducto = (tipo = "") => {
+  const t = String(tipo || "").toLowerCase();
+  if (t.includes("dental") && !t.includes("ms")) return "bg-info text-dark";
+  if (t.includes("vision") || t.includes("visión")) return "bg-success";
+  if (t.includes("vida")) return "bg-danger";
+  if (t.includes("descuento")) return "bg-warning text-dark";
+  if (isProductoPrivadoIndependiente(tipo)) return "bg-secondary";
+  return "bg-primary";
+};
 
 export default function ClienteExistenteModal({
   open,
@@ -181,7 +195,7 @@ export default function ClienteExistenteModal({
                 <h5 className="modal-title gf-modal__title mb-1">Agregar cliente existente</h5>
                 <div className="small" style={{ color: "rgba(255,255,255,0.9)" }}>
                   Criterio de producto:{" "}
-                  <span className="badge bg-info text-dark">
+                  <span className={`badge ${badgeClassProducto(defaultCoberturaTipo)}`}>
                     {defaultCoberturaTipo || "Plan de salud"}
                   </span>
                 </div>
@@ -193,12 +207,12 @@ export default function ClienteExistenteModal({
           <div className="modal-body gf-modal__body">
             <div className="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 border rounded bg-light">
               <span className="text-muted small mb-0">Producto seleccionado del grupo:</span>
-              <span className="badge bg-info text-dark fs-6">
+              <span className={`badge fs-6 ${badgeClassProducto(defaultCoberturaTipo)}`}>
                 {defaultCoberturaTipo || "Plan de salud"}
               </span>
               <span className="text-muted small mb-0">
-                La búsqueda y el botón Agregar usan este producto como criterio
-                (no se bloquea por tener otro producto activo, p. ej. Salud MS).
+                Criterio para todos los productos (Salud MS y privados: Plan Dental,
+                Vision, Vida, Descuentos). Solo bloquea si ya tiene <strong>este mismo</strong> producto activo.
               </span>
             </div>
 
