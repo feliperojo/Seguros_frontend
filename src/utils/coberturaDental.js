@@ -73,6 +73,24 @@ export const pickPagoFieldsFromSalud = (saludMember = {}) => ({
       : saludMember.pagador_id,
 });
 
+/**
+ * Campos de Salud MS que sí pueden pegarse en Dental MS al copiar entre miembros.
+ * El resto (compañía, plan, metal, red, cobertura, día de pago, etc.) no aplica.
+ */
+export const CAMPOS_COPIABLES_SALUD_A_DENTAL_MS = [
+  "elegibilidad",
+  "agente",
+  "pagador_id",
+  "ano_cobertura",
+  "tipo_pago",
+  "fecha_activacion",
+];
+
+export const filterCamposCopiablesADentalMs = (fieldKeys = []) =>
+  (fieldKeys || []).filter((key) =>
+    CAMPOS_COPIABLES_SALUD_A_DENTAL_MS.includes(key)
+  );
+
 export {
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,

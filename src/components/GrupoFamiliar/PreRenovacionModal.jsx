@@ -402,7 +402,7 @@ const PreRenovacionModal = ({
     miembrosParaCopiar.length >= 2;
 
   const applyCopySelection = useCallback(
-    async ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+    async ({ sourceId, fieldKeys, copyAddress, targetIds, includeDentalMs }) => {
       const sourceItem = items.find(
         (item) => Number(item.id) === Number(sourceId)
       );
@@ -425,6 +425,7 @@ const PreRenovacionModal = ({
           const patch = buildCopyPatchForItem(sourceItem, targetItem, {
             fieldKeys,
             copyAddress,
+            includeDentalMs: !!includeDentalMs,
           });
           if (Object.keys(patch).length === 0) continue;
 
@@ -1378,6 +1379,7 @@ const PreRenovacionModal = ({
         members={miembrosParaCopiar}
         defaultSourceId={tomadorSourceId}
         zIndex={1080}
+        allowIncludeDentalMs={isProductoSaludMs(defaultCoberturaTipo)}
         onApply={applyCopySelection}
       />
 

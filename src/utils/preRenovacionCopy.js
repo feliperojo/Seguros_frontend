@@ -2,7 +2,8 @@ import {
   CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
   soloPermiteCopiarDireccion,
 } from "./estadoPoliza";
-import { isItemAltaEnLote } from "./preRenovacionDental";
+import { filterCamposCopiablesADentalMs } from "./coberturaDental";
+import { isItemAltaEnLote, isItemDental, getItemCoberturaTipo } from "./preRenovacionDental";
 
 /** Misma lista que CopiarDatosModal (dirección en cliente). */
 const ADDRESS_FIELDS = [
@@ -102,6 +103,8 @@ export const itemToCopyMember = (item) => {
     nombreCompleto: nombre,
     cliente,
     estado_cobertura: estado.has ? estado.value : "",
+    cobertura_tipo: getItemCoberturaTipo(item),
+    isDentalMs: isItemDental(item),
   };
 
   // Campos de cobertura aplanados (para que el apply del modal vea `k in src`)
@@ -117,6 +120,7 @@ export const itemToCopyMember = (item) => {
     "dia_pago",
     "estado_cobertura",
     "fecha_activacion",
+    "ano_cobertura",
     "precio",
     "grupo",
   ].forEach((key) => {
@@ -134,14 +138,25 @@ export const itemToCopyMember = (item) => {
 export const buildCopyPatchForItem = (
   sourceItem,
   targetItem,
-  { fieldKeys = [], copyAddress = false } = {}
+  { fieldKeys = [], copyAddress = false, includeDentalMs = false } = {}
 ) => {
   const patch = {};
+  const targetIsDental = isItemDental(targetItem);
+
+  // Dental MS solo participa si el usuario activó el check (Salud MS → Dental MS).
+  if (targetIsDental && !includeDentalMs) {
+    return patch;
+  }
+
+  const keysForTarget = targetIsDental
+    ? filterCamposCopiablesADentalMs(fieldKeys)
+    : fieldKeys;
+
   const soloDireccion = soloPermiteCopiarDireccion(
     pickCoberturaField(targetItem, "estado_cobertura").value
   );
 
-  fieldKeys.forEach((key) => {
+  keysForTarget.forEach((key) => {
     // El año destino lo fija la consolidación; no se copia entre miembros.
     if (key === "ano_cobertura") {
       return;
@@ -157,7 +172,8 @@ export const buildCopyPatchForItem = (
     patch[key] = picked.value;
   });
 
-  if (copyAddress) {
+  // Dirección solo en ítems de salud (o dental si el check está activo).
+  if (copyAddress && (!targetIsDental || includeDentalMs)) {
     const srcCli = clienteEfectivoOfItem(sourceItem);
     const clientePatch = {};
     ADDRESS_FIELDS.forEach((key) => {

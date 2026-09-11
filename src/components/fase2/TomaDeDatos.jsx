@@ -36,6 +36,7 @@ import {
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
+import { filterCamposCopiablesADentalMs } from "../../utils/coberturaDental";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 import "../../styles/GrupoFamiliarDetail.css";
 
@@ -1404,7 +1405,7 @@ const activeNormalized = useMemo(
     patchDental(idx, { [name]: v });
   };
 
-  const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+  const applyCopySelection = ({ sourceId, fieldKeys, copyAddress, targetIds, includeDentalMs }) => {
     const src = (familyMembers || []).find(m => (m.id ?? m.cliente_id) === sourceId);
     if (!src || !esElegibleParaCopiarEntreMiembros(src)) return;
 
@@ -1440,6 +1441,36 @@ const activeNormalized = useMemo(
           });
           next.cliente = newCli;
           next = duplicateToRootFromCliente(next, newCli);
+        }
+
+        // Opcional: también actualizar Dental MS anidado con el subconjunto de campos.
+        if (includeDentalMs && next.coberturaDental) {
+          const dental = next.coberturaDental;
+          const dentalElegible = esElegibleParaCopiarEntreMiembros({
+            activo: dental.activo,
+            fecha_retiro: dental.fecha_retiro,
+            fecha_cancelacion: dental.fecha_cancelacion,
+            fecha_anulacion: dental.fecha_anulacion,
+          });
+
+          if (dentalElegible) {
+            const dentalKeys = filterCamposCopiablesADentalMs(fieldKeys);
+            const dentalPatch = {};
+            dentalKeys.forEach((k) => {
+              if (!(k in src)) return;
+              dentalPatch[k] = src[k];
+            });
+            if (Object.keys(dentalPatch).length > 0) {
+              next = {
+                ...next,
+                coberturaDental: {
+                  cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
+                  ...dental,
+                  ...dentalPatch,
+                },
+              };
+            }
+          }
         }
 
         return next;
@@ -3410,6 +3441,7 @@ const activeNormalized = useMemo(
         open={openCopy}
         onClose={() => setOpenCopy(false)}
         members={membersElegiblesParaCopiar}
+        allowIncludeDentalMs={isProductoSaludMs(defaultCoberturaTipo)}
         onApply={applyCopySelection}
       />
 
