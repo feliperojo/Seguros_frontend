@@ -23,6 +23,7 @@ import {
 } from "../../utils/renovacionEstadoGestion";
 import {
   buildPagadorOptionsFromItems,
+  etiquetaProductoItem,
   findCascadasSaludNoRenovar,
   findConflictosDentalSinSalud,
   isItemAltaEnLote,
@@ -30,7 +31,10 @@ import {
   itemsSaludElegiblesParaDental,
   itemSaludToDentalMember,
 } from "../../utils/preRenovacionDental";
-import { isProductoSaludMs } from "../../constants/coberturaTipos";
+import {
+  isProductoSaludMs,
+  prioridadOrdenListadoProducto,
+} from "../../constants/coberturaTipos";
 import systemConfigService from "../../services/SystemConfigService";
 import { parseSystemConfigByTipo } from "../../utils/coverageFieldConfig";
 
@@ -45,6 +49,31 @@ const formatHistorialFecha = (value) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+};
+
+/** Agrupa ítems por producto para el resumen de consolidación. */
+const agruparItemsPorProducto = (lista = [], nombreFn) => {
+  const map = new Map();
+  (lista || []).forEach((item) => {
+    const producto = etiquetaProductoItem(item);
+    if (!map.has(producto)) {
+      map.set(producto, []);
+    }
+    map.get(producto).push(nombreFn(item));
+  });
+
+  return Array.from(map.entries())
+    .map(([producto, nombres]) => ({
+      producto,
+      count: nombres.length,
+      nombres,
+    }))
+    .sort((a, b) => {
+      const pa = prioridadOrdenListadoProducto(a.producto);
+      const pb = prioridadOrdenListadoProducto(b.producto);
+      if (pa !== pb) return pa - pb;
+      return a.producto.localeCompare(b.producto, "es", { sensitivity: "base" });
+    });
 };
 
 /** Año YYYY de una fecha ISO/YYYY-MM-DD, o null si no se puede leer. */
@@ -402,7 +431,7 @@ const PreRenovacionModal = ({
     miembrosParaCopiar.length >= 2;
 
   const applyCopySelection = useCallback(
-    async ({ sourceId, fieldKeys, copyAddress, targetIds }) => {
+    async ({ sourceId, fieldKeys, copyAddress, targetIds, includeDentalMs }) => {
       const sourceItem = items.find(
         (item) => Number(item.id) === Number(sourceId)
       );
@@ -425,6 +454,7 @@ const PreRenovacionModal = ({
           const patch = buildCopyPatchForItem(sourceItem, targetItem, {
             fieldKeys,
             copyAddress,
+            includeDentalMs: !!includeDentalMs,
           });
           if (Object.keys(patch).length === 0) continue;
 
@@ -557,6 +587,21 @@ const PreRenovacionModal = ({
 
   const miembrosAOmitir = useMemo(
     () => items.filter((item) => !item?.renovar),
+    [items]
+  );
+
+  const resumenRenuevanPorProducto = useMemo(
+    () => agruparItemsPorProducto(miembrosARenovar, nombreMiembro),
+    [miembrosARenovar]
+  );
+
+  const resumenOmitenPorProducto = useMemo(
+    () => agruparItemsPorProducto(miembrosAOmitir, nombreMiembro),
+    [miembrosAOmitir]
+  );
+
+  const resumenCierrePorProducto = useMemo(
+    () => agruparItemsPorProducto(items, nombreMiembro),
     [items]
   );
 
@@ -783,63 +828,87 @@ const PreRenovacionModal = ({
                   )}
 
                   {esCierreSinDestino ? (
-                    <ul className="list-unstyled mb-3">
-                      <li>
-                        <i
-                          className="fas fa-ban text-secondary me-2"
-                          aria-hidden="true"
-                        />
-                        Se cerrarán{" "}
-                        <strong>{items.length}</strong>{" "}
-                        {items.length === 1 ? "cobertura" : "coberturas"} de{" "}
-                        {anioOrigen}
-                        {items.length > 0 && (
-                          <span className="text-muted">
-                            {" "}
-                            ({items.map(nombreMiembro).join(", ")})
-                          </span>
+                    <div className="pr-resumen-renovacion">
+                      <div className="pr-resumen-renovacion__card pr-resumen-renovacion__card--omit">
+                        <div className="pr-resumen-renovacion__head">
+                          <i className="fas fa-ban" aria-hidden="true" />
+                          <span>Cierran {anioOrigen}</span>
+                          <strong>{items.length}</strong>
+                        </div>
+                        {resumenCierrePorProducto.length === 0 ? (
+                          <p className="pr-resumen-renovacion__empty">Sin coberturas</p>
+                        ) : (
+                          <ul className="pr-resumen-renovacion__list">
+                            {resumenCierrePorProducto.map((row) => (
+                              <li key={`cierre-${row.producto}`}>
+                                <div className="pr-resumen-renovacion__producto">
+                                  <span>{row.producto}</span>
+                                  <strong>{row.count}</strong>
+                                </div>
+                                <div className="pr-resumen-renovacion__nombres">
+                                  {row.nombres.join(", ")}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                        . No se creará {anioDestino}.
-                      </li>
-                    </ul>
+                        <p className="pr-resumen-renovacion__note">
+                          No se creará {anioDestino}.
+                        </p>
+                      </div>
+                    </div>
                   ) : (
-                    <ul className="list-unstyled mb-3">
-                      <li className="mb-2">
-                        <i
-                          className="fas fa-check-circle text-success me-2"
-                          aria-hidden="true"
-                        />
-                        Se renovarán{" "}
-                        <strong>{miembrosARenovar.length}</strong>{" "}
-                        {miembrosARenovar.length === 1
-                          ? "cobertura"
-                          : "coberturas"}
-                        {miembrosARenovar.length > 0 && (
-                          <span className="text-muted">
-                            {" "}
-                            ({miembrosARenovar.map(nombreMiembro).join(", ")})
-                          </span>
+                    <div className="pr-resumen-renovacion">
+                      <div className="pr-resumen-renovacion__card pr-resumen-renovacion__card--ok">
+                        <div className="pr-resumen-renovacion__head">
+                          <i className="fas fa-check-circle" aria-hidden="true" />
+                          <span>Se renuevan</span>
+                          <strong>{miembrosARenovar.length}</strong>
+                        </div>
+                        {resumenRenuevanPorProducto.length === 0 ? (
+                          <p className="pr-resumen-renovacion__empty">Ninguna</p>
+                        ) : (
+                          <ul className="pr-resumen-renovacion__list">
+                            {resumenRenuevanPorProducto.map((row) => (
+                              <li key={`renovar-${row.producto}`}>
+                                <div className="pr-resumen-renovacion__producto">
+                                  <span>{row.producto}</span>
+                                  <strong>{row.count}</strong>
+                                </div>
+                                <div className="pr-resumen-renovacion__nombres">
+                                  {row.nombres.join(", ")}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                      </li>
-                      <li>
-                        <i
-                          className="fas fa-ban text-secondary me-2"
-                          aria-hidden="true"
-                        />
-                        Se omitirán{" "}
-                        <strong>{miembrosAOmitir.length}</strong>{" "}
-                        {miembrosAOmitir.length === 1
-                          ? "cobertura"
-                          : "coberturas"}{" "}
-                        — no se renovarán
-                        {miembrosAOmitir.length > 0 && (
-                          <span className="text-muted">
-                            {" "}
-                            ({miembrosAOmitir.map(nombreMiembro).join(", ")})
-                          </span>
+                      </div>
+
+                      <div className="pr-resumen-renovacion__card pr-resumen-renovacion__card--omit">
+                        <div className="pr-resumen-renovacion__head">
+                          <i className="fas fa-ban" aria-hidden="true" />
+                          <span>Se omiten</span>
+                          <strong>{miembrosAOmitir.length}</strong>
+                        </div>
+                        {resumenOmitenPorProducto.length === 0 ? (
+                          <p className="pr-resumen-renovacion__empty">Ninguna</p>
+                        ) : (
+                          <ul className="pr-resumen-renovacion__list">
+                            {resumenOmitenPorProducto.map((row) => (
+                              <li key={`omitir-${row.producto}`}>
+                                <div className="pr-resumen-renovacion__producto">
+                                  <span>{row.producto}</span>
+                                  <strong>{row.count}</strong>
+                                </div>
+                                <div className="pr-resumen-renovacion__nombres">
+                                  {row.nombres.join(", ")}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
                         )}
-                      </li>
-                    </ul>
+                      </div>
+                    </div>
                   )}
 
                   {!esCierreSinDestino && cascadasSaludNoRenovar.length > 0 && (
@@ -1378,6 +1447,7 @@ const PreRenovacionModal = ({
         members={miembrosParaCopiar}
         defaultSourceId={tomadorSourceId}
         zIndex={1080}
+        allowIncludeDentalMs={isProductoSaludMs(defaultCoberturaTipo)}
         onApply={applyCopySelection}
       />
 

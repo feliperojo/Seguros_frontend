@@ -34,6 +34,7 @@ import {
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
   isSaludCoberturaTipo,
+  debeMostrarCoberturaDentalMs,
   COBERTURA_TIPO_DENTAL_MS,
 } from "../utils/coberturaDental";
 
@@ -822,7 +823,7 @@ const looksLikeDentalPlan = (c = {}) => {
   );
 };
 
-const mapFullToMembers = (fullRaw) => {
+const mapFullToMembers = (fullRaw, anioVista = null) => {
   const g = unwrapFull(fullRaw);
   const coberturas = Array.isArray(g.coberturas) ? g.coberturas : [];
 
@@ -874,7 +875,14 @@ const mapFullToMembers = (fullRaw) => {
 
     const member = mapCovToMemberBase(saludCov, idx++);
 
-    if (dentalCov) {
+    if (
+      dentalCov &&
+      isDentalMsCoberturaTipo(dentalCov.cobertura_tipo) &&
+      debeMostrarCoberturaDentalMs(dentalCov, {
+        anioVista,
+        anioSalud: saludCov?.ano_cobertura ?? member.ano_cobertura,
+      })
+    ) {
       member.coberturaDental = {
         ...mapCoberturaApiToFields(dentalCov),
         cobertura_tipo: COBERTURA_TIPO_DENTAL_MS,
@@ -1155,7 +1163,7 @@ console.log("Ingreso Familiar:", total);
   
       setFormData(mapFullToForm(full));
       setGrupoVersion(meta?.grupo_version || fullData?.updated_at || fullData?.updatedAt || null);
-      setFamilyMembers(mapFullToMembers(full));
+      setFamilyMembers(mapFullToMembers(full, anioResuelto));
       
       // 👈 Guardar grupo completo para generar PDF de confirmación
       setGrupoCompleto(fullData);
@@ -2499,6 +2507,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           readOnly={readOnly}
           canAdd={canAddMember}
           isProspecto={isProspecto}
+          anioConsultado={anioConsultado}
           defaultCoberturaTipo={
             productoCotizacion?.label ||
             getProductoFromCoberturas(formData?.coberturas || [])?.label ||

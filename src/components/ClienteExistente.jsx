@@ -5,6 +5,7 @@ import apiRequest from "../services/api";
 import { formatPhone334, formatDateForDisplay } from "../utils/formatters";
 import { getListFromApi } from "../utils/apiResponse";
 import { derivarEstadoPoliza, estadoPolizaBadgeVariant } from "../utils/estadoPoliza";
+import { sonMismoProductoParaConflicto } from "../constants/coberturaTipos";
 
 const ETIQUETA_ESTADO_PRODUCTO = {
   Vigente: "Activo",
@@ -70,11 +71,57 @@ const esTerminadoORetirado = (cobertura) => {
   });
 };
 
-const resolverAccionAgregar = (coberturas, { permitirTraslado = false } = {}) => {
+const toBoolFlag = (v) =>
+  v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
+
+const isBlankFecha = (v) => v === null || v === undefined || v === "";
+
+const esCoberturaActivaVigente = (cobertura = {}) => {
+  if (esTerminadoORetirado(cobertura)) return false;
+  if (!toBoolFlag(cobertura.activo ?? true)) return false;
+  if (!isBlankFecha(cobertura.fecha_cancelacion)) return false;
+  if (!isBlankFecha(cobertura.fecha_retiro)) return false;
+  if (!isBlankFecha(cobertura.fecha_anulacion)) return false;
+  if (
+    cobertura.vigente !== undefined &&
+    cobertura.vigente !== null &&
+    !toBoolFlag(cobertura.vigente)
+  ) {
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Puede agregar si no hay cobertura activa del MISMO producto destino.
+ * Aplica a todos los privados (Plan Dental, Vision, Vida, Descuentos) y a Salud MS:
+ * tener otro producto activo distinto no bloquea.
+ */
+const resolverAccionAgregar = (
+  coberturas,
+  { permitirTraslado = false, coberturaTipoDestino = null } = {}
+) => {
   if (!coberturas.length || permitirTraslado) {
     return { puedeAgregar: true, motivo: "" };
   }
 
+  if (coberturaTipoDestino) {
+    const conflicto = coberturas.find(
+      (c) =>
+        esCoberturaActivaVigente(c) &&
+        sonMismoProductoParaConflicto(coberturaTipoDestino, c.cobertura_tipo)
+    );
+    if (!conflicto) {
+      return { puedeAgregar: true, motivo: "" };
+    }
+    const tipo = conflicto.cobertura_tipo || coberturaTipoDestino;
+    return {
+      puedeAgregar: false,
+      motivo: `Ya tiene ${tipo} activo/vigente. Debe retirarlo o cancelarlo antes de agregarlo a este producto.`,
+    };
+  }
+
+  // Legacy sin producto destino: solo Terminado/Retirado.
   const puedeAgregar = coberturas.every(esTerminadoORetirado);
   return {
     puedeAgregar,
@@ -84,7 +131,11 @@ const resolverAccionAgregar = (coberturas, { permitirTraslado = false } = {}) =>
   };
 };
 
-const ClienteExistente = ({ onClienteSeleccionado, contexto = "grupo" }) => {
+const ClienteExistente = ({
+  onClienteSeleccionado,
+  contexto = "grupo",
+  coberturaTipoDestino = null,
+}) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -291,7 +342,14 @@ const ClienteExistente = ({ onClienteSeleccionado, contexto = "grupo" }) => {
 
       {!loading && searchResults.length > 0 && (
         <>
-          <h6 className="mt-3">Resultados ({searchResults.length})</h6>
+          <h6 className="mt-3">
+            Resultados ({searchResults.length})
+            {coberturaTipoDestino ? (
+              <span className="text-muted fw-normal ms-2 small">
+                — criterio: agregar a <strong>{coberturaTipoDestino}</strong>
+              </span>
+            ) : null}
+          </h6>
           <div className="table-responsive">
             <Table hover className="mt-2">
               <thead className="bg-light">
@@ -309,6 +367,7 @@ const ClienteExistente = ({ onClienteSeleccionado, contexto = "grupo" }) => {
                   const coberturas = extraerCoberturasCliente(cliente);
                   const { puedeAgregar, motivo } = resolverAccionAgregar(coberturas, {
                     permitirTraslado: contexto === "pre_renovacion",
+                    coberturaTipoDestino,
                   });
 
                   return (

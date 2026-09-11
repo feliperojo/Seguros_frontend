@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { soloPermiteCopiarDireccion } from "../../utils/estadoPoliza";
+import { CAMPOS_COPIABLES_SALUD_A_DENTAL_MS } from "../../utils/coberturaDental";
+import { isDentalMsCoberturaTipo } from "../../constants/coberturaTipos";
 import "../../styles/GfModal.css";
 
 /** Campos disponibles para copiar (área de cobertura/raíz) */
@@ -40,15 +42,23 @@ const estadoLabel = (m) => {
   return raw || "Sin estado";
 };
 
+const isDentalMember = (m) =>
+  Boolean(m?.isDentalMs) || isDentalMsCoberturaTipo(m?.cobertura_tipo);
+
 export default function CopiarDatosModal({
   open,
   onClose,
   members = [],
-  onApply, // ({ sourceId, fieldKeys, copyAddress, targetIds })
+  onApply, // ({ sourceId, fieldKeys, copyAddress, targetIds, includeDentalMs })
   /** Base z-index (modal). Backdrop = zIndex - 10. Subir si se abre sobre otro modal. */
   zIndex = 1060,
   /** Si se pasa, preselecciona ese origen al abrir (p. ej. el tomador). */
   defaultSourceId = null,
+  /**
+   * Solo Salud MS + Dental MS: muestra el check para incluir Dental MS
+   * (con el subconjunto de campos aplicables).
+   */
+  allowIncludeDentalMs = false,
 }) {
   const candidates = useMemo(() => members || [], [members]);
   const backdropZ = zIndex - 10;
@@ -56,6 +66,7 @@ export default function CopiarDatosModal({
   // ✅ por defecto: todo marcado
   const [fieldKeys, setFieldKeys] = useState(() => new Set(ALL_KEYS));
   const [copyAddress, setCopyAddress] = useState(true);
+  const [includeDentalMs, setIncludeDentalMs] = useState(false);
   const [sourceId, setSourceId] = useState(null);
 
   const [targetMode, setTargetMode] = useState("all"); // 'all' | 'some'
@@ -89,6 +100,7 @@ export default function CopiarDatosModal({
     if (open) {
       setFieldKeys(new Set(ALL_KEYS));
       setCopyAddress(true);
+      setIncludeDentalMs(false);
       setTargetMode("all");
       setSelectedTargets(new Set());
       if (defaultSourceId != null) {
@@ -101,6 +113,19 @@ export default function CopiarDatosModal({
   useEffect(() => {
     setSelectedTargets(new Set());
   }, [sourceId]);
+
+  // Al desactivar Dental MS, quitar destinos dentales ya marcados
+  useEffect(() => {
+    if (includeDentalMs || !allowIncludeDentalMs) return;
+    setSelectedTargets((prev) => {
+      const next = new Set();
+      prev.forEach((id) => {
+        const m = candidates.find((c) => (c.id ?? c.cliente_id) === id);
+        if (!m || !isDentalMember(m)) next.add(id);
+      });
+      return next;
+    });
+  }, [includeDentalMs, allowIncludeDentalMs, candidates]);
 
   const toggleField = (key) => {
     setFieldKeys((prev) => {
@@ -120,16 +145,30 @@ export default function CopiarDatosModal({
 
   const handleApply = () => {
     if (!sourceId) return;
+    const includeDental = allowIncludeDentalMs && !!includeDentalMs;
     const ids =
       targetMode === "all"
-        ? candidates.filter(m => (m.id ?? m.cliente_id) !== sourceId).map(m => m.id ?? m.cliente_id)
-        : Array.from(selectedTargets);
+        ? candidates
+            .filter((m) => {
+              const id = m.id ?? m.cliente_id;
+              if (id === sourceId) return false;
+              // Sin el check, los ítems Dental MS no reciben copia.
+              if (!includeDental && isDentalMember(m)) return false;
+              return true;
+            })
+            .map((m) => m.id ?? m.cliente_id)
+        : Array.from(selectedTargets).filter((id) => {
+            if (includeDental) return true;
+            const m = candidates.find((c) => (c.id ?? c.cliente_id) === id);
+            return !m || !isDentalMember(m);
+          });
 
     onApply?.({
       sourceId,
       fieldKeys: Array.from(fieldKeys),
       copyAddress: !!copyAddress,
       targetIds: ids,
+      includeDentalMs: includeDental,
     });
     onClose?.();
   };
@@ -170,7 +209,12 @@ export default function CopiarDatosModal({
                     const id = m.id ?? m.cliente_id;
                     return (
                       <option key={id} value={id}>
-                        {fullName(m)} {m?.tipo ? `— ${m.tipo}` : ""}
+                        {fullName(m)}{" "}
+                        {isDentalMember(m)
+                          ? "— Dental MS"
+                          : m?.tipo
+                            ? `— ${m.tipo}`
+                            : ""}
                       </option>
                     );
                   })}
@@ -232,6 +276,33 @@ export default function CopiarDatosModal({
                   </label>
                 </div>
 
+                {allowIncludeDentalMs && (
+                  <>
+                    <div className="form-check mt-2">
+                      <input
+                        id="copy-dental-ms"
+                        className="form-check-input"
+                        type="checkbox"
+                        checked={includeDentalMs}
+                        onChange={(e) => setIncludeDentalMs(e.target.checked)}
+                      />
+                      <label className="form-check-label" htmlFor="copy-dental-ms">
+                        Incluir / actualizar productos Dental MS
+                      </label>
+                    </div>
+                    <div className="form-text small ms-4">
+                      Solo Salud MS → Dental MS. En Dental MS se copian únicamente:{" "}
+                      {CAMPOS_COPIABLES_SALUD_A_DENTAL_MS.map((k) => {
+                        const def = FIELD_DEFS.find((f) => f.key === k);
+                        return def?.label || k;
+                      }).join(", ")}.
+                      {!includeDentalMs && (
+                        <> Sin este check, las coberturas Dental MS no se modifican.</>
+                      )}
+                    </div>
+                  </>
+                )}
+
                 {targetsRestringidos.length > 0 && (
                   <div className="alert alert-warning small mt-3 mb-0 py-2">
                     Miembros con cobertura <strong>No</strong>, <strong>Medicare</strong> o{" "}
@@ -280,6 +351,8 @@ export default function CopiarDatosModal({
                       const id = m.id ?? m.cliente_id;
                       if (id === sourceId) return null;
                       const restringido = soloPermiteCopiarDireccion(m.estado_cobertura);
+                      const esDental = isDentalMember(m);
+                      const dentalOmitido = allowIncludeDentalMs && esDental && !includeDentalMs;
                       return (
                         <div className="form-check" key={id}>
                           <input
@@ -287,11 +360,21 @@ export default function CopiarDatosModal({
                             type="checkbox"
                             id={`tgt-${id}`}
                             checked={selectedTargets.has(id)}
+                            disabled={dentalOmitido}
                             onChange={() => toggleTarget(id)}
                           />
                           <label className="form-check-label" htmlFor={`tgt-${id}`}>
-                            {fullName(m)} {m?.tipo ? `— ${m.tipo}` : ""}
-                            {restringido ? (
+                            {fullName(m)}{" "}
+                            {esDental
+                              ? "— Dental MS"
+                              : m?.tipo
+                                ? `— ${m.tipo}`
+                                : ""}
+                            {dentalOmitido ? (
+                              <span className="text-muted small ms-1">
+                                (active el check de Dental MS para incluirlo)
+                              </span>
+                            ) : restringido ? (
                               <span className="text-warning small ms-1">
                                 ({estadoLabel(m)} · solo dirección y elegibilidad)
                               </span>
