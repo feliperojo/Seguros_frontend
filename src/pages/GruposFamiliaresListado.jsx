@@ -143,36 +143,115 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     };
   }, []);
 
-  const anioSeleccionado = useMemo(() => {
-    const raw = Number(searchParams.get("anio"));
-    if (
-      Number.isFinite(raw) &&
-      (aniosDisponibles.includes(raw) ||
-        ANIOS_BASE.includes(raw) ||
-        raw > ANIO_ACTUAL)
-    ) {
-      return raw;
-    }
-    return ANIO_ACTUAL;
+  /**
+   * null = Todos los años
+   * number[] = uno o varios años seleccionados
+   * Sin ?anio en URL → default año actual (comportamiento histórico).
+   */
+  const aniosSeleccionados = useMemo(() => {
+    const raw = (searchParams.get("anio") || "").trim();
+    if (!raw) return [ANIO_ACTUAL];
+    if (raw === "all" || raw === "todos") return null;
+
+    const years = raw
+      .split(/[,\s]+/)
+      .map((y) => Number(y))
+      .filter(
+        (y) =>
+          Number.isFinite(y) &&
+          y > 1900 &&
+          y < 2100 &&
+          (aniosDisponibles.includes(y) ||
+            ANIOS_BASE.includes(y) ||
+            y > ANIO_ACTUAL)
+      );
+
+    const unique = Array.from(new Set(years)).sort((a, b) => b - a);
+    return unique.length > 0 ? unique : [ANIO_ACTUAL];
   }, [searchParams, aniosDisponibles]);
 
+  const esTodosLosAnios = aniosSeleccionados === null;
+
+  /** Año único para links/detalle; si hay varios o todos, vista vigente. */
+  const anioParaDetalle = useMemo(() => {
+    if (!aniosSeleccionados || aniosSeleccionados.length !== 1) return null;
+    const y = aniosSeleccionados[0];
+    return y === ANIO_ACTUAL ? null : y;
+  }, [aniosSeleccionados]);
+
   const buildDetallePath = (grupoId) => {
-    if (anioSeleccionado === ANIO_ACTUAL) {
+    if (anioParaDetalle == null) {
       return `/grupo_familiar/${grupoId}`;
     }
-    return `/grupo_familiar/${grupoId}?anio=${anioSeleccionado}`;
+    return `/grupo_familiar/${grupoId}?anio=${anioParaDetalle}`;
   };
 
-  const handleAnioChange = (year) => {
-    const next = Number(year);
+  const persistAniosEnUrl = (nextAnios) => {
     const params = new URLSearchParams(searchParams);
-    if (next === ANIO_ACTUAL) {
+    if (nextAnios === null) {
+      params.set("anio", "all");
+    } else if (
+      Array.isArray(nextAnios) &&
+      nextAnios.length === 1 &&
+      nextAnios[0] === ANIO_ACTUAL
+    ) {
       params.delete("anio");
+    } else if (Array.isArray(nextAnios) && nextAnios.length > 0) {
+      params.set(
+        "anio",
+        [...nextAnios].sort((a, b) => b - a).join(",")
+      );
     } else {
-      params.set("anio", String(next));
+      params.delete("anio");
     }
     setSearchParams(params, { replace: true });
     setCurrentPage(1);
+  };
+
+  const handleSeleccionarTodosAnios = () => {
+    persistAniosEnUrl(null);
+  };
+
+  const handleToggleAnio = (year) => {
+    const y = Number(year);
+    if (!Number.isFinite(y)) return;
+
+    if (esTodosLosAnios) {
+      persistAniosEnUrl([y]);
+      return;
+    }
+
+    const set = new Set(aniosSeleccionados || []);
+    if (set.has(y)) {
+      set.delete(y);
+    } else {
+      set.add(y);
+    }
+
+    if (set.size === 0) {
+      persistAniosEnUrl(null);
+      return;
+    }
+
+    persistAniosEnUrl(Array.from(set).sort((a, b) => b - a));
+  };
+
+  const etiquetaAnio = (year) => {
+    if (year === ANIO_ACTUAL) return " (actual)";
+    if (year > ANIO_ACTUAL) return " (futuro)";
+    return "";
+  };
+
+  const etiquetaFiltroAnio = () => {
+    if (esTodosLosAnios) return "Todos los años";
+    if (aniosSeleccionados.length === 1) {
+      const y = aniosSeleccionados[0];
+      return `${y}${etiquetaAnio(y)}`;
+    }
+    if (aniosSeleccionados.length <= 3) {
+      return aniosSeleccionados.join(", ");
+    }
+    return `${aniosSeleccionados.length} años`;
   };
 
   const handleProductoChange = (value) => {
@@ -186,12 +265,6 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     }
     setSearchParams(params, { replace: true });
     setCurrentPage(1);
-  };
-
-  const etiquetaAnio = (year) => {
-    if (year === ANIO_ACTUAL) return " (actual)";
-    if (year > ANIO_ACTUAL) return " (futuro)";
-    return "";
   };
 
   // Función para manejar el clic desde el componente de resumen
@@ -245,9 +318,16 @@ useEffect(() => {
           params.set("search", debouncedSearch.trim());
         }
 
-        // Año actual = default del backend; histórico o futuro ya creado se filtra por ?anio=
-        if (anioSeleccionado !== ANIO_ACTUAL) {
-          params.set("anio", String(anioSeleccionado));
+        // null = todos / año actual solo (sin ?anio). Varios o históricos → ?anio=2024,2025
+        if (esTodosLosAnios) {
+          params.set("anio", "all");
+        } else if (
+          aniosSeleccionados.length === 1 &&
+          aniosSeleccionados[0] === ANIO_ACTUAL
+        ) {
+          // Compat: año actual solo no envía anio (mismo que antes).
+        } else if (aniosSeleccionados.length > 0) {
+          params.set("anio", aniosSeleccionados.join(","));
         }
 
         if (selectedProducto && selectedProducto !== "todos") {
@@ -303,7 +383,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, anioSeleccionado, listadoReloadKey]);
+  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, aniosSeleccionados, esTodosLosAnios, listadoReloadKey]);
 
   const toggleGrupoExpandido = (grupoId) => {
     setGruposExpandidos((prev) => {
@@ -562,20 +642,62 @@ useEffect(() => {
                   <option value="descartado">Descartado</option>
                 </Form.Select>
               </div>
-              <div style={{ minWidth: "140px" }}>
+              <div style={{ minWidth: "180px" }}>
                 <div className="gf-listado__label">Año del plan</div>
-                <Form.Select
-                  value={anioSeleccionado}
-                  onChange={(e) => handleAnioChange(e.target.value)}
-                  aria-label="Año del plan"
-                >
-                  {aniosDisponibles.map((year) => (
-                    <option key={year} value={year}>
-                      {year}
-                      {etiquetaAnio(year)}
-                    </option>
-                  ))}
-                </Form.Select>
+                <Dropdown autoClose="outside" className="gf-listado__anio-dropdown">
+                  <Dropdown.Toggle
+                    variant="outline-secondary"
+                    id="filtro-anio-plan"
+                    className="w-100 text-start gf-listado__anio-toggle"
+                    aria-label="Año del plan"
+                  >
+                    {etiquetaFiltroAnio()}
+                  </Dropdown.Toggle>
+                  <Dropdown.Menu className="gf-listado__anio-menu">
+                    <div
+                      className="gf-listado__anio-item"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handleSeleccionarTodosAnios();
+                      }}
+                    >
+                      <Form.Check
+                        type="checkbox"
+                        id="anio-todos"
+                        label="Todos los años"
+                        checked={esTodosLosAnios}
+                        onChange={handleSeleccionarTodosAnios}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <Dropdown.Divider />
+                    {aniosDisponibles.map((year) => {
+                      const checked =
+                        !esTodosLosAnios &&
+                        Array.isArray(aniosSeleccionados) &&
+                        aniosSeleccionados.includes(year);
+                      return (
+                        <div
+                          key={year}
+                          className="gf-listado__anio-item"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleToggleAnio(year);
+                          }}
+                        >
+                          <Form.Check
+                            type="checkbox"
+                            id={`anio-${year}`}
+                            label={`${year}${etiquetaAnio(year)}`}
+                            checked={checked}
+                            onChange={() => handleToggleAnio(year)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                      );
+                    })}
+                  </Dropdown.Menu>
+                </Dropdown>
               </div>
               <div style={{ minWidth: "200px" }}>
                 <div className="gf-listado__label">Producto</div>
@@ -770,11 +892,7 @@ useEffect(() => {
                                     <td colSpan={11} className="bg-white border-bottom p-3">
                                       <GrupoFamiliarClasificadoDetalle
                                         grupoId={grupo.id}
-                                        anio={
-                                          anioSeleccionado !== ANIO_ACTUAL
-                                            ? anioSeleccionado
-                                            : null
-                                        }
+                                        anio={anioParaDetalle}
                                         detallePath={buildDetallePath(grupo.id)}
                                       />
                                     </td>
