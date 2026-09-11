@@ -79,6 +79,105 @@
   font-size: 0.8125rem;
 }
 
+.pr-resumen-renovacion {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.pr-resumen-renovacion__card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.75rem 0.85rem;
+}
+
+.pr-resumen-renovacion__card--ok {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.pr-resumen-renovacion__card--omit {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.pr-resumen-renovacion__head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #0f2744;
+}
+
+.pr-resumen-renovacion__head i {
+  font-size: 0.9rem;
+}
+
+.pr-resumen-renovacion__card--ok .pr-resumen-renovacion__head i {
+  color: #16a34a;
+}
+
+.pr-resumen-renovacion__card--omit .pr-resumen-renovacion__head i {
+  color: #64748b;
+}
+
+.pr-resumen-renovacion__head strong {
+  margin-left: auto;
+  min-width: 1.5rem;
+  text-align: center;
+  background: rgba(15, 39, 68, 0.08);
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.75rem;
+}
+
+.pr-resumen-renovacion__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pr-resumen-renovacion__producto {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pr-resumen-renovacion__producto strong {
+  color: #0f2744;
+  font-variant-numeric: tabular-nums;
+}
+
+.pr-resumen-renovacion__nombres {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.35;
+  margin-top: 0.1rem;
+}
+
+.pr-resumen-renovacion__empty {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.pr-resumen-renovacion__note {
+  margin: 0.55rem 0 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
 .pr-modal__footer {
   background: #fff;
   border-top: 1px solid #e2e8f0;
