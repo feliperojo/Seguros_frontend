@@ -36,7 +36,6 @@ const DEFAULT_POLIZAS_ACTIVAS = {
 };
 
 const DEFAULT_OTROS_PRODUCTOS = {
-  dental_ms: 0,
   vision: 0,
   plan_dental: 0,
   total: 0,
@@ -63,7 +62,15 @@ function normalizePolizasActivas(value) {
 
 function normalizeOtrosProductos(value) {
   if (value && typeof value === "object") {
-    return { ...DEFAULT_OTROS_PRODUCTOS, ...value };
+    const vision = Number(value.vision) || 0;
+    const planDental = Number(value.plan_dental) || 0;
+    return {
+      ...DEFAULT_OTROS_PRODUCTOS,
+      vision,
+      plan_dental: planDental,
+      // Dental MS ya no forma parte de este KPI
+      total: vision + planDental,
+    };
   }
   return DEFAULT_OTROS_PRODUCTOS;
 }
@@ -715,6 +722,7 @@ const Dashboard = () => {
         ...(resEstadisticas || {}),
         polizasActivas: normalizePolizasActivas(resEstadisticas?.polizasActivas),
         polizasCotizacion: Number(resEstadisticas?.polizasCotizacion) || 0,
+        dentalMsActivo: Number(resEstadisticas?.dentalMsActivo) || 0,
         canceladasPorProducto: normalizeCanceladasPorProducto(
           resEstadisticas?.canceladasPorProducto
         ),
@@ -971,8 +979,11 @@ const handleOpenViewModal = (cliente) => {
             onKeyDown={(e) => manejarTeclaKpiCard(e, "grupos")}
           />
           <DashboardKpiTile
-            label="Estado de Coberturas"
-            value={estadisticas.polizasActivas.total}
+            label="Estado de Coberturas MS"
+            value={
+              (estadisticas.polizasActivas?.total ?? 0) +
+              (Number(estadisticas.dentalMsActivo) || 0)
+            }
             icon={<FaFileInvoiceDollar />}
             onClick={() => abrirKpiModal("coberturas")}
             onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}

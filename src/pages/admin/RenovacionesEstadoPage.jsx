@@ -18,6 +18,7 @@ import {
   FaFilter,
   FaClipboardList,
   FaTable,
+  FaExclamationCircle,
 } from "react-icons/fa";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
@@ -40,7 +41,20 @@ const ESTADOS_FILTRO = [
   { key: "borrador", label: "En pre-renovación" },
   { key: "consolidado", label: "Consolidado" },
   { key: "sin_cobertura_activa", label: "Grupo inactivo" },
+  {
+    key: "inactivo_con_prerenovacion",
+    label: "Inactivo + pre-renovación",
+  },
 ];
+
+const RESUMEN_ESTADOS_VACIO = {
+  todos: 0,
+  pendiente: 0,
+  borrador: 0,
+  consolidado: 0,
+  sin_cobertura_activa: 0,
+  inactivo_con_prerenovacion: 0,
+};
 
 const buildDetallePath = (id, estado, anioDestino) => {
   if (estado === "pendiente") {
@@ -83,6 +97,8 @@ const RenovacionesEstadoPage = () => {
   });
   const [grupoSeleccionado, setGrupoSeleccionado] = useState(null);
   const [showConsolidarTodos, setShowConsolidarTodos] = useState(false);
+  const [resumenEstados, setResumenEstados] = useState(RESUMEN_ESTADOS_VACIO);
+  const [resumenGestion, setResumenGestion] = useState({});
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400);
@@ -127,6 +143,16 @@ const RenovacionesEstadoPage = () => {
             ? response.filtros.responsables
             : []
         );
+        setResumenEstados({
+          ...RESUMEN_ESTADOS_VACIO,
+          ...(response?.resumen?.estados || {}),
+        });
+        setResumenGestion(
+          response?.resumen?.estado_gestion &&
+            typeof response.resumen.estado_gestion === "object"
+            ? response.resumen.estado_gestion
+            : {}
+        );
         setPaginationMeta(
           response.meta || {
             total: response.data.length,
@@ -138,6 +164,8 @@ const RenovacionesEstadoPage = () => {
       } else {
         setFilas([]);
         setResponsablesOpciones([]);
+        setResumenEstados(RESUMEN_ESTADOS_VACIO);
+        setResumenGestion({});
         setPaginationMeta({
           total: 0,
           last_page: 1,
@@ -152,6 +180,8 @@ const RenovacionesEstadoPage = () => {
         "Error al cargar el estado de renovaciones. Intente nuevamente.";
       setError(message);
       setFilas([]);
+      setResumenEstados(RESUMEN_ESTADOS_VACIO);
+      setResumenGestion({});
     } finally {
       setLoading(false);
     }
@@ -208,6 +238,12 @@ const RenovacionesEstadoPage = () => {
   const rangeStart =
     totalFiltered === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
   const rangeEnd = Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalFiltered);
+  const inactivosConPrerenovacion =
+    Number(resumenEstados.inactivo_con_prerenovacion) || 0;
+  const conteoEstadoPill = (key) => {
+    if (key === "") return Number(resumenEstados.todos) || 0;
+    return Number(resumenEstados[key]) || 0;
+  };
 
   return (
     <Container fluid className="gf-listado-container py-3">
@@ -332,19 +368,64 @@ const RenovacionesEstadoPage = () => {
             <div className="mt-3">
               <div className="gf-listado__label mb-2">Estado de renovación</div>
               <div className="gf-listado__filter-pills">
-                {ESTADOS_FILTRO.map((opt) => (
-                  <button
-                    key={opt.key || "todos"}
-                    type="button"
-                    className={`gf-listado__filter-pill${
-                      estadoFiltro === opt.key ? " is-active" : ""
-                    }`}
-                    onClick={() => setEstadoFiltro(opt.key)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {ESTADOS_FILTRO.map((opt) => {
+                  const count = conteoEstadoPill(opt.key);
+                  const isInactivo = opt.key === "sin_cobertura_activa";
+                  const showAlertaInactivo =
+                    isInactivo && inactivosConPrerenovacion > 0;
+                  const isInactivoConPre =
+                    opt.key === "inactivo_con_prerenovacion";
+
+                  return (
+                    <button
+                      key={opt.key || "todos"}
+                      type="button"
+                      className={`gf-listado__filter-pill${
+                        estadoFiltro === opt.key ? " is-active" : ""
+                      }${isInactivoConPre ? " gf-listado__filter-pill--alert" : ""}`}
+                      onClick={() => setEstadoFiltro(opt.key)}
+                      title={
+                        showAlertaInactivo
+                          ? `${inactivosConPrerenovacion} inactivo${
+                              inactivosConPrerenovacion !== 1 ? "s" : ""
+                            } con pre-renovación sin consolidar`
+                          : undefined
+                      }
+                    >
+                      <span>{opt.label}</span>
+                      {hasConsultado && (
+                        <span className="gf-listado__filter-pill-count">
+                          {count}
+                        </span>
+                      )}
+                      {showAlertaInactivo && (
+                        <span
+                          className="gf-listado__filter-pill-alert"
+                          aria-label={`${inactivosConPrerenovacion} con pre-renovación pendiente`}
+                        >
+                          <FaExclamationCircle aria-hidden="true" />
+                          <span className="gf-listado__filter-pill-alert-n">
+                            {inactivosConPrerenovacion}
+                          </span>
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
+              {hasConsultado && inactivosConPrerenovacion > 0 && (
+                <p className="gf-listado__filter-hint mt-2 mb-0">
+                  Hay{" "}
+                  <strong>
+                    {inactivosConPrerenovacion} grupo
+                    {inactivosConPrerenovacion !== 1 ? "s" : ""} inactivo
+                    {inactivosConPrerenovacion !== 1 ? "s" : ""}
+                  </strong>{" "}
+                  con pre-renovación generada pendiente de consolidar. Use el
+                  filtro <em>Inactivo + pre-renovación</em> o el ícono en{" "}
+                  <em>Grupo inactivo</em>.
+                </p>
+              )}
             </div>
 
             <div className="mt-3">
@@ -357,20 +438,28 @@ const RenovacionesEstadoPage = () => {
                   }`}
                   onClick={() => setEstadoGestionFiltro("")}
                 >
-                  Todos
+                  <span>Todos</span>
                 </button>
-                {ESTADOS_GESTION_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    className={`gf-listado__filter-pill${
-                      estadoGestionFiltro === opt.value ? " is-active" : ""
-                    }`}
-                    onClick={() => setEstadoGestionFiltro(opt.value)}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+                {ESTADOS_GESTION_OPTIONS.map((opt) => {
+                  const count = Number(resumenGestion[opt.value]) || 0;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`gf-listado__filter-pill${
+                        estadoGestionFiltro === opt.value ? " is-active" : ""
+                      }`}
+                      onClick={() => setEstadoGestionFiltro(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      {hasConsultado && (
+                        <span className="gf-listado__filter-pill-count">
+                          {count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -498,6 +587,11 @@ const RenovacionesEstadoPage = () => {
                                   >
                                     Grupo inactivo
                                   </Badge>
+                                  {fila.estado_renovacion === "borrador" && (
+                                    <Badge bg="primary" className="ms-1">
+                                      Pre-renovación {anioDestino}
+                                    </Badge>
+                                  )}
                                   {fila.ultima_ano_cobertura != null && (
                                     <div className="text-muted small mt-1">
                                       Última cobertura:{" "}

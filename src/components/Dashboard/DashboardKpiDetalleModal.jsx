@@ -143,7 +143,7 @@ export default function DashboardKpiDetalleModal({
   const titulos = {
     clientes: "Detalle de Clientes",
     grupos: "Detalle de Grupos Familiares",
-    coberturas: "Detalle — Estado de Coberturas",
+    coberturas: "Detalle — Estado de Coberturas MS",
     cotizacion: "Detalle — Cotizaciones",
     otros_productos: "Detalle — Otras coberturas",
     canceladas: "Coberturas Canceladas",
@@ -243,12 +243,18 @@ export default function DashboardKpiDetalleModal({
     }
 
     if (tipo === "coberturas") {
+      const dentalMs =
+        estadisticas?.dentalMsActivo ??
+        estadisticas?.otrosProductos?.dental_ms ??
+        0;
+      const totalCoberturasMs = (polizasActivas.total ?? 0) + Number(dentalMs || 0);
+
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Solo <strong>producto Salud</strong>. Pólizas con{" "}
-            <strong>activo = true</strong>, clasificadas por estado de cobertura
-            (fuera de flujo de cotización).
+            Productos <strong>Salud MS</strong> (pólizas con{" "}
+            <strong>activo = true</strong>, fuera de flujo de cotización) y{" "}
+            <strong>Dental MS</strong> (todas las existentes).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {COBERTURA_ITEMS.map(({ key, label, color, descripcion, activo, vigente }) => (
@@ -261,9 +267,15 @@ export default function DashboardKpiDetalleModal({
                 criterios={{ activo, vigente }}
               />
             ))}
+            <DetalleFila
+              label="Dental MS"
+              valor={dentalMs}
+              color="#059669"
+              descripcion="cobertura_tipo = Dental MS"
+            />
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">
-            Total: <strong>{polizasActivas.total ?? 0}</strong>
+            Total: <strong>{totalCoberturasMs}</strong>
           </p>
         </>
       );
@@ -275,14 +287,14 @@ export default function DashboardKpiDetalleModal({
         <>
           <p className="dashboard-kpi-detalle-intro">
             Coberturas con <strong>activo = true</strong> cuyo grupo familiar
-            está en flujo de cotización (estados 1–4: Prospecto → Toma de Datos).
+            está en flujo de cotización (estados 1–5: Prospecto → Inscripción / Confirmación).
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
               label="Cotización"
               valor={totalCotizacion}
               color="#f9ab00"
-              descripcion="Grupo familiar en flujo de cotización (estados 1–4)"
+              descripcion="Grupo familiar en flujo de cotización (estados 1–5)"
               criterios={{ activo: true }}
             />
           </div>
@@ -292,28 +304,20 @@ export default function DashboardKpiDetalleModal({
 
     if (tipo === "otros_productos") {
       const otros = estadisticas?.otrosProductos || {};
-      const dentalMs = otros.dental_ms ?? estadisticas?.dentalMsActivo ?? 0;
       const vision = otros.vision ?? 0;
       const planDental = otros.plan_dental ?? 0;
-      const totalOtros =
-        otros.total ?? dentalMs + vision + planDental;
+      const totalOtros = otros.total ?? vision + planDental;
 
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Productos distintos de Salud MS registrados en el sistema (todas las
-            existentes, no solo las activas), discriminados por tipo.
+            Productos distintos de Salud MS y Dental MS registrados en el sistema
+            (todas las existentes, no solo las activas), discriminados por tipo.
           </p>
           <div className="dashboard-kpi-detalle-hero" style={{ color: "#059669" }}>
             {totalOtros}
           </div>
           <div className="dashboard-kpi-detalle-list">
-            <DetalleFila
-              label="Dental MS"
-              valor={dentalMs}
-              color="#059669"
-              descripcion="cobertura_tipo = Dental MS"
-            />
             <DetalleFila
               label="Vision"
               valor={vision}
