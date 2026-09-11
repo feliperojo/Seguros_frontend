@@ -126,7 +126,7 @@ export const ESTADOS_GRUPO_CODIGOS_PROCESO_INICIAL = [
 ];
 
 /**
- * Estados 1–4: flujo de cotización del panel (Prospecto → Toma de Datos).
+ * Estados 1–5: flujo de cotización del panel (Prospecto → Inscripción / Confirmación).
  * Las coberturas de estos grupos no cuentan como “activas reales”.
  */
 export const ESTADOS_GRUPO_CODIGOS_FLUJO_COTIZACION = [
@@ -134,9 +134,10 @@ export const ESTADOS_GRUPO_CODIGOS_FLUJO_COTIZACION = [
   "COTIZACION",
   "SEGUIMIENTO",
   "TOMA_DATOS",
+  "INSCRIPCION_INI",
 ];
 
-export const ESTADOS_GRUPO_IDS_FLUJO_COTIZACION = [1, 2, 3, 4];
+export const ESTADOS_GRUPO_IDS_FLUJO_COTIZACION = [1, 2, 3, 4, 5];
 
 /** True en Prospecto, Cotización o Seguimiento. */
 export function esProcesoInicialGrupoFamiliar(estadoCodigoOrNombre) {
@@ -145,7 +146,7 @@ export function esProcesoInicialGrupoFamiliar(estadoCodigoOrNombre) {
 }
 
 /**
- * True si el GF está en flujo de cotización (estados 1–4).
+ * True si el GF está en flujo de cotización (estados 1–5).
  * Acepta código, nombre o id numérico del catálogo.
  */
 export function esGrupoEnFlujoCotizacion(estadoCodigoOrNombreOrId) {

@@ -184,6 +184,13 @@
   border-bottom: 1px solid #e2e8f0;
 }
 
+.ficha-poliza-card__icons {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
 .ficha-poliza-card__icon {
   width: 2rem;
   height: 2rem;
@@ -197,6 +204,7 @@
   background: #1a365d;
 }
 
+.ficha-poliza-card__icon--dental,
 .ficha-poliza-card--dental .ficha-poliza-card__icon {
   background: #0f2744;
 }

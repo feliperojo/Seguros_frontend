@@ -32,14 +32,21 @@ const DEFAULT_POLIZAS_ACTIVAS = {
   no: 0,
   medicare: 0,
   medicaid: 0,
-  cotizacion: 0,
   total: 0,
 };
 
 const DEFAULT_OTROS_PRODUCTOS = {
+  vision: 0,
+  plan_dental: 0,
+  total: 0,
+};
+
+const DEFAULT_CANCELADAS_POR_PRODUCTO = {
+  salud: 0,
   dental_ms: 0,
   vision: 0,
   plan_dental: 0,
+  otros: 0,
   total: 0,
 };
 
@@ -55,9 +62,24 @@ function normalizePolizasActivas(value) {
 
 function normalizeOtrosProductos(value) {
   if (value && typeof value === "object") {
-    return { ...DEFAULT_OTROS_PRODUCTOS, ...value };
+    const vision = Number(value.vision) || 0;
+    const planDental = Number(value.plan_dental) || 0;
+    return {
+      ...DEFAULT_OTROS_PRODUCTOS,
+      vision,
+      plan_dental: planDental,
+      // Dental MS ya no forma parte de este KPI
+      total: vision + planDental,
+    };
   }
   return DEFAULT_OTROS_PRODUCTOS;
+}
+
+function normalizeCanceladasPorProducto(value) {
+  if (value && typeof value === "object") {
+    return { ...DEFAULT_CANCELADAS_POR_PRODUCTO, ...value };
+  }
+  return DEFAULT_CANCELADAS_POR_PRODUCTO;
 }
 
 /** Nombre legible del cliente para filas de requerimientos/documentos (API puede variar forma y profundidad). */
@@ -166,10 +188,11 @@ const Dashboard = () => {
     totalGruposFamiliares: 0,
     detalleClientes: { clientes: 0, contactos: 0, empresas: 0, prospectos: 0, total: 0 },
     polizasActivas: { ...DEFAULT_POLIZAS_ACTIVAS },
+    polizasCotizacion: 0,
     polizasCanceladas: 0,
+    canceladasPorProducto: { ...DEFAULT_CANCELADAS_POR_PRODUCTO },
     polizasRetiradas: 0,
     dentalMsActivo: 0,
-    dentalMsCancelado: 0,
     otrosProductos: { ...DEFAULT_OTROS_PRODUCTOS },
   });
   const [kpiModalTipo, setKpiModalTipo] = useState(null);
@@ -698,6 +721,11 @@ const Dashboard = () => {
       setEstadisticas({
         ...(resEstadisticas || {}),
         polizasActivas: normalizePolizasActivas(resEstadisticas?.polizasActivas),
+        polizasCotizacion: Number(resEstadisticas?.polizasCotizacion) || 0,
+        dentalMsActivo: Number(resEstadisticas?.dentalMsActivo) || 0,
+        canceladasPorProducto: normalizeCanceladasPorProducto(
+          resEstadisticas?.canceladasPorProducto
+        ),
         otrosProductos: normalizeOtrosProductos(resEstadisticas?.otrosProductos),
         detalleClientes: resEstadisticas?.detalleClientes || {
           clientes: totalClientesEstadoCliente ?? resEstadisticas?.totalClientes ?? 0,
@@ -935,7 +963,7 @@ const handleOpenViewModal = (cliente) => {
 
       <div className="dashboard-panel__section dashboard-panel__section--kpis">
         <p className="dashboard-kpi-group-label">Resumen general</p>
-        <div className="dashboard-kpi-grid dashboard-kpi-grid--4">
+        <div className="dashboard-kpi-grid dashboard-kpi-grid--5">
           <DashboardKpiTile
             label="Total Clientes"
             value={estadisticas.totalClientes}
@@ -951,14 +979,25 @@ const handleOpenViewModal = (cliente) => {
             onKeyDown={(e) => manejarTeclaKpiCard(e, "grupos")}
           />
           <DashboardKpiTile
-            label="Estado de Coberturas"
-            value={estadisticas.polizasActivas.total}
+            label="Estado de Coberturas MS"
+            value={
+              (estadisticas.polizasActivas?.total ?? 0) +
+              (Number(estadisticas.dentalMsActivo) || 0)
+            }
             icon={<FaFileInvoiceDollar />}
             onClick={() => abrirKpiModal("coberturas")}
             onKeyDown={(e) => manejarTeclaKpiCard(e, "coberturas")}
           />
           <DashboardKpiTile
-            label="Otros productos"
+            label="Cotizaciones"
+            value={estadisticas.polizasCotizacion ?? 0}
+            icon={<FaFileInvoiceDollar />}
+            tone="warning"
+            onClick={() => abrirKpiModal("cotizacion")}
+            onKeyDown={(e) => manejarTeclaKpiCard(e, "cotizacion")}
+          />
+          <DashboardKpiTile
+            label="Otras coberturas"
             value={estadisticas.otrosProductos?.total ?? 0}
             icon={<FaFileInvoiceDollar />}
             tone="success"
@@ -967,7 +1006,7 @@ const handleOpenViewModal = (cliente) => {
           />
         </div>
         <p className="dashboard-kpi-group-label dashboard-kpi-group-label--alert">Cancelaciones y retiros</p>
-        <div className="dashboard-kpi-grid dashboard-kpi-grid--3">
+        <div className="dashboard-kpi-grid dashboard-kpi-grid--2">
           <DashboardKpiTile
             label="Coberturas Canceladas"
             value={estadisticas.polizasCanceladas}
@@ -975,14 +1014,6 @@ const handleOpenViewModal = (cliente) => {
             tone="danger"
             onClick={() => abrirKpiModal("canceladas")}
             onKeyDown={(e) => manejarTeclaKpiCard(e, "canceladas")}
-          />
-          <DashboardKpiTile
-            label="Dental MS Cancelado"
-            value={estadisticas.dentalMsCancelado ?? 0}
-            icon={<FaCalendarAlt />}
-            tone="danger"
-            onClick={() => abrirKpiModal("dental_ms_cancelado")}
-            onKeyDown={(e) => manejarTeclaKpiCard(e, "dental_ms_cancelado")}
           />
           <DashboardKpiTile
             label="Coberturas Retiradas"

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
+import "../../styles/GfModal.css";
 
 const TYPE_COLOR = {
   Tomador: "primary", Conyuge: "info", "Hijo/a": "success", Hermano: "secondary",
@@ -16,6 +17,7 @@ export default function ClienteExistenteModal({
   grupoFamiliarId,
   defaultCoberturaTipo = "Plan de salud",
   onCreateCoberturaDeClienteExistente,   // (payload, cliente) => Promise
+  contexto = "grupo", // "grupo" | "pre_renovacion"
 }) {
   const [saving, setSaving] = useState(false);
   const [tipo, setTipo] = useState("");
@@ -39,13 +41,16 @@ export default function ClienteExistenteModal({
     // Soportar tanto un arreglo de coberturas como campos planos en el cliente
     const coberturas = Array.isArray(clienteBase.coberturas)
       ? clienteBase.coberturas
-      : (clienteBase.cobertura_tipo || clienteBase.vigente || clienteBase.activo)
+      : (clienteBase.cobertura_tipo || clienteBase.vigente || clienteBase.activo || clienteBase.estado_cobertura)
       ? [{
           cobertura_tipo: clienteBase.cobertura_tipo,
           vigente: clienteBase.vigente,
           activo: clienteBase.activo,
+          estado_cobertura: clienteBase.estado_cobertura,
+          cobertura_definida: clienteBase.cobertura_definida,
           fecha_cancelacion: clienteBase.fecha_cancelacion,
           fecha_retiro: clienteBase.fecha_retiro,
+          fecha_anulacion: clienteBase.fecha_anulacion,
           grupo_familiar_id: clienteBase.grupo_familiar_id,
         }]
       : [];
@@ -92,49 +97,55 @@ export default function ClienteExistenteModal({
     };
 
     try {
-      // Validación rápida con la data que ya viene del buscador
-      const conflictoLocal = validarCoberturasLocalmente(cliente);
-      if (conflictoLocal) {
-        const nombreCliente =
-          cliente.nombre_completo ||
-          `${cliente.primer_nombre || ""} ${cliente.segundo_nombre || ""} ${cliente.apellidos || cliente.apellido || ""}`.trim() ||
-          "Este cliente";
+      const esPreRenovacion = contexto === "pre_renovacion";
 
-        const descripcionCobertura = [
-          conflictoLocal.cobertura_tipo,
-          conflictoLocal.compania_nombre || conflictoLocal.compania?.nombre,
-          conflictoLocal.codigo_poliza || conflictoLocal.policy_number,
-        ]
-          .filter(Boolean)
-          .join(" - ");
+      // En grupo familiar: no duplicar cobertura vigente del mismo producto.
+      // En pre-renovación: sí puede tener cobertura 2026 en otro grupo; el año
+      // entrante se valida en backend (no estar en otra pre-renovación).
+      if (!esPreRenovacion) {
+        const conflictoLocal = validarCoberturasLocalmente(cliente);
+        if (conflictoLocal) {
+          const nombreCliente =
+            cliente.nombre_completo ||
+            `${cliente.primer_nombre || ""} ${cliente.segundo_nombre || ""} ${cliente.apellidos || cliente.apellido || ""}`.trim() ||
+            "Este cliente";
 
-        const grupoTexto = conflictoLocal.grupo_familiar_id
-          ? `Grupo familiar #${conflictoLocal.grupo_familiar_id}`
-          : null;
+          const descripcionCobertura = [
+            conflictoLocal.cobertura_tipo,
+            conflictoLocal.compania_nombre || conflictoLocal.compania?.nombre,
+            conflictoLocal.codigo_poliza || conflictoLocal.policy_number,
+          ]
+            .filter(Boolean)
+            .join(" - ");
 
-        const mensajeDetalle = descripcionCobertura
-          ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
-          : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
+          const grupoTexto = conflictoLocal.grupo_familiar_id
+            ? `Grupo familiar #${conflictoLocal.grupo_familiar_id}`
+            : null;
 
-        if (window?.Swal) {
-          window.Swal.fire({
-            icon: "warning",
-            title: "Cobertura vigente existente",
-            html: `
+          const mensajeDetalle = descripcionCobertura
+            ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
+            : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
+
+          if (window?.Swal) {
+            window.Swal.fire({
+              icon: "warning",
+              title: "Cobertura vigente existente",
+              html: `
               <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto.</p>
               <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
               <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
             `,
-            confirmButtonText: "Entendido",
-          });
-        } else {
-          window.alert(
-            `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
-            `${mensajeDetalle}\n\n` +
-            `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
-          );
+              confirmButtonText: "Entendido",
+            });
+          } else {
+            window.alert(
+              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
+              `${mensajeDetalle}\n\n` +
+              `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
+            );
+          }
+          return;
         }
-        return;
       }
 
       setSaving(true);
@@ -153,22 +164,24 @@ export default function ClienteExistenteModal({
       // 2) Entregar al padre el objeto plano con campos en raíz
       await onCreateCoberturaDeClienteExistente?.(payload, clienteFull);
       onClose?.();
+    } catch {
+      // El padre muestra el error; el modal permanece abierto para corregir.
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)", zIndex: 1075}}>
-      <div className="modal-dialog modal-xl">
-        <div className="modal-content">
+    <div className="modal fade show d-block gf-modal" style={{backgroundColor:"rgba(0,0,0,0.5)", zIndex: 1075}}>
+      <div className="modal-dialog modal-xl gf-modal gf-modal--xl">
+        <div className="modal-content gf-modal__content">
 
-          <div className="modal-header">
-            <h5 className="modal-title">Agregar cliente existente</h5>
+          <div className="modal-header gf-modal__header">
+            <h5 className="modal-title gf-modal__title">Agregar cliente existente</h5>
             <button className="btn-close" onClick={onClose}/>
           </div>
 
-          <div className="modal-body">
+          <div className="modal-body gf-modal__body">
             <div className="row g-2 align-items-center mb-3">
               <div className="col-auto">
                 <label className="form-label mb-0">Tipo <span className="text-danger">*</span></label>
@@ -198,11 +211,25 @@ export default function ClienteExistenteModal({
               </div>
             )}
 
+            {contexto === "pre_renovacion" && (
+              <div className="alert alert-info mb-3">
+                Si la persona ya está en otro grupo este año, primero hay que
+                abrir la pre-renovación de <strong>ese grupo</strong> y marcarla
+                como <strong>no renovar</strong>. Solo después se puede agregar
+                aquí para el año destino. El tomador de otro grupo no se
+                traslada por este camino, salvo que ese grupo esté en No renovará
+                o Terminado.
+              </div>
+            )}
+
             {/* Buscador/listado de clientes existentes */}
-            <ClienteExistente onClienteSeleccionado={handlePick} />
+            <ClienteExistente
+              onClienteSeleccionado={handlePick}
+              contexto={contexto}
+            />
           </div>
 
-          <div className="modal-footer">
+          <div className="modal-footer gf-modal__footer">
             <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Cerrar</button>
           </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Button, Form, Spinner, Alert } from "react-bootstrap";
 import apiRequest from "../../services/api"; // Ajusta la ruta según tu estructura
+import "../../styles/GfModal.css";
 
 const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
   const [driveUrl, setDriveUrl] = useState(initialUrl);
@@ -121,14 +122,14 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
   const tieneUrlGuardada = urlGuardada && urlGuardada.trim();
 
   return (
-    <Modal show={show} onHide={onHide} centered size="lg">
-      <Modal.Header closeButton>
-        <Modal.Title>
+    <Modal show={show} onHide={onHide} centered size="lg" dialogClassName="gf-modal gf-modal--lg" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">
           <i className="bi bi-folder2-open me-2"></i>
           Administrar URL de Google Drive
         </Modal.Title>
       </Modal.Header>
-      <Modal.Body>
+      <Modal.Body className="gf-modal__body">
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
         {/* Indicador de carga al obtener la URL */}
@@ -236,7 +237,7 @@ const DriveUrlModal = ({ show, onHide, grupoId, initialUrl = "", onSave }) => {
           </div>
         )}
       </Modal.Body>
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button 
           variant="secondary" 
           onClick={onHide}

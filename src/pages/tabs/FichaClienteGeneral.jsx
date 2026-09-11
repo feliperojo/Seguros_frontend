@@ -144,10 +144,19 @@ export default function FichaClienteGeneral() {
       });
     }
 
-    // desduplicar por id
+    // desduplicar por id (preferir salud si Dental MS llegó primero)
     const unique = Object.values(
       arr.reduce((acc, g) => {
-        if (g?.id != null) acc[g.id] = acc[g.id] ?? g;
+        if (g?.id == null) return acc;
+        const prev = acc[g.id];
+        if (!prev) {
+          acc[g.id] = g;
+        } else if (
+          isDentalCoberturaTipo(prev.coberturaTipo) &&
+          !isDentalCoberturaTipo(g.coberturaTipo)
+        ) {
+          acc[g.id] = g;
+        }
         return acc;
       }, {})
     );
@@ -341,10 +350,22 @@ export default function FichaClienteGeneral() {
 
   // ===== datos derivados visibles según grupo seleccionado =====
   const labelGrupoSelector = (g) => {
-    const producto = (g?.coberturaTipo || "Sin producto").trim();
     const id = g?.id ?? "—";
-    return `${producto} · GF ${id}`;
+    return `ID de grupo · GF ${id}`;
   };
+
+  /** Salud (+ dental adjunto como icono); evita card duplicada de Dental MS. */
+  const productosPolizaVista = useMemo(() => {
+    const salud = productosPoliza.find((p) => p.key === "salud") ?? null;
+    const dental = productosPoliza.find((p) => p.key === "dental") ?? null;
+    if (salud) {
+      return [{ key: "salud", cobertura: salud.cobertura, conDental: Boolean(dental) }];
+    }
+    if (dental) {
+      return [{ key: "dental", cobertura: dental.cobertura, conDental: false }];
+    }
+    return [];
+  }, [productosPoliza]);
 
   const gfId          = currentGrupo?.id ?? null;
   const gfResponsable = currentGrupo?.responsable ?? "—";
@@ -667,10 +688,6 @@ export default function FichaClienteGeneral() {
                   </h6>
                   <div className="ficha-fields">
                     <div className="ficha-field">
-                      <label className="ficha-label">ID grupo familiar</label>
-                      <div className="ficha-value">GF {gfId}</div>
-                    </div>
-                    <div className="ficha-field">
                       <label className="ficha-label">Proceso</label>
                       <div
                         className={`ficha-value${
@@ -718,10 +735,6 @@ export default function FichaClienteGeneral() {
                   </h6>
                   <div className="ficha-fields">
                     <div className="ficha-field">
-                      <label className="ficha-label">ID grupo familiar</label>
-                      <div className="ficha-value">GF {gfId ?? "—"}</div>
-                    </div>
-                    <div className="ficha-field">
                       <label className="ficha-label">Proceso</label>
                       <div
                         className={`ficha-value${
@@ -741,13 +754,13 @@ export default function FichaClienteGeneral() {
                     </div>
                   </div>
 
-                  {productosPoliza.length > 0 && (
+                  {productosPolizaVista.length > 0 && (
                     <div className="ficha-poliza-productos">
-                      {productosPoliza.map(({ key, cobertura }) => {
-                        const esDental = key === "dental";
+                      {productosPolizaVista.map(({ key, cobertura, conDental }) => {
+                        const esDentalSolo = key === "dental";
                         const titulo =
                           cobertura?.cobertura_tipo ||
-                          (esDental ? "Dental MS" : "Plan de salud");
+                          (esDentalSolo ? "Dental MS" : "Plan de salud");
                         const estadoDerivado = derivarEstadoPoliza(cobertura);
                         const estado = estadoDerivado?.estado ?? "Vigente";
                         const fechaEstado = estadoDerivado?.fecha ?? null;
@@ -769,16 +782,30 @@ export default function FichaClienteGeneral() {
                           <div
                             key={`${key}-${cobertura?.id ?? titulo}`}
                             className={`ficha-poliza-card${
-                              esDental ? " ficha-poliza-card--dental" : ""
+                              esDentalSolo ? " ficha-poliza-card--dental" : ""
                             }`}
                           >
                             <div className="ficha-poliza-card__header">
-                              <span className="ficha-poliza-card__icon" aria-hidden="true">
-                                <i
-                                  className={
-                                    esDental ? "fas fa-tooth" : "fas fa-heartbeat"
-                                  }
-                                />
+                              <span className="ficha-poliza-card__icons" aria-hidden="true">
+                                {esDentalSolo ? (
+                                  <span className="ficha-poliza-card__icon ficha-poliza-card__icon--dental">
+                                    <i className="fas fa-tooth" />
+                                  </span>
+                                ) : (
+                                  <>
+                                    <span className="ficha-poliza-card__icon">
+                                      <i className="fas fa-heartbeat" />
+                                    </span>
+                                    {conDental && (
+                                      <span
+                                        className="ficha-poliza-card__icon ficha-poliza-card__icon--dental"
+                                        title="Dental MS"
+                                      >
+                                        <i className="fas fa-tooth" />
+                                      </span>
+                                    )}
+                                  </>
+                                )}
                               </span>
                               <h6 className="ficha-poliza-card__title">{titulo}</h6>
                             </div>

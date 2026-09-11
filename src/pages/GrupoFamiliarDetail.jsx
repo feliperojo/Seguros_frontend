@@ -22,7 +22,7 @@ import {
   attachCoberturaDirtyFieldsForLegacy,
   buildDeltaCambiosFromPayloads,
 } from "../utils/grupoFamiliarConcurrentSave";
-
+import "../styles/GrupoFamiliarDetail.css";
 
 import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
 import { estadoClienteDesdeProcesoGrupo } from "../utils/clasificacionClienteProceso";
@@ -1870,8 +1870,8 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-12 text-center text-gray-500">
-        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-300 border-t-blue-600 inline-block mr-2" role="status" />
+      <div className="gf-detalle-state">
+        <div className="gf-detalle-state__spinner" role="status" />
         Cargando...
       </div>
     );
@@ -1879,12 +1879,12 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
   if (loadError) {
     return (
-      <div className="container mx-auto px-4 py-12">
-        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-lg flex items-center">
-          <i className="fa fa-triangle-exclamation mr-2" />
+      <div className="gf-detalle-state">
+        <div className="gf-detalle-state__error">
+          <i className="fa fa-triangle-exclamation" />
           <div>{loadError}</div>
         </div>
-        <button className="mt-4 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-600 hover:text-white transition-colors" onClick={reload}>
+        <button type="button" className="gf-detalle-state__retry" onClick={reload}>
           Reintentar
         </button>
       </div>
@@ -1898,38 +1898,31 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
   
 
   return (
-    <div className="w-full bg-gray-100 min-h-screen py-4">
-     <div className="container mx-auto px-4 py-4">
-  <div className="bg-white shadow-sm border-0 rounded-2xl px-4 py-4">
+    <div className="gf-detalle-page">
+     <div className="gf-detalle-page__container">
+  <div className="gf-detalle">
+  <div className="gf-detalle__body">
     {/* Aquí dentro va TODO el contenido actual */}
 
         {/* Toast flotante */}
-        <div
-          className="fixed top-0 right-0 p-3"
-          style={{ zIndex: 1080 }}
-        >
+        <div className="gf-detalle__toast-wrap">
           <div
-            className={`bg-white border rounded-lg shadow-lg ${toast.show ? "opacity-100" : "opacity-0"}`}
+            className={`gf-detalle__toast ${toast.show ? "is-visible" : "is-hidden"}`}
             role="alert"
             aria-live="assertive"
             aria-atomic="true"
-            style={{
-              transition: "opacity 200ms ease",
-              minWidth: 320,
-              pointerEvents: toast.show ? "auto" : "none"
-            }}
           >
-            <div className={`px-4 py-2 rounded-t-lg ${
-              toast.type === "success" ? "bg-green-600" :
-              toast.type === "danger" ? "bg-red-600" :
-              toast.type === "warning" ? "bg-yellow-600" :
-              toast.type === "info" ? "bg-blue-600" :
-              "bg-gray-600"
-            } text-white flex items-center justify-between`}>
+            <div className={`gf-detalle__toast-head ${
+              toast.type === "success" ? "gf-detalle__toast-head--success" :
+              toast.type === "danger" ? "gf-detalle__toast-head--danger" :
+              toast.type === "warning" ? "gf-detalle__toast-head--warning" :
+              toast.type === "info" ? "gf-detalle__toast-head--info" :
+              "gf-detalle__toast-head--muted"
+            }`}>
               <strong className="flex-1">{toast.title || "Notificación"}</strong>
               <button
                 type="button"
-                className="ml-2 mb-1 text-white hover:text-gray-200 text-xl leading-none"
+                className="gf-detalle__toast-close"
                 aria-label="Close"
                 onClick={() => setToast((t) => ({ ...t, show: false }))}
               >
@@ -1937,7 +1930,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               </button>
             </div>
             {toast.message && (
-              <div className="px-4 py-3 bg-white text-gray-900 rounded-b-lg">
+              <div className="gf-detalle__toast-body">
                 {toast.message}
               </div>
             )}
@@ -1947,13 +1940,12 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         <GrupoFamiliarEdicionAlerta edicion={edicion} />
 
         {aniosDisponibles.length >= 1 && (
-          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+          <div className="gf-detalle__toolbar">
             <div className="d-flex align-items-center gap-2">
-              <i className="fas fa-calendar-alt text-primary" aria-hidden="true" />
+              <i className="fas fa-calendar-alt gf-detalle__toolbar-icon" aria-hidden="true" />
               <label
                 htmlFor="consultar-anio-grupo"
-                className="mb-0 fw-semibold text-muted"
-                style={{ fontSize: "0.9rem" }}
+                className="gf-detalle__toolbar-label"
               >
                 Consultar año anterior
               </label>
@@ -2041,7 +2033,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
 
         {!esAnioPasado && (
-        <div className="d-flex justify-content-end mb-3">
+        <div className="gf-detalle__actions">
           {readOnly ? (
             <div className="d-flex gap-2">
               <button 
@@ -2184,19 +2176,18 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         )}
                 {/* 👈 Nuevo: Mostrar producto seleccionado */}
              {productoCotizacion && (
-             <div className="bg-white mb-4 border-0 shadow-sm rounded-lg">
-                      <div className="p-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center">
-                            <i className="fas fa-shield-alt text-blue-600 mr-2"></i>
-                            <span className="font-bold text-gray-500 mr-2">Plan seleccionado:</span>
-                            <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                              productoCotizacion?.color === 'primary' ? 'bg-blue-600 text-white' :
-                              productoCotizacion?.color === 'success' ? 'bg-green-600 text-white' :
-                              productoCotizacion?.color === 'info' ? 'bg-cyan-600 text-white' :
-                              productoCotizacion?.color === 'warning' ? 'bg-yellow-600 text-white' :
-                              productoCotizacion?.color === 'danger' ? 'bg-red-600 text-white' :
-                              'bg-gray-600 text-white'
+             <div className="gf-detalle__plan">
+                        <div className="gf-detalle__plan-row">
+                          <div className="gf-detalle__plan-meta">
+                            <i className="fas fa-shield-alt gf-detalle__plan-icon" aria-hidden="true"></i>
+                            <span className="gf-detalle__plan-label">Plan seleccionado</span>
+                            <span className={`gf-detalle__plan-badge ${
+                              productoCotizacion?.color === 'primary' ? '' :
+                              productoCotizacion?.color === 'success' ? 'gf-detalle__plan-badge--success' :
+                              productoCotizacion?.color === 'info' ? 'gf-detalle__plan-badge--info' :
+                              productoCotizacion?.color === 'warning' ? 'gf-detalle__plan-badge--warning' :
+                              productoCotizacion?.color === 'danger' ? 'gf-detalle__plan-badge--danger' :
+                              'gf-detalle__plan-badge--muted'
                             }`}>
                               {productoCotizacion?.label || 'Sin plan'}
                       </span>
@@ -2204,23 +2195,22 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                     {isEditing && !esAnioPasado && (
                       <button
                         type="button"
-                        className="px-3 py-1.5 text-sm border border-blue-600 text-blue-600 rounded hover:bg-blue-600 hover:text-white transition-colors"
+                        className="gf-detalle__plan-change"
                         onClick={() => setShowProductModal(true)}
                       >
-                        <i className="fas fa-edit mr-1"></i>
+                        <i className="fas fa-edit me-1"></i>
                         Cambiar plan
                       </button>
                     )}
                   </div>
-                </div>
               </div>
              )}
 
         {periodoRelativo === "pasado" && (
-          <div className="card mb-4 shadow-sm border-0">
-            <div className="card-header bg-light d-flex flex-wrap align-items-center justify-content-between gap-2">
-              <h5 className="mb-0 fw-semibold">
-                <i className="fas fa-clipboard-list text-primary me-2"></i>
+          <div className="gf-detalle__section">
+            <div className="gf-detalle__section-header">
+              <h5 className="gf-detalle__section-title">
+                <i className="fas fa-clipboard-list me-2"></i>
                 Qué pasó este año ({anioConsultado})
               </h5>
               <button
@@ -2233,7 +2223,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 Hist. Renov. {anioConsultado}
               </button>
             </div>
-            <div className="card-body">
+            <div className="gf-detalle__section-body">
               {cierreLoading && (
                 <div className="text-muted">
                   <span className="spinner-border spinner-border-sm me-2" role="status" />
@@ -2329,7 +2319,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                     ) : (
                       <div className="row g-3">
                         <div className="col-md-4">
-                          <div className="border rounded p-3 h-100">
+                          <div className="gf-detalle__cierre-panel">
                             <div className="fw-semibold mb-2 text-success">
                               Renovadas
                             </div>
@@ -2377,7 +2367,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                           </div>
                         </div>
                         <div className="col-md-4">
-                          <div className="border rounded p-3 h-100">
+                          <div className="gf-detalle__cierre-panel">
                             <div className="fw-semibold mb-2 text-secondary">
                               No renovadas
                             </div>
@@ -2430,7 +2420,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                         {(cierreAnio.renovaciones?.con_error || []).length >
                           0 && (
                           <div className="col-md-4">
-                            <div className="border border-danger rounded p-3 h-100 bg-danger-subtle">
+                            <div className="gf-detalle__cierre-panel gf-detalle__cierre-panel--danger">
                               <div className="fw-semibold mb-2 text-danger">
                                 <i className="fas fa-exclamation-circle me-1" />
                                 Con error
@@ -2559,6 +2549,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           }}
           centered
           backdrop="static"
+          dialogClassName="gf-detalle-confirm-modal"
         >
           <Modal.Header closeButton={!advancing}>
             <Modal.Title>Confirmar producto activo</Modal.Title>
@@ -2639,6 +2630,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           anioInicial={anioConsultado}
           soloAnioInicial
         />
+        </div>
         </div>
       </div>
     </div>

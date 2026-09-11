@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Modal, Button, Form, Alert, Spinner } from "react-bootstrap";
 import systemConfigService from "../../services/SystemConfigService";
+import "../../styles/GfModal.css";
 
 const SuperAdminPasswordModal = ({
   show,
@@ -46,12 +47,12 @@ const SuperAdminPasswordModal = ({
   };
 
   return (
-    <Modal show={show} onHide={handleClose} centered backdrop="static">
-      <Modal.Header closeButton>
-        <Modal.Title>{title}</Modal.Title>
+    <Modal show={show} onHide={handleClose} centered backdrop="static" dialogClassName="gf-modal gf-modal--sm" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">{title}</Modal.Title>
       </Modal.Header>
       <Form onSubmit={handleSubmit}>
-        <Modal.Body>
+        <Modal.Body className="gf-modal__body">
           <p className="text-muted small mb-3">{message}</p>
           {error && (
             <Alert variant="danger" className="py-2 small">
@@ -69,7 +70,7 @@ const SuperAdminPasswordModal = ({
             />
           </Form.Group>
         </Modal.Body>
-        <Modal.Footer>
+        <Modal.Footer className="gf-modal__footer">
           <Button variant="secondary" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>

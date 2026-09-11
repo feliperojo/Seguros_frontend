@@ -4,7 +4,10 @@ import { toast } from "react-toastify";
 import apiRequest from "../../services/api";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CopiarDatosModal from "../fase2/CopiarDatosModal";
+import MemberModal from "../fase2/MemberModal";
+import AgregarDentalModal from "../fase2/AgregarDentalModal";
 import PreRenovacionItemCard from "./PreRenovacionItemCard";
+import "../../styles/PreRenovacionModal.css";
 import { pickClienteParaBorrador } from "../../utils/clienteFieldGroups";
 import {
   buildCopyPatchForItem,
@@ -14,6 +17,7 @@ import {
 } from "../../utils/preRenovacionCopy";
 import {
   ESTADOS_GESTION_EDITABLES,
+  esEstadoGestionCierreSinDestino,
   estadoGestionBadge,
   etiquetaEstadoGestion,
 } from "../../utils/renovacionEstadoGestion";
@@ -21,22 +25,14 @@ import {
   buildPagadorOptionsFromItems,
   findCascadasSaludNoRenovar,
   findConflictosDentalSinSalud,
+  isItemAltaEnLote,
   isItemDental,
+  itemsSaludElegiblesParaDental,
+  itemSaludToDentalMember,
 } from "../../utils/preRenovacionDental";
-
-const TIPOS_PARENTESCO = [
-  "Tomador",
-  "Conyuge",
-  "Hijo/a",
-  "Hermano",
-  "Padre",
-  "Madre",
-  "Nieto",
-  "Abuelo/a",
-  "Suegro/a",
-  "Tio/a",
-  "Sobrino/a",
-];
+import { isProductoSaludMs } from "../../constants/coberturaTipos";
+import systemConfigService from "../../services/SystemConfigService";
+import { parseSystemConfigByTipo } from "../../utils/coverageFieldConfig";
 
 const formatHistorialFecha = (value) => {
   if (!value) return "—";
@@ -59,9 +55,12 @@ const anioDeFecha = (value) => {
 };
 
 const nombreMiembro = (item) =>
-  item?.tipo_item === "miembro_nuevo"
+  isItemAltaEnLote(item)
     ? item?.datos_borrador?.cliente?.nombre_completo ||
-      `Miembro nuevo #${item?.id || "?"}`
+      item?.cliente_existente?.nombre_completo ||
+      (item?.tipo_item === "producto_nuevo"
+        ? `Dental MS #${item?.id || "?"}`
+        : `Miembro nuevo #${item?.id || "?"}`)
     : item?.cobertura?.cliente?.nombre_completo ||
       `Cobertura #${item?.cobertura_id || "?"}`;
 
@@ -82,9 +81,6 @@ const getErrorMessage = (error) => {
   return text;
 };
 
-const buildFullName = (p = "", s = "", a = "") =>
-  [p?.trim(), s?.trim(), a?.trim()].filter(Boolean).join(" ");
-
 const PreRenovacionModal = ({
   show,
   onHide,
@@ -103,15 +99,12 @@ const PreRenovacionModal = ({
     () => new Set()
   );
   const [showClienteExistente, setShowClienteExistente] = useState(false);
-  const [showPersonaNueva, setShowPersonaNueva] = useState(false);
-  const [personaNuevaParentesco, setPersonaNuevaParentesco] = useState("");
-  const [personaNuevaPrimerNombre, setPersonaNuevaPrimerNombre] = useState("");
-  const [personaNuevaSegundoNombre, setPersonaNuevaSegundoNombre] =
-    useState("");
-  const [personaNuevaApellidos, setPersonaNuevaApellidos] = useState("");
+  const [showMemberModal, setShowMemberModal] = useState(false);
   const [agregandoMiembro, setAgregandoMiembro] = useState(false);
   const [showCopiarDatos, setShowCopiarDatos] = useState(false);
+  const [showDentalModal, setShowDentalModal] = useState(false);
   const [copiandoDatos, setCopiandoDatos] = useState(false);
+  const [coverageFieldConfig, setCoverageFieldConfig] = useState(null);
   const [cardsRevision, setCardsRevision] = useState(0);
   const [estadoGestionDraft, setEstadoGestionDraft] = useState("");
   const [notaEstadoGestion, setNotaEstadoGestion] = useState("");
@@ -130,12 +123,9 @@ const PreRenovacionModal = ({
     setConfirmoRevision(false);
     setItemsConGuardadoPendiente(new Set());
     setShowClienteExistente(false);
-    setShowPersonaNueva(false);
+    setShowMemberModal(false);
     setShowCopiarDatos(false);
-    setPersonaNuevaParentesco("");
-    setPersonaNuevaPrimerNombre("");
-    setPersonaNuevaSegundoNombre("");
-    setPersonaNuevaApellidos("");
+    setShowDentalModal(false);
     setCardsRevision(0);
     setEstadoGestionDraft("");
     setNotaEstadoGestion("");
@@ -161,6 +151,15 @@ const PreRenovacionModal = ({
         if (active) setLoading(false);
       }
     })();
+
+    systemConfigService
+      .get("coverage_fields_by_tipo")
+      .then((raw) => {
+        if (active) setCoverageFieldConfig(parseSystemConfigByTipo(raw));
+      })
+      .catch(() => {
+        if (active) setCoverageFieldConfig(null);
+      });
 
     return () => {
       active = false;
@@ -256,27 +255,31 @@ const PreRenovacionModal = ({
     );
   }, []);
 
-  const handleItemRemoved = useCallback((itemId) => {
+  const handleItemRemoved = useCallback((itemIds) => {
+    const ids = (Array.isArray(itemIds) ? itemIds : [itemIds])
+      .map((id) => Number(id))
+      .filter((id) => Number.isFinite(id));
+    const idSet = new Set(ids);
     setLote((prev) =>
       prev
         ? {
             ...prev,
             items: (prev.items || []).filter(
-              (item) => Number(item.id) !== Number(itemId)
+              (item) => !idSet.has(Number(item.id))
             ),
           }
         : prev
     );
     setItemsConGuardadoPendiente((prev) => {
       const next = new Set(prev);
-      next.delete(itemId);
+      ids.forEach((id) => next.delete(id));
       return next;
     });
   }, []);
 
   const agregarMiembroAlLote = useCallback(
     async (body) => {
-      if (!lote?.id || !grupoFamiliarId) return;
+      if (!lote?.id || !grupoFamiliarId) return false;
       setAgregandoMiembro(true);
       setError("");
       try {
@@ -292,14 +295,14 @@ const PreRenovacionModal = ({
             : prev
         );
         setShowClienteExistente(false);
-        setShowPersonaNueva(false);
-        setPersonaNuevaParentesco("");
-        setPersonaNuevaPrimerNombre("");
-        setPersonaNuevaSegundoNombre("");
-        setPersonaNuevaApellidos("");
+        setShowMemberModal(false);
+        return true;
       } catch (requestError) {
         console.error("Error al agregar miembro nuevo", requestError);
-        setError(getErrorMessage(requestError));
+        const message = getErrorMessage(requestError);
+        setError(message);
+        toast.error(message);
+        return false;
       } finally {
         setAgregandoMiembro(false);
       }
@@ -315,12 +318,15 @@ const PreRenovacionModal = ({
         cliente.nombre_completo = clienteFull.nombre_completo;
       }
 
-      await agregarMiembroAlLote({
+      const ok = await agregarMiembroAlLote({
         parentesco: payload.tipo,
         cobertura_tipo: payload.cobertura_tipo,
         cliente_id_existente: clienteFull.id,
         cliente,
       });
+      if (!ok) {
+        throw new Error("No se pudo agregar el miembro existente a la pre-renovación.");
+      }
     },
     [agregarMiembroAlLote]
   );
@@ -357,14 +363,22 @@ const PreRenovacionModal = ({
   const loteCerrado = ["consolidado", "confirmado"].includes(
     String(lote?.estado || "").toLowerCase()
   );
-  // Igual que anulado: no_renovara no cierra el lote; el historial registra el cambio.
+  const esCierreSinDestino = esEstadoGestionCierreSinDestino(
+    lote?.estado_gestion
+  );
+  const anioOrigen = Number(lote?.anio_origen) || Number(anioDestino) - 1;
+  // Terminado / No renovará: no se editan miembros; Consolidar ejecuta el cierre del año origen.
   const edicionBloqueada =
     loteCerrado ||
-    ["anulado", "no_renovara", "consolidado"].includes(lote?.estado_gestion);
+    lote?.estado_gestion === "anulado" ||
+    lote?.estado_gestion === "consolidado" ||
+    esCierreSinDestino;
   const estadoGestionTerminal =
     loteCerrado || lote?.estado_gestion === "consolidado";
   const pagoConfirmadoBloqueado =
-    loteCerrado || ["consolidado", "no_renovara"].includes(lote?.estado_gestion);
+    loteCerrado ||
+    lote?.estado_gestion === "consolidado" ||
+    esCierreSinDestino;
 
   const miembrosParaCopiar = useMemo(
     () => items.filter(itemElegibleParaCopiarEnBorrador).map(itemToCopyMember),
@@ -453,25 +467,88 @@ const PreRenovacionModal = ({
     );
   }, [items]);
 
-  const handleAgregarPersonaNueva = async (e) => {
-    e.preventDefault();
-    const nombreCompleto = buildFullName(
-      personaNuevaPrimerNombre,
-      personaNuevaSegundoNombre,
-      personaNuevaApellidos
-    );
-    if (!personaNuevaParentesco.trim() || !nombreCompleto) return;
-    await agregarMiembroAlLote({
-      parentesco: personaNuevaParentesco,
-      cobertura_tipo: defaultCoberturaTipo,
-      cliente: {
-        nombre_completo: nombreCompleto,
-        primer_nombre: personaNuevaPrimerNombre.trim() || null,
-        segundo_nombre: personaNuevaSegundoNombre.trim() || null,
-        apellidos: personaNuevaApellidos.trim() || null,
-      },
-    });
-  };
+  const handleCreateMemberFromModal = useCallback(
+    async (payload) => {
+      const cliente = pickClienteParaBorrador({
+        ...payload,
+        nombre_completo:
+          payload?.nombre_completo || payload?.nombreCompleto || "",
+      });
+      if (!cliente.nombre_completo) {
+        const nombre = [
+          payload?.primer_nombre,
+          payload?.segundo_nombre,
+          payload?.apellidos,
+        ]
+          .map((v) => String(v || "").trim())
+          .filter(Boolean)
+          .join(" ");
+        if (nombre) cliente.nombre_completo = nombre;
+      }
+      if (!cliente.nombre_completo) {
+        const message = "El nombre completo es obligatorio.";
+        setError(message);
+        toast.error(message);
+        throw new Error(message);
+      }
+
+      const ok = await agregarMiembroAlLote({
+        parentesco: payload?.parentesco || payload?.tipo || "Tomador",
+        cobertura_tipo: payload?.cobertura_tipo || defaultCoberturaTipo,
+        cliente,
+      });
+      if (!ok) {
+        throw new Error("No se pudo agregar el miembro a la pre-renovación.");
+      }
+    },
+    [agregarMiembroAlLote, defaultCoberturaTipo]
+  );
+
+  const miembrosElegiblesDental = useMemo(
+    () =>
+      itemsSaludElegiblesParaDental(items).map((item) =>
+        itemSaludToDentalMember(item, anioDestino)
+      ),
+    [items, anioDestino]
+  );
+
+  const handleCreateDentalEnLote = useCallback(
+    async ({ member, payload }) => {
+      if (!lote?.id || !grupoFamiliarId) {
+        throw new Error("No hay pre-renovación abierta.");
+      }
+      const response = await apiRequest(
+        `/grupo_familiar/${grupoFamiliarId}/pre-renovacion/${lote.id}/productos`,
+        "POST",
+        {
+          miembro_origen_item_id: member?.item_id ?? member?.id,
+          cobertura_tipo: payload?.cobertura_tipo,
+          parentesco: payload?.parentesco,
+          codigo_poliza: payload?.codigo_poliza,
+          policy_number: payload?.policy_number,
+          compania_id: payload?.compania_id,
+          plan: payload?.plan,
+          elegibilidad: payload?.elegibilidad,
+          precio: payload?.precio,
+          fecha_activacion: payload?.fecha_activacion,
+          estado_cobertura: payload?.estado_cobertura,
+          tipo_pago: payload?.tipo_pago,
+          dia_pago: payload?.dia_pago,
+          agente: payload?.agente,
+          pagador_id: payload?.pagador_id,
+          cliente_id_existente: member?.cliente_id || null,
+        }
+      );
+      const nuevoItem = response?.data ?? response;
+      setLote((prev) =>
+        prev
+          ? { ...prev, items: [...(prev.items || []), nuevoItem] }
+          : prev
+      );
+      return nuevoItem;
+    },
+    [lote?.id, grupoFamiliarId]
+  );
 
   const miembrosARenovar = useMemo(
     () => items.filter((item) => Boolean(item?.renovar)),
@@ -499,7 +576,7 @@ const PreRenovacionModal = ({
     () =>
       items
         .filter((item) => {
-          if (!item?.renovar && item?.tipo_item !== "miembro_nuevo") {
+          if (!item?.renovar && !isItemAltaEnLote(item)) {
             return false;
           }
           const fecha = item?.datos_borrador?.fecha_activacion;
@@ -520,10 +597,7 @@ const PreRenovacionModal = ({
           const requiereRetiro =
             !item?.renovar && Boolean(item?.cobertura?.activo);
           if (!requiereRetiro) return false;
-          return (
-            !String(item?.datos_borrador?.fecha_retiro ?? "").trim() ||
-            !String(item?.datos_borrador?.motivo_retiro ?? "").trim()
-          );
+          return !String(item?.datos_borrador?.motivo_retiro ?? "").trim();
         })
         .map(nombreMiembro),
     [items]
@@ -579,17 +653,26 @@ const PreRenovacionModal = ({
 
   const hayGuardadosPendientes =
     itemsConGuardadoPendiente.size > 0 || copiandoDatos;
-  const puedeConsolidar =
-    items.length > 0 &&
-    miembrosSinCodigo.length === 0 &&
-    miembrosSinRetiro.length === 0 &&
-    miembrosInactivosMarcadosRenovar.length === 0 &&
-    miembrosConFechaFueraDeAnio.length === 0 &&
-    conflictosDentalSinSalud.length === 0 &&
-    !hayGuardadosPendientes &&
-    !loading &&
-    !consolidando &&
-    !edicionBloqueada;
+  const loteProcesable =
+    !loteCerrado &&
+    lote?.estado_gestion !== "anulado" &&
+    lote?.estado_gestion !== "consolidado";
+  const puedeConsolidar = esCierreSinDestino
+    ? items.length > 0 &&
+      !hayGuardadosPendientes &&
+      !loading &&
+      !consolidando &&
+      loteProcesable
+    : items.length > 0 &&
+      miembrosSinCodigo.length === 0 &&
+      miembrosSinRetiro.length === 0 &&
+      miembrosInactivosMarcadosRenovar.length === 0 &&
+      miembrosConFechaFueraDeAnio.length === 0 &&
+      conflictosDentalSinSalud.length === 0 &&
+      !hayGuardadosPendientes &&
+      !loading &&
+      !consolidando &&
+      !edicionBloqueada;
 
   const handleClose = () => {
     if (consolidando) return;
@@ -640,16 +723,30 @@ const PreRenovacionModal = ({
         style={{ zIndex: 1065 }}
       >
         <div
-          className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable"
+          className="modal-dialog modal-dialog-centered pr-modal"
           role="document"
         >
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">
-                {showConfirmacionFinal
-                  ? `Confirmar consolidación ${anioDestino}`
-                  : `Pre-renovación ${anioDestino}`}
-              </h5>
+          <div className="modal-content pr-modal__content">
+            <div className="modal-header pr-modal__header">
+              <div className="pr-modal__header-main">
+                <div className="pr-modal__header-icon" aria-hidden="true">
+                  <i className="fas fa-sync-alt" />
+                </div>
+                <div>
+                  <h5 className="modal-title pr-modal__title">
+                    {showConfirmacionFinal
+                      ? esCierreSinDestino
+                        ? `Cerrar año fiscal ${anioOrigen}`
+                        : `Confirmar consolidación ${anioDestino}`
+                      : `Pre-renovación ${anioDestino}`}
+                  </h5>
+                  <p className="pr-modal__subtitle">
+                    {showConfirmacionFinal
+                      ? "Revisa el resumen antes de confirmar. Esta acción no se puede deshacer."
+                      : "Los cambios se guardan solos. Nada se aplica a las pólizas hasta consolidar."}
+                  </p>
+                </div>
+              </div>
               <button
                 type="button"
                 className="btn-close"
@@ -661,56 +758,91 @@ const PreRenovacionModal = ({
 
             {showConfirmacionFinal ? (
               <>
-                <div className="modal-body">
+                <div className="modal-body pr-modal__body">
                   <div className="alert alert-warning">
-                    <strong>Esta acción ejecutará la renovación real</strong>{" "}
-                    para este grupo y no se puede deshacer. Revisa el resumen
-                    antes de continuar.
+                    {esCierreSinDestino ? (
+                      <>
+                        <strong>
+                          Esta acción cerrará {anioOrigen} sin crear{" "}
+                          {anioDestino}.
+                        </strong>{" "}
+                        El estado {etiquetaEstadoGestion(lote?.estado_gestion)}{" "}
+                        no genera año destino. No se puede deshacer.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Esta acción ejecutará la renovación real</strong>{" "}
+                        para este grupo y no se puede deshacer. Revisa el
+                        resumen antes de continuar.
+                      </>
+                    )}
                   </div>
 
                   {error && (
                     <div className="alert alert-danger py-2">{error}</div>
                   )}
 
-                  <ul className="list-unstyled mb-3">
-                    <li className="mb-2">
-                      <i
-                        className="fas fa-check-circle text-success me-2"
-                        aria-hidden="true"
-                      />
-                      Se renovarán{" "}
-                      <strong>{miembrosARenovar.length}</strong>{" "}
-                      {miembrosARenovar.length === 1
-                        ? "cobertura"
-                        : "coberturas"}
-                      {miembrosARenovar.length > 0 && (
-                        <span className="text-muted">
-                          {" "}
-                          ({miembrosARenovar.map(nombreMiembro).join(", ")})
-                        </span>
-                      )}
-                    </li>
-                    <li>
-                      <i
-                        className="fas fa-ban text-secondary me-2"
-                        aria-hidden="true"
-                      />
-                      Se omitirán{" "}
-                      <strong>{miembrosAOmitir.length}</strong>{" "}
-                      {miembrosAOmitir.length === 1
-                        ? "cobertura"
-                        : "coberturas"}{" "}
-                      — no se renovarán
-                      {miembrosAOmitir.length > 0 && (
-                        <span className="text-muted">
-                          {" "}
-                          ({miembrosAOmitir.map(nombreMiembro).join(", ")})
-                        </span>
-                      )}
-                    </li>
-                  </ul>
+                  {esCierreSinDestino ? (
+                    <ul className="list-unstyled mb-3">
+                      <li>
+                        <i
+                          className="fas fa-ban text-secondary me-2"
+                          aria-hidden="true"
+                        />
+                        Se cerrarán{" "}
+                        <strong>{items.length}</strong>{" "}
+                        {items.length === 1 ? "cobertura" : "coberturas"} de{" "}
+                        {anioOrigen}
+                        {items.length > 0 && (
+                          <span className="text-muted">
+                            {" "}
+                            ({items.map(nombreMiembro).join(", ")})
+                          </span>
+                        )}
+                        . No se creará {anioDestino}.
+                      </li>
+                    </ul>
+                  ) : (
+                    <ul className="list-unstyled mb-3">
+                      <li className="mb-2">
+                        <i
+                          className="fas fa-check-circle text-success me-2"
+                          aria-hidden="true"
+                        />
+                        Se renovarán{" "}
+                        <strong>{miembrosARenovar.length}</strong>{" "}
+                        {miembrosARenovar.length === 1
+                          ? "cobertura"
+                          : "coberturas"}
+                        {miembrosARenovar.length > 0 && (
+                          <span className="text-muted">
+                            {" "}
+                            ({miembrosARenovar.map(nombreMiembro).join(", ")})
+                          </span>
+                        )}
+                      </li>
+                      <li>
+                        <i
+                          className="fas fa-ban text-secondary me-2"
+                          aria-hidden="true"
+                        />
+                        Se omitirán{" "}
+                        <strong>{miembrosAOmitir.length}</strong>{" "}
+                        {miembrosAOmitir.length === 1
+                          ? "cobertura"
+                          : "coberturas"}{" "}
+                        — no se renovarán
+                        {miembrosAOmitir.length > 0 && (
+                          <span className="text-muted">
+                            {" "}
+                            ({miembrosAOmitir.map(nombreMiembro).join(", ")})
+                          </span>
+                        )}
+                      </li>
+                    </ul>
+                  )}
 
-                  {cascadasSaludNoRenovar.length > 0 && (
+                  {!esCierreSinDestino && cascadasSaludNoRenovar.length > 0 && (
                     <div className="alert alert-warning py-2">
                       <strong>Cascada dental:</strong> al no renovar Salud MS
                       de{" "}
@@ -732,16 +864,17 @@ const PreRenovacionModal = ({
                       className="form-check-label"
                       htmlFor="confirmo-revision-consolidar"
                     >
-                      Confirmo que revisé la información de todos los miembros y
-                      quiero ejecutar la renovación real para este grupo.
+                      {esCierreSinDestino
+                        ? `Confirmo el cierre de ${anioOrigen} sin generar ${anioDestino} para este grupo.`
+                        : "Confirmo que revisé la información de todos los miembros y quiero ejecutar la renovación real para este grupo."}
                     </label>
                   </div>
                 </div>
 
-                <div className="modal-footer">
+                <div className="modal-footer pr-modal__footer">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-secondary pr-btn-cancel"
                     onClick={() => {
                       setShowConfirmacionFinal(false);
                       setConfirmoRevision(false);
@@ -763,8 +896,12 @@ const PreRenovacionModal = ({
                           role="status"
                           aria-hidden="true"
                         />
-                        Consolidando…
+                        {esCierreSinDestino
+                          ? "Cerrando…"
+                          : "Consolidando…"}
                       </>
+                    ) : esCierreSinDestino ? (
+                      `Sí, cerrar ${anioOrigen}`
                     ) : (
                       "Sí, consolidar ahora"
                     )}
@@ -773,16 +910,29 @@ const PreRenovacionModal = ({
               </>
             ) : (
               <>
-                <div className="modal-body">
+                <div className="modal-body pr-modal__body">
                   <div className="alert alert-info">
-                    <strong>Esto es una pre-renovación.</strong> Puedes cerrar esta
-                    ventana y volver más tarde — cada cambio se guarda
-                    automáticamente. Nada se aplica a las pólizas reales hasta
-                    que uses “Consolidar”.
+                    {esCierreSinDestino ? (
+                      <>
+                        <strong>
+                          {etiquetaEstadoGestion(lote?.estado_gestion)}:
+                        </strong>{" "}
+                        no se editan miembros ni se crea {anioDestino}. Usa
+                        “Cerrar año fiscal” para aplicar el retiro de{" "}
+                        {anioOrigen}.
+                      </>
+                    ) : (
+                      <>
+                        <strong>Esto es una pre-renovación.</strong> Puedes
+                        cerrar esta ventana y volver más tarde — cada cambio se
+                        guarda automáticamente. Nada se aplica a las pólizas
+                        reales hasta que uses “Consolidar”.
+                      </>
+                    )}
                   </div>
 
                   {!loading && lote?.id && (
-                    <div className="border rounded p-3 mb-3 bg-light">
+                    <div className="pr-panel mb-3">
                       <div className="d-flex flex-wrap align-items-center gap-2 mb-2">
                         <span
                           className={`badge text-bg-${estadoGestionBadge(lote.estado_gestion).bg}`}
@@ -961,7 +1111,9 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
-                  {attemptedConsolidar && miembrosSinCodigo.length > 0 && (
+                  {attemptedConsolidar &&
+                    !esCierreSinDestino &&
+                    miembrosSinCodigo.length > 0 && (
                     <div className="alert alert-warning">
                       Completa el <strong>código de póliza</strong> de:{" "}
                       {miembrosSinCodigo.join(", ")}.
@@ -969,6 +1121,7 @@ const PreRenovacionModal = ({
                   )}
 
                   {attemptedConsolidar &&
+                    !esCierreSinDestino &&
                     miembrosConFechaFueraDeAnio.length > 0 && (
                       <div className="alert alert-warning">
                         La <strong>fecha de activación</strong> debe pertenecer
@@ -977,7 +1130,9 @@ const PreRenovacionModal = ({
                       </div>
                     )}
 
-                  {attemptedConsolidar && miembrosSinRetiro.length > 0 && (
+                  {attemptedConsolidar &&
+                    !esCierreSinDestino &&
+                    miembrosSinRetiro.length > 0 && (
                     <div className="alert alert-warning">
                       Completa la{" "}
                       <strong>fecha y el motivo de retiro</strong> de:{" "}
@@ -985,7 +1140,8 @@ const PreRenovacionModal = ({
                     </div>
                   )}
 
-                  {miembrosInactivosMarcadosRenovar.length > 0 && (
+                  {!esCierreSinDestino &&
+                    miembrosInactivosMarcadosRenovar.length > 0 && (
                     <div className="alert alert-warning">
                       Hay coberturas ya <strong>inactivas</strong> (anuladas,
                       retiradas o canceladas) marcadas para renovar:{" "}
@@ -997,6 +1153,7 @@ const PreRenovacionModal = ({
                   )}
 
                   {attemptedConsolidar &&
+                    !esCierreSinDestino &&
                     conflictosDentalSinSalud.length > 0 && (
                       <div className="alert alert-danger">
                         <strong>Dental sin salud:</strong> no se puede renovar
@@ -1015,7 +1172,8 @@ const PreRenovacionModal = ({
                       <strong>{resumenProductos.dental}</strong> Dental MS.
                       Dental solo se renueva si Salud del mismo miembro también
                       se renueva. Si no renuevas Salud, Dental se retira en
-                      cascada.
+                      cascada. Puedes agregar Dental MS nuevo para {anioDestino}
+                      y quitarlo del borrador si te arrepientes.
                     </div>
                   )}
 
@@ -1033,8 +1191,8 @@ const PreRenovacionModal = ({
                   )}
 
                   {!loading && (
-                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
-                      <h6 className="mb-0">
+                    <div className="pr-toolbar">
+                      <h6>
                         <i className="fas fa-users me-2" aria-hidden="true" />
                         Miembros
                       </h6>
@@ -1044,7 +1202,7 @@ const PreRenovacionModal = ({
                           className="btn btn-primary btn-sm"
                           onClick={() => {
                             setShowClienteExistente(false);
-                            setShowPersonaNueva(true);
+                            setShowMemberModal(true);
                           }}
                           disabled={
                             consolidando ||
@@ -1054,13 +1212,14 @@ const PreRenovacionModal = ({
                             !lote?.id
                           }
                         >
+                          <i className="fas fa-plus me-1" aria-hidden="true" />
                           Añadir
                         </button>
                         <button
                           type="button"
                           className="btn btn-outline-primary btn-sm"
                           onClick={() => {
-                            setShowPersonaNueva(false);
+                            setShowMemberModal(false);
                             setShowClienteExistente(true);
                           }}
                           disabled={
@@ -1088,6 +1247,24 @@ const PreRenovacionModal = ({
                           <i className="fas fa-copy me-1" aria-hidden="true" />
                           Copiar
                         </button>
+                        {isProductoSaludMs(defaultCoberturaTipo) && (
+                          <button
+                            type="button"
+                            className="btn btn-outline-info btn-sm"
+                            onClick={() => setShowDentalModal(true)}
+                            disabled={
+                              consolidando ||
+                              edicionBloqueada ||
+                              agregandoMiembro ||
+                              copiandoDatos ||
+                              !lote?.id
+                            }
+                            title={`Agregar Dental MS ${anioDestino} a miembros que renuevan Salud y aún no tienen dental`}
+                          >
+                            <i className="fas fa-tooth me-1" aria-hidden="true" />
+                            Agregar Dental MS
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1098,6 +1275,7 @@ const PreRenovacionModal = ({
                         key={`${item.id}-${cardsRevision}`}
                         item={item}
                         anioDestino={anioDestino}
+                        anioOrigen={anioOrigen}
                         onItemUpdated={handleItemUpdated}
                         onItemRemoved={handleItemRemoved}
                         attemptedConsolidar={attemptedConsolidar}
@@ -1110,121 +1288,16 @@ const PreRenovacionModal = ({
                         alertaCascadaSalud={idsSaludCascada.has(
                           Number(item.id)
                         )}
+                        coverageFieldConfig={coverageFieldConfig}
                       />
                     ))}
                   </div>
-
-                  {!loading && lote?.id && showPersonaNueva && (
-                    <form
-                      className="card card-body mt-3"
-                      onSubmit={handleAgregarPersonaNueva}
-                    >
-                      <div className="fw-semibold mb-2">
-                        Persona nueva para {anioDestino}
-                      </div>
-                      <div className="row g-2 align-items-end">
-                        <div className="col-md-3">
-                          <label className="form-label form-label-sm">
-                            Parentesco <span className="text-danger">*</span>
-                          </label>
-                          <select
-                            className="form-select form-select-sm"
-                            value={personaNuevaParentesco}
-                            onChange={(e) =>
-                              setPersonaNuevaParentesco(e.target.value)
-                            }
-                            required
-                            disabled={agregandoMiembro || edicionBloqueada}
-                          >
-                            <option value="">Seleccione…</option>
-                            {TIPOS_PARENTESCO.map((t) => (
-                              <option key={t} value={t}>
-                                {t}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="col-md-3">
-                          <label className="form-label form-label-sm">
-                            Primer nombre <span className="text-danger">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            value={personaNuevaPrimerNombre}
-                            onChange={(e) =>
-                              setPersonaNuevaPrimerNombre(e.target.value)
-                            }
-                            required
-                            disabled={agregandoMiembro}
-                          />
-                        </div>
-                        <div className="col-md-3">
-                          <label className="form-label form-label-sm">
-                            Segundo nombre
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            value={personaNuevaSegundoNombre}
-                            onChange={(e) =>
-                              setPersonaNuevaSegundoNombre(e.target.value)
-                            }
-                            disabled={agregandoMiembro}
-                          />
-                        </div>
-                        <div className="col-md-3">
-                          <label className="form-label form-label-sm">
-                            Apellidos <span className="text-danger">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            className="form-control form-control-sm"
-                            value={personaNuevaApellidos}
-                            onChange={(e) =>
-                              setPersonaNuevaApellidos(e.target.value)
-                            }
-                            required
-                            disabled={agregandoMiembro}
-                          />
-                        </div>
-                      </div>
-                      <div className="d-flex gap-2 mt-3">
-                        <button
-                          type="submit"
-                          className="btn btn-primary btn-sm"
-                          disabled={
-                            agregandoMiembro ||
-                            !personaNuevaParentesco.trim() ||
-                            !personaNuevaPrimerNombre.trim() ||
-                            !personaNuevaApellidos.trim()
-                          }
-                        >
-                          {agregandoMiembro ? "Agregando…" : "Agregar"}
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-outline-secondary btn-sm"
-                          onClick={() => {
-                            setShowPersonaNueva(false);
-                            setPersonaNuevaParentesco("");
-                            setPersonaNuevaPrimerNombre("");
-                            setPersonaNuevaSegundoNombre("");
-                            setPersonaNuevaApellidos("");
-                          }}
-                          disabled={agregandoMiembro}
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </form>
-                  )}
                 </div>
 
-                <div className="modal-footer">
+                <div className="modal-footer pr-modal__footer">
                   <button
                     type="button"
-                    className="btn btn-secondary"
+                    className="btn btn-secondary pr-btn-cancel"
                     onClick={handleClose}
                     disabled={consolidando}
                   >
@@ -1232,26 +1305,32 @@ const PreRenovacionModal = ({
                   </button>
                   <button
                     type="button"
-                    className="btn btn-primary"
+                    className="btn btn-primary pr-btn-confirm"
                     onClick={handleConsolidar}
                     disabled={!puedeConsolidar}
                     title={
-                      miembrosSinCodigo.length > 0
-                        ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
-                        : miembrosConFechaFueraDeAnio.length > 0
-                          ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
-                          : miembrosSinRetiro.length > 0
-                            ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
-                            : miembrosInactivosMarcadosRenovar.length > 0
-                              ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
-                              : conflictosDentalSinSalud.length > 0
-                                ? `Dental sin salud renovando: ${conflictosDentalSinSalud.map((c) => c.nombre).join(", ")}`
-                                : hayGuardadosPendientes
-                                  ? "Espera a que termine el autoguardado"
-                                  : undefined
+                      esCierreSinDestino
+                        ? hayGuardadosPendientes
+                          ? "Espera a que termine el autoguardado"
+                          : `Cierra ${anioOrigen} sin crear ${anioDestino}`
+                        : miembrosSinCodigo.length > 0
+                          ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
+                          : miembrosConFechaFueraDeAnio.length > 0
+                            ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
+                            : miembrosSinRetiro.length > 0
+                              ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
+                              : miembrosInactivosMarcadosRenovar.length > 0
+                                ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
+                                : conflictosDentalSinSalud.length > 0
+                                  ? `Dental sin salud renovando: ${conflictosDentalSinSalud.map((c) => c.nombre).join(", ")}`
+                                  : hayGuardadosPendientes
+                                    ? "Espera a que termine el autoguardado"
+                                    : undefined
                     }
                   >
-                    Consolidar ahora
+                    {esCierreSinDestino
+                      ? `Cerrar año fiscal ${anioOrigen}`
+                      : "Consolidar ahora"}
                   </button>
                 </div>
               </>
@@ -1263,13 +1342,32 @@ const PreRenovacionModal = ({
       <div
         className="modal-backdrop fade show"
         style={{ zIndex: 1060 }}
-        onClick={handleClose}
+        onClick={() => {
+          if (showMemberModal || showClienteExistente || showCopiarDatos || showDentalModal) return;
+          handleClose();
+        }}
+      />
+
+      <MemberModal
+        open={showMemberModal}
+        onClose={() => setShowMemberModal(false)}
+        editingMember={null}
+        defaultCoberturaTipo={defaultCoberturaTipo}
+        readOnly={edicionBloqueada}
+        isProspecto={false}
+        onCreateRemote={handleCreateMemberFromModal}
+        onRequestExistingClientModal={() => {
+          setShowMemberModal(false);
+          setShowClienteExistente(true);
+        }}
+        zIndex={1085}
       />
 
       <ClienteExistenteModal
         open={showClienteExistente}
         grupoFamiliarId={grupoFamiliarId}
         defaultCoberturaTipo={defaultCoberturaTipo}
+        contexto="pre_renovacion"
         onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
         onClose={() => setShowClienteExistente(false)}
       />
@@ -1281,6 +1379,19 @@ const PreRenovacionModal = ({
         defaultSourceId={tomadorSourceId}
         zIndex={1080}
         onApply={applyCopySelection}
+      />
+
+      <AgregarDentalModal
+        open={showDentalModal}
+        onClose={() => setShowDentalModal(false)}
+        members={miembrosElegiblesDental}
+        grupoFamiliarId={grupoFamiliarId}
+        anioDestino={anioDestino}
+        zIndex={1095}
+        subtitle={`Dental MS para la pre-renovación ${anioDestino}. Se guarda en el borrador; no se aplica hasta consolidar.`}
+        emptyDescription="Solo aparecen miembros con Salud MS marcada para renovar (o miembros nuevos) que aún no tienen Dental MS en este lote."
+        createDentalCoverage={handleCreateDentalEnLote}
+        onDentalCreated={() => setShowDentalModal(false)}
       />
     </>
   );

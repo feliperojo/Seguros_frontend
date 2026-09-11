@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { soloPermiteCopiarDireccion } from "../../utils/estadoPoliza";
+import "../../styles/GfModal.css";
 
 /** Campos disponibles para copiar (área de cobertura/raíz) */
 const FIELD_DEFS = [
@@ -138,23 +139,23 @@ export default function CopiarDatosModal({
   return createPortal(
     <>
       <div
-        className="modal fade show"
+        className="modal fade show gf-modal"
         role="dialog"
         aria-modal="true"
         tabIndex={-1}
         style={{ display: "block", zIndex, pointerEvents: "auto" }}
       >
-        <div className="modal-dialog modal-lg modal-dialog-scrollable">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">
+        <div className="modal-dialog modal-lg modal-dialog-scrollable gf-modal gf-modal--lg">
+          <div className="modal-content gf-modal__content">
+            <div className="modal-header gf-modal__header">
+              <h5 className="modal-title gf-modal__title">
                 <i className="fas fa-copy me-2" />
                 Copiar datos entre miembros
               </h5>
               <button className="btn-close" onClick={onClose} />
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body gf-modal__body">
               {/* Origen */}
               <div className="mb-3">
                 <label className="form-label fw-semibold">Origen (de dónde copiar)</label>
@@ -304,7 +305,7 @@ export default function CopiarDatosModal({
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer gf-modal__footer">
               <button className="btn btn-outline-secondary" onClick={onClose}>
                 Cancelar
               </button>

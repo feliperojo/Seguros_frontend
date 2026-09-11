@@ -6,6 +6,7 @@ import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import apiRequest from "../../services/api";
 import { getListFromApi } from "../../utils/apiResponse";
 import { opcionesEstadoCoberturaPorProceso } from "../../constants/estadosGrupoFamiliar";
+import "../../styles/GfModal.css";
 
 /* ---------- Constantes de UI ---------- */
 const TYPE_COLOR = {
@@ -58,6 +59,7 @@ export default function MemberModalCreate({
   onUpdateLocal,
   onCreateRemote,
   onRequestExistingClientModal,
+  zIndex = 1055,
 }) {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
@@ -354,6 +356,8 @@ export default function MemberModalCreate({
   
       // 5) Fallback: si nada aplica, cierra igual para no bloquear UX
       onClose?.();
+    } catch {
+      // El padre muestra el error; el modal permanece abierto para reintentar.
     } finally {
       setSaving(false);
     }
@@ -374,12 +378,15 @@ export default function MemberModalCreate({
     (validationDone && (validationMatches.length === 0 || allowSaveAfterValidation));
 
   return (
-    <div className="modal fade show d-block" style={{backgroundColor:"rgba(0,0,0,0.5)"}}>
-      <div className="modal-dialog modal-lg">
-        <div className="modal-content">
+    <div
+      className="modal fade show d-block gf-modal"
+      style={{ backgroundColor: "rgba(0,0,0,0.5)", zIndex }}
+    >
+      <div className="modal-dialog modal-lg gf-modal gf-modal--lg">
+        <div className="modal-content gf-modal__content">
 
-          <div className="modal-header">
-            <h5 className="modal-title">{title}</h5>
+          <div className="modal-header gf-modal__header">
+            <h5 className="modal-title gf-modal__title">{title}</h5>
             <button className="btn-close" onClick={onClose} />
           </div>
 

@@ -9,7 +9,7 @@ import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import TelefonosPro from "../fase2/TelefonosPro";
 import { buildDireccion } from "../../utils/direccion";
 import { buildNombreCompleto } from "../../utils/nombre";
-import { formatDateForDisplay } from "../../utils/formatters";
+import { formatDateForDisplay, formatDateMMDDYYYY } from "../../utils/formatters";
 import {
   resolveClienteTelefonos,
   toApiPhones,
@@ -31,6 +31,18 @@ import {
   COBERTURA_TIPO_DENTAL_MS,
   isDentalCoberturaTipo,
 } from "../../constants/coberturaTipos";
+import {
+  isItemAltaEnLote,
+  isItemProductoNuevo,
+} from "../../utils/preRenovacionDental";
+import {
+  resolveEnabledFields,
+  shouldShowConfiguredField,
+} from "../../utils/coverageFieldConfig";
+import {
+  COBERTURA_DEFINIDA,
+  OPCIONES_COBERTURA_RETIRO,
+} from "../../utils/coberturaDefinida";
 import { computeAnnual } from "../../services/ingresos";
 import MediosPagoSection from "../MediosPagoSection";
 import {
@@ -38,6 +50,7 @@ import {
   isBorradorClienteCleared,
   normalizeClienteBorradorValue,
 } from "../../utils/preRenovacionCopy";
+import "../../styles/PreRenovacionModal.css";
 
 const TIPO_PAGO_OPTIONS = [
   "DEBITO AUTOMATICO",
@@ -50,6 +63,19 @@ const METAL_OPTIONS = ["BRONCE", "SILVER", "GOLD", "PLATINUM"];
 const RED_OPTIONS = ["HMO", "EPO", "PPO", "POS"];
 const GENERO_OPTIONS = ["Masculino", "Femenino", "Otro"];
 const ESTADO_COBERTURA_OPTIONS = ["Sí", "No", "Medicare", "Medicaid"];
+const PARENTESCO_OPTIONS = [
+  "Tomador",
+  "Conyuge",
+  "Hijo/a",
+  "Hermano",
+  "Padre",
+  "Madre",
+  "Nieto",
+  "Abuelo/a",
+  "Suegro/a",
+  "Tio/a",
+  "Sobrino/a",
+];
 
 const MOTIVOS_RETIRO_NO_RENOVACION = [
   "CAMBIO DE AGENTE",
@@ -63,7 +89,8 @@ const MOTIVOS_RETIRO_NO_RENOVACION = [
   "SE CANCELO POR FALTA DE PAGO (MORA)",
   "NO REALIZO EL PAGO INICIAL",
   "TAXES POR SEPARADO",
-  "TAXES EN OTRO GF",
+    "TAXES EN OTRO GF",
+  "TRASLADO A OTRO GRUPO FAMILIAR",
   "OTRO",
 ];
 
@@ -136,6 +163,12 @@ const TEXT_FIELDS = [
 
 const toDateInput = (value) => (value ? String(value).slice(0, 10) : "");
 
+/** Cierre fiscal del año origen: siempre 31 de diciembre. */
+const fechaRetiroCierreAnioOrigen = (anioOrigen, anioDestino) => {
+  const origen = Number(anioOrigen) || Number(anioDestino) - 1;
+  return `${origen}-12-31`;
+};
+
 const getErrorMessage = (error) =>
   error?.response?.data?.message ||
   error?.message ||
@@ -156,6 +189,7 @@ const optionsWithCurrent = (options, current) => {
 const PreRenovacionItemCard = ({
   item,
   anioDestino,
+  anioOrigen,
   onItemUpdated,
   onItemRemoved,
   attemptedConsolidar = false,
@@ -164,12 +198,19 @@ const PreRenovacionItemCard = ({
   pagadorOptions = [],
   alertaDentalSinSalud = false,
   alertaCascadaSalud = false,
+  coverageFieldConfig = null,
 }) => {
   const [renovar, setRenovar] = useState(Boolean(item?.renovar ?? true));
-  const [datos, setDatos] = useState(() => ({
-    ...(item?.datos_borrador || {}),
-    cliente: { ...(item?.datos_borrador?.cliente || {}) },
-  }));
+  const [datos, setDatos] = useState(() => {
+    const borrador = item?.datos_borrador || {};
+    return {
+      ...borrador,
+      // Lotes antiguos pueden no tener parentesco en el JSON; usar el de la cobertura.
+      parentesco:
+        borrador.parentesco ?? item?.cobertura?.parentesco ?? "",
+      cliente: { ...(borrador.cliente || {}) },
+    };
+  });
   const { companies: allCompanies, loading: companiesLoading } = useCompanies();
   const [contactoAbierto, setContactoAbierto] = useState(false);
   const [copiarDir, setCopiarDir] = useState(false);
@@ -316,7 +357,23 @@ const PreRenovacionItemCard = ({
 
   const cambiarRenovar = (checked) => {
     setRenovar(checked);
-    guardarCambio({ renovar: checked }, "renovar", true);
+    if (!checked) {
+      const cierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
+      const definida =
+        datos.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO;
+      setDatos((prev) => ({
+        ...prev,
+        fecha_retiro: cierre,
+        cobertura_definida: prev.cobertura_definida || definida,
+      }));
+      guardarCambio({ renovar: false }, "renovar", true);
+      guardarCambio(
+        { fecha_retiro: cierre, cobertura_definida: definida },
+        "fecha_retiro"
+      );
+      return;
+    }
+    guardarCambio({ renovar: true }, "renovar", true);
   };
 
   const retry = (key) => {
@@ -348,11 +405,18 @@ const PreRenovacionItemCard = ({
     );
   };
 
-  const esMiembroNuevo = item?.tipo_item === "miembro_nuevo";
+  const esProductoNuevo = isItemProductoNuevo(item);
+  const esAltaEnLote = isItemAltaEnLote(item);
   const cobertura = item?.cobertura || {};
   const coberturaTipo =
     datos?.cobertura_tipo ?? cobertura?.cobertura_tipo ?? null;
   const esDental = isDentalCoberturaTipo(coberturaTipo);
+  const visibleCoverageFields = resolveEnabledFields(
+    coverageFieldConfig,
+    esDental ? COBERTURA_TIPO_DENTAL_MS : coberturaTipo
+  );
+  const showCoverageField = (fieldKey) =>
+    shouldShowConfiguredField(visibleCoverageFields, fieldKey);
   const productoCompania = resolveProductoKeyFromCoberturaTipo(coberturaTipo);
   const companies = useMemo(
     () =>
@@ -372,26 +436,40 @@ const PreRenovacionItemCard = ({
   // Renovación normal: referencia en vivo = cobertura.cliente
   // Miembro nuevo de cliente existente: referencia en vivo = cliente_existente (BD)
   // Fallback: snapshot guardado en el borrador
-  const clienteActual = esMiembroNuevo
+  const clienteActual = esAltaEnLote
     ? item?.cliente_existente || item?.datos_borrador?.cliente || {}
     : cobertura?.cliente || {};
 
+  const pickParteDireccion = (field, overrides = {}) => {
+    if (Object.prototype.hasOwnProperty.call(overrides, field)) {
+      const v = overrides[field];
+      return v == null ? "" : v;
+    }
+    const draft = datos.cliente || {};
+    if (isBorradorClienteCleared(draft, field)) return "";
+    if (hasBorradorClienteField(draft, field)) {
+      return draft[field] ?? "";
+    }
+    return clienteActual[field] ?? "";
+  };
+
   const resolverDireccionCliente = (overrides = {}) => {
     const base = {
-      calle: datos.cliente?.calle ?? clienteActual.calle,
-      apto: datos.cliente?.apto ?? clienteActual.apto,
-      ciudad: datos.cliente?.ciudad ?? clienteActual.ciudad,
-      condado: datos.cliente?.condado ?? clienteActual.condado,
-      estado: datos.cliente?.estado ?? clienteActual.estado,
-      codigo_postal: datos.cliente?.codigo_postal ?? clienteActual.codigo_postal,
-      ...overrides,
+      calle: pickParteDireccion("calle", overrides),
+      apto: pickParteDireccion("apto", overrides),
+      ciudad: pickParteDireccion("ciudad", overrides),
+      condado: pickParteDireccion("condado", overrides),
+      estado: pickParteDireccion("estado", overrides),
+      codigo_postal: pickParteDireccion("codigo_postal", overrides),
     };
-    return (
-      buildDireccion(base) ||
-      datos.cliente?.direccion ||
-      clienteActual.direccion ||
-      ""
-    );
+    const armada = buildDireccion(base);
+    if (armada) return armada;
+    const draft = datos.cliente || {};
+    if (isBorradorClienteCleared(draft, "direccion")) return "";
+    if (hasBorradorClienteField(draft, "direccion")) {
+      return draft.direccion || "";
+    }
+    return clienteActual.direccion || "";
   };
 
   const clienteIdMediosPago =
@@ -425,41 +503,121 @@ const PreRenovacionItemCard = ({
     "us"
   );
 
-  const nombre = esMiembroNuevo
+  const nombre = esAltaEnLote
     ? datos.cliente?.nombre_completo ||
       item?.cliente_existente?.nombre_completo ||
       item?.datos_borrador?.cliente?.nombre_completo ||
-      `Miembro nuevo #${item?.id || "?"}`
+      (esProductoNuevo
+        ? `Dental MS #${item?.id || "?"}`
+        : `Miembro nuevo #${item?.id || "?"}`)
     : clienteActual.nombre_completo ||
       [clienteActual.primer_nombre, clienteActual.apellidos]
         .filter(Boolean)
         .join(" ") ||
       `Cobertura #${item?.cobertura_id || "?"}`;
-  const requiereRetiro = !esMiembroNuevo && !renovar && Boolean(cobertura.activo);
-  const mostrarPoliza = esMiembroNuevo || renovar;
+  const requiereRetiro =
+    !esAltaEnLote && !renovar && Boolean(cobertura.activo);
+  const fechaRetiroCierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
+  const mostrarPoliza = esAltaEnLote || renovar;
   const codigoInvalido =
     attemptedConsolidar &&
     mostrarPoliza &&
     !String(datos.codigo_poliza ?? "").trim();
-  const retiroFechaInvalida =
-    attemptedConsolidar &&
-    requiereRetiro &&
-    !String(datos.fecha_retiro ?? "").trim();
   const retiroMotivoInvalido =
     attemptedConsolidar &&
     requiereRetiro &&
     !String(datos.motivo_retiro ?? "").trim();
+  const coberturaDefinidaRetiro = OPCIONES_COBERTURA_RETIRO.includes(
+    datos.cobertura_definida
+  )
+    ? datos.cobertura_definida
+    : COBERTURA_DEFINIDA.RETIRADO;
   const disabled = bloqueado || edicionBloqueada;
+  const campoClienteVacio = (field) =>
+    isBorradorClienteCleared(draftCliente, field);
+
+  // No renovar: F. retiro fija al 31/12 del año fiscal que se cierra.
+  useEffect(() => {
+    if (disabled || !requiereRetiro) return;
+    if (toDateInput(datos.fecha_retiro) === fechaRetiroCierre) return;
+    setDatos((prev) => ({ ...prev, fecha_retiro: fechaRetiroCierre }));
+    guardarCambio({ fecha_retiro: fechaRetiroCierre }, "fecha_retiro");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo alinear fecha de cierre
+  }, [requiereRetiro, fechaRetiroCierre, disabled, datos.fecha_retiro]);
+
+  const placeholderActual = (field, actual, fallback = "") => {
+    if (campoClienteVacio(field)) return "";
+    if (actual != null && actual !== "") return String(actual);
+    return fallback;
+  };
+
+  const classInputCliente = (field, extra = "") =>
+    ["form-control", "form-control-sm", campoClienteVacio(field) ? "pr-field--cleared" : "", extra]
+      .filter(Boolean)
+      .join(" ");
+
+  const classSelectCliente = (field, extra = "") =>
+    ["form-select", "form-select-sm", campoClienteVacio(field) ? "pr-field--cleared" : "", extra]
+      .filter(Boolean)
+      .join(" ");
+
+  const aplicarCampoCliente = (field, value) => {
+    if (DIRECCION_FORMULA_FIELDS.has(field)) {
+      const direccionCalculada = resolverDireccionCliente({ [field]: value });
+      const campos = { [field]: value, direccion: direccionCalculada };
+      if (copiarDir) campos.dir_correspondencia = direccionCalculada;
+      cambiarClienteCampos(campos, `cliente.${field}`, true);
+      return;
+    }
+    if (NOMBRE_FORMULA_FIELDS.has(field)) {
+      const pickNombre = (f) => {
+        if (f === field) return value == null ? "" : value;
+        if (isBorradorClienteCleared(draftCliente, f)) return "";
+        if (hasBorradorClienteField(draftCliente, f)) {
+          return draftCliente[f] ?? "";
+        }
+        return clienteActual[f] ?? "";
+      };
+      cambiarClienteCampos(
+        {
+          [field]: value,
+          nombre_completo: buildNombreCompleto({
+            primer_nombre: pickNombre("primer_nombre"),
+            segundo_nombre: pickNombre("segundo_nombre"),
+            apellidos: pickNombre("apellidos"),
+          }),
+        },
+        `cliente.${field}`,
+        true
+      );
+      return;
+    }
+    cambiarCliente(field, value, true);
+  };
 
   const limpiarClienteParaRenovacion = (field) => {
-    cambiarCliente(field, null, true);
+    aplicarCampoCliente(field, null);
+  };
+
+  const restaurarClienteParaRenovacion = (field, actual) => {
+    const value = actual === undefined || actual === "" ? null : actual;
+    aplicarCampoCliente(field, value);
   };
 
   const renderClienteBorradorHint = (field, actual, { skipClear = false } = {}) => {
-    if (isBorradorClienteCleared(draftCliente, field)) {
+    if (campoClienteVacio(field)) {
       return (
-        <div className="form-text text-warning-emphasis">
-          Se dejará vacío al consolidar.
+        <div className="pr-field-hint pr-field-hint--cleared">
+          <span>Se dejará vacío al consolidar.</span>
+          {!disabled && (
+            <button
+              type="button"
+              className="btn btn-link btn-sm p-0"
+              onClick={() => restaurarClienteParaRenovacion(field, actual)}
+            >
+              Restaurar
+            </button>
+          )}
         </div>
       );
     }
@@ -469,7 +627,7 @@ const PreRenovacionItemCard = ({
 
     if (!hasBorradorClienteField(draftCliente, field) && hasActual && !skipClear) {
       return (
-        <div className="d-flex flex-wrap align-items-center gap-2">
+        <div className="pr-field-hint">
           <span className="form-text mb-0">Actual: {String(actual)}</span>
           {!disabled && (
             <button
@@ -506,7 +664,7 @@ const PreRenovacionItemCard = ({
       <div className="col-md-4" key={field}>
         <label className="form-label form-label-sm mb-1">{label}</label>
         <select
-          className="form-select form-select-sm"
+          className={classSelectCliente(field)}
           value={selectValue}
           onChange={(e) => cambiarCliente(field, e.target.value || null, true)}
           disabled={disabled}
@@ -549,6 +707,8 @@ const PreRenovacionItemCard = ({
             minIso="1900-01-01"
             maxIso="2099-12-31"
             disabled={disabled}
+            className={campoClienteVacio(field) ? "pr-field--cleared" : ""}
+            placeholder={campoClienteVacio(field) ? "" : undefined}
             onChangeIso={(iso) => cambiarCliente(field, iso || null, true)}
           />
           {esNombreCalculado ? (
@@ -567,9 +727,9 @@ const PreRenovacionItemCard = ({
         <input
           type={type}
           step={type === "number" ? "0.01" : undefined}
-          className="form-control form-control-sm"
+          className={classInputCliente(field)}
           value={datos.cliente?.[field] ?? ""}
-          placeholder={String(actual ?? "")}
+          placeholder={placeholderActual(field, actual)}
           onChange={(e) => {
             if (esNombreCalculado) return;
             const raw = e.target.value;
@@ -613,12 +773,18 @@ const PreRenovacionItemCard = ({
     );
   };
 
-  const handleQuitarMiembroNuevo = async () => {
+  const handleQuitarAltaEnLote = async () => {
     if (disabled) return;
     setEstadosGuardado((prev) => ({ ...prev, quitar: "guardando" }));
     try {
-      await apiRequest(`/pre-renovacion/items/${item.id}`, "DELETE");
-      onItemRemoved?.(item.id);
+      const response = await apiRequest(
+        `/pre-renovacion/items/${item.id}`,
+        "DELETE"
+      );
+      const deletedIds = Array.isArray(response?.deleted_ids)
+        ? response.deleted_ids
+        : [item.id];
+      onItemRemoved?.(deletedIds);
     } catch (error) {
       if (error?.response?.status === 409) {
         setBloqueado(true);
@@ -632,17 +798,14 @@ const PreRenovacionItemCard = ({
   };
 
   return (
-    <div
-      className={`card shadow-sm${esDental ? " border-info" : ""}`}
-      style={esDental ? { borderLeftWidth: "4px" } : undefined}
-    >
-      <div className="card-header bg-light">
+    <div className={`pr-item${esDental ? " pr-item--dental" : ""}`}>
+      <div className="pr-item__header">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
           <div>
             <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-              <div className="fw-semibold">{nombre}</div>
+              <div className="pr-item__name">{nombre}</div>
               <span
-                className={`badge ${esDental ? "bg-info" : "bg-primary"}`}
+                className={`badge pr-item__badge ${esDental ? "bg-info" : "bg-primary"}`}
                 title={
                   esDental ? "Producto Dental MS" : "Producto Salud MS"
                 }
@@ -651,9 +814,11 @@ const PreRenovacionItemCard = ({
                 {etiquetaProducto}
               </span>
             </div>
-            {esMiembroNuevo ? (
+            {esAltaEnLote ? (
               <span className="badge bg-info text-white">
-                Miembro nuevo para {anioDestino}
+                {esProductoNuevo
+                  ? `Dental MS nuevo para ${anioDestino}`
+                  : `Miembro nuevo para ${anioDestino}`}
               </span>
             ) : (
               <div className="small text-muted">
@@ -664,12 +829,12 @@ const PreRenovacionItemCard = ({
             )}
           </div>
           <div className="text-end">
-            {esMiembroNuevo ? (
+            {esAltaEnLote ? (
               <div>
                 <button
                   type="button"
                   className="btn btn-outline-danger btn-sm"
-                  onClick={handleQuitarMiembroNuevo}
+                  onClick={handleQuitarAltaEnLote}
                   disabled={disabled || estadosGuardado.quitar === "guardando"}
                 >
                   🗑 Quitar de esta pre-renovación
@@ -707,11 +872,12 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
-      {alertaDentalSinSalud && renovar && (
+      {alertaDentalSinSalud && (renovar || esProductoNuevo) && (
         <div className="alert alert-danger rounded-0 mb-0 py-2">
-          <strong>Dental no se puede renovar sin salud.</strong> La cobertura
-          de Salud MS de este miembro está marcada para no renovar. Desmarca
-          Dental o marca Salud para renovar.
+          <strong>Dental no se puede renovar sin salud.</strong>{" "}
+          {esProductoNuevo
+            ? "Quita este Dental MS o marca Salud MS de este miembro para renovar."
+            : "La cobertura de Salud MS de este miembro está marcada para no renovar. Desmarca Dental o marca Salud para renovar."}
         </div>
       )}
 
@@ -722,7 +888,7 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
-      {!esMiembroNuevo && renovar && !cobertura.activo && (
+      {!esAltaEnLote && renovar && !cobertura.activo && (
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
           cancelada o retirada después de agregarse a esta pre-renovación. Revisa si
@@ -730,37 +896,64 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
+      {requiereRetiro && datos.motivo_retiro === "TRASLADO A OTRO GRUPO FAMILIAR" && (
+        <div className="alert alert-info rounded-0 mb-0 py-2">
+          Este miembro ya está reservado en otro grupo para el año destino.
+          Aquí se cierra el año en curso; no se genera póliza nueva en este
+          grupo.
+        </div>
+      )}
+
       {requiereRetiro && (
-        <div className="card-body border-bottom">
+        <div className="pr-item__body border-bottom">
           <p className="small text-muted mb-3">
             Este miembro no se renovará. Prepara los datos obligatorios del retiro.
           </p>
           <div className="row g-2">
-            <div className="col-md-4">
+            <div className="col-md-3">
               <label className="form-label form-label-sm mb-1">
-                Fecha de retiro <span className="text-danger">*</span>
+                F. retiro
               </label>
-              <DateInputWithCalendar
-                size="sm"
-                valueIso={toDateInput(datos.fecha_retiro)}
-                minIso="1900-01-01"
-                maxIso="2099-12-31"
-                disabled={disabled}
-                className={retiroFechaInvalida ? "is-invalid" : ""}
-                onChangeIso={(iso) =>
-                  cambiarDato("fecha_retiro", iso || null, true)
-                }
+              <input
+                type="text"
+                className="form-control form-control-sm"
+                value={formatDateMMDDYYYY(fechaRetiroCierre)}
+                disabled
+                readOnly
               />
-              {retiroFechaInvalida && (
-                <div className="invalid-feedback d-block">
-                  Obligatoria para consolidar.
-                </div>
-              )}
+              <div className="form-text">
+                Fija al 31/12/{Number(anioOrigen) || Number(anioDestino) - 1}{" "}
+                (cierre del año fiscal).
+              </div>
               {renderEstado("fecha_retiro")}
             </div>
-            <div className="col-md-8">
+            <div className="col-md-3">
               <label className="form-label form-label-sm mb-1">
-                Motivo de retiro <span className="text-danger">*</span>
+                Estado <span className="text-danger">*</span>
+              </label>
+              <select
+                className="form-select form-select-sm"
+                value={coberturaDefinidaRetiro}
+                onChange={(e) =>
+                  cambiarDato(
+                    "cobertura_definida",
+                    e.target.value || COBERTURA_DEFINIDA.RETIRADO,
+                    true
+                  )
+                }
+                disabled={disabled}
+              >
+                {OPCIONES_COBERTURA_RETIRO.map((op) => (
+                  <option key={op} value={op}>
+                    {op}
+                  </option>
+                ))}
+              </select>
+              {renderEstado("cobertura_definida")}
+            </div>
+            <div className="col-md-6">
+              <label className="form-label form-label-sm mb-1">
+                Motivo retiro <span className="text-danger">*</span>
               </label>
               <select
                 className={`form-select form-select-sm${
@@ -777,6 +970,11 @@ const PreRenovacionItemCard = ({
                   </option>
                 ))}
               </select>
+              {retiroMotivoInvalido && (
+                <div className="invalid-feedback d-block">
+                  Obligatorio para consolidar.
+                </div>
+              )}
               {renderEstado("motivo_retiro")}
             </div>
           </div>
@@ -784,14 +982,38 @@ const PreRenovacionItemCard = ({
       )}
 
       {mostrarPoliza && (
-        <div className="card-body border-bottom">
-          <p className="small text-muted mb-3">
+        <div className="pr-item__body border-bottom">
+          <p className="pr-item__section-title">
             Datos de la póliza para {anioDestino}
           </p>
           <div className="row g-2">
-            {TEXT_FIELDS.filter(([field]) =>
-              esDental ? field !== "grupo" : true
-            ).map(([field, label, type, col]) => (
+            <div className="col-md-3">
+              <label className="form-label form-label-sm mb-1">Parentesco</label>
+              <select
+                className="form-select form-select-sm"
+                value={datos.parentesco || ""}
+                onChange={(e) =>
+                  cambiarDato("parentesco", e.target.value || null, true)
+                }
+                disabled={disabled}
+              >
+                <option value="">Seleccione…</option>
+                {optionsWithCurrent(
+                  PARENTESCO_OPTIONS,
+                  datos.parentesco
+                ).map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt === "Conyuge" ? "Cónyuge" : opt}
+                  </option>
+                ))}
+              </select>
+              {renderEstado("parentesco")}
+            </div>
+
+            {TEXT_FIELDS.filter(([field]) => {
+              if (esDental && field === "grupo") return false;
+              return showCoverageField(field);
+            }).map(([field, label, type, col]) => (
               <div className={col} key={field}>
                 <label className="form-label form-label-sm mb-1">
                   {label}
@@ -829,8 +1051,7 @@ const PreRenovacionItemCard = ({
               </div>
             ))}
 
-            {!esDental && (
-              <>
+            {!esDental && showCoverageField("metal") && (
                 <div className="col-md-3">
                   <label className="form-label form-label-sm mb-1">Metal</label>
                   <select
@@ -852,7 +1073,9 @@ const PreRenovacionItemCard = ({
                   </select>
                   {renderEstado("metal")}
                 </div>
+            )}
 
+            {!esDental && showCoverageField("red") && (
                 <div className="col-md-3">
                   <label className="form-label form-label-sm mb-1">Red</label>
                   <select
@@ -872,11 +1095,9 @@ const PreRenovacionItemCard = ({
                   </select>
                   {renderEstado("red")}
                 </div>
-              </>
             )}
 
-            {esDental && (
-              <>
+            {esDental && showCoverageField("agente") && (
                 <div className="col-md-4">
                   <label className="form-label form-label-sm mb-1">Agente</label>
                   <input
@@ -890,6 +1111,8 @@ const PreRenovacionItemCard = ({
                   />
                   {renderEstado("agente")}
                 </div>
+            )}
+            {esDental && showCoverageField("pagador_id") && (
                 <div className="col-md-4">
                   <label className="form-label form-label-sm mb-1">Pagador</label>
                   <select
@@ -917,9 +1140,9 @@ const PreRenovacionItemCard = ({
                   </select>
                   {renderEstado("pagador_id")}
                 </div>
-              </>
             )}
 
+            {showCoverageField("compania_id") && (
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">Compañía</label>
               <select
@@ -953,7 +1176,9 @@ const PreRenovacionItemCard = ({
               </select>
               {renderEstado("compania_id")}
             </div>
+            )}
 
+            {showCoverageField("fecha_activacion") && (
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">
                 Fecha de activación
@@ -971,7 +1196,9 @@ const PreRenovacionItemCard = ({
               {renderEstado("fecha_activacion")}
               <div className="form-text">Debe pertenecer a {anioDestino}.</div>
             </div>
+            )}
 
+            {showCoverageField("tipo_pago") && (
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">Tipo de pago</label>
               <select
@@ -993,7 +1220,9 @@ const PreRenovacionItemCard = ({
               </select>
               {renderEstado("tipo_pago")}
             </div>
+            )}
 
+            {showCoverageField("estado_cobertura") && (
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">Cobertura</label>
               <select
@@ -1016,7 +1245,9 @@ const PreRenovacionItemCard = ({
               </select>
               {renderEstado("estado_cobertura")}
             </div>
+            )}
 
+            {showCoverageField("ano_cobertura") && (
             <div className="col-md-4">
               <label className="form-label form-label-sm mb-1">
                 Año de cobertura
@@ -1033,15 +1264,16 @@ const PreRenovacionItemCard = ({
                 Fijo al año destino {anioDestino} al consolidar.
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
 
       {!esDental && (
-      <div className="card-body">
+      <div className="pr-item__body">
         <button
           type="button"
-          className="btn btn-link p-0 text-decoration-none"
+          className="btn btn-link p-0 text-decoration-none pr-toggle-contacto"
           onClick={() => setContactoAbierto((prev) => !prev)}
           aria-expanded={contactoAbierto}
         >
@@ -1049,12 +1281,12 @@ const PreRenovacionItemCard = ({
             className={`fas fa-chevron-${contactoAbierto ? "up" : "down"} me-2`}
             aria-hidden="true"
           />
-          Datos de contacto para {anioDestino} (opcional)
+          Información del cliente
         </button>
 
         {contactoAbierto && (
           <div className="mt-2">
-            <div className="text-muted small fw-semibold mb-2">Datos principales</div>
+            <div className="pr-item__section-title">Datos principales</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_PRINCIPALES.map(([field, label, type]) => {
                 if (field === "genero") {
@@ -1069,7 +1301,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Estatus migratorio</div>
+            <div className="pr-item__section-title">Estatus migratorio</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_MIGRATORIO.map(([field, label, type]) => {
                 if (field === "status") {
@@ -1084,7 +1316,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Dirección</div>
+            <div className="pr-item__section-title">Dirección</div>
             <div className="row g-2 mb-3">
               {CLIENTE_FIELDS_DIRECCION.map(([field, label, type]) => {
                 const actual = clienteActual[field];
@@ -1101,9 +1333,9 @@ const PreRenovacionItemCard = ({
                           </label>
                           <input
                             type={type}
-                            className="form-control form-control-sm"
+                            className={classInputCliente(field)}
                             value={datos.cliente?.[field] ?? ""}
-                            placeholder={String(actual ?? "")}
+                            placeholder={placeholderActual(field, actual)}
                             onChange={(e) =>
                               cambiarCliente(field, e.target.value)
                             }
@@ -1152,9 +1384,17 @@ const PreRenovacionItemCard = ({
                     <input
                       type={type}
                       step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
-                      value={datos.cliente?.[field] ?? ""}
-                      placeholder={String(actual ?? "")}
+                      className={classInputCliente(field)}
+                      value={
+                        esDireccionCalculada
+                          ? resolverDireccionCliente()
+                          : (datos.cliente?.[field] ?? "")
+                      }
+                      placeholder={
+                        esDireccionCalculada
+                          ? ""
+                          : placeholderActual(field, actual)
+                      }
                       onChange={(e) => {
                         if (esDireccionCalculada) return;
                         const raw = e.target.value;
@@ -1202,7 +1442,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Datos de contacto</div>
+            <div className="pr-item__section-title">Datos de contacto</div>
             <div className="row g-2 mb-3">
               <div className="col-12">
                 <label className="form-label form-label-sm mb-1">Teléfonos</label>
@@ -1291,7 +1531,7 @@ const PreRenovacionItemCard = ({
                           cambiarCliente(field, e.target.value || null, true)
                         }
                         disabled={disabled}
-                        className="form-select form-select-sm"
+                        className={classSelectCliente(field)}
                         placeholder="Seleccione…"
                       />
                       {renderClienteBorradorHint(field, actual)}
@@ -1306,9 +1546,9 @@ const PreRenovacionItemCard = ({
                     <input
                       type={type}
                       step={type === "number" ? "0.01" : undefined}
-                      className="form-control form-control-sm"
+                      className={classInputCliente(field)}
                       value={datos.cliente?.[field] ?? ""}
-                      placeholder={String(actual ?? "")}
+                      placeholder={placeholderActual(field, actual)}
                       onChange={(e) => {
                         const raw = e.target.value;
                         cambiarCliente(
@@ -1330,7 +1570,7 @@ const PreRenovacionItemCard = ({
               })}
             </div>
 
-            <div className="text-muted small fw-semibold mb-2">Empleo e ingreso</div>
+            <div className="pr-item__section-title">Empleo e ingreso</div>
             <div className="row g-2">
               {(() => {
                 const valorEmpleo = (field) => {
@@ -1353,7 +1593,7 @@ const PreRenovacionItemCard = ({
                         Tipo de ingreso
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("tipo_ingreso")}
                         value={datos.cliente?.tipo_ingreso ?? ""}
                         onChange={(e) =>
                           cambiarCliente(
@@ -1384,9 +1624,12 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("actividad_economica")}
                         value={datos.cliente?.actividad_economica ?? ""}
-                        placeholder={String(clienteActual.actividad_economica ?? "")}
+                        placeholder={placeholderActual(
+                          "actividad_economica",
+                          clienteActual.actividad_economica
+                        )}
                         onChange={(e) =>
                           cambiarCliente("actividad_economica", e.target.value)
                         }
@@ -1410,12 +1653,13 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("empleador")}
                         value={datos.cliente?.empleador ?? ""}
-                        placeholder={
-                          String(clienteActual.empleador ?? "") ||
+                        placeholder={placeholderActual(
+                          "empleador",
+                          clienteActual.empleador,
                           "Nombre de la empresa"
-                        }
+                        )}
                         onChange={(e) =>
                           cambiarCliente("empleador", e.target.value)
                         }
@@ -1432,10 +1676,11 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("telefono_empleador")}
                         value={datos.cliente?.telefono_empleador ?? ""}
-                        placeholder={String(
-                          clienteActual.telefono_empleador ?? ""
+                        placeholder={placeholderActual(
+                          "telefono_empleador",
+                          clienteActual.telefono_empleador
                         )}
                         onChange={(e) =>
                           cambiarCliente("telefono_empleador", e.target.value)
@@ -1459,7 +1704,7 @@ const PreRenovacionItemCard = ({
                         Periodo de ingreso
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("periodo_ingreso")}
                         value={datos.cliente?.periodo_ingreso ?? ""}
                         onChange={(e) => {
                           const value = e.target.value || null;
@@ -1506,10 +1751,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_por_periodo")}
                         value={moneyValue("ingreso_por_periodo")}
-                        placeholder={String(
-                          clienteActual.ingreso_por_periodo ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_por_periodo",
+                          clienteActual.ingreso_por_periodo
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1548,9 +1794,12 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_anual")}
                         value={moneyValue("ingreso_anual")}
-                        placeholder={String(clienteActual.ingreso_anual ?? "")}
+                        placeholder={placeholderActual(
+                          "ingreso_anual",
+                          clienteActual.ingreso_anual
+                        )}
                         onChange={(e) => {
                           const raw = e.target.value;
                           cambiarCliente(
@@ -1578,10 +1827,11 @@ const PreRenovacionItemCard = ({
                       </label>
                       <textarea
                         rows={2}
-                        className="form-control form-control-sm"
+                        className={classInputCliente("nota_ingreso_ocasional")}
                         value={datos.cliente?.nota_ingreso_ocasional ?? ""}
-                        placeholder={String(
-                          clienteActual.nota_ingreso_ocasional ?? ""
+                        placeholder={placeholderActual(
+                          "nota_ingreso_ocasional",
+                          clienteActual.nota_ingreso_ocasional
                         )}
                         onChange={(e) =>
                           cambiarCliente(
@@ -1608,7 +1858,7 @@ const PreRenovacionItemCard = ({
                         Periodo de ingreso ocasional
                       </label>
                       <select
-                        className="form-select form-select-sm"
+                        className={classSelectCliente("periodo_ingreso_ocasional")}
                         value={datos.cliente?.periodo_ingreso_ocasional ?? ""}
                         onChange={(e) => {
                           const value = e.target.value || null;
@@ -1655,10 +1905,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_por_periodo_ocasional")}
                         value={moneyValue("ingreso_por_periodo_ocasional")}
-                        placeholder={String(
-                          clienteActual.ingreso_por_periodo_ocasional ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_por_periodo_ocasional",
+                          clienteActual.ingreso_por_periodo_ocasional
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1699,10 +1950,11 @@ const PreRenovacionItemCard = ({
                         type="number"
                         step="0.01"
                         inputMode="decimal"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("ingreso_ocasional_anual")}
                         value={moneyValue("ingreso_ocasional_anual")}
-                        placeholder={String(
-                          clienteActual.ingreso_ocasional_anual ?? ""
+                        placeholder={placeholderActual(
+                          "ingreso_ocasional_anual",
+                          clienteActual.ingreso_ocasional_anual
                         )}
                         onChange={(e) => {
                           const raw = e.target.value;
@@ -1731,9 +1983,12 @@ const PreRenovacionItemCard = ({
                       </label>
                       <input
                         type="text"
-                        className="form-control form-control-sm"
+                        className={classInputCliente("empresa")}
                         value={datos.cliente?.empresa ?? ""}
-                        placeholder={String(clienteActual.empresa ?? "")}
+                        placeholder={placeholderActual(
+                          "empresa",
+                          clienteActual.empresa
+                        )}
                         onChange={(e) =>
                           cambiarCliente("empresa", e.target.value)
                         }
@@ -1757,7 +2012,7 @@ const PreRenovacionItemCard = ({
                 />
               ) : (
                 <>
-                  <div className="text-muted small fw-semibold mb-2">
+                  <div className="pr-item__section-title">
                     Medios de pago
                   </div>
                   <div className="text-muted small">

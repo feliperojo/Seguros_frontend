@@ -80,7 +80,10 @@ export default function CoberturaEstadoGfBadges({
         </Badge>
       )}
 
-      <span className="badge bg-white border text-secondary rounded-pill">
+      <span
+        className="badge bg-white border text-secondary rounded-pill"
+        title="ID de grupo"
+      >
         {loading ? "…" : `GF ${gfId ?? "—"}`}
       </span>
     </span>

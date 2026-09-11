@@ -18,8 +18,21 @@ export const etiquetaProductoItem = (item = {}) => {
   return tipo || "Salud MS";
 };
 
+export const TIPO_ITEM_MIEMBRO_NUEVO = "miembro_nuevo";
+export const TIPO_ITEM_PRODUCTO_NUEVO = "producto_nuevo";
+
+export const isItemAltaEnLote = (item = {}) =>
+  item?.tipo_item === TIPO_ITEM_MIEMBRO_NUEVO ||
+  item?.tipo_item === TIPO_ITEM_PRODUCTO_NUEVO;
+
+export const isItemProductoNuevo = (item = {}) =>
+  item?.tipo_item === TIPO_ITEM_PRODUCTO_NUEVO;
+
+export const isItemMiembroNuevo = (item = {}) =>
+  item?.tipo_item === TIPO_ITEM_MIEMBRO_NUEVO;
+
 export const getItemClienteId = (item = {}) => {
-  if (item?.tipo_item === "miembro_nuevo") {
+  if (isItemAltaEnLote(item)) {
     const id =
       item?.datos_borrador?.cliente_id_existente ??
       item?.datos_borrador?.cliente_id ??
@@ -42,10 +55,16 @@ export const findConflictosDentalSinSalud = (items = [], nombreFn) => {
   const list = Array.isArray(items) ? items : [];
   const porCliente = new Map();
 
+  const sinCliente = [];
+
   list.forEach((item) => {
-    if (item?.tipo_item === "miembro_nuevo") return;
     const clienteId = getItemClienteId(item);
-    if (clienteId == null) return;
+    if (clienteId == null) {
+      if (isItemProductoNuevo(item) && (item?.renovar ?? true)) {
+        sinCliente.push(item);
+      }
+      return;
+    }
     if (!porCliente.has(clienteId)) {
       porCliente.set(clienteId, { salud: [], dental: [] });
     }
@@ -55,21 +74,38 @@ export const findConflictosDentalSinSalud = (items = [], nombreFn) => {
   });
 
   const conflictos = [];
+  const pushConflicto = (d, saludOmitida) => {
+    conflictos.push({
+      dental: d,
+      salud: saludOmitida,
+      nombre: typeof nombreFn === "function" ? nombreFn(d) : `Item #${d.id}`,
+    });
+  };
+
   porCliente.forEach(({ salud, dental }) => {
     dental.forEach((d) => {
-      if (!d?.renovar) return;
-      // Sin salud en el lote: no bloquear aquí (salud pudo renovarse antes;
-      // la elegibilidad la valida el backend).
-      if (salud.length === 0) return;
-      const saludRenovando = salud.some((s) => Boolean(s?.renovar));
+      const dentalActivo = isItemProductoNuevo(d) || Boolean(d?.renovar);
+      if (!dentalActivo) return;
+      if (salud.length === 0) {
+        if (isItemProductoNuevo(d)) pushConflicto(d, null);
+        return;
+      }
+      const saludRenovando = salud.some(
+        (s) => isItemMiembroNuevo(s) || Boolean(s?.renovar)
+      );
       if (saludRenovando) return;
       const saludOmitida = salud.find((s) => !s?.renovar) || null;
-      conflictos.push({
-        dental: d,
-        salud: saludOmitida,
-        nombre: typeof nombreFn === "function" ? nombreFn(d) : `Item #${d.id}`,
-      });
+      pushConflicto(d, saludOmitida);
     });
+  });
+
+  sinCliente.forEach((d) => {
+    const origenId = Number(d?.datos_borrador?.miembro_origen_item_id || 0);
+    const origen = list.find((item) => Number(item?.id) === origenId);
+    const origenRenueva =
+      origen &&
+      (isItemMiembroNuevo(origen) || Boolean(origen?.renovar));
+    if (!origenRenueva) pushConflicto(d, origen || null);
   });
 
   return conflictos;
@@ -81,7 +117,7 @@ export const findCascadasSaludNoRenovar = (items = [], nombreFn) => {
   const porCliente = new Map();
 
   list.forEach((item) => {
-    if (item?.tipo_item === "miembro_nuevo") return;
+    if (isItemAltaEnLote(item)) return;
     const clienteId = getItemClienteId(item);
     if (clienteId == null) return;
     if (!porCliente.has(clienteId)) {
@@ -147,4 +183,74 @@ export const buildPagadorOptionsFromItems = (items = []) => {
   return Array.from(map.values()).sort((a, b) =>
     String(a.nombre).localeCompare(String(b.nombre), "es")
   );
+};
+
+const nombreDesdeItem = (item = {}) =>
+  item?.cobertura?.cliente?.nombre_completo ||
+  item?.cliente_existente?.nombre_completo ||
+  item?.datos_borrador?.cliente?.nombre_completo ||
+  null;
+
+/** Salud renovando (o miembro nuevo) que aún no tiene Dental MS en el lote. */
+export const itemsSaludElegiblesParaDental = (items = []) => {
+  const list = Array.isArray(items) ? items : [];
+  const dentalClienteIds = new Set();
+  const dentalOrigenIds = new Set();
+
+  list.forEach((item) => {
+    if (!isItemDental(item)) return;
+    const cid = getItemClienteId(item);
+    if (cid != null) dentalClienteIds.add(cid);
+    const origen = Number(item?.datos_borrador?.miembro_origen_item_id || 0);
+    if (origen > 0) dentalOrigenIds.add(origen);
+  });
+
+  return list.filter((item) => {
+    if (isItemDental(item) || isItemProductoNuevo(item)) return false;
+    const renovando = isItemMiembroNuevo(item) || Boolean(item?.renovar);
+    if (!renovando) return false;
+    const cid = getItemClienteId(item);
+    if (cid != null && dentalClienteIds.has(cid)) return false;
+    if (dentalOrigenIds.has(Number(item?.id))) return false;
+    return true;
+  });
+};
+
+/** Shape compatible con AgregarDentalModal. */
+export const itemSaludToDentalMember = (item = {}, anioDestino) => {
+  const datos = item?.datos_borrador || {};
+  const cob = item?.cobertura || {};
+  const cliente =
+    item?.cliente_existente ||
+    cob?.cliente ||
+    datos?.cliente ||
+    {};
+  const clienteId = getItemClienteId(item);
+  const parentesco =
+    datos?.parentesco || cob?.parentesco || item?.cobertura?.parentesco || "";
+
+  return {
+    id: item?.id,
+    item_id: item?.id,
+    cliente_id: clienteId,
+    nombreCompleto:
+      cliente.nombre_completo ||
+      [cliente.primer_nombre, cliente.segundo_nombre, cliente.apellidos]
+        .filter(Boolean)
+        .join(" ") ||
+      nombreDesdeItem(item) ||
+      `Ítem #${item?.id}`,
+    parentesco,
+    tipo: parentesco,
+    ano_cobertura: anioDestino || datos.ano_cobertura || cob.ano_cobertura,
+    elegibilidad: datos.elegibilidad || cob.elegibilidad || "",
+    estado_cobertura: "Sí",
+    activo: true,
+    vigente: true,
+    agente: datos.agente || cob.agente || "",
+    tipo_pago: datos.tipo_pago || cob.tipo_pago || "",
+    dia_pago: datos.dia_pago ?? cob.dia_pago ?? "",
+    pagador_id: datos.pagador_id ?? cob.pagador_id ?? null,
+    coberturaDental: null,
+  };
 };

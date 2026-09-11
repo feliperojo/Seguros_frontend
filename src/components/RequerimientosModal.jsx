@@ -4,6 +4,7 @@ import apiRequest from "../services/api"; // Asumiendo que usas este servicio pa
 import { getListFromApi } from "../utils/apiResponse";
 import { formatDateMMDDYYYY } from "../utils/formatters";
 import DateInputWithCalendar from "./common/DateInputWithCalendar";
+import "../styles/GfModal.css";
 import {
   esEstadoCompletado,
   fechaCierreAlCompletar,
@@ -296,11 +297,11 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
   const groupedCoberturas = groupRequerimientosByCliente(coberturas);
 
   return (
-    <Modal show={show} onHide={onHide} size="xl" backdrop="static">
-      <Modal.Header closeButton>
-        <Modal.Title>Requerimientos de Documentos</Modal.Title>
+    <Modal show={show} onHide={onHide} size="xl" backdrop="static" dialogClassName="gf-modal gf-modal--xl" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
+        <Modal.Title className="gf-modal__title">Requerimientos de Documentos</Modal.Title>
       </Modal.Header>
-      <Modal.Body>
+      <Modal.Body className="gf-modal__body">
         {error && <Alert variant="danger">{error}</Alert>}  {/* Mostrar errores */}
         {success && <Alert variant="success">{success}</Alert>} {/* Mostrar éxito */}
 
@@ -527,7 +528,7 @@ const RequerimientosModal = ({ show, onHide, grupoFamiliarId }) => {
           <div className="text-muted">No hay requerimientos registrados.</div>
         )}
       </Modal.Body>
-      <Modal.Footer>
+      <Modal.Footer className="gf-modal__footer">
         <Button variant="secondary" onClick={onHide}>
           Cerrar
         </Button>

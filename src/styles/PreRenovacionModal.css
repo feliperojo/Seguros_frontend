@@ -1,0 +1,278 @@
+/* Pre-renovación — estilo institucional (ficha / dashboard / CVC) */
+
+.modal-dialog.pr-modal {
+  max-width: min(calc(100vw - 1.25rem), 1140px) !important;
+  width: min(calc(100vw - 1.25rem), 1140px) !important;
+  margin: 0.65rem auto;
+}
+
+.pr-modal__content {
+  border: none;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 16px 48px rgba(15, 39, 68, 0.18);
+  max-height: calc(100dvh - 1.25rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.pr-modal__header {
+  background: linear-gradient(135deg, #0f2744 0%, #1a365d 100%);
+  color: #fff;
+  border-bottom: none;
+  padding: 0.95rem 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.pr-modal__header .btn-close {
+  filter: invert(1) grayscale(1) brightness(2);
+  opacity: 0.85;
+  margin-left: auto;
+}
+
+.pr-modal__header-main {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.pr-modal__header-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.pr-modal__title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.pr-modal__subtitle {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0.12rem 0 0;
+}
+
+.pr-modal__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  min-height: 0;
+  background: #f8f9fb;
+  padding: 1rem 1.25rem;
+}
+
+.pr-modal__body .alert {
+  border-radius: 10px;
+  font-size: 0.8125rem;
+}
+
+.pr-modal__footer {
+  background: #fff;
+  border-top: 1px solid #e2e8f0;
+  padding: 0.75rem 1.25rem;
+}
+
+.pr-modal__footer .btn {
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.pr-btn-cancel {
+  border-color: #cbd5e1 !important;
+  color: #475569 !important;
+  background: #fff !important;
+}
+
+.pr-btn-cancel:hover:not(:disabled) {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+  color: #0f2744 !important;
+}
+
+.pr-btn-confirm {
+  background: #1a365d !important;
+  border-color: #1a365d !important;
+}
+
+.pr-btn-confirm:hover:not(:disabled) {
+  background: #0f2744 !important;
+  border-color: #0f2744 !important;
+}
+
+.pr-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+}
+
+.pr-panel .form-label,
+.pr-panel .form-check-label {
+  font-size: 0.78rem;
+  color: #334155;
+}
+
+.pr-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.pr-toolbar h6 {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0;
+}
+
+.pr-toolbar .btn {
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.pr-toolbar .btn-primary {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.pr-item {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.pr-item--dental {
+  border-left: 4px solid #0ea5e9;
+}
+
+.pr-item__header {
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.85rem 1rem;
+}
+
+.pr-item__name {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #0f2744;
+}
+
+.pr-item__badge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.pr-item__body {
+  padding: 0.9rem 1rem;
+}
+
+.pr-item__section-title {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin: 0 0 0.65rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.pr-item .form-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.pr-item .form-control,
+.pr-item .form-select {
+  border-radius: 8px;
+  border-color: #cbd5e1;
+  font-size: 0.8125rem;
+}
+
+.pr-item .form-control:focus,
+.pr-item .form-select:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 0.2rem rgba(26, 54, 93, 0.12);
+}
+
+.pr-item .form-control[readonly] {
+  background: #f8fafc;
+  color: #334155;
+}
+
+/* Campo marcado para quedar vacío: sin ghost del valor anterior */
+.pr-field--cleared,
+.pr-item .form-control.pr-field--cleared,
+.pr-item .form-select.pr-field--cleared,
+.pr-item .pr-field--cleared .form-control {
+  background: #fffbeb !important;
+  border-color: #f59e0b !important;
+  color: #92400e;
+}
+
+.pr-field--cleared::placeholder,
+.pr-item .pr-field--cleared .form-control::placeholder {
+  color: transparent !important;
+  opacity: 0 !important;
+}
+
+.pr-field-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.65rem;
+  margin-top: 0.2rem;
+}
+
+.pr-field-hint--cleared {
+  color: #b45309;
+  font-size: 0.75rem;
+}
+
+.pr-field-hint .btn-link {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.pr-field-hint .btn-link:hover {
+  text-decoration: underline;
+}
+
+.pr-toggle-contacto {
+  color: #1a365d;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+@media (max-width: 575.98px) {
+  .modal-dialog.pr-modal {
+    max-width: calc(100vw - 0.5rem) !important;
+    width: calc(100vw - 0.5rem) !important;
+    margin: 0.25rem auto;
+  }
+}

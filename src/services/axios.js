@@ -40,10 +40,14 @@ axiosInstance.interceptors.response.use(
       reqUrl.includes('/v1/auth/login') ||
       reqUrl.includes('/auth/login');
     if (error.response?.status === 401 && !isAuthLoginAttempt) {
+      const hadToken = !!localStorage.getItem('auth_token');
       localStorage.removeItem('auth_token');
       localStorage.removeItem('user');
       localStorage.removeItem('roles');
       localStorage.removeItem('permissions');
+      if (hadToken) {
+        window.dispatchEvent(new CustomEvent('auth:session-expired'));
+      }
 
       const currentPath = window.location.pathname;
       if (currentPath !== '/login') {

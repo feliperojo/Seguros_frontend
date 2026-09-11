@@ -20,6 +20,7 @@ import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFa
 import GroupTags from "../GroupTags";
 import GrupoNotaEditor from "../GrupoFamiliar/GrupoNotaEditor";
 import systemConfigService from "../../services/SystemConfigService";
+import "../../styles/GrupoFamiliarDetail.css";
 
 const resolveEnabledGroupHeaderFields = (configByTipo, tipo) => {
   const entry = configByTipo?.[tipo];
@@ -214,20 +215,20 @@ const Prospectogrupo = ({
   };
 
   return (
-    <div style={{ fontFamily: `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"` }}>
+    <div className="gf-detalle-grupo">
       {/* Utilidades - Barra superior */}
-      <div className="card mb-4 shadow-sm">
-        <div className="card-body p-3">
-          <div className="d-flex align-items-center justify-content-between flex-wrap gap-3">
+      <div className="gf-detalle__section gf-detalle__utils">
+        <div className="gf-detalle__section-body">
+          <div className="gf-detalle__utils-row">
             {/* Título y Etiquetas */}
-            <div className="d-flex align-items-center gap-3 flex-grow-1" style={{ minWidth: '200px' }}>
-              <div className="d-flex align-items-center">
-                <i className="fas fa-tools text-primary me-2"></i>
-                <h6 className="mb-0 fw-semibold" style={{ letterSpacing: '0.01em' }}>Utilidades</h6>
-              </div>
-              <div className="vr d-none d-md-block"></div>
-              <div className="flex-grow-1" style={{ minWidth: '250px' }}>
-                <label className="form-label mb-1 small text-muted" style={{ fontSize: '0.875rem', fontWeight: '500' }}>Etiquetas</label>
+            <div className="gf-detalle__utils-left">
+              <h6 className="gf-detalle__utils-title">
+                <i className="fas fa-tools me-2" aria-hidden="true"></i>
+                Utilidades
+              </h6>
+              <div className="gf-detalle__utils-divider d-none d-md-block" aria-hidden="true"></div>
+              <div className="gf-detalle__utils-tags">
+                <label className="gf-detalle__label">Etiquetas</label>
                 <GroupTags
                   value={Array.isArray(formData?.etiquetas) ? formData.etiquetas : []}
                   onChange={(tags) => {
@@ -246,80 +247,81 @@ const Prospectogrupo = ({
             </div>
 
             {/* Barra de navegación horizontal */}
-            <div className="d-flex align-items-center gap-2" style={{ flexWrap: 'nowrap', overflowX: 'auto' }}>
+            <div className="gf-detalle__utils-actions">
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowContactosModal(true)}
                 disabled={!resolvedGrupoId}
                 title="Contactos relacionados"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="bi bi-people me-1"></i>
                 <span className="d-none d-lg-inline">Contactos</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowHistorialCambios(true)}
                 disabled={!resolvedGrupoId}
                 title="Historial de cambios"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="bi bi-clock-history me-1"></i>
                 <span className="d-none d-lg-inline">Historial</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowDocumentosModal(true)}
                 disabled={!resolvedGrupoId}
                 title="Requerimientos"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="bi bi-folder2-open me-1"></i>
                 <span className="d-none d-lg-inline">Requerimientos</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowDriveModal(true)}
                 disabled={!resolvedGrupoId}
                 title={driveUrl ? "Editar URL Drive" : "Agregar URL Drive"}
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="bi bi-pencil-square me-1"></i>
                 <span className="d-none d-lg-inline">Drive</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-primary"
+                type="button"
+                className="btn btn-sm btn-outline-primary gf-detalle__utils-btn"
                 onClick={() => setShowGestion(true)}
                 disabled={!resolvedGrupoId}
                 title="Nueva Tarea"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="fas fa-tasks me-1"></i>
                 <span className="d-none d-lg-inline">Nueva Tarea</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowComentarioModal(true)}
                 disabled={!resolvedGrupoId}
                 title="Nuevo Comentario"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="fas fa-comment me-1"></i>
                 <span className="d-none d-lg-inline">Comentario</span>
               </button>
               <button
-                className="btn btn-sm btn-outline-secondary"
+                type="button"
+                className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                 onClick={() => setShowGestorDocumentosModal(true)}
                 disabled={!resolvedGrupoId}
                 title="Gestor de documentos"
-                style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
               >
                 <i className="fas fa-folder-open me-1"></i>
                 <span className="d-none d-lg-inline">Documentos</span>
               </button>
               {puedeGenerarPDF && (
                 <button
-                  className="btn btn-sm btn-outline-danger"
+                  type="button"
+                  className="btn btn-sm btn-outline-danger gf-detalle__utils-btn"
                   onClick={async () => {
                     try {
                       const language = await seleccionarIdiomaConfirmacion();
@@ -338,7 +340,6 @@ const Prospectogrupo = ({
                   }}
                   disabled={!resolvedGrupoId}
                   title="Confirmación de Datos"
-                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                 >
                   <FaFilePdf className="me-1" />
                   <span className="d-none d-lg-inline">Confirmación</span>
@@ -346,7 +347,8 @@ const Prospectogrupo = ({
               )}
               {puedeGenerarAutorizacion && (
                 <button
-                  className="btn btn-sm btn-outline-danger"
+                  type="button"
+                  className="btn btn-sm btn-outline-danger gf-detalle__utils-btn"
                   onClick={async () => {
                     try {
                     const language = await seleccionarIdiomaAutorizacion();
@@ -369,7 +371,6 @@ const Prospectogrupo = ({
                   }}
                   disabled={!resolvedGrupoId || !clienteTomadorId}
                   title="Carta de Autorización"
-                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                 >
                   <FaFilePdf className="me-1" />
                   <span className="d-none d-lg-inline">Autorización</span>
@@ -378,21 +379,21 @@ const Prospectogrupo = ({
               {puedeRenovar && !modoHistorico && (
                 <>
                   <button
-                    className="btn btn-sm btn-outline-warning"
+                    type="button"
+                    className="btn btn-sm btn-outline-warning gf-detalle__utils-btn"
                     onClick={() => setShowCambioVidaModal(true)}
                     disabled={!resolvedGrupoId || readOnly}
                     title="Retiro/cancelacion"
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
                     <i className="fas fa-exclamation-triangle me-1"></i>
                     <span className="d-none d-lg-inline">Retiro/cancelacion</span>
                   </button>
                   <button
-                    className="btn btn-sm btn-outline-success"
+                    type="button"
+                    className="btn btn-sm btn-outline-success gf-detalle__utils-btn"
                     onClick={() => setShowReactivacionModal(true)}
                     disabled={!resolvedGrupoId || readOnly}
                     title="Reactivar coberturas retiradas"
-                    style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                   >
                     <i className="fas fa-redo me-1"></i>
                     <span className="d-none d-lg-inline">Reactivar</span>
@@ -401,7 +402,8 @@ const Prospectogrupo = ({
               )}
               {(modoHistorico || puedeRenovar) && (
                 <button
-                  className="btn btn-sm btn-outline-secondary"
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
                   onClick={() => setShowHistorialCanceladasModal(true)}
                   disabled={!resolvedGrupoId}
                   title={
@@ -409,7 +411,6 @@ const Prospectogrupo = ({
                       ? `Historial de retiros y cancelaciones del año ${anioConsultado}`
                       : "Historial de retiros y cancelaciones"
                   }
-                  style={{ whiteSpace: 'nowrap', flexShrink: 0, fontSize: '0.875rem', fontWeight: '500' }}
                 >
                   <i className="fas fa-history me-1"></i>
                   <span className="d-none d-lg-inline">
@@ -425,17 +426,17 @@ const Prospectogrupo = ({
       </div>
 
       {/* Información del Prospecto (captación) */}
-      <div className="card mb-4 shadow-sm">
-        <div className="card-header bg-light">
-          <h5 className="mb-0 fw-semibold" style={{ letterSpacing: '0.01em', fontSize: '1.1rem' }}>
-            <i className="fas fa-info-circle text-primary me-2"></i>
+      <div className="gf-detalle__section">
+        <div className="gf-detalle__section-header">
+          <h5 className="gf-detalle__section-title">
+            <i className="fas fa-info-circle me-2" aria-hidden="true"></i>
             Información del Grupo Familiar
           </h5>
         </div>
-        <div className="card-body">
+        <div className="gf-detalle__section-body">
           <div className="row g-3">
             <div className="col-md-4">
-              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+              <label className="gf-detalle__label">
                 Captado por:
               </label>
               <select
@@ -444,7 +445,6 @@ const Prospectogrupo = ({
                 value={formData.captadoPor || ""}
                 onChange={onChange}
                 disabled={readOnly}
-                style={{ fontSize: '0.9rem' }}
               >
                 <option value="Google">Google</option>
                 <option value="Facebook">Facebook</option>
@@ -453,7 +453,7 @@ const Prospectogrupo = ({
               </select>
             </div>
             <div className="col-md-4">
-              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+              <label className="gf-detalle__label">
                 Cuál
               </label>
               <input
@@ -463,11 +463,10 @@ const Prospectogrupo = ({
                 value={formData.cual || ""}
                 onChange={onChange}
                 disabled={readOnly}
-                style={{ fontSize: '0.9rem' }}
               />
             </div>
             <div className="col-md-4">
-              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+              <label className="gf-detalle__label">
                 Asesor
               </label>
               <input
@@ -477,7 +476,6 @@ const Prospectogrupo = ({
                 value={formData.asesor || ""}
                 onChange={onChange}
                 disabled={readOnly}
-                style={{ fontSize: '0.9rem' }}
               />
             </div>
           </div>
@@ -485,12 +483,12 @@ const Prospectogrupo = ({
       </div>
 
       {/* Bloque económico */}
-      <div className="card mb-4 shadow-sm">
-        <div className="card-body">
+      <div className="gf-detalle__section">
+        <div className="gf-detalle__section-body">
           <div className="row g-3">
             {showZipCode && (
             <div className="col-md-6 col-lg-3">
-              <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+              <label className="gf-detalle__label">
                 ZIP Code
               </label>
               <input
@@ -500,14 +498,13 @@ const Prospectogrupo = ({
                 value={formData.zipCode || ""}
                 onChange={onChange}
                 disabled={readOnly}
-                style={{ fontSize: '0.9rem' }}
               />
             </div>
             )}
             {showIngresoFamiliar && (
             <div className="col-md-6 col-lg-3">
-              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                <i className="fas fa-dollar-sign text-success me-2"></i>
+              <label className="gf-detalle__label gf-detalle__label--with-icon">
+                <i className="fas fa-dollar-sign me-2" aria-hidden="true"></i>
                 Ingreso Familiar
               </label>
               <input
@@ -517,18 +514,17 @@ const Prospectogrupo = ({
                 value={formatMoneyDisplay(formData.ingresoFamiliar ?? 0)}
                 onChange={onChange}
                 readOnly
-                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
-                <i className="fas fa-info-circle me-1"></i>
+              <small className="gf-detalle__hint">
+                <i className="fas fa-info-circle" aria-hidden="true"></i>
                 Sumatoria de los ingresos de cada miembro sin fecha de retiro.
               </small>
             </div>
             )}
             {showPersonasCobertura && (
             <div className="col-md-6 col-lg-3">
-              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                <i className="fas fa-shield-alt text-primary me-2"></i>
+              <label className="gf-detalle__label gf-detalle__label--with-icon">
+                <i className="fas fa-shield-alt me-2" aria-hidden="true"></i>
                 Personas en Cobertura
               </label>
               <input
@@ -537,18 +533,17 @@ const Prospectogrupo = ({
                 name="personasCobertura"
                 value={formData.personasCobertura ?? 0}
                 readOnly
-                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
-                <i className="fas fa-info-circle me-1"></i>
+              <small className="gf-detalle__hint">
+                <i className="fas fa-info-circle" aria-hidden="true"></i>
                 Se calcula con miembros en "Sí" y sin retiro.
               </small>
             </div>
             )}
             {showPersonasTaxes && (
             <div className="col-md-6 col-lg-3">
-              <label className="form-label fw-medium d-flex align-items-center" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
-                <i className="fas fa-users text-info me-2"></i>
+              <label className="gf-detalle__label gf-detalle__label--with-icon">
+                <i className="fas fa-users me-2" aria-hidden="true"></i>
                 Personas en Taxes
               </label>
               <input
@@ -557,17 +552,16 @@ const Prospectogrupo = ({
                 name="personasTaxes"
                 value={formData.personasTaxes ?? 0}
                 readOnly
-                style={{ fontSize: '0.9rem', fontWeight: '500' }}
               />
-              <small className="text-muted d-flex align-items-center mt-1" style={{ fontSize: '0.8rem' }}>
-                <i className="fas fa-info-circle me-1"></i>
+              <small className="gf-detalle__hint">
+                <i className="fas fa-info-circle" aria-hidden="true"></i>
                 Se calcula con el número de miembros (cards).
               </small>
             </div>
             )}
             <div className="col-12">
-              <div className={`accordion ${showAnyEconomicField ? "mt-1" : ""}`} id="accordionNotasAutorizacion">
-                <div className="accordion-item border rounded">
+              <div className={`accordion gf-detalle__notes ${showAnyEconomicField ? "mt-1" : ""}`} id="accordionNotasAutorizacion">
+                <div className="accordion-item">
                   <h2 className="accordion-header" id="headingNotasAutorizacion">
                     <button
                       type="button"
@@ -575,9 +569,8 @@ const Prospectogrupo = ({
                       onClick={() => setNotasAutorizacionOpen((prev) => !prev)}
                       aria-expanded={notasAutorizacionOpen}
                       aria-controls="collapseNotasAutorizacion"
-                      style={{ fontSize: "0.9rem", fontWeight: 500 }}
                     >
-                      <i className="fas fa-sticky-note text-secondary me-2"></i>
+                      <i className="fas fa-sticky-note me-2" aria-hidden="true"></i>
                       Notas y autorización
                     </button>
                   </h2>
@@ -590,7 +583,7 @@ const Prospectogrupo = ({
                       <div className="accordion-body">
                         <div className="row g-3 mb-3">
                           <div className="col-md-6">
-                            <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                            <label className="gf-detalle__label">
                               Fecha autorización
                             </label>
                             <DateInputWithCalendar
@@ -609,7 +602,7 @@ const Prospectogrupo = ({
                             />
                           </div>
                           <div className="col-md-6">
-                            <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                            <label className="gf-detalle__label">
                               Nombre autorizado
                             </label>
                             <input
@@ -620,11 +613,10 @@ const Prospectogrupo = ({
                               onChange={onChange}
                               disabled={readOnly}
                               placeholder="Persona autorizada"
-                              style={{ fontSize: '0.9rem' }}
                             />
                           </div>
                         </div>
-                        <label className="form-label fw-medium" style={{ fontSize: '0.9rem', fontWeight: '500' }}>
+                        <label className="gf-detalle__label">
                           Nota
                         </label>
                         <GrupoNotaEditor

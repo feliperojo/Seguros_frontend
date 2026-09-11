@@ -6,6 +6,7 @@ import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { formatDateForDisplay } from "../../utils/formatters";
 import { COBERTURA_DEFINIDA } from "../../utils/coberturaDefinida";
 import { tieneFechaAnulacion } from "../../utils/coberturaAnulacion";
+import "../../styles/GfModal.css";
 
 /**
  * ReactivacionCoberturasModal
@@ -402,19 +403,19 @@ const ReactivacionCoberturasModal = ({
   const totalSeleccionadas = coberturasSeleccionadas.size;
 
   return (
-    <Modal show={show} onHide={onClose} size="xl" centered>
-      <Modal.Header closeButton className="bg-light border-bottom">
+    <Modal show={show} onHide={onClose} size="xl" centered dialogClassName="gf-modal gf-modal--xl" contentClassName="gf-modal__content">
+      <Modal.Header closeButton className="gf-modal__header">
         <div className="w-100">
-          <Modal.Title className="mb-1">
-            <i className="fas fa-redo me-2 text-primary"></i>
+          <Modal.Title className="gf-modal__title mb-1">
+            <i className="fas fa-redo me-2"></i>
             Reactivación de Coberturas
           </Modal.Title>
-          <small className="text-muted">
+          <small className="gf-modal__subtitle">
             Activar nuevamente coberturas retiradas y/o canceladas del grupo familiar
           </small>
         </div>
       </Modal.Header>
-      <Modal.Body className="p-4">
+      <Modal.Body className="gf-modal__body">
         {loadingCoberturas ? (
           <div className="text-center py-4">
             <Spinner animation="border" variant="primary" />

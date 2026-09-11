@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import "../../styles/GfModal.css";
 
 /**
  * Modal estático para elegir el tipo de producto a cotizar.
@@ -35,13 +36,13 @@ export default function ProductoCotizacionModal({
         href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
       />
       <div
-        className="modal fade show d-block"
+        className="modal fade show d-block gf-modal"
         style={{ backgroundColor: "rgba(0,0,0,.5)", zIndex: 1055 }}
       >
-        <div className="modal-dialog modal-lg">
-          <div className="modal-content">
-            <div className="modal-header">
-              <h5 className="modal-title">Seleccionar tipo de producto</h5>
+        <div className="modal-dialog modal-lg gf-modal gf-modal--lg">
+          <div className="modal-content gf-modal__content">
+            <div className="modal-header gf-modal__header">
+              <h5 className="modal-title gf-modal__title">Seleccionar tipo de producto</h5>
               {onClose && (
                 <button
                   type="button"
@@ -52,7 +53,7 @@ export default function ProductoCotizacionModal({
               )}
             </div>
 
-            <div className="modal-body">
+            <div className="modal-body gf-modal__body">
               <div className="text-center text-muted mb-3">
                 ¿Qué producto deseas cotizar?
               </div>
@@ -98,7 +99,7 @@ export default function ProductoCotizacionModal({
               </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer gf-modal__footer">
               <button
                 className="btn btn-secondary"
                 onClick={onClose || (() => {})}

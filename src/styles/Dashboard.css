@@ -109,8 +109,16 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.dashboard-kpi-grid--5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
 .dashboard-kpi-grid--3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dashboard-kpi-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 @media (min-width: 1400px) {
@@ -118,8 +126,16 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
+  .dashboard-kpi-grid--5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
   .dashboard-kpi-grid--3 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dashboard-kpi-grid--2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -159,6 +175,11 @@
   border-left-color: #059669;
 }
 
+.dashboard-kpi-tile--warning {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
 .dashboard-kpi-tile--danger {
   border-left-color: #dc2626;
   background: #fffbfb;
@@ -166,6 +187,10 @@
 
 .dashboard-kpi-tile--danger .dashboard-kpi-tile__value {
   color: #dc2626;
+}
+
+.dashboard-kpi-tile--warning .dashboard-kpi-tile__value {
+  color: #b45309;
 }
 
 .dashboard-kpi-tile__icon {
@@ -184,6 +209,11 @@
 .dashboard-kpi-tile--success .dashboard-kpi-tile__icon {
   background: rgba(5, 150, 105, 0.1);
   color: #059669;
+}
+
+.dashboard-kpi-tile--warning .dashboard-kpi-tile__icon {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
 }
 
 .dashboard-kpi-tile--danger .dashboard-kpi-tile__icon {
@@ -883,7 +913,8 @@
 
 /* Responsive */
 @media (max-width: 1199.98px) {
-  .dashboard-kpi-grid--4 {
+  .dashboard-kpi-grid--4,
+  .dashboard-kpi-grid--5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -897,7 +928,8 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .dashboard-kpi-grid--3 {
+  .dashboard-kpi-grid--3,
+  .dashboard-kpi-grid--2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -927,7 +959,9 @@
   }
 
   .dashboard-kpi-grid--4,
-  .dashboard-kpi-grid--3 {
+  .dashboard-kpi-grid--5,
+  .dashboard-kpi-grid--3,
+  .dashboard-kpi-grid--2 {
     grid-template-columns: 1fr;
   }
 

@@ -48,7 +48,7 @@ const esActivoTrue = (cobertura) => {
 
 /**
  * Clasifica un miembro alineado al panel:
- * activos reales vs cotización (GF en estados 1–4).
+ * activos reales vs cotización (GF en estados 1–5).
  */
 export const clasificarEstadoMiembro = (cobertura, grupo = {}) => {
   const estadoCobertura = cobertura.estado_cobertura || "";

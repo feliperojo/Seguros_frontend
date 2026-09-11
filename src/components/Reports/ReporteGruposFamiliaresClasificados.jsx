@@ -75,7 +75,7 @@ const esActivoTrue = (cobertura) => {
 /**
  * Clasifica un miembro alineado al panel:
  * - Activos reales: Sí + activo + vigente, fuera de cotización y sin fechas de baja.
- * - Cotización: misma cobertura “Sí” pero el GF aún está en estados 1–4.
+ * - Cotización: misma cobertura “Sí” pero el GF aún está en estados 1–5.
  */
 const clasificarEstadoMiembro = (cobertura, grupo = {}) => {
   const estadoCobertura = cobertura.estado_cobertura || "";

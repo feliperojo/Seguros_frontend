@@ -8,6 +8,7 @@ import DocuSealSignerModal from "./DocuSealSignerModal";
 import DocumentFlowGuide from "./DocumentFlowGuide";
 import useToast from "../hooks/useToast";
 import logo from "../assets/tampa.jpg";
+import "../styles/GfModal.css";
 
 /**
  * Modal que se muestra después de generar un PDF con opciones para descargar o enviar a firmar
@@ -398,15 +399,15 @@ Tampa Seguros`;
 
   return (
     <>
-      <Modal show={show} onHide={onHide} centered size="lg">
-        <Modal.Header closeButton>
+      <Modal show={show} onHide={onHide} centered size="lg" dialogClassName="gf-modal gf-modal--lg" contentClassName="gf-modal__content">
+        <Modal.Header closeButton className="gf-modal__header">
           <div className="d-flex align-items-center gap-3">
             <img src={logo} alt="Tampa Seguros" className="document-modal-logo" />
-            <Modal.Title className="mb-0">Documento Generado</Modal.Title>
+            <Modal.Title className="gf-modal__title mb-0">Documento Generado</Modal.Title>
           </div>
         </Modal.Header>
 
-        <Modal.Body>
+        <Modal.Body className="gf-modal__body">
           {/* Paso 1: Opciones (Descargar / Enviar a firma) */}
           {step === "options" && (
             <div className="text-center py-4">

@@ -64,7 +64,12 @@ const apiRequest = async (endpoint, method = "GET", body = null, extraHeaders = 
       const isAuthLoginAttempt =
         url.includes("/v1/auth/login") || url.includes("/auth/login");
       if (!isVerifySuperAdminPassword && !isAuthLoginAttempt) {
+        const hadToken = !!localStorage.getItem("auth_token");
         localStorage.removeItem("auth_token");
+        // Avisa a AuthContext para sincronizar estado y redirigir (evita UI “logueada” sin token)
+        if (hadToken && typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth:session-expired"));
+        }
       }
     } else if (response.status === 403) {
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
@@ -179,7 +184,11 @@ const apiRequestFormData = async (
       const isAuthLoginAttempt =
         url.includes("/v1/auth/login") || url.includes("/auth/login");
       if (!isVerifySuperAdminPassword && !isAuthLoginAttempt) {
+        const hadToken = !!localStorage.getItem("auth_token");
         localStorage.removeItem("auth_token");
+        if (hadToken && typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("auth:session-expired"));
+        }
       }
     } else if (response.status === 403) {
       errorMessage = data?.message || "No tienes permisos para realizar esta acción";
