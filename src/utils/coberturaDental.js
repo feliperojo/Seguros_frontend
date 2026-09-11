@@ -91,6 +91,50 @@ export const filterCamposCopiablesADentalMs = (fieldKeys = []) =>
     CAMPOS_COPIABLES_SALUD_A_DENTAL_MS.includes(key)
   );
 
+/** Año efectivo de una cobertura Dental MS (ano_cobertura o fecha de activación). */
+export const anioDeCoberturaDentalMs = (dental = {}) => {
+  const fromAno = Number(dental?.ano_cobertura);
+  if (Number.isFinite(fromAno) && fromAno > 1900 && fromAno < 2100) {
+    return fromAno;
+  }
+  const fromFecha = Number(String(dental?.fecha_activacion || "").slice(0, 4));
+  if (Number.isFinite(fromFecha) && fromFecha > 1900 && fromFecha < 2100) {
+    return fromFecha;
+  }
+  return null;
+};
+
+/**
+ * Dental MS solo se visualiza en el año al que pertenece su cobertura.
+ * Prioriza el año consultado de la vista; si no hay, compara con el año de salud.
+ * Sin referencia de año (vistas legacy) no oculta.
+ */
+export const debeMostrarCoberturaDentalMs = (
+  dental = {},
+  { anioVista = null, anioSalud = null } = {}
+) => {
+  const dentalId = dental?.cobertura_id ?? dental?.id ?? null;
+  if (dentalId == null || dentalId === "") return false;
+
+  const tipo = dental?.cobertura_tipo;
+  if (tipo && !isDentalMsCoberturaTipo(tipo)) return false;
+
+  const anioDental = anioDeCoberturaDentalMs(dental);
+  if (anioDental == null) return false;
+
+  const vista = Number(anioVista);
+  if (Number.isFinite(vista) && vista > 1900 && vista < 2100) {
+    return anioDental === vista;
+  }
+
+  const salud = Number(anioSalud);
+  if (Number.isFinite(salud) && salud > 1900 && salud < 2100) {
+    return anioDental === salud;
+  }
+
+  return true;
+};
+
 export {
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,

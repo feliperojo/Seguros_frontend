@@ -36,7 +36,7 @@ import {
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
-import { filterCamposCopiablesADentalMs } from "../../utils/coberturaDental";
+import { filterCamposCopiablesADentalMs, debeMostrarCoberturaDentalMs } from "../../utils/coberturaDental";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 import "../../styles/GrupoFamiliarDetail.css";
 
@@ -809,6 +809,8 @@ const TomaDeDatos = ({
   onBlockedAddClick,
   grupoFamiliarId,
   onDerivedCounts,
+  /** Año de la vista del GF (histórico / actual / futuro). Controla Dental MS. */
+  anioConsultado = null,
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -2948,8 +2950,12 @@ const activeNormalized = useMemo(
                   </div>
                 </AccordionItem>
 
-                {/* Datos Cobertura Dental MS */}
-                {m.coberturaDental?.cobertura_id && (() => {
+                {/* Datos Cobertura Dental MS — solo si pertenece al año de la vista */}
+                {m.coberturaDental?.cobertura_id &&
+                  debeMostrarCoberturaDentalMs(m.coberturaDental, {
+                    anioVista: anioConsultado,
+                    anioSalud: m.ano_cobertura,
+                  }) && (() => {
                   const d = m.coberturaDental;
                   const onDentalChange = onChangeDentalFactory(idx);
                   const dentalTipo = COBERTURA_TIPO_DENTAL_MS;

@@ -1,5 +1,6 @@
 // services/GrupoFamiliarService.js
 import apiRequest from "./api";
+import { sonMismoProductoParaConflicto } from "../constants/coberturaTipos";
 
 // Base paths (evita typos y facilita mantenimiento)
 const BASE_GF = "grupo_familiar";
@@ -188,7 +189,7 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
 
     const conflicto = activas.find((c) => {
       const cClienteId = c?.cliente?.id ?? c.cliente_id;
-      const tipoCob = (c?.cobertura_tipo || "").toString().trim().toUpperCase();
+      const tipoCob = (c?.cobertura_tipo || "").toString().trim();
 
       const estaVigente =
         toBool(c.activo) &&
@@ -199,7 +200,7 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
       if (!estaVigente) return false;
 
       const mismoCliente = Number(cClienteId) === targetClienteId;
-      const mismoTipo = tipoCob === tipoActual;
+      const mismoTipo = sonMismoProductoParaConflicto(coberturaTipo, tipoCob);
 
       if (import.meta?.env?.DEV) {
         console.log("[GF] Cobertura activa revisada", {
@@ -263,13 +264,11 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
           ? estadoRaw.data.data
           : [];
 
-    const tipoActual = String(coberturaTipo).trim().toUpperCase();
-
     const conflicto = activas.find((c) => {
-      const tipoCob = (c?.cobertura_tipo || "").toString().trim().toUpperCase();
+      const tipoCob = (c?.cobertura_tipo || "").toString().trim();
       const grupoFamiliarId = c?.grupo_familiar_id ?? c?.grupo?.id ?? c?.grupo?.grupo_familiar_id;
 
-      const mismoTipo = tipoCob === tipoActual;
+      const mismoTipo = sonMismoProductoParaConflicto(coberturaTipo, tipoCob);
       if (!mismoTipo) return false;
 
       if (grupoFamiliarId == null || currentGrupoFamiliarId == null) return true;

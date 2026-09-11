@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
+import { sonMismoProductoParaConflicto } from "../../constants/coberturaTipos";
 import "../../styles/GfModal.css";
 
 const TYPE_COLOR = {
@@ -24,9 +25,6 @@ export default function ClienteExistenteModal({
 
   if (!open) return null;
 
-  const normalizeTipo = (v) =>
-    (v || "").toString().trim().toUpperCase();
-
   const toBool = (v) =>
     v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
 
@@ -35,8 +33,6 @@ export default function ClienteExistenteModal({
 
   const validarCoberturasLocalmente = (clienteBase) => {
     if (!clienteBase) return null;
-
-    const tipoActual = normalizeTipo(defaultCoberturaTipo);
 
     // Soportar tanto un arreglo de coberturas como campos planos en el cliente
     const coberturas = Array.isArray(clienteBase.coberturas)
@@ -58,24 +54,27 @@ export default function ClienteExistenteModal({
     if (!coberturas.length) return null;
 
     const conflicto = coberturas.find((c) => {
-      const tipoCob = normalizeTipo(c.cobertura_tipo);
       const estaVigente =
         toBool(c.activo) &&
         isBlank(c.fecha_cancelacion) &&
         isBlank(c.fecha_retiro) &&
+        isBlank(c.fecha_anulacion) &&
         (c.vigente === undefined || c.vigente === null || toBool(c.vigente));
 
       if (!estaVigente) return false;
+      if (!sonMismoProductoParaConflicto(defaultCoberturaTipo, c.cobertura_tipo)) {
+        return false;
+      }
 
       const grupoCob = c.grupo_familiar_id ?? c.grupo_id ?? c.grupoFamiliarId ?? null;
 
       // Regla: cobertura vigente, mismo producto y perteneciendo a OTRO grupo familiar.
       // Si por alguna razón no viene grupoCob, caemos al bloqueo por producto solamente.
       if (grupoCob && grupoFamiliarId) {
-        return tipoCob === tipoActual && Number(grupoCob) !== Number(grupoFamiliarId);
+        return Number(grupoCob) !== Number(grupoFamiliarId);
       }
 
-      return tipoCob === tipoActual;
+      return true;
     });
 
     return conflicto || null;
@@ -131,7 +130,7 @@ export default function ClienteExistenteModal({
               icon: "warning",
               title: "Cobertura vigente existente",
               html: `
-              <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto.</p>
+              <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto (<b>${defaultCoberturaTipo}</b>).</p>
               <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
               <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
             `,
@@ -139,7 +138,7 @@ export default function ClienteExistenteModal({
             });
           } else {
             window.alert(
-              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto.\n\n` +
+              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto (${defaultCoberturaTipo}).\n\n` +
               `${mensajeDetalle}\n\n` +
               `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
             );
@@ -177,14 +176,35 @@ export default function ClienteExistenteModal({
         <div className="modal-content gf-modal__content">
 
           <div className="modal-header gf-modal__header">
-            <h5 className="modal-title gf-modal__title">Agregar cliente existente</h5>
-            <button className="btn-close" onClick={onClose}/>
+            <div className="gf-modal__header-main" style={{ justifyContent: "space-between" }}>
+              <div style={{ minWidth: 0 }}>
+                <h5 className="modal-title gf-modal__title mb-1">Agregar cliente existente</h5>
+                <div className="small" style={{ color: "rgba(255,255,255,0.9)" }}>
+                  Criterio de producto:{" "}
+                  <span className="badge bg-info text-dark">
+                    {defaultCoberturaTipo || "Plan de salud"}
+                  </span>
+                </div>
+              </div>
+              <button type="button" className="btn-close" onClick={onClose} aria-label="Cerrar" />
+            </div>
           </div>
 
           <div className="modal-body gf-modal__body">
+            <div className="d-flex flex-wrap align-items-center gap-2 mb-3 p-2 border rounded bg-light">
+              <span className="text-muted small mb-0">Producto seleccionado del grupo:</span>
+              <span className="badge bg-info text-dark fs-6">
+                {defaultCoberturaTipo || "Plan de salud"}
+              </span>
+              <span className="text-muted small mb-0">
+                La búsqueda y el botón Agregar usan este producto como criterio
+                (no se bloquea por tener otro producto activo, p. ej. Salud MS).
+              </span>
+            </div>
+
             <div className="row g-2 align-items-center mb-3">
               <div className="col-auto">
-                <label className="form-label mb-0">Tipo <span className="text-danger">*</span></label>
+                <label className="form-label mb-0">Tipo de miembro <span className="text-danger">*</span></label>
               </div>
               <div className="col-auto">
                 <select
@@ -207,7 +227,8 @@ export default function ClienteExistenteModal({
             {!tipo && (
               <div className="alert alert-info mb-3">
                 <i className="bi bi-info-circle me-2"></i>
-                Por favor, seleccione un tipo de cliente antes de buscar y agregar.
+                Seleccione el tipo de miembro (Tomador, Cónyuge, etc.) antes de buscar.
+                El producto ya está fijado: <strong>{defaultCoberturaTipo || "Plan de salud"}</strong>.
               </div>
             )}
 
@@ -226,6 +247,7 @@ export default function ClienteExistenteModal({
             <ClienteExistente
               onClienteSeleccionado={handlePick}
               contexto={contexto}
+              coberturaTipoDestino={defaultCoberturaTipo}
             />
           </div>
 

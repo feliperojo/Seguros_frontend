@@ -80,6 +80,31 @@ export const isProductoPrivadoIndependiente = (tipo = "") => {
   return !isProductoSaludMs(norm);
 };
 
+/**
+ * Clave de producto para conflictos al agregar a un GF.
+ * Salud MS y privados distintos no se bloquean entre sí.
+ */
+export const claveProductoConflicto = (tipo = "") => {
+  const norm = normalizeCoberturaTipo(tipo);
+  if (!norm) return null;
+  if (isDentalMsCoberturaTipo(norm)) return "dental_ms";
+  if (isProductoSaludMs(norm)) return "salud";
+  const lower = norm.toLowerCase();
+  if (lower.includes("vision") || lower.includes("visión")) return "vision";
+  if (lower.includes("vida")) return "vida";
+  if (lower.includes("descuento")) return "descuentos";
+  if (lower.includes("dental")) return "plan_dental";
+  return lower;
+};
+
+/** true si ambos tipos son el mismo producto de negocio (conflicto al agregar). */
+export const sonMismoProductoParaConflicto = (tipoA, tipoB) => {
+  const a = claveProductoConflicto(tipoA);
+  const b = claveProductoConflicto(tipoB);
+  if (!a || !b) return false;
+  return a === b;
+};
+
 /** Salud MS → Dental MS → privados → otros (listado de GF). */
 export const prioridadOrdenListadoProducto = (tipo = "") => {
   if (isProductoSaludMs(tipo)) return 10;
