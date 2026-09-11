@@ -74,6 +74,7 @@ const GruposFamiliaresListado = () => {
     last_page: 1,
     per_page: ITEMS_PER_PAGE,
     page: 1,
+    expandido_por_anio: false,
   });
   const [selectedStatus, setSelectedStatus] = useState(() => {
     const fromUrl = (searchParams.get("estado") || "").toLowerCase();
@@ -179,11 +180,12 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     return y === ANIO_ACTUAL ? null : y;
   }, [aniosSeleccionados]);
 
-  const buildDetallePath = (grupoId) => {
-    if (anioParaDetalle == null) {
+  const buildDetallePath = (grupoId, anioPlan = null) => {
+    const anio = anioPlan != null ? Number(anioPlan) : anioParaDetalle;
+    if (anio == null || anio === ANIO_ACTUAL) {
       return `/grupo_familiar/${grupoId}`;
     }
-    return `/grupo_familiar/${grupoId}?anio=${anioParaDetalle}`;
+    return `/grupo_familiar/${grupoId}?anio=${anio}`;
   };
 
   const persistAniosEnUrl = (nextAnios) => {
@@ -343,11 +345,13 @@ useEffect(() => {
 
         if (response && response.status === "success" && Array.isArray(response.data)) {
           setGrupos(response.data);
-          setPaginationMeta(response.meta || {
+          setPaginationMeta({
             total: response.data.length,
             last_page: 1,
             per_page: ITEMS_PER_PAGE,
             page: currentPage,
+            expandido_por_anio: false,
+            ...(response.meta || {}),
           });
         } else {
           setGrupos([]);
@@ -356,6 +360,7 @@ useEffect(() => {
             last_page: 1,
             per_page: ITEMS_PER_PAGE,
             page: 1,
+            expandido_por_anio: false,
           });
         }
       } catch (error) {
@@ -367,6 +372,7 @@ useEffect(() => {
           last_page: 1,
           per_page: ITEMS_PER_PAGE,
           page: 1,
+          expandido_por_anio: false,
         });
         setLoadError(
           error?.message ||
@@ -547,6 +553,18 @@ useEffect(() => {
   const getTomadorNombre = (grupo) => grupo.tomador_nombre || "Sin asignar";
 
   const totalFiltered = paginationMeta.total ?? 0;
+  const expandidoPorAnio = Boolean(paginationMeta.expandido_por_anio);
+  const mostrarColumnaAnio =
+    expandidoPorAnio || grupos.some((g) => g?.anio_plan != null);
+
+  const rowKeyOf = (grupo) =>
+    grupo?.anio_plan != null ? `${grupo.id}-${grupo.anio_plan}` : String(grupo.id);
+
+  const etiquetaAnioFila = (anioPlan) => {
+    if (anioPlan == null) return "—";
+    const y = Number(anioPlan);
+    return `${y}${etiquetaAnio(y)}`;
+  };
   const totalPages = Math.max(1, paginationMeta.last_page ?? 1);
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const rangeStart = totalFiltered === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
@@ -756,8 +774,14 @@ useEffect(() => {
                     <div className="d-flex justify-content-between align-items-center gf-listado__summary">
                       <span>
                         Mostrando <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> de{" "}
-                        <strong>{totalFiltered}</strong> grupo
-                        {totalFiltered !== 1 ? "s" : ""}
+                        <strong>{totalFiltered}</strong>{" "}
+                        {expandidoPorAnio
+                          ? totalFiltered !== 1
+                            ? "resultados"
+                            : "resultado"
+                          : totalFiltered !== 1
+                            ? "grupos"
+                            : "grupo"}
                       </span>
                       {totalPages > 1 && (
                         <span>
@@ -771,6 +795,7 @@ useEffect(() => {
                           <tr>
                             <th style={{ width: "2.5rem" }} aria-label="Expandir" />
                             <th>ID GF</th>
+                            {mostrarColumnaAnio && <th>Año</th>}
                             <th>Tomador</th>
                             <th title="Coberturas privadas activas (Vision, Plan Dental, etc.)">C.Privado</th>
                             <th title="Miembros activos Salud MS / Dental MS">Salud/Dental Ms</th>
@@ -784,13 +809,15 @@ useEffect(() => {
                         </thead>
                         <tbody>
                           {grupos.map((grupo) => {
-                            const estaExpandido = gruposExpandidos.has(grupo.id);
+                            const rowKey = rowKeyOf(grupo);
+                            const estaExpandido = gruposExpandidos.has(rowKey);
+                            const detallePath = buildDetallePath(grupo.id, grupo.anio_plan);
                             return (
-                              <Fragment key={grupo.id}>
+                              <Fragment key={rowKey}>
                                 <tr
                                   className={estaExpandido ? "table-active" : undefined}
                                   style={{ cursor: "pointer" }}
-                                  onClick={() => toggleGrupoExpandido(grupo.id)}
+                                  onClick={() => toggleGrupoExpandido(rowKey)}
                                 >
                                   <td className="text-muted">
                                     {estaExpandido ? <FaChevronUp /> : <FaChevronDown />}
@@ -798,7 +825,7 @@ useEffect(() => {
                                   <td>
                                     {grupo.id ? (
                                       <Link
-                                        to={buildDetallePath(grupo.id)}
+                                        to={detallePath}
                                         className="text-decoration-none"
                                         title="Ver detalle del grupo"
                                         onClick={(e) => e.stopPropagation()}
@@ -809,6 +836,13 @@ useEffect(() => {
                                       "Sin asignar"
                                     )}
                                   </td>
+                                  {mostrarColumnaAnio && (
+                                    <td>
+                                      <span className="gf-listado__anio-badge">
+                                        {etiquetaAnioFila(grupo.anio_plan)}
+                                      </span>
+                                    </td>
+                                  )}
                                   <td>{getTomadorNombre(grupo)}</td>
                                   <td>{renderPersonasCP(grupo)}</td>
                                   <td>{renderPersonasSD(grupo)}</td>
@@ -817,7 +851,7 @@ useEffect(() => {
                                   <td>
                                     {grupo.id ? (
                                       <Link
-                                        to={buildDetallePath(grupo.id)}
+                                        to={detallePath}
                                         className="text-decoration-none fw-bold"
                                         title="Ver detalle del grupo"
                                         onClick={(e) => e.stopPropagation()}
@@ -889,11 +923,19 @@ useEffect(() => {
                                 </tr>
                                 {estaExpandido && (
                                   <tr className="grupo-listado-acordeon-detalle">
-                                    <td colSpan={11} className="bg-white border-bottom p-3">
+                                    <td
+                                      colSpan={mostrarColumnaAnio ? 12 : 11}
+                                      className="bg-white border-bottom p-3"
+                                    >
                                       <GrupoFamiliarClasificadoDetalle
                                         grupoId={grupo.id}
-                                        anio={anioParaDetalle}
-                                        detallePath={buildDetallePath(grupo.id)}
+                                        anio={
+                                          grupo.anio_plan != null &&
+                                          Number(grupo.anio_plan) !== ANIO_ACTUAL
+                                            ? Number(grupo.anio_plan)
+                                            : anioParaDetalle
+                                        }
+                                        detallePath={detallePath}
                                       />
                                     </td>
                                   </tr>
