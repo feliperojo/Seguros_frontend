@@ -19,6 +19,7 @@ import { Helmet } from "react-helmet-async";
 import Pagination from "../components/Pagination";
 import GroupTags from "../components/GroupTags";
 import { SUGGESTED_TAGS } from "../utils/tagsCatalog";
+import { ordenarEtiquetasProductoListado } from "../constants/coberturaTipos";
 
 const ITEMS_PER_PAGE = 50;
 const SEARCH_DEBOUNCE_MS = 400;
@@ -252,6 +253,18 @@ const GruposFamiliaresConTags = () => {
     return "#2196F3";
   };
 
+  const getProductoNombre = (grupo) =>
+    ordenarEtiquetasProductoListado(grupo.producto || "-");
+
+  const getProductoItems = (grupo) => {
+    const producto = getProductoNombre(grupo);
+    if (!producto || producto === "-") return [];
+    return producto
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
   const getTags = (grupo) => {
     try {
       const tagsRaw = grupo.tags || grupo.etiquetas;
@@ -400,6 +413,7 @@ const GruposFamiliaresConTags = () => {
                         <th>ID GF</th>
                         <th>Tomador</th>
                         <th>Estado</th>
+                        <th>Producto</th>
                         <th>Etiquetas</th>
                       </tr>
                     </thead>
@@ -407,6 +421,7 @@ const GruposFamiliaresConTags = () => {
                       {grupos.map((grupo) => {
                         const tags = getTags(grupo);
                         const estadoInfo = getGrupoEstado(grupo);
+                        const productos = getProductoItems(grupo);
                         const isSaving = savingIds.has(grupo.id);
 
                         return (
@@ -430,6 +445,19 @@ const GruposFamiliaresConTags = () => {
                               >
                                 {estadoInfo.estado}
                               </span>
+                            </td>
+                            <td>
+                              {productos.length > 0 ? (
+                                <div className="gf-tags__productos-wrap" title={getProductoNombre(grupo)}>
+                                  {productos.map((producto) => (
+                                    <span key={producto} className="gf-tags__producto-chip">
+                                      {producto}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="gf-tags__sin-producto">Sin producto</span>
+                              )}
                             </td>
                             <td>
                               <div className={`gf-tags__editor-wrap${isSaving ? " is-saving" : ""}`}>

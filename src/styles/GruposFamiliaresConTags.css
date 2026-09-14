@@ -97,6 +97,33 @@
   font-size: 0.875rem;
 }
 
+.gf-tags__productos-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.gf-tags__producto-chip {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1a365d;
+  border: 1px solid #bfdbfe;
+  line-height: 1.25;
+  max-width: 100%;
+}
+
+.gf-tags__sin-producto {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .gf-tags__editor-wrap {
   display: flex;
   flex-direction: column;
