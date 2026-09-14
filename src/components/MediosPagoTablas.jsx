@@ -84,11 +84,21 @@ const MediosPagoTablas = ({
     pendingActionRef.current = action;
     setShowPasswordModal(true);
   };
-  const tarjetas = mediosPago.filter((m) => {
-    const fp = inferFormaPago(m);
-    return fp === "tarjeta" || fp === "tarjeta_credito" || fp === "tarjeta_debito";
-  });
-  const cuentasBancarias = mediosPago.filter((m) => inferFormaPago(m) === "cuenta_bancaria");
+  const isPrincipal = (medio) =>
+    medio?.es_principal === true || medio?.es_principal === 1 || medio?.es_principal === "1";
+
+  // Solo orden de visualización: el marcado como principal va primero
+  const sortByPrincipal = (a, b) => Number(isPrincipal(b)) - Number(isPrincipal(a));
+
+  const tarjetas = mediosPago
+    .filter((m) => {
+      const fp = inferFormaPago(m);
+      return fp === "tarjeta" || fp === "tarjeta_credito" || fp === "tarjeta_debito";
+    })
+    .sort(sortByPrincipal);
+  const cuentasBancarias = mediosPago
+    .filter((m) => inferFormaPago(m) === "cuenta_bancaria")
+    .sort(sortByPrincipal);
   
   const datosVisibles = showPaymentMethodsData || isUnlocked;
 
@@ -168,9 +178,7 @@ const MediosPagoTablas = ({
   };
 
   const renderPrincipal = (medio) => {
-    const isPrincipal =
-      medio?.es_principal === true || medio?.es_principal === 1 || medio?.es_principal === "1";
-    return isPrincipal ? (
+    return isPrincipal(medio) ? (
       <span className="badge bg-primary">Principal</span>
     ) : (
       <span className="text-muted">—</span>
