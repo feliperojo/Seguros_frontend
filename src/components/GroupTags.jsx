@@ -18,8 +18,17 @@ import useToast from "../hooks/useToast";
  * @param {Function} onChange - Callback que se ejecuta cuando cambian las etiquetas (recibe el array de etiquetas activas)
  * @param {Boolean} readOnly - Si es true, deshabilita la edición
  * @param {String} className - Clases CSS adicionales
+ * @param {Boolean} hideLabel - Si es true, oculta el texto "Etiquetas:"
+ * @param {Boolean} lazyCatalog - Si es true, carga el catálogo solo al abrir el modal (útil en tablas)
  */
-const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) => {
+const GroupTags = ({
+  value = [],
+  onChange,
+  readOnly = false,
+  className = "",
+  hideLabel = false,
+  lazyCatalog = false,
+}) => {
   const toast = useToast();
   const CONFIG_KEY = GROUP_TAGS_CONFIG_KEY;
   const DELETED_KEY = GROUP_TAGS_DELETED_CONFIG_KEY;
@@ -198,8 +207,30 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
 
   // Carga inicial del banco global (compartido entre usuarios y grupos)
   useEffect(() => {
+    if (lazyCatalog) {
+      // En modo lazy solo hidratar desde localStorage; el servidor se consulta al abrir el modal.
+      try {
+        const savedCustom = localStorage.getItem("groupTags_custom");
+        const savedDeleted = localStorage.getItem("groupTags_deleted");
+        if (savedCustom) {
+          const parsed = JSON.parse(savedCustom);
+          if (Array.isArray(parsed)) setCustomTags(parsed.filter(validateTag));
+        }
+        if (savedDeleted) {
+          const parsed = JSON.parse(savedDeleted);
+          if (Array.isArray(parsed)) {
+            setDeletedTagKeys(parsed.filter((k) => typeof k === "string"));
+          }
+        }
+      } catch {
+        // Ignorar errores de localStorage
+      }
+      setCatalogReady(true);
+      return;
+    }
+
     loadCatalogFromServer({ mergeWithLocal: true });
-  }, [loadCatalogFromServer]);
+  }, [loadCatalogFromServer, lazyCatalog]);
 
   // Al abrir el modal, refrescar desde el servidor para ver etiquetas de otros usuarios
   useEffect(() => {
@@ -429,7 +460,9 @@ const GroupTags = ({ value = [], onChange, readOnly = false, className = "" }) =
     <>
       {/* Vista de etiquetas activas (chips) */}
       <div className={`flex flex-wrap gap-2 items-center ${className}`}>
-        <span className="text-sm font-medium text-gray-700 mr-2">Etiquetas:</span>
+        {!hideLabel && (
+          <span className="text-sm font-medium text-gray-700 mr-2">Etiquetas:</span>
+        )}
         {normalizedValue.length > 0 ? (
           normalizedValue.map((tag) => (
             <span

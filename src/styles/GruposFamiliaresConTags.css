@@ -96,3 +96,34 @@
   color: #334155;
   font-size: 0.875rem;
 }
+
+.gf-tags__editor-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 12rem;
+}
+
+.gf-tags__editor-wrap.is-saving {
+  opacity: 0.92;
+}
+
+.gf-tags__editor {
+  gap: 0.35rem !important;
+}
+
+.gf-tags__editor .inline-flex.items-center.gap-1\.5,
+.gf-tags__editor span[style] {
+  font-size: 0.6875rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.gf-tags__saving-hint {
+  font-size: 0.6875rem;
+  color: #64748b;
+  font-style: italic;
+}

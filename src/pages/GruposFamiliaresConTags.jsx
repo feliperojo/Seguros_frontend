@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Container,
   Table,
@@ -16,38 +16,163 @@ import "../styles/GruposFamiliaresConTags.css";
 import { Link } from "react-router-dom";
 import apiRequest from "../services/api";
 import { Helmet } from "react-helmet-async";
+import Pagination from "../components/Pagination";
+import GroupTags from "../components/GroupTags";
 import { SUGGESTED_TAGS } from "../utils/tagsCatalog";
+
+const ITEMS_PER_PAGE = 50;
+const SEARCH_DEBOUNCE_MS = 400;
+const TAGS_SAVE_DEBOUNCE_MS = 450;
 
 const GruposFamiliaresConTags = () => {
   const [grupos, setGrupos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [savingIds, setSavingIds] = useState(() => new Set());
+  const [paginationMeta, setPaginationMeta] = useState({
+    total: 0,
+    last_page: 1,
+    per_page: ITEMS_PER_PAGE,
+    page: 1,
+  });
 
-  const fetchGrupos = async () => {
-    setLoading(true);
-    try {
-      const endpoint = "grupo_familiar/grupos-familiares-full";
-      const response = await apiRequest(endpoint, "GET");
-
-      if (response && response.status === "success" && Array.isArray(response.data)) {
-        setGrupos(response.data);
-      } else {
-        console.error("❌ [GruposFamiliaresConTags] Respuesta inesperada:", response);
-        setGrupos([]);
-      }
-    } catch (error) {
-      console.error("❌ [GruposFamiliaresConTags] Error al cargar grupos familiares:", error);
-      alert("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const saveTimersRef = useRef({});
+  const lastSavedTagsRef = useRef({});
 
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm.trim());
+      setCurrentPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchGrupos = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams();
+        params.set("page", String(currentPage));
+        params.set("per_page", String(ITEMS_PER_PAGE));
+        if (debouncedSearch) {
+          params.set("search", debouncedSearch);
+        }
+
+        const response = await apiRequest(
+          `grupo_familiar/grupos-familiares-listado?${params.toString()}`,
+          "GET"
+        );
+
+        if (cancelled) return;
+
+        if (response && response.status === "success" && Array.isArray(response.data)) {
+          setGrupos(response.data);
+          response.data.forEach((grupo) => {
+            if (grupo?.id != null) {
+              lastSavedTagsRef.current[grupo.id] = JSON.stringify(grupo.tags || []);
+            }
+          });
+          setPaginationMeta({
+            total: response.data.length,
+            last_page: 1,
+            per_page: ITEMS_PER_PAGE,
+            page: currentPage,
+            ...(response.meta || {}),
+          });
+        } else {
+          console.error("❌ [GruposFamiliaresConTags] Respuesta inesperada:", response);
+          setGrupos([]);
+          setPaginationMeta({
+            total: 0,
+            last_page: 1,
+            per_page: ITEMS_PER_PAGE,
+            page: 1,
+          });
+        }
+      } catch (error) {
+        if (cancelled || error?.response?.status === 401) return;
+        console.error("❌ [GruposFamiliaresConTags] Error al cargar grupos familiares:", error);
+        setGrupos([]);
+        setPaginationMeta({
+          total: 0,
+          last_page: 1,
+          per_page: ITEMS_PER_PAGE,
+          page: 1,
+        });
+        alert("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
     fetchGrupos();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentPage, debouncedSearch, reloadKey]);
+
+  useEffect(() => {
+    const timers = saveTimersRef.current;
+    return () => {
+      Object.values(timers).forEach((timer) => clearTimeout(timer));
+    };
   }, []);
 
+  const persistTags = useCallback(async (grupoId, tags) => {
+    const snapshot = JSON.stringify(tags);
+    if (lastSavedTagsRef.current[grupoId] === snapshot) return;
+
+    setSavingIds((prev) => {
+      const next = new Set(prev);
+      next.add(grupoId);
+      return next;
+    });
+
+    try {
+      await apiRequest(`grupo_familiar/${grupoId}`, "PUT", { tags });
+      lastSavedTagsRef.current[grupoId] = snapshot;
+    } catch (error) {
+      console.error("❌ [GruposFamiliaresConTags] Error al guardar etiquetas:", error);
+      alert("No se pudieron guardar las etiquetas del grupo. Intente nuevamente.");
+      setReloadKey((k) => k + 1);
+    } finally {
+      setSavingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(grupoId);
+        return next;
+      });
+    }
+  }, []);
+
+  const handleTagsChange = useCallback((grupoId, nextTags) => {
+    const sanitized = Array.isArray(nextTags) ? nextTags : [];
+
+    setGrupos((prev) =>
+      prev.map((grupo) =>
+        grupo.id === grupoId ? { ...grupo, tags: sanitized } : grupo
+      )
+    );
+
+    if (saveTimersRef.current[grupoId]) {
+      clearTimeout(saveTimersRef.current[grupoId]);
+    }
+
+    saveTimersRef.current[grupoId] = setTimeout(() => {
+      persistTags(grupoId, sanitized);
+    }, TAGS_SAVE_DEBOUNCE_MS);
+  }, [persistTags]);
+
   const getTomadorNombre = (grupo) => {
+    if (grupo.tomador_nombre && String(grupo.tomador_nombre).trim()) {
+      return grupo.tomador_nombre;
+    }
+
     if (!grupo.coberturas || grupo.coberturas.length === 0) {
       return "Sin asignar";
     }
@@ -88,19 +213,6 @@ const GruposFamiliaresConTags = () => {
     }
 
     return { estado, variant };
-  };
-
-  const getTextColor = (bgColor) => {
-    if (!bgColor) return "#FFFFFF";
-
-    const hex = bgColor.replace('#', '');
-    const r = parseInt(hex.length === 3 ? hex[0] + hex[0] : hex.substring(0, 2), 16);
-    const g = parseInt(hex.length === 3 ? hex[1] + hex[1] : hex.substring(2, 4), 16);
-    const b = parseInt(hex.length === 3 ? hex[2] + hex[2] : hex.substring(4, 6), 16);
-
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-
-    return brightness > 128 ? "#000000" : "#FFFFFF";
   };
 
   const normalizeLabelForSearch = (label) => {
@@ -157,7 +269,7 @@ const GruposFamiliaresConTags = () => {
         }
       }
 
-      const tagsValidas = tagsArray
+      return tagsArray
         .filter(tag => {
           return (
             tag &&
@@ -168,35 +280,23 @@ const GruposFamiliaresConTags = () => {
             typeof tag.label === "string"
           );
         })
-        .map(tag => {
-          const finalColor = getTagColor(tag);
-          return {
-            ...tag,
-            color: finalColor,
-          };
-        });
-
-      return tagsValidas;
+        .map(tag => ({
+          ...tag,
+          color: getTagColor(tag),
+        }));
     } catch (error) {
       console.error("❌ Error al procesar tags:", error);
       return [];
     }
   };
 
-  const filteredGrupos = grupos.filter(grupo => {
-    if (searchTerm === "") return true;
+  const totalPages = Math.max(1, paginationMeta.last_page ?? 1);
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const totalFiltered = paginationMeta.total ?? 0;
+  const rangeStart = totalFiltered === 0 ? 0 : (safeCurrentPage - 1) * ITEMS_PER_PAGE + 1;
+  const rangeEnd = Math.min(safeCurrentPage * ITEMS_PER_PAGE, totalFiltered);
 
-    const id = grupo.id ? grupo.id.toString() : "";
-    const tomador = getTomadorNombre(grupo);
-    const estado = getGrupoEstado(grupo).estado;
-    const tags = getTags(grupo);
-    const tagsText = tags.map(t => t.label).join(" ").toLowerCase();
-
-    return id.includes(searchTerm) ||
-      tomador.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      estado.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      tagsText.includes(searchTerm.toLowerCase());
-  });
+  const fetchGrupos = () => setReloadKey((k) => k + 1);
 
   return (
     <Container fluid className="gf-listado-container py-3 gf-tags">
@@ -221,7 +321,7 @@ const GruposFamiliaresConTags = () => {
             <span className="gf-listado__chip">
               {loading
                 ? "Cargando…"
-                : `${filteredGrupos.length} grupo${filteredGrupos.length !== 1 ? "s" : ""}`}
+                : `${totalFiltered} grupo${totalFiltered !== 1 ? "s" : ""}`}
             </span>
             <Button
               size="sm"
@@ -270,11 +370,11 @@ const GruposFamiliaresConTags = () => {
               Grupos familiares
             </div>
 
-            {!loading && filteredGrupos.length > 0 && (
+            {!loading && totalFiltered > 0 && (
               <div className="gf-listado__summary">
-                Mostrando <strong>{filteredGrupos.length}</strong> de{" "}
-                <strong>{grupos.length}</strong> grupos
-                {searchTerm.trim() ? " (filtrados)" : ""}
+                Mostrando <strong>{rangeStart}</strong>–<strong>{rangeEnd}</strong> de{" "}
+                <strong>{totalFiltered}</strong> grupos
+                {debouncedSearch ? " (filtrados)" : ""}
               </div>
             )}
 
@@ -285,82 +385,81 @@ const GruposFamiliaresConTags = () => {
                 </div>
                 <div>Cargando grupos familiares…</div>
               </div>
-            ) : filteredGrupos.length === 0 ? (
+            ) : grupos.length === 0 ? (
               <div className="gf-listado__empty">
-                {searchTerm.trim()
+                {debouncedSearch
                   ? "No se encontraron grupos que coincidan con la búsqueda."
                   : "No se encontraron grupos familiares."}
               </div>
             ) : (
-              <div className="gf-listado__table-wrap">
-                <Table hover className="gf-listado__table mb-0 align-middle">
-                  <thead>
-                    <tr>
-                      <th>ID GF</th>
-                      <th>Tomador</th>
-                      <th>Estado</th>
-                      <th>Etiquetas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredGrupos.map((grupo) => {
-                      const tags = getTags(grupo);
-                      const estadoInfo = getGrupoEstado(grupo);
+              <>
+                <div className="gf-listado__table-wrap">
+                  <Table hover className="gf-listado__table mb-0 align-middle">
+                    <thead>
+                      <tr>
+                        <th>ID GF</th>
+                        <th>Tomador</th>
+                        <th>Estado</th>
+                        <th>Etiquetas</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grupos.map((grupo) => {
+                        const tags = getTags(grupo);
+                        const estadoInfo = getGrupoEstado(grupo);
+                        const isSaving = savingIds.has(grupo.id);
 
-                      return (
-                        <tr key={grupo.id}>
-                          <td>
-                            {grupo.id ? (
-                              <Link
-                                to={`/grupo_familiar/${grupo.id}`}
-                                title="Ver detalle del grupo"
+                        return (
+                          <tr key={grupo.id}>
+                            <td>
+                              {grupo.id ? (
+                                <Link
+                                  to={`/grupo_familiar/${grupo.id}`}
+                                  title="Ver detalle del grupo"
+                                >
+                                  {grupo.id}
+                                </Link>
+                              ) : (
+                                "Sin asignar"
+                              )}
+                            </td>
+                            <td className="gf-tags__tomador">{getTomadorNombre(grupo)}</td>
+                            <td>
+                              <span
+                                className={`gf-tags__estado gf-tags__estado--${estadoInfo.variant}`}
                               >
-                                {grupo.id}
-                              </Link>
-                            ) : (
-                              "Sin asignar"
-                            )}
-                          </td>
-                          <td className="gf-tags__tomador">{getTomadorNombre(grupo)}</td>
-                          <td>
-                            <span
-                              className={`gf-tags__estado gf-tags__estado--${estadoInfo.variant}`}
-                            >
-                              {estadoInfo.estado}
-                            </span>
-                          </td>
-                          <td>
-                            {tags.length > 0 ? (
-                              <div className="gf-tags__tags-wrap">
-                                {tags.map((tag, index) => {
-                                  const bgColor = getTagColor(tag);
-                                  const textColor = getTextColor(bgColor);
-
-                                  return (
-                                    <span
-                                      key={tag.key || index}
-                                      style={{
-                                        backgroundColor: bgColor,
-                                        color: textColor,
-                                        border: `1px solid ${bgColor}80`,
-                                      }}
-                                      className="gf-tags__tag-chip"
-                                    >
-                                      {tag.label}
-                                    </span>
-                                  );
-                                })}
+                                {estadoInfo.estado}
+                              </span>
+                            </td>
+                            <td>
+                              <div className={`gf-tags__editor-wrap${isSaving ? " is-saving" : ""}`}>
+                                <GroupTags
+                                  value={tags}
+                                  onChange={(nextTags) => handleTagsChange(grupo.id, nextTags)}
+                                  hideLabel
+                                  lazyCatalog
+                                  className="gf-tags__editor"
+                                />
+                                {isSaving && (
+                                  <span className="gf-tags__saving-hint">Guardando…</span>
+                                )}
                               </div>
-                            ) : (
-                              <span className="gf-tags__sin-etiquetas">Sin etiquetas</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </Table>
-              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </div>
+                <div className="d-flex justify-content-center mt-4">
+                  <Pagination
+                    currentPage={safeCurrentPage}
+                    totalPages={totalPages}
+                    onPageChange={setCurrentPage}
+                    disabled={loading}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
