@@ -555,7 +555,7 @@ const Prospectogrupo = ({
               />
               <small className="gf-detalle__hint">
                 <i className="fas fa-info-circle" aria-hidden="true"></i>
-                Se calcula con el número de miembros (cards).
+                Se calcula con el número de clientes del grupo sin retirados.
               </small>
             </div>
             )}
