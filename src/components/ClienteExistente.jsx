@@ -63,43 +63,30 @@ const normalizarEstadoProducto = (valor) =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
-const esTerminadoORetirado = (cobertura) => {
+const isBlankFecha = (v) =>
+  v === null || v === undefined || v === "" || String(v).trim() === "null";
+
+/**
+ * En grupo familiar, el mismo producto solo se puede reutilizar si está
+ * retirado (fecha_retiro). Cancelado / anulado / activo bloquean.
+ */
+const esCoberturaRetirada = (cobertura = {}) => {
+  if (!isBlankFecha(cobertura.fecha_retiro)) return true;
   const { estado, etiqueta } = resolverEstadoProducto(cobertura);
-  return [estado, etiqueta].some((valor) => {
+  const pareceRetiro = [estado, etiqueta, cobertura.cobertura_definida].some((valor) => {
     const norm = normalizarEstadoProducto(valor);
-    return norm === "terminado" || norm === "retirado" || norm === "retirada";
+    return norm === "retirado" || norm === "retirada" || norm === "terminado";
   });
-};
-
-const toBoolFlag = (v) =>
-  v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
-
-const isBlankFecha = (v) => v === null || v === undefined || v === "";
-
-const esCoberturaActivaVigente = (cobertura = {}) => {
-  if (esTerminadoORetirado(cobertura)) return false;
-  if (!toBoolFlag(cobertura.activo ?? true)) return false;
-  if (!isBlankFecha(cobertura.fecha_cancelacion)) return false;
-  if (!isBlankFecha(cobertura.fecha_retiro)) return false;
-  if (!isBlankFecha(cobertura.fecha_anulacion)) return false;
-  if (
-    cobertura.vigente !== undefined &&
-    cobertura.vigente !== null &&
-    !toBoolFlag(cobertura.vigente)
-  ) {
-    return false;
-  }
-  return true;
+  // Si hay fecha de cancelación, no se considera retiro aunque el estado diga otra cosa.
+  return pareceRetiro && isBlankFecha(cobertura.fecha_cancelacion);
 };
 
 /**
- * Puede agregar si no hay cobertura activa del MISMO producto destino.
- * Aplica a todos los privados (Plan Dental, Vision, Vida, Descuentos) y a Salud MS:
- * tener otro producto activo distinto no bloquea.
+ * En grupo: permite si el producto es distinto, o si el mismo producto ya está
+ * retirado. Cancelado NO habilita agregar.
  *
  * En pre-renovación (`omitirBloqueoProductoActivo`): la tabla no bloquea por
- * producto activo del año en curso; la elegibilidad real (otra pre-renovación /
- * no renovar) se valida al hacer clic vía endpoint de elegibilidad.
+ * producto del año en curso; la elegibilidad real se valida al hacer clic.
  */
 const resolverAccionAgregar = (
   coberturas,
@@ -112,26 +99,27 @@ const resolverAccionAgregar = (
   if (coberturaTipoDestino) {
     const conflicto = coberturas.find(
       (c) =>
-        esCoberturaActivaVigente(c) &&
-        sonMismoProductoParaConflicto(coberturaTipoDestino, c.cobertura_tipo)
+        sonMismoProductoParaConflicto(coberturaTipoDestino, c.cobertura_tipo) &&
+        !esCoberturaRetirada(c)
     );
     if (!conflicto) {
       return { puedeAgregar: true, motivo: "" };
     }
     const tipo = conflicto.cobertura_tipo || coberturaTipoDestino;
+    const { etiqueta } = resolverEstadoProducto(conflicto);
     return {
       puedeAgregar: false,
-      motivo: `Ya tiene ${tipo} activo/vigente. Debe retirarlo o cancelarlo antes de agregarlo a este producto.`,
+      motivo: `Ya tiene ${tipo} (${etiqueta}). Solo se puede agregar si está Retirado en el otro grupo, o si el producto es distinto.`,
     };
   }
 
-  // Legacy sin producto destino: solo Terminado/Retirado.
-  const puedeAgregar = coberturas.every(esTerminadoORetirado);
+  // Legacy sin producto destino: solo Retirado.
+  const puedeAgregar = coberturas.every(esCoberturaRetirada);
   return {
     puedeAgregar,
     motivo: puedeAgregar
       ? ""
-      : "Solo se puede agregar si el producto está Terminado o Retirado.",
+      : "Solo se puede agregar si el producto está Retirado en el otro grupo, o si es un producto distinto.",
   };
 };
 

@@ -54,11 +54,26 @@ export default function ClienteExistenteModal({
 
   if (!open) return null;
 
-  const toBool = (v) =>
-    v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
-
   const isBlank = (v) =>
-    v === null || v === undefined || v === "";
+    v === null || v === undefined || v === "" || String(v).trim() === "null";
+
+  const normalizarEstado = (valor) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  /** Mismo producto solo se libera con retiro (no con cancelación). */
+  const esCoberturaRetirada = (c = {}) => {
+    if (!isBlank(c.fecha_retiro)) return true;
+    const definidos = [c.cobertura_definida, c.estado_cobertura];
+    const pareceRetiro = definidos.some((valor) => {
+      const norm = normalizarEstado(valor);
+      return norm === "retirado" || norm === "retirada" || norm === "terminado";
+    });
+    return pareceRetiro && isBlank(c.fecha_cancelacion);
+  };
 
   const validarCoberturasLocalmente = (clienteBase) => {
     if (!clienteBase) return null;
@@ -83,22 +98,15 @@ export default function ClienteExistenteModal({
     if (!coberturas.length) return null;
 
     const conflicto = coberturas.find((c) => {
-      const estaVigente =
-        toBool(c.activo) &&
-        isBlank(c.fecha_cancelacion) &&
-        isBlank(c.fecha_retiro) &&
-        isBlank(c.fecha_anulacion) &&
-        (c.vigente === undefined || c.vigente === null || toBool(c.vigente));
-
-      if (!estaVigente) return false;
       if (!sonMismoProductoParaConflicto(defaultCoberturaTipo, c.cobertura_tipo)) {
         return false;
       }
+      // Cancelado / activo / anulado del mismo producto bloquean; solo retiro libera.
+      if (esCoberturaRetirada(c)) return false;
 
       const grupoCob = c.grupo_familiar_id ?? c.grupo_id ?? c.grupoFamiliarId ?? null;
 
-      // Regla: cobertura vigente, mismo producto y perteneciendo a OTRO grupo familiar.
-      // Si por alguna razón no viene grupoCob, caemos al bloqueo por producto solamente.
+      // Mismo producto no retirado en OTRO grupo familiar.
       if (grupoCob && grupoFamiliarId) {
         return Number(grupoCob) !== Number(grupoFamiliarId);
       }
@@ -127,7 +135,7 @@ export default function ClienteExistenteModal({
     try {
       const esPreRenovacion = contexto === "pre_renovacion";
 
-      // En grupo familiar: no duplicar cobertura vigente del mismo producto.
+      // En grupo familiar: mismo producto solo si está retirado (Cancelado bloquea).
       // En pre-renovación: el check de elegibilidad (mismo backend) valida
       // origen con pre-renovación + no renovar / otra pre-renovación.
       if (!esPreRenovacion) {
@@ -155,15 +163,15 @@ export default function ClienteExistenteModal({
             : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
 
           mostrarAviso(
-            "Cobertura vigente existente",
+            "Mismo producto en otro grupo",
             `
-              <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto (<b>${defaultCoberturaTipo}</b>).</p>
+              <p>${nombreCliente} ya tiene <b>${defaultCoberturaTipo}</b> en otro grupo familiar.</p>
               <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
-              <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
+              <p style="margin-top:12px;">Solo se puede agregar si ese producto está <b>retirado</b> (con fecha de retiro) en el otro grupo, o si el producto es <b>distinto</b>. Cancelado no habilita el alta.</p>
             `,
-            `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto (${defaultCoberturaTipo}).\n\n` +
+            `${nombreCliente} ya tiene ${defaultCoberturaTipo} en otro grupo familiar.\n\n` +
               `${mensajeDetalle}\n\n` +
-              `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
+              `Solo se puede agregar si está retirado en el otro grupo, o si el producto es distinto. Cancelado no habilita el alta.`
           );
           return;
         }
@@ -256,10 +264,10 @@ export default function ClienteExistenteModal({
                   </>
                 ) : (
                   <>
-                    En grupo familiar: se puede agregar si el producto es{" "}
-                    <strong>distinto</strong> al destino, o si en el otro grupo ya tiene{" "}
-                    <strong>fecha de retiro</strong> / cancelación. Solo bloquea si ya tiene{" "}
-                    <strong>este mismo</strong> producto activo sin retiro.
+                    En grupo familiar: se puede agregar solo si el producto es{" "}
+                    <strong>distinto</strong>, o si en el otro grupo ese mismo producto
+                    está <strong>retirado</strong> (fecha de retiro).{" "}
+                    <strong>Cancelado no permite</strong> agregarlo.
                   </>
                 )}
               </span>
