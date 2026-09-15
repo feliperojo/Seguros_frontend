@@ -26,6 +26,19 @@ const badgeClassProducto = (tipo = "") => {
   return "bg-primary";
 };
 
+const mostrarAviso = (title, html, plainText) => {
+  if (window?.Swal) {
+    window.Swal.fire({
+      icon: "warning",
+      title,
+      html,
+      confirmButtonText: "Entendido",
+    });
+  } else {
+    window.alert(plainText || title);
+  }
+};
+
 export default function ClienteExistenteModal({
   open,
   onClose,
@@ -33,6 +46,8 @@ export default function ClienteExistenteModal({
   defaultCoberturaTipo = "Plan de salud",
   onCreateCoberturaDeClienteExistente,   // (payload, cliente) => Promise
   contexto = "grupo", // "grupo" | "pre_renovacion"
+  loteId = null,
+  anioDestino = null,
 }) {
   const [saving, setSaving] = useState(false);
   const [tipo, setTipo] = useState("");
@@ -113,8 +128,8 @@ export default function ClienteExistenteModal({
       const esPreRenovacion = contexto === "pre_renovacion";
 
       // En grupo familiar: no duplicar cobertura vigente del mismo producto.
-      // En pre-renovación: sí puede tener cobertura 2026 en otro grupo; el año
-      // entrante se valida en backend (no estar en otra pre-renovación).
+      // En pre-renovación: el check de elegibilidad (mismo backend) valida
+      // origen con pre-renovación + no renovar / otra pre-renovación.
       if (!esPreRenovacion) {
         const conflictoLocal = validarCoberturasLocalmente(cliente);
         if (conflictoLocal) {
@@ -139,25 +154,47 @@ export default function ClienteExistenteModal({
             ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
             : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
 
-          if (window?.Swal) {
-            window.Swal.fire({
-              icon: "warning",
-              title: "Cobertura vigente existente",
-              html: `
+          mostrarAviso(
+            "Cobertura vigente existente",
+            `
               <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto (<b>${defaultCoberturaTipo}</b>).</p>
               <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
               <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
             `,
-              confirmButtonText: "Entendido",
-            });
-          } else {
-            window.alert(
-              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto (${defaultCoberturaTipo}).\n\n` +
+            `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto (${defaultCoberturaTipo}).\n\n` +
               `${mensajeDetalle}\n\n` +
               `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
-            );
-          }
+          );
           return;
+        }
+      } else if (grupoFamiliarId && loteId) {
+        setSaving(true);
+        try {
+          const tipoParam = encodeURIComponent(defaultCoberturaTipo || "");
+          const check = await apiRequest(
+            `grupo_familiar/${grupoFamiliarId}/pre-renovacion/${loteId}/elegibilidad-cliente?cliente_id=${cliente.id}&cobertura_tipo=${tipoParam}`,
+            "GET"
+          );
+          const elegible = check?.elegible === true;
+          if (!elegible) {
+            const motivo =
+              check?.motivo ||
+              "Este cliente no puede agregarse a esta pre-renovación todavía.";
+            mostrarAviso(
+              "No se puede agregar",
+              `<p>${motivo}</p>`,
+              motivo
+            );
+            return;
+          }
+        } catch (err) {
+          const motivo =
+            err?.message ||
+            "No se pudo validar la elegibilidad del cliente para esta pre-renovación.";
+          mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+          return;
+        } finally {
+          setSaving(false);
         }
       }
 
@@ -211,8 +248,20 @@ export default function ClienteExistenteModal({
                 {defaultCoberturaTipo || "Plan de salud"}
               </span>
               <span className="text-muted small mb-0">
-                Criterio para todos los productos (Salud MS y privados: Plan Dental,
-                Vision, Vida, Descuentos). Solo bloquea si ya tiene <strong>este mismo</strong> producto activo.
+                {contexto === "pre_renovacion" ? (
+                  <>
+                    En pre-renovación: si la persona tiene cobertura activa en otro grupo,
+                    ese grupo debe tener pre-renovación abierta y la persona marcada como{" "}
+                    <strong>no renovar</strong> antes de agregarla aquí.
+                  </>
+                ) : (
+                  <>
+                    En grupo familiar: se puede agregar si el producto es{" "}
+                    <strong>distinto</strong> al destino, o si en el otro grupo ya tiene{" "}
+                    <strong>fecha de retiro</strong> / cancelación. Solo bloquea si ya tiene{" "}
+                    <strong>este mismo</strong> producto activo sin retiro.
+                  </>
+                )}
               </span>
             </div>
 
@@ -251,9 +300,11 @@ export default function ClienteExistenteModal({
                 Si la persona ya está en otro grupo este año, primero hay que
                 abrir la pre-renovación de <strong>ese grupo</strong> y marcarla
                 como <strong>no renovar</strong>. Solo después se puede agregar
-                aquí para el año destino. El tomador de otro grupo no se
-                traslada por este camino, salvo que ese grupo esté en No renovará
-                o Terminado.
+                aquí para el año destino
+                {anioDestino ? ` (${anioDestino})` : ""}. Si ya figura en otra
+                pre-renovación del mismo año, debe quedar <strong>no activa para
+                renovar</strong> allí. El tomador de otro grupo no se traslada por
+                este camino, salvo que ese grupo esté en No renovará o Terminado.
               </div>
             )}
 

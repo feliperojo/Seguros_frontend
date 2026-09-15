@@ -1437,6 +1437,8 @@ const PreRenovacionModal = ({
         grupoFamiliarId={grupoFamiliarId}
         defaultCoberturaTipo={defaultCoberturaTipo}
         contexto="pre_renovacion"
+        loteId={lote?.id ?? null}
+        anioDestino={anioDestino}
         onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
         onClose={() => setShowClienteExistente(false)}
       />

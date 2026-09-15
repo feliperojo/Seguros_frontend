@@ -96,12 +96,16 @@ const esCoberturaActivaVigente = (cobertura = {}) => {
  * Puede agregar si no hay cobertura activa del MISMO producto destino.
  * Aplica a todos los privados (Plan Dental, Vision, Vida, Descuentos) y a Salud MS:
  * tener otro producto activo distinto no bloquea.
+ *
+ * En pre-renovación (`omitirBloqueoProductoActivo`): la tabla no bloquea por
+ * producto activo del año en curso; la elegibilidad real (otra pre-renovación /
+ * no renovar) se valida al hacer clic vía endpoint de elegibilidad.
  */
 const resolverAccionAgregar = (
   coberturas,
-  { permitirTraslado = false, coberturaTipoDestino = null } = {}
+  { omitirBloqueoProductoActivo = false, coberturaTipoDestino = null } = {}
 ) => {
-  if (!coberturas.length || permitirTraslado) {
+  if (!coberturas.length || omitirBloqueoProductoActivo) {
     return { puedeAgregar: true, motivo: "" };
   }
 
@@ -366,7 +370,9 @@ const ClienteExistente = ({
                 {getCurrentPageClients().map((cliente) => {
                   const coberturas = extraerCoberturasCliente(cliente);
                   const { puedeAgregar, motivo } = resolverAccionAgregar(coberturas, {
-                    permitirTraslado: contexto === "pre_renovacion",
+                    // Pre-renovación: no deshabilitar por cobertura activa del año
+                    // en curso; el modal valida elegibilidad al click.
+                    omitirBloqueoProductoActivo: contexto === "pre_renovacion",
                     coberturaTipoDestino,
                   });
 
