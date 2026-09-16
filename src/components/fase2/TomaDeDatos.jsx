@@ -80,9 +80,9 @@ import {
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
   isFechaActivacionPendiente,
-  isFechaRetiroProgramada,
   esMiembroEnSeccionRetirados,
   debeResaltarRetiroMiembro,
+  etiquetaAvisoRetiroMiembro,
   soloPermiteCopiarDireccion,
   CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
   esElegibleParaCopiarEntreMiembros,
@@ -1747,7 +1747,6 @@ const activeNormalized = useMemo(
     
     // Retiro efectivo / anulación → sección retirados; programado → activos con aviso amarillo
     const enSeccionRetirados = esMiembroEnSeccionRetirados(m);
-    const retiroProgramado = isFechaRetiroProgramada(m.fecha_retiro);
     const showRetiroHighlight = debeResaltarRetiroMiembro(m);
     // Bloquear edición si retiro/anulación ya es efectivo o activo=false (incl. programado)
     const isReadOnly = readOnly || enSeccionRetirados || m.activo === false;
@@ -1818,13 +1817,7 @@ const activeNormalized = useMemo(
             {showRetiroHighlight && (
               <div className="gf-detalle__member-inactive-banner">
                 <i className="fas fa-exclamation-triangle me-2"></i>
-                <small className="fw-bold">
-                  {m.fecha_anulacion
-                    ? "Anulado del Grupo Familiar"
-                    : retiroProgramado && !enSeccionRetirados
-                      ? "Retiro programado del Grupo Familiar"
-                      : "Retirado del Grupo Familiar"}
-                </small>
+                <small className="fw-bold">{etiquetaAvisoRetiroMiembro(m)}</small>
               </div>
             )}
             {/* Header */}
@@ -1863,6 +1856,9 @@ const activeNormalized = useMemo(
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
   fechaAnulacion={m.fecha_anulacion}
   fueRenovado={!!m.fue_renovado}
+  motivoRetiro={m.motivo_retiro}
+  motivoCancelacion={m.motivo_cancelacion}
+  notaRetiro={m.nota_retiro}
   estadoProceso={estadoActual}
   size={50}
 />

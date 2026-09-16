@@ -9,6 +9,8 @@ import {
   esMiembroEnSeccionRetirados,
   debeResaltarRetiroMiembro,
   esElegibleParaCopiarEntreMiembros,
+  esCierreFiscalPorRenovacionAnual,
+  etiquetaAvisoRetiroMiembro,
 } from "../src/utils/estadoPoliza.js";
 
 const now = new Date(2026, 8, 16); // 2026-09-16 (local)
@@ -151,6 +153,66 @@ assert(
   "copiar: activo=false NO elegible",
   esElegibleParaCopiarEntreMiembros({ activo: false }),
   false
+);
+
+console.log("\n6) Cierre fiscal por renovación anual (títulos)");
+
+const miembroRenovado = {
+  fue_renovado: true,
+  fecha_retiro: "2026-12-31",
+  activo: true,
+};
+const miembroNoRenueva = {
+  fue_renovado: false,
+  fecha_retiro: "2026-12-31",
+  activo: false,
+  motivo_retiro: "No renovará: el cliente no continúa al siguiente período",
+};
+const retiroOperativo = {
+  fue_renovado: false,
+  fecha_retiro: "2026-12-31",
+  activo: false,
+  motivo_retiro: "Cambio de vida",
+};
+
+assert("renovado es cierre fiscal", esCierreFiscalPorRenovacionAnual(miembroRenovado), true);
+assert("no-renueva es cierre fiscal", esCierreFiscalPorRenovacionAnual(miembroNoRenueva), true);
+assert(
+  "retiro operativo NO es cierre fiscal",
+  esCierreFiscalPorRenovacionAnual(retiroOperativo),
+  false
+);
+assert(
+  "banner renovado programado",
+  etiquetaAvisoRetiroMiembro(miembroRenovado, now),
+  "Programado para cierre fiscal 2026"
+);
+assert(
+  "banner no-renueva programado",
+  etiquetaAvisoRetiroMiembro(miembroNoRenueva, now),
+  "Programado para cierre fiscal 2026"
+);
+assert(
+  "banner operativo programado",
+  etiquetaAvisoRetiroMiembro(retiroOperativo, now),
+  "Retiro programado del Grupo Familiar"
+);
+
+const now2027 = new Date(2027, 0, 15);
+assert(
+  "banner renovado efectivo ene-2027",
+  etiquetaAvisoRetiroMiembro(miembroRenovado, now2027),
+  "Cierre fiscal 2026"
+);
+assert(
+  "banner no-renueva efectivo ene-2027",
+  etiquetaAvisoRetiroMiembro(miembroNoRenueva, now2027),
+  "Cierre fiscal 2026"
+);
+assert(
+  "banner operativo efectivo",
+  etiquetaAvisoRetiroMiembro(retiroOperativo, now2027),
+  "Retirado del Grupo Familiar"
 );
 
 console.log(`\nResultado: ${passed} ok, ${failed} fallos\n`);
