@@ -178,6 +178,22 @@ const retiroOperativo = {
 assert("renovado es cierre fiscal", esCierreFiscalPorRenovacionAnual(miembroRenovado), true);
 assert("no-renueva es cierre fiscal", esCierreFiscalPorRenovacionAnual(miembroNoRenueva), true);
 assert(
+  "omitida_renovacion es cierre fiscal",
+  esCierreFiscalPorRenovacionAnual({
+    omitida_renovacion: true,
+    fecha_retiro: "2026-12-31",
+  }),
+  true
+);
+assert(
+  "Terminado es cierre fiscal",
+  esCierreFiscalPorRenovacionAnual({
+    cobertura_definida: "Terminado",
+    fecha_retiro: "2026-12-31",
+  }),
+  true
+);
+assert(
   "retiro operativo NO es cierre fiscal",
   esCierreFiscalPorRenovacionAnual(retiroOperativo),
   false

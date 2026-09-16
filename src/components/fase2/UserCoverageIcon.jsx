@@ -24,9 +24,11 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   fechaActivacion,   // 👈 NUEVO
   fechaAnulacion = null,
   fueRenovado = false,
+  omitidaRenovacion = false,
   motivoRetiro = null,
   motivoCancelacion = null,
   notaRetiro = null,
+  coberturaDefinida = null,
   /** Código/nombre del estado del grupo familiar (para “por activar” en pasos 4–5) */
   estadoProceso = null,
 }) {
@@ -41,6 +43,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const retiroProgramado = hasRetiro && isFechaRetiroProgramada(fechaRetiro);
   const cierreFiscalRenovacion = esCierreFiscalPorRenovacionAnual({
     fue_renovado: fueRenovado,
+    omitida_renovacion: omitidaRenovacion,
+    cobertura_definida: coberturaDefinida,
     motivo_retiro: motivoRetiro,
     motivo_cancelacion: motivoCancelacion,
     nota_retiro: notaRetiro,

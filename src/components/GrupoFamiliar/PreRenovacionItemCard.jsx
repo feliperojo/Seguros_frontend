@@ -360,7 +360,7 @@ const PreRenovacionItemCard = ({
     if (!checked) {
       const cierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
       const definida =
-        datos.cobertura_definida || COBERTURA_DEFINIDA.RETIRADO;
+        datos.cobertura_definida || COBERTURA_DEFINIDA.TERMINADO;
       setDatos((prev) => ({
         ...prev,
         fecha_retiro: cierre,
@@ -531,7 +531,7 @@ const PreRenovacionItemCard = ({
     datos.cobertura_definida
   )
     ? datos.cobertura_definida
-    : COBERTURA_DEFINIDA.RETIRADO;
+    : COBERTURA_DEFINIDA.TERMINADO;
   const disabled = bloqueado || edicionBloqueada;
   const campoClienteVacio = (field) =>
     isBorradorClienteCleared(draftCliente, field);
@@ -937,7 +937,7 @@ const PreRenovacionItemCard = ({
                 onChange={(e) =>
                   cambiarDato(
                     "cobertura_definida",
-                    e.target.value || COBERTURA_DEFINIDA.RETIRADO,
+                    e.target.value || COBERTURA_DEFINIDA.TERMINADO,
                     true
                   )
                 }

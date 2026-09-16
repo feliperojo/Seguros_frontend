@@ -40,6 +40,7 @@ export const mapCoberturaApiToFields = (cov = {}) => ({
   motivo_cancelacion: cov.motivo_cancelacion ?? "",
   motivo_retiro: cov.motivo_retiro ?? "",
   fue_renovado: !!cov.fue_renovado,
+  omitida_renovacion: !!cov.omitida_renovacion,
   cobertura_definida: cov.cobertura_definida ?? "",
   activo: cov.activo !== undefined && cov.activo !== null ? cov.activo : true,
   vigente: cov.vigente !== undefined && cov.vigente !== null ? cov.vigente : true,

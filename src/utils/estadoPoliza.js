@@ -384,6 +384,14 @@ export function anioCierreFiscalMiembro(m = {}) {
  */
 export function esCierreFiscalPorRenovacionAnual(m = {}) {
   if (toBoolFlag(m?.fue_renovado, false)) return true;
+  if (toBoolFlag(m?.omitida_renovacion, false)) return true;
+
+  const definida = String(m?.cobertura_definida || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (definida === "terminado") return true;
 
   const motivo = [m?.motivo_retiro, m?.motivo_cancelacion, m?.nota_retiro]
     .filter((v) => v != null && String(v).trim() !== "")

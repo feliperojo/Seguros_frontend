@@ -1856,9 +1856,11 @@ const activeNormalized = useMemo(
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
   fechaAnulacion={m.fecha_anulacion}
   fueRenovado={!!m.fue_renovado}
+  omitidaRenovacion={!!m.omitida_renovacion}
   motivoRetiro={m.motivo_retiro}
   motivoCancelacion={m.motivo_cancelacion}
   notaRetiro={m.nota_retiro}
+  coberturaDefinida={m.cobertura_definida}
   estadoProceso={estadoActual}
   size={50}
 />
