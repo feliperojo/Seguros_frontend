@@ -605,18 +605,6 @@ const PreRenovacionModal = ({
     [items]
   );
 
-  const miembrosSinCodigo = useMemo(
-    () =>
-      items
-        .filter(
-          (item) =>
-            Boolean(item?.renovar) &&
-            !String(item?.datos_borrador?.codigo_poliza ?? "").trim()
-        )
-        .map(nombreMiembro),
-    [items]
-  );
-
   const miembrosConFechaFueraDeAnio = useMemo(
     () =>
       items
@@ -709,7 +697,6 @@ const PreRenovacionModal = ({
       !consolidando &&
       loteProcesable
     : items.length > 0 &&
-      miembrosSinCodigo.length === 0 &&
       miembrosSinRetiro.length === 0 &&
       miembrosInactivosMarcadosRenovar.length === 0 &&
       miembrosConFechaFueraDeAnio.length === 0 &&
@@ -1182,15 +1169,6 @@ const PreRenovacionModal = ({
 
                   {attemptedConsolidar &&
                     !esCierreSinDestino &&
-                    miembrosSinCodigo.length > 0 && (
-                    <div className="alert alert-warning">
-                      Completa el <strong>código de póliza</strong> de:{" "}
-                      {miembrosSinCodigo.join(", ")}.
-                    </div>
-                  )}
-
-                  {attemptedConsolidar &&
-                    !esCierreSinDestino &&
                     miembrosConFechaFueraDeAnio.length > 0 && (
                       <div className="alert alert-warning">
                         La <strong>fecha de activación</strong> debe pertenecer
@@ -1382,9 +1360,7 @@ const PreRenovacionModal = ({
                         ? hayGuardadosPendientes
                           ? "Espera a que termine el autoguardado"
                           : `Cierra ${anioOrigen} sin crear ${anioDestino}`
-                        : miembrosSinCodigo.length > 0
-                          ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
-                          : miembrosConFechaFueraDeAnio.length > 0
+                        : miembrosConFechaFueraDeAnio.length > 0
                             ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
                             : miembrosSinRetiro.length > 0
                               ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`

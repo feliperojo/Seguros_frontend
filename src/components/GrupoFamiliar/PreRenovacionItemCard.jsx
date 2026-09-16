@@ -519,10 +519,6 @@ const PreRenovacionItemCard = ({
     !esAltaEnLote && !renovar && Boolean(cobertura.activo);
   const fechaRetiroCierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
   const mostrarPoliza = esAltaEnLote || renovar;
-  const codigoInvalido =
-    attemptedConsolidar &&
-    mostrarPoliza &&
-    !String(datos.codigo_poliza ?? "").trim();
   const retiroMotivoInvalido =
     attemptedConsolidar &&
     requiereRetiro &&
@@ -1017,19 +1013,12 @@ const PreRenovacionItemCard = ({
               <div className={col} key={field}>
                 <label className="form-label form-label-sm mb-1">
                   {label}
-                  {field === "codigo_poliza" && (
-                    <span className="text-danger"> *</span>
-                  )}
                 </label>
                 <input
                   type={type}
                   step={field === "precio" ? "0.01" : undefined}
                   min={type === "number" ? "0" : undefined}
-                  className={`form-control form-control-sm${
-                    field === "codigo_poliza" && codigoInvalido
-                      ? " is-invalid"
-                      : ""
-                  }`}
+                  className="form-control form-control-sm"
                   value={datos[field] ?? ""}
                   onChange={(e) => {
                     const raw = e.target.value;
@@ -1044,9 +1033,6 @@ const PreRenovacionItemCard = ({
                   onBlur={() => guardarPendienteAhora(field)}
                   disabled={disabled}
                 />
-                {field === "codigo_poliza" && codigoInvalido && (
-                  <div className="invalid-feedback">Obligatoria para consolidar.</div>
-                )}
                 {renderEstado(field)}
               </div>
             ))}
