@@ -1955,7 +1955,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 htmlFor="consultar-anio-grupo"
                 className="gf-detalle__toolbar-label"
               >
-                Consultar año anterior
+                Consultar año
               </label>
               <Form.Select
                 id="consultar-anio-grupo"
@@ -1963,7 +1963,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 style={{ width: "auto", minWidth: "8.5rem" }}
                 value={anioConsultado || ANIO_ACTUAL}
                 onChange={(e) => handleAnioConsultaChange(e.target.value)}
-                aria-label="Consultar año anterior del grupo familiar"
+                aria-label="Consultar año del grupo familiar"
               >
                 {aniosDisponibles.map((year) => (
                   <option key={year} value={year}>

@@ -322,3 +322,47 @@ export function isFechaActivacionPendiente(fechaActivacion, now = new Date()) {
   const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return fecha.getTime() > hoy.getTime();
 }
+
+/**
+ * Retiro programado: hay fecha_retiro pero aún es posterior a hoy.
+ * Sin fecha válida o fecha ya vencida → false.
+ */
+export function isFechaRetiroProgramada(fechaRetiro, now = new Date()) {
+  const fecha = parseApiDateToLocalDate(fechaRetiro);
+  if (!fecha) return false;
+
+  const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return fecha.getTime() > hoy.getTime();
+}
+
+/**
+ * Retiro ya vigente: fecha_retiro existe y es hoy o anterior.
+ */
+export function isFechaRetiroEfectiva(fechaRetiro, now = new Date()) {
+  if (!hasFechaCobertura(fechaRetiro)) return false;
+  return !isFechaRetiroProgramada(fechaRetiro, now);
+}
+
+/**
+ * ¿Debe ir a la sección "Miembros Retirados"?
+ * - Anulación: siempre.
+ * - Retiro: solo cuando la fecha ya se cumplió.
+ * - activo=false sin fecha_retiro: legacy, se trata como retirado efectivo.
+ * Un retiro con fecha futura permanece en el listado activo (con aviso visual).
+ */
+export function esMiembroEnSeccionRetirados(m = {}, now = new Date()) {
+  if (hasFechaCobertura(m?.fecha_anulacion)) return true;
+  if (isFechaRetiroEfectiva(m?.fecha_retiro, now)) return true;
+  if (m?.activo === false && !hasFechaCobertura(m?.fecha_retiro)) return true;
+  return false;
+}
+
+/**
+ * Resaltado amarillo de retiro/anulación (programado o ya efectivo).
+ */
+export function debeResaltarRetiroMiembro(m = {}, now = new Date()) {
+  if (esMiembroEnSeccionRetirados(m, now)) return true;
+  if (isFechaRetiroProgramada(m?.fecha_retiro, now)) return true;
+  if (m?.activo === false) return true;
+  return false;
+}

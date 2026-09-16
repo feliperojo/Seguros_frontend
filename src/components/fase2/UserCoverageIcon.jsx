@@ -5,7 +5,7 @@ import {
   normalizeEstadoGrupoCodigo,
   esProcesoInicialGrupoFamiliar,
 } from "../../constants/estadosGrupoFamiliar";
-import { isFechaActivacionPendiente } from "../../utils/estadoPoliza";
+import { isFechaActivacionPendiente, isFechaRetiroProgramada } from "../../utils/estadoPoliza";
 
 /** Pasos 4 y 5: Toma de datos e Inscripción / Confirmación */
 const ESTADOS_POR_ACTIVAR = ["TOMA_DATOS", "INSCRIPCION_INI"];
@@ -35,6 +35,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const hasRetiro = !!fechaRetiro;
   const hasCancel = !!fechaCancelacion;
   const hasAnulacion = !!fechaAnulacion;
+  const retiroProgramado = hasRetiro && isFechaRetiroProgramada(fechaRetiro);
   const procesoCode = normalizeEstadoGrupoCodigo(estadoProceso);
   const enPaso4o5 = ESTADOS_POR_ACTIVAR.includes(procesoCode);
   const enProcesoInicial = esProcesoInicialGrupoFamiliar(procesoCode);
@@ -64,8 +65,11 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
       color = hasCancel ? "#ffc107" : "#0d6efd";
     } else if (hasAnulacion) {
       color = "#fd7e14"; // naranja — anulado, nunca se activó
+    } else if (retiroProgramado) {
+      // RETIRO PROGRAMADO (aún no efectivo)
+      color = "#f0ad4e"; // amarillo aviso
     } else if (hasRetiro) {
-      // RETIRADO
+      // RETIRADO efectivo
       color = "#6c757d"; // gris
     } else if (hasCancel && !hasRetiro) {
       // CANCELADO (cuando hay cancelación y NO hay retiro)
@@ -102,8 +106,10 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     label = hasCancel ? "Cancelado - Renovado" : "Renovado";
   } else if (hasAnulacion) {
     label = "Anulado";
+  } else if (retiroProgramado) {
+    label = "Retiro programado";
   } else if (hasRetiro) {
-    // Prioridad 1: Si tiene fecha de retiro → Retirado
+    // Prioridad 1: Si tiene fecha de retiro efectiva → Retirado
     label = "Retirado";
   } else if (hasCancel && !hasRetiro) {
     // Prioridad 2: Si tiene fecha de cancelación y NO tiene retiro → Cancelado

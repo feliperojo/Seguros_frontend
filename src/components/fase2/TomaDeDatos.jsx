@@ -80,6 +80,9 @@ import {
   isMedicareOrMedicaidEstado,
   clearedCoverageFieldsForMedicareMedicaid,
   isFechaActivacionPendiente,
+  isFechaRetiroProgramada,
+  esMiembroEnSeccionRetirados,
+  debeResaltarRetiroMiembro,
   soloPermiteCopiarDireccion,
   CAMPOS_COPIABLES_COBERTURA_RESTRINGIDA,
   esElegibleParaCopiarEntreMiembros,
@@ -230,6 +233,16 @@ const getC = (m) => (m?.cliente ? m.cliente : m);
 
 const yaEstaEnElGrupo = (clienteId, members) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
+
+/** Solo bloquea si el cliente ya figura como activo en la vista actual. */
+const yaEstaActivoEnElGrupo = (clienteId, members) =>
+  members.some((m) => {
+    const mismo =
+      Number(m.cliente_id) === Number(clienteId) ||
+      Number(m?.cliente?.id) === Number(clienteId);
+    if (!mismo) return false;
+    return m.activo !== false;
+  });
 
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 
@@ -900,14 +913,14 @@ const TomaDeDatos = ({
     [familyMembers]
   );
 
-  // Separar miembros activos e inactivos y mantener índice original
+  // Separar activos vs retirados efectivos (retiro futuro queda en activos con aviso)
   const { activeMembers, inactiveMembers } = useMemo(() => {
     const active = [];
     const inactive = [];
     
     normalized.forEach((m, originalIdx) => {
       const memberWithIdx = { m, idx: originalIdx };
-      if (m.activo === false) {
+      if (esMiembroEnSeccionRetirados(m)) {
         inactive.push(memberWithIdx);
       } else {
         active.push(memberWithIdx);
@@ -1483,7 +1496,11 @@ const activeNormalized = useMemo(
   const handleCreateCoberturaExistente = useCallback(
     async (payload, clienteSeleccionado) => {
       if (!grupoFamiliarId || !payload?.cliente_id) return;
-      if (yaEstaEnElGrupo(payload.cliente_id, normalized)) return;
+
+      const esReingreso = Boolean(payload?.reingreso);
+      if (!esReingreso && yaEstaActivoEnElGrupo(payload.cliente_id, normalized)) {
+        return;
+      }
 
       const clienteSelRaw =
         unwrapClienteFromApi(clienteSeleccionado) ?? clienteSeleccionado ?? {};
@@ -1550,13 +1567,22 @@ const activeNormalized = useMemo(
         }
       }
 
-      const res = await GrupoFamiliarService.createCoberturaSimple({
-        grupo_familiar_id: grupoFamiliarId,
-        cliente_id: payload.cliente_id,
-        parentesco: payload.tipo,
-        cobertura_tipo: payload.cobertura_tipo,
-        estado_cobertura: payload.estado_cobertura
-      });
+      const res = esReingreso
+        ? await GrupoFamiliarService.reingresoCobertura({
+            grupo_familiar_id: grupoFamiliarId,
+            cliente_id: payload.cliente_id,
+            parentesco: payload.tipo,
+            cobertura_tipo: payload.cobertura_tipo,
+            estado_cobertura: payload.estado_cobertura || "Sí",
+            ano_cobertura: payload.anio_destino || new Date().getFullYear(),
+          })
+        : await GrupoFamiliarService.createCoberturaSimple({
+            grupo_familiar_id: grupoFamiliarId,
+            cliente_id: payload.cliente_id,
+            parentesco: payload.tipo,
+            cobertura_tipo: payload.cobertura_tipo,
+            estado_cobertura: payload.estado_cobertura
+          });
 
       const coberturaCreada = extractCoberturaFromCreateResponse(res);
       const cliOverlay =
@@ -1576,7 +1602,22 @@ const activeNormalized = useMemo(
       );
 
       setFamilyMembers((prev) => {
-        const next = [...(prev ?? []), merged];
+        const list = prev ?? [];
+        if (esReingreso && coberturaCreada?.id) {
+          const idx = list.findIndex(
+            (m) =>
+              Number(m.cobertura_id) === Number(coberturaCreada.id) ||
+              Number(m.cliente_id) === Number(payload.cliente_id) ||
+              Number(m?.cliente?.id) === Number(payload.cliente_id)
+          );
+          if (idx >= 0) {
+            const next = [...list];
+            next[idx] = { ...list[idx], ...merged, id: list[idx].id };
+            onDerivedCounts?.(deriveCounts(next));
+            return next;
+          }
+        }
+        const next = [...list, merged];
         onDerivedCounts?.(deriveCounts(next));
         return next;
       });
@@ -1704,10 +1745,12 @@ const activeNormalized = useMemo(
 
     const clienteId = m?.cliente_id ?? m?.cliente?.id ?? null;
     
-    // Detectar si la cobertura está inactiva
-    const isInactive = m.activo === false;
-    // Si está inactiva, bloquear todos los campos
-    const isReadOnly = readOnly || isInactive;
+    // Retiro efectivo / anulación → sección retirados; programado → activos con aviso amarillo
+    const enSeccionRetirados = esMiembroEnSeccionRetirados(m);
+    const retiroProgramado = isFechaRetiroProgramada(m.fecha_retiro);
+    const showRetiroHighlight = debeResaltarRetiroMiembro(m);
+    // Bloquear edición si retiro/anulación ya es efectivo o activo=false (incl. programado)
+    const isReadOnly = readOnly || enSeccionRetirados || m.activo === false;
     const canEditParentesco = puedeEditarParentescoOEliminarCobertura(
       estadoActual,
       { readOnly: isReadOnly, estadoId }
@@ -1765,17 +1808,23 @@ const activeNormalized = useMemo(
 
         return (
           <div 
-            className={`gf-detalle__member-card overflow-visible ${isInactive ? 'gf-detalle__member-card--inactive' : ''}`} 
+            className={`gf-detalle__member-card overflow-visible ${showRetiroHighlight ? 'gf-detalle__member-card--inactive' : ''}`} 
             key={itemId}
-            style={isInactive ? { 
+            style={showRetiroHighlight ? { 
               position: 'relative'
             } : {}}
           >
-            {/* Indicador de alerta para coberturas inactivas */}
-            {isInactive && (
+            {/* Aviso amarillo: retiro programado (en activos) o efectivo/anulado */}
+            {showRetiroHighlight && (
               <div className="gf-detalle__member-inactive-banner">
                 <i className="fas fa-exclamation-triangle me-2"></i>
-                <small className="fw-bold">Retirado del Grupo Familiar</small>
+                <small className="fw-bold">
+                  {m.fecha_anulacion
+                    ? "Anulado del Grupo Familiar"
+                    : retiroProgramado && !enSeccionRetirados
+                      ? "Retiro programado del Grupo Familiar"
+                      : "Retirado del Grupo Familiar"}
+                </small>
               </div>
             )}
             {/* Header */}
@@ -3457,6 +3506,8 @@ const activeNormalized = useMemo(
         grupoFamiliarId={grupoFamiliarId}
         onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
         defaultCoberturaTipo={defaultCoberturaTipo}
+        permitirReingresoFiscal
+        anioDestino={anioConsultado || new Date().getFullYear()}
       />
 
       <AgregarDentalModal

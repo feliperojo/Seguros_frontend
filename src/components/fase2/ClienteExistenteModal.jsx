@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import {
   isProductoPrivadoIndependiente,
@@ -48,6 +49,8 @@ export default function ClienteExistenteModal({
   contexto = "grupo", // "grupo" | "pre_renovacion"
   loteId = null,
   anioDestino = null,
+  /** Solo grupo: detecta historial y ofrece reingreso fiscal sin romper otros flujos. */
+  permitirReingresoFiscal = false,
 }) {
   const [saving, setSaving] = useState(false);
   const [tipo, setTipo] = useState("");
@@ -206,6 +209,78 @@ export default function ClienteExistenteModal({
         }
       }
 
+      // Grupo: si hubo cobertura histórica del mismo producto → confirmar reingreso.
+      if (
+        !esPreRenovacion &&
+        permitirReingresoFiscal &&
+        grupoFamiliarId &&
+        cliente?.id
+      ) {
+        setSaving(true);
+        try {
+          const evalRes = await GrupoFamiliarService.evaluarAltaClienteExistente({
+            cliente_id: cliente.id,
+            grupo_familiar_id: grupoFamiliarId,
+            cobertura_tipo: defaultCoberturaTipo,
+            anio_destino: anioDestino || new Date().getFullYear(),
+          });
+          const accion = evalRes?.tipo_accion;
+
+          if (accion === "bloqueado") {
+            const motivo =
+              evalRes?.motivo ||
+              "Este cliente ya tiene este producto activo en el grupo.";
+            mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+            return;
+          }
+
+          if (accion === "reingreso") {
+            const ultimo = evalRes?.ultima_ano_cobertura;
+            const anio = evalRes?.anio_destino || anioDestino || new Date().getFullYear();
+            const nombre =
+              cliente.nombre_completo ||
+              `${cliente.primer_nombre || ""} ${cliente.apellidos || ""}`.trim() ||
+              "Este cliente";
+
+            let confirmar = true;
+            if (window?.Swal) {
+              const result = await window.Swal.fire({
+                icon: "info",
+                title: "Reingreso al grupo",
+                html: `
+                  <p><b>${nombre}</b> ya perteneció a este grupo.</p>
+                  <p style="margin-top:8px;">Última cobertura: <b>${ultimo || "—"}</b></p>
+                  <p style="margin-top:8px;">Se reactivará para <b>${anio}</b> (sin duplicar la ficha).</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: `Reingresar ${anio}`,
+                cancelButtonText: "Cancelar",
+              });
+              confirmar = Boolean(result?.isConfirmed);
+            } else {
+              confirmar = window.confirm(
+                `${nombre} ya perteneció a este grupo. Última cobertura: ${ultimo || "—"}.\n\n¿Reingresar para ${anio}?`
+              );
+            }
+
+            if (!confirmar) return;
+
+            payload.reingreso = true;
+            payload.cobertura_id_reingreso = evalRes?.cobertura_id ?? null;
+            payload.ultima_ano_cobertura = ultimo ?? null;
+            payload.anio_destino = anio;
+          }
+        } catch (err) {
+          const motivo =
+            err?.message ||
+            "No se pudo validar el historial del cliente en este grupo.";
+          mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+          return;
+        } finally {
+          setSaving(false);
+        }
+      }
+
       setSaving(true);
       // 1) Cliente del listado (puede venir envuelto en { data }) + GET completo
       let clienteFull = unwrapClienteFromApi(cliente) ?? cliente;
@@ -261,6 +336,12 @@ export default function ClienteExistenteModal({
                     En pre-renovación: si la persona tiene cobertura activa en otro grupo,
                     ese grupo debe tener pre-renovación abierta y la persona marcada como{" "}
                     <strong>no renovar</strong> antes de agregarla aquí.
+                  </>
+                ) : permitirReingresoFiscal ? (
+                  <>
+                    Si ya perteneció a este grupo, el sistema ofrecerá{" "}
+                    <strong>reingreso</strong> (sin duplicar). En otro grupo, solo si el
+                    mismo producto está <strong>retirado</strong>.
                   </>
                 ) : (
                   <>

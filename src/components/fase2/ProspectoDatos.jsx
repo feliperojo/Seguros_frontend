@@ -136,6 +136,15 @@ const getMemberGenero = (m = {}) =>
 const yaEstaEnElGrupo = (clienteId, members = []) =>
   members.some((m) => m.cliente_id === clienteId || m?.cliente?.id === clienteId);
 
+const yaEstaActivoEnElGrupo = (clienteId, members = []) =>
+  members.some((m) => {
+    const mismo =
+      Number(m.cliente_id) === Number(clienteId) ||
+      Number(m?.cliente?.id) === Number(clienteId);
+    if (!mismo) return false;
+    return m.activo !== false;
+  });
+
 const mapClienteToMember = (
   c,
   tipoSel,
@@ -752,7 +761,11 @@ const ProspectoDatos = ({
       id: clienteSelRaw.id ?? payload.cliente_id,
     };
     if (!clienteSel.id) return;
-    if (yaEstaEnElGrupo(payload.cliente_id, familyMembers)) return;
+
+    const esReingreso = Boolean(payload?.reingreso);
+    if (!esReingreso && yaEstaActivoEnElGrupo(payload.cliente_id, familyMembers)) {
+      return;
+    }
 
     // 🔍 Validación centralizada: evitar duplicar coberturas activas/vigentes
     if (grupoFamiliarId) {
@@ -831,13 +844,22 @@ const ProspectoDatos = ({
       return;
     }
 
-    const res = await GrupoFamiliarService.createCoberturaSimple({
-      grupo_familiar_id: grupoFamiliarId,
-      cliente_id: payload.cliente_id,
-      parentesco: payload.tipo,
-      cobertura_tipo: payload.cobertura_tipo,
-      estado_cobertura: payload.estado_cobertura,
-    });
+    const res = esReingreso
+      ? await GrupoFamiliarService.reingresoCobertura({
+          grupo_familiar_id: grupoFamiliarId,
+          cliente_id: payload.cliente_id,
+          parentesco: payload.tipo,
+          cobertura_tipo: payload.cobertura_tipo,
+          estado_cobertura: payload.estado_cobertura || "Sí",
+          ano_cobertura: payload.anio_destino || new Date().getFullYear(),
+        })
+      : await GrupoFamiliarService.createCoberturaSimple({
+          grupo_familiar_id: grupoFamiliarId,
+          cliente_id: payload.cliente_id,
+          parentesco: payload.tipo,
+          cobertura_tipo: payload.cobertura_tipo,
+          estado_cobertura: payload.estado_cobertura,
+        });
 
     const coberturaCreada = extractCoberturaFromCreateResponse(res);
     const cliOverlay =
@@ -853,7 +875,23 @@ const ProspectoDatos = ({
       })
     );
 
-    setFamilyMembers((prev) => [...prev, merged]);
+    setFamilyMembers((prev) => {
+      const list = prev ?? [];
+      if (esReingreso && coberturaCreada?.id) {
+        const idx = list.findIndex(
+          (m) =>
+            Number(m.cobertura_id) === Number(coberturaCreada.id) ||
+            Number(m.cliente_id) === Number(payload.cliente_id) ||
+            Number(m?.cliente?.id) === Number(payload.cliente_id)
+        );
+        if (idx >= 0) {
+          const next = [...list];
+          next[idx] = { ...list[idx], ...merged, id: list[idx].id };
+          return next;
+        }
+      }
+      return [...list, merged];
+    });
 
     if (res?.personas_taxes != null || res?.personas_cobertura != null) {
       onDerivedCounts?.({
@@ -1093,6 +1131,7 @@ const sortedMembers = familyMembers
    grupoFamiliarId={grupoFamiliarId}
    onCreateCoberturaDeClienteExistente={handleCreateCoberturaExistente}
    defaultCoberturaTipo={defaultCoberturaTipo}
+   permitirReingresoFiscal={Boolean(grupoFamiliarId)}
  />
     </>
   );
