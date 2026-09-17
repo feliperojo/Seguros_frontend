@@ -727,12 +727,14 @@ const RenovacionesEstadoPage = () => {
 
       <PreRenovacionModal
         show={!!grupoSeleccionado}
-        onHide={() => setGrupoSeleccionado(null)}
-        grupoFamiliarId={grupoSeleccionado?.id}
-        anioDestino={anioDestino}
-        onAfterConsolidar={async () => {
+        onHide={async () => {
           setGrupoSeleccionado(null);
           if (hasConsultado) await fetchData();
+        }}
+        grupoFamiliarId={grupoSeleccionado?.id}
+        anioDestino={anioDestino}
+        onAfterConsolidar={() => {
+          setGrupoSeleccionado(null);
         }}
       />
 
