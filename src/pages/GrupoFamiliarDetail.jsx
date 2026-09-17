@@ -2200,7 +2200,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
             <div className="gf-detalle__section-header">
               <h5 className="gf-detalle__section-title">
                 <i className="fas fa-clipboard-list me-2"></i>
-                Qué pasó este año ({anioConsultado})
+                Año {anioConsultado}
               </h5>
               <button
                 type="button"
