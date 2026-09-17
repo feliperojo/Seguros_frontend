@@ -41,12 +41,6 @@ import {
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
 
-const formatFechaCorta = (value) => {
-  if (!value) return "—";
-  const s = String(value).slice(0, 10);
-  return s || "—";
-};
-
 const etiquetaProductoCierre = (tipo = "") => {
   const raw = String(tipo || "").trim();
   if (!raw) return "Salud MS";
@@ -63,19 +57,6 @@ const claseBadgeProductoCierre = (tipo = "") => {
   if (isDentalCoberturaTipo(tipo)) return "bg-info text-dark";
   if (isProductoPrivadoIndependiente(tipo)) return "bg-secondary";
   return "bg-primary";
-};
-
-const etiquetaEventoRetiro = (retiro = {}) => {
-  switch (retiro.tipo_evento) {
-    case "retiro":
-      return "Retiro del grupo";
-    case "cancelacion":
-      return "Cancelación de póliza";
-    case "retiro_cancelacion":
-      return "Retiro y cancelación";
-    default:
-      return "Cierre de cobertura";
-  }
 };
 
 /** Salud primero y Dental MS del mismo cliente debajo. */
@@ -2242,75 +2223,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 <div className="alert alert-danger mb-0">{cierreError}</div>
               )}
               {!cierreLoading && !cierreError && cierreAnio && (
-                <>
-                  <div className="mb-4">
-                    <h6 className="fw-semibold text-danger mb-1">
-                      Quiénes salieron del grupo
-                    </h6>
-                    <p className="text-muted small mb-2">
-                      Miembros que se retiraron o cancelaron su cobertura durante{" "}
-                      {anioConsultado}. No incluye a quienes solo se renovaron al
-                      año siguiente.
-                    </p>
-                    {(cierreAnio.retiros || []).length === 0 ? (
-                      <p className="text-muted small mb-0">
-                        No hubo retiros ni cancelaciones fuera de renovación.
-                      </p>
-                    ) : (
-                      <ul className="list-group">
-                        {ordenarItemsCierrePorProducto(cierreAnio.retiros || []).map(
-                          (retiro, idx) => {
-                            const producto = etiquetaProductoCierre(
-                              retiro.cobertura_tipo
-                            );
-                            const motivo =
-                              retiro.motivo_retiro ||
-                              retiro.motivo_cancelacion ||
-                              "";
-                            return (
-                              <li
-                                key={`${retiro.cobertura_id || "r"}-${idx}`}
-                                className="list-group-item"
-                              >
-                                <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                  <span className="fw-semibold">
-                                    {retiro.cliente_nombre ||
-                                      `Cobertura #${retiro.cobertura_id}`}
-                                  </span>
-                                  <span
-                                    className={`badge ${claseBadgeProductoCierre(
-                                      retiro.cobertura_tipo
-                                    )}`}
-                                  >
-                                    {producto}
-                                  </span>
-                                  <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
-                                    {etiquetaEventoRetiro(retiro)}
-                                  </span>
-                                  {retiro.parentesco && (
-                                    <span className="badge bg-light text-dark border">
-                                      {retiro.parentesco}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="small text-muted">
-                                  Fecha:{" "}
-                                  {formatFechaCorta(
-                                    retiro.fecha_retiro ||
-                                      retiro.fecha_cancelacion
-                                  )}
-                                  {retiro.plan ? ` · Plan: ${retiro.plan}` : ""}
-                                  {motivo ? ` · Motivo: ${motivo}` : ""}
-                                </div>
-                              </li>
-                            );
-                          }
-                        )}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div>
+                <div>
                     <h6 className="fw-semibold text-success mb-1">
                       Renovación al año siguiente
                     </h6>
@@ -2470,7 +2383,6 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                       </div>
                     )}
                   </div>
-                </>
               )}
             </div>
           </div>
