@@ -866,6 +866,11 @@ a:hover .gf-detalle__member-name {
   font-weight: 700;
 }
 
+/* El banner absoluto no debe tapar el badge de parentesco (HIJO/A, TOMADOR, …). */
+.gf-detalle__member-card--inactive .gf-detalle__member-header {
+  padding-top: 2.75rem;
+}
+
 .gf-detalle__member-header {
   padding: 1rem 1.125rem 0.75rem;
   background: #fff;
