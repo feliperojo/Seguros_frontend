@@ -2904,7 +2904,7 @@ const activeNormalized = useMemo(
 
                             {m.fecha_retiro && (
                               <>
-                                <ConfigField label="Fecha de Retiro">
+                                <ConfigField label="Fecha de Expiración">
                                   <MdyDashDateInput
                                     size="sm"
                                     valueIso={(m.fecha_retiro || "").slice(0, 10)}
@@ -3322,7 +3322,7 @@ const activeNormalized = useMemo(
                           )}
                           {d.fecha_retiro && (
                             <>
-                              <ConfigField label="Fecha de Retiro">
+                              <ConfigField label="Fecha de Expiración">
                                 <MdyDashDateInput
                                   size="sm"
                                   valueIso={(d.fecha_retiro || "").slice(0, 10)}

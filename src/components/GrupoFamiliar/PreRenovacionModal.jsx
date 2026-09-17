@@ -1018,11 +1018,21 @@ const PreRenovacionModal = ({
                               {estadoGestionBadge(lote.estado_gestion).label}
                             </option>
                           ) : (
-                            ESTADOS_GESTION_EDITABLES.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))
+                            <>
+                              {estadoGestionDraft &&
+                                !ESTADOS_GESTION_EDITABLES.some(
+                                  (opt) => opt.value === estadoGestionDraft
+                                ) && (
+                                  <option value={estadoGestionDraft}>
+                                    {estadoGestionBadge(estadoGestionDraft).label}
+                                  </option>
+                                )}
+                              {ESTADOS_GESTION_EDITABLES.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </>
                           )}
                         </select>
                         <input
