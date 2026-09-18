@@ -372,6 +372,11 @@ const PreRenovacionModal = ({
   const items = useMemo(() => {
     const list = [...(lote?.items || [])];
     list.sort((a, b) => {
+      // No renovará / retirados al final de la lista
+      const aRetiro = a?.renovar === false ? 1 : 0;
+      const bRetiro = b?.renovar === false ? 1 : 0;
+      if (aRetiro !== bRetiro) return aRetiro - bRetiro;
+
       const aTomador = isTomadorItem(a) ? 0 : 1;
       const bTomador = isTomadorItem(b) ? 0 : 1;
       if (aTomador !== bTomador) return aTomador - bTomador;
@@ -1191,9 +1196,10 @@ const PreRenovacionModal = ({
                     !esCierreSinDestino &&
                     miembrosSinRetiro.length > 0 && (
                     <div className="alert alert-warning">
-                      Completa la{" "}
-                      <strong>fecha y el motivo de retiro</strong> de:{" "}
-                      {miembrosSinRetiro.join(", ")}.
+                      Aún falta confirmar el retiro automático de:{" "}
+                      {miembrosSinRetiro.join(", ")}. Si ya marcaste{" "}
+                      <strong>Retirar miembro</strong>, espera a que se guarde
+                      y vuelve a intentar.
                     </div>
                   )}
 
@@ -1202,10 +1208,10 @@ const PreRenovacionModal = ({
                     <div className="alert alert-warning">
                       Hay coberturas ya <strong>inactivas</strong> (anuladas,
                       retiradas o canceladas) marcadas para renovar:{" "}
-                      {miembrosInactivosMarcadosRenovar.join(", ")}. Desmarca{" "}
-                      <strong>Renovar esta cobertura</strong> o vuelve a abrir
+                      {miembrosInactivosMarcadosRenovar.join(", ")}. Marca{" "}
+                      <strong>Retirar miembro</strong> o vuelve a abrir
                       la pre-renovación para sincronizarlas. Mientras estén
-                      marcadas, no se puede consolidar.
+                      marcadas para renovar, no se puede consolidar.
                     </div>
                   )}
 
@@ -1373,7 +1379,7 @@ const PreRenovacionModal = ({
                         : miembrosConFechaFueraDeAnio.length > 0
                             ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
                             : miembrosSinRetiro.length > 0
-                              ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
+                              ? `Falta confirmar retiro: ${miembrosSinRetiro.join(", ")}`
                               : miembrosInactivosMarcadosRenovar.length > 0
                                 ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
                                 : conflictosDentalSinSalud.length > 0

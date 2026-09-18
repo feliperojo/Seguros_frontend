@@ -190,10 +190,17 @@ export default function ClienteExistenteModal({
           if (!elegible) {
             const motivo =
               check?.motivo ||
-              "Este cliente no puede agregarse a esta pre-renovación todavía.";
+              "Esta persona no puede agregarse a esta pre-renovación todavía.";
             mostrarAviso(
-              "No se puede agregar",
-              `<p>${motivo}</p>`,
+              "No se puede agregar todavía",
+              motivo
+                .split(/(?<=\.)\s+/)
+                .filter(Boolean)
+                .map(
+                  (parte, i) =>
+                    `<p style="${i ? "margin-top:8px;" : ""}">${parte}</p>`
+                )
+                .join(""),
               motivo
             );
             return;
@@ -202,7 +209,11 @@ export default function ClienteExistenteModal({
           const motivo =
             err?.message ||
             "No se pudo validar la elegibilidad del cliente para esta pre-renovación.";
-          mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+          mostrarAviso(
+            "No se puede agregar todavía",
+            `<p>${motivo}</p>`,
+            motivo
+          );
           return;
         } finally {
           setSaving(false);
@@ -333,9 +344,9 @@ export default function ClienteExistenteModal({
               <span className="text-muted small mb-0">
                 {contexto === "pre_renovacion" ? (
                   <>
-                    En pre-renovación: si la persona tiene cobertura activa en otro grupo,
-                    ese grupo debe tener pre-renovación abierta y la persona marcada como{" "}
-                    <strong>no renovar</strong> antes de agregarla aquí.
+                    Si ya pertenece a otro grupo este año, abre la pre-renovación
+                    de ese grupo y márcala como <strong>No renovar</strong> antes
+                    de agregarla aquí.
                   </>
                 ) : permitirReingresoFiscal ? (
                   <>
@@ -386,14 +397,11 @@ export default function ClienteExistenteModal({
 
             {contexto === "pre_renovacion" && (
               <div className="alert alert-info mb-3">
-                Si la persona ya está en otro grupo este año, primero hay que
-                abrir la pre-renovación de <strong>ese grupo</strong> y marcarla
-                como <strong>no renovar</strong>. Solo después se puede agregar
-                aquí para el año destino
-                {anioDestino ? ` (${anioDestino})` : ""}. Si ya figura en otra
-                pre-renovación del mismo año, debe quedar <strong>no activa para
-                renovar</strong> allí. El tomador de otro grupo no se traslada por
-                este camino, salvo que ese grupo esté en No renovará o Terminado.
+                Si la persona ya pertenece a otro grupo en el año fiscal actual,
+                primero abre la pre-renovación de <strong>ese grupo</strong> y
+                márcala como <strong>No renovar</strong>. Luego puedes
+                agregarla aquí
+                {anioDestino ? ` para ${anioDestino}` : ""}.
               </div>
             )}
 

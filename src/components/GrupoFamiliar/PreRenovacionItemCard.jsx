@@ -41,7 +41,6 @@ import {
 } from "../../utils/coverageFieldConfig";
 import {
   COBERTURA_DEFINIDA,
-  OPCIONES_COBERTURA_RETIRO,
 } from "../../utils/coberturaDefinida";
 import { computeAnnual } from "../../services/ingresos";
 import MediosPagoSection from "../MediosPagoSection";
@@ -77,22 +76,14 @@ const PARENTESCO_OPTIONS = [
   "Sobrino/a",
 ];
 
-const MOTIVOS_RETIRO_NO_RENOVACION = [
-  "CAMBIO DE AGENTE",
-  "MS CANCELO POR FALTA DE DOCUMENTOS",
-  "TOMO MEDICAID",
-  "TOMO MEDICARE (65 AÑOS)",
-  "TOMO SEGURO POR EMPLEADOR/OTRO",
-  "CLIENTE CANCELO POR PRECIO",
-  "SE MUDO A OTRO ESTADO/PAIS",
-  "YA NO NECESITA EL SEGURO",
-  "SE CANCELO POR FALTA DE PAGO (MORA)",
-  "NO REALIZO EL PAGO INICIAL",
-  "TAXES POR SEPARADO",
-    "TAXES EN OTRO GF",
-  "TRASLADO A OTRO GRUPO FAMILIAR",
-  "OTRO",
-];
+const MOTIVO_RETIRO_NO_RENOVACION = "NO RENOVACION";
+const MOTIVO_RETIRO_TRASLADO = "TRASLADO A OTRO GRUPO FAMILIAR";
+
+const motivoRetiroAutomatico = (motivoActual) => {
+  const actual = String(motivoActual ?? "").trim();
+  if (actual === MOTIVO_RETIRO_TRASLADO) return MOTIVO_RETIRO_TRASLADO;
+  return MOTIVO_RETIRO_NO_RENOVACION;
+};
 
 const DIRECCION_FORMULA_FIELDS = new Set([
   "calle",
@@ -356,19 +347,25 @@ const PreRenovacionItemCard = ({
   };
 
   const cambiarRenovar = (checked) => {
+    // checked = true → renovar; false → retirar miembro (no renovar)
     setRenovar(checked);
     if (!checked) {
       const cierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
-      const definida =
-        datos.cobertura_definida || COBERTURA_DEFINIDA.TERMINADO;
+      const definida = COBERTURA_DEFINIDA.TERMINADO;
+      const motivo = motivoRetiroAutomatico(datos.motivo_retiro);
       setDatos((prev) => ({
         ...prev,
         fecha_retiro: cierre,
-        cobertura_definida: prev.cobertura_definida || definida,
+        cobertura_definida: definida,
+        motivo_retiro: motivoRetiroAutomatico(prev.motivo_retiro),
       }));
       guardarCambio({ renovar: false }, "renovar", true);
       guardarCambio(
-        { fecha_retiro: cierre, cobertura_definida: definida },
+        {
+          fecha_retiro: cierre,
+          cobertura_definida: definida,
+          motivo_retiro: motivo,
+        },
         "fecha_retiro"
       );
       return;
@@ -523,23 +520,36 @@ const PreRenovacionItemCard = ({
     attemptedConsolidar &&
     requiereRetiro &&
     !String(datos.motivo_retiro ?? "").trim();
-  const coberturaDefinidaRetiro = OPCIONES_COBERTURA_RETIRO.includes(
-    datos.cobertura_definida
-  )
-    ? datos.cobertura_definida
-    : COBERTURA_DEFINIDA.TERMINADO;
   const disabled = bloqueado || edicionBloqueada;
   const campoClienteVacio = (field) =>
     isBorradorClienteCleared(draftCliente, field);
 
-  // No renovar: F. retiro fija al 31/12 del año fiscal que se cierra.
+  // Retiro automático: fecha 31/12, estado Terminado, motivo NO RENOVACION
+  // (o TRASLADO si el sistema ya lo marcó).
   useEffect(() => {
     if (disabled || !requiereRetiro) return;
-    if (toDateInput(datos.fecha_retiro) === fechaRetiroCierre) return;
-    setDatos((prev) => ({ ...prev, fecha_retiro: fechaRetiroCierre }));
-    guardarCambio({ fecha_retiro: fechaRetiroCierre }, "fecha_retiro");
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo alinear fecha de cierre
-  }, [requiereRetiro, fechaRetiroCierre, disabled, datos.fecha_retiro]);
+    const motivoEsperado = motivoRetiroAutomatico(datos.motivo_retiro);
+    const fechaOk = toDateInput(datos.fecha_retiro) === fechaRetiroCierre;
+    const estadoOk = datos.cobertura_definida === COBERTURA_DEFINIDA.TERMINADO;
+    const motivoOk = String(datos.motivo_retiro ?? "").trim() === motivoEsperado;
+    if (fechaOk && estadoOk && motivoOk) return;
+
+    const patch = {
+      fecha_retiro: fechaRetiroCierre,
+      cobertura_definida: COBERTURA_DEFINIDA.TERMINADO,
+      motivo_retiro: motivoEsperado,
+    };
+    setDatos((prev) => ({ ...prev, ...patch }));
+    guardarCambio(patch, "fecha_retiro");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- alinear defaults de retiro
+  }, [
+    requiereRetiro,
+    fechaRetiroCierre,
+    disabled,
+    datos.fecha_retiro,
+    datos.cobertura_definida,
+    datos.motivo_retiro,
+  ]);
 
   const placeholderActual = (field, actual, fallback = "") => {
     if (campoClienteVacio(field)) return "";
@@ -794,7 +804,18 @@ const PreRenovacionItemCard = ({
   };
 
   return (
-    <div className={`pr-item${esDental ? " pr-item--dental" : ""}`}>
+    <div
+      className={`pr-item${esDental ? " pr-item--dental" : ""}${
+        !esAltaEnLote && !renovar ? " pr-item--no-renovar" : ""
+      }`}
+    >
+      {!esAltaEnLote && !renovar && (
+        <div className="pr-item__no-renovar-banner">
+          <i className="fas fa-exclamation-triangle me-2" aria-hidden="true" />
+          No se renovará · Fecha de expiración (cierre fiscal):{" "}
+          <strong>{formatDateMMDDYYYY(fechaRetiroCierre)}</strong>
+        </div>
+      )}
       <div className="pr-item__header">
         <div className="d-flex flex-wrap justify-content-between align-items-start gap-2">
           <div>
@@ -809,6 +830,11 @@ const PreRenovacionItemCard = ({
                 <i className={`${iconoProducto} me-1`} aria-hidden="true" />
                 {etiquetaProducto}
               </span>
+              {!esAltaEnLote && !renovar && (
+                <span className="badge bg-warning text-dark pr-item__badge">
+                  No renovará
+                </span>
+              )}
             </div>
             {esAltaEnLote ? (
               <span className="badge bg-info text-white">
@@ -843,16 +869,16 @@ const PreRenovacionItemCard = ({
                   <input
                     className="form-check-input"
                     type="checkbox"
-                    id={`pre-renovar-${item.id}`}
-                    checked={renovar}
-                    onChange={(e) => cambiarRenovar(e.target.checked)}
+                    id={`pre-retirar-${item.id}`}
+                    checked={!renovar}
+                    onChange={(e) => cambiarRenovar(!e.target.checked)}
                     disabled={disabled}
                   />
                   <label
                     className="form-check-label"
-                    htmlFor={`pre-renovar-${item.id}`}
+                    htmlFor={`pre-retirar-${item.id}`}
                   >
-                    Renovar esta cobertura
+                    Retirar miembro
                   </label>
                 </div>
                 {renderEstado("renovar")}
@@ -888,11 +914,11 @@ const PreRenovacionItemCard = ({
         <div className="alert alert-warning rounded-0 mb-0 py-2">
           <strong>⚠ Esta cobertura ya no está activa</strong> — probablemente fue
           cancelada o retirada después de agregarse a esta pre-renovación. Revisa si
-          corresponde desmarcar &quot;Renovar esta cobertura&quot;.
+          corresponde marcar &quot;Retirar miembro&quot;.
         </div>
       )}
 
-      {requiereRetiro && datos.motivo_retiro === "TRASLADO A OTRO GRUPO FAMILIAR" && (
+      {requiereRetiro && datos.motivo_retiro === MOTIVO_RETIRO_TRASLADO && (
         <div className="alert alert-info rounded-0 mb-0 py-2">
           Este miembro ya está reservado en otro grupo para el año destino.
           Aquí se cierra el año en curso; no se genera póliza nueva en este
@@ -900,82 +926,16 @@ const PreRenovacionItemCard = ({
         </div>
       )}
 
-      {requiereRetiro && (
-        <div className="pr-item__body border-bottom">
-          <p className="small text-muted mb-3">
-            Este miembro no se renovará. Prepara los datos obligatorios del retiro.
-          </p>
-          <div className="row g-2">
-            <div className="col-md-3">
-              <label className="form-label form-label-sm mb-1">
-                F. retiro
-              </label>
-              <input
-                type="text"
-                className="form-control form-control-sm"
-                value={formatDateMMDDYYYY(fechaRetiroCierre)}
-                disabled
-                readOnly
-              />
-              <div className="form-text">
-                Fija al 31/12/{Number(anioOrigen) || Number(anioDestino) - 1}{" "}
-                (cierre del año fiscal).
-              </div>
-              {renderEstado("fecha_retiro")}
-            </div>
-            <div className="col-md-3">
-              <label className="form-label form-label-sm mb-1">
-                Estado <span className="text-danger">*</span>
-              </label>
-              <select
-                className="form-select form-select-sm"
-                value={coberturaDefinidaRetiro}
-                onChange={(e) =>
-                  cambiarDato(
-                    "cobertura_definida",
-                    e.target.value || COBERTURA_DEFINIDA.TERMINADO,
-                    true
-                  )
-                }
-                disabled={disabled}
-              >
-                {OPCIONES_COBERTURA_RETIRO.map((op) => (
-                  <option key={op} value={op}>
-                    {op}
-                  </option>
-                ))}
-              </select>
-              {renderEstado("cobertura_definida")}
-            </div>
-            <div className="col-md-6">
-              <label className="form-label form-label-sm mb-1">
-                Motivo retiro <span className="text-danger">*</span>
-              </label>
-              <select
-                className={`form-select form-select-sm${
-                  retiroMotivoInvalido ? " is-invalid" : ""
-                }`}
-                value={datos.motivo_retiro || ""}
-                onChange={(e) => cambiarDato("motivo_retiro", e.target.value, true)}
-                disabled={disabled}
-              >
-                <option value="">Seleccione…</option>
-                {MOTIVOS_RETIRO_NO_RENOVACION.map((motivo) => (
-                  <option key={motivo} value={motivo}>
-                    {motivo}
-                  </option>
-                ))}
-              </select>
-              {retiroMotivoInvalido && (
-                <div className="invalid-feedback d-block">
-                  Obligatorio para consolidar.
-                </div>
-              )}
-              {renderEstado("motivo_retiro")}
-            </div>
-          </div>
+      {requiereRetiro && retiroMotivoInvalido && (
+        <div className="px-3 py-2 border-bottom text-danger small">
+          Falta confirmar el retiro para poder consolidar.
         </div>
       )}
+      {requiereRetiro &&
+        estadosGuardado.fecha_retiro &&
+        estadosGuardado.fecha_retiro !== "limpio" && (
+          <div className="px-3 py-1">{renderEstado("fecha_retiro")}</div>
+        )}
 
       {mostrarPoliza && (
         <div className="pr-item__body border-bottom">
