@@ -2206,10 +2206,10 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
                 onClick={() => setShowHistorialRenovacionesAnio(true)}
-                title={`Historial de renovaciones solo del año ${anioConsultado}`}
+                title={`Historial de coberturas del año ${anioConsultado}`}
               >
                 <i className="fas fa-history me-1" aria-hidden="true" />
-                Hist. Renov. {anioConsultado}
+                Historial de coberturas
               </button>
             </div>
             <div className="gf-detalle__section-body">
