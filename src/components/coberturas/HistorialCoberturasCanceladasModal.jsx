@@ -756,7 +756,7 @@ const HistorialCoberturasCanceladasModal = ({
                   </div>
                 </div>
                 <div className="col-6">
-                  <small className="text-muted">Fecha de Retiro:</small>
+                  <small className="text-muted">Fecha de expiración:</small>
                   <div className="fw-semibold">
                     {formatearFecha(item?.fecha_retiro)}
                   </div>
@@ -1080,7 +1080,7 @@ const HistorialCoberturasCanceladasModal = ({
                     <th>Parentesco</th>
                     <th>Plan</th>
                     <th>Fecha de cancelación</th>
-                    <th>F. retiro</th>
+                    <th>Fecha de expiración</th>
                     <th>Estado</th>
                     <th>Motivo canc.</th>
                     <th>Motivo ret.</th>
