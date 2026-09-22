@@ -847,11 +847,11 @@ const HistorialCoberturasCanceladasModal = ({
             </div>
             <div>
               <h5 className="hcc-modal__title">
-                Historial de cancelaciones y retiros
+                Historial de coberturas
                 {soloAnioInicial && anioInicialStr ? ` — ${anioInicialStr}` : ""}
               </h5>
               <p className="hcc-modal__subtitle">
-                Registro de coberturas canceladas o retiradas del grupo familiar
+                Registro de coberturas del grupo familiar
               </p>
             </div>
           </div>

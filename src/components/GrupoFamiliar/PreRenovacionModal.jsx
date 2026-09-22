@@ -204,13 +204,13 @@ const PreRenovacionModal = ({
   const handleGuardarEstadoGestion = useCallback(async () => {
     if (!lote?.id || !estadoGestionDraft) return;
     if (estadoGestionDraft === lote.estado_gestion) return;
-    if (!notaEstadoGestion.trim()) return;
 
     setGuardandoEstadoGestion(true);
     try {
+      const nota = notaEstadoGestion.trim();
       const body = {
         estado_gestion: estadoGestionDraft,
-        nota: notaEstadoGestion.trim(),
+        ...(nota ? { nota } : {}),
       };
       const response = await apiRequest(
         `/renovacion_lote/${lote.id}/estado-gestion`,
@@ -1044,8 +1044,7 @@ const PreRenovacionModal = ({
                           type="text"
                           className="form-control form-control-sm"
                           style={{ maxWidth: 240 }}
-                          placeholder="Nota (obligatoria): motivo del cambio"
-                          required
+                          placeholder="Nota (opcional): motivo del cambio"
                           value={notaEstadoGestion}
                           disabled={
                             guardandoEstadoGestion ||
@@ -1064,8 +1063,7 @@ const PreRenovacionModal = ({
                             consolidando ||
                             estadoGestionTerminal ||
                             !estadoGestionDraft ||
-                            estadoGestionDraft === lote.estado_gestion ||
-                            !notaEstadoGestion.trim()
+                            estadoGestionDraft === lote.estado_gestion
                           }
                           onClick={handleGuardarEstadoGestion}
                         >
