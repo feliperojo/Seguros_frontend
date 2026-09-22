@@ -98,13 +98,35 @@ const CambioVidaCancelacionModal = ({
   const getIconoProducto = (esDental) =>
     esDental ? "fas fa-tooth" : "fas fa-shield-alt";
 
+  const esDentalMsVigenteParaCascada = (c = {}) => {
+    const esVerdadero = (valor) =>
+      valor === true || valor === "true" || valor === 1 || valor === "1";
+    const tieneFecha = (valor) => {
+      if (valor === null || valor === undefined) return false;
+      const normalizado = String(valor).trim().toLowerCase();
+      return normalizado !== "" && normalizado !== "null" && normalizado !== "undefined";
+    };
+    const estadoCobertura =
+      c?.estado_cobertura ?? c?.cobertura_estado ?? c?.estadoCobertura;
+
+    return (
+      isDentalMsCoberturaTipo(c?.cobertura_tipo) &&
+      esVerdadero(c?.activo) &&
+      esVerdadero(c?.vigente) &&
+      vigenteDesdeEstadoCobertura(estadoCobertura) === true &&
+      !tieneFecha(c?.fecha_cancelacion ?? c?.fechaCancelacion) &&
+      !tieneFecha(c?.fecha_retiro ?? c?.fechaRetiro) &&
+      !tieneFecha(c?.fecha_anulacion ?? c?.fechaAnulacion)
+    );
+  };
+
   const findDentalCoberturaForCliente = (clienteId, list = coberturas) => {
     if (!clienteId) return null;
     return (
       list.find(
         (c) =>
           getClienteIdFromCobertura(c) === clienteId &&
-          isDentalMsCoberturaTipo(c?.cobertura_tipo)
+          esDentalMsVigenteParaCascada(c)
       ) || null
     );
   };
@@ -129,7 +151,10 @@ const CambioVidaCancelacionModal = ({
   const esDentalVinculadaASaludSeleccionada = (dentalId) => {
     const dental = coberturas.find((c) => c.id === dentalId);
     if (!dental) return false;
-    const salud = findSaludCoberturaForCliente(getClienteIdFromCobertura(dental));
+    const clienteId = getClienteIdFromCobertura(dental);
+    const dentalVigente = findDentalCoberturaForCliente(clienteId);
+    if (dentalVigente?.id !== dentalId) return false;
+    const salud = findSaludCoberturaForCliente(clienteId);
     return Boolean(salud?.id && coberturasSeleccionadas.has(salud.id));
   };
 
