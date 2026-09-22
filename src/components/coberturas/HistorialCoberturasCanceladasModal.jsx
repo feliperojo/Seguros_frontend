@@ -750,13 +750,13 @@ const HistorialCoberturasCanceladasModal = ({
                   </div>
                 </div>
                 <div className="col-6">
-                  <small className="text-muted">Fecha de expiración:</small>
+                  <small className="text-muted">Fecha de cancelación:</small>
                   <div className="fw-semibold text-danger">
                     {formatearFecha(item?.fecha_cancelacion)}
                   </div>
                 </div>
                 <div className="col-6">
-                  <small className="text-muted">Fecha de Retiro:</small>
+                  <small className="text-muted">Fecha de expiración:</small>
                   <div className="fw-semibold">
                     {formatearFecha(item?.fecha_retiro)}
                   </div>
@@ -824,18 +824,6 @@ const HistorialCoberturasCanceladasModal = ({
                     {item?.motivo_retiro || "-"}
                   </div>
                 </div>
-                <div className="col-md-12">
-                  <small className="text-muted">Nota de Retiro:</small>
-                  <div className="fw-semibold">
-                    {item?.nota_retiro || "-"}
-                  </div>
-                </div>
-                <div className="col-md-12">
-                  <small className="text-muted">Nota de Cancelación:</small>
-                  <div className="fw-semibold">
-                    {item?.nota_cancel || "-"}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -859,11 +847,11 @@ const HistorialCoberturasCanceladasModal = ({
             </div>
             <div>
               <h5 className="hcc-modal__title">
-                Historial de cancelaciones y retiros
+                Historial de coberturas
                 {soloAnioInicial && anioInicialStr ? ` — ${anioInicialStr}` : ""}
               </h5>
               <p className="hcc-modal__subtitle">
-                Registro de coberturas canceladas o retiradas del grupo familiar
+                Registro de coberturas del grupo familiar
               </p>
             </div>
           </div>
@@ -1091,13 +1079,11 @@ const HistorialCoberturasCanceladasModal = ({
                     <th>Cliente</th>
                     <th>Parentesco</th>
                     <th>Plan</th>
-                    <th>F. expiración</th>
-                    <th>F. retiro</th>
+                    <th>Fecha de cancelación</th>
+                    <th>Fecha de expiración</th>
                     <th>Estado</th>
                     <th>Motivo canc.</th>
                     <th>Motivo ret.</th>
-                    <th>Nota canc.</th>
-                    <th>Nota ret.</th>
                     <th>Acción origen</th>
                     <th>Navegación</th>
                   </tr>
@@ -1165,12 +1151,6 @@ const HistorialCoberturasCanceladasModal = ({
                           <td>{item?.motivo_cancelacion || "-"}</td>
                           <td>{item?.motivo_retiro || "-"}</td>
                           <td>
-                            <small className="text-muted">{item?.nota_cancel || "-"}</small>
-                          </td>
-                          <td>
-                            <small className="text-muted">{item?.nota_retiro || "-"}</small>
-                          </td>
-                          <td>
                             <Badge bg="secondary" className="hcc-badge-origen">
                               {item?.accion_origen || "N/A"}
                             </Badge>
@@ -1197,7 +1177,7 @@ const HistorialCoberturasCanceladasModal = ({
                         </tr>
                         {isExpanded && (
                           <tr>
-                            <td colSpan={15} style={{ padding: 0, border: "none" }}>
+                            <td colSpan={13} style={{ padding: 0, border: "none" }}>
                               <div className="hcc-expand-panel">
                                 {renderCoberturaCompleta(item)}
 

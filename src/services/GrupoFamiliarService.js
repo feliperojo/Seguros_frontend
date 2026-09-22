@@ -150,6 +150,60 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   },
 
   /**
+   * Evalúa si el alta de cliente existente es agregar, reingreso o bloqueo.
+   * Solo para flujo de grupo (no pre-renovación).
+   */
+  evaluarAltaClienteExistente: async ({
+    cliente_id,
+    grupo_familiar_id,
+    cobertura_tipo,
+    anio_destino = null,
+  }) => {
+    const params = new URLSearchParams({
+      cliente_id: String(cliente_id),
+      grupo_familiar_id: String(grupo_familiar_id),
+      cobertura_tipo: String(cobertura_tipo || "Plan de salud"),
+    });
+    if (anio_destino != null) {
+      params.set("anio_destino", String(anio_destino));
+    }
+    const res = await apiRequest(
+      `${BASE_COB}/evaluar-alta-existente?${params.toString()}`,
+      "GET"
+    );
+    return res?.data ?? res;
+  },
+
+  /**
+   * Reingreso fiscal: reactiva cobertura histórica del mismo grupo/producto.
+   */
+  reingresoCobertura: async (
+    {
+      grupo_familiar_id,
+      cliente_id,
+      parentesco = "Tomador",
+      cobertura_tipo,
+      estado_cobertura = "Sí",
+      fecha_activacion = null,
+      ano_cobertura = null,
+    },
+    headers = {}
+  ) => {
+    const payload = {
+      grupo_familiar_id,
+      cliente_id,
+      parentesco,
+      cobertura_tipo,
+      estado_cobertura,
+      ano_cobertura: ano_cobertura ?? new Date().getFullYear(),
+    };
+    if (fecha_activacion) {
+      payload.fecha_activacion = fecha_activacion;
+    }
+    return await apiRequest(`${BASE_COB}/reingreso`, "POST", payload, headers);
+  },
+
+  /**
    * Busca si un cliente ya tiene una cobertura activa/vigente
    * para el mismo tipo de producto en OTRO grupo familiar.
    *

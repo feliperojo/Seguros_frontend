@@ -41,12 +41,6 @@ import {
 const ANIO_ACTUAL = new Date().getFullYear();
 const ANIO_RENOVACION = ANIO_ACTUAL + 1;
 
-const formatFechaCorta = (value) => {
-  if (!value) return "—";
-  const s = String(value).slice(0, 10);
-  return s || "—";
-};
-
 const etiquetaProductoCierre = (tipo = "") => {
   const raw = String(tipo || "").trim();
   if (!raw) return "Salud MS";
@@ -63,19 +57,6 @@ const claseBadgeProductoCierre = (tipo = "") => {
   if (isDentalCoberturaTipo(tipo)) return "bg-info text-dark";
   if (isProductoPrivadoIndependiente(tipo)) return "bg-secondary";
   return "bg-primary";
-};
-
-const etiquetaEventoRetiro = (retiro = {}) => {
-  switch (retiro.tipo_evento) {
-    case "retiro":
-      return "Retiro del grupo";
-    case "cancelacion":
-      return "Cancelación de póliza";
-    case "retiro_cancelacion":
-      return "Retiro y cancelación";
-    default:
-      return "Cierre de cobertura";
-  }
 };
 
 /** Salud primero y Dental MS del mismo cliente debajo. */
@@ -109,6 +90,171 @@ const ordenarItemsCierrePorProducto = (items = []) => {
   });
 
   return out;
+};
+
+/** Agrupa coberturas por persona para el resumen de cierre (solo presentación). */
+const agruparItemsCierrePorCliente = (items = []) => {
+  const ordenados = ordenarItemsCierrePorProducto(items);
+  const grupos = [];
+  const indicePorClave = new Map();
+
+  ordenados.forEach((item) => {
+    const clienteId = Number(item?.cliente_id);
+    const clave =
+      clienteId > 0
+        ? `id:${clienteId}`
+        : `nombre:${String(item?.cliente_nombre || "").trim().toLowerCase() || item?.cobertura_id}`;
+
+    if (indicePorClave.has(clave)) {
+      grupos[indicePorClave.get(clave)].coberturas.push(item);
+      return;
+    }
+
+    indicePorClave.set(clave, grupos.length);
+    grupos.push({
+      clave,
+      cliente_id: clienteId || null,
+      cliente_nombre:
+        item?.cliente_nombre ||
+        (item?.cobertura_id != null ? `#${item.cobertura_id}` : "Sin nombre"),
+      coberturas: [item],
+    });
+  });
+
+  return grupos;
+};
+
+/** Detalle común a todas las coberturas del panel (evita repetirlo en cada fila). */
+const detalleComunCierre = (items = []) => {
+  const detalles = (items || [])
+    .map((item) => String(item?.detalle || "").trim())
+    .filter(Boolean);
+  if (detalles.length === 0) return null;
+  const primero = detalles[0];
+  return detalles.every((d) => d === primero) ? primero : null;
+};
+
+const ResumenCierrePersona = ({
+  grupo,
+  prefijoKey,
+  ocultarDetalleComun = null,
+  detalleDanger = false,
+}) => (
+  <li className="gf-detalle__cierre-persona">
+    <div className="gf-detalle__cierre-persona-nombre">
+      {grupo.cliente_nombre}
+    </div>
+    <ul className="gf-detalle__cierre-coberturas">
+      {grupo.coberturas.map((item, idx) => {
+        const detallePropio =
+          item.detalle && item.detalle !== ocultarDetalleComun
+            ? item.detalle
+            : null;
+        return (
+          <li
+            key={`${prefijoKey}-cov-${item.cobertura_id}-${idx}`}
+            className="gf-detalle__cierre-cobertura"
+          >
+            <div className="gf-detalle__cierre-cobertura-fila">
+              <span
+                className={`badge ${claseBadgeProductoCierre(
+                  item.cobertura_tipo
+                )}`}
+              >
+                {etiquetaProductoCierre(item.cobertura_tipo)}
+              </span>
+              {item.plan ? (
+                <span className="gf-detalle__cierre-plan">{item.plan}</span>
+              ) : (
+                <span className="gf-detalle__cierre-plan gf-detalle__cierre-plan--muted">
+                  Sin plan indicado
+                </span>
+              )}
+            </div>
+            {detallePropio && (
+              <div
+                className={
+                  detalleDanger
+                    ? "gf-detalle__cierre-detalle text-danger"
+                    : "gf-detalle__cierre-detalle"
+                }
+              >
+                {detallePropio}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  </li>
+);
+
+const ResumenCierrePanel = ({
+  titulo,
+  tituloClassName,
+  items,
+  emptyLabel = "Ninguna",
+  notaFija = null,
+  danger = false,
+  showWhenEmpty = true,
+  colClassName = "col-md-6",
+  prefijoKey,
+}) => {
+  if (!showWhenEmpty && items.length === 0) return null;
+
+  const grupos = agruparItemsCierrePorCliente(items);
+  const detalleComun = detalleComunCierre(items);
+
+  return (
+    <div className={colClassName}>
+      <div
+        className={
+          danger
+            ? "gf-detalle__cierre-panel gf-detalle__cierre-panel--danger"
+            : "gf-detalle__cierre-panel"
+        }
+      >
+        <div className="gf-detalle__cierre-panel-head">
+          <span className={`fw-semibold ${tituloClassName}`}>{titulo}</span>
+          {items.length > 0 && (
+            <span className={`gf-detalle__cierre-count ${tituloClassName}`}>
+              {grupos.length} {grupos.length === 1 ? "persona" : "personas"} ·{" "}
+              {items.length} {items.length === 1 ? "cobertura" : "coberturas"}
+            </span>
+          )}
+        </div>
+        {notaFija && (
+          <p className="gf-detalle__cierre-panel-nota">{notaFija}</p>
+        )}
+        {detalleComun && (
+          <p
+            className={
+              danger
+                ? "gf-detalle__cierre-panel-nota text-danger"
+                : "gf-detalle__cierre-panel-nota"
+            }
+          >
+            {detalleComun}
+          </p>
+        )}
+        {items.length === 0 ? (
+          <p className="text-muted small mb-0">{emptyLabel}</p>
+        ) : (
+          <ul className="list-unstyled mb-0">
+            {grupos.map((grupo) => (
+              <ResumenCierrePersona
+                key={`${prefijoKey}-${grupo.clave}`}
+                grupo={grupo}
+                prefijoKey={prefijoKey}
+                ocultarDetalleComun={detalleComun}
+                detalleDanger={danger}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
 };
 
 // ================== Helpers ==================
@@ -1955,7 +2101,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 htmlFor="consultar-anio-grupo"
                 className="gf-detalle__toolbar-label"
               >
-                Consultar año anterior
+                Consultar año
               </label>
               <Form.Select
                 id="consultar-anio-grupo"
@@ -1963,7 +2109,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 style={{ width: "auto", minWidth: "8.5rem" }}
                 value={anioConsultado || ANIO_ACTUAL}
                 onChange={(e) => handleAnioConsultaChange(e.target.value)}
-                aria-label="Consultar año anterior del grupo familiar"
+                aria-label="Consultar año del grupo familiar"
               >
                 {aniosDisponibles.map((year) => (
                   <option key={year} value={year}>
@@ -2219,16 +2365,16 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
             <div className="gf-detalle__section-header">
               <h5 className="gf-detalle__section-title">
                 <i className="fas fa-clipboard-list me-2"></i>
-                Qué pasó este año ({anioConsultado})
+                Año {anioConsultado}
               </h5>
               <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary"
                 onClick={() => setShowHistorialRenovacionesAnio(true)}
-                title={`Historial de renovaciones solo del año ${anioConsultado}`}
+                title={`Historial de coberturas del año ${anioConsultado}`}
               >
                 <i className="fas fa-history me-1" aria-hidden="true" />
-                Hist. Renov. {anioConsultado}
+                Historial de coberturas
               </button>
             </div>
             <div className="gf-detalle__section-body">
@@ -2242,75 +2388,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 <div className="alert alert-danger mb-0">{cierreError}</div>
               )}
               {!cierreLoading && !cierreError && cierreAnio && (
-                <>
-                  <div className="mb-4">
-                    <h6 className="fw-semibold text-danger mb-1">
-                      Quiénes salieron del grupo
-                    </h6>
-                    <p className="text-muted small mb-2">
-                      Miembros que se retiraron o cancelaron su cobertura durante{" "}
-                      {anioConsultado}. No incluye a quienes solo se renovaron al
-                      año siguiente.
-                    </p>
-                    {(cierreAnio.retiros || []).length === 0 ? (
-                      <p className="text-muted small mb-0">
-                        No hubo retiros ni cancelaciones fuera de renovación.
-                      </p>
-                    ) : (
-                      <ul className="list-group">
-                        {ordenarItemsCierrePorProducto(cierreAnio.retiros || []).map(
-                          (retiro, idx) => {
-                            const producto = etiquetaProductoCierre(
-                              retiro.cobertura_tipo
-                            );
-                            const motivo =
-                              retiro.motivo_retiro ||
-                              retiro.motivo_cancelacion ||
-                              "";
-                            return (
-                              <li
-                                key={`${retiro.cobertura_id || "r"}-${idx}`}
-                                className="list-group-item"
-                              >
-                                <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                  <span className="fw-semibold">
-                                    {retiro.cliente_nombre ||
-                                      `Cobertura #${retiro.cobertura_id}`}
-                                  </span>
-                                  <span
-                                    className={`badge ${claseBadgeProductoCierre(
-                                      retiro.cobertura_tipo
-                                    )}`}
-                                  >
-                                    {producto}
-                                  </span>
-                                  <span className="badge bg-danger-subtle text-danger border border-danger-subtle">
-                                    {etiquetaEventoRetiro(retiro)}
-                                  </span>
-                                  {retiro.parentesco && (
-                                    <span className="badge bg-light text-dark border">
-                                      {retiro.parentesco}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="small text-muted">
-                                  Fecha:{" "}
-                                  {formatFechaCorta(
-                                    retiro.fecha_retiro ||
-                                      retiro.fecha_cancelacion
-                                  )}
-                                  {retiro.plan ? ` · Plan: ${retiro.plan}` : ""}
-                                  {motivo ? ` · Motivo: ${motivo}` : ""}
-                                </div>
-                              </li>
-                            );
-                          }
-                        )}
-                      </ul>
-                    )}
-                  </div>
-
-                  <div>
+                <div>
                     <h6 className="fw-semibold text-success mb-1">
                       Renovación al año siguiente
                     </h6>
@@ -2326,151 +2404,46 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                       </div>
                     ) : (
                       <div className="row g-3">
-                        <div className="col-md-4">
-                          <div className="gf-detalle__cierre-panel">
-                            <div className="fw-semibold mb-2 text-success">
-                              Renovadas
-                            </div>
-                            {(cierreAnio.renovaciones?.renovadas || []).length ===
-                            0 ? (
-                              <p className="text-muted small mb-0">Ninguna</p>
-                            ) : (
-                              <ul className="list-unstyled mb-0 small">
-                                {ordenarItemsCierrePorProducto(
-                                  cierreAnio.renovaciones?.renovadas || []
-                                ).map((item, idx) => (
-                                  <li
-                                    key={`ren-${item.cobertura_id}-${idx}`}
-                                    className="mb-3"
-                                  >
-                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                      <span className="fw-semibold">
-                                        {item.cliente_nombre ||
-                                          `#${item.cobertura_id}`}
-                                      </span>
-                                      <span
-                                        className={`badge ${claseBadgeProductoCierre(
-                                          item.cobertura_tipo
-                                        )}`}
-                                      >
-                                        {etiquetaProductoCierre(
-                                          item.cobertura_tipo
-                                        )}
-                                      </span>
-                                    </div>
-                                    {item.plan && (
-                                      <div className="text-muted">
-                                        Plan: {item.plan}
-                                      </div>
-                                    )}
-                                    {item.detalle && (
-                                      <div className="text-muted">
-                                        {item.detalle}
-                                      </div>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                        <div className="col-md-4">
-                          <div className="gf-detalle__cierre-panel">
-                            <div className="fw-semibold mb-2 text-secondary">
-                              No renovadas
-                            </div>
-                            <p className="text-muted small mb-2">
-                              Se marcaron para no renovar en el proceso.
-                            </p>
-                            {(cierreAnio.renovaciones?.omitidas || []).length ===
-                            0 ? (
-                              <p className="text-muted small mb-0">Ninguna</p>
-                            ) : (
-                              <ul className="list-unstyled mb-0 small">
-                                {ordenarItemsCierrePorProducto(
-                                  cierreAnio.renovaciones?.omitidas || []
-                                ).map((item, idx) => (
-                                  <li
-                                    key={`omit-${item.cobertura_id}-${idx}`}
-                                    className="mb-3"
-                                  >
-                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                      <span className="fw-semibold">
-                                        {item.cliente_nombre ||
-                                          `#${item.cobertura_id}`}
-                                      </span>
-                                      <span
-                                        className={`badge ${claseBadgeProductoCierre(
-                                          item.cobertura_tipo
-                                        )}`}
-                                      >
-                                        {etiquetaProductoCierre(
-                                          item.cobertura_tipo
-                                        )}
-                                      </span>
-                                    </div>
-                                    {item.plan && (
-                                      <div className="text-muted">
-                                        Plan: {item.plan}
-                                      </div>
-                                    )}
-                                    {item.detalle && (
-                                      <div className="text-muted">
-                                        {item.detalle}
-                                      </div>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </div>
-                        {(cierreAnio.renovaciones?.con_error || []).length >
-                          0 && (
-                          <div className="col-md-4">
-                            <div className="gf-detalle__cierre-panel gf-detalle__cierre-panel--danger">
-                              <div className="fw-semibold mb-2 text-danger">
-                                <i className="fas fa-exclamation-circle me-1" />
-                                Con error
-                              </div>
-                              <ul className="list-unstyled mb-0 small">
-                                {ordenarItemsCierrePorProducto(
-                                  cierreAnio.renovaciones?.con_error || []
-                                ).map((item, idx) => (
-                                  <li
-                                    key={`err-${item.cobertura_id}-${idx}`}
-                                    className="mb-3"
-                                  >
-                                    <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
-                                      <span className="fw-semibold">
-                                        {item.cliente_nombre ||
-                                          `#${item.cobertura_id}`}
-                                      </span>
-                                      <span
-                                        className={`badge ${claseBadgeProductoCierre(
-                                          item.cobertura_tipo
-                                        )}`}
-                                      >
-                                        {etiquetaProductoCierre(
-                                          item.cobertura_tipo
-                                        )}
-                                      </span>
-                                    </div>
-                                    {item.detalle && (
-                                      <div className="text-danger">
-                                        {item.detalle}
-                                      </div>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          </div>
-                        )}
+                        <ResumenCierrePanel
+                          titulo="Renovadas"
+                          tituloClassName="text-success"
+                          items={cierreAnio.renovaciones?.renovadas || []}
+                          colClassName={
+                            (cierreAnio.renovaciones?.con_error || []).length > 0
+                              ? "col-md-4"
+                              : "col-md-6"
+                          }
+                          prefijoKey="ren"
+                        />
+                        <ResumenCierrePanel
+                          titulo="No renovadas"
+                          tituloClassName="text-secondary"
+                          items={cierreAnio.renovaciones?.omitidas || []}
+                          notaFija="Se marcaron para no renovar en el proceso."
+                          colClassName={
+                            (cierreAnio.renovaciones?.con_error || []).length > 0
+                              ? "col-md-4"
+                              : "col-md-6"
+                          }
+                          prefijoKey="omit"
+                        />
+                        <ResumenCierrePanel
+                          titulo={
+                            <>
+                              <i className="fas fa-exclamation-circle me-1" />
+                              Con error
+                            </>
+                          }
+                          tituloClassName="text-danger"
+                          items={cierreAnio.renovaciones?.con_error || []}
+                          danger
+                          showWhenEmpty={false}
+                          colClassName="col-md-4"
+                          prefijoKey="err"
+                        />
                       </div>
                     )}
                   </div>
-                </>
               )}
             </div>
           </div>

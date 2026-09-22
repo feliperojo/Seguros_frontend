@@ -2,6 +2,7 @@ export const ESTADOS_GESTION_OPTIONS = [
   { value: "sin_gestion", label: "Sin gestión", bg: "secondary" },
   { value: "pre_renovacion", label: "Pre-renovación", bg: "info" },
   { value: "listo_para_renovar", label: "Listo para renovar", bg: "warning" },
+  // Legacy: ya no se usa en el flujo; se mantiene solo para badge de lotes antiguos.
   { value: "pendiente_consolidar", label: "Pendiente consolidar", bg: "primary" },
   { value: "renovado", label: "Renovado", bg: "success" },
   { value: "renovado_automatico", label: "Renovado Aut.", bg: "success" },
@@ -17,9 +18,17 @@ export const ESTADOS_GESTION_CIERRE_SIN_DESTINO = ["no_renovara", "terminado"];
 export const esEstadoGestionCierreSinDestino = (estado) =>
   ESTADOS_GESTION_CIERRE_SIN_DESTINO.includes(estado);
 
-/** Opciones elegibles a mano. "consolidado" en gestión es legacy (ya no se asigna al consolidar). */
+/**
+ * Opciones elegibles a mano.
+ * "consolidado" y "pendiente_consolidar" son legacy (ya no se asignan en el flujo).
+ */
 export const ESTADOS_GESTION_EDITABLES = ESTADOS_GESTION_OPTIONS.filter(
-  (o) => o.value !== "consolidado"
+  (o) => o.value !== "consolidado" && o.value !== "pendiente_consolidar"
+);
+
+/** Filtros del informe de renovaciones (sin estados fuera del flujo actual). */
+export const ESTADOS_GESTION_FILTRO = ESTADOS_GESTION_OPTIONS.filter(
+  (o) => o.value !== "pendiente_consolidar"
 );
 
 export const estadoGestionBadge = (estado) => {

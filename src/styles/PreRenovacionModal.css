@@ -266,6 +266,29 @@
   border-left: 4px solid #0ea5e9;
 }
 
+.pr-item--no-renovar {
+  border: 2px solid #f59e0b;
+  background: #fffbeb;
+}
+
+.pr-item--no-renovar.pr-item--dental {
+  border-left: 4px solid #f59e0b;
+}
+
+.pr-item__no-renovar-banner {
+  padding: 0.5rem 1rem;
+  background: #fbbf24;
+  color: #78350f;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-bottom: 2px solid #f59e0b;
+}
+
+.pr-item--no-renovar .pr-item__header {
+  background: #fef3c7;
+  border-bottom-color: #f59e0b;
+}
+
 .pr-item__header {
   background: #f8fafc;
   border-bottom: 1px solid #e2e8f0;

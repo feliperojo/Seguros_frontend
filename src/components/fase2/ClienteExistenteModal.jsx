@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import ClienteExistente from "../ClienteExistente";
 import apiRequest from "../../services/api";
+import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { unwrapClienteFromApi } from "../../utils/mergeClientePreferNonEmpty";
 import {
   isProductoPrivadoIndependiente,
@@ -26,6 +27,19 @@ const badgeClassProducto = (tipo = "") => {
   return "bg-primary";
 };
 
+const mostrarAviso = (title, html, plainText) => {
+  if (window?.Swal) {
+    window.Swal.fire({
+      icon: "warning",
+      title,
+      html,
+      confirmButtonText: "Entendido",
+    });
+  } else {
+    window.alert(plainText || title);
+  }
+};
+
 export default function ClienteExistenteModal({
   open,
   onClose,
@@ -33,17 +47,36 @@ export default function ClienteExistenteModal({
   defaultCoberturaTipo = "Plan de salud",
   onCreateCoberturaDeClienteExistente,   // (payload, cliente) => Promise
   contexto = "grupo", // "grupo" | "pre_renovacion"
+  loteId = null,
+  anioDestino = null,
+  /** Solo grupo: detecta historial y ofrece reingreso fiscal sin romper otros flujos. */
+  permitirReingresoFiscal = false,
 }) {
   const [saving, setSaving] = useState(false);
   const [tipo, setTipo] = useState("");
 
   if (!open) return null;
 
-  const toBool = (v) =>
-    v === true || v === 1 || v === "1" || v === "true" || v === "TRUE";
-
   const isBlank = (v) =>
-    v === null || v === undefined || v === "";
+    v === null || v === undefined || v === "" || String(v).trim() === "null";
+
+  const normalizarEstado = (valor) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  /** Mismo producto solo se libera con retiro (no con cancelación). */
+  const esCoberturaRetirada = (c = {}) => {
+    if (!isBlank(c.fecha_retiro)) return true;
+    const definidos = [c.cobertura_definida, c.estado_cobertura];
+    const pareceRetiro = definidos.some((valor) => {
+      const norm = normalizarEstado(valor);
+      return norm === "retirado" || norm === "retirada" || norm === "terminado";
+    });
+    return pareceRetiro && isBlank(c.fecha_cancelacion);
+  };
 
   const validarCoberturasLocalmente = (clienteBase) => {
     if (!clienteBase) return null;
@@ -68,22 +101,15 @@ export default function ClienteExistenteModal({
     if (!coberturas.length) return null;
 
     const conflicto = coberturas.find((c) => {
-      const estaVigente =
-        toBool(c.activo) &&
-        isBlank(c.fecha_cancelacion) &&
-        isBlank(c.fecha_retiro) &&
-        isBlank(c.fecha_anulacion) &&
-        (c.vigente === undefined || c.vigente === null || toBool(c.vigente));
-
-      if (!estaVigente) return false;
       if (!sonMismoProductoParaConflicto(defaultCoberturaTipo, c.cobertura_tipo)) {
         return false;
       }
+      // Cancelado / activo / anulado del mismo producto bloquean; solo retiro libera.
+      if (esCoberturaRetirada(c)) return false;
 
       const grupoCob = c.grupo_familiar_id ?? c.grupo_id ?? c.grupoFamiliarId ?? null;
 
-      // Regla: cobertura vigente, mismo producto y perteneciendo a OTRO grupo familiar.
-      // Si por alguna razón no viene grupoCob, caemos al bloqueo por producto solamente.
+      // Mismo producto no retirado en OTRO grupo familiar.
       if (grupoCob && grupoFamiliarId) {
         return Number(grupoCob) !== Number(grupoFamiliarId);
       }
@@ -112,9 +138,9 @@ export default function ClienteExistenteModal({
     try {
       const esPreRenovacion = contexto === "pre_renovacion";
 
-      // En grupo familiar: no duplicar cobertura vigente del mismo producto.
-      // En pre-renovación: sí puede tener cobertura 2026 en otro grupo; el año
-      // entrante se valida en backend (no estar en otra pre-renovación).
+      // En grupo familiar: mismo producto solo si está retirado (Cancelado bloquea).
+      // En pre-renovación: el check de elegibilidad (mismo backend) valida
+      // origen con pre-renovación + no renovar / otra pre-renovación.
       if (!esPreRenovacion) {
         const conflictoLocal = validarCoberturasLocalmente(cliente);
         if (conflictoLocal) {
@@ -139,25 +165,130 @@ export default function ClienteExistenteModal({
             ? `Cobertura: ${descripcionCobertura}${grupoTexto ? ` (${grupoTexto})` : ""}`
             : `Cobertura activa/vigente para el mismo producto${grupoTexto ? ` en ${grupoTexto}` : ""}.`;
 
-          if (window?.Swal) {
-            window.Swal.fire({
-              icon: "warning",
-              title: "Cobertura vigente existente",
-              html: `
-              <p>${nombreCliente} ya pertenece a un grupo familiar con una cobertura <b>activa y vigente</b> para este mismo producto (<b>${defaultCoberturaTipo}</b>).</p>
+          mostrarAviso(
+            "Mismo producto en otro grupo",
+            `
+              <p>${nombreCliente} ya tiene <b>${defaultCoberturaTipo}</b> en otro grupo familiar.</p>
               <p style="margin-top:8px;"><small>${mensajeDetalle}</small></p>
-              <p style="margin-top:12px;">Debe realizar el <b>retiro o cancelación</b> de la cobertura actual antes de poder agregarlo a este nuevo grupo.</p>
+              <p style="margin-top:12px;">Solo se puede agregar si ese producto está <b>retirado</b> (con fecha de retiro) en el otro grupo, o si el producto es <b>distinto</b>. Cancelado no habilita el alta.</p>
             `,
-              confirmButtonText: "Entendido",
-            });
-          } else {
-            window.alert(
-              `${nombreCliente} ya pertenece a un grupo familiar con una cobertura activa y vigente para este mismo producto (${defaultCoberturaTipo}).\n\n` +
+            `${nombreCliente} ya tiene ${defaultCoberturaTipo} en otro grupo familiar.\n\n` +
               `${mensajeDetalle}\n\n` +
-              `Debe retirar o cancelar la cobertura actual antes de agregarlo a este nuevo grupo.`
-            );
-          }
+              `Solo se puede agregar si está retirado en el otro grupo, o si el producto es distinto. Cancelado no habilita el alta.`
+          );
           return;
+        }
+      } else if (grupoFamiliarId && loteId) {
+        setSaving(true);
+        try {
+          const tipoParam = encodeURIComponent(defaultCoberturaTipo || "");
+          const check = await apiRequest(
+            `grupo_familiar/${grupoFamiliarId}/pre-renovacion/${loteId}/elegibilidad-cliente?cliente_id=${cliente.id}&cobertura_tipo=${tipoParam}`,
+            "GET"
+          );
+          const elegible = check?.elegible === true;
+          if (!elegible) {
+            const motivo =
+              check?.motivo ||
+              "Esta persona no puede agregarse a esta pre-renovación todavía.";
+            mostrarAviso(
+              "No se puede agregar todavía",
+              motivo
+                .split(/(?<=\.)\s+/)
+                .filter(Boolean)
+                .map(
+                  (parte, i) =>
+                    `<p style="${i ? "margin-top:8px;" : ""}">${parte}</p>`
+                )
+                .join(""),
+              motivo
+            );
+            return;
+          }
+        } catch (err) {
+          const motivo =
+            err?.message ||
+            "No se pudo validar la elegibilidad del cliente para esta pre-renovación.";
+          mostrarAviso(
+            "No se puede agregar todavía",
+            `<p>${motivo}</p>`,
+            motivo
+          );
+          return;
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      // Grupo: si hubo cobertura histórica del mismo producto → confirmar reingreso.
+      if (
+        !esPreRenovacion &&
+        permitirReingresoFiscal &&
+        grupoFamiliarId &&
+        cliente?.id
+      ) {
+        setSaving(true);
+        try {
+          const evalRes = await GrupoFamiliarService.evaluarAltaClienteExistente({
+            cliente_id: cliente.id,
+            grupo_familiar_id: grupoFamiliarId,
+            cobertura_tipo: defaultCoberturaTipo,
+            anio_destino: anioDestino || new Date().getFullYear(),
+          });
+          const accion = evalRes?.tipo_accion;
+
+          if (accion === "bloqueado") {
+            const motivo =
+              evalRes?.motivo ||
+              "Este cliente ya tiene este producto activo en el grupo.";
+            mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+            return;
+          }
+
+          if (accion === "reingreso") {
+            const ultimo = evalRes?.ultima_ano_cobertura;
+            const anio = evalRes?.anio_destino || anioDestino || new Date().getFullYear();
+            const nombre =
+              cliente.nombre_completo ||
+              `${cliente.primer_nombre || ""} ${cliente.apellidos || ""}`.trim() ||
+              "Este cliente";
+
+            let confirmar = true;
+            if (window?.Swal) {
+              const result = await window.Swal.fire({
+                icon: "info",
+                title: "Reingreso al grupo",
+                html: `
+                  <p><b>${nombre}</b> ya perteneció a este grupo.</p>
+                  <p style="margin-top:8px;">Última cobertura: <b>${ultimo || "—"}</b></p>
+                  <p style="margin-top:8px;">Se reactivará para <b>${anio}</b> (sin duplicar la ficha).</p>
+                `,
+                showCancelButton: true,
+                confirmButtonText: `Reingresar ${anio}`,
+                cancelButtonText: "Cancelar",
+              });
+              confirmar = Boolean(result?.isConfirmed);
+            } else {
+              confirmar = window.confirm(
+                `${nombre} ya perteneció a este grupo. Última cobertura: ${ultimo || "—"}.\n\n¿Reingresar para ${anio}?`
+              );
+            }
+
+            if (!confirmar) return;
+
+            payload.reingreso = true;
+            payload.cobertura_id_reingreso = evalRes?.cobertura_id ?? null;
+            payload.ultima_ano_cobertura = ultimo ?? null;
+            payload.anio_destino = anio;
+          }
+        } catch (err) {
+          const motivo =
+            err?.message ||
+            "No se pudo validar el historial del cliente en este grupo.";
+          mostrarAviso("No se puede agregar", `<p>${motivo}</p>`, motivo);
+          return;
+        } finally {
+          setSaving(false);
         }
       }
 
@@ -211,8 +342,26 @@ export default function ClienteExistenteModal({
                 {defaultCoberturaTipo || "Plan de salud"}
               </span>
               <span className="text-muted small mb-0">
-                Criterio para todos los productos (Salud MS y privados: Plan Dental,
-                Vision, Vida, Descuentos). Solo bloquea si ya tiene <strong>este mismo</strong> producto activo.
+                {contexto === "pre_renovacion" ? (
+                  <>
+                    Si ya pertenece a otro grupo este año, abre la pre-renovación
+                    de ese grupo y márcala como <strong>No renovar</strong> antes
+                    de agregarla aquí.
+                  </>
+                ) : permitirReingresoFiscal ? (
+                  <>
+                    Si ya perteneció a este grupo, el sistema ofrecerá{" "}
+                    <strong>reingreso</strong> (sin duplicar). En otro grupo, solo si el
+                    mismo producto está <strong>retirado</strong>.
+                  </>
+                ) : (
+                  <>
+                    En grupo familiar: se puede agregar solo si el producto es{" "}
+                    <strong>distinto</strong>, o si en el otro grupo ese mismo producto
+                    está <strong>retirado</strong> (fecha de retiro).{" "}
+                    <strong>Cancelado no permite</strong> agregarlo.
+                  </>
+                )}
               </span>
             </div>
 
@@ -248,12 +397,11 @@ export default function ClienteExistenteModal({
 
             {contexto === "pre_renovacion" && (
               <div className="alert alert-info mb-3">
-                Si la persona ya está en otro grupo este año, primero hay que
-                abrir la pre-renovación de <strong>ese grupo</strong> y marcarla
-                como <strong>no renovar</strong>. Solo después se puede agregar
-                aquí para el año destino. El tomador de otro grupo no se
-                traslada por este camino, salvo que ese grupo esté en No renovará
-                o Terminado.
+                Si la persona ya pertenece a otro grupo en el año fiscal actual,
+                primero abre la pre-renovación de <strong>ese grupo</strong> y
+                márcala como <strong>No renovar</strong>. Luego puedes
+                agregarla aquí
+                {anioDestino ? ` para ${anioDestino}` : ""}.
               </div>
             )}
 

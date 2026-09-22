@@ -204,13 +204,13 @@ const PreRenovacionModal = ({
   const handleGuardarEstadoGestion = useCallback(async () => {
     if (!lote?.id || !estadoGestionDraft) return;
     if (estadoGestionDraft === lote.estado_gestion) return;
-    if (!notaEstadoGestion.trim()) return;
 
     setGuardandoEstadoGestion(true);
     try {
+      const nota = notaEstadoGestion.trim();
       const body = {
         estado_gestion: estadoGestionDraft,
-        nota: notaEstadoGestion.trim(),
+        ...(nota ? { nota } : {}),
       };
       const response = await apiRequest(
         `/renovacion_lote/${lote.id}/estado-gestion`,
@@ -372,6 +372,11 @@ const PreRenovacionModal = ({
   const items = useMemo(() => {
     const list = [...(lote?.items || [])];
     list.sort((a, b) => {
+      // No renovará / retirados al final de la lista
+      const aRetiro = a?.renovar === false ? 1 : 0;
+      const bRetiro = b?.renovar === false ? 1 : 0;
+      if (aRetiro !== bRetiro) return aRetiro - bRetiro;
+
       const aTomador = isTomadorItem(a) ? 0 : 1;
       const bTomador = isTomadorItem(b) ? 0 : 1;
       if (aTomador !== bTomador) return aTomador - bTomador;
@@ -605,18 +610,6 @@ const PreRenovacionModal = ({
     [items]
   );
 
-  const miembrosSinCodigo = useMemo(
-    () =>
-      items
-        .filter(
-          (item) =>
-            Boolean(item?.renovar) &&
-            !String(item?.datos_borrador?.codigo_poliza ?? "").trim()
-        )
-        .map(nombreMiembro),
-    [items]
-  );
-
   const miembrosConFechaFueraDeAnio = useMemo(
     () =>
       items
@@ -709,7 +702,6 @@ const PreRenovacionModal = ({
       !consolidando &&
       loteProcesable
     : items.length > 0 &&
-      miembrosSinCodigo.length === 0 &&
       miembrosSinRetiro.length === 0 &&
       miembrosInactivosMarcadosRenovar.length === 0 &&
       miembrosConFechaFueraDeAnio.length === 0 &&
@@ -1031,19 +1023,28 @@ const PreRenovacionModal = ({
                               {estadoGestionBadge(lote.estado_gestion).label}
                             </option>
                           ) : (
-                            ESTADOS_GESTION_EDITABLES.map((opt) => (
-                              <option key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </option>
-                            ))
+                            <>
+                              {estadoGestionDraft &&
+                                !ESTADOS_GESTION_EDITABLES.some(
+                                  (opt) => opt.value === estadoGestionDraft
+                                ) && (
+                                  <option value={estadoGestionDraft}>
+                                    {estadoGestionBadge(estadoGestionDraft).label}
+                                  </option>
+                                )}
+                              {ESTADOS_GESTION_EDITABLES.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </>
                           )}
                         </select>
                         <input
                           type="text"
                           className="form-control form-control-sm"
                           style={{ maxWidth: 240 }}
-                          placeholder="Nota (obligatoria): motivo del cambio"
-                          required
+                          placeholder="Nota (opcional): motivo del cambio"
                           value={notaEstadoGestion}
                           disabled={
                             guardandoEstadoGestion ||
@@ -1062,8 +1063,7 @@ const PreRenovacionModal = ({
                             consolidando ||
                             estadoGestionTerminal ||
                             !estadoGestionDraft ||
-                            estadoGestionDraft === lote.estado_gestion ||
-                            !notaEstadoGestion.trim()
+                            estadoGestionDraft === lote.estado_gestion
                           }
                           onClick={handleGuardarEstadoGestion}
                         >
@@ -1182,15 +1182,6 @@ const PreRenovacionModal = ({
 
                   {attemptedConsolidar &&
                     !esCierreSinDestino &&
-                    miembrosSinCodigo.length > 0 && (
-                    <div className="alert alert-warning">
-                      Completa el <strong>código de póliza</strong> de:{" "}
-                      {miembrosSinCodigo.join(", ")}.
-                    </div>
-                  )}
-
-                  {attemptedConsolidar &&
-                    !esCierreSinDestino &&
                     miembrosConFechaFueraDeAnio.length > 0 && (
                       <div className="alert alert-warning">
                         La <strong>fecha de activación</strong> debe pertenecer
@@ -1203,9 +1194,10 @@ const PreRenovacionModal = ({
                     !esCierreSinDestino &&
                     miembrosSinRetiro.length > 0 && (
                     <div className="alert alert-warning">
-                      Completa la{" "}
-                      <strong>fecha y el motivo de retiro</strong> de:{" "}
-                      {miembrosSinRetiro.join(", ")}.
+                      Aún falta confirmar el retiro automático de:{" "}
+                      {miembrosSinRetiro.join(", ")}. Si ya marcaste{" "}
+                      <strong>Retirar miembro</strong>, espera a que se guarde
+                      y vuelve a intentar.
                     </div>
                   )}
 
@@ -1214,10 +1206,10 @@ const PreRenovacionModal = ({
                     <div className="alert alert-warning">
                       Hay coberturas ya <strong>inactivas</strong> (anuladas,
                       retiradas o canceladas) marcadas para renovar:{" "}
-                      {miembrosInactivosMarcadosRenovar.join(", ")}. Desmarca{" "}
-                      <strong>Renovar esta cobertura</strong> o vuelve a abrir
+                      {miembrosInactivosMarcadosRenovar.join(", ")}. Marca{" "}
+                      <strong>Retirar miembro</strong> o vuelve a abrir
                       la pre-renovación para sincronizarlas. Mientras estén
-                      marcadas, no se puede consolidar.
+                      marcadas para renovar, no se puede consolidar.
                     </div>
                   )}
 
@@ -1382,12 +1374,10 @@ const PreRenovacionModal = ({
                         ? hayGuardadosPendientes
                           ? "Espera a que termine el autoguardado"
                           : `Cierra ${anioOrigen} sin crear ${anioDestino}`
-                        : miembrosSinCodigo.length > 0
-                          ? `Falta código de póliza: ${miembrosSinCodigo.join(", ")}`
-                          : miembrosConFechaFueraDeAnio.length > 0
+                        : miembrosConFechaFueraDeAnio.length > 0
                             ? `Fecha de activación fuera de ${anioDestino}: ${miembrosConFechaFueraDeAnio.join(", ")}`
                             : miembrosSinRetiro.length > 0
-                              ? `Falta fecha/motivo de retiro: ${miembrosSinRetiro.join(", ")}`
+                              ? `Falta confirmar retiro: ${miembrosSinRetiro.join(", ")}`
                               : miembrosInactivosMarcadosRenovar.length > 0
                                 ? `Cobertura inactiva marcada para renovar: ${miembrosInactivosMarcadosRenovar.join(", ")}`
                                 : conflictosDentalSinSalud.length > 0
@@ -1437,6 +1427,8 @@ const PreRenovacionModal = ({
         grupoFamiliarId={grupoFamiliarId}
         defaultCoberturaTipo={defaultCoberturaTipo}
         contexto="pre_renovacion"
+        loteId={lote?.id ?? null}
+        anioDestino={anioDestino}
         onCreateCoberturaDeClienteExistente={handleAgregarClienteExistente}
         onClose={() => setShowClienteExistente(false)}
       />

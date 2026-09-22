@@ -322,3 +322,113 @@ export function isFechaActivacionPendiente(fechaActivacion, now = new Date()) {
   const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   return fecha.getTime() > hoy.getTime();
 }
+
+/**
+ * Retiro programado: hay fecha_retiro pero aún es posterior a hoy.
+ * Sin fecha válida o fecha ya vencida → false.
+ */
+export function isFechaRetiroProgramada(fechaRetiro, now = new Date()) {
+  const fecha = parseApiDateToLocalDate(fechaRetiro);
+  if (!fecha) return false;
+
+  const hoy = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return fecha.getTime() > hoy.getTime();
+}
+
+/**
+ * Retiro ya vigente: fecha_retiro existe y es hoy o anterior.
+ */
+export function isFechaRetiroEfectiva(fechaRetiro, now = new Date()) {
+  if (!hasFechaCobertura(fechaRetiro)) return false;
+  return !isFechaRetiroProgramada(fechaRetiro, now);
+}
+
+/**
+ * ¿Debe ir a la sección "Miembros Retirados"?
+ * - Anulación: siempre.
+ * - Retiro: solo cuando la fecha ya se cumplió.
+ * - activo=false sin fecha_retiro: legacy, se trata como retirado efectivo.
+ * Un retiro con fecha futura permanece en el listado activo (con aviso visual).
+ */
+export function esMiembroEnSeccionRetirados(m = {}, now = new Date()) {
+  if (hasFechaCobertura(m?.fecha_anulacion)) return true;
+  if (isFechaRetiroEfectiva(m?.fecha_retiro, now)) return true;
+  if (m?.activo === false && !hasFechaCobertura(m?.fecha_retiro)) return true;
+  return false;
+}
+
+/**
+ * Resaltado amarillo de retiro/anulación (programado o ya efectivo).
+ */
+export function debeResaltarRetiroMiembro(m = {}, now = new Date()) {
+  if (esMiembroEnSeccionRetirados(m, now)) return true;
+  if (isFechaRetiroProgramada(m?.fecha_retiro, now)) return true;
+  if (m?.activo === false) return true;
+  return false;
+}
+
+/**
+ * Año del cierre fiscal (desde fecha_retiro o ano_cobertura).
+ */
+export function anioCierreFiscalMiembro(m = {}) {
+  const fromRetiro = String(m?.fecha_retiro || "").slice(0, 4);
+  if (/^\d{4}$/.test(fromRetiro)) return fromRetiro;
+  const fromAno = String(m?.ano_cobertura ?? "").slice(0, 4);
+  if (/^\d{4}$/.test(fromAno)) return fromAno;
+  return String(new Date().getFullYear());
+}
+
+/**
+ * Cierre por renovación anual (renovó o no renovó/terminó en consolidación).
+ * No aplica a retiros operativos normales (Cambio de vida, etc.).
+ */
+export function esCierreFiscalPorRenovacionAnual(m = {}) {
+  if (toBoolFlag(m?.fue_renovado, false)) return true;
+  if (toBoolFlag(m?.omitida_renovacion, false)) return true;
+
+  const definida = String(m?.cobertura_definida || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (definida === "terminado") return true;
+
+  const motivo = [m?.motivo_retiro, m?.motivo_cancelacion, m?.nota_retiro]
+    .filter((v) => v != null && String(v).trim() !== "")
+    .join(" ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  if (!motivo) return false;
+  if (/no\s*renov/.test(motivo)) return true;
+  if (/cierre de ano fiscal/.test(motivo)) return true;
+  if (/retiro por no renovacion/.test(motivo)) return true;
+  return false;
+}
+
+/**
+ * Texto del banner amarillo del miembro.
+ * Renovación anual → cierre fiscal; retiro operativo → retiro programado/retirado.
+ */
+export function etiquetaAvisoRetiroMiembro(m = {}, now = new Date()) {
+  if (hasFechaCobertura(m?.fecha_anulacion)) {
+    return "Anulado del Grupo Familiar";
+  }
+
+  const programado = isFechaRetiroProgramada(m?.fecha_retiro, now);
+  const enSeccionRetirados = esMiembroEnSeccionRetirados(m, now);
+
+  if (esCierreFiscalPorRenovacionAnual(m) && hasFechaCobertura(m?.fecha_retiro)) {
+    const anio = anioCierreFiscalMiembro(m);
+    return programado && !enSeccionRetirados
+      ? `Programado para cierre fiscal ${anio}`
+      : `Cierre fiscal ${anio}`;
+  }
+
+  if (programado && !enSeccionRetirados) {
+    return "Retiro programado del Grupo Familiar";
+  }
+
+  return "Retirado del Grupo Familiar";
+}

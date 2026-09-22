@@ -28,7 +28,7 @@ import ConsolidarTodosModal from "../../components/GrupoFamiliar/ConsolidarTodos
 import {
   estadoGestionBadge,
   estadoRenovacionBadge,
-  ESTADOS_GESTION_OPTIONS,
+  ESTADOS_GESTION_FILTRO,
 } from "../../utils/renovacionEstadoGestion";
 import "../../styles/GruposFamiliaresListado.css";
 
@@ -440,7 +440,7 @@ const RenovacionesEstadoPage = () => {
                 >
                   <span>Todos</span>
                 </button>
-                {ESTADOS_GESTION_OPTIONS.map((opt) => {
+                {ESTADOS_GESTION_FILTRO.map((opt) => {
                   const count = Number(resumenGestion[opt.value]) || 0;
                   return (
                     <button
@@ -727,12 +727,14 @@ const RenovacionesEstadoPage = () => {
 
       <PreRenovacionModal
         show={!!grupoSeleccionado}
-        onHide={() => setGrupoSeleccionado(null)}
-        grupoFamiliarId={grupoSeleccionado?.id}
-        anioDestino={anioDestino}
-        onAfterConsolidar={async () => {
+        onHide={async () => {
           setGrupoSeleccionado(null);
           if (hasConsultado) await fetchData();
+        }}
+        grupoFamiliarId={grupoSeleccionado?.id}
+        anioDestino={anioDestino}
+        onAfterConsolidar={() => {
+          setGrupoSeleccionado(null);
         }}
       />
 

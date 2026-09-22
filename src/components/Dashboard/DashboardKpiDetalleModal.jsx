@@ -153,6 +153,7 @@ export default function DashboardKpiDetalleModal({
   const enlaces = {
     clientes: "/clientes/lista",
     grupos: "/grupofamiliar/lista",
+    cotizacion: "/grupofamiliar/lista?estado=flujo_cotizacion&anio=all",
     canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
     retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
   };
@@ -286,8 +287,10 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Coberturas con <strong>activo = true</strong> cuyo grupo familiar
+            Este número cuenta <strong>coberturas</strong>, no grupos. Incluye
+            cada cobertura con <strong>activo = true</strong> cuyo grupo familiar
             está en flujo de cotización (estados 1–5: Prospecto → Inscripción / Confirmación).
+            Un grupo con varias coberturas activas puede sumar más de una cotización.
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
@@ -306,7 +309,8 @@ export default function DashboardKpiDetalleModal({
       const otros = estadisticas?.otrosProductos || {};
       const vision = otros.vision ?? 0;
       const planDental = otros.plan_dental ?? 0;
-      const totalOtros = otros.total ?? vision + planDental;
+      const descuentos = otros.descuentos ?? 0;
+      const totalOtros = otros.total ?? vision + planDental + descuentos;
 
       return (
         <>
@@ -329,6 +333,12 @@ export default function DashboardKpiDetalleModal({
               valor={planDental}
               color="#0891b2"
               descripcion="Plan Dental privado"
+            />
+            <DetalleFila
+              label="Plan de Descuentos"
+              valor={descuentos}
+              color="#f9ab00"
+              descripcion="Producto de descuentos"
             />
           </div>
         </>
@@ -405,7 +415,7 @@ export default function DashboardKpiDetalleModal({
       {enlaces[tipo] && (
         <Modal.Footer className="border-0 pt-0">
           <Link to={enlaces[tipo]} className="btn btn-sm btn-outline-primary" onClick={onHide}>
-            Ver listado completo
+            {tipo === "cotizacion" ? "Ver grupos relacionados" : "Ver listado completo"}
           </Link>
         </Modal.Footer>
       )}

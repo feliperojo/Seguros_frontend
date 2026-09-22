@@ -866,6 +866,11 @@ a:hover .gf-detalle__member-name {
   font-weight: 700;
 }
 
+/* El banner absoluto no debe tapar el badge de parentesco (HIJO/A, TOMADOR, …). */
+.gf-detalle__member-card--inactive .gf-detalle__member-header {
+  padding-top: 2.75rem;
+}
+
 .gf-detalle__member-header {
   padding: 1rem 1.125rem 0.75rem;
   background: #fff;
@@ -1201,6 +1206,80 @@ a:hover .gf-detalle__member-name {
 .gf-detalle__cierre-panel--danger {
   background: #fef2f2;
   border-color: #fecaca;
+}
+
+.gf-detalle__cierre-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.gf-detalle__cierre-count {
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.gf-detalle__cierre-panel-nota {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.gf-detalle__cierre-persona {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.gf-detalle__cierre-persona:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.gf-detalle__cierre-persona-nombre {
+  font-weight: 600;
+  font-size: 0.925rem;
+  color: #0f172a;
+  margin-bottom: 0.4rem;
+}
+
+.gf-detalle__cierre-coberturas {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.gf-detalle__cierre-cobertura-fila {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+}
+
+.gf-detalle__cierre-plan {
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+.gf-detalle__cierre-plan--muted {
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.gf-detalle__cierre-detalle {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 0.15rem;
+  padding-left: 0.1rem;
 }
 
 @media (max-width: 992px) {
