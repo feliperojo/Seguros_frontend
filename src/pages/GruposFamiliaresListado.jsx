@@ -39,6 +39,7 @@ const ANIOS_BASE = [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL -
 
 const mapearEstadoParaEndpoint = (codigoEstado) => {
   const estadoMap = {
+    flujo_cotizacion: "FLUJO_COTIZACION",
     prospecto: "PROSPECTO",
     cotizacion: "COTIZACION",
     seguimiento: "SEGUIMIENTO",
@@ -79,6 +80,7 @@ const GruposFamiliaresListado = () => {
   const [selectedStatus, setSelectedStatus] = useState(() => {
     const fromUrl = (searchParams.get("estado") || "").toLowerCase();
     const validos = [
+      "flujo_cotizacion",
       "prospecto",
       "cotizacion",
       "seguimiento",
@@ -94,6 +96,10 @@ const GruposFamiliaresListado = () => {
   const [selectedProducto, setSelectedProducto] = useState(() =>
     normalizarFiltroProductoListado(searchParams.get("producto"))
   );
+  const [selectedResponsable, setSelectedResponsable] = useState(
+    () => searchParams.get("responsable") || ""
+  );
+  const [responsablesOpciones, setResponsablesOpciones] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [grupoParaRetiro, setGrupoParaRetiro] = useState(null);
@@ -269,6 +275,18 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     setCurrentPage(1);
   };
 
+  const handleResponsableChange = (value) => {
+    setSelectedResponsable(value);
+    const params = new URLSearchParams(searchParams);
+    if (value) {
+      params.set("responsable", value);
+    } else {
+      params.delete("responsable");
+    }
+    setSearchParams(params, { replace: true });
+    setCurrentPage(1);
+  };
+
   // Función para manejar el clic desde el componente de resumen
   const handleEstadoClickFromResumen = (codigoEstado) => {
     // Si se hace clic en "Todos los estados", resetear el filtro
@@ -335,6 +353,9 @@ useEffect(() => {
         if (selectedProducto && selectedProducto !== "todos") {
           params.set("producto", selectedProducto);
         }
+        if (selectedResponsable) {
+          params.set("responsable", selectedResponsable);
+        }
 
         const response = await apiRequest(
           `grupo_familiar/grupos-familiares-listado?${params.toString()}`,
@@ -345,6 +366,11 @@ useEffect(() => {
 
         if (response && response.status === "success" && Array.isArray(response.data)) {
           setGrupos(response.data);
+          setResponsablesOpciones(
+            Array.isArray(response?.filtros?.responsables)
+              ? response.filtros.responsables
+              : []
+          );
           setPaginationMeta({
             total: response.data.length,
             last_page: 1,
@@ -389,7 +415,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [selectedStatus, selectedProducto, debouncedSearch, currentPage, aniosSeleccionados, esTodosLosAnios, listadoReloadKey]);
+  }, [selectedStatus, selectedProducto, selectedResponsable, debouncedSearch, currentPage, aniosSeleccionados, esTodosLosAnios, listadoReloadKey]);
 
   const toggleGrupoExpandido = (grupoId) => {
     setGruposExpandidos((prev) => {
@@ -403,7 +429,7 @@ useEffect(() => {
   // Volver a la primera página al cambiar búsqueda o filtro de estado
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedStatus, selectedProducto]);
+  }, [searchTerm, selectedStatus, selectedProducto, selectedResponsable]);
 
   // Recarga manual (p. ej. tras eliminar o botón reintentar)
   const fetchGrupos = () => setListadoReloadKey((k) => k + 1);
@@ -628,7 +654,7 @@ useEffect(() => {
               Búsqueda y resultados
             </div>
 
-            <div className="d-flex flex-column flex-md-row gap-3 mb-3 align-items-md-end">
+            <div className="d-flex flex-column flex-md-row flex-md-wrap gap-3 mb-3 align-items-md-end">
               <div className="flex-grow-1">
                 <div className="gf-listado__label">Buscar</div>
                 <InputGroup>
@@ -649,6 +675,7 @@ useEffect(() => {
                   onChange={(e) => setSelectedStatus(e.target.value)}
                 >
                   <option value="Todos los estados">Todos los estados</option>
+                  <option value="flujo_cotizacion">Flujo de cotización (estados 1–5)</option>
                   <option value="prospecto">Prospecto</option>
                   <option value="cotizacion">Cotización</option>
                   <option value="seguimiento">Seguimiento</option>
@@ -727,6 +754,22 @@ useEffect(() => {
                   {FILTRO_PRODUCTO_LISTADO_OPCIONES.map((opcion) => (
                     <option key={opcion.value} value={opcion.value}>
                       {opcion.label}
+                    </option>
+                  ))}
+                </Form.Select>
+              </div>
+              <div style={{ minWidth: "200px" }}>
+                <div className="gf-listado__label">Responsable</div>
+                <Form.Select
+                  value={selectedResponsable}
+                  onChange={(e) => handleResponsableChange(e.target.value)}
+                  aria-label="Filtrar por responsable"
+                >
+                  <option value="">Todos los responsables</option>
+                  <option value="__sin_responsable__">Sin responsable</option>
+                  {responsablesOpciones.map((responsable) => (
+                    <option key={responsable} value={responsable}>
+                      {responsable}
                     </option>
                   ))}
                 </Form.Select>

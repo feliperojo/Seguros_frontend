@@ -38,6 +38,7 @@ const DEFAULT_POLIZAS_ACTIVAS = {
 const DEFAULT_OTROS_PRODUCTOS = {
   vision: 0,
   plan_dental: 0,
+  descuentos: 0,
   total: 0,
 };
 
@@ -64,12 +65,14 @@ function normalizeOtrosProductos(value) {
   if (value && typeof value === "object") {
     const vision = Number(value.vision) || 0;
     const planDental = Number(value.plan_dental) || 0;
+    const descuentos = Number(value.descuentos) || 0;
     return {
       ...DEFAULT_OTROS_PRODUCTOS,
       vision,
       plan_dental: planDental,
+      descuentos,
       // Dental MS ya no forma parte de este KPI
-      total: vision + planDental,
+      total: vision + planDental + descuentos,
     };
   }
   return DEFAULT_OTROS_PRODUCTOS;

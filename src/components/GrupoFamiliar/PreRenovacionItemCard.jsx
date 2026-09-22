@@ -512,6 +512,15 @@ const PreRenovacionItemCard = ({
         .filter(Boolean)
         .join(" ") ||
       `Cobertura #${item?.cobertura_id || "?"}`;
+  const esTomador =
+    String(datos.parentesco ?? cobertura.parentesco ?? "")
+      .trim()
+      .toLowerCase() === "tomador";
+  const idiomaTomador = isBorradorClienteCleared(draftCliente, "idioma")
+    ? ""
+    : hasBorradorClienteField(draftCliente, "idioma")
+      ? draftCliente.idioma
+      : clienteActual.idioma;
   const requiereRetiro =
     !esAltaEnLote && !renovar && Boolean(cobertura.activo);
   const fechaRetiroCierre = fechaRetiroCierreAnioOrigen(anioOrigen, anioDestino);
@@ -821,6 +830,11 @@ const PreRenovacionItemCard = ({
           <div>
             <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
               <div className="pr-item__name">{nombre}</div>
+              {esTomador && (
+                <span className="small text-muted">
+                  Idioma: <strong>{idiomaTomador || "—"}</strong>
+                </span>
+              )}
               <span
                 className={`badge pr-item__badge ${esDental ? "bg-info" : "bg-primary"}`}
                 title={
