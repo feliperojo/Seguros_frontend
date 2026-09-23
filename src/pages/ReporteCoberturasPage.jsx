@@ -109,8 +109,38 @@ const SORTABLE_COLUMNS = {
  * Convierte una clave de columna (snake_case) en etiqueta legible.
  * Se usa cuando las columnas se derivan de los datos del reporte (Postgres) sin metadata.
  */
+const COLUMN_LABELS = {
+  cobertura_id: "Cobertura Id",
+  grupo_familiar_id: "Grupo Familiar Id",
+  fecha_activacion: "Fecha Activación",
+  codigo_poliza: "Codigo Poliza",
+  cliente: "Cliente",
+  compania_id: "Compania Id",
+  compania: "Compañía",
+  responsable: "Responsable",
+  zip_code: "Zip Code",
+  req_total: "Req Total",
+  req_completos: "Req Completos",
+  req_pendientes: "Req Pendientes",
+  req_ultima_actualizacion: "Req Ultima Actualizacion",
+  condado: "Condado",
+  estado: "Estado",
+  precio: "Precio",
+  dia_pago: "Dia Pago",
+  tipo_pago: "Tipo Pago",
+  ingreso_familiar_anual: "Ingreso Familiar Anual",
+  status: "Status",
+  fecha_nacimiento: "Fecha Nacimiento",
+  estado_cobertura: "Estado Cobertura",
+  cobertura_tipo: "Tipo de Producto",
+  vigente: "Vigente",
+  activo: "Activo",
+  acciones: "Acciones",
+};
+
 const keyToLabel = (key) => {
   if (!key || key === "acciones") return "Acciones";
+  if (COLUMN_LABELS[key]) return COLUMN_LABELS[key];
   return key
     .split("_")
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
@@ -118,26 +148,36 @@ const keyToLabel = (key) => {
 };
 
 /**
- * Columnas por defecto cuando el backend aún no ha devuelto metadata (reporting Postgres).
- * El reporte puede enviar response.columns o las columnas se derivan del primer registro de response.data.
+ * Columnas del reporte: las que ya salían del reporting más tipo de producto.
+ * Se conservan aunque el backend no las mande en una fila concreta.
  */
 const FALLBACK_REPORT_COLUMNS = [
+  { key: "cobertura_id", label: "Cobertura Id" },
+  { key: "grupo_familiar_id", label: "Grupo Familiar Id" },
   { key: "fecha_activacion", label: "Fecha Activación" },
-  { key: "codigo_poliza", label: "Numero ID" },
+  { key: "codigo_poliza", label: "Codigo Poliza" },
   { key: "cliente", label: "Cliente" },
+  { key: "compania_id", label: "Compania Id" },
   { key: "compania", label: "Compañía" },
   { key: "responsable", label: "Responsable" },
-  { key: "zip_code", label: "Código Postal" },
+  { key: "zip_code", label: "Zip Code" },
+  { key: "req_total", label: "Req Total" },
+  { key: "req_completos", label: "Req Completos" },
+  { key: "req_pendientes", label: "Req Pendientes" },
+  { key: "req_ultima_actualizacion", label: "Req Ultima Actualizacion" },
   { key: "condado", label: "Condado" },
   { key: "estado", label: "Estado" },
-  { key: "estado_cobertura", label: "Estado Cobertura" },
   { key: "precio", label: "Precio" },
-  { key: "dia_pago", label: "Día Pago" },
+  { key: "dia_pago", label: "Dia Pago" },
   { key: "tipo_pago", label: "Tipo Pago" },
   { key: "ingreso_familiar_anual", label: "Ingreso Familiar Anual" },
   { key: "status", label: "Status" },
-  { key: "req_pendientes", label: "Requerimientos" },
+  { key: "fecha_nacimiento", label: "Fecha Nacimiento" },
+  { key: "estado_cobertura", label: "Estado Cobertura" },
+  { key: "cobertura_tipo", label: "Tipo de Producto" },
   { key: "acciones", label: "Acciones" },
+  { key: "vigente", label: "Vigente" },
+  { key: "activo", label: "Activo" },
 ];
 
 const REPORT_COLUMNS_CONFIG_KEY = "reporte_coberturas_columns";
@@ -155,31 +195,37 @@ const ESTADO_COBERTURA_OPTIONS = [
  * - response.columns = [{ key, label }, ...] o [{ key }, ...] o ["key1", "key2", ...]
  * Devuelve array de { key, label } y añade la columna "acciones" al final.
  */
+const normalizeColumnItem = (item) => {
+  if (typeof item === "string") {
+    return { key: item, label: keyToLabel(item) };
+  }
+  if (item && typeof item === "object" && item.key) {
+    return { key: item.key, label: item.label || keyToLabel(item.key) };
+  }
+  return null;
+};
+
 const normalizeReportColumns = (columnsOrKeys, firstRowKeys = null) => {
-  const withAcciones = (list) => {
-    if (list.some((c) => c.key === "acciones")) return list;
-    return [...list, { key: "acciones", label: "Acciones" }];
-  };
+  const byKey = new Map(FALLBACK_REPORT_COLUMNS.map((col) => [col.key, col]));
 
+  const incoming = [];
   if (Array.isArray(columnsOrKeys) && columnsOrKeys.length > 0) {
-    const normalized = columnsOrKeys.map((item) => {
-      if (typeof item === "string") {
-        return { key: item, label: keyToLabel(item) };
-      }
-      if (item && typeof item === "object" && item.key) {
-        return { key: item.key, label: item.label || keyToLabel(item.key) };
-      }
-      return null;
-    }).filter(Boolean);
-    return withAcciones(normalized);
+    incoming.push(...columnsOrKeys.map(normalizeColumnItem).filter(Boolean));
+  } else if (Array.isArray(firstRowKeys) && firstRowKeys.length > 0) {
+    incoming.push(...firstRowKeys.map((key) => ({ key, label: keyToLabel(key) })));
   }
 
-  if (Array.isArray(firstRowKeys) && firstRowKeys.length > 0) {
-    const derived = firstRowKeys.map((key) => ({ key, label: keyToLabel(key) }));
-    return withAcciones(derived);
-  }
+  incoming.forEach((col) => {
+    if (!byKey.has(col.key)) {
+      byKey.set(col.key, col);
+    }
+  });
 
-  return withAcciones([...FALLBACK_REPORT_COLUMNS.filter((c) => c.key !== "acciones")]);
+  const list = [...byKey.values()];
+  if (!list.some((col) => col.key === "acciones")) {
+    list.push({ key: "acciones", label: "Acciones" });
+  }
+  return list;
 };
 
 const ReporteCoberturasPage = () => {
@@ -585,6 +631,8 @@ const ReporteCoberturasPage = () => {
         return cobertura.estado || "-";
       case "estado_cobertura":
         return cobertura.estado_cobertura || "-";
+      case "cobertura_tipo":
+        return cobertura.cobertura_tipo || "-";
       case "precio":
         return formatCurrency(cobertura.precio);
       case "dia_pago":
@@ -834,30 +882,32 @@ const ReporteCoberturasPage = () => {
               </div>
 
               {loadingColumnsConfig ? (
-                <div className="d-flex align-items-center gap-2">
+                <div className="d-flex align-items-center gap-2 mb-2">
                   <Spinner animation="border" size="sm" />
                   <span className="small text-muted">Cargando configuración de columnas...</span>
                 </div>
-              ) : columnsConfigEmpty ? (
+              ) : null}
+
+              {columnsConfigEmpty && (
                 <div className="alert alert-warning py-2 small mb-2">
-                  Debes configurar en el <strong>Configurador</strong> las columnas a mostrar para este informe
-                  (<code>reporte_coberturas_columns</code>) o seleccionarlas aquí y guardarlas como predeterminadas.
-                </div>
-              ) : (
-                <div className="row">
-                  {reportColumns.map((col) => (
-                    <div key={col.key} className="col-md-3 mb-2">
-                      <Form.Check
-                        type="checkbox"
-                        id={`column-${col.key}`}
-                        label={col.label}
-                        checked={isColumnVisible(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                      />
-                    </div>
-                  ))}
+                  No hay columnas predeterminadas guardadas. Puedes marcarlas aquí
+                  y guardarlas como predeterminadas.
                 </div>
               )}
+
+              <div className="row">
+                {reportColumns.map((col) => (
+                  <div key={col.key} className="col-md-3 mb-2">
+                    <Form.Check
+                      type="checkbox"
+                      id={`column-${col.key}`}
+                      label={col.label}
+                      checked={isColumnVisible(col.key)}
+                      onChange={() => toggleColumn(col.key)}
+                    />
+                  </div>
+                ))}
+              </div>
 
               <div className="mt-2">
                 <Button
