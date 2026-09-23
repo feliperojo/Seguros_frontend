@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Container,
   Table,
@@ -28,6 +28,11 @@ import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
 import { esGrupoEnFlujoCotizacion } from "../../constants/estadosGrupoFamiliar";
+import {
+  isDentalCoberturaTipo,
+  isDentalMsCoberturaTipo,
+  isProductoSaludMs,
+} from "../../constants/coberturaTipos";
 import "../../styles/ReporteGruposFamiliaresClasificados.css";
 
 /**
@@ -70,6 +75,92 @@ const esActivoTrue = (cobertura) => {
     cobertura.activo === "1" ||
     cobertura.activo === "true"
   );
+};
+
+const esBooleanoFalse = (valor) =>
+  valor === false || valor === 0 || valor === "0" || valor === "false";
+
+const esBooleanoTrue = (valor) =>
+  valor === true || valor === 1 || valor === "1" || valor === "true";
+
+const normalizarTexto = (valor) =>
+  String(valor || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+/**
+ * Replica las métricas independientes usadas por el panel principal.
+ * No son categorías excluyentes: por ejemplo, Dental MS cuenta en el KPI MS
+ * aunque esa misma cobertura también pueda estar cancelada o retirada.
+ */
+const calcularMetricasPanel = (grupos) => {
+  const metricas = {
+    estado_coberturas_ms: 0,
+    cotizacion: 0,
+    otras_coberturas: 0,
+    cancelados: 0,
+    retirados: 0,
+  };
+
+  grupos.forEach((grupo) => {
+    const enCotizacion = esGrupoEnFlujoCotizacion(
+      grupo.estado_codigo ?? grupo.estado_id ?? grupo.estado
+    );
+
+    (grupo.coberturas || []).forEach((cobertura) => {
+      const activo = esBooleanoTrue(cobertura.activo);
+      const vigente = esBooleanoTrue(cobertura.vigente);
+      const estado = normalizarTexto(cobertura.estado_cobertura);
+      const tipo = cobertura.cobertura_tipo || "";
+      const definida = normalizarTexto(cobertura.cobertura_definida);
+      const anulada = !fechaVacia(cobertura.fecha_anulacion);
+
+      if (activo && enCotizacion) {
+        metricas.cotizacion += 1;
+      }
+
+      const saludMsContabilizable =
+        isProductoSaludMs(tipo) &&
+        activo &&
+        !enCotizacion &&
+        ((esEstadoCoberturaSi(estado) && vigente) ||
+          (["no", "medicare", "medicaid"].includes(estado) &&
+            esBooleanoFalse(cobertura.vigente)));
+
+      if (saludMsContabilizable || isDentalMsCoberturaTipo(tipo)) {
+        metricas.estado_coberturas_ms += 1;
+      }
+
+      const tipoNormalizado = normalizarTexto(tipo);
+      if (
+        tipoNormalizado.includes("vision") ||
+        tipoNormalizado.includes("descuento") ||
+        (isDentalCoberturaTipo(tipo) && !isDentalMsCoberturaTipo(tipo))
+      ) {
+        metricas.otras_coberturas += 1;
+      }
+
+      const cancelada =
+        !anulada &&
+        esBooleanoFalse(cobertura.vigente) &&
+        !fechaVacia(cobertura.fecha_cancelacion) &&
+        (definida === "cancelado" || (!definida && activo));
+
+      const retirada =
+        !anulada &&
+        esBooleanoFalse(cobertura.activo) &&
+        esBooleanoFalse(cobertura.vigente) &&
+        !fechaVacia(cobertura.fecha_retiro) &&
+        (["retirado", "terminado"].includes(definida) || !definida);
+
+      if (cancelada) metricas.cancelados += 1;
+      if (retirada) metricas.retirados += 1;
+    });
+  });
+
+  return metricas;
 };
 
 /**
@@ -178,6 +269,7 @@ const ReporteGruposFamiliaresClasificados = () => {
   const [gruposExpandidos, setGruposExpandidos] = useState(new Set());
   const [filtroEstado, setFiltroEstado] = useState("todos");
   const [filtroCoberturaTipo, setFiltroCoberturaTipo] = useState("todos");
+  const [resumenPanel, setResumenPanel] = useState(null);
 
   // Cargar grupos familiares
   useEffect(() => {
@@ -185,13 +277,25 @@ const ReporteGruposFamiliaresClasificados = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiRequest("grupo_familiar/grupos-familiares-full", "GET");
-        
+        const [gruposResult, resumenResult] = await Promise.allSettled([
+          apiRequest("grupo_familiar/grupos-familiares-full", "GET"),
+          apiRequest("cliente/general", "GET"),
+        ]);
+
+        const response =
+          gruposResult.status === "fulfilled" ? gruposResult.value : null;
+
         if (response?.status === "success" && Array.isArray(response.data)) {
           setGrupos(response.data);
         } else {
-          setGrupos([]);
+          throw gruposResult.status === "rejected"
+            ? gruposResult.reason
+            : new Error("Respuesta inválida del reporte");
         }
+
+        setResumenPanel(
+          resumenResult.status === "fulfilled" ? resumenResult.value : null
+        );
       } catch (err) {
         console.error("Error al cargar grupos familiares:", err);
         setError("Error al cargar los grupos familiares. Por favor, intente nuevamente.");
@@ -231,12 +335,15 @@ const ReporteGruposFamiliaresClasificados = () => {
       };
 
       // Estadísticas
+      const metricasPanel = calcularMetricasPanel([{ ...grupo, coberturas }]);
       const estadisticas = {
         total: miembrosClasificados.length,
         activos_con_cobertura: porCategoria.activos_con_cobertura.length,
-        cotizacion: porCategoria.cotizacion.length,
-        cancelados: porCategoria.cancelados.length,
-        retirados: porCategoria.retirados.length,
+        estado_coberturas_ms: metricasPanel.estado_coberturas_ms,
+        cotizacion: metricasPanel.cotizacion,
+        otras_coberturas: metricasPanel.otras_coberturas,
+        cancelados: metricasPanel.cancelados,
+        retirados: metricasPanel.retirados,
         sin_cobertura: porCategoria.sin_cobertura.length,
         otros_estados: porCategoria.otros_estados.length
       };
@@ -245,7 +352,8 @@ const ReporteGruposFamiliaresClasificados = () => {
         ...grupo,
         miembrosClasificados,
         porCategoria,
-        estadisticas
+        estadisticas,
+        metricasPanel,
       };
     });
   }, [grupos]);
@@ -549,7 +657,7 @@ const ReporteGruposFamiliaresClasificados = () => {
   /**
    * Renderizar sección de miembros por categoría
    */
-  const renderCategoriaMiembros = (categoria, miembros, grupoId) => {
+  const renderCategoriaMiembros = (categoria, miembros) => {
     if (miembros.length === 0) return null;
 
     const estadoInfo = miembros[0]?.estadoClasificado;
@@ -664,10 +772,23 @@ const ReporteGruposFamiliaresClasificados = () => {
   }
 
   const totalMiembros = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.total, 0);
-  const totalActivos = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.activos_con_cobertura, 0);
-  const totalCotizacion = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cotizacion, 0);
-  const totalCancelados = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.cancelados, 0);
-  const totalRetirados = gruposFiltrados.reduce((sum, g) => sum + g.estadisticas.retirados, 0);
+  const hayFiltrosActivos =
+    Boolean(searchTerm.trim()) ||
+    filtroEstado !== "todos" ||
+    filtroCoberturaTipo !== "todos";
+  const metricasFiltradas = calcularMetricasPanel(gruposFiltrados);
+  const metricasResumen =
+    !hayFiltrosActivos && resumenPanel
+      ? {
+          estado_coberturas_ms:
+            (Number(resumenPanel.polizasActivas?.total) || 0) +
+            (Number(resumenPanel.dentalMsActivo) || 0),
+          cotizacion: Number(resumenPanel.polizasCotizacion) || 0,
+          otras_coberturas: Number(resumenPanel.otrosProductos?.total) || 0,
+          cancelados: Number(resumenPanel.polizasCanceladas) || 0,
+          retirados: Number(resumenPanel.polizasRetiradas) || 0,
+        }
+      : metricasFiltradas;
 
   return (
     <Container fluid className="rgfc-container py-3">
@@ -720,8 +841,9 @@ const ReporteGruposFamiliaresClasificados = () => {
                   aria-label="Filtrar por estado de cobertura"
                 >
                   <option value="todos">Todos los estados</option>
-                  <option value="activos_con_cobertura">Activos con Cobertura</option>
+                  <option value="estado_coberturas_ms">Estado de Coberturas MS</option>
                   <option value="cotizacion">Cotización</option>
+                  <option value="otras_coberturas">Otras Coberturas</option>
                   <option value="cancelados">Cancelados</option>
                   <option value="retirados">Retirados</option>
                   <option value="sin_cobertura">Sin Cobertura</option>
@@ -763,20 +885,24 @@ const ReporteGruposFamiliaresClasificados = () => {
                 <span className="rgfc__kpi-value">{totalMiembros}</span>
               </div>
               <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Activos con Cobertura</span>
-                <span className="rgfc__kpi-value">{totalActivos}</span>
+                <span className="rgfc__kpi-label">Estado de Coberturas MS</span>
+                <span className="rgfc__kpi-value">{metricasResumen.estado_coberturas_ms}</span>
               </div>
               <div className="rgfc__kpi">
                 <span className="rgfc__kpi-label">Cotización</span>
-                <span className="rgfc__kpi-value">{totalCotizacion}</span>
+                <span className="rgfc__kpi-value">{metricasResumen.cotizacion}</span>
+              </div>
+              <div className="rgfc__kpi">
+                <span className="rgfc__kpi-label">Otras Coberturas</span>
+                <span className="rgfc__kpi-value">{metricasResumen.otras_coberturas}</span>
               </div>
               <div className="rgfc__kpi">
                 <span className="rgfc__kpi-label">Cancelados</span>
-                <span className="rgfc__kpi-value">{totalCancelados}</span>
+                <span className="rgfc__kpi-value">{metricasResumen.cancelados}</span>
               </div>
               <div className="rgfc__kpi">
                 <span className="rgfc__kpi-label">Retirados</span>
-                <span className="rgfc__kpi-value">{totalRetirados}</span>
+                <span className="rgfc__kpi-value">{metricasResumen.retirados}</span>
               </div>
             </div>
           </div>
@@ -856,20 +982,24 @@ const ReporteGruposFamiliaresClasificados = () => {
                               <strong>{grupo.estadisticas.total}</strong>
                             </div>
                             <div className="rgfc__grupo-stat">
-                              <span>Activos</span>
-                              <strong>{grupo.estadisticas.activos_con_cobertura}</strong>
+                              <span>Coberturas MS</span>
+                              <strong>{grupo.metricasPanel.estado_coberturas_ms}</strong>
                             </div>
                             <div className="rgfc__grupo-stat">
                               <span>Cotización</span>
-                              <strong>{grupo.estadisticas.cotizacion}</strong>
+                              <strong>{grupo.metricasPanel.cotizacion}</strong>
+                            </div>
+                            <div className="rgfc__grupo-stat">
+                              <span>Otras Coberturas</span>
+                              <strong>{grupo.metricasPanel.otras_coberturas}</strong>
                             </div>
                             <div className="rgfc__grupo-stat">
                               <span>Cancelados</span>
-                              <strong>{grupo.estadisticas.cancelados}</strong>
+                              <strong>{grupo.metricasPanel.cancelados}</strong>
                             </div>
                             <div className="rgfc__grupo-stat">
                               <span>Retirados</span>
-                              <strong>{grupo.estadisticas.retirados}</strong>
+                              <strong>{grupo.metricasPanel.retirados}</strong>
                             </div>
                             <div className="rgfc__grupo-stat">
                               <span>Sin Cobertura</span>
@@ -922,33 +1052,27 @@ const ReporteGruposFamiliaresClasificados = () => {
                           <div>
                             {renderCategoriaMiembros(
                               "activos_con_cobertura",
-                              grupo.porCategoria.activos_con_cobertura,
-                              grupo.id
+                              grupo.porCategoria.activos_con_cobertura
                             )}
                             {renderCategoriaMiembros(
                               "cotizacion",
-                              grupo.porCategoria.cotizacion,
-                              grupo.id
+                              grupo.porCategoria.cotizacion
                             )}
                             {renderCategoriaMiembros(
                               "cancelados",
-                              grupo.porCategoria.cancelados,
-                              grupo.id
+                              grupo.porCategoria.cancelados
                             )}
                             {renderCategoriaMiembros(
                               "retirados",
-                              grupo.porCategoria.retirados,
-                              grupo.id
+                              grupo.porCategoria.retirados
                             )}
                             {renderCategoriaMiembros(
                               "sin_cobertura",
-                              grupo.porCategoria.sin_cobertura,
-                              grupo.id
+                              grupo.porCategoria.sin_cobertura
                             )}
                             {renderCategoriaMiembros(
                               "otros_estados",
-                              grupo.porCategoria.otros_estados,
-                              grupo.id
+                              grupo.porCategoria.otros_estados
                             )}
                           </div>
                         </div>
