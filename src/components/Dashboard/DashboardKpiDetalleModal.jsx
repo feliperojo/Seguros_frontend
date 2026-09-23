@@ -255,7 +255,7 @@ export default function DashboardKpiDetalleModal({
           <p className="dashboard-kpi-detalle-intro">
             Productos <strong>Salud MS</strong> (pólizas con{" "}
             <strong>activo = true</strong>, fuera de flujo de cotización) y{" "}
-            <strong>Dental MS</strong> (todas las existentes).
+            <strong>Dental MS</strong> (activos o con servicio).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {COBERTURA_ITEMS.map(({ key, label, color, descripcion, activo, vigente }) => (
@@ -272,7 +272,7 @@ export default function DashboardKpiDetalleModal({
               label="Dental MS"
               valor={dentalMs}
               color="#059669"
-              descripcion="cobertura_tipo = Dental MS"
+              descripcion="Activos o con servicio"
             />
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">

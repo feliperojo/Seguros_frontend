@@ -43,7 +43,7 @@ const DESCRIPCIONES_METRICAS = {
   total_miembros:
     "Clientes que pertenecen a un grupo familiar. Cada cliente cuenta una sola vez, aunque tenga más de una cobertura.",
   estado_coberturas_ms:
-    "Coberturas de Salud MS contabilizables más todas las Dental MS. Es la misma fórmula del Panel Principal.",
+    "Coberturas de Salud MS contabilizables más Dental MS activos o con servicio. Es la misma fórmula del Panel Principal.",
   cotizacion:
     "Coberturas activas de grupos que aún están en flujo de cotización (estados 1 a 5).",
   otras_coberturas:
@@ -160,8 +160,7 @@ const normalizarTexto = (valor) =>
 
 /**
  * Replica las métricas independientes usadas por el panel principal.
- * No son categorías excluyentes: por ejemplo, Dental MS cuenta en el KPI MS
- * aunque esa misma cobertura también pueda estar cancelada o retirada.
+ * Dental MS entra en Coberturas MS solo si está activo o con servicio.
  */
 const calcularMetricasPanel = (grupos) => {
   const metricas = {
@@ -197,7 +196,10 @@ const calcularMetricasPanel = (grupos) => {
           (["no", "medicare", "medicaid"].includes(estado) &&
             esBooleanoFalse(cobertura.vigente)));
 
-      if (saludMsContabilizable || isDentalMsCoberturaTipo(tipo)) {
+      const dentalMsActivoOConServicio =
+        isDentalMsCoberturaTipo(tipo) && (activo || vigente);
+
+      if (saludMsContabilizable || dentalMsActivoOConServicio) {
         metricas.estado_coberturas_ms += 1;
       }
 
