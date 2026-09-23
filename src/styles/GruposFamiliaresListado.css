@@ -554,6 +554,20 @@
   font-size: 0.7rem;
 }
 
+.gf-listado__filtro-popover {
+  max-width: 280px;
+}
+
+.gf-listado__filtro-popover .popover-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.gf-listado__filtro-popover .popover-body {
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
 .gf-listado__filter-hint {
   font-size: 0.8125rem;
   color: #92400e;
