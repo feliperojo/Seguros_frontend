@@ -9,7 +9,9 @@ import {
   Row,
   Col,
   Spinner,
-  Alert
+  Alert,
+  OverlayTrigger,
+  Popover,
 } from "react-bootstrap";
 import {
   FaSearch,
@@ -34,6 +36,72 @@ import {
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
 import "../../styles/ReporteGruposFamiliaresClasificados.css";
+
+const DESCRIPCIONES_METRICAS = {
+  total_grupos:
+    "Cantidad de grupos familiares que coinciden con los filtros actuales.",
+  total_miembros:
+    "Clientes que pertenecen a un grupo familiar. Cada cliente cuenta una sola vez, aunque tenga más de una cobertura.",
+  estado_coberturas_ms:
+    "Coberturas de Salud MS contabilizables más todas las Dental MS. Es la misma fórmula del Panel Principal.",
+  cotizacion:
+    "Coberturas activas de grupos que aún están en flujo de cotización (estados 1 a 5).",
+  otras_coberturas:
+    "Productos distintos de Salud MS y Dental MS: Visión, Plan Dental privado y Plan de Descuentos.",
+  cancelados:
+    "Coberturas que quedaron en estado Cancelado, con fecha de cancelación registrada.",
+  retirados:
+    "Coberturas que quedaron en estado Retirado o Terminado, con fecha de retiro registrada.",
+};
+
+function DatoConDescripcion({ label, valor, descripcion, variant = "kpi" }) {
+  const overlay = (
+    <Popover className="rgfc__dato-popover">
+      <Popover.Header as="h6">{label}</Popover.Header>
+      <Popover.Body>{descripcion}</Popover.Body>
+    </Popover>
+  );
+
+  return (
+    <OverlayTrigger
+      trigger={["hover", "focus", "click"]}
+      placement="top"
+      overlay={overlay}
+      rootClose
+    >
+      <div
+        className={variant === "stat" ? "rgfc__grupo-stat rgfc__dato-ayuda" : "rgfc__kpi rgfc__dato-ayuda"}
+        role="button"
+        tabIndex={0}
+        aria-label={`${label}: ${valor}. ${descripcion}`}
+      >
+        {variant === "stat" ? (
+          <>
+            <span>{label}</span>
+            <strong>{valor}</strong>
+          </>
+        ) : (
+          <>
+            <span className="rgfc__kpi-label">{label}</span>
+            <span className="rgfc__kpi-value">{valor}</span>
+          </>
+        )}
+      </div>
+    </OverlayTrigger>
+  );
+}
+
+const contarPersonasUnicas = (coberturas = []) => {
+  const ids = new Set();
+  coberturas.forEach((cobertura, idx) => {
+    const id =
+      cobertura.cliente_id ??
+      cobertura.cliente?.id ??
+      `cobertura-${cobertura.id ?? idx}`;
+    ids.add(String(id));
+  });
+  return ids.size;
+};
 
 /**
  * Utilidad para verificar si una fecha está vacía o no válida
@@ -337,7 +405,7 @@ const ReporteGruposFamiliaresClasificados = () => {
       // Estadísticas
       const metricasPanel = calcularMetricasPanel([{ ...grupo, coberturas }]);
       const estadisticas = {
-        total: miembrosClasificados.length,
+        total: contarPersonasUnicas(coberturas),
         activos_con_cobertura: porCategoria.activos_con_cobertura.length,
         estado_coberturas_ms: metricasPanel.estado_coberturas_ms,
         cotizacion: metricasPanel.cotizacion,
@@ -876,34 +944,41 @@ const ReporteGruposFamiliaresClasificados = () => {
               Resumen
             </div>
             <div className="rgfc__kpis">
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Total Grupos</span>
-                <span className="rgfc__kpi-value">{gruposFiltrados.length}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Total Miembros</span>
-                <span className="rgfc__kpi-value">{totalMiembros}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Estado de Coberturas MS</span>
-                <span className="rgfc__kpi-value">{metricasResumen.estado_coberturas_ms}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Cotización</span>
-                <span className="rgfc__kpi-value">{metricasResumen.cotizacion}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Otras Coberturas</span>
-                <span className="rgfc__kpi-value">{metricasResumen.otras_coberturas}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Cancelados</span>
-                <span className="rgfc__kpi-value">{metricasResumen.cancelados}</span>
-              </div>
-              <div className="rgfc__kpi">
-                <span className="rgfc__kpi-label">Retirados</span>
-                <span className="rgfc__kpi-value">{metricasResumen.retirados}</span>
-              </div>
+              <DatoConDescripcion
+                label="Total Grupos"
+                valor={gruposFiltrados.length}
+                descripcion={DESCRIPCIONES_METRICAS.total_grupos}
+              />
+              <DatoConDescripcion
+                label="Total Miembros"
+                valor={totalMiembros}
+                descripcion={DESCRIPCIONES_METRICAS.total_miembros}
+              />
+              <DatoConDescripcion
+                label="Estado de Coberturas MS"
+                valor={metricasResumen.estado_coberturas_ms}
+                descripcion={DESCRIPCIONES_METRICAS.estado_coberturas_ms}
+              />
+              <DatoConDescripcion
+                label="Cotización"
+                valor={metricasResumen.cotizacion}
+                descripcion={DESCRIPCIONES_METRICAS.cotizacion}
+              />
+              <DatoConDescripcion
+                label="Otras Coberturas"
+                valor={metricasResumen.otras_coberturas}
+                descripcion={DESCRIPCIONES_METRICAS.otras_coberturas}
+              />
+              <DatoConDescripcion
+                label="Cancelados"
+                valor={metricasResumen.cancelados}
+                descripcion={DESCRIPCIONES_METRICAS.cancelados}
+              />
+              <DatoConDescripcion
+                label="Retirados"
+                valor={metricasResumen.retirados}
+                descripcion={DESCRIPCIONES_METRICAS.retirados}
+              />
             </div>
           </div>
 
@@ -976,41 +1051,6 @@ const ReporteGruposFamiliaresClasificados = () => {
 
                       {estaExpandido && (
                         <div className="rgfc__grupo-body">
-                          <div className="rgfc__grupo-stats">
-                            <div className="rgfc__grupo-stat">
-                              <span>Total Miembros</span>
-                              <strong>{grupo.estadisticas.total}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Coberturas MS</span>
-                              <strong>{grupo.metricasPanel.estado_coberturas_ms}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Cotización</span>
-                              <strong>{grupo.metricasPanel.cotizacion}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Otras Coberturas</span>
-                              <strong>{grupo.metricasPanel.otras_coberturas}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Cancelados</span>
-                              <strong>{grupo.metricasPanel.cancelados}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Retirados</span>
-                              <strong>{grupo.metricasPanel.retirados}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Sin Cobertura</span>
-                              <strong>{grupo.estadisticas.sin_cobertura}</strong>
-                            </div>
-                            <div className="rgfc__grupo-stat">
-                              <span>Otros</span>
-                              <strong>{grupo.estadisticas.otros_estados}</strong>
-                            </div>
-                          </div>
-
                           <div className="rgfc__meta-row">
                             <p className="mb-0">
                               <strong>Estado:</strong>
