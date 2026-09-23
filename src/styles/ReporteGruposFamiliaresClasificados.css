@@ -135,7 +135,7 @@
 /* KPIs — una sola fila institucional */
 .rgfc__kpis {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.5rem;
 }
 
@@ -298,7 +298,7 @@
 
 .rgfc__grupo-stats {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 0.45rem;
   margin-bottom: 1rem;
 }
@@ -464,7 +464,7 @@
 
 @media (max-width: 1200px) {
   .rgfc__kpis {
-    grid-template-columns: repeat(6, minmax(7rem, 1fr));
+    grid-template-columns: repeat(7, minmax(7rem, 1fr));
     overflow-x: auto;
     padding-bottom: 0.25rem;
   }
