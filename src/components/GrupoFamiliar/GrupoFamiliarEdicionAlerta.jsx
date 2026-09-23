@@ -20,6 +20,19 @@ const joinNames = (nombres) => {
   return `${list.slice(0, -1).join(", ")} y ${list[list.length - 1]}`;
 };
 
+const frasePresencia = (personas, accion, hora) => {
+  const sujeto = joinNames(personas.map((e) => e.nombre));
+  const verbo = personas.length === 1 ? "está" : "están";
+
+  if (hora && personas.length === 1) {
+    return `${sujeto} ${verbo} ${accion} este grupo familiar desde las ${hora}.`;
+  }
+  if (hora) {
+    return `${sujeto} ${verbo} ${accion} este grupo familiar (desde las ${hora}).`;
+  }
+  return `${sujeto} ${verbo} ${accion} este grupo familiar.`;
+};
+
 /** Reconstruye el mensaje con hora local del navegador (evita desfase UTC del servidor). */
 export const buildEdicionMensaje = (edicion) => {
   if (!edicion) return null;
@@ -30,19 +43,32 @@ export const buildEdicionMensaje = (edicion) => {
 
   const editores = edicion.editores ?? [];
   if (editores.length > 0) {
-    const sujeto = joinNames(editores.map((e) => e.nombre));
+    const editando = editores.filter((e) => e.modo === "editando");
+    const viendo = editores.filter((e) => e.modo !== "editando");
     const hora = formatHoraDesde(editores[0]?.desde);
 
-    if (hora && editores.length === 1) {
-      return `${sujeto} tiene abierto este grupo familiar desde las ${hora}.`;
+    if (editando.length > 0 && viendo.length > 0) {
+      const verboEdita = editando.length === 1 ? "está" : "están";
+      const verboVe = viendo.length === 1 ? "está" : "están";
+      return `${joinNames(editando.map((e) => e.nombre))} ${verboEdita} editando este grupo familiar. ${joinNames(viendo.map((e) => e.nombre))} ${verboVe} solo visualizando.`;
     }
-    if (hora) {
-      return `${sujeto} tienen abierto este grupo familiar (desde las ${hora}).`;
+
+    if (editando.length > 0) {
+      return frasePresencia(editando, "editando", hora);
     }
-    return `${sujeto} tiene abierto este grupo familiar.`;
+
+    return frasePresencia(viendo, "visualizando", hora);
   }
 
   return edicion.mensaje;
+};
+
+export const otroUsuarioEstaEditando = (edicion) => {
+  if (!edicion) return false;
+  if (edicion.bloquea_edicion === true) return true;
+  return (edicion.editores ?? []).some(
+    (editor) => editor.modo === "editando" && editor.activo !== false
+  );
 };
 
 /**
@@ -55,6 +81,8 @@ const GrupoFamiliarEdicionAlerta = ({ edicion }) => {
   if (!edicion?.alerta || !mensaje) return null;
 
   const inactivo = edicion.tipo === "inactivo";
+  const editando = otroUsuarioEstaEditando(edicion);
+  const varios = (edicion.editores ?? []).length > 1;
 
   return (
     <div
@@ -63,14 +91,16 @@ const GrupoFamiliarEdicionAlerta = ({ edicion }) => {
       style={{ fontSize: "0.9rem" }}
     >
       <i
-        className={`fas ${inactivo ? "fa-clock" : "fa-user-edit"} mt-1 flex-shrink-0`}
+        className={`fas ${inactivo ? "fa-clock" : editando ? "fa-user-edit" : "fa-eye"} mt-1 flex-shrink-0`}
         aria-hidden="true"
       />
       <div>
         <div>{mensaje}</div>
         {!inactivo && (
           <div className="text-muted mt-1" style={{ fontSize: "0.82rem" }}>
-            Es solo informativo: puedes seguir editando y guardar con normalidad.
+            {editando
+              ? `Mientras ${varios ? "estén editando" : "esté editando"}, el botón Editar permanece inactivo para no pisar sus cambios.`
+              : `${varios ? "Están" : "Está"} solo visualizando. Puedes editar y guardar con normalidad.`}
           </div>
         )}
       </div>

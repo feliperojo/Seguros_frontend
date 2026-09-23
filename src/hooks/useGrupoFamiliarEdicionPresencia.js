@@ -26,6 +26,8 @@ export default function useGrupoFamiliarEdicionPresencia(
 ) {
   const [edicion, setEdicion] = useState(initialEdicion ?? EMPTY_EDICION);
   const sessionIdRef = useRef(null);
+  const activoRef = useRef(activo);
+  activoRef.current = activo;
   const grupoId = Number(grupoFamiliarId);
   const shouldRegister = Boolean(registrarPresencia || activo);
 
@@ -47,13 +49,21 @@ export default function useGrupoFamiliarEdicionPresencia(
     }
   }, [grupoId]);
 
-  const touchPresencia = useCallback(async () => {
+  const touchPresencia = useCallback(async (modoOverride) => {
     if (!grupoId || !shouldRegister) return null;
+
+    const modo =
+      modoOverride === "editando" || modoOverride === "viendo"
+        ? modoOverride
+        : activoRef.current
+          ? "editando"
+          : "viendo";
 
     try {
       const res = await GrupoFamiliarService.touchEdicionPresencia(
         grupoId,
-        sessionIdRef.current
+        sessionIdRef.current,
+        modo
       );
 
       const sessionId = res?.data?.session_id ?? res?.session_id;
@@ -67,6 +77,11 @@ export default function useGrupoFamiliarEdicionPresencia(
       return null;
     }
   }, [grupoId, shouldRegister]);
+
+  useEffect(() => {
+    if (!grupoId || !shouldRegister) return;
+    touchPresencia();
+  }, [activo, grupoId, shouldRegister, touchPresencia]);
 
   useEffect(() => {
     if (initialEdicion) {

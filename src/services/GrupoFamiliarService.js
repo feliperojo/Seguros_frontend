@@ -77,8 +77,11 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   },
 
   // ---- Presencia de edición (alerta colaborativa) ----
-  touchEdicionPresencia: async (id, sessionId = null) => {
-    const body = sessionId ? { session_id: sessionId } : null;
+  touchEdicionPresencia: async (id, sessionId = null, modo = "viendo") => {
+    const body = {
+      modo: modo === "editando" ? "editando" : "viendo",
+    };
+    if (sessionId) body.session_id = sessionId;
     const headers = sessionId ? { "X-Edicion-Session": sessionId } : {};
     return await apiRequest(
       `${BASE_GF}/${id}/edicion/presencia`,
