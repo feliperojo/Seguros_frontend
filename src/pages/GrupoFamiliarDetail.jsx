@@ -417,6 +417,7 @@ const mapClienteForSave = (m) => {
     const filtered = Object.fromEntries(
       Object.entries(payload).filter(([k, v]) => {
         if (k === "telefonos") return true;
+        if (k === "segundo_nombre") return true;
         if (k === "fecha_emision" || k === "fecha_expiracion") return true;
         return v !== null && v !== undefined;
       })
