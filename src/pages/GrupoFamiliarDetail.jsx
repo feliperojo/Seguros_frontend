@@ -696,8 +696,11 @@ const buildFullUpdatePayloadParts = (formData, members, grupoId, productoCotizac
     .map(mapClienteForSave)
     .filter(Boolean)
     .map((cli) => {
-      const { fecha_emision, fecha_expiracion, ...rest } = cli;
+      const { segundo_nombre, fecha_emision, fecha_expiracion, ...rest } = cli;
       const cleaned = stripNulls(rest);
+      // El segundo nombre es opcional y puede borrarse intencionalmente.
+      // Debe viajar como null; si stripNulls lo omite, el backend conserva el valor anterior.
+      if (segundo_nombre !== undefined) cleaned.segundo_nombre = segundo_nombre || null;
       // Permitir limpiar fechas de estatus migratorio (stripNulls las omitiría).
       if (fecha_emision !== undefined) cleaned.fecha_emision = fecha_emision || null;
       if (fecha_expiracion !== undefined) cleaned.fecha_expiracion = fecha_expiracion || null;
