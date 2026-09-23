@@ -495,6 +495,7 @@ export function ordenarResumenGrupos(resumenEstados = []) {
         codigo: (item.codigo || "").toLowerCase(),
         nombre: item.nombre || "",
         total_grupos: item.total_grupos ?? 0,
+        productos: item.productos || null,
       }))
     : [];
 
@@ -519,6 +520,7 @@ export function ordenarResumenGrupos(resumenEstados = []) {
     return {
       key: estado.codigo,
       valor: estado.total_grupos,
+      productos: estado.productos || null,
       nombre: label,
       config: {
         ...config,

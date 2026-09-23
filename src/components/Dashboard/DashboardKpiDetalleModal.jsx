@@ -71,11 +71,25 @@ function formatearCriterioBooleano(valor) {
   return valor ? "true" : "false";
 }
 
-function DetalleFila({ label, valor, color, descripcion, criterios, icon: Icon }) {
+function DetalleFila({
+  label,
+  valor,
+  color,
+  descripcion,
+  criterios,
+  icon: Icon,
+  onToggle,
+  abierta,
+}) {
+  const Tag = onToggle ? "button" : "div";
+
   return (
-    <div
-      className="dashboard-kpi-detalle-item"
+    <Tag
+      type={onToggle ? "button" : undefined}
+      className={`dashboard-kpi-detalle-item${onToggle ? " dashboard-kpi-detalle-item--btn" : ""}`}
       style={{ borderLeftColor: color || "#1a3964" }}
+      onClick={onToggle}
+      aria-expanded={onToggle ? abierta : undefined}
     >
       <div className="dashboard-kpi-detalle-item__info">
         {Icon && (
@@ -99,6 +113,39 @@ function DetalleFila({ label, valor, color, descripcion, criterios, icon: Icon }
         </div>
       </div>
       <span className="dashboard-kpi-detalle-item__value">{valor}</span>
+    </Tag>
+  );
+}
+
+function DiscriminacionProductos({ productos }) {
+  if (!productos) return null;
+
+  const ms = Number(productos.ms) || 0;
+  const privados = Number(productos.privados) || 0;
+  const ambos = Number(productos.ambos) || 0;
+  const sinProducto = Number(productos.sin_producto) || 0;
+
+  return (
+    <div className="dashboard-kpi-detalle-split">
+      <div className="dashboard-kpi-detalle-split__row">
+        <span>Productos MS</span>
+        <strong>{ms + ambos}</strong>
+      </div>
+      <div className="dashboard-kpi-detalle-split__row">
+        <span>Productos privados</span>
+        <strong>{privados}</strong>
+      </div>
+      {ambos > 0 && (
+        <p className="dashboard-kpi-detalle-split__nota">
+          De los MS, {ambos} también tienen un producto privado.
+        </p>
+      )}
+      {sinProducto > 0 && (
+        <div className="dashboard-kpi-detalle-split__row">
+          <span>Sin producto</span>
+          <strong>{sinProducto}</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -112,6 +159,11 @@ export default function DashboardKpiDetalleModal({
   const [resumenGrupos, setResumenGrupos] = useState([]);
   const [cargandoGrupos, setCargandoGrupos] = useState(false);
   const [errorGrupos, setErrorGrupos] = useState(null);
+  const [filaAbierta, setFilaAbierta] = useState(null);
+
+  useEffect(() => {
+    if (!show) setFilaAbierta(null);
+  }, [show]);
 
   useEffect(() => {
     if (!show || tipo !== "grupos") return;
@@ -223,18 +275,30 @@ export default function DashboardKpiDetalleModal({
             Grupos familiares según su estado actual en el flujo de trabajo.
             El estado <strong>Grupo Familiar</strong> se divide en{" "}
             <strong>activos</strong> e <strong>inactivos</strong> (todas las
-            coberturas canceladas o retiradas).
+            coberturas canceladas o retiradas). Pulsa un dato para ver cuántos
+            son de productos MS y cuántos de productos privados.
           </p>
           <div className="dashboard-kpi-detalle-list">
-            {estadosGrupo.map(({ key, valor, config }) => (
-              <DetalleFila
-                key={key}
-                label={config.label}
-                valor={valor}
-                color={config.color}
-                icon={config.icon}
-              />
-            ))}
+            {estadosGrupo.map(({ key, valor, config, productos }) => {
+              const abierta = filaAbierta === key;
+              return (
+                <div key={key}>
+                  <DetalleFila
+                    label={config.label}
+                    valor={valor}
+                    color={config.color}
+                    icon={config.icon}
+                    abierta={abierta}
+                    onToggle={
+                      productos
+                        ? () => setFilaAbierta(abierta ? null : key)
+                        : undefined
+                    }
+                  />
+                  {abierta && <DiscriminacionProductos productos={productos} />}
+                </div>
+              );
+            })}
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">
             Total grupos: <strong>{estadisticas?.totalGruposFamiliares ?? 0}</strong>
@@ -315,8 +379,10 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Productos distintos de Salud MS y Dental MS registrados en el sistema
-            (todas las existentes, no solo las activas), discriminados por tipo.
+            Coberturas <strong>activas y vigentes</strong> de productos privados
+            (Vision, Plan Dental y Plan de Descuentos) cuyo grupo ya está en{" "}
+            <strong>Grupo Familiar</strong> (estado 6). No entran las que siguen
+            en cotización, ni las canceladas o retiradas.
           </p>
           <div className="dashboard-kpi-detalle-hero" style={{ color: "#059669" }}>
             {totalOtros}
@@ -384,21 +450,39 @@ export default function DashboardKpiDetalleModal({
     }
 
     if (tipo === "retiradas") {
+      const porProducto = estadisticas?.retiradasPorProducto || {};
+      const totalRetiradas = estadisticas?.polizasRetiradas ?? porProducto.total ?? 0;
+      const otrosRetiradas = porProducto.otros ?? 0;
+
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
             Pólizas que salieron del grupo con estado <strong>Retirado</strong> o{" "}
-            <strong>Terminado</strong> y <strong>fecha de retiro</strong>. Las que
-            quedaron en Cancelado van al recuento de canceladas.
+            <strong>Terminado</strong> y <strong>fecha de retiro</strong>,
+            discriminadas por producto. Las que quedaron en Cancelado van al recuento de canceladas.
           </p>
           <div className="dashboard-kpi-detalle-list">
-            <DetalleFila
-              label="Retiradas"
-              valor={estadisticas?.polizasRetiradas ?? 0}
-              color="#ea4335"
-              descripcion="estado Retirado o Terminado + fecha_retiro"
-            />
+            {CANCELADAS_PRODUCTO_ITEMS.map(({ key, label, color, descripcion }) => (
+              <DetalleFila
+                key={key}
+                label={label}
+                valor={porProducto[key] ?? 0}
+                color={color}
+                descripcion={descripcion}
+              />
+            ))}
+            {otrosRetiradas > 0 && (
+              <DetalleFila
+                label="Otros"
+                valor={otrosRetiradas}
+                color="#9aa0a6"
+                descripcion="Otros tipos de cobertura"
+              />
+            )}
           </div>
+          <p className="dashboard-kpi-detalle-total mt-3 mb-0">
+            Total: <strong>{totalRetiradas}</strong>
+          </p>
         </>
       );
     }

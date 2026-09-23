@@ -17,7 +17,9 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
 import { formatDisplayName } from "../utils/names";
 import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPresencia";
-import GrupoFamiliarEdicionAlerta from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
+import GrupoFamiliarEdicionAlerta, {
+  otroUsuarioEstaEditando,
+} from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
 import {
   attachCoberturaDirtyFieldsForLegacy,
   buildDeltaCambiosFromPayloads,
@@ -2051,6 +2053,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
   const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';
   const canAddMember = esAnioPasado ? false : (isProspecto ? true : isEditing);
   const readOnly = esAnioPasado || !isEditing;
+  const edicionBloqueada = otroUsuarioEstaEditando(edicion);
 
 
   
@@ -2197,14 +2200,23 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               <button 
                 type="button"
                 className="btn btn-primary" 
+                disabled={edicionBloqueada}
+                title={
+                  edicionBloqueada
+                    ? "Otro usuario está editando este grupo. El botón se activa cuando termine."
+                    : undefined
+                }
                 onClick={async () => {
+                  const presenciaActual = await refreshEdicion?.();
+                  if (otroUsuarioEstaEditando(presenciaActual || edicion)) {
+                    return;
+                  }
                   setEditBaseline({
                     formData: cloneEditSnapshot(formData),
                     familyMembers: cloneEditSnapshot(familyMembers),
                   });
                   setIsEditing(true);
-                  await touchPresencia?.();
-                  await refreshEdicion?.();
+                  await touchPresencia?.("editando");
                 }}
               >
                 <i className="fas fa-edit me-2"></i>

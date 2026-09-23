@@ -71,6 +71,10 @@ function normalizeOtrosProductos(value) {
       vision,
       plan_dental: planDental,
       descuentos,
+      por_situacion:
+        value.por_situacion && typeof value.por_situacion === "object"
+          ? value.por_situacion
+          : {},
       // Dental MS ya no forma parte de este KPI
       total: vision + planDental + descuentos,
     };
@@ -195,6 +199,7 @@ const Dashboard = () => {
     polizasCanceladas: 0,
     canceladasPorProducto: { ...DEFAULT_CANCELADAS_POR_PRODUCTO },
     polizasRetiradas: 0,
+    retiradasPorProducto: { ...DEFAULT_CANCELADAS_POR_PRODUCTO },
     dentalMsActivo: 0,
     otrosProductos: { ...DEFAULT_OTROS_PRODUCTOS },
   });
@@ -728,6 +733,9 @@ const Dashboard = () => {
         dentalMsActivo: Number(resEstadisticas?.dentalMsActivo) || 0,
         canceladasPorProducto: normalizeCanceladasPorProducto(
           resEstadisticas?.canceladasPorProducto
+        ),
+        retiradasPorProducto: normalizeCanceladasPorProducto(
+          resEstadisticas?.retiradasPorProducto
         ),
         otrosProductos: normalizeOtrosProductos(resEstadisticas?.otrosProductos),
         detalleClientes: resEstadisticas?.detalleClientes || {
