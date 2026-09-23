@@ -20,6 +20,11 @@ const buildQueryParams = (params) => {
   if (params.per_page) queryParams.append("per_page", params.per_page);
   if (params.compania_id) queryParams.append("compania_id", params.compania_id);
   if (params.estado_cobertura) queryParams.append("estado_cobertura", params.estado_cobertura);
+  if (Array.isArray(params.productos)) {
+    params.productos.forEach((producto) => {
+      if (producto) queryParams.append("productos[]", producto);
+    });
+  }
   if (params.date_from) queryParams.append("date_from", params.date_from);
   if (params.date_to) queryParams.append("date_to", params.date_to);
   if (params.search) queryParams.append("search", params.search);

@@ -1,6 +1,6 @@
 // pages/ReporteCoberturasPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Table, Button, Badge, Alert, Spinner, Form } from "react-bootstrap";
+import { Table, Button, Badge, Alert, Spinner, Form, Dropdown } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
 import { FaSort, FaSortUp, FaSortDown, FaFileAlt } from "react-icons/fa";
 import { getReporteCoberturas } from "../services/reportesService";
@@ -10,6 +10,7 @@ import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaM
 import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
 import { formatDateMMDDYYYY } from "../utils/formatters";
+import { FILTRO_PRODUCTO_LISTADO_OPCIONES } from "../constants/estadosGrupoFamiliar";
 
 /**
  * Construye los query params desde el estado de filtros
@@ -21,6 +22,9 @@ const buildQueryParams = (filters) => {
   if (filters.per_page) params.per_page = filters.per_page;
   if (filters.compania_id) params.compania_id = filters.compania_id;
   if (filters.estado_cobertura) params.estado_cobertura = filters.estado_cobertura;
+  if (Array.isArray(filters.productos) && filters.productos.length > 0) {
+    params.productos = filters.productos;
+  }
   if (filters.date_from) params.date_from = filters.date_from;
   if (filters.date_to) params.date_to = filters.date_to;
   if (filters.search) params.search = filters.search;
@@ -203,6 +207,7 @@ const ReporteCoberturasPage = () => {
     per_page: 25,
     compania_id: "",
     estado_cobertura: "",
+    productos: [],
     date_from: "",
     date_to: "",
     search: "",
@@ -215,6 +220,7 @@ const ReporteCoberturasPage = () => {
   const [tempFilters, setTempFilters] = useState({
     compania_id: "",
     estado_cobertura: "",
+    productos: [],
     date_from: "",
     date_to: "",
     search: "",
@@ -397,6 +403,7 @@ const ReporteCoberturasPage = () => {
     const filtersChanged = 
       prevFiltersRef.current.compania_id !== filters.compania_id ||
       prevFiltersRef.current.estado_cobertura !== filters.estado_cobertura ||
+      prevFiltersRef.current.productos.join(",") !== filters.productos.join(",") ||
       prevFiltersRef.current.date_from !== filters.date_from ||
       prevFiltersRef.current.date_to !== filters.date_to ||
       prevFiltersRef.current.search !== filters.search ||
@@ -406,6 +413,7 @@ const ReporteCoberturasPage = () => {
       setTempFilters({
         compania_id: filters.compania_id,
         estado_cobertura: filters.estado_cobertura,
+        productos: [...filters.productos],
         date_from: filters.date_from,
         date_to: filters.date_to,
         search: filters.search,
@@ -418,6 +426,15 @@ const ReporteCoberturasPage = () => {
   // Manejar cambio de filtros temporales
   const handleTempFilterChange = (key, value) => {
     setTempFilters((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleProductoToggle = (producto) => {
+    setTempFilters((prev) => ({
+      ...prev,
+      productos: prev.productos.includes(producto)
+        ? prev.productos.filter((item) => item !== producto)
+        : [...prev.productos, producto],
+    }));
   };
   
   // Aplicar filtros
@@ -474,6 +491,7 @@ const ReporteCoberturasPage = () => {
     const clearedFilters = {
       compania_id: "",
       estado_cobertura: "",
+      productos: [],
       date_from: "",
       date_to: "",
       search: "",
@@ -498,7 +516,7 @@ const ReporteCoberturasPage = () => {
       page: 1, // Resetear a primera página al ordenar
     }));
   };
-  
+
   // Limpiar ordenamiento
   const handleClearSort = () => {
     setFilters((prev) => ({
@@ -650,6 +668,46 @@ const ReporteCoberturasPage = () => {
                   </option>
                 ))}
               </Form.Select>
+            </div>
+
+            {/* Tipo de producto */}
+            <div className="col-md-3">
+              <Form.Label>Tipo de producto</Form.Label>
+              <Dropdown autoClose="outside">
+                <Dropdown.Toggle
+                  variant="outline-secondary"
+                  className="w-100 text-start"
+                  id="productos-filter"
+                >
+                  {tempFilters.productos.length === 0
+                    ? "Todos los productos"
+                    : `${tempFilters.productos.length} producto(s) seleccionado(s)`}
+                </Dropdown.Toggle>
+                <Dropdown.Menu className="p-3" style={{ minWidth: "240px" }}>
+                  <Form.Check
+                    type="checkbox"
+                    id="producto-todos"
+                    label="Todos los productos"
+                    checked={tempFilters.productos.length === 0}
+                    onChange={() => handleTempFilterChange("productos", [])}
+                    className="mb-2"
+                  />
+                  <Dropdown.Divider />
+                  {FILTRO_PRODUCTO_LISTADO_OPCIONES
+                    .filter((opcion) => opcion.value !== "todos")
+                    .map((opcion) => (
+                      <Form.Check
+                        key={opcion.value}
+                        type="checkbox"
+                        id={`producto-${opcion.value}`}
+                        label={opcion.label}
+                        checked={tempFilters.productos.includes(opcion.value)}
+                        onChange={() => handleProductoToggle(opcion.value)}
+                        className="mb-2"
+                      />
+                    ))}
+                </Dropdown.Menu>
+              </Dropdown>
             </div>
             
             {/* Estado Cobertura */}
