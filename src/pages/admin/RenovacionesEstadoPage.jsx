@@ -10,6 +10,8 @@ import {
   Row,
   Col,
   Alert,
+  OverlayTrigger,
+  Popover,
 } from "react-bootstrap";
 import {
   FaSearch,
@@ -36,16 +38,80 @@ const ITEMS_PER_PAGE = 50;
 const ANIO_DEFAULT = new Date().getFullYear() + 1;
 
 const ESTADOS_FILTRO = [
-  { key: "", label: "Todos" },
-  { key: "pendiente", label: "Pendiente" },
-  { key: "borrador", label: "En pre-renovación" },
-  { key: "consolidado", label: "Consolidado" },
-  { key: "sin_cobertura_activa", label: "Grupo inactivo" },
+  {
+    key: "",
+    label: "Todos",
+    descripcion:
+      "Grupos con Plan de salud activo en estado Sí, o que ya tienen una renovación generada para el año destino.",
+  },
+  {
+    key: "pendiente",
+    label: "Pendiente",
+    descripcion:
+      "Todavía no tienen pre-renovación para el año destino.",
+  },
+  {
+    key: "borrador",
+    label: "En pre-renovación",
+    descripcion:
+      "Tienen una pre-renovación en borrador para el año destino, pendiente de consolidar.",
+  },
+  {
+    key: "consolidado",
+    label: "Consolidado",
+    descripcion:
+      "La renovación del año destino ya fue consolidada o confirmada.",
+  },
+  {
+    key: "sin_cobertura_activa",
+    label: "Grupo inactivo",
+    descripcion:
+      "El grupo tiene coberturas, pero ninguna está activa en estado Sí: no está vigente, o tiene fecha de cancelación, retiro o anulación. Es la misma regla del listado de grupos.",
+  },
   {
     key: "inactivo_con_prerenovacion",
     label: "Inactivo + pre-renovación",
+    descripcion:
+      "Grupo inactivo que además tiene una pre-renovación en borrador para el año destino, pendiente de consolidar.",
   },
 ];
+
+const DESCRIPCIONES_GESTION = {
+  "": "Muestra los grupos sin filtrar por el estado de gestión comercial.",
+  sin_gestion:
+    "Todavía no tienen pre-renovación, o la pre-renovación aún no tiene una gestión asignada.",
+  pre_renovacion: "La pre-renovación está en curso.",
+  listo_para_renovar: "La pre-renovación quedó lista para consolidar.",
+  renovado: "El grupo ya fue renovado para el año destino.",
+  renovado_automatico: "La renovación se aplicó de forma automática.",
+  anulado: "La renovación fue anulada.",
+  no_renovara:
+    "El cliente no continúa al siguiente período. Solo cierra el año de origen y no genera año destino.",
+  terminado:
+    "El grupo termina y no continúa. Solo cierra el año de origen y no genera año destino.",
+  consolidado: "La gestión de la renovación quedó consolidada.",
+};
+
+function FiltroConDescripcion({ label, descripcion, children }) {
+  if (!descripcion) return children;
+
+  const overlay = (
+    <Popover className="gf-listado__filtro-popover">
+      <Popover.Header as="h6">{label}</Popover.Header>
+      <Popover.Body>{descripcion}</Popover.Body>
+    </Popover>
+  );
+
+  return (
+    <OverlayTrigger
+      trigger={["hover", "focus"]}
+      placement="top"
+      overlay={overlay}
+    >
+      {children}
+    </OverlayTrigger>
+  );
+}
 
 const RESUMEN_ESTADOS_VACIO = {
   todos: 0,
@@ -377,39 +443,38 @@ const RenovacionesEstadoPage = () => {
                     opt.key === "inactivo_con_prerenovacion";
 
                   return (
-                    <button
+                    <FiltroConDescripcion
                       key={opt.key || "todos"}
-                      type="button"
-                      className={`gf-listado__filter-pill${
-                        estadoFiltro === opt.key ? " is-active" : ""
-                      }${isInactivoConPre ? " gf-listado__filter-pill--alert" : ""}`}
-                      onClick={() => setEstadoFiltro(opt.key)}
-                      title={
-                        showAlertaInactivo
-                          ? `${inactivosConPrerenovacion} inactivo${
-                              inactivosConPrerenovacion !== 1 ? "s" : ""
-                            } con pre-renovación sin consolidar`
-                          : undefined
-                      }
+                      label={opt.label}
+                      descripcion={opt.descripcion}
                     >
-                      <span>{opt.label}</span>
-                      {hasConsultado && (
-                        <span className="gf-listado__filter-pill-count">
-                          {count}
-                        </span>
-                      )}
-                      {showAlertaInactivo && (
-                        <span
-                          className="gf-listado__filter-pill-alert"
-                          aria-label={`${inactivosConPrerenovacion} con pre-renovación pendiente`}
-                        >
-                          <FaExclamationCircle aria-hidden="true" />
-                          <span className="gf-listado__filter-pill-alert-n">
-                            {inactivosConPrerenovacion}
+                      <button
+                        type="button"
+                        className={`gf-listado__filter-pill${
+                          estadoFiltro === opt.key ? " is-active" : ""
+                        }${isInactivoConPre ? " gf-listado__filter-pill--alert" : ""}`}
+                        onClick={() => setEstadoFiltro(opt.key)}
+                        aria-label={`${opt.label}. ${opt.descripcion}`}
+                      >
+                        <span>{opt.label}</span>
+                        {hasConsultado && (
+                          <span className="gf-listado__filter-pill-count">
+                            {count}
                           </span>
-                        </span>
-                      )}
-                    </button>
+                        )}
+                        {showAlertaInactivo && (
+                          <span
+                            className="gf-listado__filter-pill-alert"
+                            aria-label={`${inactivosConPrerenovacion} con pre-renovación pendiente`}
+                          >
+                            <FaExclamationCircle aria-hidden="true" />
+                            <span className="gf-listado__filter-pill-alert-n">
+                              {inactivosConPrerenovacion}
+                            </span>
+                          </span>
+                        )}
+                      </button>
+                    </FiltroConDescripcion>
                   );
                 })}
               </div>
@@ -431,33 +496,50 @@ const RenovacionesEstadoPage = () => {
             <div className="mt-3">
               <div className="gf-listado__label mb-2">Estado de gestión</div>
               <div className="gf-listado__filter-pills">
-                <button
-                  type="button"
-                  className={`gf-listado__filter-pill${
-                    estadoGestionFiltro === "" ? " is-active" : ""
-                  }`}
-                  onClick={() => setEstadoGestionFiltro("")}
+                <FiltroConDescripcion
+                  label="Todos"
+                  descripcion={DESCRIPCIONES_GESTION[""]}
                 >
-                  <span>Todos</span>
-                </button>
+                  <button
+                    type="button"
+                    className={`gf-listado__filter-pill${
+                      estadoGestionFiltro === "" ? " is-active" : ""
+                    }`}
+                    onClick={() => setEstadoGestionFiltro("")}
+                    aria-label={`Todos. ${DESCRIPCIONES_GESTION[""]}`}
+                  >
+                    <span>Todos</span>
+                  </button>
+                </FiltroConDescripcion>
                 {ESTADOS_GESTION_FILTRO.map((opt) => {
                   const count = Number(resumenGestion[opt.value]) || 0;
+                  const descripcion = DESCRIPCIONES_GESTION[opt.value];
                   return (
-                    <button
+                    <FiltroConDescripcion
                       key={opt.value}
-                      type="button"
-                      className={`gf-listado__filter-pill${
-                        estadoGestionFiltro === opt.value ? " is-active" : ""
-                      }`}
-                      onClick={() => setEstadoGestionFiltro(opt.value)}
+                      label={opt.label}
+                      descripcion={descripcion}
                     >
-                      <span>{opt.label}</span>
-                      {hasConsultado && (
-                        <span className="gf-listado__filter-pill-count">
-                          {count}
-                        </span>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        className={`gf-listado__filter-pill${
+                          estadoGestionFiltro === opt.value ? " is-active" : ""
+                        }`}
+                        onClick={() => setEstadoGestionFiltro(opt.value)}
+                        aria-label={
+                          descripcion
+                            ? `${opt.label}. ${descripcion}`
+                            : opt.label
+                        }
+                      >
+                        <span>{opt.label}</span>
+                        {hasConsultado && (
+                          <span className="gf-listado__filter-pill-count">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    </FiltroConDescripcion>
                   );
                 })}
               </div>
@@ -541,9 +623,10 @@ const RenovacionesEstadoPage = () => {
                         const badgeGestion = estadoGestionBadge(
                           fila.estado_gestion
                         );
-                        const sinCoberturaActiva =
-                          (fila.miembros_activos ?? 0) === 0;
-                        const grupoInactivo = sinCoberturaActiva;
+                        const grupoInactivo =
+                          fila.grupo_inactivo != null
+                            ? Boolean(fila.grupo_inactivo)
+                            : (fila.miembros_activos ?? 0) === 0;
 
                         return (
                           <tr
