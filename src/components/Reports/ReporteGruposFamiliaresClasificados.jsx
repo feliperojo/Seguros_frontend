@@ -29,7 +29,10 @@ import apiRequest from "../../services/api";
 import { Helmet } from "react-helmet-async";
 import { Link } from "react-router-dom";
 import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
-import { esGrupoEnFlujoCotizacion } from "../../constants/estadosGrupoFamiliar";
+import {
+  esGrupoEnFlujoCotizacion,
+  esGrupoFamiliarTerminado,
+} from "../../constants/estadosGrupoFamiliar";
 import {
   isDentalCoberturaTipo,
   isDentalMsCoberturaTipo,
@@ -47,7 +50,7 @@ const DESCRIPCIONES_METRICAS = {
   cotizacion:
     "Coberturas activas de grupos que aún están en flujo de cotización (estados 1 a 5).",
   otras_coberturas:
-    "Productos distintos de Salud MS y Dental MS: Visión, Plan Dental privado y Plan de Descuentos.",
+    "Coberturas activas y vigentes de Vision, Plan Dental privado y Plan de Descuentos cuyo grupo ya está en Grupo Familiar (estado 6).",
   cancelados:
     "Coberturas que quedaron en estado Cancelado, con fecha de cancelación registrada.",
   retirados:
@@ -172,9 +175,9 @@ const calcularMetricasPanel = (grupos) => {
   };
 
   grupos.forEach((grupo) => {
-    const enCotizacion = esGrupoEnFlujoCotizacion(
-      grupo.estado_codigo ?? grupo.estado_id ?? grupo.estado
-    );
+    const estadoGrupo = grupo.estado_codigo ?? grupo.estado_id ?? grupo.estado;
+    const enCotizacion = esGrupoEnFlujoCotizacion(estadoGrupo);
+    const enGrupoFamiliar = esGrupoFamiliarTerminado(estadoGrupo);
 
     (grupo.coberturas || []).forEach((cobertura) => {
       const activo = esBooleanoTrue(cobertura.activo);
@@ -204,11 +207,19 @@ const calcularMetricasPanel = (grupos) => {
       }
 
       const tipoNormalizado = normalizarTexto(tipo);
-      if (
+      const productoPrivado =
         tipoNormalizado.includes("vision") ||
         tipoNormalizado.includes("descuento") ||
-        (isDentalCoberturaTipo(tipo) && !isDentalMsCoberturaTipo(tipo))
-      ) {
+        (isDentalCoberturaTipo(tipo) && !isDentalMsCoberturaTipo(tipo));
+      const privadaActivaVigente =
+        enGrupoFamiliar &&
+        activo &&
+        vigente &&
+        esEstadoCoberturaSi(estado) &&
+        fechaVacia(cobertura.fecha_cancelacion) &&
+        fechaVacia(cobertura.fecha_retiro) &&
+        fechaVacia(cobertura.fecha_anulacion);
+      if (productoPrivado && privadaActivaVigente) {
         metricas.otras_coberturas += 1;
       }
 
