@@ -403,6 +403,9 @@ const Sidebar = ({ isOpen, toggleSidebar, notificationsProps = null }) => {
               <Link to="/informes/coberturas-canceladas-retiradas" className={`submenu-link ${isActive('/informes/coberturas-canceladas-retiradas') ? 'active' : ''}`}>
                 <FaFileInvoiceDollar /> Canceladas y retiradas
               </Link>
+              <Link to="/informes/directorio-de-grupos" className={`submenu-link ${isActive('/informes/directorio-de-grupos') || isActive('/informes/coberturas-por-parentesco') ? 'active' : ''}`}>
+                <FaUserFriends /> Directorio de grupos
+              </Link>
               <Link to="/informes/documentos" className={`submenu-link ${isActive('/informes/documentos') ? 'active' : ''}`}>
                 <FaFileAlt /> Documentos Enviados
               </Link>

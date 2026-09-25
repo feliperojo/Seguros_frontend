@@ -30,6 +30,7 @@ import ReporteCoberturasPage from "./pages/ReporteCoberturasPage";
 import ReporteCumpleanosPage from "./pages/ReporteCumpleanosPage";
 import ReporteMediosPagoPage from "./pages/ReporteMediosPagoPage";
 import ReporteCoberturasCanceladasRetiradasPage from "./pages/ReporteCoberturasCanceladasRetiradasPage";
+import ReporteCoberturasPorParentescoPage from "./pages/ReporteCoberturasPorParentescoPage";
 import ReporteGruposDescartadosPage from "./pages/ReporteGruposDescartadosPage";
 import ReporteGruposInactivosPage from "./pages/ReporteGruposInactivosPage";
 import DocumentsReport from "./pages/DocumentsReport";
@@ -137,6 +138,8 @@ const App = () => {
         <Route path="/informes/cumpleanos" element={<ReporteCumpleanosPage />} />
         <Route path="/informes/medios-pago" element={<ReporteMediosPagoPage />} />
         <Route path="/informes/coberturas-canceladas-retiradas" element={<ReporteCoberturasCanceladasRetiradasPage />} />
+        <Route path="/informes/directorio-de-grupos" element={<ReporteCoberturasPorParentescoPage />} />
+        <Route path="/informes/coberturas-por-parentesco" element={<Navigate to="/informes/directorio-de-grupos" replace />} />
         <Route path="/informes/documentos" element={<DocumentsReport />} />
         <Route path="/clientes/:id/detalle" element={<DetalleClientePage />} />
         <Route path="/grupodamiliar/prospecto" element={<DetalleClientePage />} />
