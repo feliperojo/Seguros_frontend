@@ -160,6 +160,43 @@
   user-select: none;
 }
 
+.ccr-report__acordeon {
+  border: 0;
+  background: transparent;
+  color: #1a365d;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ccr-report__acordeon:hover {
+  background: #e8eef6;
+}
+
+.ccr-report__acordeon-detalle td {
+  background: #f8fafc !important;
+}
+
+.ccr-report__gf-cell {
+  vertical-align: middle;
+  font-weight: 700;
+  background: #eef3f9;
+  border-left: 3px solid #1a365d;
+  text-align: center;
+}
+
+.hcc-table tbody tr.ccr-gf-band td {
+  background: #f8fafc;
+}
+
+.hcc-table tbody tr.ccr-gf-band td.ccr-report__gf-cell,
+.hcc-table tbody tr.ccr-gf-inicio td.ccr-report__gf-cell {
+  background: #e8eef6;
+}
+
 .ccr-report__producto {
   font-size: 0.75rem;
   font-weight: 600;
