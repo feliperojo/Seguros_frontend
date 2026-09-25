@@ -344,11 +344,33 @@ const buildCoberturasPorParentescoQueryParams = (params) => {
   appendList("parentesco", params.parentesco);
   if (params.search) queryParams.append("search", params.search);
   appendList("compania_id", params.compania_id);
+  appendList("responsable", params.responsable);
   appendList("producto", params.producto);
   appendList("grupo_familiar_id", params.grupo_familiar_id);
   appendList("estado_cobertura", params.estado_cobertura);
+  const filtros = params.filtros && typeof params.filtros === "object" ? params.filtros : {};
+  Object.entries(filtros).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach((item) => {
+        if (item !== undefined && item !== null && String(item).trim() !== "") {
+          queryParams.append(`filtros[${key}][]`, item);
+        }
+      });
+      return;
+    }
+    if (value && typeof value === "object") {
+      if (value.desde) queryParams.append(`filtros[${key}][desde]`, value.desde);
+      if (value.hasta) queryParams.append(`filtros[${key}][hasta]`, value.hasta);
+      return;
+    }
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      queryParams.append(`filtros[${key}]`, value);
+    }
+  });
+
   if (params.incluir_inactivos) queryParams.append("incluir_inactivos", "1");
   if (params.incluir_anuladas) queryParams.append("incluir_anuladas", "1");
+  if (params.exportar) queryParams.append("exportar", "1");
   if (params.sort_by) {
     queryParams.append("sort_by", params.sort_by);
     if (params.sort_dir) queryParams.append("sort_dir", params.sort_dir);

@@ -1,10 +1,13 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { saveAs } from "file-saver";
 import { Alert, Badge, Button, Col, Form, Row, Spinner, Table } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
 import {
   FaChevronDown,
   FaChevronUp,
+  FaColumns,
   FaExclamationTriangle,
+  FaFileExcel,
   FaFilter,
   FaSearch,
   FaSync,
@@ -15,6 +18,8 @@ import { Link } from "react-router-dom";
 import Select from "react-select";
 import Pagination from "../components/Pagination";
 import GrupoFamiliarClasificadoDetalle from "../components/GrupoFamiliar/GrupoFamiliarClasificadoDetalle";
+import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../constants/coberturaFields";
+import { STATUS_MIGRATORIO_OPTIONS } from "../constants/statusMigratorio";
 import {
   FILTRO_PRODUCTO_LISTADO_OPCIONES,
   normalizarFiltroProductoListado,
@@ -23,7 +28,16 @@ import {
   claseBadgeProductoCobertura,
   etiquetaProductoCobertura,
 } from "../constants/coberturaTipos";
+import DirectorioGruposColumnasModal from "../components/Reportes/DirectorioGruposColumnasModal";
+import {
+  COLUMNAS_DIRECTORIO,
+  esVistaInicial,
+  guardarColumnas,
+  leerColumnasGuardadas,
+  tipoFiltroColumna,
+} from "./directorioGruposColumnas";
 import { getReporteCoberturasPorParentesco } from "../services/reportesService";
+import * as XLSX from "xlsx";
 import { fetchCompanies } from "../services/companies";
 import { formatDateMMDDYYYY } from "../utils/formatters";
 import { badgeCoberturaDefinida, COBERTURA_DEFINIDA } from "../utils/coberturaDefinida";
@@ -38,11 +52,35 @@ const DEFAULT_FILTERS = {
   search: "",
   compania_id: [],
   grupo_familiar_id: [],
+  responsable: [],
   estado_cobertura: [],
   incluir_inactivos: false,
   incluir_anuladas: false,
   sort_by: "grupo_familiar_id",
   sort_dir: "asc",
+};
+
+const PERIODOS_INGRESO = ["HOUR", "WEEKLY P.TIME", "WEEKLY", "BIWEEKLY", "MONTHLY", "ANNUAL"];
+
+const OPCIONES_FILTRO_FIJAS = {
+  estado_cobertura: ["Sí", "No", "Medicare", "Medicaid"],
+  estado: ["Vigente", "Cancelado", "Retirado", "Terminado", "Anulado"],
+  metal: METAL_OPTIONS,
+  red: ["HMO", "EPO", "PPO", "POS"],
+  tipo_pago: TIPO_PAGO_OPTIONS,
+  genero: ["Masculino", "Femenino", "Otro"],
+  status_migratorio: STATUS_MIGRATORIO_OPTIONS,
+  tipo_ingreso: ["W2", "1099", "SOCIAL SECURITY", "SELF EMPLOYMENT", "SUPPORT", "ALIMONY"],
+  periodo_ingreso: PERIODOS_INGRESO,
+  periodo_ingreso_ocasional: PERIODOS_INGRESO,
+};
+
+const opcionesDeFiltro = (clave, desdeApi) => {
+  const fijas = OPCIONES_FILTRO_FIJAS[clave] || [];
+  const extras = Array.isArray(desdeApi) ? desdeApi : [];
+  return [...new Set([...fijas, ...extras.map((item) => String(item))])]
+    .filter((item) => item.trim() !== "")
+    .map((item) => ({ value: item, label: item }));
 };
 
 const selectStyles = {
@@ -57,13 +95,6 @@ const selectStyles = {
   menu: (base) => ({ ...base, zIndex: 20, fontSize: "0.875rem" }),
   multiValue: (base) => ({ ...base, borderRadius: 999 }),
 };
-
-const COBERTURAS_OPCIONES = [
-  { value: "si", label: "Sí" },
-  { value: "no", label: "No" },
-  { value: "medicare", label: "Medicare" },
-  { value: "medicaid", label: "Medicaid" },
-];
 
 const PARENTESCOS_BASE = [
   { value: "todos", label: "Todos los parentescos" },
@@ -179,6 +210,102 @@ const renderClienteLink = (clienteId, label) => {
   );
 };
 
+const FECHAS = new Set([
+  "fecha_activacion",
+  "fecha_cancelacion",
+  "fecha_retiro",
+  "fecha_anulacion",
+  "fecha_nacimiento",
+  "fecha_emision",
+  "fecha_expiracion",
+]);
+
+const MONTOS = new Set([
+  "precio",
+  "ingreso_por_periodo",
+  "ingreso_anual",
+  "ingreso_por_periodo_ocasional",
+  "ingreso_ocasional_anual",
+]);
+
+const esVacio = (value) => value === null || value === undefined || String(value).trim() === "";
+
+const formatPrecio = (value) => {
+  if (esVacio(value)) return "—";
+  const numero = Number(value);
+  if (Number.isNaN(numero)) return String(value);
+  return numero.toLocaleString("en-US", { style: "currency", currency: "USD" });
+};
+
+const valorExportacion = (row, key) => {
+  if (key === "producto") {
+    return etiquetaProductoCobertura(row?.cobertura_tipo ?? row?.producto ?? "") || "";
+  }
+  if (key === "estado_cobertura") {
+    const tipo = badgeTipoCobertura(row.estado_cobertura);
+    return tipo.text === "—" ? "" : tipo.text;
+  }
+  if (key === "parentesco") return row.parentesco || row.parentesco_canonico || "";
+  if (FECHAS.has(key)) {
+    const fecha = formatDate(row[key]);
+    return fecha === "—" ? "" : fecha;
+  }
+  if (MONTOS.has(key)) {
+    if (esVacio(row[key])) return "";
+    const numero = Number(row[key]);
+    return Number.isNaN(numero) ? String(row[key]) : numero;
+  }
+  return esVacio(row[key]) ? "" : row[key];
+};
+
+const renderCelda = (row, columna, inicio, span) => {
+  const { key } = columna;
+  if (key === "grupo_familiar_id") {
+    if (!inicio) return null;
+    return (
+      <td key={key} rowSpan={span} className="ccr-report__gf-cell">
+        {renderGrupoLink(row.grupo_familiar_id)}
+      </td>
+    );
+  }
+
+  let content = esVacio(row[key]) ? "—" : row[key];
+  if (key === "nombre") content = renderClienteLink(row.cliente_id, row.nombre);
+  if (key === "parentesco") {
+    const parentesco = badgeParentesco(row);
+    content = (
+      <Badge bg={parentesco.bg} text={parentesco.textColor} pill>
+        {parentesco.text}
+      </Badge>
+    );
+  }
+  if (key === "producto") content = renderProducto(row);
+  if (key === "estado_cobertura") {
+    const tipo = badgeTipoCobertura(row.estado_cobertura);
+    content = (
+      <Badge bg={tipo.bg} text={tipo.textColor} pill>
+        {tipo.text}
+      </Badge>
+    );
+  }
+  if (key === "estado") {
+    const estado = badgeEstadoReporte(row.estado);
+    content = (
+      <Badge bg={estado.bg} text={estado.textColor} pill>
+        {estado.text}
+      </Badge>
+    );
+  }
+  if (MONTOS.has(key)) content = formatPrecio(row[key]);
+  if (FECHAS.has(key)) content = formatDate(row[key]);
+
+  return (
+    <td key={key} className={key === "estado" ? "text-end" : undefined}>
+      {content}
+    </td>
+  );
+};
+
 const renderProducto = (row) => {
   const tipo = row?.cobertura_tipo ?? row?.producto ?? "";
   const label = etiquetaProductoCobertura(tipo);
@@ -204,10 +331,16 @@ const ReporteCoberturasPorParentescoPage = () => {
   });
   const [parentescosApi, setParentescosApi] = useState([]);
   const [gruposApi, setGruposApi] = useState([]);
+  const [responsablesApi, setResponsablesApi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [companies, setCompanies] = useState([]);
   const [gruposAbiertos, setGruposAbiertos] = useState(() => new Set());
+  const [columnasVisibles, setColumnasVisibles] = useState(leerColumnasGuardadas);
+  const [showColumnas, setShowColumnas] = useState(false);
+  const [filtrosColumna, setFiltrosColumna] = useState({});
+  const [opcionesFiltro, setOpcionesFiltro] = useState({});
+  const [exportando, setExportando] = useState(false);
   const abortRef = useRef(null);
 
   const opcionesParentesco = useMemo(() => {
@@ -233,11 +366,29 @@ const ReporteCoberturasPorParentescoPage = () => {
     if (!Array.isArray(params.grupo_familiar_id) || params.grupo_familiar_id.length === 0) {
       delete params.grupo_familiar_id;
     }
+    if (!Array.isArray(params.responsable) || params.responsable.length === 0) {
+      delete params.responsable;
+    }
     if (!Array.isArray(params.estado_cobertura) || params.estado_cobertura.length === 0) {
       delete params.estado_cobertura;
     }
+    const filtros = {};
+    columnasVisibles.forEach((clave) => {
+      const tipo = tipoFiltroColumna(clave);
+      const valor = filtrosColumna[clave];
+      if (!tipo || valor == null) return;
+      if (tipo === "texto" && String(valor).trim() !== "") filtros[clave] = String(valor).trim();
+      if (tipo === "lista" && Array.isArray(valor) && valor.length) filtros[clave] = valor;
+      if ((tipo === "fecha" || tipo === "numero") && (valor.desde || valor.hasta)) {
+        filtros[clave] = {
+          ...(valor.desde ? { desde: valor.desde } : {}),
+          ...(valor.hasta ? { hasta: valor.hasta } : {}),
+        };
+      }
+    });
+    if (Object.keys(filtros).length) params.filtros = filtros;
     return params;
-  }, [filters]);
+  }, [filters, filtrosColumna, columnasVisibles]);
 
   const loadReport = useCallback(async () => {
     if (abortRef.current) {
@@ -265,6 +416,10 @@ const ReporteCoberturasPorParentescoPage = () => {
       );
       setParentescosApi(Array.isArray(response?.parentescos) ? response.parentescos : []);
       setGruposApi(Array.isArray(response?.grupos) ? response.grupos : []);
+      setResponsablesApi(Array.isArray(response?.responsables) ? response.responsables : []);
+      setOpcionesFiltro(
+        response?.opciones && typeof response.opciones === "object" ? response.opciones : {}
+      );
     } catch (err) {
       if (err?.name === "AbortError") return;
       setError(err?.message || "No se pudo cargar el informe.");
@@ -324,6 +479,33 @@ const ReporteCoberturasPorParentescoPage = () => {
     return filters.sort_dir === "asc" ? " ↑" : " ↓";
   };
 
+  const columnasActivas = useMemo(() => {
+    const porClave = new Map(COLUMNAS_DIRECTORIO.map((columna) => [columna.key, columna]));
+    return columnasVisibles.map((clave) => porClave.get(clave)).filter(Boolean);
+  }, [columnasVisibles]);
+  const colSpanTabla = 1 + columnasActivas.length;
+
+  const aplicarColumnas = (claves) => {
+    setColumnasVisibles(claves);
+    guardarColumnas(claves);
+    setFiltrosColumna((prev) => {
+      const next = {};
+      claves.forEach((clave) => {
+        if (prev[clave] != null) next[clave] = prev[clave];
+      });
+      return next;
+    });
+    setFilters((prev) => ({ ...prev, page: 1 }));
+    setShowColumnas(false);
+  };
+
+  const filtrosVisibles = columnasActivas.filter((columna) => tipoFiltroColumna(columna.key));
+
+  const cambiarFiltroColumna = (clave, valor) => {
+    setFiltrosColumna((prev) => ({ ...prev, [clave]: valor }));
+    setFilters((prev) => ({ ...prev, page: 1 }));
+  };
+
   const filasAgrupadas = useMemo(() => {
     let banda = 0;
     return data.map((row, index) => {
@@ -361,9 +543,41 @@ const ReporteCoberturasPorParentescoPage = () => {
     });
   };
 
+  const exportarExcel = async () => {
+    setExportando(true);
+    setError(null);
+    try {
+      const response = await getReporteCoberturasPorParentesco({
+        ...queryParams,
+        page: 1,
+        exportar: true,
+      });
+      const filas = Array.isArray(response?.data) ? response.data : [];
+      const encabezados = columnasActivas.map((columna) => columna.label);
+      const cuerpo = filas.map((fila) =>
+        columnasActivas.map((columna) => valorExportacion(fila, columna.key))
+      );
+      const hoja = XLSX.utils.aoa_to_sheet([encabezados, ...cuerpo]);
+      hoja["!cols"] = encabezados.map((titulo) => ({ wch: Math.max(12, String(titulo).length + 2) }));
+      const libro = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(libro, hoja, "Directorio");
+      const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const fecha = new Date().toISOString().slice(0, 10);
+      saveAs(blob, `directorio-de-grupos-${fecha}.xlsx`);
+    } catch (err) {
+      setError(err?.message || "No se pudo exportar el directorio.");
+    } finally {
+      setExportando(false);
+    }
+  };
+
   const limpiarFiltros = () => {
     setSearchInput("");
     setFilters({ ...DEFAULT_FILTERS });
+    setFiltrosColumna({});
   };
 
   return (
@@ -392,6 +606,15 @@ const ReporteCoberturasPorParentescoPage = () => {
             <span className="ccr-report__chip-resumen">
               {resumen.grupos ?? 0} grupos · {resumen.coberturas ?? resumen.total ?? 0} coberturas
             </span>
+            <Button
+              variant="light"
+              size="sm"
+              onClick={exportarExcel}
+              disabled={loading || exportando || !(meta.total > 0)}
+            >
+              <FaFileExcel className="me-1" />
+              {exportando ? "Exportando..." : "Excel"}
+            </Button>
             <Button variant="light" size="sm" onClick={loadReport} disabled={loading}>
               <FaSync className={loading ? "fa-spin me-1" : "me-1"} />
               Actualizar
@@ -460,27 +683,6 @@ const ReporteCoberturasPorParentescoPage = () => {
                 />
               </Col>
               <Col md={6} lg={3}>
-                <div className="ccr-report__label">Cobertura</div>
-                <Select
-                  isMulti
-                  closeMenuOnSelect={false}
-                  options={COBERTURAS_OPCIONES}
-                  value={COBERTURAS_OPCIONES.filter((opcion) =>
-                    filters.estado_cobertura.includes(opcion.value)
-                  )}
-                  onChange={(selected) =>
-                    handleFilterChange(
-                      "estado_cobertura",
-                      (selected || []).map((opcion) => opcion.value)
-                    )
-                  }
-                  placeholder="Todas las coberturas"
-                  noOptionsMessage={() => "Sin opciones"}
-                  styles={selectStyles}
-                  aria-label="Filtrar por cobertura"
-                />
-              </Col>
-              <Col md={6} lg={3}>
                 <div className="ccr-report__label">Compañía</div>
                 <Select
                   isMulti
@@ -502,6 +704,30 @@ const ReporteCoberturasPorParentescoPage = () => {
                   noOptionsMessage={() => "Sin compañías"}
                   styles={selectStyles}
                   aria-label="Filtrar por compañía"
+                />
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Responsable</div>
+                <Select
+                  isMulti
+                  closeMenuOnSelect={false}
+                  options={responsablesApi.map((nombre) => ({
+                    value: nombre,
+                    label: nombre,
+                  }))}
+                  value={responsablesApi
+                    .filter((nombre) => filters.responsable.includes(nombre))
+                    .map((nombre) => ({ value: nombre, label: nombre }))}
+                  onChange={(selected) =>
+                    handleFilterChange(
+                      "responsable",
+                      (selected || []).map((opcion) => opcion.value)
+                    )
+                  }
+                  placeholder="Todos los responsables"
+                  noOptionsMessage={() => "Sin responsables"}
+                  styles={selectStyles}
+                  aria-label="Filtrar por responsable"
                 />
               </Col>
               <Col md={6} lg={3}>
@@ -581,6 +807,96 @@ const ReporteCoberturasPorParentescoPage = () => {
             </Row>
           </div>
 
+          {filtrosVisibles.length > 0 && (
+            <div className="ccr-report__section">
+              <div className="ccr-report__section-title">
+                <FaFilter aria-hidden="true" />
+                Filtros de las columnas visibles
+              </div>
+              <Row className="g-3 align-items-end">
+                {filtrosVisibles.map((columna) => {
+                  const tipo = tipoFiltroColumna(columna.key);
+                  const valor = filtrosColumna[columna.key];
+                  if (tipo === "lista") {
+                    const opciones = opcionesDeFiltro(columna.key, opcionesFiltro[columna.key]);
+                    const seleccion = Array.isArray(valor) ? valor : [];
+                    return (
+                      <Col key={columna.key} md={6} lg={3}>
+                        <div className="ccr-report__label">{columna.label}</div>
+                        <Select
+                          isMulti
+                          closeMenuOnSelect={false}
+                          options={opciones}
+                          value={opciones.filter((opcion) => seleccion.includes(opcion.value))}
+                          onChange={(selected) =>
+                            cambiarFiltroColumna(
+                              columna.key,
+                              (selected || []).map((opcion) => opcion.value)
+                            )
+                          }
+                          placeholder="Todos"
+                          noOptionsMessage={() => "Sin opciones"}
+                          menuPortalTarget={document.body}
+                          menuPosition="fixed"
+                          styles={{
+                            ...selectStyles,
+                            menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+                          }}
+                          aria-label={`Filtrar por ${columna.label}`}
+                        />
+                      </Col>
+                    );
+                  }
+                  if (tipo === "fecha" || tipo === "numero") {
+                    const rango = valor && typeof valor === "object" ? valor : {};
+                    return (
+                      <Col key={columna.key} md={6} lg={3}>
+                        <div className="ccr-report__label">{columna.label}</div>
+                        <div className="d-flex gap-2">
+                          <Form.Control
+                            type={tipo === "fecha" ? "date" : "number"}
+                            value={rango.desde || ""}
+                            placeholder={tipo === "fecha" ? "Desde" : "Mínimo"}
+                            aria-label={`${columna.label} desde`}
+                            onChange={(event) =>
+                              cambiarFiltroColumna(columna.key, {
+                                ...rango,
+                                desde: event.target.value,
+                              })
+                            }
+                          />
+                          <Form.Control
+                            type={tipo === "fecha" ? "date" : "number"}
+                            value={rango.hasta || ""}
+                            placeholder={tipo === "fecha" ? "Hasta" : "Máximo"}
+                            aria-label={`${columna.label} hasta`}
+                            onChange={(event) =>
+                              cambiarFiltroColumna(columna.key, {
+                                ...rango,
+                                hasta: event.target.value,
+                              })
+                            }
+                          />
+                        </div>
+                      </Col>
+                    );
+                  }
+                  return (
+                    <Col key={columna.key} md={6} lg={3}>
+                      <div className="ccr-report__label">{columna.label}</div>
+                      <Form.Control
+                        value={typeof valor === "string" ? valor : ""}
+                        placeholder={`Contiene…`}
+                        aria-label={`Filtrar por ${columna.label}`}
+                        onChange={(event) => cambiarFiltroColumna(columna.key, event.target.value)}
+                      />
+                    </Col>
+                  );
+                })}
+              </Row>
+            </div>
+          )}
+
           <div className="ccr-report__summary">
             <strong>{resumen.grupos ?? 0}</strong> grupos ·{" "}
             <strong>{resumen.coberturas ?? resumen.total ?? 0}</strong> coberturas
@@ -591,75 +907,65 @@ const ReporteCoberturasPorParentescoPage = () => {
           </div>
 
           <div className="ccr-report__section ccr-report__section--table">
-            <div className="ccr-report__section-title px-3 pt-3 mb-0 border-0">
-              <FaTable aria-hidden="true" />
-              Resultados
+            <div className="ccr-report__resultados-head">
+              <div className="ccr-report__section-title">
+                <FaTable aria-hidden="true" />
+                Resultados
+              </div>
+              <Button
+                type="button"
+                variant="outline-primary"
+                size="sm"
+                className="ccr-report__columnas-btn"
+                onClick={() => setShowColumnas(true)}
+              >
+                <FaColumns aria-hidden="true" />
+                Columnas
+                <span className="ccr-report__columnas-count">{columnasActivas.length}</span>
+                {!esVistaInicial(columnasVisibles) && (
+                  <span className="visually-hidden">vista personalizada</span>
+                )}
+              </Button>
             </div>
+            <DirectorioGruposColumnasModal
+              show={showColumnas}
+              seleccion={columnasVisibles}
+              onHide={() => setShowColumnas(false)}
+              onAplicar={aplicarColumnas}
+            />
             <div className="ccr-report__table-wrap hcc-table-wrap border-0 rounded-0">
               <Table hover className="hcc-table mb-0 align-middle">
                 <thead>
                   <tr>
                     <th style={{ width: "2.5rem" }} aria-label="Abrir grupo" />
-                    <th
-                      className="ccr-report__sortable"
-                      onClick={() => handleSort("grupo_familiar_id")}
-                    >
-                      GF{sortIcon("grupo_familiar_id")}
-                    </th>
-                    <th className="ccr-report__sortable" onClick={() => handleSort("nombre")}>
-                      Nombre{sortIcon("nombre")}
-                    </th>
-                    <th className="ccr-report__sortable" onClick={() => handleSort("parentesco")}>
-                      Parentesco{sortIcon("parentesco")}
-                    </th>
-                    <th className="ccr-report__sortable" onClick={() => handleSort("producto")}>
-                      Producto{sortIcon("producto")}
-                    </th>
-                    <th className="ccr-report__sortable" onClick={() => handleSort("compania")}>
-                      Compañía{sortIcon("compania")}
-                    </th>
-                    <th className="ccr-report__sortable" onClick={() => handleSort("codigo_poliza")}>
-                      Numero ID{sortIcon("codigo_poliza")}
-                    </th>
-                    <th
-                      className="ccr-report__sortable"
-                      onClick={() => handleSort("fecha_activacion")}
-                    >
-                      Fecha activación{sortIcon("fecha_activacion")}
-                    </th>
-                    <th
-                      className="ccr-report__sortable"
-                      onClick={() => handleSort("estado_cobertura")}
-                    >
-                      Cobertura{sortIcon("estado_cobertura")}
-                    </th>
-                    <th
-                      className="text-end ccr-report__sortable"
-                      onClick={() => handleSort("estado")}
-                    >
-                      Estado{sortIcon("estado")}
-                    </th>
+                    {columnasActivas.map((columna) => (
+                      <th
+                        key={columna.key}
+                        className={`ccr-report__sortable${columna.key === "estado" ? " text-end" : ""}`}
+                        onClick={() => handleSort(columna.key)}
+                      >
+                        {columna.label}
+                        {sortIcon(columna.key)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {loading ? (
                     <tr>
-                      <td colSpan={10} className="text-center py-5">
+                      <td colSpan={colSpanTabla} className="text-center py-5">
                         <Spinner animation="border" size="sm" className="me-2" />
                         Cargando informe...
                       </td>
                     </tr>
                   ) : data.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="ccr-report__empty">
+                      <td colSpan={colSpanTabla} className="ccr-report__empty">
                         No hay coberturas para los filtros seleccionados
                       </td>
                     </tr>
                   ) : (
                     filasAgrupadas.map(({ row, inicio, ultima, span, tieneTomador, banda }) => {
-                      const parentesco = badgeParentesco(row);
-                      const tipoCobertura = badgeTipoCobertura(row.estado_cobertura);
-                      const estado = badgeEstadoReporte(row.estado);
                       const grupoId = String(row.grupo_familiar_id ?? "");
                       const abierto = gruposAbiertos.has(grupoId);
                       return (
@@ -686,35 +992,13 @@ const ReporteCoberturasPorParentescoPage = () => {
                               )}
                             </td>
                           )}
-                          {inicio && (
-                            <td rowSpan={span} className="ccr-report__gf-cell">
-                              {renderGrupoLink(row.grupo_familiar_id)}
-                            </td>
+                          {columnasActivas.map((columna) =>
+                            renderCelda(row, columna, inicio, span)
                           )}
-                          <td>{renderClienteLink(row.cliente_id, row.nombre)}</td>
-                          <td>
-                            <Badge bg={parentesco.bg} text={parentesco.textColor} pill>
-                              {parentesco.text}
-                            </Badge>
-                          </td>
-                          <td>{renderProducto(row)}</td>
-                          <td>{row.compania || "—"}</td>
-                          <td>{row.codigo_poliza || "—"}</td>
-                          <td>{formatDate(row.fecha_activacion)}</td>
-                          <td>
-                            <Badge bg={tipoCobertura.bg} text={tipoCobertura.textColor} pill>
-                              {tipoCobertura.text}
-                            </Badge>
-                          </td>
-                          <td className="text-end">
-                            <Badge bg={estado.bg} text={estado.textColor} pill>
-                              {estado.text}
-                            </Badge>
-                          </td>
                         </tr>
                         {ultima && tieneTomador && abierto && (
                           <tr className="ccr-report__acordeon-detalle">
-                            <td colSpan={10} className="bg-white border-bottom p-3">
+                            <td colSpan={colSpanTabla} className="bg-white border-bottom p-3">
                               <GrupoFamiliarClasificadoDetalle
                                 grupoId={row.grupo_familiar_id}
                                 detallePath={`/grupo_familiar/${row.grupo_familiar_id}`}
