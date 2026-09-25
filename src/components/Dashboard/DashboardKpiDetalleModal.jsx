@@ -319,7 +319,7 @@ export default function DashboardKpiDetalleModal({
           <p className="dashboard-kpi-detalle-intro">
             Productos <strong>Salud MS</strong> (pólizas con{" "}
             <strong>activo = true</strong>, fuera de flujo de cotización) y{" "}
-            <strong>Dental MS</strong> (activos o con servicio).
+            <strong>Dental MS</strong> (activos o con servicio, sin canceladas ni retiradas).
           </p>
           <div className="dashboard-kpi-detalle-list">
             {COBERTURA_ITEMS.map(({ key, label, color, descripcion, activo, vigente }) => (
@@ -336,7 +336,7 @@ export default function DashboardKpiDetalleModal({
               label="Dental MS"
               valor={dentalMs}
               color="#059669"
-              descripcion="Activos o con servicio"
+              descripcion="Activos o con servicio, sin canceladas ni retiradas"
             />
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">
@@ -353,7 +353,8 @@ export default function DashboardKpiDetalleModal({
           <p className="dashboard-kpi-detalle-intro">
             Este número cuenta <strong>coberturas</strong>, no grupos. Incluye
             cada cobertura con <strong>activo = true</strong> cuyo grupo familiar
-            está en flujo de cotización (estados 1–5: Prospecto → Inscripción / Confirmación).
+            está en flujo de cotización (Prospecto → Inscripción / Confirmación).
+            No entran grupos en <strong>Terminado</strong> ni Descartado.
             Un grupo con varias coberturas activas puede sumar más de una cotización.
           </p>
           <div className="dashboard-kpi-detalle-list">

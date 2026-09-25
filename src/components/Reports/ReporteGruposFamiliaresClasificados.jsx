@@ -46,7 +46,7 @@ const DESCRIPCIONES_METRICAS = {
   total_miembros:
     "Clientes que pertenecen a un grupo familiar. Cada cliente cuenta una sola vez, aunque tenga más de una cobertura.",
   estado_coberturas_ms:
-    "Coberturas de Salud MS contabilizables más Dental MS activos o con servicio. Es la misma fórmula del Panel Principal.",
+    "Coberturas de Salud MS contabilizables más Dental MS activos o con servicio, sin canceladas ni retiradas. Es la misma fórmula del Panel Principal.",
   cotizacion:
     "Coberturas activas de grupos que aún están en flujo de cotización (estados 1 a 5).",
   otras_coberturas:
@@ -163,7 +163,8 @@ const normalizarTexto = (valor) =>
 
 /**
  * Replica las métricas independientes usadas por el panel principal.
- * Dental MS entra en Coberturas MS solo si está activo o con servicio.
+ * Dental MS entra en Coberturas MS si está activo o con servicio,
+ * y no si está cancelado o retirado.
  */
 const calcularMetricasPanel = (grupos) => {
   const metricas = {
@@ -199,8 +200,32 @@ const calcularMetricasPanel = (grupos) => {
           (["no", "medicare", "medicaid"].includes(estado) &&
             esBooleanoFalse(cobertura.vigente)));
 
+      const cancelada =
+        !anulada &&
+        esBooleanoFalse(cobertura.vigente) &&
+        !fechaVacia(cobertura.fecha_cancelacion) &&
+        (definida === "cancelado" || (!definida && activo));
+
+      const retirada =
+        !anulada &&
+        esBooleanoFalse(cobertura.activo) &&
+        esBooleanoFalse(cobertura.vigente) &&
+        !fechaVacia(cobertura.fecha_retiro) &&
+        (["retirado", "terminado"].includes(definida) || !definida);
+
+      const retiradaDentalConActivo =
+        isDentalMsCoberturaTipo(tipo) &&
+        !anulada &&
+        !vigente &&
+        !fechaVacia(cobertura.fecha_retiro) &&
+        ["retirado", "terminado"].includes(definida);
+
       const dentalMsActivoOConServicio =
-        isDentalMsCoberturaTipo(tipo) && (activo || vigente);
+        isDentalMsCoberturaTipo(tipo) &&
+        (activo || vigente) &&
+        !cancelada &&
+        !retirada &&
+        !retiradaDentalConActivo;
 
       if (saludMsContabilizable || dentalMsActivoOConServicio) {
         metricas.estado_coberturas_ms += 1;
@@ -222,19 +247,6 @@ const calcularMetricasPanel = (grupos) => {
       if (productoPrivado && privadaActivaVigente) {
         metricas.otras_coberturas += 1;
       }
-
-      const cancelada =
-        !anulada &&
-        esBooleanoFalse(cobertura.vigente) &&
-        !fechaVacia(cobertura.fecha_cancelacion) &&
-        (definida === "cancelado" || (!definida && activo));
-
-      const retirada =
-        !anulada &&
-        esBooleanoFalse(cobertura.activo) &&
-        esBooleanoFalse(cobertura.vigente) &&
-        !fechaVacia(cobertura.fecha_retiro) &&
-        (["retirado", "terminado"].includes(definida) || !definida);
 
       if (cancelada) metricas.cancelados += 1;
       if (retirada) metricas.retirados += 1;
