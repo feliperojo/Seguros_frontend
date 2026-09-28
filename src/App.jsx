@@ -68,6 +68,8 @@ import UserSessionsReport from "./pages/admin/UserSessionsReport";
 import OperationalConceptsAdmin from "./pages/admin/OperationalConceptsAdmin";
 import CompaniasAdmin from "./pages/admin/CompaniasAdmin";
 import Configurador from "./pages/admin/Configurador";
+import MenuVisibilidad from "./pages/admin/MenuVisibilidad";
+import MenuVisibilityGate from "./components/MenuVisibilityGate";
 import RenovacionesEstadoPage from "./pages/admin/RenovacionesEstadoPage";
 
 import { ProtectedRoute, PermissionRoute } from "./routes/ProtectedRoute";
@@ -85,7 +87,9 @@ const ProtectedLayout = () => {
       {/* Popup de llamada entrante: solo cuando hay usuario autenticado (token) para que Echo conecte bien */}
       <CallIdentifierContainer />
       <MainLayout>
-        <Outlet />
+        <MenuVisibilityGate>
+          <Outlet />
+        </MenuVisibilityGate>
       </MainLayout>
     </ProtectedRoute>
   );
@@ -224,6 +228,24 @@ const App = () => {
           element={
             <PermissionRoute permission="users.view">
               <Configurador />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/menu-visibilidad"
+          element={
+            <PermissionRoute
+              permission={[
+                "users.view",
+                "roles.view",
+                "permissions.view",
+                "settings.view",
+                "settings.read",
+                "settings.edit",
+                "settings.update",
+              ]}
+            >
+              <MenuVisibilidad />
             </PermissionRoute>
           }
         />

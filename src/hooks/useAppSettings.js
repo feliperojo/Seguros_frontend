@@ -23,6 +23,11 @@ export default function useAppSettings() {
         allow_family_document_archive_folders: !!runtime?.allow_family_document_archive_folders,
         is_super_user: !!runtime?.is_super_user,
         can_manage_document_trash: !!runtime?.can_manage_document_trash,
+        ...(runtime?.menu_visibility &&
+        typeof runtime.menu_visibility === "object" &&
+        !Array.isArray(runtime.menu_visibility)
+          ? { menu_visibility: runtime.menu_visibility }
+          : {}),
       };
       if (typeof setAppSettings === "function") {
         setAppSettings(next);
