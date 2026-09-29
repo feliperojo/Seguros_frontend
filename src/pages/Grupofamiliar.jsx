@@ -664,7 +664,7 @@ const [fechaCancelacionGeneral, setFechaCancelacionGeneral] = useState("");
         policy_number: "",
         precio: "",
         red: "",
-        ano_cobertura: "",
+        ano_cobertura: new Date().getFullYear().toString(),
         pagador_id: ""
       }));
     }

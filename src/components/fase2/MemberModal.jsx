@@ -315,6 +315,10 @@ export default function MemberModalCreate({
       tipo: data.parentesco || data.tipo || "Tomador",
       estado_cobertura: data.estado_cobertura || "Sí",
       cobertura_tipo: defaultCoberturaTipo,
+      // Año fiscal: solo al crear. En edición no se pisa el año que ya tiene la cobertura.
+      ...(!editingMember
+        ? { ano_cobertura: String(data.ano_cobertura || new Date().getFullYear()) }
+        : {}),
       // contact
       telefonos: Array.isArray(data.telefonos) ? data.telefonos : [],
     };
