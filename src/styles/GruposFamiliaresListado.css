@@ -216,6 +216,25 @@
   background-color: #fafcff;
 }
 
+.gf-listado__table tbody tr.gf-listado__row--sin-cobertura > td {
+  background-color: #fff4cc;
+}
+
+.gf-listado__table tbody tr.gf-listado__row--sin-cobertura > td:first-child {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+
+.gf-listado__table.table-hover tbody tr.gf-listado__row--sin-cobertura:hover > td {
+  background-color: #ffe8a3;
+}
+
+.gf-listado__badge-inactivo {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
 .gf-listado__table a {
   color: #1a365d;
   font-weight: 600;

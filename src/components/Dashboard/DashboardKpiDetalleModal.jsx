@@ -17,7 +17,7 @@ const COBERTURA_ITEMS = [
     key: "no",
     label: "No",
     color: "#6c757d",
-    descripcion: "Sin cobertura",
+    descripcion: "Sin cobertura, grupo activo, sin retiro ni cancelación",
     activo: true,
     vigente: false,
   },
@@ -25,7 +25,7 @@ const COBERTURA_ITEMS = [
     key: "medicare",
     label: "Medicare",
     color: "#4285f4",
-    descripcion: "Estado Medicare",
+    descripcion: "Estado Medicare, grupo activo, sin retiro ni cancelación",
     activo: true,
     vigente: false,
   },
@@ -33,7 +33,7 @@ const COBERTURA_ITEMS = [
     key: "medicaid",
     label: "Medicaid",
     color: "#1a73e8",
-    descripcion: "Estado Medicaid",
+    descripcion: "Estado Medicaid, grupo activo, sin retiro ni cancelación",
     activo: true,
     vigente: false,
   },
@@ -319,7 +319,10 @@ export default function DashboardKpiDetalleModal({
           <p className="dashboard-kpi-detalle-intro">
             Productos <strong>Salud MS</strong> (pólizas con{" "}
             <strong>activo = true</strong>, fuera de flujo de cotización) y{" "}
-            <strong>Dental MS</strong> (activos o con servicio, sin canceladas ni retiradas).
+            <strong>Dental MS</strong> (activos o con servicio, sin canceladas ni retiradas,
+            solo en Grupo Familiar).
+            No, Medicare y Medicaid solo entran si el grupo familiar está activo
+            y la cobertura no tiene fecha de retiro ni de cancelación.
           </p>
           <div className="dashboard-kpi-detalle-list">
             {COBERTURA_ITEMS.map(({ key, label, color, descripcion, activo, vigente }) => (
@@ -336,7 +339,7 @@ export default function DashboardKpiDetalleModal({
               label="Dental MS"
               valor={dentalMs}
               color="#059669"
-              descripcion="Activos o con servicio, sin canceladas ni retiradas"
+              descripcion="Activos o con servicio, solo Grupo Familiar (estado 6), sin canceladas ni retiradas"
             />
           </div>
           <p className="dashboard-kpi-detalle-total mt-3 mb-0">
