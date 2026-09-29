@@ -273,7 +273,8 @@ export function isMedicareOrMedicaidEstado(estado) {
 
 /**
  * Campos de cobertura que no aplican en Medicare/Medicaid.
- * Se conservan: estado_cobertura, elegibilidad, grupo y campos de retiro/cancelación.
+ * Se conservan: estado_cobertura, elegibilidad, grupo, año fiscal
+ * (ano_cobertura) y campos de retiro/cancelación.
  */
 export function clearedCoverageFieldsForMedicareMedicaid() {
   return {
@@ -281,7 +282,6 @@ export function clearedCoverageFieldsForMedicareMedicaid() {
     policy_number: "",
     vigencia: "",
     fecha_activacion: "",
-    ano_cobertura: "",
     compania_id: null,
     agente: "",
     plan: "",
