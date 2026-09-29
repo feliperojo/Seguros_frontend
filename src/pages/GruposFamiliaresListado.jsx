@@ -7,7 +7,7 @@ import Pagination from "../components/Pagination";
 import {
   FaSearch, FaEdit, FaEye, FaTrashAlt, FaCog,
   FaFilter, FaSortAmountDown, FaSortAmountUp, FaFile, FaFileExport,
-  FaChevronDown, FaChevronUp, FaUsers, FaChartBar,
+  FaChevronDown, FaChevronUp, FaUsers, FaChartBar, FaExclamationTriangle,
 } from "react-icons/fa";
 import "../styles/GruposFamiliaresListado.css"
 import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
@@ -855,10 +855,15 @@ useEffect(() => {
                             const rowKey = rowKeyOf(grupo);
                             const estaExpandido = gruposExpandidos.has(rowKey);
                             const detallePath = buildDetallePath(grupo.id, grupo.anio_plan);
+                            const sinCoberturaSi = grupo.sin_cobertura_si === true;
+                            const claseFila = [
+                              estaExpandido ? "table-active" : "",
+                              sinCoberturaSi ? "gf-listado__row--sin-cobertura" : "",
+                            ].filter(Boolean).join(" ");
                             return (
                               <Fragment key={rowKey}>
                                 <tr
-                                  className={estaExpandido ? "table-active" : undefined}
+                                  className={claseFila || undefined}
                                   style={{ cursor: "pointer" }}
                                   onClick={() => toggleGrupoExpandido(rowKey)}
                                 >
@@ -886,7 +891,22 @@ useEffect(() => {
                                       </span>
                                     </td>
                                   )}
-                                  <td>{getTomadorNombre(grupo)}</td>
+                                  <td>
+                                    <div className="d-flex flex-wrap align-items-center gap-2">
+                                      <span>{getTomadorNombre(grupo)}</span>
+                                      {sinCoberturaSi && (
+                                        <Badge
+                                          bg="warning"
+                                          text="dark"
+                                          className="gf-listado__badge-inactivo"
+                                          title="Ningún integrante tiene cobertura en Sí. Todas están en No, Medicare o Medicaid."
+                                        >
+                                          <FaExclamationTriangle className="me-1" aria-hidden="true" />
+                                          Inactivo
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </td>
                                   <td>{renderPersonasCP(grupo)}</td>
                                   <td>{renderPersonasSD(grupo)}</td>
                                   <td>{renderPersonasTaxes(grupo)}</td>
