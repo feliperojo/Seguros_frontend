@@ -595,9 +595,10 @@ const ReporteCoberturasPorParentescoPage = () => {
             <div>
               <h1 className="ccr-report__title">Directorio de grupos</h1>
               <p className="ccr-report__subtitle mb-0">
-                Consulta los miembros de los grupos familiares: solo cabezas (tomadores), solo
-                cónyuges, un parentesco concreto o todos. Las coberturas retiradas se consultan en
-                Canceladas y retiradas.{" "}
+                Consulta los miembros de los grupos que ya están en Grupo Familiar. No entran
+                prospecto, cotización ni descartados. Solo cabezas (tomadores), solo cónyuges, un
+                parentesco concreto o todos. Las coberturas retiradas se consultan en Canceladas y
+                retiradas.{" "}
                 <Link to="/">Volver al panel principal</Link>
               </p>
             </div>
