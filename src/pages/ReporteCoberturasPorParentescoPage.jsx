@@ -901,8 +901,6 @@ const ReporteCoberturasPorParentescoPage = () => {
             <strong>{resumen.grupos ?? 0}</strong> grupos ·{" "}
             <strong>{resumen.coberturas ?? resumen.total ?? 0}</strong> coberturas
             {" · "}
-            {resumen.tomadores} tomadores · {resumen.conyuges} cónyuges · {resumen.otros} otros
-            {" · "}
             mostrando <strong>{data.length}</strong> de <strong>{meta.total ?? 0}</strong> en esta página
           </div>
 
