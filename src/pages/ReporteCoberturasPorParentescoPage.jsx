@@ -597,8 +597,8 @@ const ReporteCoberturasPorParentescoPage = () => {
               <p className="ccr-report__subtitle mb-0">
                 Consulta los miembros de los grupos familiares activos: ya están en Grupo Familiar y
                 tienen al menos una cobertura en Sí, vigente y sin fecha de baja. Solo cabezas
-                (tomadores), solo cónyuges, un parentesco concreto o todos. Las coberturas retiradas
-                se consultan en Canceladas y retiradas.{" "}
+                (tomadores), solo cónyuges, un parentesco concreto o todos. Con los interruptores
+                también entran las canceladas, retiradas y anuladas, de todos los productos.{" "}
                 <Link to="/">Volver al panel principal</Link>
               </p>
             </div>
