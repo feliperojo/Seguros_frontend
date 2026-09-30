@@ -54,8 +54,6 @@ const DEFAULT_FILTERS = {
   grupo_familiar_id: [],
   responsable: [],
   estado_cobertura: [],
-  incluir_inactivos: false,
-  incluir_anuladas: false,
   sort_by: "grupo_familiar_id",
   sort_dir: "asc",
 };
@@ -372,6 +370,8 @@ const ReporteCoberturasPorParentescoPage = () => {
     if (!Array.isArray(params.estado_cobertura) || params.estado_cobertura.length === 0) {
       delete params.estado_cobertura;
     }
+    params.incluir_inactivos = true;
+    params.incluir_anuladas = true;
     const filtros = {};
     columnasVisibles.forEach((clave) => {
       const tipo = tipoFiltroColumna(clave);
@@ -595,10 +595,9 @@ const ReporteCoberturasPorParentescoPage = () => {
             <div>
               <h1 className="ccr-report__title">Directorio de grupos</h1>
               <p className="ccr-report__subtitle mb-0">
-                Consulta los miembros de los grupos familiares activos: ya están en Grupo Familiar y
-                tienen al menos una cobertura en Sí, vigente y sin fecha de baja. Solo cabezas
-                (tomadores), solo cónyuges, un parentesco concreto o todos. Las coberturas retiradas
-                se consultan en Canceladas y retiradas.{" "}
+                Consulta los miembros de los grupos familiares, de todos los productos. Al entrar
+                se cargan vigentes, canceladas, retiradas y anuladas. Usa los filtros para ver
+                solo lo que necesites.{" "}
                 <Link to="/">Volver al panel principal</Link>
               </p>
             </div>
@@ -753,30 +752,6 @@ const ReporteCoberturasPorParentescoPage = () => {
                   noOptionsMessage={() => "Sin grupos"}
                   styles={selectStyles}
                   aria-label="Filtrar por id de grupo"
-                />
-              </Col>
-              <Col md={6} lg={3} className="d-flex align-items-center">
-                <Form.Check
-                  type="switch"
-                  id="incluir-inactivos"
-                  className="mb-0"
-                  label="Incluir retirados y cancelados"
-                  checked={filters.incluir_inactivos}
-                  onChange={(event) =>
-                    handleFilterChange("incluir_inactivos", event.target.checked)
-                  }
-                />
-              </Col>
-              <Col md={6} lg={3} className="d-flex align-items-center">
-                <Form.Check
-                  type="switch"
-                  id="incluir-anuladas"
-                  className="mb-0"
-                  label="Incluir anuladas"
-                  checked={filters.incluir_anuladas}
-                  onChange={(event) =>
-                    handleFilterChange("incluir_anuladas", event.target.checked)
-                  }
                 />
               </Col>
               <Col md={6} lg={3}>
