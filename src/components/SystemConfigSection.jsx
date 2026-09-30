@@ -9,6 +9,7 @@ const CONFIG_KEYS = {
   WORK_SCHEDULE: "work_schedule",
   SHOW_PAYMENT_METHODS_DATA: "show_payment_methods_data",
   ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS: "allow_family_document_archive_folders",
+  CIERRES_FISCALES: "cierres_fiscales_habilitado",
 };
 
 const DAY_LABELS = {
@@ -104,6 +105,7 @@ function configFromApiResponse(items) {
     [CONFIG_KEYS.WORK_SCHEDULE]: defaultWorkSchedule(),
     [CONFIG_KEYS.SHOW_PAYMENT_METHODS_DATA]: false,
     [CONFIG_KEYS.ALLOW_FAMILY_DOCUMENT_ARCHIVE_FOLDERS]: false,
+    [CONFIG_KEYS.CIERRES_FISCALES]: false,
   };
   if (!Array.isArray(items)) return result;
   for (const item of items) {
@@ -155,6 +157,7 @@ const SystemConfigSection = ({
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
   const [savingDocumentFolders, setSavingDocumentFolders] = useState(false);
+  const [savingCierresFiscales, setSavingCierresFiscales] = useState(false);
 
   const update = (key, value) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -278,6 +281,26 @@ const SystemConfigSection = ({
       toast.error(msg);
     } finally {
       setSavingDocumentFolders(false);
+    }
+  };
+
+  const handleSaveCierresFiscales = async () => {
+    if (!canEditSettings) return;
+
+    setSavingCierresFiscales(true);
+    try {
+      const value = !!config[CONFIG_KEYS.CIERRES_FISCALES];
+      await systemConfigService.put(CONFIG_KEYS.CIERRES_FISCALES, value, "bool");
+      toast.success(
+        value
+          ? "Cierres fiscales habilitados. Consolidar exige el cierre confirmado del año origen."
+          : "Cierres fiscales deshabilitados. La consolidación vuelve al comportamiento anterior."
+      );
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Error al guardar.";
+      toast.error(msg);
+    } finally {
+      setSavingCierresFiscales(false);
     }
   };
 
@@ -452,6 +475,42 @@ const SystemConfigSection = ({
                   </>
                 ) : (
                   "Guardar configuración de carpetas"
+                )}
+              </Button>
+            </div>
+
+            <hr className="my-4" />
+
+            <div className="mb-4 p-3 rounded border bg-light">
+              <div className="fw-semibold mb-1">Cierres fiscales</div>
+              <p className="text-muted small mb-3">
+                Guarda el informe de la cartera al 31 de diciembre y, mientras esté activo,
+                exige ese cierre confirmado antes de consolidar el año siguiente. Apagado,
+                la consolidación sigue como hasta ahora y los cierres ya guardados no se borran.
+                Debe quedar deshabilitado hasta terminar la validación.
+              </p>
+              <Form.Check
+                type="checkbox"
+                id="cierres_fiscales_habilitado"
+                label="Habilitar cierres fiscales y el requisito previo a consolidar"
+                checked={!!config[CONFIG_KEYS.CIERRES_FISCALES]}
+                onChange={(e) => update(CONFIG_KEYS.CIERRES_FISCALES, e.target.checked)}
+                disabled={!canEditSettings}
+                className="mb-3"
+              />
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleSaveCierresFiscales}
+                disabled={savingCierresFiscales || !canEditSettings}
+              >
+                {savingCierresFiscales ? (
+                  <>
+                    <Spinner animation="border" size="sm" className="me-2" />
+                    Guardando...
+                  </>
+                ) : (
+                  "Guardar cierres fiscales"
                 )}
               </Button>
             </div>

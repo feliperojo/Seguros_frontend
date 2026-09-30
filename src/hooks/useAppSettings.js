@@ -21,6 +21,7 @@ export default function useAppSettings() {
         show_payment_methods_data: !!runtime?.show_payment_methods_data,
         require_super_password: !!runtime?.require_super_password,
         allow_family_document_archive_folders: !!runtime?.allow_family_document_archive_folders,
+        cierres_fiscales_habilitado: !!runtime?.cierres_fiscales_habilitado,
         is_super_user: !!runtime?.is_super_user,
         can_manage_document_trash: !!runtime?.can_manage_document_trash,
         ...(runtime?.menu_visibility &&
