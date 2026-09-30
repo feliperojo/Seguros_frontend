@@ -59,9 +59,43 @@ export default function CopiarDatosModal({
    * (con el subconjunto de campos aplicables).
    */
   allowIncludeDentalMs = false,
+  /**
+   * Clasificación del configurador (coverage_fields_by_tipo) del producto
+   * que se está diligenciando.
+   * null/undefined: todos los campos copiables (Salud MS y productos sin config).
+   * string[]: solo la intersección con los campos habilitados para ese producto.
+   */
+  enabledCoverageFields = null,
+  /** false oculta dirección cuando el producto no clasifica ese acordeón. */
+  showAddress = true,
 }) {
   const candidates = useMemo(() => members || [], [members]);
   const backdropZ = zIndex - 10;
+
+  const enabledCoverageFieldsKey = Array.isArray(enabledCoverageFields)
+    ? enabledCoverageFields.join("|")
+    : null;
+
+  /** Checks visibles: todos, o solo los que aplican al producto clasificado. */
+  const visibleFieldDefs = useMemo(() => {
+    if (enabledCoverageFieldsKey == null) return FIELD_DEFS;
+    const allowed = new Set(
+      enabledCoverageFieldsKey.split("|").filter(Boolean)
+    );
+    return FIELD_DEFS.filter((f) => allowed.has(f.key));
+  }, [enabledCoverageFieldsKey]);
+
+  const visibleKeys = useMemo(
+    () => visibleFieldDefs.map((f) => f.key),
+    [visibleFieldDefs]
+  );
+
+  const recibeEnCoberturaRestringida = useMemo(() => {
+    const partes = [];
+    if (showAddress) partes.push("dirección");
+    if (visibleKeys.includes("elegibilidad")) partes.push("elegibilidad");
+    return partes;
+  }, [showAddress, visibleKeys]);
 
   // ✅ por defecto: todo marcado
   const [fieldKeys, setFieldKeys] = useState(() => new Set(ALL_KEYS));
@@ -95,11 +129,11 @@ export default function CopiarDatosModal({
     };
   }, [open]);
 
-  // Al abrir, re-inicializa a todo marcado
+  // Al abrir, marca solo los campos que aplican al producto (o todos, si no hay clasificación).
   useEffect(() => {
     if (open) {
-      setFieldKeys(new Set(ALL_KEYS));
-      setCopyAddress(true);
+      setFieldKeys(new Set(visibleKeys));
+      setCopyAddress(!!showAddress);
       setIncludeDentalMs(false);
       setTargetMode("all");
       setSelectedTargets(new Set());
@@ -107,7 +141,7 @@ export default function CopiarDatosModal({
         setSourceId(Number(defaultSourceId));
       }
     }
-  }, [open, defaultSourceId]);
+  }, [open, defaultSourceId, visibleKeys, showAddress]);
 
   // Si cambia el origen, limpiamos selección de destinos específicos
   useEffect(() => {
@@ -165,8 +199,8 @@ export default function CopiarDatosModal({
 
     onApply?.({
       sourceId,
-      fieldKeys: Array.from(fieldKeys),
-      copyAddress: !!copyAddress,
+      fieldKeys: Array.from(fieldKeys).filter((key) => visibleKeys.includes(key)),
+      copyAddress: !!showAddress && !!copyAddress,
       targetIds: ids,
       includeDentalMs: includeDental,
     });
@@ -225,26 +259,37 @@ export default function CopiarDatosModal({
               <div className="mb-3">
                 <div className="d-flex align-items-center justify-content-between mb-2">
                   <div className="fw-semibold">Campos a copiar</div>
-                  <div className="form-check">
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      id="toggle-all"
-                      checked={fieldKeys.size === ALL_KEYS.length && copyAddress}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setFieldKeys(checked ? new Set(ALL_KEYS) : new Set());
-                        setCopyAddress(checked);
-                      }}
-                    />
-                    <label className="form-check-label small" htmlFor="toggle-all">
-                      (De)seleccionar todo
-                    </label>
-                  </div>
+                  {(visibleFieldDefs.length > 0 || showAddress) && (
+                    <div className="form-check">
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id="toggle-all"
+                        checked={
+                          visibleKeys.every((key) => fieldKeys.has(key)) &&
+                          (!showAddress || copyAddress)
+                        }
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setFieldKeys(checked ? new Set(visibleKeys) : new Set());
+                          if (showAddress) setCopyAddress(checked);
+                        }}
+                      />
+                      <label className="form-check-label small" htmlFor="toggle-all">
+                        (De)seleccionar todo
+                      </label>
+                    </div>
+                  )}
                 </div>
 
+                {visibleFieldDefs.length === 0 && !showAddress && (
+                  <p className="text-muted small mb-0">
+                    Este producto no tiene campos habilitados para copiar.
+                  </p>
+                )}
+
                 <div className="row row-cols-1 row-cols-md-2 g-2">
-                  {FIELD_DEFS.map((f) => (
+                  {visibleFieldDefs.map((f) => (
                     <div className="col" key={f.key}>
                       <div className="form-check">
                         <input
@@ -262,19 +307,23 @@ export default function CopiarDatosModal({
                   ))}
                 </div>
 
-                <hr className="my-3" />
-                <div className="form-check">
-                  <input
-                    id="copy-address"
-                    className="form-check-input"
-                    type="checkbox"
-                    checked={copyAddress}
-                    onChange={(e) => setCopyAddress(e.target.checked)}
-                  />
-                  <label className="form-check-label" htmlFor="copy-address">
-                    Dirección (residencia, calle, APT, ciudad, estado, código postal, condado y correspondencia)
-                  </label>
-                </div>
+                {(visibleFieldDefs.length > 0 && (showAddress || allowIncludeDentalMs)) && (
+                  <hr className="my-3" />
+                )}
+                {showAddress && (
+                  <div className="form-check">
+                    <input
+                      id="copy-address"
+                      className="form-check-input"
+                      type="checkbox"
+                      checked={copyAddress}
+                      onChange={(e) => setCopyAddress(e.target.checked)}
+                    />
+                    <label className="form-check-label" htmlFor="copy-address">
+                      Dirección (residencia, calle, APT, ciudad, estado, código postal, condado y correspondencia)
+                    </label>
+                  </div>
+                )}
 
                 {allowIncludeDentalMs && (
                   <>
@@ -292,7 +341,9 @@ export default function CopiarDatosModal({
                     </div>
                     <div className="form-text small ms-4">
                       Solo Salud MS → Dental MS. En Dental MS se copian únicamente:{" "}
-                      {CAMPOS_COPIABLES_SALUD_A_DENTAL_MS.map((k) => {
+                      {CAMPOS_COPIABLES_SALUD_A_DENTAL_MS.filter((k) =>
+                        visibleKeys.includes(k)
+                      ).map((k) => {
                         const def = FIELD_DEFS.find((f) => f.key === k);
                         return def?.label || k;
                       }).join(", ")}.
@@ -303,12 +354,17 @@ export default function CopiarDatosModal({
                   </>
                 )}
 
-                {targetsRestringidos.length > 0 && (
+                {targetsRestringidos.length > 0 && recibeEnCoberturaRestringida.length > 0 && (
                   <div className="alert alert-warning small mt-3 mb-0 py-2">
                     Miembros con cobertura <strong>No</strong>, <strong>Medicare</strong> o{" "}
-                    <strong>Medicaid</strong> solo reciben <strong>dirección</strong> y{" "}
-                    <strong>elegibilidad</strong>; el resto de datos de cobertura no se
-                    copian en ellos.
+                    <strong>Medicaid</strong> solo reciben{" "}
+                    {recibeEnCoberturaRestringida.map((parte, i) => (
+                      <span key={parte}>
+                        {i > 0 ? " y " : null}
+                        <strong>{parte}</strong>
+                      </span>
+                    ))}
+                    ; el resto de datos de cobertura no se copian en ellos.
                   </div>
                 )}
               </div>
@@ -374,9 +430,9 @@ export default function CopiarDatosModal({
                               <span className="text-muted small ms-1">
                                 (active el check de Dental MS para incluirlo)
                               </span>
-                            ) : restringido ? (
+                            ) : restringido && recibeEnCoberturaRestringida.length > 0 ? (
                               <span className="text-warning small ms-1">
-                                ({estadoLabel(m)} · solo dirección y elegibilidad)
+                                ({estadoLabel(m)} · solo {recibeEnCoberturaRestringida.join(" y ")})
                               </span>
                             ) : null}
                           </label>
@@ -394,7 +450,10 @@ export default function CopiarDatosModal({
               </button>
               <button
                 className="btn btn-primary"
-                disabled={!sourceId || (fieldKeys.size === 0 && !copyAddress)}
+                disabled={
+                  !sourceId ||
+                  (fieldKeys.size === 0 && !(showAddress && copyAddress))
+                }
                 onClick={handleApply}
               >
                 Copiar

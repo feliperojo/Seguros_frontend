@@ -33,6 +33,7 @@ import {
 } from "../../utils/coberturaAnulacion";
 import {
   COBERTURA_TIPO_DENTAL_MS,
+  isDentalMsCoberturaTipo,
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
@@ -906,6 +907,47 @@ const TomaDeDatos = ({
       cancelled = true;
     };
   }, []);
+
+  // Producto que se está diligenciando (el del miembro, no el Dental MS adjunto).
+  const coberturaTipoParaCopiar = useMemo(() => {
+    const miembro = (familyMembers || []).find((m) => {
+      const tipo = String(m?.cobertura_tipo || "").trim();
+      if (!tipo) return false;
+      return !isDentalMsCoberturaTipo(tipo);
+    });
+    return miembro?.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
+  }, [familyMembers, defaultCoberturaTipo]);
+
+  const esProductoPrivadoParaCopiar = isProductoPrivadoIndependiente(
+    coberturaTipoParaCopiar
+  );
+
+  // En privados, el modal solo ofrece los campos clasificados para ese producto.
+  // Salud MS y el resto conservan la lista completa.
+  const enabledCoverageFieldsForCopy = useMemo(() => {
+    if (!esProductoPrivadoParaCopiar) return null;
+    return resolveEnabledFields(
+      coverageFieldConfig,
+      coberturaTipoParaCopiar
+    );
+  }, [
+    esProductoPrivadoParaCopiar,
+    coverageFieldConfig,
+    coberturaTipoParaCopiar,
+  ]);
+
+  const showCopyAddress = useMemo(() => {
+    if (!esProductoPrivadoParaCopiar) return true;
+    const accordions = resolveEnabledAccordions(
+      clientFieldConfig,
+      coberturaTipoParaCopiar
+    );
+    return shouldShowConfiguredField(accordions, "direccion");
+  }, [
+    esProductoPrivadoParaCopiar,
+    clientFieldConfig,
+    coberturaTipoParaCopiar,
+  ]);
 
   // Normalización y ordenamiento
   const normalized = useMemo(
@@ -3495,6 +3537,8 @@ const activeNormalized = useMemo(
         onClose={() => setOpenCopy(false)}
         members={membersElegiblesParaCopiar}
         allowIncludeDentalMs={isProductoSaludMs(defaultCoberturaTipo)}
+        enabledCoverageFields={enabledCoverageFieldsForCopy}
+        showAddress={showCopyAddress}
         onApply={applyCopySelection}
       />
 
