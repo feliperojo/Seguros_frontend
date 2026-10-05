@@ -2,11 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container } from "react-bootstrap";
 import apiRequest from "../services/api";
-import { fetchPagosExistForPeriodo, fetchResumenAnual } from "../services/coberturaPagosApi";
+import { fetchListadoPagosPeriodo, fetchPagosExistForPeriodo, fetchResumenAnual } from "../services/coberturaPagosApi";
 import { fetchCompanies } from "../services/companies";
 import CobrosPeriodoResumen from "./CobrosPeriodoResumen";
 import VistaPreviaCobrosModal from "./VistaPreviaCobrosModal";
+import RegenerarCobrosModal from "./RegenerarCobrosModal";
 import { MESES_COBRO, etiquetaMes } from "../utils/periodoCobros";
+import { condicionCobro } from "../utils/condicionCobro";
+import {
+  alternarSeleccion,
+  conservarSeleccionEnFiltro,
+  describirAlcance,
+  filtrarCobrosParaRegenerar,
+  seleccionarPagina,
+  seleccionarTodosFiltrados,
+} from "../utils/regenerarCobros";
 import { renderClienteLink } from "../pages/ListaClientes";
 import {
   COBERTURA_TIPO_DENTAL_MS,
@@ -44,6 +54,12 @@ const TablaConfiguracionPagos = () => {
     exists: null,
     count: null,
   });
+  const [cobrosPeriodo, setCobrosPeriodo] = useState([]);
+  const [cargandoCobros, setCargandoCobros] = useState(false);
+  const [errorCobros, setErrorCobros] = useState(false);
+  const [seleccionRegenerar, setSeleccionRegenerar] = useState([]);
+  const [idsRevision, setIdsRevision] = useState([]);
+  const [paginaRegenerar, setPaginaRegenerar] = useState(1);
   const [showInconsistenciasModal, setShowInconsistenciasModal] = useState(false);
   const [inconsistenciasDetalle, setInconsistenciasDetalle] = useState({
     message: "",
@@ -147,9 +163,50 @@ const TablaConfiguracionPagos = () => {
     };
   }, [mesSeleccionado, anioSeleccionado]);
 
+  useEffect(() => {
+    if (!mesSeleccionado || !anioSeleccionado) {
+      setCobrosPeriodo([]);
+      setErrorCobros(false);
+      return;
+    }
+
+    let cancel = false;
+    setCargandoCobros(true);
+    setErrorCobros(false);
+    fetchListadoPagosPeriodo(anioSeleccionado, mesSeleccionado)
+      .then((lista) => {
+        if (!cancel) setCobrosPeriodo(Array.isArray(lista) ? lista : []);
+      })
+      .catch(() => {
+        if (!cancel) {
+          setErrorCobros(true);
+          setCobrosPeriodo([]);
+        }
+      })
+      .finally(() => {
+        if (!cancel) setCargandoCobros(false);
+      });
+
+    return () => {
+      cancel = true;
+    };
+  }, [mesSeleccionado, anioSeleccionado, resumenVersion]);
+
+  useEffect(() => {
+    setPaginaRegenerar(1);
+    setSeleccionRegenerar([]);
+    setIdsRevision([]);
+  }, [mesSeleccionado, anioSeleccionado]);
+
+  useEffect(() => {
+    const filtrados = filtrarCobrosParaRegenerar(cobrosPeriodo, filtros);
+    setSeleccionRegenerar((actual) => conservarSeleccionEnFiltro(actual, filtrados));
+  }, [cobrosPeriodo, filtros]);
+
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
     setFiltros({ ...filtros, [name]: value });
+    setPaginaRegenerar(1);
   };
 
   const cargarVistaPrevia = async () => {
@@ -297,6 +354,17 @@ const TablaConfiguracionPagos = () => {
 
   const resumenVisible =
     resumenAnual && String(resumenAnual.anio) === String(anioSeleccionado) ? resumenAnual : null;
+  const cobrosRegenerables = filtrarCobrosParaRegenerar(cobrosPeriodo, filtros);
+  const totalPaginasRegenerar = Math.max(1, Math.ceil(cobrosRegenerables.length / 10));
+  const paginaRegenerarVisible = Math.min(paginaRegenerar, totalPaginasRegenerar);
+  const inicioRegenerar = (paginaRegenerarVisible - 1) * 10;
+  const cobrosPagina = cobrosRegenerables.slice(inicioRegenerar, inicioRegenerar + 10);
+  const alcanceRegenerar = describirAlcance({
+    seleccion: seleccionRegenerar,
+    pagosFiltrados: cobrosRegenerables,
+    pagosPagina: cobrosPagina,
+    periodo: mesSeleccionado && anioSeleccionado ? `${etiquetaMes(mesSeleccionado)} ${anioSeleccionado}` : "",
+  });
 
   return (
     <Container fluid className="mt-4 mb-4">
@@ -397,7 +465,7 @@ const TablaConfiguracionPagos = () => {
                       Revisando…
                     </>
                   ) : (
-                    "Generar pagos"
+                    "Generar faltantes"
                   )}
                 </Button>
               </Col>
@@ -484,6 +552,107 @@ const TablaConfiguracionPagos = () => {
               {alerta.mensaje}
             </Alert>
           )}
+
+          <div className="pagos-mensuales__section">
+            <div className="pagos-mensuales__section-title">
+              <i className="fas fa-sync-alt" aria-hidden="true" />
+              Regenerar existentes
+            </div>
+            <p className="pagos-mensuales__regenerar-nota">
+              Actualiza cobros ya generados del período y los filtros activos. No crea faltantes ni
+              cambia el estado ni la fecha de pago.
+            </p>
+            {!mesSeleccionado || !anioSeleccionado ? (
+              <div className="pagos-mensuales__notice">Seleccione el mes y el año para ver los cobros que se pueden regenerar.</div>
+            ) : cargandoCobros ? (
+              <div className="text-center py-3">
+                <Spinner animation="border" size="sm" style={{ color: "#1a365d" }} />
+              </div>
+            ) : errorCobros ? (
+              <div className="pagos-mensuales__notice pagos-mensuales__notice--warn">
+                No fue posible cargar los cobros del período.
+              </div>
+            ) : cobrosRegenerables.length === 0 ? (
+              <div className="pagos-mensuales__notice">
+                No hay cobros generados en {etiquetaMes(mesSeleccionado)} {anioSeleccionado} con los filtros activos.
+              </div>
+            ) : (
+              <>
+                <div className="pagos-mensuales__seleccion">
+                  <Button variant="outline-secondary" size="sm" onClick={() => setSeleccionRegenerar(seleccionarPagina(cobrosPagina))}>
+                    Seleccionar página ({cobrosPagina.length})
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" onClick={() => setSeleccionRegenerar(seleccionarTodosFiltrados(cobrosRegenerables))}>
+                    Seleccionar todos ({cobrosRegenerables.length})
+                  </Button>
+                  <Button variant="outline-secondary" size="sm" onClick={() => setSeleccionRegenerar([])} disabled={seleccionRegenerar.length === 0}>
+                    Quitar selección
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setIdsRevision(seleccionRegenerar)} disabled={seleccionRegenerar.length === 0}>
+                    Regenerar seleccionados
+                  </Button>
+                  <p className="pagos-mensuales__seleccion-alcance">{alcanceRegenerar.texto}</p>
+                </div>
+                <div className="pagos-mensuales__table-wrap table-responsive">
+                  <Table hover responsive="lg" className="pagos-mensuales__table w-100">
+                    <thead>
+                      <tr>
+                        <th className="pagos-mensuales__col-check">
+                          <span className="visually-hidden">Selección de la fila</span>
+                        </th>
+                        <th>Cobro</th>
+                        <th>Cliente</th>
+                        <th>Compañía</th>
+                        <th>Monto</th>
+                        <th>Estado</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cobrosPagina.map((pago) => {
+                        const compania = condicionCobro(pago, "compania_nombre");
+                        return (
+                          <tr key={pago.id}>
+                            <td>
+                              <Form.Check
+                                type="checkbox"
+                                checked={seleccionRegenerar.includes(pago.id)}
+                                onChange={() => setSeleccionRegenerar((actual) => alternarSeleccion(actual, pago.id))}
+                                aria-label={`Seleccionar cobro ${pago.id}`}
+                              />
+                            </td>
+                            <td>{pago.id}</td>
+                            <td>{pago.cliente?.nombre_completo || "—"}</td>
+                            <td>{compania.texto}</td>
+                            <td>${Number(pago.monto).toFixed(2)}</td>
+                            <td>{pago.estado || "—"}</td>
+                            <td>
+                              <Button variant="outline-secondary" size="sm" onClick={() => setIdsRevision([pago.id])}>
+                                Regenerar cobro
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </div>
+                {totalPaginasRegenerar > 1 ? (
+                  <div className="pagos-mensuales__seleccion">
+                    <Button variant="outline-secondary" size="sm" disabled={paginaRegenerarVisible <= 1} onClick={() => setPaginaRegenerar((pagina) => Math.max(1, pagina - 1))}>
+                      Anterior
+                    </Button>
+                    <span>
+                      Página {paginaRegenerarVisible} de {totalPaginasRegenerar}
+                    </span>
+                    <Button variant="outline-secondary" size="sm" disabled={paginaRegenerarVisible >= totalPaginasRegenerar} onClick={() => setPaginaRegenerar((pagina) => Math.min(totalPaginasRegenerar, pagina + 1))}>
+                      Siguiente
+                    </Button>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
 
           <div className="pagos-mensuales__section mb-0">
             <div className="pagos-mensuales__section-title">
@@ -650,6 +819,19 @@ const TablaConfiguracionPagos = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+
+      <RegenerarCobrosModal
+        show={idsRevision.length > 0}
+        pagoIds={idsRevision}
+        periodo={mesSeleccionado && anioSeleccionado ? `${etiquetaMes(mesSeleccionado)} ${anioSeleccionado}` : ""}
+        onCancel={() => setIdsRevision([])}
+        onGuardado={(mensaje) => {
+          mostrarAlerta(mensaje, "success", 8000);
+          setIdsRevision([]);
+          setSeleccionRegenerar((actual) => actual.filter((id) => !idsRevision.includes(id)));
+          setResumenVersion((version) => version + 1);
+        }}
+      />
 
       <VistaPreviaCobrosModal
         show={showVistaPrevia}

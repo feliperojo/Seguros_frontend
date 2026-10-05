@@ -128,3 +128,53 @@
   background: transparent;
   border: 1.5px dashed #94a3b8;
 }
+
+.pagos-grupo-modal__cobros {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pagos-grupo-modal__monto-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: help;
+}
+
+.pagos-grupo-modal__monto-btn:focus-visible {
+  outline: 2px solid #1a365d;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pagos-grupo-modal__editar {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #1a365d;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.pagos-grupo-modal__snapshot {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pagos-grupo-modal__snapshot dt {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.pagos-grupo-modal__snapshot dd {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.pagos-grupo-modal__editar-backdrop {
+  z-index: 1070;
+}

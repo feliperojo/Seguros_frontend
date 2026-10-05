@@ -1,11 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Form, Spinner, Table } from "react-bootstrap";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Button, Form, Modal, OverlayTrigger, Popover, Spinner, Table } from "react-bootstrap";
+import apiRequest from "../../services/api";
 import { fetchPagosGrupoFamiliar } from "../../services/coberturaPagosApi";
-import { condicionCobro, TEXTO_PENDIENTE_COBRO } from "../../utils/condicionCobro";
+import {
+  detalleProyeccion,
+  detalleSnapshotCobro,
+  ESTADOS_COBRO_EDITABLES,
+  filasPagosGrupo,
+  mesesParaSituacion,
+  prepararGuardadoCobro,
+  prepararGuardadoProyeccion,
+} from "../../utils/pagosGrupoFamiliarConsulta";
 import {
   indicadorMorosidadPagosPorMes,
   PAGOS_INFORME_MONTH_ABBR,
-  pickEstadoFechaActualizacionPago,
 } from "../../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../../utils/formatters";
 import "../../styles/GfModal.css";
@@ -23,10 +31,7 @@ const getEstadoCeldaClass = (estado) => {
 };
 
 const renderSituacion = (meses) => {
-  const porMes = (meses || []).map((celda) =>
-    celda?.tipo === "cobro" ? { estado: celda.estado, monto: celda.monto } : null
-  );
-  const ind = indicadorMorosidadPagosPorMes(porMes);
+  const ind = indicadorMorosidadPagosPorMes(mesesParaSituacion(meses));
   if (!ind || ind.nivel === "sin_datos" || ind.nivel === "sin_generacion") {
     return (
       <span className="text-muted small" title={ind?.titulo}>
@@ -41,91 +46,119 @@ const renderSituacion = (meses) => {
   );
 };
 
-const asegurarFila = (filas, key, base) => {
-  if (!filas.has(key)) {
-    filas.set(key, {
-      id: key,
-      miembro: base.miembro || "—",
-      cobertura: base.cobertura || "—",
-      codigo: base.codigo || "",
-      compania: base.compania || "—",
-      companiaPendiente: Boolean(base.companiaPendiente),
-      plan: base.plan || "",
-      planPendiente: Boolean(base.planPendiente),
-      meses: Array(12).fill(null),
-    });
-  }
-  return filas.get(key);
+const popoverDetalle = (titulo, nota, campos) => (
+  <Popover>
+    <Popover.Header as="h3">{titulo}</Popover.Header>
+    <Popover.Body>
+      {nota ? <p className="mb-2">{nota}</p> : null}
+      {campos.length > 0 ? (
+        <dl className="pagos-grupo-modal__snapshot mb-0">
+          {campos.map((campo) => (
+            <div key={campo.etiqueta}>
+              <dt>{campo.etiqueta}</dt>
+              <dd>{campo.valor}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+    </Popover.Body>
+  </Popover>
+);
+
+const MontoConDetalle = ({ etiqueta, overlay, children }) => (
+  <OverlayTrigger
+    trigger={["hover", "focus", "click"]}
+    rootClose
+    placement="auto"
+    container={typeof document !== "undefined" ? document.body : undefined}
+    overlay={overlay}
+  >
+    <button type="button" className="pagos-grupo-modal__monto-btn" aria-label={etiqueta}>
+      {children}
+    </button>
+  </OverlayTrigger>
+);
+
+const EditarCobroDialogo = ({ cobro, guardando, error, onCancel, onGuardar }) => {
+  const [estado, setEstado] = useState(cobro?.estado || "pendiente");
+  const [monto, setMonto] = useState(cobro?.monto != null ? Number(cobro.monto).toFixed(2) : "");
+  const [motivo, setMotivo] = useState("");
+  const esProyeccion = Boolean(cobro?.proyeccion);
+  const opciones = ESTADOS_COBRO_EDITABLES.includes(cobro?.estado)
+    ? ESTADOS_COBRO_EDITABLES
+    : [cobro?.estado, ...ESTADOS_COBRO_EDITABLES].filter(Boolean);
+
+  useEffect(() => {
+    if (!cobro) return;
+    setEstado(cobro.estado || "pendiente");
+    setMonto(cobro.monto != null ? Number(cobro.monto).toFixed(2) : "");
+    setMotivo("");
+  }, [cobro]);
+
+  if (!cobro) return null;
+
+  return (
+    <Modal show onHide={onCancel} centered style={{ zIndex: 1080 }} backdropClassName="pagos-grupo-modal__editar-backdrop">
+      <Modal.Header closeButton>
+        <Modal.Title>
+          {esProyeccion ? `Editar ${cobro.etiqueta || "mes"}` : `Editar cobro ${cobro.id}`}
+        </Modal.Title>
+      </Modal.Header>
+      <Modal.Body>
+        {error ? <Alert variant="warning">{error}</Alert> : null}
+        <Form.Group className="mb-3">
+          <Form.Label>Estado</Form.Label>
+          <Form.Select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value)}
+            aria-label={`Estado del cobro ${cobro.id}`}
+          >
+            {opciones.map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {opcion}
+              </option>
+            ))}
+          </Form.Select>
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label>Monto</Form.Label>
+          <Form.Control
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={monto}
+            onChange={(e) => setMonto(e.target.value)}
+            disabled={guardando}
+            aria-label={esProyeccion ? `Monto de ${cobro.etiqueta || "este mes"}` : `Monto del cobro ${cobro.id}`}
+          />
+          <Form.Text>
+            {esProyeccion
+              ? "Este mes todavía no tiene cobro. Al guardar se registra solo este mes, con el importe indicado."
+              : "Puede corregir el importe en cualquier estado. El motivo es necesario si cambia el importe."}
+          </Form.Text>
+        </Form.Group>
+        <Form.Group>
+          <Form.Label>Motivo de la corrección</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={3}
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            disabled={guardando}
+          />
+        </Form.Group>
+      </Modal.Body>
+      <Modal.Footer>
+        <Button variant="outline-secondary" onClick={onCancel} disabled={guardando}>
+          Cancelar
+        </Button>
+        <Button variant="primary" onClick={() => onGuardar({ estado, monto, motivo })} disabled={guardando}>
+          {guardando ? "Guardando…" : "Guardar"}
+        </Button>
+      </Modal.Footer>
+    </Modal>
+  );
 };
-
-/**
- * Misma clave del informe anual: cobertura + compañía + plan + código del cobro.
- * Los meses sin cobro usan la compañía, el plan y el código que propone el módulo.
- */
-export function filasPagosGrupo(coberturas) {
-  const filas = new Map();
-
-  (coberturas || []).forEach((cob) => {
-    const meses = Array.isArray(cob?.meses) ? cob.meses : [];
-
-    meses.forEach((mes) => {
-      const idx = parseInt(mes?.mes, 10) - 1;
-      const pago = mes?.cobro;
-      if (!pago || idx < 0 || idx > 11) return;
-
-      const compania = condicionCobro(pago, "compania_nombre");
-      const plan = condicionCobro(pago, "plan");
-      const codigo = condicionCobro(pago, "codigo_poliza");
-      const key = [cob.cobertura_id, compania.texto, plan.texto, codigo.texto].join("|");
-      const fila = asegurarFila(filas, key, {
-        miembro: cob.miembro,
-        cobertura: cob.cobertura,
-        codigo: codigo.pendiente ? "" : codigo.texto,
-        compania: compania.texto,
-        companiaPendiente: compania.pendiente,
-        plan: plan.pendiente ? "" : plan.texto,
-        planPendiente: plan.pendiente,
-      });
-
-      fila.meses[idx] = {
-        tipo: "cobro",
-        estado: pago.estado,
-        monto: pago.monto,
-        estadoActualizadoEn: pickEstadoFechaActualizacionPago(pago),
-      };
-    });
-
-    meses.forEach((mes) => {
-      const idx = parseInt(mes?.mes, 10) - 1;
-      const proy = mes?.proyectado;
-      if (mes?.cobro || !proy || idx < 0 || idx > 11) return;
-
-      const companiaTexto = proy.compania_nombre || cob.compania || TEXTO_PENDIENTE_COBRO;
-      const planTexto = proy.plan || cob.plan || TEXTO_PENDIENTE_COBRO;
-      const codigoTexto = proy.codigo_poliza || cob.codigo_poliza || TEXTO_PENDIENTE_COBRO;
-      const key = [cob.cobertura_id, companiaTexto, planTexto, codigoTexto].join("|");
-      const fila = asegurarFila(filas, key, {
-        miembro: cob.miembro,
-        cobertura: cob.cobertura,
-        codigo: codigoTexto === TEXTO_PENDIENTE_COBRO ? "" : codigoTexto,
-        compania: companiaTexto,
-        companiaPendiente: companiaTexto === TEXTO_PENDIENTE_COBRO,
-        plan: planTexto === TEXTO_PENDIENTE_COBRO ? "" : planTexto,
-        planPendiente: planTexto === TEXTO_PENDIENTE_COBRO,
-      });
-
-      if (!fila.meses[idx]) {
-        fila.meses[idx] = {
-          tipo: "proyectado",
-          monto: proy.monto,
-          origen: proy.origen,
-        };
-      }
-    });
-  });
-
-  return [...filas.values()];
-}
 
 const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
   const [loading, setLoading] = useState(false);
@@ -133,6 +166,10 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
   const [consulta, setConsulta] = useState(null);
   const [anioTexto, setAnioTexto] = useState("");
   const [anioConsulta, setAnioConsulta] = useState(null);
+  const [cobroEdicion, setCobroEdicion] = useState(null);
+  const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [errorEdicion, setErrorEdicion] = useState("");
+  const guardandoRef = useRef(false);
 
   useEffect(() => {
     if (show) return;
@@ -141,6 +178,10 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
     setConsulta(null);
     setAnioTexto("");
     setAnioConsulta(null);
+    setCobroEdicion(null);
+    setGuardandoEdicion(false);
+    setErrorEdicion("");
+    guardandoRef.current = false;
   }, [show]);
 
   useEffect(() => {
@@ -181,6 +222,69 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
     [consulta]
   );
   const tieneCobros = Boolean(consulta?.tiene_cobros);
+
+  const cerrarEdicion = () => {
+    if (guardandoRef.current) return;
+    setCobroEdicion(null);
+    setErrorEdicion("");
+  };
+
+  const guardarEdicion = async ({ estado, monto, motivo }) => {
+    if (!cobroEdicion || guardandoRef.current) return;
+    const preparado = cobroEdicion.proyeccion
+      ? prepararGuardadoProyeccion({
+          grupoFamiliarId,
+          coberturaId: cobroEdicion.coberturaId,
+          anio: cobroEdicion.anio,
+          mes: cobroEdicion.mes,
+          estado,
+          monto,
+          motivo,
+        })
+      : prepararGuardadoCobro({
+          cobro: cobroEdicion,
+          estado,
+          monto,
+          motivo,
+        });
+    if (!preparado.ok) {
+      setErrorEdicion(preparado.errores.join(" "));
+      return;
+    }
+    if (preparado.acciones.length === 0) {
+      cerrarEdicion();
+      return;
+    }
+
+    guardandoRef.current = true;
+    setGuardandoEdicion(true);
+    setErrorEdicion("");
+    try {
+      for (const accion of preparado.acciones) {
+        await apiRequest(accion.path, accion.method, accion.body);
+      }
+      const data = await fetchPagosGrupoFamiliar(
+        grupoFamiliarId,
+        anioConsulta ?? undefined
+      );
+      setConsulta(data);
+      setCobroEdicion(null);
+    } catch (err) {
+      setErrorEdicion(err?.message || "No se pudo guardar el cobro.");
+      try {
+        const data = await fetchPagosGrupoFamiliar(
+          grupoFamiliarId,
+          anioConsulta ?? undefined
+        );
+        setConsulta(data);
+      } catch {
+        /* conserva la consulta anterior si la recarga también falla */
+      }
+    } finally {
+      guardandoRef.current = false;
+      setGuardandoEdicion(false);
+    }
+  };
 
   if (!show) return null;
 
@@ -282,7 +386,7 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
                         <th>Miembro</th>
                         <th>Cobertura</th>
                         <th>Compañía</th>
-                        <th>Plan</th>
+                        <th>Fecha de activación</th>
                         <th
                           className="text-nowrap"
                           title="Mora: 1–2 meses con cobro distinto de pagado. Riesgo: 3 o más. Los montos proyectados no cuentan."
@@ -306,41 +410,78 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
                               <div className="pagos-grupo-modal__codigo">{fila.codigo}</div>
                             ) : null}
                           </td>
-                          <td className={fila.companiaPendiente ? "text-muted" : undefined}>
-                            {fila.compania || "—"}
-                          </td>
-                          <td className={fila.planPendiente ? "text-muted" : undefined}>
-                            {fila.plan || "—"}
+                          <td>{fila.compania || "—"}</td>
+                          <td>
+                            {fila.fechaActivacion
+                              ? formatDateForDisplay(fila.fechaActivacion)
+                              : "—"}
                           </td>
                           <td className="text-center">{renderSituacion(fila.meses)}</td>
                           {fila.meses.map((celda, idx) => (
                             <td key={idx} className="pagos-informe__col-mes">
                               {celda?.tipo === "cobro" ? (
-                                <div className="pagos-informe__celda">
-                                  <span className={`pagos-informe__estado ${getEstadoCeldaClass(celda.estado)}`}>
-                                    {celda.estado}
-                                  </span>
-                                  <span className="pagos-informe__monto">
-                                    ${Number(celda.monto).toFixed(2)}
-                                  </span>
-                                  {celda.estadoActualizadoEn ? (
-                                    <span
-                                      className="pagos-informe__fecha-estado"
-                                      title="Última actualización del estado"
-                                    >
-                                      {formatDateForDisplay(celda.estadoActualizadoEn)}
-                                    </span>
-                                  ) : null}
+                                <div className="pagos-grupo-modal__cobros">
+                                  {celda.cobros.map((cobro) => {
+                                    const detalle = detalleSnapshotCobro(cobro);
+                                    return (
+                                      <div key={cobro.id} className="pagos-informe__celda">
+                                        <span className={`pagos-informe__estado ${getEstadoCeldaClass(cobro.estado)}`}>
+                                          {cobro.estado}
+                                        </span>
+                                        <MontoConDetalle
+                                          etiqueta={`Snapshot del cobro ${cobro.id}, monto ${Number(cobro.monto).toFixed(2)}`}
+                                          overlay={popoverDetalle(detalle.titulo, detalle.nota, detalle.campos)}
+                                        >
+                                          <span className="pagos-informe__monto">
+                                            ${Number(cobro.monto).toFixed(2)}
+                                          </span>
+                                        </MontoConDetalle>
+                                        <button
+                                          type="button"
+                                          className="pagos-grupo-modal__editar"
+                                          onClick={() => {
+                                            setErrorEdicion("");
+                                            setCobroEdicion(cobro);
+                                          }}
+                                        >
+                                          Editar
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ) : celda?.tipo === "proyectado" ? (
-                                <div
-                                  className="pagos-grupo-modal__proyectado"
-                                  title="Monto proyectado por el módulo de pagos. No es un cobro generado."
-                                >
+                                <div className="pagos-grupo-modal__proyectado">
                                   <span className="pagos-grupo-modal__proyectado-etiqueta">Proyectado</span>
-                                  <span className="pagos-informe__monto">
-                                    ${Number(celda.monto).toFixed(2)}
-                                  </span>
+                                  <MontoConDetalle
+                                    etiqueta="Proyección, no es un cobro generado"
+                                    overlay={(() => {
+                                      const detalle = detalleProyeccion(celda.proyectado);
+                                      return popoverDetalle(detalle.titulo, detalle.nota, detalle.campos);
+                                    })()}
+                                  >
+                                    <span className="pagos-informe__monto">
+                                      ${Number(celda.monto).toFixed(2)}
+                                    </span>
+                                  </MontoConDetalle>
+                                  <button
+                                    type="button"
+                                    className="pagos-grupo-modal__editar"
+                                    onClick={() => {
+                                      setErrorEdicion("");
+                                      setCobroEdicion({
+                                        proyeccion: true,
+                                        coberturaId: fila.id,
+                                        anio: consulta?.anio,
+                                        mes: String(idx + 1).padStart(2, "0"),
+                                        monto: celda.monto,
+                                        estado: "pendiente",
+                                        etiqueta: PAGOS_INFORME_MONTH_ABBR[idx],
+                                      });
+                                    }}
+                                  >
+                                    Editar
+                                  </button>
                                 </div>
                               ) : (
                                 <span className="pagos-informe__celda-vacia">—</span>
@@ -357,6 +498,15 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
           </div>
         </div>
       </div>
+      {cobroEdicion ? (
+        <EditarCobroDialogo
+          cobro={cobroEdicion}
+          guardando={guardandoEdicion}
+          error={errorEdicion}
+          onCancel={cerrarEdicion}
+          onGuardar={guardarEdicion}
+        />
+      ) : null}
     </div>
   );
 };

@@ -209,6 +209,31 @@
   letter-spacing: 0.02em;
 }
 
+.pagos-mensuales__regenerar-nota {
+  margin: 0 0 0.75rem;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.pagos-mensuales__seleccion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.pagos-mensuales__seleccion-alcance {
+  flex-basis: 100%;
+  margin: 0;
+  color: #475569;
+  font-size: 0.8125rem;
+}
+
+.pagos-mensuales__col-check {
+  width: 2.5rem;
+}
+
 .pagos-mensuales__summary {
   font-size: 0.8125rem;
   color: #64748b;
