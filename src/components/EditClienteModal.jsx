@@ -79,7 +79,15 @@ const renderMediosPagoTab = () => (
 );
 
 
-const EditClienteModal = ({ show, onHide, clienteId, clienteData, onClienteUpdated }) => {
+const EditClienteModal = ({
+  show,
+  onHide,
+  clienteId,
+  clienteData,
+  onClienteUpdated,
+  origenActualizacion = null,
+  grupoFamiliarOrigenId = null,
+}) => {
   // Estado para los datos del cliente organizados por secciones
 
 
@@ -601,6 +609,12 @@ useEffect(() => {
   
   const actualizarCliente = async () => {
     const dataToSubmit = prepareDataForSubmit();
+    if (origenActualizacion === "grupo_familiar" && grupoFamiliarOrigenId) {
+      dataToSubmit.origen = "grupo_familiar";
+      dataToSubmit.grupo_familiar_origen_id = Number(grupoFamiliarOrigenId);
+    } else if (origenActualizacion === "ficha_cliente") {
+      dataToSubmit.origen = "ficha_cliente";
+    }
     try {
       const response = await apiRequest(`cliente/${clienteId}`, "PUT", dataToSubmit);
      

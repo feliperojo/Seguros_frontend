@@ -330,6 +330,71 @@
   font-weight: 600;
 }
 
+.hcc-detail-card__header--with-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.hcc-plan-toggle {
+  margin-left: auto;
+  background: transparent;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.28rem 0.55rem;
+  white-space: nowrap;
+}
+
+.hcc-plan-toggle:hover,
+.hcc-plan-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.hcc-plan-section {
+  margin-top: 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 0.85rem;
+}
+
+.hcc-plan-section__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+
+.hcc-plan-section__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f2744;
+}
+
+.hcc-plan-section__collapse {
+  color: #1a365d !important;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none !important;
+  padding: 0 !important;
+}
+
+.hcc-plan-meta.hp-filter-bar {
+  justify-content: flex-start;
+  margin-bottom: 0.75rem;
+}
+
 .hcc-detail-card__header--dental {
   background: linear-gradient(135deg, #0369a1 0%, #0ea5e9 100%);
 }
@@ -343,7 +408,98 @@
 }
 
 .hcc-detail-card__body {
-  padding: 0.85rem;
+  padding: 0.85rem 1rem 1rem;
+}
+
+.hcc-field-group + .hcc-field-group {
+  margin-top: 0.9rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.hcc-field-group__title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 0.55rem;
+}
+
+.hcc-field-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1.1rem;
+}
+
+.hcc-field-grid.hcc-field-grid--pay {
+  grid-template-columns: 1fr;
+  gap: 0;
+  height: 100%;
+}
+
+.hcc-detail-card--pay .hcc-detail-card__body {
+  display: flex;
+}
+
+.hcc-detail-card--pay .hcc-field-grid--pay {
+  flex: 1;
+}
+
+.hcc-detail-card--pay .hcc-field {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.hcc-detail-card--pay .hcc-field:first-child {
+  padding-top: 0.15rem;
+}
+
+.hcc-detail-card--pay .hcc-field:last-child {
+  border-bottom: none;
+  padding-bottom: 0.15rem;
+}
+
+.hcc-field__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #64748b;
+  margin-bottom: 0.15rem;
+}
+
+.hcc-field__value {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #0f2744;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.hcc-field__value--danger {
+  color: #b91c1c;
+}
+
+.hcc-field__value--price {
+  color: #166534;
+  font-size: 1.2rem;
+}
+
+@media (max-width: 991.98px) {
+  .hcc-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 575.98px) {
+  .hcc-field-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hcc-field-grid.hcc-field-grid--pay {
+    grid-template-columns: 1fr;
+  }
 }
 
 .hcc-detail-card__body .small.text-muted {
@@ -382,4 +538,71 @@
 .hcc-alert {
   border-radius: 10px;
   font-size: 0.8125rem;
+}
+
+@media (max-width: 575.98px) {
+  .modal-dialog.hcc-modal {
+    max-width: calc(100% - 0.5rem) !important;
+    width: calc(100% - 0.5rem) !important;
+    margin: 0.25rem auto;
+  }
+
+  .hcc-modal .modal-content,
+  .hcc-modal__body {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .hcc-modal__header,
+  .hcc-modal__body,
+  .hcc-modal__footer {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .hcc-modal__title {
+    font-size: 0.95rem;
+  }
+
+  .hcc-table-wrap {
+    container-type: inline-size;
+    display: block;
+    width: 0;
+    min-width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .hcc-expand-panel {
+    position: sticky;
+    left: 0;
+    width: 100cqi;
+    max-width: 100cqi;
+    box-sizing: border-box;
+    padding: 0.75rem;
+  }
+
+  .hcc-plan-section,
+  .hcc-plan-section .hp-table-wrap {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .hcc-plan-section .hp-table-wrap {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .hcc-plan-toggle {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .hcc-plan-meta.hp-filter-bar {
+    align-items: flex-start;
+  }
+
+  .hcc-plan-meta .hp-chip {
+    white-space: normal;
+  }
 }

@@ -1,10 +1,13 @@
 // src/components/coberturas/HistorialCoberturasCanceladasModal.jsx
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Modal, Button, Table, Alert, Spinner, Badge, Form, Row, Col } from "react-bootstrap";
 import { FaChevronDown, FaChevronRight } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import { fetchHistorialPlan } from "../../services/historialPlanCoberturaApi";
+import HistorialPlanCoberturaConsulta from "./HistorialPlanCoberturaConsulta";
+import { referenciaHistorialPlanCancelacion } from "../../utils/historialPlanCobertura";
 import {
   COBERTURA_TIPO_DENTAL_MS,
   isDentalCoberturaTipo,
@@ -156,7 +159,7 @@ const ordenarHistorialAgrupado = (items = []) => {
 /**
  * HistorialCoberturasCanceladasModal
  * 
- * Modal para consultar el historial de coberturas canceladas de un grupo familiar.
+ * Modal para consultar el historial de retiros y cancelaciones de un grupo familiar.
  * 
  * Props:
  * - show (boolean): Controla la visibilidad del modal
@@ -183,6 +186,9 @@ const HistorialCoberturasCanceladasModal = ({
   const [error, setError] = useState("");
   const [grupoFamiliarInfo, setGrupoFamiliarInfo] = useState(null);
   const [filasExpandidas, setFilasExpandidas] = useState(new Set());
+  const [planesAbiertos, setPlanesAbiertos] = useState(() => new Set());
+  const planCacheRef = useRef(new Map());
+  const [planTick, setPlanTick] = useState(0);
 
   // Filtros
   const [filtroClienteId, setFiltroClienteId] = useState("");
@@ -205,6 +211,9 @@ const HistorialCoberturasCanceladasModal = ({
       setFiltroCompaniaId("");
       setFiltroAnio(anioInicialStr);
       setFilasExpandidas(new Set());
+      setPlanesAbiertos(new Set());
+      planCacheRef.current = new Map();
+      setPlanTick(0);
       cargarOpcionesFiltro();
     } else if (!show) {
       setHistorial([]);
@@ -217,6 +226,9 @@ const HistorialCoberturasCanceladasModal = ({
       setAnios([]);
       setGrupoFamiliarInfo(null);
       setFilasExpandidas(new Set());
+      setPlanesAbiertos(new Set());
+      planCacheRef.current = new Map();
+      setPlanTick(0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- cargarOpcionesFiltro es estable en práctica
   }, [show, grupoFamiliarId, anioInicialStr]);
@@ -507,6 +519,61 @@ const HistorialCoberturasCanceladasModal = ({
     Boolean(filtroCompaniaId) ||
     (!soloAnioInicial && Boolean(filtroAnio));
 
+  const leerEntradaPlan = (coberturaId) => {
+    if (planTick < 0 || coberturaId == null) return null;
+    return planCacheRef.current.get(String(coberturaId)) ?? null;
+  };
+
+  const publicarPlan = (key, entry) => {
+    planCacheRef.current.set(key, entry);
+    setPlanTick((n) => n + 1);
+  };
+
+  const solicitarHistorialPlan = (coberturaId, { forzar = false } = {}) => {
+    const key = String(coberturaId);
+    const actual = planCacheRef.current.get(key);
+    if (
+      !forzar &&
+      (actual?.status === "loading" || actual?.status === "success")
+    ) {
+      return;
+    }
+
+    const requestId = (actual?.requestId ?? 0) + 1;
+    publicarPlan(key, { status: "loading", data: [], error: "", requestId });
+
+    fetchHistorialPlan(coberturaId)
+      .then((res) => {
+        const vigente = planCacheRef.current.get(key);
+        if (!vigente || vigente.requestId !== requestId) return;
+        const data = Array.isArray(res?.data) ? res.data : [];
+        publicarPlan(key, { status: "success", data, error: "", requestId });
+      })
+      .catch((err) => {
+        const vigente = planCacheRef.current.get(key);
+        if (!vigente || vigente.requestId !== requestId) return;
+        publicarPlan(key, {
+          status: "error",
+          data: [],
+          error: err?.message || "No se pudo cargar el historial de plan.",
+          requestId,
+        });
+      });
+  };
+
+  const toggleHistorialPlan = (filaId, referencia) => {
+    const abrir = !planesAbiertos.has(filaId);
+    setPlanesAbiertos((prev) => {
+      const next = new Set(prev);
+      if (next.has(filaId)) next.delete(filaId);
+      else next.add(filaId);
+      return next;
+    });
+    if (abrir && referencia.valida) {
+      solicitarHistorialPlan(referencia.coberturaId);
+    }
+  };
+
   // Toggle para expandir/contraer filas
   const toggleFila = (coberturaId) => {
     setFilasExpandidas((prev) => {
@@ -646,8 +713,10 @@ const HistorialCoberturasCanceladasModal = ({
   };
 
   // Renderizar información completa de la cobertura
-  const renderCoberturaCompleta = (item) => {
+  const renderCoberturaCompleta = (item, filaId) => {
     const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
+    const referenciaPlan = referenciaHistorialPlanCancelacion(item);
+    const planAbierto = planesAbiertos.has(filaId);
 
     return (
       <div className="row g-3">
@@ -662,126 +731,174 @@ const HistorialCoberturasCanceladasModal = ({
         )}
 
         {/* Información de la Cobertura */}
-        <Col md={6}>
+        <Col lg={8} md={7}>
           <div className="hcc-detail-card h-100">
-            <div className={`hcc-detail-card__header${esDental ? " hcc-detail-card__header--dental" : ""}`}>
-              <i className="fas fa-shield-alt me-2" aria-hidden="true" />
-              Información de la Cobertura
-              <span className="ms-2">{renderBadgeProducto(item)}</span>
+            <div className={`hcc-detail-card__header hcc-detail-card__header--with-action${esDental ? " hcc-detail-card__header--dental" : ""}`}>
+              <span>
+                <i className="fas fa-shield-alt me-2" aria-hidden="true" />
+                Información de la cobertura
+                <span className="ms-2">{renderBadgeProducto(item)}</span>
+              </span>
+              <button
+                type="button"
+                className="hcc-plan-toggle"
+                aria-expanded={planAbierto}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleHistorialPlan(filaId, referenciaPlan);
+                }}
+              >
+                {planAbierto ? "Ocultar historial del plan" : "Ver historial del plan"}
+              </button>
             </div>
             <div className="hcc-detail-card__body">
-              <div className="row g-2">
-                <div className="col-12">
-                  <small className="text-muted">Numero ID:</small>
-                  <div className="fw-semibold">{item?.codigo_poliza || "-"}</div>
-                </div>
-                <div className="col-12">
-                  <small className="text-muted">Producto:</small>
-                  <div className="fw-semibold mt-1">
-                    {renderBadgeProducto(item, { large: true })}
+              <div className="hcc-field-group">
+                <div className="hcc-field-group__title">Identificación</div>
+                <div className="hcc-field-grid">
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Número ID</div>
+                    <div className="hcc-field__value">{item?.codigo_poliza || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Producto</div>
+                    <div className="hcc-field__value">
+                      {renderBadgeProducto(item, { large: true })}
+                    </div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Tipo de cobertura</div>
+                    <div className="hcc-field__value">{item?.cobertura_tipo || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Compañía</div>
+                    <div className="hcc-field__value">{item?.compania?.nombre || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Parentesco</div>
+                    <div className="hcc-field__value">
+                      {item?.parentesco || "-"}
+                      {item?.parentesco?.toUpperCase() === "TOMADOR" && (
+                        <Badge bg="warning" text="dark" className="ms-2">TOMADOR</Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">ID cobertura original</div>
+                    <div className="hcc-field__value">{item?.cobertura_id_original || "-"}</div>
                   </div>
                 </div>
-                <div className="col-12">
-                  <small className="text-muted">Tipo de Cobertura:</small>
-                  <div className="fw-semibold">{item?.cobertura_tipo || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Plan:</small>
-                  <div className="fw-semibold">{item?.plan || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Metal:</small>
-                  <div className="fw-semibold">{item?.metal || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Red:</small>
-                  <div className="fw-semibold">{item?.red || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Grupo:</small>
-                  <div className="fw-semibold">{item?.grupo || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Año de Cobertura:</small>
-                  <div className="fw-semibold">{item?.ano_cobertura || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Elegibilidad:</small>
-                  <div className="fw-semibold">{item?.elegibilidad || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Estado de Cobertura:</small>
-                  <div className="fw-semibold">{item?.estado_cobertura || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Precio:</small>
-                  <div className="fw-semibold text-success">
-                    {formatearDinero(item?.precio)}
+              </div>
+
+              <div className="hcc-field-group">
+                <div className="hcc-field-group__title">Plan</div>
+                <div className="hcc-field-grid">
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Plan</div>
+                    <div className="hcc-field__value">{item?.plan || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Metal</div>
+                    <div className="hcc-field__value">{item?.metal || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Red</div>
+                    <div className="hcc-field__value">{item?.red || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Grupo</div>
+                    <div className="hcc-field__value">{item?.grupo || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Elegibilidad</div>
+                    <div className="hcc-field__value">{item?.elegibilidad || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Año de cobertura</div>
+                    <div className="hcc-field__value">{item?.ano_cobertura || "-"}</div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Estado de cobertura</div>
+                    <div className="hcc-field__value">{item?.estado_cobertura || "-"}</div>
                   </div>
                 </div>
-                <div className="col-6">
-                  <small className="text-muted">Compañía:</small>
-                  <div className="fw-semibold">
-                    {item?.compania?.nombre || "-"}
+              </div>
+
+              <div className="hcc-field-group">
+                <div className="hcc-field-group__title">Vigencia</div>
+                <div className="hcc-field-grid">
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Fecha de activación</div>
+                    <div className="hcc-field__value">
+                      {formatearFecha(item?.fecha_activacion)}
+                    </div>
                   </div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">ID Cobertura Original:</small>
-                  <div className="fw-semibold">{item?.cobertura_id_original || "-"}</div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Fecha de cancelación</div>
+                    <div className="hcc-field__value hcc-field__value--danger">
+                      {formatearFecha(item?.fecha_cancelacion)}
+                    </div>
+                  </div>
+                  <div className="hcc-field">
+                    <div className="hcc-field__label">Fecha de expiración</div>
+                    <div className="hcc-field__value">
+                      {formatearFecha(item?.fecha_retiro)}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </Col>
 
-        {/* Información de Fechas y Pagos */}
-        <Col md={6}>
-          <div className="hcc-detail-card h-100">
+        <Col lg={4} md={5}>
+          <div className="hcc-detail-card hcc-detail-card--pay h-100">
             <div className="hcc-detail-card__header">
-              <i className="fas fa-calendar-alt me-2" aria-hidden="true" />
-              Fechas y Pagos
+              <i className="fas fa-credit-card me-2" aria-hidden="true" />
+              Pagos
             </div>
             <div className="hcc-detail-card__body">
-              <div className="row g-2">
-                <div className="col-6">
-                  <small className="text-muted">Fecha de Activación:</small>
-                  <div className="fw-semibold">
-                    {formatearFecha(item?.fecha_activacion)}
-                  </div>
+              <div className="hcc-field-grid hcc-field-grid--pay">
+                <div className="hcc-field">
+                  <div className="hcc-field__label">Día de pago</div>
+                  <div className="hcc-field__value">{item?.dia_pago || "-"}</div>
                 </div>
-                <div className="col-6">
-                  <small className="text-muted">Fecha de cancelación:</small>
-                  <div className="fw-semibold text-danger">
-                    {formatearFecha(item?.fecha_cancelacion)}
-                  </div>
+                <div className="hcc-field">
+                  <div className="hcc-field__label">Medio de pago</div>
+                  <div className="hcc-field__value">{item?.tipo_pago || "-"}</div>
                 </div>
-                <div className="col-6">
-                  <small className="text-muted">Fecha de expiración:</small>
-                  <div className="fw-semibold">
-                    {formatearFecha(item?.fecha_retiro)}
-                  </div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Tipo de Pago:</small>
-                  <div className="fw-semibold">{item?.tipo_pago || "-"}</div>
-                </div>
-                <div className="col-6">
-                  <small className="text-muted">Día de Pago:</small>
-                  <div className="fw-semibold">{item?.dia_pago || "-"}</div>
-                </div>
-                <div className="col-12">
-                  <small className="text-muted">Parentesco:</small>
-                  <div className="fw-semibold">
-                    {item?.parentesco || "-"}
-                    {item?.parentesco?.toUpperCase() === "TOMADOR" && (
-                      <Badge bg="warning" text="dark" className="ms-2">TOMADOR</Badge>
-                    )}
+                <div className="hcc-field">
+                  <div className="hcc-field__label">Precio de la cobertura</div>
+                  <div className="hcc-field__value hcc-field__value--price">
+                    {formatearDinero(item?.precio)}
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </Col>
+
+        {planAbierto && (
+          <Col xs={12}>
+            <HistorialPlanCoberturaConsulta
+              productoLabel={getEtiquetaProductoHistorial(item)}
+              esDental={esDental}
+              coberturaId={referenciaPlan.coberturaId}
+              anio={referenciaPlan.anio}
+              valida={referenciaPlan.valida}
+              status={leerEntradaPlan(referenciaPlan.coberturaId)?.status || "idle"}
+              error={leerEntradaPlan(referenciaPlan.coberturaId)?.error || ""}
+              registros={leerEntradaPlan(referenciaPlan.coberturaId)?.data || []}
+              onRetry={() => {
+                if (referenciaPlan.valida) {
+                  solicitarHistorialPlan(referenciaPlan.coberturaId, {
+                    forzar: true,
+                  });
+                }
+              }}
+              onCollapse={() => toggleHistorialPlan(filaId, referenciaPlan)}
+            />
+          </Col>
+        )}
 
         {/* Información de Cancelación */}
         <Col md={12}>
@@ -847,11 +964,11 @@ const HistorialCoberturasCanceladasModal = ({
             </div>
             <div>
               <h5 className="hcc-modal__title">
-                Historial de coberturas
+                Historial de retiros y cancelaciones
                 {soloAnioInicial && anioInicialStr ? ` — ${anioInicialStr}` : ""}
               </h5>
               <p className="hcc-modal__subtitle">
-                Registro de coberturas del grupo familiar
+                Registro de retiros y cancelaciones del grupo familiar
               </p>
             </div>
           </div>
@@ -1179,7 +1296,7 @@ const HistorialCoberturasCanceladasModal = ({
                           <tr>
                             <td colSpan={13} style={{ padding: 0, border: "none" }}>
                               <div className="hcc-expand-panel">
-                                {renderCoberturaCompleta(item)}
+                                {renderCoberturaCompleta(item, coberturaId)}
 
                                 {clienteInfo && (
                                   <div className="mt-3">

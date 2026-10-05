@@ -1811,6 +1811,7 @@ const handleOpenViewModal = (cliente) => {
         onHide={() => setShowEditModal(false)}
         clienteId={clienteToEdit}
         clienteData={clienteDataToEdit}
+        origenActualizacion="ficha_cliente"
         onClienteUpdated={handleClienteUpdated}
       />
             {/* Modal de Visualización */}

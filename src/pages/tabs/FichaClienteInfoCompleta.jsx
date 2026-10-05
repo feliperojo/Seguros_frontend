@@ -1,13 +1,48 @@
-import React, { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Card, Row, Col, Badge } from "react-bootstrap";
 import { useFichaCliente } from "../../context/fichaClienteContext";
+import HistorialCambiosModal from "../../components/Reports/HistorialCambiosModal";
+
+function tituloSeccion(titulo, onVerHistorial, disabled) {
+  return (
+    <div className="d-flex align-items-center justify-content-between gap-2">
+      <h6 className="mb-0 text-primary">{titulo}</h6>
+      <button
+        type="button"
+        className="btn btn-link btn-sm text-secondary text-decoration-none py-0 px-1"
+        onClick={onVerHistorial}
+        disabled={disabled}
+        aria-label={`Ver historial de ${titulo}`}
+      >
+        Ver historial
+      </button>
+    </div>
+  );
+}
 
 const NotAvailable = ({ children = "—" }) => (
   <span className="text-muted">{children}</span>
 );
 
+const toValidId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
 export default function FichaClienteInfoCompleta() {
-  const { cliente, formatDate } = useFichaCliente();
+  const { cliente, formatDate, coberturaPrincipal, selectedGrupoId } = useFichaCliente();
+  const [seccionHistorial, setSeccionHistorial] = useState(null);
+
+  const grupoFamiliarId = useMemo(() => {
+    if (!cliente) return null;
+    return (
+      toValidId(selectedGrupoId) ??
+      toValidId(cliente.grupo_familiar_id) ??
+      toValidId(coberturaPrincipal?.grupo_familiar_id) ??
+      toValidId(coberturaPrincipal?.grupo_familiar?.id) ??
+      null
+    );
+  }, [cliente, coberturaPrincipal, selectedGrupoId]);
 
   const telefonosFormateados = useMemo(() => {
     if (!cliente) return [];
@@ -84,7 +119,11 @@ export default function FichaClienteInfoCompleta() {
         <Col>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-light">
-              <h6 className="mb-0 text-primary">Datos Principales</h6>
+              {tituloSeccion(
+                "Datos Principales",
+                () => setSeccionHistorial("principales"),
+                !cliente.id
+              )}
             </Card.Header>
             <Card.Body>
               <Row>
@@ -144,7 +183,11 @@ export default function FichaClienteInfoCompleta() {
         <Col>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-light">
-              <h6 className="mb-0 text-primary">Estatus migratorio</h6>
+              {tituloSeccion(
+                "Estatus migratorio",
+                () => setSeccionHistorial("migratorio"),
+                !cliente.id
+              )}
             </Card.Header>
             <Card.Body>
               <Row>
@@ -205,7 +248,11 @@ export default function FichaClienteInfoCompleta() {
         <Col>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-light">
-              <h6 className="mb-0 text-primary">Datos de Contacto</h6>
+              {tituloSeccion(
+                "Datos de Contacto",
+                () => setSeccionHistorial("contacto"),
+                !cliente.id
+              )}
             </Card.Header>
             <Card.Body>
               <Row>
@@ -261,7 +308,11 @@ export default function FichaClienteInfoCompleta() {
         <Col>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-light">
-              <h6 className="mb-0 text-primary">Dirección</h6>
+              {tituloSeccion(
+                "Dirección",
+                () => setSeccionHistorial("direccion"),
+                !cliente.id
+              )}
             </Card.Header>
             <Card.Body>
               <Row>
@@ -312,7 +363,11 @@ export default function FichaClienteInfoCompleta() {
         <Col>
           <Card className="border-0 shadow-sm">
             <Card.Header className="bg-light">
-              <h6 className="mb-0 text-primary">Datos de Empleo e Ingreso</h6>
+              {tituloSeccion(
+                "Datos de Empleo e Ingreso",
+                () => setSeccionHistorial("empleo"),
+                !cliente.id
+              )}
             </Card.Header>
             <Card.Body>
               <Row>
@@ -423,6 +478,17 @@ export default function FichaClienteInfoCompleta() {
           </Card>
         </Col>
       </Row>
+
+      {seccionHistorial && cliente.id && (
+        <HistorialCambiosModal
+          show
+          onClose={() => setSeccionHistorial(null)}
+          modelo="Cliente"
+          modeloId={cliente.id}
+          seccion={seccionHistorial}
+          grupoFamiliarId={grupoFamiliarId}
+        />
+      )}
     </div>
   );
 }

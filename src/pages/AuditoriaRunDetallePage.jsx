@@ -17,6 +17,7 @@ import {
 } from "react-icons/fa";
 import { getRunReporte, updateItem, getRun } from "../services/auditoriasService";
 import { fetchCompanies } from "../services/companies";
+import { textosCondicionCobros } from "../utils/condicionCobro";
 import RequerimientosCoberturaModal from "../components/RequerimientosCoberturaModal";
 import Pagination from "../components/Pagination";
 import useToast from "../hooks/useToast";
@@ -2227,10 +2228,11 @@ const AuditoriaRunDetallePage = () => {
             <div className="border rounded bg-light px-3 py-2 mb-2 small text-start">
               <strong>Cliente:</strong> {pagosClienteVista.cobertura.cliente || "—"} ·{" "}
               <strong>Numero ID:</strong> {pagosClienteVista.cobertura.codigo_poliza || "—"}
-              {pagosClienteVista.cobertura.compania ? (
+              {!pagosClienteVista.loading && pagosClienteVista.items?.length ? (
                 <>
                   {" "}
-                  · <strong>Compañía:</strong> {pagosClienteVista.cobertura.compania}
+                  · <strong>Compañía del cobro:</strong>{" "}
+                  {textosCondicionCobros(pagosClienteVista.items, "compania_nombre")}
                 </>
               ) : null}
             </div>
@@ -2248,15 +2250,11 @@ const AuditoriaRunDetallePage = () => {
             </Alert>
           ) : (
             (() => {
-              const c = pagosClienteVista.cobertura;
               const { year, porMes } = agruparPagosPorMesEnAnio(pagosClienteVista.items, periodoRun);
               const indModal = includePagosEnabled ? indicadorMorosidadPagosPorMes(porMes) : null;
-              const pagador =
-                c?.pagador ??
-                c?.pagador_nombre ??
-                c?.nombre_pagador ??
-                c?.cobertura?.pagador?.nombre_completo ??
-                "—";
+              const pagador = pagosClienteVista.items?.length
+                ? textosCondicionCobros(pagosClienteVista.items, "pagador_nombre")
+                : "Pendiente de confirmar";
 
               return (
                 <>

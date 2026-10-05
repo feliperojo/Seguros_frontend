@@ -17,7 +17,9 @@ import CambioVidaCancelacionModal from "../coberturas/CambioVidaCancelacionModal
 import HistorialCoberturasCanceladasModal from "../coberturas/HistorialCoberturasCanceladasModal";
 import ReactivacionCoberturasModal from "../coberturas/ReactivacionCoberturasModal";
 import GestorDocumentosGrupoFamiliar from "../Documentos/GestorDocumentosGrupoFamiliar";
+import PagosGrupoFamiliarModal from "../GrupoFamiliar/PagosGrupoFamiliarModal";
 import GroupTags from "../GroupTags";
+import { esGrupoFamiliarTerminado } from "../../constants/estadosGrupoFamiliar";
 import GrupoNotaEditor from "../GrupoFamiliar/GrupoNotaEditor";
 import systemConfigService from "../../services/SystemConfigService";
 import "../../styles/GrupoFamiliarDetail.css";
@@ -54,6 +56,7 @@ const Prospectogrupo = ({
   const [showDriveModal, setShowDriveModal] = useState(false);
   const [showHistorialCambios, setShowHistorialCambios] = useState(false);
   const [showContactosModal, setShowContactosModal] = useState(false);
+  const [showPagosModal, setShowPagosModal] = useState(false);
   const [showCambioVidaModal, setShowCambioVidaModal] = useState(false);
   const [showHistorialCanceladasModal, setShowHistorialCanceladasModal] = useState(false);
   const [showReactivacionModal, setShowReactivacionModal] = useState(false);
@@ -165,6 +168,8 @@ const Prospectogrupo = ({
   
   // Verificar si el grupo tiene coberturas para generar el PDF
   const puedeGenerarPDF = puedeMostrarConfirmacion && grupo && grupo.coberturas && Array.isArray(grupo.coberturas) && grupo.coberturas.length > 0;
+
+  const puedeConsultarPagos = esGrupoFamiliarTerminado(estadoActual);
 
   // Obtener el ID del cliente tomador para generar la carta de autorización
   const obtenerClienteTomadorId = () => {
@@ -278,6 +283,18 @@ const Prospectogrupo = ({
                 <i className="bi bi-folder2-open me-1"></i>
                 <span className="d-none d-lg-inline">Requerimientos</span>
               </button>
+              {puedeConsultarPagos && (
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
+                  onClick={() => setShowPagosModal(true)}
+                  disabled={!resolvedGrupoId}
+                  title="Pagos del grupo familiar"
+                >
+                  <i className="bi bi-cash-coin me-1"></i>
+                  <span className="d-none d-lg-inline">Pagos</span>
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-sm btn-outline-secondary gf-detalle__utils-btn"
@@ -679,6 +696,14 @@ const Prospectogrupo = ({
   grupoFamiliarId={resolvedGrupoId}
   readOnly={true}
 />
+
+{puedeConsultarPagos && (
+  <PagosGrupoFamiliarModal
+    show={showPagosModal}
+    onHide={() => setShowPagosModal(false)}
+    grupoFamiliarId={resolvedGrupoId}
+  />
+)}
 
 <CambioVidaCancelacionModal
   show={showCambioVidaModal}

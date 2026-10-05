@@ -409,7 +409,10 @@ export default function ContactosAdmin() {
 
       if (model.id) {
         // Actualizar contacto existente
-        await apiRequest(`/cliente/${model.id}`, "PUT", payload);
+        await apiRequest(`/cliente/${model.id}`, "PUT", {
+          ...payload,
+          origen: "administracion_contactos",
+        });
         
         // refrescar listado
         setRows((prev) =>

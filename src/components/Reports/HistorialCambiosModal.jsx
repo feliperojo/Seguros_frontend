@@ -2,7 +2,7 @@
 // ✅ MODAL DE SOLO LECTURA: Este componente solo muestra el historial de cambios.
 // NO realiza actualizaciones al backend. Todas las actualizaciones se realizan
 // a través del botón "Guardar" del grupo familiar en GrupoFamiliarDetail.jsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
 import { formatDateTimeForDisplay, formatPhone334 } from "../../utils/formatters";
@@ -13,6 +13,17 @@ import {
   CLIENTE_FIELDS_CONTACTO,
   CLIENTE_FIELDS_EMPLEO,
 } from "../../utils/clienteFieldGroups";
+import {
+  claveCampoCliente,
+  definicionSeccionCliente,
+  ETIQUETAS_SECCION_FICHA,
+  esEventoIndividualCliente,
+  etiquetaOrigenActualizacion,
+  paginarFilas,
+  filtrarHistorialPorSeccion,
+  formatValorCampoCliente,
+  ordenarCamposDeSeccion,
+} from "../../utils/clienteHistorialSeccion";
 import "../../styles/GfModal.css";
 
 // ==================== CONSTANTES ====================
@@ -74,38 +85,27 @@ const CLIENTE_SECCIONES = [
   {
     id: "principales",
     label: "Datos personales",
-    fields: new Set(CLIENTE_FIELDS_PRINCIPALES.map(([key]) => key)),
+    fields: definicionSeccionCliente("principales").fields,
   },
   {
     id: "migratorio",
     label: "Status migratorio",
-    fields: new Set([
-      ...CLIENTE_FIELDS_MIGRATORIO.map(([key]) => key),
-      "ssn",
-    ]),
+    fields: definicionSeccionCliente("migratorio").fields,
   },
   {
     id: "direccion",
     label: "Dirección",
-    fields: new Set([
-      ...CLIENTE_FIELDS_DIRECCION.map(([key]) => key),
-      "direccion_completa",
-      "estado_direccion",
-      "zip_code",
-    ]),
+    fields: definicionSeccionCliente("direccion").fields,
   },
   {
     id: "contacto",
     label: "Contacto",
-    fields: new Set([
-      ...CLIENTE_FIELDS_CONTACTO.map(([key]) => key),
-      "telefonos",
-    ]),
+    fields: definicionSeccionCliente("contacto").fields,
   },
   {
     id: "empleo",
     label: "Empleo e ingreso",
-    fields: new Set(CLIENTE_FIELDS_EMPLEO.map(([key]) => key)),
+    fields: definicionSeccionCliente("empleo").fields,
   },
 ];
 
@@ -648,6 +648,450 @@ const renderCoberturasDiffCell = (anteriorVal, nuevoVal) => {
   );
 };
 
+const renderValorSeccion = (val, fieldKey) => {
+  if (esCampoTelefonos(fieldKey)) return renderTelefonosHistorial(val);
+  return formatValorCampoCliente(val, fieldKey);
+};
+
+const textoPlanoValor = (val, fieldKey) => {
+  const formatted = formatValorCampoCliente(val, fieldKey);
+  if (formatted) return formatted;
+  if (val === null || val === undefined || val === "") return "";
+  try {
+    return JSON.stringify(val);
+  } catch {
+    return String(val);
+  }
+};
+
+const etiquetaFilaOrigen = (fila) => etiquetaOrigenActualizacion(
+  fila.origen,
+  fila.grupoFamiliarOrigenId,
+  fila.coberturaOrigenId,
+);
+
+const textoBusquedaFila = (fila) =>
+  [
+    formatDateTime(fila.fecha),
+    fila.usuario,
+    fila.label,
+    textoPlanoValor(fila.anterior, fila.campo),
+    textoPlanoValor(fila.nuevo, fila.campo),
+    etiquetaFilaOrigen(fila),
+  ].join(" ").toLowerCase();
+
+const opcionesCampoHistorial = (filas) => {
+  const opciones = [];
+  const vistos = new Set();
+  filas.forEach((fila) => {
+    if (!fila?.campo || vistos.has(fila.campo)) return;
+    vistos.add(fila.campo);
+    opciones.push({ value: fila.campo, label: fila.label || fila.campo });
+  });
+  return opciones;
+};
+
+const filasDeHistorialSeccion = (rows, seccionId) => {
+  const filas = [];
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const campos = ordenarCamposDeSeccion(Object.keys(row?.cambios || {}), seccionId);
+    campos.forEach((campo) => {
+      const info = row.cambios[campo];
+      filas.push({
+        key: `${row.id ?? "sin-id"}-${campo}`,
+        fecha: row.created_at || row.fecha,
+        usuario: row.usuario || "—",
+        campo,
+        label: getFieldLabel(claveCampoCliente(campo)),
+        anterior: info?.anterior,
+        nuevo: info?.nuevo,
+        origen: row.origen ?? null,
+        grupoFamiliarOrigenId: row.grupo_familiar_origen_id ?? null,
+        coberturaOrigenId: row.cobertura_origen_id ?? null,
+      });
+    });
+  });
+  return filas;
+};
+
+function filtroHistorialSeccion({
+  opcionesCampo,
+  filtroCampo,
+  onCampo,
+  filtroTexto,
+  onTexto,
+  fechaDesde,
+  fechaHasta,
+  onDesde,
+  onHasta,
+  onLimpiar,
+  total,
+  visibles,
+}) {
+  const hayFiltro = Boolean(filtroCampo || filtroTexto.trim() || fechaDesde || fechaHasta);
+
+  return (
+    <div className="mb-3">
+      <div className="row g-2 align-items-end">
+        <div className="col-12 col-md-3">
+          <label htmlFor="historial-filtro-campo" className="form-label small mb-1">
+            Campo
+          </label>
+          <select
+            id="historial-filtro-campo"
+            className="form-select form-select-sm"
+            value={filtroCampo}
+            onChange={(event) => onCampo(event.target.value)}
+          >
+            <option value="">Todos los campos</option>
+            {opcionesCampo.map((opcion) => (
+              <option key={opcion.value} value={opcion.value}>
+                {opcion.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="col-12 col-md">
+          <label htmlFor="historial-filtro-texto" className="form-label small mb-1">
+            Buscar
+          </label>
+          <input
+            id="historial-filtro-texto"
+            type="search"
+            className="form-control form-control-sm"
+            placeholder="Usuario, fecha o valor"
+            value={filtroTexto}
+            onChange={(event) => onTexto(event.target.value)}
+          />
+        </div>
+        <div className="col-6 col-md-auto">
+          <label htmlFor="historial-desde" className="form-label small mb-1">Desde</label>
+          <EntradaFechaHistorial id="historial-desde" value={fechaDesde} onChange={onDesde} />
+        </div>
+        <div className="col-6 col-md-auto">
+          <label htmlFor="historial-hasta" className="form-label small mb-1">Hasta</label>
+          <EntradaFechaHistorial id="historial-hasta" value={fechaHasta} onChange={onHasta} />
+        </div>
+        {hayFiltro && (
+          <div className="col-12 col-md-auto">
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onLimpiar}>
+              Limpiar
+            </button>
+          </div>
+        )}
+      </div>
+      <p className="small text-muted mb-0 mt-2">
+        {visibles} de {total} {total === 1 ? "cambio" : "cambios"}
+      </p>
+    </div>
+  );
+}
+
+const enmascararFechaMdY = (valor) => {
+  const texto = String(valor ?? "");
+  if (/[/-]/.test(texto)) {
+    const partes = texto.split(/[/-]/);
+    const mes = (partes[0] || "").replace(/\D/g, "").slice(0, 2);
+    const dia = (partes[1] || "").replace(/\D/g, "").slice(0, 2);
+    const anio = (partes[2] || "").replace(/\D/g, "").slice(0, 4);
+    const terminaSeparador = /[/-]$/.test(texto);
+    if (partes.length <= 1) return mes;
+    if (partes.length === 2) {
+      if (!dia && terminaSeparador) return mes ? `${mes}/` : "";
+      return dia ? `${mes}/${dia}` : mes;
+    }
+    const mesListo = mes.length === 1 && (dia || anio) ? mes.padStart(2, "0") : mes;
+    const diaListo = dia.length === 1 && anio ? dia.padStart(2, "0") : dia;
+    if (!anio && terminaSeparador) return `${mesListo}/${diaListo}/`;
+    if (!anio) return diaListo ? `${mesListo}/${diaListo}` : (mesListo ? `${mesListo}/` : "");
+    return `${mesListo}/${diaListo}/${anio}`;
+  }
+  const digitos = texto.replace(/\D/g, "").slice(0, 8);
+  if (digitos.length <= 2) return digitos;
+  if (digitos.length <= 4) return `${digitos.slice(0, 2)}/${digitos.slice(2)}`;
+  return `${digitos.slice(0, 2)}/${digitos.slice(2, 4)}/${digitos.slice(4)}`;
+};
+
+const fechaMdY = (valor) => {
+  const texto = String(valor || "").trim();
+  if (!texto) return "";
+  const match = texto.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!match) return null;
+  const mes = Number(match[1]);
+  const dia = Number(match[2]);
+  const anio = Number(match[3]);
+  if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+  const iso = `${anio}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+  const comprobacion = new Date(`${iso}T00:00:00`);
+  if (
+    comprobacion.getFullYear() !== anio
+    || comprobacion.getMonth() + 1 !== mes
+    || comprobacion.getDate() !== dia
+  ) {
+    return null;
+  }
+  return iso;
+};
+
+const fechaHistorialIncompleta = (valor) => {
+  const texto = String(valor || "").trim();
+  if (!texto) return false;
+  return texto.replace(/\D/g, "").length < 8;
+};
+
+function EntradaFechaHistorial({ id, value, onChange }) {
+  const calendarioRef = useRef(null);
+  const iso = fechaMdY(value) || "";
+
+  const abrirCalendario = () => {
+    const input = calendarioRef.current;
+    if (!input) return;
+    if (typeof input.showPicker === "function") {
+      try {
+        input.showPicker();
+        return;
+      } catch {
+        input.click();
+        return;
+      }
+    }
+    input.click();
+  };
+
+  return (
+    <div className="position-relative" style={{ width: "11.25rem" }}>
+      <div className="input-group input-group-sm">
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          className="form-control"
+          placeholder="mm/dd/aaaa"
+          title="Escribe 10022026 o mm/dd/aaaa. El calendario usa el mismo formato."
+          value={value}
+          onChange={(event) => onChange(enmascararFechaMdY(event.target.value))}
+        />
+        <button
+          type="button"
+          className="btn btn-outline-secondary"
+          aria-label="Abrir calendario"
+          title="Abrir calendario"
+          onClick={abrirCalendario}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+            <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z" />
+          </svg>
+        </button>
+      </div>
+      <input
+        ref={calendarioRef}
+        type="date"
+        tabIndex={-1}
+        aria-hidden="true"
+        value={iso}
+        onChange={(event) => {
+          const elegido = event.target.value;
+          if (!elegido) {
+            onChange("");
+            return;
+          }
+          const [anio, mes, dia] = elegido.split("-");
+          onChange(`${mes}/${dia}/${anio}`);
+        }}
+        style={{
+          position: "absolute",
+          width: 0,
+          height: 0,
+          opacity: 0,
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+const coincideFiltroFila = (fila, filtroCampo, consulta) => {
+  if (filtroCampo && fila.campo !== filtroCampo) return false;
+  if (!consulta) return true;
+  return textoBusquedaFila(fila).includes(consulta);
+};
+
+function listadoFilasSeccion(filasVisibles) {
+  return (
+    <>
+      <div className="d-md-none">
+        {filasVisibles.map((fila) => (
+          <article key={fila.key} className="border rounded p-2 mb-2">
+            <div className="small text-muted mb-1">
+              {formatDateTime(fila.fecha)} · {fila.usuario}
+            </div>
+            <div className="small mb-1">
+              <span className="text-muted">Origen: </span>
+              {etiquetaFilaOrigen(fila)}
+            </div>
+            <div className="fw-semibold mb-1">{fila.label}</div>
+            <div className="small mb-1">
+              <span className="text-muted">Anterior: </span>
+              {renderValorSeccion(fila.anterior, fila.campo)}
+            </div>
+            <div className="small">
+              <span className="text-muted">Nuevo: </span>
+              <span className="fw-semibold">{renderValorSeccion(fila.nuevo, fila.campo)}</span>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <div className="d-none d-md-block table-responsive">
+        <table className="table table-sm table-hover align-middle border mb-0">
+          <thead style={{ backgroundColor: "#e9ecef" }}>
+            <tr>
+              <th scope="col">Fecha</th>
+              <th scope="col" title="Origen de la actualización" style={{ width: "1%", whiteSpace: "nowrap" }}>
+                Origen
+              </th>
+              <th scope="col">Usuario</th>
+              <th scope="col">Campo</th>
+              <th scope="col">Anterior</th>
+              <th scope="col">Nuevo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filasVisibles.map((fila) => (
+              <tr key={fila.key}>
+                <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(fila.fecha)}</td>
+                <td style={{ whiteSpace: "nowrap" }}>
+                  {etiquetaFilaOrigen(fila)}
+                </td>
+                <td>{fila.usuario}</td>
+                <td>{fila.label}</td>
+                <td style={{ wordBreak: "break-word" }}>
+                  <span className="text-muted">{renderValorSeccion(fila.anterior, fila.campo)}</span>
+                </td>
+                <td style={{ wordBreak: "break-word" }}>
+                  <span className="fw-semibold">{renderValorSeccion(fila.nuevo, fila.campo)}</span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function vistaHistorialSeccion({
+  cargando,
+  error,
+  filas,
+  filtroCampo,
+  filtroTexto,
+  fechaDesde,
+  fechaHasta,
+  onDesde,
+  onHasta,
+  onCampo,
+  onTexto,
+  onLimpiar,
+  pagina,
+  onPagina,
+}) {
+  if (cargando) {
+    return (
+      <div className="d-flex justify-content-center py-4">
+        <div className="spinner-border" role="status">
+          <span className="visually-hidden">Cargando...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="alert alert-danger mb-0">{error}</div>;
+  }
+
+  if (filas.length === 0) {
+    return (
+      <div className="text-muted text-center py-3">
+        Sin cambios registrados en esta sección.
+      </div>
+    );
+  }
+
+  const consulta = String(filtroTexto || "").trim().toLowerCase();
+  const desdeIso = fechaHistorialIncompleta(fechaDesde) ? "" : fechaMdY(fechaDesde);
+  const hastaIso = fechaHistorialIncompleta(fechaHasta) ? "" : fechaMdY(fechaHasta);
+  const fechaInvalida = (Boolean(String(fechaDesde || "").trim()) && !fechaHistorialIncompleta(fechaDesde) && desdeIso === null)
+    || (Boolean(String(fechaHasta || "").trim()) && !fechaHistorialIncompleta(fechaHasta) && hastaIso === null);
+  const rangoInvalido = Boolean(desdeIso && hastaIso && desdeIso > hastaIso);
+  const filasVisibles = fechaInvalida || rangoInvalido ? [] : filas.filter((fila) => {
+    if (!coincideFiltroFila(fila, filtroCampo, consulta)) return false;
+    if (!desdeIso && !hastaIso) return true;
+    const match = formatDateTime(fila.fecha).match(/^(\d{2})-(\d{2})-(\d{4})/);
+    if (!match) return false;
+    const dia = `${match[3]}-${match[1]}-${match[2]}`;
+    return (!desdeIso || dia >= desdeIso) && (!hastaIso || dia <= hastaIso);
+  });
+  const paginaActual = paginarFilas(filasVisibles, pagina);
+
+  return (
+    <>
+      {filtroHistorialSeccion({
+        opcionesCampo: opcionesCampoHistorial(filas),
+        filtroCampo,
+        onCampo,
+        filtroTexto,
+        onTexto,
+        fechaDesde,
+        fechaHasta,
+        onDesde,
+        onHasta,
+        onLimpiar,
+        total: filas.length,
+        visibles: filasVisibles.length,
+      })}
+
+      {filasVisibles.length === 0 ? (
+        <div className="text-muted text-center py-3">
+          {fechaInvalida
+            ? "Usa el formato mm/dd/aaaa en Desde y Hasta."
+            : rangoInvalido
+              ? "La fecha Desde debe ser anterior o igual a Hasta."
+              : "Ningún cambio coincide con el filtro."}
+        </div>
+      ) : (
+        <>
+          {listadoFilasSeccion(paginaActual.filas)}
+          {paginaActual.paginas > 1 && (
+            <nav className="d-flex align-items-center justify-content-between gap-2 mt-3" aria-label="Páginas del historial">
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                disabled={paginaActual.pagina <= 1}
+                onClick={() => onPagina(paginaActual.pagina - 1)}
+              >
+                Anterior
+              </button>
+              <span className="small text-muted">
+                Página {paginaActual.pagina} de {paginaActual.paginas}
+              </span>
+              <button
+                type="button"
+                className="btn btn-outline-secondary btn-sm"
+                disabled={paginaActual.pagina >= paginaActual.paginas}
+                onClick={() => onPagina(paginaActual.pagina + 1)}
+              >
+                Siguiente
+              </button>
+            </nav>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 // ==================== COMPONENTE PRINCIPAL ====================
 
 export default function HistorialCambiosModal({
@@ -655,6 +1099,8 @@ export default function HistorialCambiosModal({
   onClose,
   modelo = "GrupoFamiliar",
   modeloId,
+  seccion,
+  grupoFamiliarId = null,
 }) {
   const [historial, setHistorial] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -662,6 +1108,35 @@ export default function HistorialCambiosModal({
   const [error, setError] = useState(null);
   const [viewMode, setViewMode] = useState("grupo");
   const [titularesPorCobertura, setTitularesPorCobertura] = useState({});
+  const [historialSeccion, setHistorialSeccion] = useState({
+    key: "",
+    rows: [],
+    error: null,
+    loading: false,
+  });
+  const [filtroCampo, setFiltroCampo] = useState("");
+  const [filtroTexto, setFiltroTexto] = useState("");
+  const [fechaDesde, setFechaDesde] = useState("");
+  const [fechaHasta, setFechaHasta] = useState("");
+  const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const dialogRef = useRef(null);
+  const closeBtnRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const filtrarPorSeccion = seccion != null && seccion !== "";
+
+  useEffect(() => {
+    setFiltroCampo("");
+    setFiltroTexto("");
+    setFechaDesde("");
+    setFechaHasta("");
+    setPaginaHistorial(1);
+  }, [seccion, modeloId, grupoFamiliarId]);
+
+  useEffect(() => {
+    setPaginaHistorial(1);
+  }, [filtroCampo, filtroTexto, fechaDesde, fechaHasta]);
 
   const isGrupo = modelo === "GrupoFamiliar";
 
@@ -961,20 +1436,51 @@ export default function HistorialCambiosModal({
 
   // Cargar historial
   useEffect(() => {
-    if (!show || !modeloId) return;
+    if (!show || !modeloId) return undefined;
+
+    let cancelled = false;
 
     const fetchHistorial = async () => {
+      if (seccion) {
+        const key = `${modelo}:${modeloId}:${seccion}`;
+        setHistorialSeccion({ key, rows: [], error: null, loading: true });
+
+        try {
+          const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
+          if (cancelled) return;
+          const rows = (Array.isArray(res.data) ? res.data : []).filter(esEventoIndividualCliente);
+          setHistorialSeccion({
+            key,
+            rows: filtrarHistorialPorSeccion(rows, seccion),
+            error: null,
+            loading: false,
+          });
+        } catch (e) {
+          if (cancelled) return;
+          console.error("Error cargando historial:", e);
+          setHistorialSeccion({
+            key,
+            rows: [],
+            error: "No se pudo cargar el historial de cambios.",
+            loading: false,
+          });
+        }
+        return;
+      }
+
       setLoading(true);
       setError(null);
 
       try {
         // Obtener historial del modelo principal
         const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
+        if (cancelled) return;
         let rows = Array.isArray(res.data) ? res.data : [];
         
         // Si es GrupoFamiliar, obtener también historial de coberturas
         if (isGrupo && modeloId) {
           const grupoData = await GrupoFamiliarService.getFullById(modeloId);
+          if (cancelled) return;
           const coberturasGrupo = Array.isArray(grupoData?.coberturas) ? grupoData.coberturas : [];
           setTitularesPorCobertura(buildTitularesDesdeCoberturas(coberturasGrupo));
 
@@ -982,6 +1488,7 @@ export default function HistorialCambiosModal({
             obtenerHistorialCoberturas(coberturasGrupo),
             obtenerHistorialMediosPago(grupoData),
           ]);
+          if (cancelled) return;
           rows = [...rows, ...registrosCoberturas, ...registrosMediosPago];
           
           rows.sort((a, b) => {
@@ -992,6 +1499,7 @@ export default function HistorialCambiosModal({
         } else if (modelo === "Cliente" && modeloId) {
           setTitularesPorCobertura({});
           const registrosMediosPago = await obtenerHistorialMediosPago(null, modeloId);
+          if (cancelled) return;
           rows = [...rows, ...registrosMediosPago];
           rows.sort((a, b) => {
             const fechaA = new Date(a.created_at || a.fecha || 0).getTime();
@@ -1002,20 +1510,25 @@ export default function HistorialCambiosModal({
           setTitularesPorCobertura({});
         }
         
+        if (cancelled) return;
         const historialFiltrado = filtrarRegistrosRelevantes(rows);
         setHistorial(historialFiltrado);
         setSelected(historialFiltrado.length > 0 ? historialFiltrado[0] : null);
       } catch (e) {
+        if (cancelled) return;
         console.error("Error cargando historial:", e);
         setError("No se pudo cargar el historial de cambios.");
         setSelected(null);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchHistorial();
-  }, [show, modelo, modeloId, isGrupo]);
+    return () => {
+      cancelled = true;
+    };
+  }, [show, modelo, modeloId, isGrupo, seccion]);
 
   // Auto-seleccionar el área con cambios al cambiar de registro
   useEffect(() => {
@@ -1043,7 +1556,61 @@ export default function HistorialCambiosModal({
     }
   }, [selected?.id]);
 
+  useEffect(() => {
+    if (!show || !filtrarPorSeccion) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab") return;
+
+      const root = dialogRef.current;
+      if (!root) return;
+      const focusable = [...root.querySelectorAll(
+        "button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])"
+      )].filter((el) => !el.disabled);
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    const previouslyFocused = document.activeElement;
+    const focusTimer = window.setTimeout(() => {
+      closeBtnRef.current?.focus();
+    }, 0);
+
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      window.clearTimeout(focusTimer);
+      if (previouslyFocused instanceof HTMLElement) {
+        previouslyFocused.focus();
+      }
+    };
+  }, [show, filtrarPorSeccion]);
+
   if (!show) return null;
+
+  const claveSeccionActual = `${modelo}:${modeloId}:${seccion || ""}`;
+  const seccionVigente = historialSeccion.key === claveSeccionActual;
+  const cargandoSeccion = filtrarPorSeccion && (!seccionVigente || historialSeccion.loading);
+  const errorSeccion = filtrarPorSeccion && seccionVigente ? historialSeccion.error : null;
+  const filasSeccion = filtrarPorSeccion && seccionVigente && !historialSeccion.loading && !historialSeccion.error
+    ? filasDeHistorialSeccion(historialSeccion.rows, seccion)
+    : [];
+  const tituloSeccion = ETIQUETAS_SECCION_FICHA[seccion] || "Sección";
 
   const renderDetalleCambios = () => {
     if (!selected) {
@@ -1878,22 +2445,22 @@ export default function HistorialCambiosModal({
                   </td>
                 </tr>
 
-                {secciones.map((seccion) => (
-                  <React.Fragment key={`${clienteData.key}-${seccion.id}`}>
+                {secciones.map((bloque) => (
+                  <React.Fragment key={`${clienteData.key}-${bloque.id}`}>
                     <tr style={{ backgroundColor: "#f1f8f4" }}>
                       <td colSpan={3} style={{ padding: "0.5rem 1rem 0.5rem 1.75rem" }}>
                         <span
                           className="text-dark fw-semibold"
                           style={{ fontSize: "0.8rem", textTransform: "uppercase", letterSpacing: "0.4px" }}
                         >
-                          {seccion.label}
+                          {bloque.label}
                         </span>
                         <span className="badge bg-light text-dark border ms-2" style={{ fontSize: "0.7rem" }}>
-                          {seccion.cambios.length}
+                          {bloque.cambios.length}
                         </span>
                       </td>
                     </tr>
-                    {seccion.cambios.map(({ campo, fieldKey, info }) =>
+                    {bloque.cambios.map(({ campo, fieldKey, info }) =>
                       renderCampoRow(campo, getFieldLabel(fieldKey), info, {
                         indent: "2.5rem",
                         fieldKey,
@@ -1976,12 +2543,20 @@ export default function HistorialCambiosModal({
         className="modal fade show gf-modal"
         tabIndex="-1"
         role="dialog"
+        aria-modal={filtrarPorSeccion ? "true" : undefined}
+        aria-labelledby="historial-cambios-titulo"
         style={{ display: "block", zIndex: 1060 }}
       >
         <div
-          className="modal-dialog modal-xl modal-dialog-centered gf-modal gf-modal--xl"
+          ref={dialogRef}
+          className={`modal-dialog modal-dialog-centered gf-modal ${filtrarPorSeccion ? "modal-lg" : "modal-xl gf-modal--xl"}`}
           role="document"
-          style={{
+          style={filtrarPorSeccion ? {
+            maxWidth: "min(1480px, calc(100vw - 2rem))",
+            width: "min(1480px, calc(100vw - 2rem))",
+            margin: "0.75rem auto",
+            maxHeight: "calc(100vh - 1.5rem)",
+          } : {
             maxWidth: "min(1800px, 98vw)",
             width: "98vw",
             margin: "0.75rem auto",
@@ -1992,25 +2567,35 @@ export default function HistorialCambiosModal({
           <div
             className="modal-content gf-modal__content"
             style={{
-              height: "100%",
+              height: filtrarPorSeccion ? "auto" : "100%",
               maxHeight: "100%",
               display: "flex",
               flexDirection: "column",
             }}
           >
             <div className="modal-header gf-modal__header" style={{ flexShrink: 0 }}>
-              <h5 className="modal-title gf-modal__title">
-                Historial de Cambios
-                {isGrupo && (
-                  <span className="badge bg-light text-dark ms-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
-                    Grupo Familiar
-                  </span>
+              <div className="min-w-0 me-2 flex-grow-1">
+                <h5 id="historial-cambios-titulo" className="modal-title gf-modal__title">
+                  {filtrarPorSeccion ? `Historial · ${tituloSeccion}` : "Historial de Cambios"}
+                  {isGrupo && !filtrarPorSeccion && (
+                    <span className="badge bg-light text-dark ms-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
+                      Grupo Familiar
+                    </span>
+                  )}
+                </h5>
+                {filtrarPorSeccion && (
+                  <p className="gf-modal__subtitle mb-0">
+                    {grupoFamiliarId
+                      ? `Grupo familiar #${grupoFamiliarId}`
+                      : "Sin grupo familiar"}
+                  </p>
                 )}
-              </h5>
+              </div>
               <button
+                ref={closeBtnRef}
                 type="button"
-                className="btn-close btn-close-white"
-                aria-label="Close"
+                className="btn-close btn-close-white flex-shrink-0"
+                aria-label={filtrarPorSeccion ? "Cerrar historial" : "Close"}
                 onClick={onClose}
                 style={{ margin: 0 }}
               />
@@ -2018,7 +2603,10 @@ export default function HistorialCambiosModal({
 
             <div
               className="modal-body"
-              style={{
+              style={filtrarPorSeccion ? {
+                padding: "1rem",
+                overflowY: "auto",
+              } : {
                 padding: "1.25rem 1.5rem",
                 flex: "1 1 auto",
                 minHeight: 0,
@@ -2027,6 +2615,30 @@ export default function HistorialCambiosModal({
                 flexDirection: "column",
               }}
             >
+              {filtrarPorSeccion ? (
+                vistaHistorialSeccion({
+                  cargando: cargandoSeccion,
+                  error: errorSeccion,
+                  filas: filasSeccion,
+                  filtroCampo,
+                  filtroTexto,
+                  fechaDesde,
+                  fechaHasta,
+                  onDesde: setFechaDesde,
+                  onHasta: setFechaHasta,
+                  onCampo: setFiltroCampo,
+                  onTexto: setFiltroTexto,
+                  onLimpiar: () => {
+                    setFiltroCampo("");
+                    setFiltroTexto("");
+                    setFechaDesde("");
+                    setFechaHasta("");
+                  },
+                  pagina: paginaHistorial,
+                  onPagina: setPaginaHistorial,
+                })
+              ) : (
+              <>
               {loading && (
                 <div className="d-flex justify-content-center py-4">
                   <div className="spinner-border" role="status">
@@ -2178,6 +2790,8 @@ export default function HistorialCambiosModal({
                     </div>
                   </div>
                 </div>
+              )}
+              </>
               )}
             </div>
 

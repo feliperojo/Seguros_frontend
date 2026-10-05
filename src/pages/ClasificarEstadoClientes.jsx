@@ -277,6 +277,7 @@ const ClasificarEstadoClientes = () => {
     try {
       await apiRequest(`cliente/${cliente.id}`, "PUT", {
         estado_cliente: next,
+        origen: "clasificacion_estado",
       });
       updateLocalEstado(cliente.id, next);
       showToast(
@@ -373,6 +374,7 @@ const ClasificarEstadoClientes = () => {
           try {
             await apiRequest(`cliente/${id}`, "PUT", {
               estado_cliente: bulkEstado,
+              origen: "clasificacion_estado",
             });
             updateLocalEstado(id, bulkEstado);
             ok += 1;

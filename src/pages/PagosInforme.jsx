@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
@@ -19,6 +19,7 @@ import {
 } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
+import { condicionCobro } from "../utils/condicionCobro";
 import { indicadorMorosidadPagosPorMes, pickEstadoFechaActualizacionPago } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
 import "../styles/GruposFamiliaresListado.css";
@@ -108,34 +109,46 @@ const PagosInforme = () => {
   const pagosAgrupados = listaPagos
     .filter((p) => {
       const cliente = p.cliente?.nombre_completo?.toLowerCase() || "";
-      const compania = p.cobertura?.compania?.nombre?.toLowerCase() || "";
+      const compania = condicionCobro(p, "compania_nombre").texto.toLowerCase();
+      const plan = condicionCobro(p, "plan").texto.toLowerCase();
       const estado = p.estado?.toLowerCase() || "";
-      const anioPago = p.fecha_pago?.split("-")[0] || "";
+      const anioPago = p.anio_generado != null ? String(p.anio_generado) : "";
 
       return (
         cliente.includes(filtros.cliente.toLowerCase()) &&
-        compania.includes(filtros.compania.toLowerCase()) &&
+        (compania.includes(filtros.compania.toLowerCase()) ||
+          plan.includes(filtros.compania.toLowerCase())) &&
         (filtros.estado ? estado === filtros.estado.toLowerCase() : true) &&
         anioPago === String(filtros.anio)
       );
     })
     .reduce((acc, pago) => {
-      const key = `${pago.cobertura?.codigo_poliza}`;
+      const compania = condicionCobro(pago, "compania_nombre");
+      const plan = condicionCobro(pago, "plan");
+      const codigo = condicionCobro(pago, "codigo_poliza");
+      const pagador = condicionCobro(pago, "pagador_nombre");
+      const mesNum = parseInt(pago.mes_generado, 10);
+      if (!Number.isFinite(mesNum) || mesNum < 1 || mesNum > 12) return acc;
+
+      const key = [pago.cobertura_id, compania.texto, plan.texto, codigo.texto].join("|");
       if (!acc[key]) {
         acc[key] = {
-          id: pago.id,
-          codigo_poliza: pago.cobertura?.codigo_poliza,
+          id: key,
+          codigo_poliza: codigo.texto,
+          codigoPendiente: codigo.pendiente,
           cliente: pago.cliente?.nombre_completo,
           cliente_id: pago.cliente?.id || pago.cliente_id,
-          grupo_familiar_id: pago.cobertura?.grupo_familiar_id || pago.grupo_familiar_id,
-          pagador: pago.cobertura?.pagador?.nombre_completo,
-          compania: pago.cobertura?.compania?.nombre,
+          grupo_familiar_id: pago.grupo_familiar_id,
+          pagador: pagador.texto,
+          pagadorPendiente: pagador.pendiente,
+          compania: compania.texto,
+          companiaPendiente: compania.pendiente,
+          plan: plan.pendiente ? "" : plan.texto,
           pagos: Array(12).fill(null),
         };
       }
 
-      const mesIndex = parseInt(pago.fecha_pago.split("-")[1], 10) - 1;
-      acc[key].pagos[mesIndex] = {
+      acc[key].pagos[mesNum - 1] = {
         estado: pago.estado,
         monto: pago.monto,
         estadoActualizadoEn: pickEstadoFechaActualizacionPago(pago),
@@ -165,7 +178,7 @@ const PagosInforme = () => {
             <div>
               <h1 className="gf-listado__title">Informe de Pagos por Año</h1>
               <p className="gf-listado__subtitle">
-                Revisa el estado mensual de pagos agrupados por póliza.
+                Revisa el estado mensual de los pagos con la compañía y el plan guardados en cada cobro.
               </p>
             </div>
           </div>
@@ -207,7 +220,7 @@ const PagosInforme = () => {
               <Col xs={12} md={6} lg={3}>
                 <div className="gf-listado__label">Compañía</div>
                 <Form.Control
-                  placeholder="Filtrar por compañía"
+                  placeholder="Compañía o plan del cobro"
                   name="compania"
                   value={filtros.compania}
                   onChange={handleFiltroChange}
@@ -325,15 +338,18 @@ const PagosInforme = () => {
                               "—"
                             )}
                           </td>
-                          <td>{fila.codigo_poliza || "—"}</td>
+                          <td className={fila.codigoPendiente ? "text-muted" : undefined}>{fila.codigo_poliza || "—"}</td>
                           <td>
                             {renderClienteLink(
                               fila.cliente_id,
                               fila.cliente || "—"
                             )}
                           </td>
-                          <td>{fila.pagador || "—"}</td>
-                          <td>{fila.compania || "—"}</td>
+                          <td className={fila.pagadorPendiente ? "text-muted" : undefined}>{fila.pagador || "—"}</td>
+                          <td className={fila.companiaPendiente ? "text-muted" : undefined}>
+                            {fila.compania || "—"}
+                            {fila.plan ? <div className="small">{fila.plan}</div> : null}
+                          </td>
                           <td className="text-center">{renderSituacion(fila.pagos)}</td>
                           {fila.pagos.map((pago, idx) => (
                             <td key={idx} className="pagos-informe__col-mes">

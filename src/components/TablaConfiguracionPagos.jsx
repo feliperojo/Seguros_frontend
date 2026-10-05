@@ -1,8 +1,12 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container } from "react-bootstrap";
 import apiRequest from "../services/api";
-import { fetchPagosExistForPeriodo } from "../services/coberturaPagosApi";
+import { fetchPagosExistForPeriodo, fetchResumenAnual } from "../services/coberturaPagosApi";
+import { fetchCompanies } from "../services/companies";
+import CobrosPeriodoResumen from "./CobrosPeriodoResumen";
+import VistaPreviaCobrosModal from "./VistaPreviaCobrosModal";
+import { MESES_COBRO, etiquetaMes } from "../utils/periodoCobros";
 import { renderClienteLink } from "../pages/ListaClientes";
 import {
   COBERTURA_TIPO_DENTAL_MS,
@@ -22,8 +26,17 @@ const TablaConfiguracionPagos = () => {
   const [filtros, setFiltros] = useState({ cliente: "", compania: "", responsable: "" });
   const [mesSeleccionado, setMesSeleccionado] = useState("");
   const [alerta, setAlerta] = useState({ show: false, variant: "", mensaje: "" });
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showVistaPrevia, setShowVistaPrevia] = useState(false);
+  const [vistaPrevia, setVistaPrevia] = useState(null);
+  const [errorVista, setErrorVista] = useState("");
+  const [companiasCatalogo, setCompaniasCatalogo] = useState([]);
   const [validandoPagosMes, setValidandoPagosMes] = useState(false);
+  const [anioSeleccionado, setAnioSeleccionado] = useState("");
+  const [periodoNegocio, setPeriodoNegocio] = useState(null);
+  const [resumenAnual, setResumenAnual] = useState(null);
+  const [resumenVersion, setResumenVersion] = useState(0);
+  const [errorPeriodo, setErrorPeriodo] = useState(false);
+  const generandoRef = useRef(false);
   /** Vista previa GET /pagos/existe para el mes+año actual */
   const [infoPagosMes, setInfoPagosMes] = useState({
     loading: false,
@@ -31,8 +44,6 @@ const TablaConfiguracionPagos = () => {
     exists: null,
     count: null,
   });
-  const [showPagosYaExistenModal, setShowPagosYaExistenModal] = useState(false);
-  const [pagosYaExistenDetalle, setPagosYaExistenDetalle] = useState({ periodo: "", count: null });
   const [showInconsistenciasModal, setShowInconsistenciasModal] = useState(false);
   const [inconsistenciasDetalle, setInconsistenciasDetalle] = useState({
     message: "",
@@ -68,13 +79,38 @@ const TablaConfiguracionPagos = () => {
     fetchPolizas();
   }, []);
 
-  const periodoParaMes = (mesDosDigitos) => {
-    if (!mesDosDigitos) return null;
-    return `${new Date().getFullYear()}-${mesDosDigitos}`;
+  const periodoParaMes = (mesDosDigitos, anio) => {
+    if (!mesDosDigitos || !anio) return null;
+    return `${anio}-${mesDosDigitos}`;
   };
 
   useEffect(() => {
-    const periodo = periodoParaMes(mesSeleccionado);
+    let cancel = false;
+    (async () => {
+      try {
+        const resumen = await fetchResumenAnual(anioSeleccionado || undefined);
+        if (cancel) return;
+        setErrorPeriodo(false);
+        setPeriodoNegocio(resumen);
+        if (!anioSeleccionado) {
+          setAnioSeleccionado(String(resumen.anio_actual));
+          return;
+        }
+        if (String(resumen.anio) === String(anioSeleccionado)) {
+          setResumenAnual(resumen);
+        }
+      } catch (err) {
+        console.error("No se pudo cargar el resumen de cobros:", err);
+        if (!cancel) setErrorPeriodo(true);
+      }
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [anioSeleccionado, resumenVersion]);
+
+  useEffect(() => {
+    const periodo = periodoParaMes(mesSeleccionado, anioSeleccionado);
     if (!periodo) {
       setInfoPagosMes({ loading: false, periodo: null, exists: null, count: null });
       return;
@@ -94,7 +130,7 @@ const TablaConfiguracionPagos = () => {
             count: r.count,
           });
         }
-      } catch (e) {
+      } catch {
         if (!cancel) {
           setInfoPagosMes({
             loading: false,
@@ -109,16 +145,17 @@ const TablaConfiguracionPagos = () => {
     return () => {
       cancel = true;
     };
-  }, [mesSeleccionado]);
+  }, [mesSeleccionado, anioSeleccionado]);
 
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
     setFiltros({ ...filtros, [name]: value });
   };
 
-  const confirmarGenerarCobros = async () => {
-    if (!mesSeleccionado) {
-      mostrarAlerta("Seleccione un mes para generar los cobros", "warning");
+  const cargarVistaPrevia = async () => {
+    if (generandoRef.current) return;
+    if (!mesSeleccionado || !anioSeleccionado) {
+      mostrarAlerta("Seleccione el mes y el año para generar los cobros", "warning");
       return;
     }
     if (polizasFiltradas.length === 0) {
@@ -126,42 +163,62 @@ const TablaConfiguracionPagos = () => {
       return;
     }
 
-    const periodo = periodoParaMes(mesSeleccionado);
-    if (!periodo) {
-      mostrarAlerta("Mes no válido", "warning");
-      return;
-    }
-
     setValidandoPagosMes(true);
+    setErrorVista("");
     try {
-      const { exists, count } = await fetchPagosExistForPeriodo(periodo);
-      if (exists) {
-        setPagosYaExistenDetalle({ periodo, count });
-        setShowPagosYaExistenModal(true);
-        return;
-      }
-      setShowConfirmModal(true);
-    } catch (e) {
-      console.error("No se pudo validar pagos del mes:", e);
-      mostrarAlerta(
-        "No se pudo comprobar si ya hay pagos para este mes. Intente de nuevo o contacte soporte.",
-        "warning"
-      );
+      const [respuesta, catalogo] = await Promise.all([
+        apiRequest("cobertura/generar-cobros/vista-previa", "POST", {
+          mes: mesSeleccionado,
+          anio: Number(anioSeleccionado),
+          cobertura_ids: polizasFiltradas.map((p) => p.id),
+        }),
+        fetchCompanies().catch(() => []),
+      ]);
+      const vista = respuesta?.data?.items ? respuesta.data : respuesta;
+      setVistaPrevia(vista);
+      setCompaniasCatalogo(Array.isArray(catalogo) ? catalogo : []);
+      setShowVistaPrevia(true);
+    } catch (err) {
+      console.error("No se pudo armar la vista previa:", err);
+      mostrarAlerta(err.message || "No se pudo preparar la revisión de los cobros.", "warning");
     } finally {
       setValidandoPagosMes(false);
     }
   };
 
-  const handleGenerarCobros = async () => {
-    setShowConfirmModal(false);
+  const cerrarVistaPrevia = () => {
+    if (generandoRef.current) return;
+    setShowVistaPrevia(false);
+    setVistaPrevia(null);
+    setErrorVista("");
+  };
+
+  const handleGenerarCobros = async ({ ajustes, confirmarDatosPeriodo }) => {
+    if (generandoRef.current || !vistaPrevia) return;
+    generandoRef.current = true;
     try {
       setLoading(true);
-      await apiRequest("cobertura/generar-cobros", "POST", {
+      const data = await apiRequest("cobertura/generar-cobros", "POST", {
         mes: mesSeleccionado,
+        anio: Number(anioSeleccionado),
         cobertura_ids: polizasFiltradas.map((p) => p.id),
+        huella: vistaPrevia.huella,
+        confirmar_datos_periodo: Boolean(confirmarDatosPeriodo),
+        ajustes,
       });
-      mostrarAlerta("Cobros generados correctamente", "success");
-      const periodo = periodoParaMes(mesSeleccionado);
+      const nuevos = Number(data?.nuevos_registros ?? 0);
+      const existentes = Number(data?.pagos_existentes ?? 0);
+      mostrarAlerta(
+        data?.message ||
+          `Se crearon ${nuevos} cobros. ${existentes} ya existían y se conservaron.`,
+        "success",
+        8000
+      );
+      setShowVistaPrevia(false);
+      setVistaPrevia(null);
+      setErrorVista("");
+      setResumenVersion((version) => version + 1);
+      const periodo = periodoParaMes(mesSeleccionado, anioSeleccionado);
       if (periodo) {
         try {
           const r = await fetchPagosExistForPeriodo(periodo);
@@ -183,29 +240,16 @@ const TablaConfiguracionPagos = () => {
         ? data.inconsistencias
         : [];
 
-      if (status === 409) {
-        const msg =
+      if (status === 409 && data.code === "REVISION_DESACTUALIZADA") {
+        setErrorVista(
           data.message ||
-          "Ya existen pagos generados para este mes. No se puede repetir la generación.";
-        mostrarAlerta(msg, "warning");
-        const periodo = periodoParaMes(mesSeleccionado);
-        if (periodo) {
-          try {
-            const r = await fetchPagosExistForPeriodo(periodo);
-            setInfoPagosMes({
-              loading: false,
-              periodo: r.periodo,
-              exists: r.exists,
-              count: r.count,
-            });
-          } catch {
-            /* ignore */
-          }
-        }
+            "Los datos de las coberturas cambiaron durante la revisión. Actualice la vista previa antes de generar."
+        );
       } else if (
         status === 422 &&
         (data.code === "COBERTURAS_INCONSISTENTES" || inconsistencias.length > 0)
       ) {
+        setShowVistaPrevia(false);
         setInconsistenciasDetalle({
           message:
             data.message ||
@@ -220,12 +264,10 @@ const TablaConfiguracionPagos = () => {
           8000
         );
       } else {
-        mostrarAlerta(
-          data.message || err.message || "Ocurrió un error al generar los cobros",
-          "danger"
-        );
+        setErrorVista(data.message || err.message || "Ocurrió un error al generar los cobros");
       }
     } finally {
+      generandoRef.current = false;
       setLoading(false);
     }
   };
@@ -240,6 +282,21 @@ const TablaConfiguracionPagos = () => {
       responsableNombre.toLowerCase().includes(filtros.responsable.toLowerCase())
     );
   }).sort((a, b) => (a.grupo_familiar_id || 0) - (b.grupo_familiar_id || 0));
+
+  const aniosGeneracion = Array.from(
+    new Set(
+      [
+        ...(periodoNegocio?.anios_disponibles || []),
+        periodoNegocio?.anio_actual,
+      ].filter((year) => Number(year) <= Number(periodoNegocio?.anio_actual))
+    )
+  )
+    .map((year) => Number(year))
+    .filter((year) => Number.isFinite(year))
+    .sort((a, b) => b - a);
+
+  const resumenVisible =
+    resumenAnual && String(resumenAnual.anio) === String(anioSeleccionado) ? resumenAnual : null;
 
   return (
     <Container fluid className="mt-4 mb-4">
@@ -264,7 +321,7 @@ const TablaConfiguracionPagos = () => {
               Filtros y generación
             </div>
             <Row className="g-3 align-items-end">
-              <Col md={3}>
+              <Col md={4} lg={2}>
                 <div className="pagos-mensuales__label">Cliente</div>
                 <Form.Control
                   placeholder="Filtrar por cliente"
@@ -273,7 +330,7 @@ const TablaConfiguracionPagos = () => {
                   onChange={handleFiltroChange}
                 />
               </Col>
-              <Col md={3}>
+              <Col md={4} lg={2}>
                 <div className="pagos-mensuales__label">Compañía</div>
                 <Form.Control
                   placeholder="Filtrar por compañía"
@@ -282,7 +339,7 @@ const TablaConfiguracionPagos = () => {
                   onChange={handleFiltroChange}
                 />
               </Col>
-              <Col md={2}>
+              <Col md={4} lg={2}>
                 <div className="pagos-mensuales__label">Responsable</div>
                 <Form.Control
                   placeholder="Filtrar por responsable"
@@ -291,39 +348,53 @@ const TablaConfiguracionPagos = () => {
                   onChange={handleFiltroChange}
                 />
               </Col>
-              <Col md={2}>
+              <Col md={4} lg={2}>
                 <div className="pagos-mensuales__label">Mes</div>
                 <Form.Select
                   value={mesSeleccionado}
                   onChange={(e) => setMesSeleccionado(e.target.value)}
+                  aria-label="Mes del período"
                 >
                   <option value="">Seleccionar mes</option>
-                  {[...Array(12)].map((_, i) => {
-                    const mes = new Date(0, i).toLocaleString("es", { month: "long" });
-                    const mesCapitalizado = mes.charAt(0).toUpperCase() + mes.slice(1);
-                    return (
-                      <option key={i + 1} value={String(i + 1).padStart(2, "0")}>
-                        {mesCapitalizado}
-                      </option>
-                    );
-                  })}
+                  {MESES_COBRO.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.etiqueta}
+                    </option>
+                  ))}
                 </Form.Select>
               </Col>
-              <Col md={2} className="text-md-end">
+              <Col md={4} lg={2}>
+                <div className="pagos-mensuales__label">Año</div>
+                <Form.Select
+                  value={anioSeleccionado}
+                  onChange={(e) => setAnioSeleccionado(e.target.value)}
+                  aria-label="Año del período"
+                  disabled={aniosGeneracion.length === 0}
+                >
+                  {aniosGeneracion.map((year) => (
+                    <option key={year} value={String(year)}>
+                      {year}
+                      {year === periodoNegocio?.anio_actual ? " (actual)" : ""}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col md={4} lg={2} className="text-md-end">
                 <Button
                   className="pagos-mensuales__btn-primary w-100"
-                  onClick={() => void confirmarGenerarCobros()}
+                  onClick={() => void cargarVistaPrevia()}
                   disabled={
                     loading ||
                     validandoPagosMes ||
                     !mesSeleccionado ||
+                    !anioSeleccionado ||
                     polizasFiltradas.length === 0
                   }
                 >
                   {validandoPagosMes ? (
                     <>
                       <Spinner animation="border" size="sm" className="me-2" />
-                      Validando…
+                      Revisando…
                     </>
                   ) : (
                     "Generar pagos"
@@ -333,35 +404,75 @@ const TablaConfiguracionPagos = () => {
             </Row>
           </div>
 
-          {mesSeleccionado && (
+          <div className="pagos-mensuales__section">
+            <div className="pagos-mensuales__section-title">
+              <i className="fas fa-calendar-alt" aria-hidden="true" />
+              Cobros generados en {anioSeleccionado || "el año"}
+            </div>
+            {errorPeriodo ? (
+              <div className="pagos-mensuales__notice pagos-mensuales__notice--warn">
+                <i className="fas fa-exclamation-triangle pagos-mensuales__notice-icon" aria-hidden="true" />
+                <span>
+                  No fue posible cargar los datos del período.{" "}
+                  <Button
+                    variant="link"
+                    className="p-0 align-baseline"
+                    onClick={() => setResumenVersion((version) => version + 1)}
+                  >
+                    Reintentar
+                  </Button>
+                </span>
+              </div>
+            ) : resumenVisible ? (
+              <CobrosPeriodoResumen
+                anio={resumenVisible.anio}
+                meses={resumenVisible.meses}
+                mesSeleccionado={mesSeleccionado}
+                onSeleccionarMes={setMesSeleccionado}
+                limitacion={resumenVisible.limitacion}
+                registrosSinPeriodo={resumenVisible.registros_sin_periodo}
+              />
+            ) : (
+              <div className="text-center py-3">
+                <Spinner animation="border" size="sm" style={{ color: "#1a365d" }} />
+              </div>
+            )}
+          </div>
+
+          {mesSeleccionado && anioSeleccionado && (
             <>
               {infoPagosMes.loading ? (
                 <div className="pagos-mensuales__notice">
                   <i className="fas fa-info-circle pagos-mensuales__notice-icon" aria-hidden="true" />
-                  <span>Comprobando pagos del mes…</span>
+                  <span>Comprobando cobros del período…</span>
                 </div>
               ) : infoPagosMes.exists === true ? (
                 <div className="pagos-mensuales__notice pagos-mensuales__notice--warn">
                   <i className="fas fa-exclamation-triangle pagos-mensuales__notice-icon" aria-hidden="true" />
                   <span>
-                    Ya existen pagos generados para el periodo{" "}
-                    <strong>{infoPagosMes.periodo}</strong>
+                    Ya hay cobros generados para{" "}
+                    <strong>
+                      {etiquetaMes(mesSeleccionado)} {anioSeleccionado}
+                    </strong>
                     {infoPagosMes.count != null ? (
                       <>
                         {" "}
-                        ({infoPagosMes.count} registro
+                        ({infoPagosMes.count} cobro
                         {infoPagosMes.count !== 1 ? "s" : ""})
                       </>
                     ) : null}
-                    . No podrá generar de nuevo hasta usar otro mes.
+                    . Generar creará solo los faltantes y conservará importe, estado y ajustes de
+                    los existentes. Esto no significa que el pago haya sido recibido.
                   </span>
                 </div>
               ) : infoPagosMes.exists === false ? (
                 <div className="pagos-mensuales__notice">
                   <i className="fas fa-info-circle pagos-mensuales__notice-icon" aria-hidden="true" />
                   <span>
-                    Periodo <strong>{infoPagosMes.periodo}</strong>: no hay pagos generados aún;
-                    puede continuar con la generación.
+                    <strong>
+                      {etiquetaMes(mesSeleccionado)} {anioSeleccionado}
+                    </strong>
+                    : todavía no tiene cobros generados.
                   </span>
                 </div>
               ) : null}
@@ -465,34 +576,6 @@ const TablaConfiguracionPagos = () => {
         </div>
       </div>
 
-      <Modal show={showPagosYaExistenModal} onHide={() => setShowPagosYaExistenModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Pagos ya generados</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p className="mb-0">
-            Ya existen pagos generados para el mes{" "}
-            <strong>{pagosYaExistenDetalle.periodo}</strong>
-            {pagosYaExistenDetalle.count != null ? (
-              <>
-                {" "}
-                ({pagosYaExistenDetalle.count} registro
-                {pagosYaExistenDetalle.count !== 1 ? "s" : ""})
-              </>
-            ) : null}
-            . No es posible generar cobros duplicados para este periodo.
-          </p>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button
-            className="pagos-mensuales__btn-primary"
-            onClick={() => setShowPagosYaExistenModal(false)}
-          >
-            Entendido
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
       <Modal
         show={showInconsistenciasModal}
         onHide={() => setShowInconsistenciasModal(false)}
@@ -568,29 +651,16 @@ const TablaConfiguracionPagos = () => {
         </Modal.Footer>
       </Modal>
 
-      <Modal show={showConfirmModal} onHide={() => setShowConfirmModal(false)} centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Confirmar generación de cobros</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          Está a punto de generar los registros de cobro para{" "}
-          <strong>{polizasFiltradas.length}</strong> póliza(s) activas correspondientes al mes
-          seleccionado.
-          <br />
-          Estos registros se crearán en base a los parámetros configurados para cada póliza.
-          <br />
-          <br />
-          ¿Desea continuar con este proceso?
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="outline-secondary" onClick={() => setShowConfirmModal(false)}>
-            Cancelar
-          </Button>
-          <Button className="pagos-mensuales__btn-primary" onClick={handleGenerarCobros}>
-            Generar
-          </Button>
-        </Modal.Footer>
-      </Modal>
+      <VistaPreviaCobrosModal
+        show={showVistaPrevia}
+        vista={vistaPrevia}
+        companias={companiasCatalogo}
+        error={errorVista}
+        generando={loading}
+        onCancel={cerrarVistaPrevia}
+        onActualizar={() => void cargarVistaPrevia()}
+        onConfirmar={(revision) => void handleGenerarCobros(revision)}
+      />
     </Container>
   );
 };

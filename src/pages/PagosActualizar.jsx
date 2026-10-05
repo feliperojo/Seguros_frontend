@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
@@ -11,11 +11,22 @@ import {
   Col,
   Button,
 } from "react-bootstrap";
-import { FaEye, FaSyncAlt, FaFilter, FaTable, FaCreditCard } from "react-icons/fa";
+import { FaEye, FaSyncAlt, FaFilter, FaTable, FaCreditCard, FaCalendarAlt, FaPen } from "react-icons/fa";
 
 import apiRequest from "../services/api";
+import { fetchListadoPagosPeriodo, fetchResumenAnual } from "../services/coberturaPagosApi";
+import { fetchCompanies } from "../services/companies";
 import ModalMediosPago from "../components/ModalMediosPago";
+import CobrosPeriodoResumen from "../components/CobrosPeriodoResumen";
+import CorregirCobroModal from "../components/CorregirCobroModal";
 import { renderClienteLink } from "./ListaClientes";
+import { condicionCobro, tituloCondicionCobro } from "../utils/condicionCobro";
+import {
+  MESES_COBRO,
+  etiquetaMes,
+  formatearInstante,
+  normalizarMes,
+} from "../utils/periodoCobros";
 import "../styles/GruposFamiliaresListado.css";
 import "../styles/PagosActualizar.css";
 
@@ -60,18 +71,55 @@ const getEstadoClass = (estado) => {
 };
 
 const PagosActualizar = () => {
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [errorCarga, setErrorCarga] = useState(false);
   const [pagos, setPagos] = useState([]);
+  const [resumen, setResumen] = useState(null);
+  const [catalogo, setCatalogo] = useState(null);
+  const [anio, setAnio] = useState("");
+  const [mes, setMes] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const anioRef = useRef(null);
+  const mesRef = useRef(null);
   const [alerta, setAlerta] = useState({ show: false, variant: "", mensaje: "" });
-  const [mesActual, setMesActual] = useState(() => {
-    const now = new Date();
-    return String(now.getMonth() + 1).padStart(2, "0");
-  });
-  const [filtros, setFiltros] = useState({ cliente: "", compania: "", estado: "", dia_pago: "" });
+  const [filtros, setFiltros] = useState({ cliente: "", compania: "", plan: "", estado: "", dia_pago: "" });
   const [paginaActual, setPaginaActual] = useState(1);
   const itemsPorPagina = 10;
   const [showMediosModal, setShowMediosModal] = useState(false);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
+  const [cobroACorregir, setCobroACorregir] = useState(null);
+  const [companiasCatalogo, setCompaniasCatalogo] = useState([]);
+  const [guardandoCorreccion, setGuardandoCorreccion] = useState(false);
+  const [errorCorreccion, setErrorCorreccion] = useState("");
+
+  const abrirCorreccion = async (pago) => {
+    setErrorCorreccion("");
+    setCobroACorregir(pago);
+    if (companiasCatalogo.length === 0) {
+      try {
+        const catalogoCompanias = await fetchCompanies();
+        setCompaniasCatalogo(Array.isArray(catalogoCompanias) ? catalogoCompanias : []);
+      } catch {
+        setCompaniasCatalogo([]);
+      }
+    }
+  };
+
+  const guardarCorreccion = async (payload) => {
+    if (!cobroACorregir) return;
+    setGuardandoCorreccion(true);
+    setErrorCorreccion("");
+    try {
+      await apiRequest(`cobertura/pagos/${cobroACorregir.id}/corregir`, "POST", payload);
+      mostrarAlerta("Se corrigieron los datos históricos de este cobro.");
+      setCobroACorregir(null);
+      setReloadKey((key) => key + 1);
+    } catch (err) {
+      setErrorCorreccion(err.message || "No se pudo corregir el cobro.");
+    } finally {
+      setGuardandoCorreccion(false);
+    }
+  };
 
   const abrirModalMedios = (clienteId) => {
     setClienteSeleccionado(clienteId);
@@ -83,22 +131,56 @@ const PagosActualizar = () => {
     setTimeout(() => setAlerta({ show: false, variant: "", mensaje: "" }), duracion);
   };
 
-  const fetchPagos = async () => {
-    try {
-      setLoading(true);
-      const response = await apiRequest("cobertura/pagos/listado", "GET");
-      setPagos(response);
-    } catch (err) {
-      console.error("Error al cargar pagos:", err);
-      mostrarAlerta("Error al cargar los pagos", "danger");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    fetchPagos();
-  }, []);
+    let cancel = false;
+
+    (async () => {
+      setLoading(true);
+      setErrorCarga(false);
+      try {
+        const anioGuardado = anioRef.current;
+        const mesGuardado = mesRef.current;
+        const resumenInicial = await fetchResumenAnual(anioGuardado || undefined);
+        if (cancel) return;
+
+        let anioUsado = anioGuardado;
+        let mesUsado = mesGuardado;
+        if (!anioUsado || !mesUsado) {
+          anioUsado = String(resumenInicial.anio_actual);
+          mesUsado = normalizarMes(resumenInicial.mes_actual);
+          anioRef.current = anioUsado;
+          mesRef.current = mesUsado;
+          setAnio(anioUsado);
+          setMes(mesUsado);
+        }
+
+        const resumenPeriodo =
+          String(resumenInicial.anio) === String(anioUsado)
+            ? resumenInicial
+            : await fetchResumenAnual(anioUsado);
+        if (cancel) return;
+
+        const listado = await fetchListadoPagosPeriodo(anioUsado, mesUsado);
+        if (cancel) return;
+
+        setCatalogo(resumenPeriodo);
+        setResumen(resumenPeriodo);
+        setPagos(listado);
+      } catch (err) {
+        console.error("Error al cargar pagos:", err);
+        if (!cancel) {
+          setErrorCarga(true);
+          setPagos([]);
+        }
+      } finally {
+        if (!cancel) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancel = true;
+    };
+  }, [reloadKey]);
 
   const updatePago = async (pagoId, patch) => {
     const pagoActual = pagos.find((p) => p.id === pagoId);
@@ -109,7 +191,6 @@ const PagosActualizar = () => {
 
     try {
       await apiRequest(`cobertura/pagos/${pagoId}`, "PUT", payload);
-
       setPagos((prev) => prev.map((p) => (p.id === pagoId ? { ...p, ...payload } : p)));
       mostrarAlerta("Pago actualizado correctamente", "success");
     } catch (err) {
@@ -128,36 +209,79 @@ const PagosActualizar = () => {
     setPaginaActual(1);
   };
 
+  const cambiarAnio = (valor) => {
+    anioRef.current = String(valor);
+    setAnio(String(valor));
+    setPaginaActual(1);
+    setReloadKey((key) => key + 1);
+  };
+
+  const cambiarMes = (valor) => {
+    const mesNorm = normalizarMes(valor);
+    if (!mesNorm) return;
+    mesRef.current = mesNorm;
+    setMes(mesNorm);
+    setPaginaActual(1);
+    setReloadKey((key) => key + 1);
+  };
+
   const diaPagoFilter = parseDiaPagoFilter(filtros.dia_pago);
 
   const pagosFiltrados = pagos.filter((p) => {
     const cliente = p.cliente?.nombre_completo?.toLowerCase() || "";
-    const compania = p.cobertura?.compania?.nombre?.toLowerCase() || "";
+    const compania = condicionCobro(p, "compania_nombre").texto.toLowerCase();
+    const plan = condicionCobro(p, "plan").texto.toLowerCase();
     const estado = p.estado?.toLowerCase() || "";
     const fecha = p.fecha_pago || "";
     const dia = fecha.split("-")[2] || "";
-    const diaNum = Number(dia);
+    const diaNum = Number(String(dia).slice(0, 2));
 
     return (
       cliente.includes(filtros.cliente.toLowerCase()) &&
       compania.includes(filtros.compania.toLowerCase()) &&
+      plan.includes(filtros.plan.toLowerCase()) &&
       (filtros.estado ? estado === filtros.estado.toLowerCase() : true) &&
       (diaPagoFilter
         ? diaPagoFilter.mode === "single"
           ? diaNum === diaPagoFilter.day
           : diaNum >= diaPagoFilter.from && diaNum <= diaPagoFilter.to
-        : true) &&
-      fecha.includes(`-${mesActual}-`)
+        : true)
     );
   });
 
   const indexInicio = (paginaActual - 1) * itemsPorPagina;
   const indexFin = indexInicio + itemsPorPagina;
   const pagosPaginados = pagosFiltrados.slice(indexInicio, indexFin);
-
   const totalPaginas = Math.ceil(pagosFiltrados.length / itemsPorPagina);
-  const mesLabel = new Date(2000, Number(mesActual) - 1).toLocaleString("es", { month: "long" });
-  const mesCapitalizado = mesLabel.charAt(0).toUpperCase() + mesLabel.slice(1);
+
+  const resumenVisible = resumen && String(resumen.anio) === String(anio) ? resumen : null;
+  const mesInfo = resumenVisible?.meses?.find((item) => item.mes === mes) || null;
+  const totalGenerado = mesInfo ? Number(mesInfo.cobros) || 0 : null;
+  const nombrePeriodo = anio && mes ? `${etiquetaMes(mes)} ${anio}` : "";
+  const ultimaGeneracion = formatearInstante(
+    mesInfo?.ultima_generacion,
+    resumenVisible?.timezone
+  );
+  const anioActual = catalogo?.anio_actual;
+  const anios = useMemo(() => {
+    const base = Array.isArray(catalogo?.anios_disponibles) ? catalogo.anios_disponibles : [];
+    return Array.from(
+      new Set(
+        [...base, ...(anio ? [Number(anio)] : [])].filter(
+          (year) => Number.isFinite(Number(year))
+        )
+      )
+    )
+      .map((year) => Number(year))
+      .sort((a, b) => b - a);
+  }, [catalogo, anio]);
+
+  const textoChip = (() => {
+    if (loading && totalGenerado == null) return "Cargando…";
+    if (errorCarga) return "No fue posible cargar los datos";
+    if (!nombrePeriodo || totalGenerado == null) return "Cargando…";
+    return `${nombrePeriodo} · ${totalGenerado} cobro${totalGenerado === 1 ? "" : "s"} generado${totalGenerado === 1 ? "" : "s"}`;
+  })();
 
   return (
     <Container fluid className="gf-listado-container py-3 pagos-actualizar">
@@ -179,15 +303,11 @@ const PagosActualizar = () => {
             </div>
           </div>
           <div className="gf-listado__header-actions">
-            <span className="gf-listado__chip">
-              {loading
-                ? "Cargando…"
-                : `${pagosFiltrados.length} pago${pagosFiltrados.length !== 1 ? "s" : ""} · ${mesCapitalizado}`}
-            </span>
+            <span className="gf-listado__chip">{textoChip}</span>
             <Button
               size="sm"
               className="gf-listado__btn-ghost"
-              onClick={fetchPagos}
+              onClick={() => setReloadKey((key) => key + 1)}
               disabled={loading}
             >
               <FaSyncAlt className={loading ? "fa-spin me-1" : "me-1"} />
@@ -204,7 +324,7 @@ const PagosActualizar = () => {
             </div>
 
             <Row className="g-3 align-items-end">
-              <Col xs={12} md={6} lg={3}>
+              <Col xs={12} md={6} lg={2}>
                 <div className="gf-listado__label">Cliente</div>
                 <Form.Control
                   placeholder="Filtrar por cliente"
@@ -213,7 +333,7 @@ const PagosActualizar = () => {
                   onChange={handleFiltroChange}
                 />
               </Col>
-              <Col xs={12} md={6} lg={3}>
+              <Col xs={12} md={6} lg={2}>
                 <div className="gf-listado__label">Compañía</div>
                 <Form.Control
                   placeholder="Filtrar por compañía"
@@ -221,19 +341,44 @@ const PagosActualizar = () => {
                   value={filtros.compania}
                   onChange={handleFiltroChange}
                 />
+                <div className="gf-listado__label mt-2">Plan</div>
+                <Form.Control
+                  placeholder="Filtrar por plan"
+                  name="plan"
+                  value={filtros.plan}
+                  onChange={handleFiltroChange}
+                />
               </Col>
-              <Col xs={12} sm={6} lg={2}>
+              <Col xs={6} md={4} lg={2}>
                 <div className="gf-listado__label">Mes</div>
-                <Form.Select value={mesActual} onChange={(e) => setMesActual(e.target.value)}>
-                  {[...Array(12)].map((_, i) => {
-                    const mes = new Date(0, i).toLocaleString("es", { month: "long" });
-                    const mesNombre = mes.charAt(0).toUpperCase() + mes.slice(1);
-                    return (
-                      <option key={i + 1} value={String(i + 1).padStart(2, "0")}>
-                        {mesNombre}
-                      </option>
-                    );
-                  })}
+                <Form.Select
+                  value={mes}
+                  onChange={(e) => cambiarMes(e.target.value)}
+                  aria-label="Mes del período"
+                  disabled={!mes}
+                >
+                  {MESES_COBRO.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.etiqueta}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Col>
+              <Col xs={6} md={4} lg={2}>
+                <div className="gf-listado__label">Año</div>
+                <Form.Select
+                  value={anio}
+                  onChange={(e) => cambiarAnio(e.target.value)}
+                  aria-label="Año del período"
+                  disabled={!anio}
+                >
+                  {anios.map((year) => (
+                    <option key={year} value={String(year)}>
+                      {year}
+                      {year === anioActual ? " (actual)" : ""}
+                      {anioActual != null && year > anioActual ? " (futuro)" : ""}
+                    </option>
+                  ))}
                 </Form.Select>
               </Col>
               <Col xs={12} sm={6} lg={2}>
@@ -258,6 +403,31 @@ const PagosActualizar = () => {
             </Row>
           </div>
 
+          <div className="gf-listado__section">
+            <div className="gf-listado__section-title">
+              <FaCalendarAlt aria-hidden="true" />
+              Cobros generados en {anio || "el año"}
+            </div>
+            {errorCarga ? (
+              <div className="gf-listado__empty" role="status">
+                No fue posible cargar los datos.
+              </div>
+            ) : resumenVisible ? (
+              <CobrosPeriodoResumen
+                anio={resumenVisible.anio}
+                meses={resumenVisible.meses}
+                mesSeleccionado={mes}
+                onSeleccionarMes={cambiarMes}
+                limitacion={resumenVisible.limitacion}
+                registrosSinPeriodo={resumenVisible.registros_sin_periodo}
+              />
+            ) : (
+              <div className="pagos-actualizar__loading">
+                <Spinner animation="border" size="sm" role="status" />
+              </div>
+            )}
+          </div>
+
           {alerta.show && (
             <Alert variant={alerta.variant} className="pagos-actualizar__alert text-center">
               {alerta.mensaje}
@@ -270,13 +440,40 @@ const PagosActualizar = () => {
               Listado de pagos
             </div>
 
-            {!loading && pagosFiltrados.length > 0 && (
+            {nombrePeriodo && totalGenerado != null && !errorCarga && (
+              <div className="pagos-actualizar__periodo">
+                <p className="pagos-actualizar__periodo-principal">
+                  <strong>
+                    {nombrePeriodo} · {totalGenerado} cobro{totalGenerado === 1 ? "" : "s"} generado
+                    {totalGenerado === 1 ? "" : "s"}
+                  </strong>
+                </p>
+                {ultimaGeneracion ? <p>Última generación: {ultimaGeneracion}</p> : null}
+                {totalGenerado > 0 ? (
+                  <p>
+                    {pagosFiltrados.length} coinciden con los filtros de un total de {totalGenerado}{" "}
+                    cobros generados. El estado de cada fila es el estado del pago, distinto de si
+                    el cobro fue generado.
+                  </p>
+                ) : (
+                  <p>El estado del pago se actualiza en cada fila y no equivale a la generación del cobro.</p>
+                )}
+              </div>
+            )}
+
+            {!loading && !errorCarga && pagosFiltrados.length > 0 && (
               <div className="gf-listado__summary">
                 Mostrando{" "}
                 <strong>
                   {indexInicio + 1}–{Math.min(indexFin, pagosFiltrados.length)}
                 </strong>{" "}
-                de <strong>{pagosFiltrados.length}</strong> pagos
+                de <strong>{pagosFiltrados.length}</strong> resultados filtrados
+                {totalGenerado != null ? (
+                  <>
+                    {" "}
+                    · <strong>{totalGenerado}</strong> cobros generados en el período
+                  </>
+                ) : null}
               </div>
             )}
 
@@ -285,9 +482,17 @@ const PagosActualizar = () => {
                 <Spinner animation="border" role="status" />
                 <div>Cargando pagos…</div>
               </div>
+            ) : errorCarga ? (
+              <div className="gf-listado__empty" role="status">
+                No fue posible cargar los datos.
+              </div>
+            ) : totalGenerado === 0 ? (
+              <div className="gf-listado__empty" role="status">
+                El período {nombrePeriodo} todavía no tiene cobros generados.
+              </div>
             ) : pagosFiltrados.length === 0 ? (
-              <div className="gf-listado__empty">
-                No hay pagos que coincidan con los filtros seleccionados.
+              <div className="gf-listado__empty" role="status">
+                El período tiene cobros, pero ninguno coincide con los filtros.
               </div>
             ) : (
               <>
@@ -301,10 +506,11 @@ const PagosActualizar = () => {
                         <th>Pagador</th>
                         <th>Fecha de pago</th>
                         <th>Compañía</th>
+                        <th>Plan</th>
                         <th>Tipo de pago</th>
                         <th>Monto</th>
-                        <th className="text-center">Medios</th>
-                        <th>Estado</th>
+                        <th className="text-center">Acciones</th>
+                        <th>Estado del pago</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -325,18 +531,62 @@ const PagosActualizar = () => {
                               "—"
                             )}
                           </td>
-                          <td>{p.cobertura?.codigo_poliza || "—"}</td>
+                          <td>
+                            {(() => {
+                              const condicion = condicionCobro(p, "codigo_poliza");
+                              return (
+                                <span className={condicion.pendiente ? "text-muted" : undefined} title={tituloCondicionCobro(condicion)}>
+                                  {condicion.texto}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td>
                             {renderClienteLink(
                               p.cliente?.id || p.cliente_id,
                               p.cliente?.nombre_completo || "—"
                             )}
                           </td>
-                          <td>{p.cobertura?.pagador?.nombre_completo || "—"}</td>
+                          <td>
+                            {(() => {
+                              const condicion = condicionCobro(p, "pagador_nombre");
+                              return (
+                                <span className={condicion.pendiente ? "text-muted" : undefined} title={tituloCondicionCobro(condicion)}>
+                                  {condicion.texto}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td>{p.fecha_pago || "—"}</td>
-                          <td>{p.cobertura?.compania?.nombre || "—"}</td>
+                          <td>
+                            {(() => {
+                              const condicion = condicionCobro(p, "compania_nombre");
+                              return (
+                                <span className={condicion.pendiente ? "text-muted" : undefined} title={tituloCondicionCobro(condicion)}>
+                                  {condicion.texto}
+                                </span>
+                              );
+                            })()}
+                          </td>
+                          <td>
+                            {(() => {
+                              const condicion = condicionCobro(p, "plan");
+                              return (
+                                <span className={condicion.pendiente ? "text-muted" : undefined} title={tituloCondicionCobro(condicion)}>
+                                  {condicion.texto}
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td className="pagos-actualizar__tipo-pago text-center">
-                            {p.cobertura?.tipo_pago || "—"}
+                            {(() => {
+                              const condicion = condicionCobro(p, "tipo_pago");
+                              return (
+                                <span className={condicion.pendiente ? "text-muted" : undefined} title={tituloCondicionCobro(condicion)}>
+                                  {condicion.texto}
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td className="pagos-actualizar__monto">
                             ${Number(p.monto).toFixed(2)}
@@ -351,6 +601,15 @@ const PagosActualizar = () => {
                               aria-label="Ver medios de pago"
                             >
                               <FaEye />
+                            </Button>
+                            <Button
+                              variant="outline-secondary"
+                              size="sm"
+                              className="ms-1"
+                              onClick={() => void abrirCorreccion(p)}
+                            >
+                              <FaPen className="me-1" aria-hidden="true" />
+                              Corregir datos del cobro
                             </Button>
                           </td>
                           <td>
@@ -401,6 +660,21 @@ const PagosActualizar = () => {
           </div>
         </div>
       </div>
+
+      <CorregirCobroModal
+        show={cobroACorregir != null}
+        pago={cobroACorregir}
+        companias={companiasCatalogo}
+        guardando={guardandoCorreccion}
+        error={errorCorreccion}
+        onCancel={() => {
+          if (!guardandoCorreccion) {
+            setCobroACorregir(null);
+            setErrorCorreccion("");
+          }
+        }}
+        onGuardar={(payload) => void guardarCorreccion(payload)}
+      />
 
       <ModalMediosPago
         show={showMediosModal}
