@@ -29,6 +29,7 @@ export function detalleSnapshotCobro(cobro) {
 
   agregar("Compañía", snap.compania_nombre);
   agregar("Plan", snap.plan);
+  agregar("Pagador", snap.pagador_nombre);
   agregar("Número de póliza", snap.codigo_poliza || snap.policy_number);
   if (Object.prototype.hasOwnProperty.call(snap, "fecha_activacion")) {
     agregar("Fecha de activación", snap.fecha_activacion);

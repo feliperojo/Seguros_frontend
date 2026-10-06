@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
+  OverlayTrigger,
+  Popover,
   Table,
   Spinner,
   Alert,
@@ -19,7 +21,8 @@ import {
 } from "react-icons/fa";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
-import { condicionCobro } from "../utils/condicionCobro";
+import { filasInformePagos } from "../utils/informePagosCobertura";
+import { detalleSnapshotCobro } from "../utils/pagosGrupoFamiliarConsulta";
 import { indicadorMorosidadPagosPorMes, pickEstadoFechaActualizacionPago } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
 import "../styles/GruposFamiliaresListado.css";
@@ -84,7 +87,7 @@ const PagosInforme = () => {
   const fetchPagos = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest("cobertura/pagos/listado", "GET");
+      const response = await apiRequest("cobertura/pagos/listado?informe_anual=1", "GET");
       const raw = response?.data != null ? response.data : response;
       setPagos(Array.isArray(raw) ? raw : []);
     } catch (err) {
@@ -105,59 +108,7 @@ const PagosInforme = () => {
     setCurrentPage(1);
   };
 
-  const listaPagos = Array.isArray(pagos) ? pagos : [];
-  const pagosAgrupados = listaPagos
-    .filter((p) => {
-      const cliente = p.cliente?.nombre_completo?.toLowerCase() || "";
-      const compania = condicionCobro(p, "compania_nombre").texto.toLowerCase();
-      const plan = condicionCobro(p, "plan").texto.toLowerCase();
-      const estado = p.estado?.toLowerCase() || "";
-      const anioPago = p.anio_generado != null ? String(p.anio_generado) : "";
-
-      return (
-        cliente.includes(filtros.cliente.toLowerCase()) &&
-        (compania.includes(filtros.compania.toLowerCase()) ||
-          plan.includes(filtros.compania.toLowerCase())) &&
-        (filtros.estado ? estado === filtros.estado.toLowerCase() : true) &&
-        anioPago === String(filtros.anio)
-      );
-    })
-    .reduce((acc, pago) => {
-      const compania = condicionCobro(pago, "compania_nombre");
-      const plan = condicionCobro(pago, "plan");
-      const codigo = condicionCobro(pago, "codigo_poliza");
-      const pagador = condicionCobro(pago, "pagador_nombre");
-      const mesNum = parseInt(pago.mes_generado, 10);
-      if (!Number.isFinite(mesNum) || mesNum < 1 || mesNum > 12) return acc;
-
-      const key = [pago.cobertura_id, compania.texto, plan.texto, codigo.texto].join("|");
-      if (!acc[key]) {
-        acc[key] = {
-          id: key,
-          codigo_poliza: codigo.texto,
-          codigoPendiente: codigo.pendiente,
-          cliente: pago.cliente?.nombre_completo,
-          cliente_id: pago.cliente?.id || pago.cliente_id,
-          grupo_familiar_id: pago.grupo_familiar_id,
-          pagador: pagador.texto,
-          pagadorPendiente: pagador.pendiente,
-          compania: compania.texto,
-          companiaPendiente: compania.pendiente,
-          plan: plan.pendiente ? "" : plan.texto,
-          pagos: Array(12).fill(null),
-        };
-      }
-
-      acc[key].pagos[mesNum - 1] = {
-        estado: pago.estado,
-        monto: pago.monto,
-        estadoActualizadoEn: pickEstadoFechaActualizacionPago(pago),
-      };
-
-      return acc;
-    }, {});
-
-  const rows = Object.values(pagosAgrupados);
+  const rows = filasInformePagos(pagos, filtros);
   const totalPages = Math.ceil(rows.length / rowsPerPage);
   const currentRows = rows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
   const indexInicio = rows.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
@@ -178,7 +129,7 @@ const PagosInforme = () => {
             <div>
               <h1 className="gf-listado__title">Informe de Pagos por Año</h1>
               <p className="gf-listado__subtitle">
-                Revisa el estado mensual de los pagos con la compañía y el plan guardados en cada cobro.
+                Una fila por cobertura del año fiscal. Consulta los datos históricos pasando el mouse sobre cada monto.
               </p>
             </div>
           </div>
@@ -220,7 +171,7 @@ const PagosInforme = () => {
               <Col xs={12} md={6} lg={3}>
                 <div className="gf-listado__label">Compañía</div>
                 <Form.Control
-                  placeholder="Compañía o plan del cobro"
+                  placeholder="Compañía o plan de la cobertura"
                   name="compania"
                   value={filtros.compania}
                   onChange={handleFiltroChange}
@@ -354,23 +305,30 @@ const PagosInforme = () => {
                           {fila.pagos.map((pago, idx) => (
                             <td key={idx} className="pagos-informe__col-mes">
                               {pago ? (
-                                <div className="pagos-informe__celda">
-                                  <span
-                                    className={`pagos-informe__estado ${getEstadoCeldaClass(pago.estado)}`}
-                                  >
-                                    {pago.estado}
-                                  </span>
-                                  <span className="pagos-informe__monto">
-                                    ${Number(pago.monto).toFixed(2)}
-                                  </span>
-                                  {pago.estadoActualizadoEn ? (
-                                    <span
-                                      className="pagos-informe__fecha-estado"
-                                      title="Última actualización del estado"
-                                    >
-                                      {formatDateForDisplay(pago.estadoActualizadoEn)}
-                                    </span>
-                                  ) : null}
+                                <div>
+                                  {pago.cobros.map((cobro) => {
+                                    const detalle = detalleSnapshotCobro(cobro);
+                                    const fecha = pickEstadoFechaActualizacionPago(cobro);
+                                    return (
+                                      <div key={cobro.id} className="pagos-informe__celda">
+                                        <span className={`pagos-informe__estado ${getEstadoCeldaClass(cobro.estado)}`}>{cobro.estado}</span>
+                                        <OverlayTrigger trigger={["hover", "focus"]} placement="auto" overlay={
+                                          <Popover id={`snapshot-cobro-${cobro.id}`}>
+                                            <Popover.Header as="h3">{detalle.titulo}</Popover.Header>
+                                            <Popover.Body>
+                                              {detalle.nota ? <p>{detalle.nota}</p> : null}
+                                              {detalle.campos.map(campo => <div key={campo.etiqueta}><strong>{campo.etiqueta}:</strong> {campo.valor}</div>)}
+                                            </Popover.Body>
+                                          </Popover>
+                                        }>
+                                          <span tabIndex={0} className="pagos-informe__monto" aria-label={`Detalle del cobro ${cobro.id}`}>
+                                            ${Number(cobro.monto).toFixed(2)}
+                                          </span>
+                                        </OverlayTrigger>
+                                        {fecha ? <span className="pagos-informe__fecha-estado" title="Última actualización del estado">{formatDateForDisplay(fecha)}</span> : null}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               ) : (
                                 <span className="pagos-informe__celda-vacia">—</span>
