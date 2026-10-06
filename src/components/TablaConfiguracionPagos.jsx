@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container } from "react-bootstrap";
+import { Table, Form, Spinner, Badge, Row, Col, Button, Alert, Modal, Container, Dropdown } from "react-bootstrap";
 import apiRequest from "../services/api";
 import { fetchListadoPagosPeriodo, fetchPagosExistForPeriodo, fetchResumenAnual } from "../services/coberturaPagosApi";
-import { fetchCompanies } from "../services/companies";
 import CobrosPeriodoResumen from "./CobrosPeriodoResumen";
 import VistaPreviaCobrosModal from "./VistaPreviaCobrosModal";
 import RegenerarCobrosModal from "./RegenerarCobrosModal";
@@ -17,18 +16,15 @@ import {
   seleccionarPagina,
   seleccionarTodosFiltrados,
 } from "../utils/regenerarCobros";
-import { renderClienteLink } from "../pages/ListaClientes";
 import {
-  COBERTURA_TIPO_DENTAL_MS,
-  isDentalMsCoberturaTipo,
-} from "../constants/coberturaTipos";
+  coberturaEnAlcance,
+  describirRevisionProductos,
+  prepararGeneracionCobros,
+  productosDelAlcance,
+} from "../utils/revisionGeneracionCobros";
+import { useHasAnyPermission } from "../hooks/useHasPermission";
+import { renderClienteLink } from "../pages/ListaClientes";
 import "./TablaConfiguracionPagos.css";
-
-const etiquetaProducto = (coberturaTipo) => {
-  if (isDentalMsCoberturaTipo(coberturaTipo)) return COBERTURA_TIPO_DENTAL_MS;
-  const tipo = String(coberturaTipo ?? "").trim();
-  return tipo || "Salud MS";
-};
 
 const TablaConfiguracionPagos = () => {
   const [loading, setLoading] = useState(false);
@@ -39,7 +35,7 @@ const TablaConfiguracionPagos = () => {
   const [showVistaPrevia, setShowVistaPrevia] = useState(false);
   const [vistaPrevia, setVistaPrevia] = useState(null);
   const [errorVista, setErrorVista] = useState("");
-  const [companiasCatalogo, setCompaniasCatalogo] = useState([]);
+  const [detalleLote, setDetalleLote] = useState({});
   const [validandoPagosMes, setValidandoPagosMes] = useState(false);
   const [anioSeleccionado, setAnioSeleccionado] = useState("");
   const [periodoNegocio, setPeriodoNegocio] = useState(null);
@@ -47,6 +43,19 @@ const TablaConfiguracionPagos = () => {
   const [resumenVersion, setResumenVersion] = useState(0);
   const [errorPeriodo, setErrorPeriodo] = useState(false);
   const generandoRef = useRef(false);
+  const idsLoteRef = useRef([]);
+  const productosLoteRef = useRef([]);
+  const puedeEditarProductos = useHasAnyPermission(["settings.edit", "settings.update"]);
+  const [catalogoProductos, setCatalogoProductos] = useState([]);
+  const [productosHabilitados, setProductosHabilitados] = useState([]);
+  const [huellaConfiguracion, setHuellaConfiguracion] = useState("");
+  const [modoProductos, setModoProductos] = useState("todos");
+  const [productosElegidos, setProductosElegidos] = useState([]);
+  const [borradorProductos, setBorradorProductos] = useState([]);
+  const [errorProductos, setErrorProductos] = useState("");
+  const [guardandoProductos, setGuardandoProductos] = useState(false);
+  const [showProductosHabilitados, setShowProductosHabilitados] = useState(false);
+  const [versionProductos, setVersionProductos] = useState(0);
   /** Vista previa GET /pagos/existe para el mes+año actual */
   const [infoPagosMes, setInfoPagosMes] = useState({
     loading: false,
@@ -199,9 +208,49 @@ const TablaConfiguracionPagos = () => {
   }, [mesSeleccionado, anioSeleccionado]);
 
   useEffect(() => {
+    idsLoteRef.current = [];
+    productosLoteRef.current = [];
+    setDetalleLote({});
+    setShowVistaPrevia(false);
+    setVistaPrevia(null);
+    setErrorVista("");
+  }, [
+    mesSeleccionado,
+    anioSeleccionado,
+    filtros.cliente,
+    filtros.compania,
+    filtros.responsable,
+    modoProductos,
+    productosElegidos,
+  ]);
+
+  useEffect(() => {
     const filtrados = filtrarCobrosParaRegenerar(cobrosPeriodo, filtros);
     setSeleccionRegenerar((actual) => conservarSeleccionEnFiltro(actual, filtrados));
   }, [cobrosPeriodo, filtros]);
+
+  useEffect(() => {
+    let cancelado = false;
+    apiRequest("cobertura/generar-cobros/productos", "GET")
+      .then((respuesta) => {
+        if (cancelado) return;
+        const data = respuesta?.catalogo ? respuesta : respuesta?.data || {};
+        const habilitados = Array.isArray(data.habilitados) ? data.habilitados : [];
+        setCatalogoProductos(Array.isArray(data.catalogo) ? data.catalogo : []);
+        setProductosHabilitados(habilitados);
+        setBorradorProductos(habilitados);
+        setHuellaConfiguracion(data.huella_configuracion || "");
+        setErrorProductos("");
+      })
+      .catch((err) => {
+        if (!cancelado) {
+          setErrorProductos(err.message || "No se pudo cargar la configuración de productos.");
+        }
+      });
+    return () => {
+      cancelado = true;
+    };
+  }, [versionProductos]);
 
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
@@ -209,38 +258,109 @@ const TablaConfiguracionPagos = () => {
     setPaginaRegenerar(1);
   };
 
-  const cargarVistaPrevia = async () => {
+  const cargarVistaPrevia = async ({ ids: idsForzados, productos: productosForzados } = {}) => {
     if (generandoRef.current) return;
     if (!mesSeleccionado || !anioSeleccionado) {
       mostrarAlerta("Seleccione el mes y el año para generar los cobros", "warning");
       return;
     }
-    if (polizasFiltradas.length === 0) {
+
+    const revalidar = Array.isArray(idsForzados) && !Array.isArray(productosForzados);
+    const productos = Array.isArray(productosForzados)
+      ? productosForzados
+      : revalidar
+        ? productosLoteRef.current
+        : productosDelAlcance({
+            modo: modoProductos,
+            elegidos: productosElegidos,
+            habilitados: productosHabilitados,
+          });
+    const ids = Array.isArray(idsForzados) ? idsForzados : polizasFiltradas.map((p) => p.id);
+    if (productos.length === 0) {
+      mostrarAlerta("Seleccione al menos un producto habilitado.", "warning");
+      return;
+    }
+    if (ids.length === 0) {
       mostrarAlerta("No hay pólizas válidas para generar cobros", "warning");
       return;
+    }
+
+    if (!revalidar) {
+      idsLoteRef.current = ids;
+      productosLoteRef.current = productos;
+      const detalle = {};
+      const polizasDelLote = Array.isArray(idsForzados)
+        ? polizas.filter((poliza) => ids.includes(poliza.id))
+        : polizasFiltradas;
+      polizasDelLote.forEach((poliza) => {
+        detalle[poliza.id] = {
+          cliente_nombre: poliza.cliente?.nombre_completo || "",
+          grupo_familiar_id: poliza.grupo_familiar_id,
+          producto: catalogoProductos.find((producto) => producto.id === poliza.producto_id)?.etiqueta || "",
+          codigo_poliza: poliza.codigo_poliza || "",
+        };
+      });
+      setDetalleLote(detalle);
+      setVistaPrevia(null);
     }
 
     setValidandoPagosMes(true);
     setErrorVista("");
     try {
-      const [respuesta, catalogo] = await Promise.all([
-        apiRequest("cobertura/generar-cobros/vista-previa", "POST", {
-          mes: mesSeleccionado,
-          anio: Number(anioSeleccionado),
-          cobertura_ids: polizasFiltradas.map((p) => p.id),
-        }),
-        fetchCompanies().catch(() => []),
-      ]);
+      const respuesta = await apiRequest("cobertura/generar-cobros/vista-previa", "POST", {
+        mes: mesSeleccionado,
+        anio: Number(anioSeleccionado),
+        cobertura_ids: ids,
+        productos,
+      });
       const vista = respuesta?.data?.items ? respuesta.data : respuesta;
       setVistaPrevia(vista);
-      setCompaniasCatalogo(Array.isArray(catalogo) ? catalogo : []);
       setShowVistaPrevia(true);
     } catch (err) {
       console.error("No se pudo armar la vista previa:", err);
-      mostrarAlerta(err.message || "No se pudo preparar la revisión de los cobros.", "warning");
+      setErrorVista(err.message || "No se pudo preparar la revisión de los cobros.");
+      setShowVistaPrevia(true);
     } finally {
       setValidandoPagosMes(false);
     }
+  };
+
+  const aceptarProductosHabilitados = async () => {
+    const firma = (ids) => [...ids].map(String).sort().join("|");
+    let habilitados = productosHabilitados;
+    if (firma(borradorProductos) !== firma(productosHabilitados)) {
+      setGuardandoProductos(true);
+      try {
+        const respuesta = await apiRequest("cobertura/generar-cobros/productos", "PUT", {
+          habilitados: borradorProductos,
+        });
+        const data = respuesta?.catalogo ? respuesta : respuesta?.data || {};
+        habilitados = Array.isArray(data.habilitados) ? data.habilitados : [...borradorProductos];
+        setProductosHabilitados(habilitados);
+        setBorradorProductos(habilitados);
+        setHuellaConfiguracion(data.huella_configuracion || "");
+      } catch (err) {
+        mostrarAlerta(err.message || "No se pudo guardar la configuración.", "danger");
+        return;
+      } finally {
+        setGuardandoProductos(false);
+      }
+    }
+
+    const productos = productosDelAlcance({
+      modo: modoProductos,
+      elegidos: productosElegidos,
+      habilitados,
+    });
+    if (productos.length === 0) {
+      mostrarAlerta("Seleccione al menos un producto habilitado.", "warning");
+      return;
+    }
+    const ids = polizasPorFiltros
+      .filter((poliza) => coberturaEnAlcance(poliza, productos))
+      .map((poliza) => poliza.id);
+    setShowProductosHabilitados(false);
+    await cargarVistaPrevia({ ids, productos });
   };
 
   const cerrarVistaPrevia = () => {
@@ -250,18 +370,25 @@ const TablaConfiguracionPagos = () => {
     setErrorVista("");
   };
 
-  const handleGenerarCobros = async ({ ajustes, confirmarDatosPeriodo }) => {
+  const handleGenerarCobros = async ({ confirmarDatosPeriodo }) => {
     if (generandoRef.current || !vistaPrevia) return;
     generandoRef.current = true;
     try {
       setLoading(true);
+      const preparado = prepararGeneracionCobros({
+        idsLote: idsLoteRef.current,
+        huella: vistaPrevia.huella,
+        confirmarDatosPeriodo,
+        productos: productosLoteRef.current,
+      });
+      if (!preparado) {
+        setErrorVista("No hay un alcance válido para generar.");
+        return;
+      }
       const data = await apiRequest("cobertura/generar-cobros", "POST", {
         mes: mesSeleccionado,
         anio: Number(anioSeleccionado),
-        cobertura_ids: polizasFiltradas.map((p) => p.id),
-        huella: vistaPrevia.huella,
-        confirmar_datos_periodo: Boolean(confirmarDatosPeriodo),
-        ajustes,
+        ...preparado,
       });
       const nuevos = Number(data?.nuevos_registros ?? 0);
       const existentes = Number(data?.pagos_existentes ?? 0);
@@ -329,7 +456,12 @@ const TablaConfiguracionPagos = () => {
     }
   };
 
-  const polizasFiltradas = polizas.filter((p) => {
+  const productosAlcance = productosDelAlcance({
+    modo: modoProductos,
+    elegidos: productosElegidos,
+    habilitados: productosHabilitados,
+  });
+  const polizasPorFiltros = polizas.filter((p) => {
     const clienteNombre = p.cliente?.nombre_completo || "";
     const companiaNombre = p.compania?.nombre || "";
     const responsableNombre = p.grupo_familiar?.responsable || "";
@@ -338,7 +470,28 @@ const TablaConfiguracionPagos = () => {
       companiaNombre.toLowerCase().includes(filtros.compania.toLowerCase()) &&
       responsableNombre.toLowerCase().includes(filtros.responsable.toLowerCase())
     );
-  }).sort((a, b) => (a.grupo_familiar_id || 0) - (b.grupo_familiar_id || 0));
+  });
+  const sinProductoIdentificable = polizasPorFiltros.filter((p) => !p.producto_id).length;
+  const polizasFiltradas = polizasPorFiltros
+    .filter((p) => coberturaEnAlcance(p, productosAlcance))
+    .sort((a, b) => (a.grupo_familiar_id || 0) - (b.grupo_familiar_id || 0));
+  const etiquetasAlcance = catalogoProductos
+    .filter((producto) => productosAlcance.includes(producto.id))
+    .map((producto) => producto.etiqueta);
+  const textoAlcance = mesSeleccionado && anioSeleccionado
+    ? describirRevisionProductos({
+        cantidad: polizasFiltradas.length,
+        etiquetas: etiquetasAlcance,
+        periodo: `${etiquetaMes(mesSeleccionado).toLocaleLowerCase("es")} de ${anioSeleccionado}`,
+        todos: modoProductos === "todos",
+      })
+    : "";
+  const resumenFiltros = [
+    textoAlcance,
+    filtros.cliente ? `Cliente: ${filtros.cliente}` : "",
+    filtros.compania ? `Compañía: ${filtros.compania}` : "",
+    filtros.responsable ? `Responsable: ${filtros.responsable}` : "",
+  ].filter(Boolean).join(". ");
 
   const aniosGeneracion = Array.from(
     new Set(
@@ -450,12 +603,21 @@ const TablaConfiguracionPagos = () => {
               <Col md={4} lg={2} className="text-md-end">
                 <Button
                   className="pagos-mensuales__btn-primary w-100"
-                  onClick={() => void cargarVistaPrevia()}
+                  onClick={() => {
+                    if (puedeEditarProductos) {
+                      setBorradorProductos([...productosHabilitados]);
+                      setShowProductosHabilitados(true);
+                      return;
+                    }
+                    void cargarVistaPrevia();
+                  }}
                   disabled={
                     loading ||
                     validandoPagosMes ||
                     !mesSeleccionado ||
                     !anioSeleccionado ||
+                    Boolean(errorProductos) ||
+                    productosAlcance.length === 0 ||
                     polizasFiltradas.length === 0
                   }
                 >
@@ -470,6 +632,76 @@ const TablaConfiguracionPagos = () => {
                 </Button>
               </Col>
             </Row>
+            <Row className="g-3 align-items-end mt-1">
+              <Col md={4} lg={3}>
+                <div className="pagos-mensuales__label">Producto</div>
+                {errorProductos ? (
+                  <Alert variant="warning" className="mb-0 py-2">{errorProductos}</Alert>
+                ) : (
+                  <Dropdown autoClose="outside">
+                    <Dropdown.Toggle
+                      variant="outline-secondary"
+                      className="w-100 text-start"
+                      id="filtro-producto-generacion"
+                    >
+                      {modoProductos === "todos"
+                        ? "Todos los habilitados"
+                        : etiquetasAlcance.join(", ") || "Ningún producto"}
+                    </Dropdown.Toggle>
+                    <Dropdown.Menu className="p-3" style={{ minWidth: "240px" }}>
+                      <Form.Check
+                        id="productos-todos-habilitados"
+                        type="checkbox"
+                        label="Todos los habilitados"
+                        checked={modoProductos === "todos"}
+                        onChange={(event) => {
+                          const marcado = event.target.checked;
+                          setModoProductos(marcado ? "todos" : "elegidos");
+                          setProductosElegidos(marcado ? [...productosHabilitados] : []);
+                        }}
+                        className="mb-2"
+                      />
+                      <Dropdown.Divider />
+                      {catalogoProductos
+                        .filter((producto) => productosHabilitados.includes(producto.id))
+                        .map((producto) => (
+                          <Form.Check
+                            key={producto.id}
+                            id={`producto-${producto.id}`}
+                            type="checkbox"
+                            label={producto.etiqueta}
+                            checked={
+                              modoProductos === "todos" || productosElegidos.includes(producto.id)
+                            }
+                            onChange={() => {
+                              const base = modoProductos === "todos" ? productosHabilitados : productosElegidos;
+                              const siguiente = base.includes(producto.id)
+                                ? base.filter((id) => id !== producto.id)
+                                : [...base, producto.id];
+                              const completo = productosHabilitados.length > 0
+                                && productosHabilitados.every((id) => siguiente.includes(id));
+                              setModoProductos(completo ? "todos" : "elegidos");
+                              setProductosElegidos(siguiente);
+                            }}
+                            className="mb-2"
+                          />
+                        ))}
+                    </Dropdown.Menu>
+                  </Dropdown>
+                )}
+              </Col>
+            </Row>
+            {textoAlcance ? <p className="mt-3 mb-1">{textoAlcance}</p> : null}
+            {productosAlcance.length === 0 && !errorProductos ? (
+              <p className="text-muted mb-1">No hay productos seleccionados. No se puede generar.</p>
+            ) : null}
+            {sinProductoIdentificable > 0 ? (
+              <p className="text-muted mb-0">
+                {sinProductoIdentificable}{" "}
+                {sinProductoIdentificable === 1 ? "cobertura no tiene" : "coberturas no tienen"}{" "}
+                un producto identificable y no entran en este alcance.
+              </p>
+            ) : null}
           </div>
 
           <div className="pagos-mensuales__section">
@@ -707,7 +939,8 @@ const TablaConfiguracionPagos = () => {
                         </td>
                         <td>{p.codigo_poliza}</td>
                         <td className="pagos-mensuales__producto">
-                          {etiquetaProducto(p.cobertura_tipo)}
+                          {catalogoProductos.find((producto) => producto.id === p.producto_id)?.etiqueta
+                            || "Sin producto"}
                         </td>
                         <td style={{ whiteSpace: "nowrap" }}>
                           {renderClienteLink(
@@ -752,15 +985,18 @@ const TablaConfiguracionPagos = () => {
         size="lg"
       >
         <Modal.Header closeButton>
-          <Modal.Title>No se pudieron generar los pagos</Modal.Title>
+          <Modal.Title>Coberturas por corregir</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <p className="mb-3">
-            {inconsistenciasDetalle.message ||
-              "Hay coberturas con datos incompletos o inconsistentes. Corrija lo indicado y vuelva a intentar."}
+          <p className="mb-1">
+            Período: <strong>{etiquetaMes(mesSeleccionado)} {anioSeleccionado}</strong>
           </p>
-          <p className="text-muted small mb-2">
-            No se creó ningún pago. Ajuste estas coberturas en su grupo familiar y reintente la generación.
+          <p className="mb-3">
+            Hay {inconsistenciasDetalle.inconsistencias.length}{" "}
+            {inconsistenciasDetalle.inconsistencias.length === 1
+              ? "cobertura que requiere"
+              : "coberturas que requieren"}{" "}
+            corrección antes de generar los cobros.
           </p>
           <div className="table-responsive" style={{ maxHeight: "50vh" }}>
             <Table bordered hover size="sm" className="mb-0 align-middle">
@@ -777,14 +1013,17 @@ const TablaConfiguracionPagos = () => {
                   <tr key={`${item.cobertura_id}-${idx}`}>
                     <td className="text-nowrap">
                       {item.grupo_familiar_id ? (
-                        <Link
-                          to={`/grupo_familiar/${item.grupo_familiar_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="pagos-mensuales__link"
-                        >
-                          {item.grupo_familiar_id}
-                        </Link>
+                        <>
+                          <div>{item.grupo_familiar_id}</div>
+                          <Link
+                            to={`/grupo_familiar/${item.grupo_familiar_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="pagos-mensuales__link"
+                          >
+                            Ir a corregir
+                          </Link>
+                        </>
                       ) : (
                         "—"
                       )}
@@ -794,7 +1033,12 @@ const TablaConfiguracionPagos = () => {
                     </td>
                     <td>
                       <div className="fw-semibold">{item.codigo_poliza || "—"}</div>
-                      <div className="text-muted small">Cob. #{item.cobertura_id}</div>
+                      <div className="text-muted small">
+                        Cobertura {item.cobertura_id}
+                        {detalleLote[item.cobertura_id]?.producto
+                          ? ` · ${detalleLote[item.cobertura_id].producto}`
+                          : ""}
+                      </div>
                     </td>
                     <td>{item.cliente_nombre || "—"}</td>
                     <td>
@@ -811,11 +1055,69 @@ const TablaConfiguracionPagos = () => {
           </div>
         </Modal.Body>
         <Modal.Footer>
+          <Button variant="outline-secondary" onClick={() => setShowInconsistenciasModal(false)}>
+            Aceptar
+          </Button>
+          <Button
+            variant="outline-primary"
+            onClick={() => {
+              setShowInconsistenciasModal(false);
+              void cargarVistaPrevia({ ids: idsLoteRef.current });
+            }}
+          >
+            Volver a validar
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      <Modal
+        show={showProductosHabilitados}
+        onHide={() => {
+          if (!guardandoProductos) setShowProductosHabilitados(false);
+        }}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Productos habilitados para generar cobros</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {resumenFiltros ? <p>{resumenFiltros}</p> : null}
+          <p className="text-muted small">
+            Estos productos pueden generar cobros nuevos. Aceptar guarda la selección y continúa la revisión.
+          </p>
+          {catalogoProductos.map((producto) => (
+            <Form.Check
+              key={`config-${producto.id}`}
+              id={`config-producto-${producto.id}`}
+              type="checkbox"
+              label={producto.etiqueta}
+              className="mb-2"
+              checked={borradorProductos.includes(producto.id)}
+              disabled={guardandoProductos}
+              onChange={() => {
+                setBorradorProductos((actual) => (
+                  actual.includes(producto.id)
+                    ? actual.filter((id) => id !== producto.id)
+                    : [...actual, producto.id]
+                ));
+              }}
+            />
+          ))}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button
+            variant="outline-secondary"
+            onClick={() => setShowProductosHabilitados(false)}
+            disabled={guardandoProductos}
+          >
+            Cancelar
+          </Button>
           <Button
             className="pagos-mensuales__btn-primary"
-            onClick={() => setShowInconsistenciasModal(false)}
+            onClick={() => void aceptarProductosHabilitados()}
+            disabled={guardandoProductos}
           >
-            Entendido
+            {guardandoProductos ? "Guardando…" : "Aceptar"}
           </Button>
         </Modal.Footer>
       </Modal>
@@ -836,11 +1138,13 @@ const TablaConfiguracionPagos = () => {
       <VistaPreviaCobrosModal
         show={showVistaPrevia}
         vista={vistaPrevia}
-        companias={companiasCatalogo}
+        detallePorCobertura={detalleLote}
         error={errorVista}
         generando={loading}
+        validando={validandoPagosMes}
         onCancel={cerrarVistaPrevia}
-        onActualizar={() => void cargarVistaPrevia()}
+        alcance={resumenFiltros}
+        onActualizar={() => void cargarVistaPrevia({ ids: idsLoteRef.current })}
         onConfirmar={(revision) => void handleGenerarCobros(revision)}
       />
     </Container>
