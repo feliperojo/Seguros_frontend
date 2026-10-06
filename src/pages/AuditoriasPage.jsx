@@ -1,9 +1,11 @@
 // pages/AuditoriasPage.jsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Card, Button, Form, Alert, Spinner, Table, Badge, Modal } from "react-bootstrap";
-import { FaEdit } from "react-icons/fa";
+import { Button, Form, Alert, Spinner, Modal } from "react-bootstrap";
+import { FaClipboardCheck, FaEdit, FaPlus, FaTable } from "react-icons/fa";
 import { Helmet } from "react-helmet-async";
+import "../styles/GruposFamiliaresListado.css";
+import "../styles/AuditoriasPage.css";
 import { listRuns, createRun, closeRun, deleteRun, listAuditTypes, previewRun } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
 import TiposAuditoriaModal from "../components/TiposAuditoriaModal";
@@ -569,22 +571,38 @@ const AuditoriasPage = () => {
   };
   
   return (
-    <div className="container-fluid py-4">
+    <div className="container-fluid gf-listado-container py-3 auditorias-page">
       <Helmet>
         <title>Auditorías</title>
       </Helmet>
-      
-      <h2 className="mb-4">Auditorías Mensuales</h2>
-      
+
+      <div className="gf-listado">
+        <div className="gf-listado__header gf-listado__header--split">
+          <div className="gf-listado__header-main">
+            <div className="gf-listado__header-icon" aria-hidden="true">
+              <FaClipboardCheck />
+            </div>
+            <div>
+              <h1 className="gf-listado__title">Auditorías Mensuales</h1>
+              <p className="gf-listado__subtitle">
+                Crea y consulta auditorías por fuente y periodo. Las fuentes personalizadas se administran desde Gestionar.
+              </p>
+            </div>
+          </div>
+          <div className="gf-listado__header-actions">
+            <span className="gf-listado__chip">{periodo || "Sin periodo"}</span>
+          </div>
+        </div>
+
+        <div className="gf-listado__body">
       {/* Selector de auditoría y periodo */}
-      <Card className="mb-4">
-        <Card.Header>
-          <h5 className="mb-0">Crear Nueva Auditoría</h5>
-        </Card.Header>
-        <Card.Body>
-          <div className="row g-3 align-items-end">
+      <div className="gf-listado__section">
+        <div className="gf-listado__section-title">
+          <FaPlus /> Crear nueva auditoría
+        </div>
+          <div className="row g-3 align-items-start">
             <div className="col-md-3">
-              <Form.Label>Tipo de Objeto a Auditar</Form.Label>
+              <div className="gf-listado__label">Tipo de objeto a auditar</div>
               <Form.Select
                 value={targetType}
                 onChange={(e) => {
@@ -602,17 +620,16 @@ const AuditoriasPage = () => {
             
             <div className="col-md-3">
               <div className="d-flex justify-content-between align-items-center mb-1">
-                <Form.Label className="mb-0">Tipo de Auditoría</Form.Label>
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="p-0 text-decoration-none"
+                <div className="gf-listado__label mb-0">Tipo de auditoría</div>
+                <button
+                  type="button"
+                  className="auditorias-page__link"
                   onClick={() => setShowTypesModal(true)}
                   title="Gestionar fuentes de auditoría"
                 >
-                  <FaEdit className="me-1" />
+                  <FaEdit />
                   Gestionar
-                </Button>
+                </button>
               </div>
               {loadingTypes ? (
                 <Form.Select disabled>
@@ -631,14 +648,14 @@ const AuditoriasPage = () => {
                       </option>
                     ))}
                   </Form.Select>
-                  <Form.Text className="text-muted">
+                  <span className="auditorias-page__hint">
                     {auditTypes.length} fuente{auditTypes.length !== 1 ? "s" : ""} disponible{auditTypes.length !== 1 ? "s" : ""}
-                  </Form.Text>
+                  </span>
                   {tipoTieneFiltrosCobertura && (
-                    <Alert variant="light" className="mt-2 mb-0 py-2 small border">
+                    <p className="auditorias-page__note">
                       Este tipo tiene <strong>filtros de cobertura</strong> configurados en su definición; el servidor los
                       aplica al crear el run sobre el universo base.
-                    </Alert>
+                    </p>
                   )}
                 </>
               ) : (
@@ -650,15 +667,15 @@ const AuditoriasPage = () => {
                     <option value="SHERPA">SHERPA</option>
                     <option value="DOCUMENTACION">DOCUMENTACIÓN</option>
                   </Form.Select>
-                  <Form.Text className="text-muted">
+                  <span className="auditorias-page__hint">
                     No hay fuentes personalizadas. Usando fuentes legacy. Crea fuentes personalizadas para más opciones.
-                  </Form.Text>
+                  </span>
                 </>
               )}
             </div>
             
             <div className="col-md-3">
-              <Form.Label>Periodo (YYYY-MM)</Form.Label>
+              <div className="gf-listado__label">Periodo (YYYY-MM)</div>
               <Form.Control
                 type="month"
                 value={periodo}
@@ -667,20 +684,22 @@ const AuditoriasPage = () => {
             </div>
 
             <div className="col-md-3">
-              <Form.Label className="d-block">Opciones</Form.Label>
-              <Form.Check
-                type="switch"
-                id="include-pagos-switch"
-                label="Incluir pagos del mes de la auditoría"
-                checked={includePagos}
-                onChange={(e) => setIncludePagos(e.target.checked)}
-                disabled={creating || validatingPagos || previewLoading}
-              />
-              <Form.Text className="text-muted d-block mb-2">
-                Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
-              </Form.Text>
+              <div className="gf-listado__label">Opciones</div>
+              <div className="auditorias-page__option">
+                <Form.Check
+                  type="switch"
+                  id="include-pagos-switch"
+                  label="Incluir pagos del mes de la auditoría"
+                  checked={includePagos}
+                  onChange={(e) => setIncludePagos(e.target.checked)}
+                  disabled={creating || validatingPagos || previewLoading}
+                />
+                <span className="auditorias-page__hint">
+                  Si lo activas, se validará que existan pagos generados para el periodo seleccionado.
+                </span>
+              </div>
               {targetType === "coberturas" && (
-                <>
+                <div className="auditorias-page__option">
                   <Form.Check
                     type="switch"
                     id="include-renovaciones-switch"
@@ -689,17 +708,18 @@ const AuditoriasPage = () => {
                     onChange={(e) => setIncludeRenovaciones(e.target.checked)}
                     disabled={creating || validatingPagos || previewLoading}
                   />
-                  <Form.Text className="text-muted">
+                  <span className="auditorias-page__hint">
                     Muestra y permite gestionar el estado de la renovación de cada grupo familiar (solo en la fila del titular).
                     {String(periodo || "").slice(0, 4) && (
                       <> Se tomarán las renovaciones con año destino {String(periodo).slice(0, 4)}.</>
                     )}
-                  </Form.Text>
-                </>
+                  </span>
+                </div>
               )}
             </div>
             
-            <div className="col-md-3 d-flex flex-column gap-2">
+            <div className="col-12">
+              <div className="auditorias-page__actions">
               <Button
                 variant="outline-primary"
                 onClick={handlePreviewRun}
@@ -710,7 +730,7 @@ const AuditoriasPage = () => {
                   (!auditTypeId && !auditTypeLegacy) ||
                   !periodo
                 }
-                className="w-100"
+                className="auditorias-page__btn-outline"
               >
                 {previewLoading || validatingPagos ? (
                   <>
@@ -722,7 +742,6 @@ const AuditoriasPage = () => {
                 )}
               </Button>
               <Button
-                variant="primary"
                 onClick={handleCreateRun}
                 disabled={
                   creating ||
@@ -731,7 +750,7 @@ const AuditoriasPage = () => {
                   (!auditTypeId && !auditTypeLegacy) ||
                   !periodo
                 }
-                className="w-100"
+                className="gf-listado__btn-primary"
               >
                 {creating || validatingPagos ? (
                   <>
@@ -742,10 +761,10 @@ const AuditoriasPage = () => {
                   "Crear Auditoría del Periodo"
                 )}
               </Button>
+              </div>
             </div>
           </div>
-        </Card.Body>
-      </Card>
+      </div>
 
       <Modal show={showPagosModal} onHide={closePagosModal} centered>
         <Modal.Header closeButton>
@@ -812,27 +831,25 @@ const AuditoriasPage = () => {
       )}
       
       {/* Lista de runs */}
-      <Card>
-        <Card.Header>
-          <h5 className="mb-0">
-            Auditorías de {targetType === "coberturas" ? "Coberturas" : "Clientes"} - Periodo {periodo}
-          </h5>
-        </Card.Header>
-        <Card.Body>
+      <div className="gf-listado__section">
+        <div className="gf-listado__section-title">
+          <FaTable />
+          Auditorías de {targetType === "coberturas" ? "Coberturas" : "Clientes"} — Periodo {periodo}
+        </div>
           {loading ? (
             <div className="text-center py-5">
-              <Spinner animation="border" role="status">
+              <Spinner animation="border" role="status" style={{ color: "#1a365d" }}>
                 <span className="visually-hidden">Cargando...</span>
               </Spinner>
-              <p className="mt-2 text-muted">Cargando auditorías...</p>
+              <p className="mt-2 auditorias-page__hint">Cargando auditorías...</p>
             </div>
           ) : runs.length === 0 ? (
-            <Alert variant="info">
+            <div className="gf-listado__intro">
               No se encontraron auditorías para la fuente y periodo seleccionados.
-            </Alert>
+            </div>
           ) : (
-            <div className="table-responsive">
-              <Table striped bordered hover>
+            <div className="gf-listado__table-wrap">
+              <table className="table align-middle gf-listado__table mb-0">
                 <thead>
                   <tr>
                     <th title="Identificador único de la auditoría">ID</th>
@@ -862,29 +879,29 @@ const AuditoriasPage = () => {
                       <td>
                         {run.audit_type ? (
                           typeof run.audit_type === "object" ? (
-                            <Badge 
-                              bg="primary"
+                            <span
+                              className="auditorias-page__badge auditorias-page__badge--navy"
                               title={run.audit_type.descripcion || run.audit_type.nombre}
                             >
                               {run.audit_type.nombre || run.audit_type.codigo}
-                            </Badge>
+                            </span>
                           ) : (
-                            <Badge 
-                              bg={run.audit_type === "SHERPA" ? "primary" : "info"}
+                            <span
+                              className={`auditorias-page__badge ${run.audit_type === "SHERPA" ? "auditorias-page__badge--navy" : "auditorias-page__badge--sky"}`}
                               title={run.audit_type === "SHERPA" 
                                 ? "SHERPA: Auditoría de procesos y cumplimiento operativo" 
                                 : "DOCUMENTACIÓN: Auditoría de documentos y requerimientos"}
                             >
                               {run.audit_type}
-                            </Badge>
+                            </span>
                           )
                         ) : (
-                          <Badge bg="secondary">Sin tipo</Badge>
+                          <span className="auditorias-page__badge auditorias-page__badge--slate">Sin tipo</span>
                         )}
                         {run.target_type && (
-                          <Badge bg="light" text="dark" className="ms-1">
+                          <span className="auditorias-page__badge auditorias-page__badge--slate">
                             {run.target_type}
-                          </Badge>
+                          </span>
                         )}
                       </td>
                       <td title={`Periodo auditado: ${run.periodo}`}>{run.periodo}</td>
@@ -903,30 +920,30 @@ const AuditoriasPage = () => {
                           }
                           if (p === "yes") {
                             return (
-                              <Badge
-                                bg="info"
+                              <span
+                                className="auditorias-page__badge auditorias-page__badge--sky"
                                 title="Esta auditoría incorpora pagos: en el detalle verás columnas de pago y situación (si aplica)."
                               >
                                 Sí
-                              </Badge>
+                              </span>
                             );
                           }
                           return (
-                            <Badge
-                              bg="secondary"
+                            <span
+                              className="auditorias-page__badge auditorias-page__badge--slate"
                               title="Esta auditoría no se creó con pagos vinculados (solo ítems de auditoría)."
                             >
                               No
-                            </Badge>
+                            </span>
                           );
                         })()}
                       </td>
                       <td title={`Creada el ${formatDate(run.created_at)}`}>{formatDate(run.created_at)}</td>
                       <td>
                         {run.is_closed ? (
-                          <Badge bg="secondary" title="Auditoría cerrada: No se pueden realizar más cambios">Cerrado</Badge>
+                          <span className="auditorias-page__badge auditorias-page__badge--slate" title="Auditoría cerrada: No se pueden realizar más cambios">Cerrado</span>
                         ) : (
-                          <Badge bg="success" title="Auditoría abierta: Puedes revisar y actualizar coberturas">Abierto</Badge>
+                          <span className="auditorias-page__badge auditorias-page__badge--ok" title="Auditoría abierta: Puedes revisar y actualizar coberturas">Abierto</span>
                         )}
                       </td>
                       {(() => {
@@ -941,64 +958,64 @@ const AuditoriasPage = () => {
                         
                         return (
                           <>
-                            <td title={`Total de ${totalItems} coberturas en esta auditoría`}>{totalItems}</td>
+                            <td className="auditorias-page__count" title={`Total de ${totalItems} coberturas en esta auditoría`}>{totalItems}</td>
                             <td>
-                              <Badge 
-                                bg="success"
+                              <span
+                                className="auditorias-page__badge auditorias-page__badge--ok"
                                 title={`${completedCount} coberturas ya revisadas (tienen estado asignado)`}
                               >
                                 {completedCount}
-                              </Badge>
+                              </span>
                             </td>
                             <td>
-                              <Badge 
-                                bg="warning"
+                              <span
+                                className="auditorias-page__badge auditorias-page__badge--warn"
                                 title={`${pendingCount} coberturas pendientes de revisar (estado PENDIENTE)`}
                               >
                                 {pendingCount}
-                              </Badge>
+                              </span>
                             </td>
                             <td>
                               {perdidaCount > 0 ? (
-                                <Badge 
-                                  bg="danger"
+                                <span
+                                  className="auditorias-page__badge auditorias-page__badge--danger"
                                   title={`${perdidaCount} coberturas marcadas como PERDIDA (no cumplen requisitos)`}
                                 >
                                   {perdidaCount}
-                                </Badge>
+                                </span>
                               ) : (
-                                <span title="0 coberturas con estado PERDIDA">{perdidaCount}</span>
+                                <span className="auditorias-page__count" title="0 coberturas con estado PERDIDA">{perdidaCount}</span>
                               )}
                             </td>
                             <td>
                               {novedadCount > 0 ? (
-                                <Badge 
-                                  bg="warning"
+                                <span
+                                  className="auditorias-page__badge auditorias-page__badge--warn"
                                   title={`${novedadCount} coberturas con novedades (requieren atención especial)`}
                                 >
                                   {novedadCount}
-                                </Badge>
+                                </span>
                               ) : (
-                                <span title="0 coberturas con novedades">{novedadCount}</span>
+                                <span className="auditorias-page__count" title="0 coberturas con novedades">{novedadCount}</span>
                               )}
                             </td>
                             <td>
                               {solucionadoCount > 0 ? (
-                                <Badge 
-                                  bg="info"
+                                <span
+                                  className="auditorias-page__badge auditorias-page__badge--sky"
                                   title={`${solucionadoCount} coberturas con estado SOLUCIONADO (problemas resueltos)`}
                                 >
                                   {solucionadoCount}
-                                </Badge>
+                                </span>
                               ) : (
-                                <span title="0 coberturas con estado SOLUCIONADO">{solucionadoCount}</span>
+                                <span className="auditorias-page__count" title="0 coberturas con estado SOLUCIONADO">{solucionadoCount}</span>
                               )}
                             </td>
                           </>
                         );
                       })()}
                       <td>
-                        <div className="d-flex gap-1">
+                        <div className="d-flex gap-1 auditorias-page__row-actions">
                           <Button
                             variant="primary"
                             size="sm"
@@ -1040,11 +1057,12 @@ const AuditoriasPage = () => {
                     </tr>
                   ))}
                 </tbody>
-              </Table>
+              </table>
             </div>
           )}
-        </Card.Body>
-      </Card>
+      </div>
+        </div>
+      </div>
       
       {/* Modal de Gestión de Fuentes de Auditoría */}
       <TiposAuditoriaModal

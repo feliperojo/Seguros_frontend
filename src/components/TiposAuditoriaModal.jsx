@@ -10,30 +10,51 @@ import {
   deleteAuditType,
 } from "../services/auditoriasService";
 import useToast from "../hooks/useToast";
+import { FILTRO_PRODUCTO_LISTADO_OPCIONES } from "../constants/estadosGrupoFamiliar";
 
-/** Valores permitidos para filtros_cobertura.estado_cobertura (coinciden con BD). */
+/** Tokens que el servidor ya expande (Sí/Si y Medicaid/medicai). */
 const ESTADO_COBERTURA_OPTIONS = [
-  { uiKey: "estado_si", apiValue: "si", label: "Si" },
+  { uiKey: "estado_si", apiValue: "si", label: "Sí" },
   { uiKey: "estado_no", apiValue: "no", label: "No" },
   { uiKey: "estado_medicare", apiValue: "medicare", label: "Medicare" },
   { uiKey: "estado_medicai", apiValue: "medicai", label: "Medicaid" },
 ];
 
-/** Keys configurables de columnas en la tabla de resultados del run. */
 const COLUMNAS_VISIBLES_OPTIONS = [
-  { key: "codigo_poliza", label: "Numero ID" },
+  { key: "codigo_poliza", label: "Número ID" },
   { key: "compania", label: "Compañía" },
   { key: "agente", label: "Agente" },
   { key: "requerimientos", label: "Requerimientos" },
 ];
 
+const PRODUCTOS_AUDITORIA = FILTRO_PRODUCTO_LISTADO_OPCIONES.filter(
+  (opcion) => opcion.value !== "todos"
+);
+
+const CLAVES_PRINCIPALES = new Set([
+  "productos",
+  "precio_gt_zero",
+  "precio_min",
+  "estado_cobertura",
+]);
+
+const ETIQUETAS_RESTRICCION_ANTERIOR = {
+  activo: "Cobertura activa",
+  vigente: "Cobertura vigente",
+  sin_cancelacion: "Sin fecha de cancelación",
+  dia_pago_in: "Días de pago",
+  elegibilidad_in: "Elegibilidad",
+  metal_in: "Metal",
+  plan_in: "Planes",
+};
+
 const emptyFiltrosCoberturaUi = () => ({
+  productos: [],
+  legacy: {},
+  estadoExtra: [],
   precio_gt_zero: false,
   use_precio_min: false,
   precio_min: "",
-  activo: false,
-  vigente: false,
-  sin_cancelacion: false,
   estado_si: false,
   estado_no: false,
   estado_medicare: false,
@@ -57,48 +78,91 @@ const columnasVisiblesFromApi = (raw) => {
   };
 };
 
-const buildColumnasVisiblesPayload = (ui) =>
-  COLUMNAS_VISIBLES_OPTIONS.map((o) => o.key).filter((key) => !!ui[key]);
+const buildColumnasVisiblesPayload = (ui, conservarSinDefinir) => {
+  const keys = COLUMNAS_VISIBLES_OPTIONS.map((o) => o.key).filter((key) => !!ui[key]);
+  const todasMarcadas = keys.length === COLUMNAS_VISIBLES_OPTIONS.length;
+  if (conservarSinDefinir && todasMarcadas) return null;
+  return keys;
+};
+
+const normalizarTokenEstado = (raw) => {
+  const v = String(raw ?? "").trim().toLocaleLowerCase("es");
+  if (v === "si" || v === "sí" || v === "yes") return "si";
+  if (v === "medicaid" || v === "medicai") return "medicai";
+  return v;
+};
+
+const normalizarIdProducto = (raw) => {
+  const id = String(raw ?? "").trim();
+  return id === "plan_dental" ? "dental_privado" : id;
+};
+
+const textoRestriccion = (value) => {
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (Array.isArray(value)) return value.map((item) => String(item)).join(", ");
+  if (value == null || value === "") return "Sin valor";
+  return String(value);
+};
 
 const filtrosCoberturaFromApi = (raw) => {
   const u = emptyFiltrosCoberturaUi();
   if (!raw || typeof raw !== "object") return u;
+
+  const catalogo = new Set(PRODUCTOS_AUDITORIA.map((opcion) => opcion.value));
+  u.productos = Array.isArray(raw.productos)
+    ? [...new Set(raw.productos.map(normalizarIdProducto).filter((id) => catalogo.has(id)))]
+    : [];
+
+  u.legacy = Object.fromEntries(
+    Object.entries(raw).filter(([key]) => !CLAVES_PRINCIPALES.has(key))
+  );
   u.precio_gt_zero = !!raw.precio_gt_zero;
   u.use_precio_min = raw.precio_min != null && raw.precio_min !== "";
   u.precio_min = raw.precio_min != null && raw.precio_min !== "" ? String(raw.precio_min) : "";
-  u.activo = !!raw.activo;
-  u.vigente = !!raw.vigente;
-  u.sin_cancelacion = !!raw.sin_cancelacion;
+
   const allowedEstado = new Set(ESTADO_COBERTURA_OPTIONS.map((o) => o.apiValue));
-  const estadoArr = Array.isArray(raw.estado_cobertura)
-    ? raw.estado_cobertura
-        .map((x) => String(x).toLowerCase().trim())
-        .filter((x) => allowedEstado.has(x))
-    : [];
+  const vistos = new Set();
+  const extras = [];
+  if (Array.isArray(raw.estado_cobertura)) {
+    raw.estado_cobertura.forEach((item) => {
+      const token = normalizarTokenEstado(item);
+      if (allowedEstado.has(token)) {
+        vistos.add(token);
+        return;
+      }
+      const original = String(item ?? "").trim();
+      if (original) extras.push(original);
+    });
+  }
   ESTADO_COBERTURA_OPTIONS.forEach((o) => {
-    u[o.uiKey] = estadoArr.includes(o.apiValue);
+    u[o.uiKey] = vistos.has(o.apiValue);
   });
+  u.estadoExtra = extras;
   return u;
 };
 
 /**
- * Solo claves activadas por el usuario. null = sin filtros extra (servidor).
+ * Conserva restricciones anteriores salvo que el usuario las retire.
+ * null = sin filtros extra.
  */
 const buildFiltrosCoberturaPayload = (ui, targetType) => {
   if (targetType !== "coberturas") return null;
-  const o = {};
+  const o = { ...(ui.legacy || {}) };
+  if (ui.productos.length) o.productos = ui.productos;
   if (ui.precio_gt_zero) o.precio_gt_zero = true;
   if (ui.use_precio_min) {
     const n = parseFloat(String(ui.precio_min).replace(",", "."));
     if (!Number.isNaN(n)) o.precio_min = n;
   }
-  if (ui.activo) o.activo = true;
-  if (ui.vigente) o.vigente = true;
-  if (ui.sin_cancelacion) o.sin_cancelacion = true;
   const ec = ESTADO_COBERTURA_OPTIONS.filter((x) => ui[x.uiKey]).map((x) => x.apiValue);
-  if (ec.length) o.estado_cobertura = ec;
+  const extras = Array.isArray(ui.estadoExtra) ? ui.estadoExtra.filter(Boolean) : [];
+  const estados = [...ec, ...extras];
+  if (estados.length) o.estado_cobertura = estados;
   return Object.keys(o).length ? o : null;
 };
+
+const hayRestriccionesAnteriores = (ui) =>
+  Object.keys(ui?.legacy || {}).length > 0 || (ui?.estadoExtra || []).length > 0;
 
 const hasFiltrosCobertura = (t) => {
   const f = t?.filtros_cobertura;
@@ -139,6 +203,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
   });
   const [filtrosCoberturaUi, setFiltrosCoberturaUi] = useState(emptyFiltrosCoberturaUi());
   const [columnasVisiblesUi, setColumnasVisiblesUi] = useState(emptyColumnasVisiblesUi());
+  const [columnasSinDefinir, setColumnasSinDefinir] = useState(false);
   const [formErrors, setFormErrors] = useState({});
 
   const updateFiltrosUi = useCallback((patch) => {
@@ -174,6 +239,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       });
       setFiltrosCoberturaUi(emptyFiltrosCoberturaUi());
       setColumnasVisiblesUi(emptyColumnasVisiblesUi());
+      setColumnasSinDefinir(false);
       setEditingType(null);
       setFormErrors({});
       setLoadingDetail(false);
@@ -212,6 +278,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
     });
     setFiltrosCoberturaUi(emptyFiltrosCoberturaUi());
     setColumnasVisiblesUi(emptyColumnasVisiblesUi());
+    setColumnasSinDefinir(false);
     setEditingType(null);
     setFormErrors({});
     setLoadingDetail(false);
@@ -235,6 +302,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       });
       setFiltrosCoberturaUi(filtrosCoberturaFromApi(row.filtros_cobertura));
       setColumnasVisiblesUi(columnasVisiblesFromApi(row.columnas_visibles));
+      setColumnasSinDefinir(!Array.isArray(row.columnas_visibles));
     } catch (err) {
       console.error("Detalle tipo auditoría:", err);
       setFormData({
@@ -247,6 +315,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       });
       setFiltrosCoberturaUi(filtrosCoberturaFromApi(type.filtros_cobertura));
       setColumnasVisiblesUi(columnasVisiblesFromApi(type.columnas_visibles));
+      setColumnasSinDefinir(!Array.isArray(type.columnas_visibles));
       toast.showWarning(
         err.response?.data?.message ||
           "No se pudo cargar el detalle del tipo; se usan los datos de la lista."
@@ -277,7 +346,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
       codigo: formData.codigo.trim(),
       descripcion: formData.descripcion?.trim() || "",
       etiqueta_estado_auditoria: formData.etiqueta_estado_auditoria?.trim() || "",
-      columnas_visibles: buildColumnasVisiblesPayload(columnasVisiblesUi),
+      columnas_visibles: buildColumnasVisiblesPayload(columnasVisiblesUi, columnasSinDefinir),
       target_type: formData.target_type,
       is_active: !!formData.is_active,
       filtros_cobertura: filtrosPayload,
@@ -458,12 +527,161 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                   </Form.Text>
                 </Form.Group>
 
+                {filtrosSectionVisible ? (
+                  <>
+                    <hr className="my-4" />
+                    <h6 className="fw-semibold mb-3">Coberturas que se auditarán</h6>
+                    <p className="text-muted small mb-3">
+                      Marca los estados y los productos que quieres auditar. Si marcas varios estados,
+                      entra la cobertura que coincida con cualquiera de ellos. Con los productos ocurre
+                      lo mismo. Si marcas estados y productos a la vez, la cobertura tiene que cumplir
+                      un estado marcado y un producto marcado. El filtro de precio se suma a esa selección.
+                      Los totales del panel principal también tienen en cuenta el estado del grupo, la
+                      cotización y si la cobertura está activa.
+                    </p>
+
+                    {formErrors.filtros_cobertura && (
+                      <Alert variant="danger" className="py-2 small">
+                        {formErrors.filtros_cobertura}
+                      </Alert>
+                    )}
+
+                    <div className="border rounded-3 p-3 bg-light bg-opacity-50">
+                      <Form.Group className="mb-3">
+                        <Form.Label className="fw-semibold">Estados de cobertura</Form.Label>
+                        <Form.Text className="text-muted d-block mb-2 small">
+                          Puedes marcar uno o varios. Si no marcas ninguno, se incluyen todos los estados.
+                        </Form.Text>
+                        <div className="d-flex flex-wrap gap-3 column-gap-4">
+                          {ESTADO_COBERTURA_OPTIONS.map((opt) => (
+                            <Form.Check
+                              key={opt.apiValue}
+                              id={`fc-estado-${opt.apiValue}`}
+                              type="checkbox"
+                              label={opt.label}
+                              checked={!!filtrosCoberturaUi[opt.uiKey]}
+                              onChange={(e) => updateFiltrosUi({ [opt.uiKey]: e.target.checked })}
+                            />
+                          ))}
+                        </div>
+                        {formErrors["filtros_cobertura.estado_cobertura"] && (
+                          <div className="text-danger small mt-2">
+                            {formErrors["filtros_cobertura.estado_cobertura"]}
+                          </div>
+                        )}
+                      </Form.Group>
+
+                      <Form.Group className="mb-3">
+                        <Form.Label className="fw-semibold">Productos</Form.Label>
+                        <Form.Text className="text-muted d-block mb-2 small">
+                          Puedes marcar uno o varios. Si no marcas ninguno, se incluyen todos los productos.
+                        </Form.Text>
+                        <div className="d-flex flex-wrap gap-3">
+                          {PRODUCTOS_AUDITORIA.map((opcion) => (
+                            <Form.Check
+                              key={opcion.value}
+                              id={`fc-producto-${opcion.value}`}
+                              type="checkbox"
+                              label={opcion.label}
+                              checked={filtrosCoberturaUi.productos.includes(opcion.value)}
+                              onChange={(e) =>
+                                updateFiltrosUi({
+                                  productos: e.target.checked
+                                    ? [...filtrosCoberturaUi.productos, opcion.value]
+                                    : filtrosCoberturaUi.productos.filter((v) => v !== opcion.value),
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
+                        {Object.entries(formErrors)
+                          .filter(([key]) => key.startsWith("filtros_cobertura.productos"))
+                          .map(([key, message]) => (
+                            <div key={key} className="text-danger small mt-2">
+                              {message}
+                            </div>
+                          ))}
+                      </Form.Group>
+
+                      <Form.Group className="mb-0">
+                        <Form.Label className="fw-semibold">Filtro de precio</Form.Label>
+                        <Form.Check
+                          className="mt-2 mb-2"
+                          type="checkbox"
+                          id="fc-precio-gt-zero"
+                          label="Solo coberturas con precio mayor que cero"
+                          checked={filtrosCoberturaUi.precio_gt_zero}
+                          onChange={(e) => updateFiltrosUi({ precio_gt_zero: e.target.checked })}
+                        />
+                        <div className="ms-4">
+                          <Form.Check
+                            type="checkbox"
+                            id="fc-use-precio-min"
+                            label="Precio mínimo"
+                            checked={filtrosCoberturaUi.use_precio_min}
+                            onChange={(e) => updateFiltrosUi({ use_precio_min: e.target.checked })}
+                          />
+                          <Form.Control
+                            type="number"
+                            step="any"
+                            min={0}
+                            size="sm"
+                            className="mt-1"
+                            style={{ maxWidth: 200 }}
+                            disabled={!filtrosCoberturaUi.use_precio_min}
+                            value={filtrosCoberturaUi.precio_min}
+                            onChange={(e) => updateFiltrosUi({ precio_min: e.target.value })}
+                            isInvalid={!!formErrors["filtros_cobertura.precio_min"]}
+                          />
+                          <Form.Control.Feedback type="invalid">
+                            {formErrors["filtros_cobertura.precio_min"]}
+                          </Form.Control.Feedback>
+                        </div>
+                      </Form.Group>
+
+                      {hayRestriccionesAnteriores(filtrosCoberturaUi) ? (
+                        <div className="border rounded-3 p-3 mt-3 bg-white">
+                          <h6 className="fw-semibold mb-2">Restricciones de la configuración anterior</h6>
+                          <p className="small text-muted mb-2">
+                            Estas condiciones se guardaron antes en esta auditoría. Si las dejas, se siguen
+                            aplicando junto con los estados, productos y precio de arriba.
+                          </p>
+                          <ul className="small mb-3">
+                            {Object.entries(filtrosCoberturaUi.legacy).map(([key, value]) => (
+                              <li key={key}>
+                                {ETIQUETAS_RESTRICCION_ANTERIOR[key] || "Restricción adicional"}:{" "}
+                                {textoRestriccion(value)}
+                              </li>
+                            ))}
+                            {filtrosCoberturaUi.estadoExtra.map((estado, index) => (
+                              <li key={`estado-extra-${index}`}>
+                                Estado de cobertura: {estado}
+                              </li>
+                            ))}
+                          </ul>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline-secondary"
+                            onClick={() => updateFiltrosUi({ legacy: {}, estadoExtra: [] })}
+                          >
+                            Retirar restricciones anteriores
+                          </Button>
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                ) : (
+                  <Alert variant="light" border="secondary" className="small mb-0 py-2 mt-3">
+                    Los estados, productos y precio aplican cuando el objetivo es coberturas.
+                  </Alert>
+                )}
+
                 <hr className="my-4" />
-                <h6 className="fw-semibold mb-3">Columnas visibles en la tabla de resultados</h6>
+                <h6 className="fw-semibold mb-3">Resultados de la auditoría</h6>
                 <p className="text-muted small mb-3">
-                  Controla qué columnas se muestran en el detalle del run. Si no configuras nada
-                  (tipos existentes con <code className="small">columnas_visibles: null</code>),
-                  se muestran las 4. Al crear un tipo nuevo, las 4 inician marcadas.
+                  Elige las columnas que quieres ver. Si esta auditoría no tenía columnas definidas,
+                  se muestran Número ID, Compañía, Agente y Requerimientos.
                 </p>
                 {formErrors.columnas_visibles && (
                   <Alert variant="danger" className="py-2 small">
@@ -486,114 +704,6 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                     ))}
                   </div>
                 </div>
-
-                {filtrosSectionVisible ? (
-                  <>
-                    <hr className="my-4" />
-                    <h6 className="fw-semibold mb-3">Filtros del universo auditado (opcional)</h6>
-                    <p className="text-muted small mb-3">
-                      Se aplican al generar el run: solo entran coberturas que cumplan estas reglas, además del
-                      listado base. Deja todo sin marcar para no añadir filtros extra (
-                      <code className="small">filtros_cobertura: null</code>).
-                    </p>
-
-                    {formErrors.filtros_cobertura && (
-                      <Alert variant="danger" className="py-2 small">
-                        {formErrors.filtros_cobertura}
-                      </Alert>
-                    )}
-
-                    <div className="border rounded-3 p-3 bg-light bg-opacity-50">
-                      <Form.Check
-                        className="mb-2"
-                        type="checkbox"
-                        id="fc-precio-gt-zero"
-                        label="Solo coberturas con precio &gt; 0"
-                        checked={filtrosCoberturaUi.precio_gt_zero}
-                        onChange={(e) => updateFiltrosUi({ precio_gt_zero: e.target.checked })}
-                      />
-                      <div className="ms-4 mb-3">
-                        <Form.Check
-                          type="checkbox"
-                          id="fc-use-precio-min"
-                          label="Precio mínimo (≥)"
-                          checked={filtrosCoberturaUi.use_precio_min}
-                          onChange={(e) => updateFiltrosUi({ use_precio_min: e.target.checked })}
-                        />
-                        <Form.Control
-                          type="number"
-                          step="any"
-                          min={0}
-                          size="sm"
-                          className="mt-1"
-                          style={{ maxWidth: 200 }}
-                          disabled={!filtrosCoberturaUi.use_precio_min}
-                          value={filtrosCoberturaUi.precio_min}
-                          onChange={(e) => updateFiltrosUi({ precio_min: e.target.value })}
-                          isInvalid={!!formErrors["filtros_cobertura.precio_min"]}
-                        />
-                        <Form.Control.Feedback type="invalid">
-                          {formErrors["filtros_cobertura.precio_min"]}
-                        </Form.Control.Feedback>
-                      </div>
-
-                      <Form.Check
-                        className="mb-2"
-                        type="checkbox"
-                        id="fc-activo"
-                        label="Solo activas (activo)"
-                        checked={filtrosCoberturaUi.activo}
-                        onChange={(e) => updateFiltrosUi({ activo: e.target.checked })}
-                      />
-                      <Form.Check
-                        className="mb-2"
-                        type="checkbox"
-                        id="fc-vigente"
-                        label="Solo vigentes"
-                        checked={filtrosCoberturaUi.vigente}
-                        onChange={(e) => updateFiltrosUi({ vigente: e.target.checked })}
-                      />
-                      <Form.Check
-                        className="mb-3"
-                        type="checkbox"
-                        id="fc-sin-cancel"
-                        label="Sin fecha de expiración"
-                        checked={filtrosCoberturaUi.sin_cancelacion}
-                        onChange={(e) => updateFiltrosUi({ sin_cancelacion: e.target.checked })}
-                      />
-
-                      <Form.Group className="mb-0">
-                        <Form.Label className="small fw-semibold mb-1">Estado de cobertura</Form.Label>
-                        <Form.Text className="text-muted d-block mb-2 small">
-                          Uno o más valores enviados como lista (<code>estado_cobertura</code>):{" "}
-                          <strong>si</strong>, <strong>no</strong>, <strong>medicare</strong>,{" "}
-                          <strong>medicai</strong>.
-                        </Form.Text>
-                        <div className="d-flex flex-wrap gap-3 column-gap-4">
-                          {ESTADO_COBERTURA_OPTIONS.map((opt) => (
-                            <Form.Check
-                              key={opt.apiValue}
-                              id={`fc-estado-${opt.apiValue}`}
-                              type="checkbox"
-                              label={opt.label}
-                              checked={!!filtrosCoberturaUi[opt.uiKey]}
-                              onChange={(e) => updateFiltrosUi({ [opt.uiKey]: e.target.checked })}
-                            />
-                          ))}
-                        </div>
-                        {formErrors["filtros_cobertura.estado_cobertura"] && (
-                          <div className="text-danger small mt-2">
-                            {formErrors["filtros_cobertura.estado_cobertura"]}
-                          </div>
-                        )}
-                      </Form.Group>
-                    </div>
-                  </>
-                ) : (
-                  <Alert variant="light" border="secondary" className="small mb-0 py-2">
-                    Los filtros de cobertura no aplican cuando el objetivo es <strong>clientes</strong>.
-                  </Alert>
-                )}
               </Form>
             )}
           </div>
@@ -643,7 +753,7 @@ const TiposAuditoriaModal = ({ show, onClose, targetType, onTypesUpdated }) => {
                         <td>
                           {hasFiltrosCobertura(type) ? (
                             <Badge bg="info" className="text-wrap">
-                              Filtros cobertura
+                              Con filtros
                             </Badge>
                           ) : (
                             <span className="text-muted small">—</span>
