@@ -951,7 +951,7 @@ const TablaConfiguracionPagos = () => {
                             <Badge className="ms-2 pagos-mensuales__badge-tomador">Tomador</Badge>
                           )}
                         </td>
-                        <td>{p.pagador?.nombre_completo || "-"}</td>
+                        <td>{p.pagador?.nombre_completo || (p.pagador_id == null || p.pagador_id === "" ? "Pagador externo" : "-")}</td>
                         <td>{p.compania?.nombre || "-"}</td>
                         <td>{p.precio ? `$${Number(p.precio).toFixed(2)}` : "-"}</td>
                         <td className="text-center">{p.dia_pago || "-"}</td>
