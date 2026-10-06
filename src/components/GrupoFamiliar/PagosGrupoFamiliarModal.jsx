@@ -3,7 +3,6 @@ import { Alert, Button, Form, Modal, OverlayTrigger, Popover, Spinner, Table } f
 import apiRequest from "../../services/api";
 import { fetchPagosGrupoFamiliar } from "../../services/coberturaPagosApi";
 import {
-  detalleProyeccion,
   detalleSnapshotCobro,
   ESTADOS_COBRO_EDITABLES,
   filasPagosGrupo,
@@ -324,7 +323,7 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
           <div className="modal-body gf-modal__body pagos-informe">
             <div className="pagos-grupo-modal__toolbar">
               <p className="mb-0 text-muted small">
-                Coberturas elegibles del grupo. El monto proyectado no es un cobro generado.
+                Cobros generados del grupo. Los meses sin cobro generado se muestran con —.
               </p>
               <Form.Group className="pagos-grupo-modal__anio mb-0">
                 <Form.Label className="gf-detalle__label mb-1">Año</Form.Label>
@@ -373,10 +372,7 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
                     <span className="pagos-informe__leyenda-dot pagos-informe__leyenda-dot--pagado" />
                     Pagado
                   </span>
-                  <span className="pagos-informe__leyenda-item">
-                    <span className="pagos-informe__leyenda-dot pagos-grupo-modal__leyenda-dot--proyectado" />
-                    Proyectado
-                  </span>
+
                 </div>
 
                 <div className="pagos-informe__table-scroll">
@@ -389,7 +385,7 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
                         <th>Fecha de activación</th>
                         <th
                           className="text-nowrap"
-                          title="Mora: 1–2 meses con cobro distinto de pagado. Riesgo: 3 o más. Los montos proyectados no cuentan."
+                          title="Mora: 1–2 meses con cobro distinto de pagado. Riesgo: 3 o más. Solo se consideran cobros generados."
                         >
                           Situación
                         </th>
@@ -449,39 +445,6 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
                                       </div>
                                     );
                                   })}
-                                </div>
-                              ) : celda?.tipo === "proyectado" ? (
-                                <div className="pagos-grupo-modal__proyectado">
-                                  <span className="pagos-grupo-modal__proyectado-etiqueta">Proyectado</span>
-                                  <MontoConDetalle
-                                    etiqueta="Proyección, no es un cobro generado"
-                                    overlay={(() => {
-                                      const detalle = detalleProyeccion(celda.proyectado);
-                                      return popoverDetalle(detalle.titulo, detalle.nota, detalle.campos);
-                                    })()}
-                                  >
-                                    <span className="pagos-informe__monto">
-                                      ${Number(celda.monto).toFixed(2)}
-                                    </span>
-                                  </MontoConDetalle>
-                                  <button
-                                    type="button"
-                                    className="pagos-grupo-modal__editar"
-                                    onClick={() => {
-                                      setErrorEdicion("");
-                                      setCobroEdicion({
-                                        proyeccion: true,
-                                        coberturaId: fila.id,
-                                        anio: consulta?.anio,
-                                        mes: String(idx + 1).padStart(2, "0"),
-                                        monto: celda.monto,
-                                        estado: "pendiente",
-                                        etiqueta: PAGOS_INFORME_MONTH_ABBR[idx],
-                                      });
-                                    }}
-                                  >
-                                    Editar
-                                  </button>
                                 </div>
                               ) : (
                                 <span className="pagos-informe__celda-vacia">—</span>
