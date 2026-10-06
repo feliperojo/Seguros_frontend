@@ -22,7 +22,8 @@ import {
   FaTable,
   FaExclamationCircle,
 } from "react-icons/fa";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import CierresFiscalesPanel from "../../components/GrupoFamiliar/CierresFiscalesPanel";
 import { Helmet } from "react-helmet-async";
 import apiRequest from "../../services/api";
 import PreRenovacionModal from "../../components/GrupoFamiliar/PreRenovacionModal";
@@ -143,6 +144,15 @@ const formatFecha = (value) => {
 };
 
 const RenovacionesEstadoPage = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const vista = searchParams.get("vista") === "cierres" ? "cierres" : "estado";
+  const anioCierre = Number(searchParams.get("anio")) || new Date().getFullYear() - 1;
+  const cambiarVista = (next) => {
+    const params = new URLSearchParams(searchParams);
+    if (next === "cierres") params.set("vista", "cierres");
+    else params.delete("vista");
+    setSearchParams(params, { replace: true });
+  };
   const [filas, setFilas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -333,30 +343,56 @@ const RenovacionesEstadoPage = () => {
             </div>
           </div>
           <div className="gf-listado__header-actions">
-            {hasConsultado && (
+            {vista === "estado" && hasConsultado && (
               <span className="gf-listado__chip">
                 {loading ? "Consultando…" : `${totalFiltered} grupo${totalFiltered !== 1 ? "s" : ""}`}
               </span>
             )}
-            <Button
-              size="sm"
-              className="gf-listado__btn-ghost"
-              onClick={handleConsultar}
-              disabled={loading}
-            >
-              <FaSync className={loading ? "fa-spin me-1" : "me-1"} />
-              {hasConsultado ? "Actualizar" : "Consultar"}
-            </Button>
-            <Button
-              size="sm"
-              className="gf-listado__btn-header gf-listado__btn-header--danger"
-              onClick={() => setShowConsolidarTodos(true)}
-            >
-              Consolidar todas
-            </Button>
+            {vista === "estado" && (
+              <Button
+                size="sm"
+                className="gf-listado__btn-ghost"
+                onClick={handleConsultar}
+                disabled={loading}
+              >
+                <FaSync className={loading ? "fa-spin me-1" : "me-1"} />
+                {hasConsultado ? "Actualizar" : "Consultar"}
+              </Button>
+            )}
+            {vista === "estado" && (
+              <Button
+                size="sm"
+                className="gf-listado__btn-header gf-listado__btn-header--danger"
+                onClick={() => setShowConsolidarTodos(true)}
+              >
+                Consolidar todas
+              </Button>
+            )}
           </div>
         </div>
 
+        <div className="px-3 pt-3">
+          <div className="gf-listado__filter-pills">
+            <button
+              type="button"
+              className={`gf-listado__filter-pill${vista === "estado" ? " is-active" : ""}`}
+              onClick={() => cambiarVista("estado")}
+            >
+              Estado de renovaciones
+            </button>
+            <button
+              type="button"
+              className={`gf-listado__filter-pill${vista === "cierres" ? " is-active" : ""}`}
+              onClick={() => cambiarVista("cierres")}
+            >
+              Cierres fiscales
+            </button>
+          </div>
+        </div>
+
+        {vista === "cierres" ? (
+          <CierresFiscalesPanel anioInicial={anioCierre} />
+        ) : (
         <div className="gf-listado__body">
           <div className="gf-listado__section">
             <div className="gf-listado__section-title">
@@ -806,6 +842,7 @@ const RenovacionesEstadoPage = () => {
             )}
           </div>
         </div>
+        )}
       </div>
 
       <PreRenovacionModal

@@ -113,3 +113,26 @@
   font-weight: 600;
   padding: 0 0.5rem;
 }
+
+.pagos-actualizar__periodo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.85rem;
+  font-size: 0.8125rem;
+  color: #475569;
+}
+
+.pagos-actualizar__periodo strong {
+  color: #0f2744;
+}
+
+.pagos-actualizar__periodo-principal {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: #0f2744;
+}
+
+.pagos-actualizar__periodo p {
+  margin: 0;
+}

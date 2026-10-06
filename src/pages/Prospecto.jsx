@@ -452,6 +452,8 @@ useEffect(() => {
             return v !== null && v !== undefined;
           })
         );
+        payloadFinal.origen = "grupo_familiar";
+        payloadFinal.grupo_familiar_origen_id = Number(newGrupoId);
 
         // Actualizar el cliente en el servidor
         try {

@@ -1,0 +1,95 @@
+.cobros-periodo__grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.cobros-periodo__mes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  min-height: 4.4rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cobros-periodo__mes--con {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+.cobros-periodo__mes--sin {
+  background: #fff;
+}
+
+.cobros-periodo__mes--activo {
+  border-color: #1a365d;
+  box-shadow: inset 0 0 0 1px #1a365d;
+  background: #eff6ff;
+}
+
+.cobros-periodo__mes:hover {
+  border-color: #1a365d;
+}
+
+.cobros-periodo__mes:focus-visible {
+  outline: 2px solid #1a365d;
+  outline-offset: 2px;
+}
+
+.cobros-periodo__nombre {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #0f2744;
+  letter-spacing: 0.01em;
+}
+
+.cobros-periodo__estado {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.cobros-periodo__mes--con .cobros-periodo__estado {
+  color: #0f2744;
+}
+
+.cobros-periodo__mes--sin .cobros-periodo__estado {
+  color: #64748b;
+}
+
+.cobros-periodo__cuenta {
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: #1a365d;
+}
+
+.cobros-periodo__nota {
+  margin: 0.75rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.cobros-periodo__nota--aviso {
+  color: #92400e;
+}
+
+@media (max-width: 992px) {
+  .cobros-periodo__grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 576px) {
+  .cobros-periodo__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

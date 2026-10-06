@@ -1,0 +1,178 @@
+/* Auditorías mensuales — estilo institucional (gf-listado) */
+
+.auditorias-page .form-switch .form-check-input:checked {
+  background-color: #1a365d;
+  border-color: #0f2744;
+}
+
+.auditorias-page .form-switch .form-check-input:focus {
+  border-color: #1a365d;
+  box-shadow: 0 0 0 0.2rem rgba(26, 54, 93, 0.12);
+}
+
+.auditorias-page__link {
+  border: none;
+  background: transparent;
+  color: #1a365d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.auditorias-page__link:hover {
+  color: #0f2744;
+  text-decoration: underline;
+}
+
+.auditorias-page__hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #64748b;
+}
+
+.auditorias-page__note {
+  margin-top: 0.65rem;
+  margin-bottom: 0;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: #1a365d;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+
+.auditorias-page__option {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 0.7rem 0.8rem;
+}
+
+.auditorias-page__option + .auditorias-page__option {
+  margin-top: 0.5rem;
+}
+
+.auditorias-page__option .form-check {
+  margin-bottom: 0;
+  min-height: 0;
+}
+
+.auditorias-page__option .form-check-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.auditorias-page__option .auditorias-page__hint {
+  margin-top: 0.3rem;
+  margin-left: 2.5em;
+}
+
+.auditorias-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+.auditorias-page__btn-outline {
+  background: #fff !important;
+  color: #1a365d !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 600;
+  border-radius: 8px;
+  font-size: 0.875rem;
+}
+
+.auditorias-page__btn-outline:hover:not(:disabled) {
+  background: #f8fafc !important;
+  border-color: #1a365d !important;
+  color: #0f2744 !important;
+}
+
+.auditorias-page .alert {
+  border-radius: 10px;
+  font-size: 0.875rem;
+}
+
+.auditorias-page__badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  padding: 0.18rem 0.5rem;
+  border: 1px solid transparent;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.auditorias-page__badge + .auditorias-page__badge {
+  margin-left: 0.3rem;
+}
+
+.auditorias-page__badge--navy {
+  background: #e8eef5;
+  color: #1a365d;
+  border-color: #d6e0ec;
+}
+
+.auditorias-page__badge--slate {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #e2e8f0;
+}
+
+.auditorias-page__badge--sky {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #bae6fd;
+}
+
+.auditorias-page__badge--ok {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
+}
+
+.auditorias-page__badge--warn {
+  background: #fffbeb;
+  color: #b45309;
+  border-color: #fde68a;
+}
+
+.auditorias-page__badge--danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.auditorias-page__row-actions .btn {
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.55rem;
+}
+
+.auditorias-page__row-actions .btn-primary {
+  background: #1a365d;
+  border-color: #1a365d;
+}
+
+.auditorias-page__row-actions .btn-primary:hover {
+  background: #0f2744;
+  border-color: #0f2744;
+}
+
+.auditorias-page__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #334155;
+}

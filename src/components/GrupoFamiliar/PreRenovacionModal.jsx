@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "react-toastify";
 import apiRequest from "../../services/api";
+import CierreFiscalBloqueo from "./CierreFiscalBloqueo";
+import { cierreFiscalDesdeError } from "../../utils/cierreFiscalBloqueo";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CopiarDatosModal from "../fase2/CopiarDatosModal";
 import MemberModal from "../fase2/MemberModal";
@@ -121,6 +123,7 @@ const PreRenovacionModal = ({
   const [loading, setLoading] = useState(false);
   const [consolidando, setConsolidando] = useState(false);
   const [error, setError] = useState("");
+  const [bloqueoCierre, setBloqueoCierre] = useState(null);
   const [attemptedConsolidar, setAttemptedConsolidar] = useState(false);
   const [showConfirmacionFinal, setShowConfirmacionFinal] = useState(false);
   const [confirmoRevision, setConfirmoRevision] = useState(false);
@@ -146,6 +149,7 @@ const PreRenovacionModal = ({
     let active = true;
     setLoading(true);
     setError("");
+    setBloqueoCierre(null);
     setLote(null);
     setAttemptedConsolidar(false);
     setShowConfirmacionFinal(false);
@@ -732,6 +736,7 @@ const PreRenovacionModal = ({
 
     setConsolidando(true);
     setError("");
+    setBloqueoCierre(null);
     try {
       const response = await apiRequest(
         `/grupo_familiar/${grupoFamiliarId}/pre-renovacion/${lote.id}/consolidar`,
@@ -743,7 +748,9 @@ const PreRenovacionModal = ({
       onHide?.();
     } catch (requestError) {
       console.error("Error al consolidar la pre-renovación", requestError);
-      setError(getErrorMessage(requestError));
+      const bloqueo = cierreFiscalDesdeError(requestError);
+      if (bloqueo) setBloqueoCierre(bloqueo);
+      else setError(getErrorMessage(requestError));
     } finally {
       setConsolidando(false);
     }
@@ -818,6 +825,7 @@ const PreRenovacionModal = ({
                   {error && (
                     <div className="alert alert-danger py-2">{error}</div>
                   )}
+                  <CierreFiscalBloqueo bloqueo={bloqueoCierre} />
 
                   {esCierreSinDestino ? (
                     <div className="pr-resumen-renovacion">
@@ -1161,6 +1169,7 @@ const PreRenovacionModal = ({
                   {error && (
                     <div className="alert alert-danger py-2">{error}</div>
                   )}
+                  <CierreFiscalBloqueo bloqueo={bloqueoCierre} />
 
                   {loading && (
                     <div className="text-center py-5">

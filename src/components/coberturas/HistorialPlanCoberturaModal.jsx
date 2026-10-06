@@ -1,25 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Button,
-  Table,
   Alert,
   Spinner,
   Form,
   Nav,
-  Badge,
-  OverlayTrigger,
-  Tooltip,
 } from "react-bootstrap";
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import CompanySelect from "../selects/CompanySelect";
 import useCompanies from "../../hooks/useCompanies";
 import {
+  anularYRecuperarPlanes,
   archivarPlanActual,
   crearHistorialPlan,
   fetchHistorialPlan,
 } from "../../services/historialPlanCoberturaApi";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
+import HistorialPlanCoberturaTabla from "./HistorialPlanCoberturaTabla";
+import {
+  esPlanRecuperable,
+  getAnioEfectivoRegistroPlan,
+  getAnioHistorialPlan,
+} from "../../utils/historialPlanCobertura";
 import "../../styles/HistorialPlanCoberturaModal.css";
 
 const EMPTY_MANUAL_FORM = {
@@ -36,38 +39,29 @@ const EMPTY_MANUAL_FORM = {
   nota: "",
 };
 
-const formatDate = (value) => {
-  if (!value) return "—";
-  const s = String(value).slice(0, 10);
-  const [y, m, d] = s.split("-");
-  if (!y || !m || !d) return s;
-  return `${m}/${d}/${y}`;
-};
-
-const formatPrecio = (value) => {
-  if (value === null || value === undefined || value === "") return "—";
-  const num = Number(value);
-  if (Number.isNaN(num)) return String(value);
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(num);
-};
-
 const ANIO_ACTUAL = new Date().getFullYear();
 
-/** Año del registro según fecha de activación (fallback: expiración / created_at). */
-const getAnioHistorial = (item) => {
-  const raw =
-    item?.fecha_activacion ||
-    item?.fecha_expiracion ||
-    item?.created_at ||
-    "";
-  const s = String(raw).slice(0, 10);
-  const year = Number(s.slice(0, 4));
-  return Number.isFinite(year) && year > 1900 ? year : null;
+const textoFecha = (valor) => (valor ? String(valor).slice(0, 10) : "—");
+
+const textoPrecio = (valor) => {
+  if (valor == null || valor === "") return "—";
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? `$${numero.toFixed(2)}` : "—";
 };
+
+const textoPoliza = (item) =>
+  item?.policy_number || item?.codigo_poliza || "—";
+
+const etiquetaPlanArchivado = (item, producto) =>
+  [
+    item?.compania?.nombre || "Sin compañía",
+    item?.plan || "Sin plan",
+    producto || "—",
+    getAnioEfectivoRegistroPlan(item) ?? "—",
+    textoFecha(item?.fecha_activacion),
+    textoPoliza(item),
+    textoPrecio(item?.precio),
+  ].join(" · ");
 
 const HistorialPlanCoberturaModal = ({
   show,
@@ -81,6 +75,8 @@ const HistorialPlanCoberturaModal = ({
   product = "salud",
   /** Solo Dental MS: actualiza la ficha al reabrir una inscripción anulada. */
   onReabierta = null,
+  /** Actualiza en la ficha solo los campos de plan restaurados. */
+  onPlanesRecuperados = null,
 }) => {
   const esDental = product === "dental";
   const [selectedCoberturaId, setSelectedCoberturaId] = useState(null);
@@ -99,6 +95,11 @@ const HistorialPlanCoberturaModal = ({
   const [esAnulacion, setEsAnulacion] = useState(false);
   const [reabriendo, setReabriendo] = useState(false);
   const [selectedForArchive, setSelectedForArchive] = useState(() => new Set());
+  const [recuperarPlan, setRecuperarPlan] = useState(false);
+  const [seleccionesRecuperacion, setSeleccionesRecuperacion] = useState({});
+  const [planesPorCobertura, setPlanesPorCobertura] = useState({});
+  const [requiereRecarga, setRequiereRecarga] = useState(false);
+  const planesRef = useRef({});
   const { companies } = useCompanies({
     producto: esDental ? "dental_ms" : "salud",
     includeId: manualForm.compania_id,
@@ -129,7 +130,7 @@ const HistorialPlanCoberturaModal = ({
   const aniosDisponibles = useMemo(() => {
     const years = new Set();
     historial.forEach((item) => {
-      const year = getAnioHistorial(item);
+      const year = getAnioHistorialPlan(item);
       if (year != null) years.add(year);
     });
     return Array.from(years).sort((a, b) => b - a);
@@ -137,7 +138,7 @@ const HistorialPlanCoberturaModal = ({
 
   const historialFiltrado = useMemo(() => {
     if (!anioSeleccionado) return historial;
-    return historial.filter((item) => getAnioHistorial(item) === anioSeleccionado);
+    return historial.filter((item) => getAnioHistorialPlan(item) === anioSeleccionado);
   }, [historial, anioSeleccionado]);
 
   const modalTitle = useMemo(() => {
@@ -148,20 +149,73 @@ const HistorialPlanCoberturaModal = ({
     return `${base}${selectedMember?.memberName ? ` — ${selectedMember.memberName}` : ""}`;
   }, [allowBulkArchive, esDental, members.length, selectedMember]);
 
-  const cargarHistorial = useCallback(async (coberturaId) => {
-    if (!coberturaId) return;
+  const guardarEntradaPlanes = useCallback((coberturaId, entrada) => {
+    planesRef.current = { ...planesRef.current, [coberturaId]: entrada };
+    setPlanesPorCobertura(planesRef.current);
+  }, []);
 
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetchHistorialPlan(coberturaId);
-      setHistorial(Array.isArray(res?.data) ? res.data : []);
-    } catch (err) {
-      setError(err?.message || "No se pudo cargar el historial de plan.");
-      setHistorial([]);
-    } finally {
-      setLoading(false);
-    }
+  const cargarPlanesCobertura = useCallback(
+    async (coberturaId, { forzar = false } = {}) => {
+      if (!coberturaId) return null;
+      const actual = planesRef.current[coberturaId];
+      if (!forzar && (actual?.estado === "loading" || actual?.estado === "ok")) {
+        return actual;
+      }
+
+      guardarEntradaPlanes(coberturaId, {
+        estado: "loading",
+        registros: [],
+        meta: actual?.meta ?? null,
+        error: "",
+      });
+
+      try {
+        const res = await fetchHistorialPlan(coberturaId);
+        const entrada = {
+          estado: "ok",
+          registros: Array.isArray(res?.data) ? res.data : [],
+          meta: res?.meta ?? null,
+          error: "",
+        };
+        guardarEntradaPlanes(coberturaId, entrada);
+        return entrada;
+      } catch (err) {
+        const entrada = {
+          estado: "error",
+          registros: [],
+          meta: null,
+          error: err?.message || "No se pudo cargar el historial.",
+        };
+        guardarEntradaPlanes(coberturaId, entrada);
+        throw err;
+      }
+    },
+    [guardarEntradaPlanes]
+  );
+
+  const cargarHistorial = useCallback(
+    async (coberturaId) => {
+      if (!coberturaId) return;
+
+      setLoading(true);
+      setError("");
+      try {
+        const entrada = await cargarPlanesCobertura(coberturaId, { forzar: true });
+        setHistorial(entrada?.registros || []);
+      } catch (err) {
+        setError(err?.message || "No se pudo cargar el historial de plan.");
+        setHistorial([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [cargarPlanesCobertura]
+  );
+
+  const limpiarRecuperacion = useCallback(() => {
+    setRecuperarPlan(false);
+    setSeleccionesRecuperacion({});
+    setRequiereRecarga(false);
   }, []);
 
   useEffect(() => {
@@ -175,6 +229,11 @@ const HistorialPlanCoberturaModal = ({
       setManualForm(EMPTY_MANUAL_FORM);
       setSelectedCoberturaId(null);
       setSelectedForArchive(new Set());
+      planesRef.current = {};
+      setPlanesPorCobertura({});
+      setRecuperarPlan(false);
+      setSeleccionesRecuperacion({});
+      setRequiereRecarga(false);
       return;
     }
 
@@ -191,6 +250,9 @@ const HistorialPlanCoberturaModal = ({
     setFechaExpiracion("");
     setNota("");
     setEsAnulacion(false);
+    setRecuperarPlan(false);
+    setSeleccionesRecuperacion({});
+    setRequiereRecarga(false);
     setReabriendo(false);
     setSuccess("");
     setError("");
@@ -239,6 +301,108 @@ const HistorialPlanCoberturaModal = ({
     });
   };
 
+  const miembrosArchivo = useMemo(() => {
+    if (allowBulkArchive) {
+      return membersWithPlan.filter((member) =>
+        selectedForArchive.has(member.coberturaId)
+      );
+    }
+    if (!selectedCoberturaId) return [];
+    return membersWithPlan.filter(
+      (member) => member.coberturaId === selectedCoberturaId
+    );
+  }, [allowBulkArchive, membersWithPlan, selectedCoberturaId, selectedForArchive]);
+
+  const nombreCompania = useCallback(
+    (id) => {
+      if (id == null || id === "") return "Sin compañía";
+      return (
+        companies.find((company) => String(company.id) === String(id))?.nombre ||
+        "Sin compañía"
+      );
+    },
+    [companies]
+  );
+
+  const planesRecuperablesDe = useCallback((member) => {
+    const entrada = planesPorCobertura[member.coberturaId];
+    const anio = Number(String(entrada?.meta?.ano_cobertura ?? "").trim());
+    return (entrada?.registros || []).filter((item) =>
+      esPlanRecuperable(item, { coberturaId: member.coberturaId, anio })
+    );
+  }, [planesPorCobertura]);
+
+  const productoDe = useCallback(
+    (member) =>
+      planesPorCobertura[member.coberturaId]?.meta?.cobertura_tipo ||
+      member.planActual?.cobertura_tipo ||
+      (esDental ? "Dental MS" : "Salud"),
+    [esDental, planesPorCobertura]
+  );
+
+  useEffect(() => {
+    if (!show || !showArchivarForm || !formEsAnulacion || !recuperarPlan) return;
+    miembrosArchivo.forEach((member) => {
+      cargarPlanesCobertura(member.coberturaId);
+    });
+  }, [
+    show,
+    showArchivarForm,
+    formEsAnulacion,
+    recuperarPlan,
+    miembrosArchivo,
+    cargarPlanesCobertura,
+  ]);
+
+  const bloqueoRecuperacion = useMemo(() => {
+    if (!recuperarPlan) return "";
+    if (requiereRecarga) {
+      return "La cobertura cambió. Recargue el historial antes de continuar.";
+    }
+    if (miembrosArchivo.length === 0) {
+      return "Seleccione al menos un miembro con datos de plan para anular.";
+    }
+
+    const faltantes = [];
+    miembrosArchivo.forEach((member) => {
+      const entrada = planesPorCobertura[member.coberturaId];
+      if (!entrada || entrada.estado === "loading") {
+        faltantes.push(`${member.memberName}: todavía se están cargando sus planes archivados.`);
+        return;
+      }
+      if (entrada.estado === "error") {
+        faltantes.push(`${member.memberName}: ${entrada.error || "no se pudo cargar el historial."}`);
+        return;
+      }
+      if (!entrada.meta?.updated_at || !entrada.meta?.version) {
+        faltantes.push(
+          `${member.memberName}: no se pudo verificar la versión de la cobertura. Recargue antes de continuar.`
+        );
+        return;
+      }
+      const opciones = planesRecuperablesDe(member);
+      if (opciones.length === 0) {
+        faltantes.push(
+          `${member.memberName}: no hay un plan archivado recuperable para esta cobertura.`
+        );
+        return;
+      }
+      const elegido = seleccionesRecuperacion[member.coberturaId];
+      if (!opciones.some((item) => String(item.id) === String(elegido))) {
+        faltantes.push(`${member.memberName}: seleccione el plan que desea recuperar.`);
+      }
+    });
+
+    return faltantes.join(" ");
+  }, [
+    miembrosArchivo,
+    planesPorCobertura,
+    planesRecuperablesDe,
+    recuperarPlan,
+    requiereRecarga,
+    seleccionesRecuperacion,
+  ]);
+
   const archivarCobertura = async (coberturaId) => {
     const forzarAnulacion = esDentalAnulada;
     const payload = {
@@ -268,6 +432,49 @@ const HistorialPlanCoberturaModal = ({
 
     if (targets.length === 0) {
       setError("Seleccione al menos un miembro con datos de plan para archivar.");
+      return;
+    }
+
+    if (archivarComoAnulacion && recuperarPlan) {
+      if (bloqueoRecuperacion) {
+        setError(bloqueoRecuperacion);
+        return;
+      }
+
+      setArchiving(true);
+      setError("");
+      setSuccess("");
+      try {
+        const res = await anularYRecuperarPlanes({
+          nota: nota.trim() || undefined,
+          miembros: targets.map((member) => ({
+            cobertura_id: member.coberturaId,
+            historial_plan_id: Number(seleccionesRecuperacion[member.coberturaId]),
+            updated_at: planesPorCobertura[member.coberturaId]?.meta?.updated_at,
+            version: planesPorCobertura[member.coberturaId]?.meta?.version,
+          })),
+        });
+        setSuccess(
+          res?.message || "Plan anulado y plan anterior recuperado correctamente."
+        );
+        setShowArchivarForm(false);
+        setEsAnulacion(false);
+        setFechaExpiracion("");
+        setNota("");
+        limpiarRecuperacion();
+        planesRef.current = {};
+        setPlanesPorCobertura({});
+        onPlanesRecuperados?.(res?.data?.miembros || []);
+        await cargarHistorial(selectedCoberturaId);
+      } catch (err) {
+        const message = err?.message || "No se pudo anular y recuperar el plan.";
+        setError(message);
+        if (message.includes("Recargue antes de continuar")) {
+          setRequiereRecarga(true);
+        }
+      } finally {
+        setArchiving(false);
+      }
       return;
     }
 
@@ -498,6 +705,7 @@ const HistorialPlanCoberturaModal = ({
                     setEsAnulacion(esDentalAnulada);
                     setFechaExpiracion("");
                     setNota("");
+                    limpiarRecuperacion();
                   }}
                 >
                   <i className="fas fa-archive me-1" />
@@ -547,6 +755,7 @@ const HistorialPlanCoberturaModal = ({
                   setEsAnulacion(false);
                   setFechaExpiracion("");
                   setNota("");
+                  limpiarRecuperacion();
                 }}
               >
                 Cancelar archivado
@@ -720,6 +929,7 @@ const HistorialPlanCoberturaModal = ({
                     const checked = e.target.checked;
                     setEsAnulacion(checked);
                     if (checked) setFechaExpiracion("");
+                    if (!checked) limpiarRecuperacion();
                   }}
                 />
                 <Form.Text className="text-muted d-block">
@@ -727,6 +937,21 @@ const HistorialPlanCoberturaModal = ({
                     ? "Obligatorio: esta cobertura Dental MS está anulada. El archivo queda sin fecha de expiración."
                     : "Marque esta opción cuando el plan se archiva porque la cobertura fue anulada. En ese caso no aplica fecha de expiración."}
                 </Form.Text>
+                {formEsAnulacion && (
+                  <Form.Check
+                    className="mt-2"
+                    type="checkbox"
+                    id="recuperar-plan-archivado"
+                    label="Recuperar un plan archivado"
+                    checked={recuperarPlan}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setRecuperarPlan(checked);
+                      setRequiereRecarga(false);
+                      if (!checked) setSeleccionesRecuperacion({});
+                    }}
+                  />
+                )}
               </div>
               {!formEsAnulacion && (
                 <div className="col-md-6">
@@ -778,6 +1003,117 @@ const HistorialPlanCoberturaModal = ({
               </div>
             )}
 
+            {formEsAnulacion && recuperarPlan && (
+              <div className="hp-recuperar">
+                <div className="hp-panel__title">Planes por miembro</div>
+                <p className="hp-panel__hint mb-2">
+                  Elija el plan archivado de cada cobertura. No se selecciona
+                  ninguno automáticamente.
+                </p>
+                {miembrosArchivo.map((member) => {
+                  const entrada = planesPorCobertura[member.coberturaId];
+                  const opciones = planesRecuperablesDe(member);
+                  const producto = productoDe(member);
+                  const elegido = opciones.find(
+                    (item) =>
+                      String(item.id) ===
+                      String(seleccionesRecuperacion[member.coberturaId] || "")
+                  );
+                  const actual = member.planActual || {};
+                  return (
+                    <div className="hp-recuperar__miembro" key={member.coberturaId}>
+                      <div className="fw-semibold small mb-1">
+                        {member.memberName}
+                        {member.parentesco ? ` (${member.parentesco})` : ""}
+                      </div>
+                      {entrada?.estado === "loading" && (
+                        <p className="text-muted small mb-2">Cargando planes archivados…</p>
+                      )}
+                      {entrada?.estado === "error" && (
+                        <p className="text-danger small mb-2">{entrada.error}</p>
+                      )}
+                      {entrada?.estado === "ok" && opciones.length === 0 && (
+                        <p className="text-danger small mb-2">
+                          No hay un plan archivado recuperable para esta cobertura.
+                          La confirmación queda bloqueada.
+                        </p>
+                      )}
+                      {opciones.length > 0 && (
+                        <Form.Select
+                          size="sm"
+                          aria-label={`Plan archivado de ${member.memberName}`}
+                          value={seleccionesRecuperacion[member.coberturaId] || ""}
+                          onChange={(e) =>
+                            setSeleccionesRecuperacion((prev) => ({
+                              ...prev,
+                              [member.coberturaId]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Seleccione el plan a recuperar</option>
+                          {opciones.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {etiquetaPlanArchivado(item, producto)}
+                            </option>
+                          ))}
+                        </Form.Select>
+                      )}
+                      <div className="hp-recuperar__resumen">
+                        <div>
+                          <span>Se anulará</span>
+                          <strong>
+                            {[
+                              nombreCompania(actual.compania_id),
+                              actual.plan || "Sin plan",
+                              producto,
+                              actual.ano_cobertura || "—",
+                              textoFecha(actual.fecha_activacion),
+                              textoPoliza(actual),
+                              textoPrecio(actual.precio),
+                            ].join(" · ")}
+                          </strong>
+                        </div>
+                        <div>
+                          <span>Se recuperará</span>
+                          <strong>
+                            {elegido
+                              ? etiquetaPlanArchivado(elegido, producto)
+                              : "Seleccione el plan a recuperar"}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {requiereRecarga && (
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      variant="outline-secondary"
+                      size="sm"
+                      onClick={() => {
+                        setRequiereRecarga(false);
+                        setSeleccionesRecuperacion({});
+                        planesRef.current = {};
+                        setPlanesPorCobertura({});
+                        miembrosArchivo.forEach((member) => {
+                          cargarPlanesCobertura(member.coberturaId, { forzar: true })
+                            .then((entrada) => {
+                              if (member.coberturaId === selectedCoberturaId) {
+                                setHistorial(entrada?.registros || []);
+                              }
+                            })
+                            .catch(() => {});
+                        });
+                      }}
+                    >
+                      Recargar historial
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="mt-3 d-flex justify-content-end gap-2">
               <Button
                 type="submit"
@@ -789,14 +1125,19 @@ const HistorialPlanCoberturaModal = ({
                   (!formEsAnulacion && !fechaExpiracion) ||
                   (allowBulkArchive && members.length > 1
                     ? selectedForArchive.size === 0
-                    : !selectedCoberturaId)
+                    : !selectedCoberturaId) ||
+                  (formEsAnulacion && recuperarPlan && Boolean(bloqueoRecuperacion))
                 }
               >
                 {archiving ? (
                   <>
                     <Spinner animation="border" size="sm" className="me-2" />
-                    Archivando…
+                    {formEsAnulacion && recuperarPlan
+                      ? "Anulando y recuperando…"
+                      : "Archivando…"}
                   </>
+                ) : formEsAnulacion && recuperarPlan ? (
+                  "Anular y recuperar plan"
                 ) : allowBulkArchive && members.length > 1 ? (
                   `Confirmar archivado (${selectedForArchive.size})`
                 ) : (
@@ -854,69 +1195,10 @@ const HistorialPlanCoberturaModal = ({
                   : ""}
               </div>
             ) : (
-              <div className="hp-table-wrap table-responsive">
-                <Table hover size="sm" className="hp-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: "1%" }}>Origen</th>
-                      <th>Compañía</th>
-                      <th>Plan</th>
-                      {!esDental && <th>Metal</th>}
-                      {!esDental && <th>Red</th>}
-                      <th>Número ID</th>
-                      {!esDental && <th>Código ID</th>}
-                      <th>Agente</th>
-                      <th>Precio ($)</th>
-                      <th>Activación</th>
-                      <th>Expiración</th>
-                      <th>Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {historialFiltrado.map((item) => (
-                      <tr key={item.id}>
-                        <td className="text-center align-middle">
-                          {item.es_anulacion ? (
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={
-                                <Tooltip id={`anulacion-${item.id}`}>
-                                  Archivado por anulación · sin fecha de expiración
-                                </Tooltip>
-                              }
-                            >
-                              <Badge bg="danger" pill className="user-select-none">
-                                Anulado
-                              </Badge>
-                            </OverlayTrigger>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
-                        </td>
-                        <td>{item.compania?.nombre || "—"}</td>
-                        <td>{item.plan || "—"}</td>
-                        {!esDental && <td>{item.metal || "—"}</td>}
-                        {!esDental && <td>{item.red || "—"}</td>}
-                        <td>
-                          {esDental
-                            ? item.policy_number || "—"
-                            : item.policy_number || item.codigo_poliza || "—"}
-                        </td>
-                        {!esDental && <td>{item.codigo_poliza || "—"}</td>}
-                        <td>{item.agente || "—"}</td>
-                        <td>{formatPrecio(item.precio)}</td>
-                        <td>{formatDate(item.fecha_activacion)}</td>
-                        <td>
-                          {item.es_anulacion
-                            ? "No aplica"
-                            : formatDate(item.fecha_expiracion)}
-                        </td>
-                        <td>{item.nota || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
+              <HistorialPlanCoberturaTabla
+                items={historialFiltrado}
+                esDental={esDental}
+              />
             )}
           </>
         )}

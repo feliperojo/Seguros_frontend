@@ -33,6 +33,7 @@ import {
 } from "../../utils/coberturaAnulacion";
 import {
   COBERTURA_TIPO_DENTAL_MS,
+  isDentalMsCoberturaTipo,
   isProductoPrivadoIndependiente,
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
@@ -907,6 +908,47 @@ const TomaDeDatos = ({
     };
   }, []);
 
+  // Producto que se está diligenciando (el del miembro, no el Dental MS adjunto).
+  const coberturaTipoParaCopiar = useMemo(() => {
+    const miembro = (familyMembers || []).find((m) => {
+      const tipo = String(m?.cobertura_tipo || "").trim();
+      if (!tipo) return false;
+      return !isDentalMsCoberturaTipo(tipo);
+    });
+    return miembro?.cobertura_tipo || defaultCoberturaTipo || "Plan de salud";
+  }, [familyMembers, defaultCoberturaTipo]);
+
+  const esProductoPrivadoParaCopiar = isProductoPrivadoIndependiente(
+    coberturaTipoParaCopiar
+  );
+
+  // En privados, el modal solo ofrece los campos clasificados para ese producto.
+  // Salud MS y el resto conservan la lista completa.
+  const enabledCoverageFieldsForCopy = useMemo(() => {
+    if (!esProductoPrivadoParaCopiar) return null;
+    return resolveEnabledFields(
+      coverageFieldConfig,
+      coberturaTipoParaCopiar
+    );
+  }, [
+    esProductoPrivadoParaCopiar,
+    coverageFieldConfig,
+    coberturaTipoParaCopiar,
+  ]);
+
+  const showCopyAddress = useMemo(() => {
+    if (!esProductoPrivadoParaCopiar) return true;
+    const accordions = resolveEnabledAccordions(
+      clientFieldConfig,
+      coberturaTipoParaCopiar
+    );
+    return shouldShowConfiguredField(accordions, "direccion");
+  }, [
+    esProductoPrivadoParaCopiar,
+    clientFieldConfig,
+    coberturaTipoParaCopiar,
+  ]);
+
   // Normalización y ordenamiento
   const normalized = useMemo(
     () => (familyMembers ?? []).map((m, i) => recomputeDerived(normalizeMember(m, i))),
@@ -1127,6 +1169,59 @@ const activeNormalized = useMemo(
     },
     [setFamilyMembers]
   );
+
+  const CAMPOS_PLAN_RESTAURADOS = [
+    "compania_id",
+    "plan",
+    "metal",
+    "red",
+    "policy_number",
+    "codigo_poliza",
+    "agente",
+    "elegibilidad",
+    "precio",
+    "fecha_activacion",
+  ];
+
+  const aplicarPlanRestaurado = (source, destino) => {
+    const next = { ...destino };
+    CAMPOS_PLAN_RESTAURADOS.forEach((campo) => {
+      if (!Object.prototype.hasOwnProperty.call(source, campo)) return;
+      const valor = source[campo];
+      next[campo] =
+        campo === "fecha_activacion" && valor
+          ? String(valor).slice(0, 10)
+          : valor;
+    });
+    return next;
+  };
+
+  const handlePlanesRecuperados = useCallback((miembros) => {
+    const porCobertura = new Map(
+      (miembros || [])
+        .filter((item) => item?.cobertura_id && item?.cobertura)
+        .map((item) => [Number(item.cobertura_id), item.cobertura])
+    );
+    if (porCobertura.size === 0) return;
+
+    setFamilyMembers((prev) =>
+      (prev ?? []).map((member) => {
+        const salud = porCobertura.get(Number(member.cobertura_id));
+        const dentalId = Number(member.coberturaDental?.cobertura_id);
+        const dental = porCobertura.get(dentalId);
+        if (!salud && !dental) return member;
+
+        const next = salud ? aplicarPlanRestaurado(salud, member) : { ...member };
+        if (dental) {
+          next.coberturaDental = aplicarPlanRestaurado(
+            dental,
+            member.coberturaDental || {}
+          );
+        }
+        return next;
+      })
+    );
+  }, [setFamilyMembers]);
 
   /**
    * Callback para cuando se reabre una inscripción Dental MS anulada.
@@ -1640,6 +1735,22 @@ const activeNormalized = useMemo(
     );
   }, []);
 
+  const planActualDe = (source) => ({
+    compania_id: source?.compania_id ?? null,
+    plan: source?.plan ?? "",
+    metal: source?.metal ?? "",
+    red: source?.red ?? "",
+    policy_number: source?.policy_number ?? "",
+    codigo_poliza: source?.codigo_poliza ?? "",
+    agente: source?.agente ?? "",
+    elegibilidad: source?.elegibilidad ?? "",
+    precio: source?.precio ?? "",
+    fecha_activacion: source?.fecha_activacion ?? "",
+    ano_cobertura: source?.ano_cobertura ?? "",
+    cobertura_tipo: source?.cobertura_tipo ?? "",
+    grupo_familiar_id: source?.grupo_familiar_id ?? null,
+  });
+
   const buildHistorialPlanContext = useCallback(
     (openedMember, openedIdx, options = {}) => {
       const isDental = options.product === "dental";
@@ -1662,6 +1773,7 @@ const activeNormalized = useMemo(
               hasPlanData: memberHasPlanData(dental),
               // Indica al modal que es una cobertura dental anulada → flujo especial
               esAnulada: Boolean(dental.fecha_anulacion),
+              planActual: planActualDe(dental),
             },
           ],
           initialCoberturaId: dental.cobertura_id,
@@ -1692,6 +1804,7 @@ const activeNormalized = useMemo(
               "Miembro",
             parentesco: member.parentesco || member.tipo || "",
             hasPlanData: memberHasPlanData(member),
+            planActual: planActualDe(member),
           };
         });
 
@@ -3495,6 +3608,8 @@ const activeNormalized = useMemo(
         onClose={() => setOpenCopy(false)}
         members={membersElegiblesParaCopiar}
         allowIncludeDentalMs={isProductoSaludMs(defaultCoberturaTipo)}
+        enabledCoverageFields={enabledCoverageFieldsForCopy}
+        showAddress={showCopyAddress}
         onApply={applyCopySelection}
       />
 
@@ -3533,6 +3648,7 @@ const activeNormalized = useMemo(
         product={historialPlanModal.product || "salud"}
         readOnly={readOnly}
         onReabierta={handleDentalReabierta}
+        onPlanesRecuperados={handlePlanesRecuperados}
       />
     </div>
   );

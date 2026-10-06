@@ -8,3 +8,6 @@ export const crearHistorialPlan = (coberturaId, payload) =>
 
 export const archivarPlanActual = (coberturaId, payload) =>
   apiRequest(`coberturas/${coberturaId}/historial-plan/archivar`, "POST", payload);
+
+export const anularYRecuperarPlanes = (payload) =>
+  apiRequest("coberturas/historial-plan/anular-recuperar", "POST", payload);

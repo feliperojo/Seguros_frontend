@@ -1,0 +1,180 @@
+.modal-dialog.gf-modal.pagos-grupo-modal {
+  width: calc(100vw - 2rem);
+  max-width: 1720px;
+}
+
+.pagos-grupo-modal__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.pagos-grupo-modal__anio {
+  width: 8.5rem;
+}
+
+.pagos-grupo-modal__aviso {
+  margin-bottom: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.pagos-grupo-modal__table {
+  width: 100%;
+  min-width: 1180px;
+  margin-bottom: 0;
+  font-size: 0.875rem;
+  table-layout: fixed;
+}
+
+.pagos-grupo-modal__table th:nth-child(1),
+.pagos-grupo-modal__table td:nth-child(1) {
+  width: 11%;
+}
+
+.pagos-grupo-modal__table th:nth-child(2),
+.pagos-grupo-modal__table td:nth-child(2) {
+  width: 9%;
+}
+
+.pagos-grupo-modal__table th:nth-child(3),
+.pagos-grupo-modal__table td:nth-child(3) {
+  width: 10%;
+}
+
+.pagos-grupo-modal__table th:nth-child(4),
+.pagos-grupo-modal__table td:nth-child(4) {
+  width: 8%;
+}
+
+.pagos-grupo-modal__table th:nth-child(5),
+.pagos-grupo-modal__table td:nth-child(5) {
+  width: 7%;
+}
+
+.pagos-grupo-modal .pagos-informe__col-mes,
+.pagos-grupo-modal .pagos-informe__col-mes-header {
+  width: 4.58%;
+  min-width: 0;
+  max-width: none;
+  padding: 0.45rem 0.15rem !important;
+  white-space: nowrap;
+}
+
+.pagos-grupo-modal__table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  vertical-align: middle;
+  text-align: center;
+  padding: 0.75rem 0.875rem;
+}
+
+.pagos-grupo-modal__table tbody td {
+  vertical-align: middle;
+  color: #334155;
+  border-color: #f1f5f9;
+  padding: 0.75rem 0.875rem;
+}
+
+.pagos-grupo-modal__table tbody tr:hover {
+  background-color: #fafcff;
+}
+
+.pagos-grupo-modal__cobertura {
+  font-weight: 600;
+}
+
+.pagos-grupo-modal__codigo {
+  color: #64748b;
+  font-size: 0.75rem;
+}
+
+.pagos-grupo-modal__proyectado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.pagos-grupo-modal__proyectado-etiqueta {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: lowercase;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.pagos-grupo-modal__proyectado .pagos-informe__monto {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.pagos-grupo-modal__leyenda-dot--proyectado {
+  background: transparent;
+  border: 1.5px dashed #94a3b8;
+}
+
+.pagos-grupo-modal__cobros {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.pagos-grupo-modal__monto-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  cursor: help;
+}
+
+.pagos-grupo-modal__monto-btn:focus-visible {
+  outline: 2px solid #1a365d;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.pagos-grupo-modal__editar {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #1a365d;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.pagos-grupo-modal__snapshot {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pagos-grupo-modal__snapshot dt {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.pagos-grupo-modal__snapshot dd {
+  margin: 0 0 0.35rem;
+  font-size: 0.8125rem;
+}
+
+.pagos-grupo-modal__editar-backdrop {
+  z-index: 1070;
+}

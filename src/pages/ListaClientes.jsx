@@ -1094,6 +1094,7 @@ const ListaClientes = () => {
         onHide={() => setShowEditModal(false)}
         clienteId={clienteToEdit}
         clienteData={clienteDataToEdit}
+        origenActualizacion="ficha_cliente"
         onClienteUpdated={handleClienteUpdated}
       />
 

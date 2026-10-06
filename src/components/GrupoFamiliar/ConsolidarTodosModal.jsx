@@ -1,6 +1,11 @@
 /* eslint-disable react/prop-types */
 import { useEffect, useState } from "react";
 import apiRequest from "../../services/api";
+import CierreFiscalBloqueo from "./CierreFiscalBloqueo";
+import {
+  cierreFiscalDesdeError,
+  cierreFiscalDesdeFila,
+} from "../../utils/cierreFiscalBloqueo";
 
 const getErrorMessage = (error) =>
   error?.response?.data?.message ||
@@ -17,6 +22,7 @@ const ConsolidarTodosModal = ({
   const [loading, setLoading] = useState(false);
   const [consolidando, setConsolidando] = useState(false);
   const [error, setError] = useState("");
+  const [bloqueoCierre, setBloqueoCierre] = useState(null);
   const [confirmo, setConfirmo] = useState(false);
   const [resumen, setResumen] = useState(null);
 
@@ -26,6 +32,7 @@ const ConsolidarTodosModal = ({
     let active = true;
     setLoading(true);
     setError("");
+    setBloqueoCierre(null);
     setConfirmo(false);
     setResumen(null);
     setPendientes([]);
@@ -57,16 +64,22 @@ const ConsolidarTodosModal = ({
 
     setConsolidando(true);
     setError("");
+    setBloqueoCierre(null);
     try {
       const response = await apiRequest(
         "/pre-renovacion/consolidar-todos",
         "POST",
         { anio_destino: anioDestino }
       );
-      setResumen(Array.isArray(response?.data) ? response.data : []);
+      const filas = Array.isArray(response?.data) ? response.data : [];
+      setResumen(filas);
+      const bloqueo = filas.map(cierreFiscalDesdeFila).find(Boolean);
+      if (bloqueo) setBloqueoCierre(bloqueo);
     } catch (requestError) {
       console.error("Error al consolidar todas las pre-renovaciones", requestError);
-      setError(getErrorMessage(requestError));
+      const bloqueo = cierreFiscalDesdeError(requestError);
+      if (bloqueo) setBloqueoCierre(bloqueo);
+      else setError(getErrorMessage(requestError));
     } finally {
       setConsolidando(false);
     }
@@ -116,6 +129,7 @@ const ConsolidarTodosModal = ({
               {error && (
                 <div className="alert alert-danger py-2">{error}</div>
               )}
+              <CierreFiscalBloqueo bloqueo={bloqueoCierre} />
 
               {loading ? (
                 <div className="text-center py-4">
