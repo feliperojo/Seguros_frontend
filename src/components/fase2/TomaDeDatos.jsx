@@ -23,6 +23,7 @@ import TelefonosPro from "./TelefonosPro";
 import MediosPagoAccordionItem from "../MediosPagoAccordionItem";
 import MediosPagoSection from "../MediosPagoSection";
 import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
+import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 import CoveragePriceInput from "../common/CoveragePriceInput";
 import CoberturaDeleteButton from "./CoberturaDeleteButton";
 import CoberturaAnularButton from "./CoberturaAnularButton";
@@ -287,6 +288,39 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
           {renderChildren()}
         </div>
       )}
+    </div>
+  );
+};
+
+const toValidId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+/** Acceso discreto al detalle de historial de una cobertura (reutiliza HistorialCambiosModal). */
+const AccesoVerCambiosCobertura = ({ coberturaId, etiqueta = "cobertura", onOpen }) => {
+  const id = toValidId(coberturaId);
+  const sinGuardar = !id;
+  const nombreAccesible = sinGuardar
+    ? "Guarda la cobertura para consultar sus cambios"
+    : `Ver cambios de ${etiqueta} #${id}`;
+
+  return (
+    <div className="d-flex justify-content-end mt-3">
+      <button
+        type="button"
+        className="btn btn-link btn-sm text-secondary text-decoration-none py-0 px-1"
+        disabled={sinGuardar}
+        title={nombreAccesible}
+        aria-label={nombreAccesible}
+        onClick={() => {
+          if (!id) return;
+          onOpen(id);
+        }}
+      >
+        <i className="fas fa-history me-1" aria-hidden="true" />
+        Ver cambios
+      </button>
     </div>
   );
 };
@@ -838,6 +872,8 @@ const TomaDeDatos = ({
     allowBulkArchive: false,
     product: "salud",
   });
+  // Una sola instancia del modal de detalle de cobertura (salud / dental / privado)
+  const [coberturaHistorialAbierta, setCoberturaHistorialAbierta] = useState(null);
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
   // Estado para controlar la visualización de miembros retirados
@@ -2666,7 +2702,7 @@ const activeNormalized = useMemo(
                             }
                           >
                             <i className="fas fa-history me-1" />
-                            Historial de plan
+                            Archivo de plan
                           </button>
                         </div>
                       )}
@@ -3107,6 +3143,22 @@ const activeNormalized = useMemo(
                             )}
                         </ConfigurableFieldsGrid>
                       )}
+                      <AccesoVerCambiosCobertura
+                        coberturaId={m.cobertura_id}
+                        etiqueta={
+                          esProductoPrivadoCard
+                            ? `cobertura ${coberturaTipo}`
+                            : "cobertura Salud"
+                        }
+                        onOpen={(id) =>
+                          setCoberturaHistorialAbierta({
+                            id,
+                            grupoFamiliarId:
+                              toValidId(grupoFamiliarId) ??
+                              toValidId(m.grupo_familiar_id),
+                          })
+                        }
+                      />
                   </div>
                 </AccordionItem>
 
@@ -3165,7 +3217,7 @@ const activeNormalized = useMemo(
                         {esCoberturaAnulada(d) && (
                           <div className="alert alert-secondary py-2 px-3 small mb-3">
                             Para reactivarla, abra el{" "}
-                            <strong>Historial de plan dental</strong>, archive
+                            <strong>Archivo de plan dental</strong>, archive
                             el plan anulado y luego use{" "}
                             <strong>Reabrir inscripción</strong>.
                           </div>
@@ -3216,7 +3268,7 @@ const activeNormalized = useMemo(
                               }
                             >
                               <i className="fas fa-history me-1" />
-                              Historial de plan dental
+                              Archivo de plan dental
                             </button>
                           </div>
                         )}
@@ -3504,6 +3556,19 @@ const activeNormalized = useMemo(
                             </>
                           )}
                         </ConfigurableFieldsGrid>
+                        <AccesoVerCambiosCobertura
+                          coberturaId={d.cobertura_id}
+                          etiqueta="cobertura Dental"
+                          onOpen={(id) =>
+                            setCoberturaHistorialAbierta({
+                              id,
+                              grupoFamiliarId:
+                                toValidId(grupoFamiliarId) ??
+                                toValidId(d.grupo_familiar_id) ??
+                                toValidId(m.grupo_familiar_id),
+                            })
+                          }
+                        />
                       </div>
                     </AccordionItem>
                   );
@@ -3650,6 +3715,18 @@ const activeNormalized = useMemo(
         onReabierta={handleDentalReabierta}
         onPlanesRecuperados={handlePlanesRecuperados}
       />
+
+      {coberturaHistorialAbierta?.id && (
+        <HistorialCambiosModal
+          key={`cobertura-${coberturaHistorialAbierta.id}`}
+          show
+          onClose={() => setCoberturaHistorialAbierta(null)}
+          modelo="Cobertura"
+          modeloId={coberturaHistorialAbierta.id}
+          seccion="cobertura"
+          grupoFamiliarId={coberturaHistorialAbierta.grupoFamiliarId}
+        />
+      )}
     </div>
   );
 };

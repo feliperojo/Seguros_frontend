@@ -685,10 +685,12 @@ const Prospectogrupo = ({
       />
 
       <HistorialCambiosModal
+  key={resolvedGrupoId ? `gf-historial-${resolvedGrupoId}` : "gf-historial"}
   show={showHistorialCambios}
   onClose={() => setShowHistorialCambios(false)}
   modelo="GrupoFamiliar"
   modeloId={resolvedGrupoId}
+  inicioConListaCoberturas
 />
 <ContactosGrupoModal
   show={showContactosModal}

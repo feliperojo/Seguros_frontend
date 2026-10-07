@@ -186,7 +186,6 @@ const HistorialCoberturasCanceladasModal = ({
   const [error, setError] = useState("");
   const [grupoFamiliarInfo, setGrupoFamiliarInfo] = useState(null);
   const [filasExpandidas, setFilasExpandidas] = useState(new Set());
-  const [planesAbiertos, setPlanesAbiertos] = useState(() => new Set());
   const planCacheRef = useRef(new Map());
   const [planTick, setPlanTick] = useState(0);
 
@@ -211,7 +210,6 @@ const HistorialCoberturasCanceladasModal = ({
       setFiltroCompaniaId("");
       setFiltroAnio(anioInicialStr);
       setFilasExpandidas(new Set());
-      setPlanesAbiertos(new Set());
       planCacheRef.current = new Map();
       setPlanTick(0);
       cargarOpcionesFiltro();
@@ -226,7 +224,6 @@ const HistorialCoberturasCanceladasModal = ({
       setAnios([]);
       setGrupoFamiliarInfo(null);
       setFilasExpandidas(new Set());
-      setPlanesAbiertos(new Set());
       planCacheRef.current = new Map();
       setPlanTick(0);
     }
@@ -561,21 +558,9 @@ const HistorialCoberturasCanceladasModal = ({
       });
   };
 
-  const toggleHistorialPlan = (filaId, referencia) => {
-    const abrir = !planesAbiertos.has(filaId);
-    setPlanesAbiertos((prev) => {
-      const next = new Set(prev);
-      if (next.has(filaId)) next.delete(filaId);
-      else next.add(filaId);
-      return next;
-    });
-    if (abrir && referencia.valida) {
-      solicitarHistorialPlan(referencia.coberturaId);
-    }
-  };
-
-  // Toggle para expandir/contraer filas
-  const toggleFila = (coberturaId) => {
+  // Toggle para expandir/contraer filas. Al abrir, el historial del plan se carga solo.
+  const toggleFila = (coberturaId, item) => {
+    const abrir = !filasExpandidas.has(coberturaId);
     setFilasExpandidas((prev) => {
       const nuevo = new Set(prev);
       if (nuevo.has(coberturaId)) {
@@ -585,6 +570,11 @@ const HistorialCoberturasCanceladasModal = ({
       }
       return nuevo;
     });
+    if (!abrir || !item) return;
+    const referencia = referenciaHistorialPlanCancelacion(item);
+    if (referencia.valida) {
+      solicitarHistorialPlan(referencia.coberturaId);
+    }
   };
 
   // Parsear cliente_info
@@ -713,10 +703,9 @@ const HistorialCoberturasCanceladasModal = ({
   };
 
   // Renderizar información completa de la cobertura
-  const renderCoberturaCompleta = (item, filaId) => {
+  const renderCoberturaCompleta = (item) => {
     const esDental = isDentalCoberturaTipo(item?.cobertura_tipo);
     const referenciaPlan = referenciaHistorialPlanCancelacion(item);
-    const planAbierto = planesAbiertos.has(filaId);
 
     return (
       <div className="row g-3">
@@ -733,23 +722,10 @@ const HistorialCoberturasCanceladasModal = ({
         {/* Información de la Cobertura */}
         <Col lg={8} md={7}>
           <div className="hcc-detail-card h-100">
-            <div className={`hcc-detail-card__header hcc-detail-card__header--with-action${esDental ? " hcc-detail-card__header--dental" : ""}`}>
-              <span>
-                <i className="fas fa-shield-alt me-2" aria-hidden="true" />
-                Información de la cobertura
-                <span className="ms-2">{renderBadgeProducto(item)}</span>
-              </span>
-              <button
-                type="button"
-                className="hcc-plan-toggle"
-                aria-expanded={planAbierto}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleHistorialPlan(filaId, referenciaPlan);
-                }}
-              >
-                {planAbierto ? "Ocultar historial del plan" : "Ver historial del plan"}
-              </button>
+            <div className={`hcc-detail-card__header${esDental ? " hcc-detail-card__header--dental" : ""}`}>
+              <i className="fas fa-shield-alt me-2" aria-hidden="true" />
+              Información de la cobertura
+              <span className="ms-2">{renderBadgeProducto(item)}</span>
             </div>
             <div className="hcc-detail-card__body">
               <div className="hcc-field-group">
@@ -877,28 +853,25 @@ const HistorialCoberturasCanceladasModal = ({
           </div>
         </Col>
 
-        {planAbierto && (
-          <Col xs={12}>
-            <HistorialPlanCoberturaConsulta
-              productoLabel={getEtiquetaProductoHistorial(item)}
-              esDental={esDental}
-              coberturaId={referenciaPlan.coberturaId}
-              anio={referenciaPlan.anio}
-              valida={referenciaPlan.valida}
-              status={leerEntradaPlan(referenciaPlan.coberturaId)?.status || "idle"}
-              error={leerEntradaPlan(referenciaPlan.coberturaId)?.error || ""}
-              registros={leerEntradaPlan(referenciaPlan.coberturaId)?.data || []}
-              onRetry={() => {
-                if (referenciaPlan.valida) {
-                  solicitarHistorialPlan(referenciaPlan.coberturaId, {
-                    forzar: true,
-                  });
-                }
-              }}
-              onCollapse={() => toggleHistorialPlan(filaId, referenciaPlan)}
-            />
-          </Col>
-        )}
+        <Col xs={12}>
+          <HistorialPlanCoberturaConsulta
+            productoLabel={getEtiquetaProductoHistorial(item)}
+            esDental={esDental}
+            coberturaId={referenciaPlan.coberturaId}
+            anio={referenciaPlan.anio}
+            valida={referenciaPlan.valida}
+            status={leerEntradaPlan(referenciaPlan.coberturaId)?.status || "idle"}
+            error={leerEntradaPlan(referenciaPlan.coberturaId)?.error || ""}
+            registros={leerEntradaPlan(referenciaPlan.coberturaId)?.data || []}
+            onRetry={() => {
+              if (referenciaPlan.valida) {
+                solicitarHistorialPlan(referenciaPlan.coberturaId, {
+                  forzar: true,
+                });
+              }
+            }}
+          />
+        </Col>
 
         {/* Información de Cancelación */}
         <Col md={12}>
@@ -1229,13 +1202,13 @@ const HistorialCoberturasCanceladasModal = ({
                           className={`hcc-row--clickable${esDental ? " hcc-row--dental" : ""}${
                             isExpanded ? " hcc-row--expanded" : ""
                           }`}
-                          onClick={() => toggleFila(coberturaId)}
+                          onClick={() => toggleFila(coberturaId, item)}
                         >
                           <td
                             className="text-center"
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleFila(coberturaId);
+                              toggleFila(coberturaId, item);
                             }}
                           >
                             {isExpanded ? (
@@ -1296,7 +1269,7 @@ const HistorialCoberturasCanceladasModal = ({
                           <tr>
                             <td colSpan={13} style={{ padding: 0, border: "none" }}>
                               <div className="hcc-expand-panel">
-                                {renderCoberturaCompleta(item, coberturaId)}
+                                {renderCoberturaCompleta(item)}
 
                                 {clienteInfo && (
                                   <div className="mt-3">

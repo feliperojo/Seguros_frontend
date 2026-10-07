@@ -13,6 +13,13 @@ export default function FichaClienteHistorial() {
 
   const [showGrupoModal, setShowGrupoModal] = useState(false);
   const [showClienteModal, setShowClienteModal] = useState(false);
+  const [coberturaElegida, setCoberturaElegida] = useState("");
+  const [coberturaAbierta, setCoberturaAbierta] = useState(null);
+  const coberturas = useMemo(() => {
+    const opciones = [...(cliente?.coberturas || []), coberturaPrincipal].filter(Boolean);
+    return [...new Map(opciones.filter((c) => toValidId(c.id)).map((c) => [String(c.id), c])).values()];
+  }, [cliente, coberturaPrincipal]);
+  const coberturaSeleccionada = coberturas.find((c) => String(c.id) === coberturaElegida) || coberturas[0];
 
   // ===== Grupo familiar principal =====
   const gfId = useMemo(() => {
@@ -128,6 +135,39 @@ export default function FichaClienteHistorial() {
           </button>
         </div>
       </div>
+
+      <div className="card mt-3">
+        <div className="card-body">
+          <h6 className="mb-2">Historial de cobertura · Detalle</h6>
+          <p className="small text-muted mb-3">
+            Consulta qué campo cambió, su valor anterior y nuevo, la fecha y quién lo modificó.
+            Selecciona la cobertura que deseas revisar.
+          </p>
+          {coberturas.length ? (
+            <>
+              <label htmlFor="historial-cobertura" className="form-label small">Cobertura</label>
+              <select id="historial-cobertura" className="form-select form-select-sm mb-3"
+                value={String(coberturaSeleccionada.id)} onChange={(event) => setCoberturaElegida(event.target.value)}>
+                {coberturas.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    Cobertura #{c.id} · Grupo #{c.grupo_familiar_id ?? c.grupo_familiar?.id ?? "—"} · {c.plan || c.tipo_cobertura || "Sin plan"} · {c.ano_cobertura || "Sin año"}
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-outline-primary btn-sm"
+                onClick={() => setCoberturaAbierta({ ...coberturaSeleccionada, clienteId })}>
+                Ver historial detallado de cobertura
+              </button>
+            </>
+          ) : <p className="small text-muted mb-0">Este cliente no tiene coberturas disponibles para consultar.</p>}
+        </div>
+      </div>
+
+      {coberturaAbierta && coberturaAbierta.clienteId === clienteId && (
+        <HistorialCambiosModal key={`${clienteId}-${coberturaAbierta.id}`} show
+          onClose={() => setCoberturaAbierta(null)} modelo="Cobertura" modeloId={coberturaAbierta.id}
+          seccion="cobertura" grupoFamiliarId={coberturaAbierta.grupo_familiar_id ?? coberturaAbierta.grupo_familiar?.id} />
+      )}
 
       {/* 🔹 Modal: Historial GF */}
       {showGrupoModal && gfId && (

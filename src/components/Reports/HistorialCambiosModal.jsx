@@ -24,6 +24,10 @@ import {
   formatValorCampoCliente,
   ordenarCamposDeSeccion,
 } from "../../utils/clienteHistorialSeccion";
+import {
+  construirDetalleHistorialCobertura,
+  etiquetaFuenteHistorialCobertura,
+} from "../../utils/historialCoberturaDetalle";
 import "../../styles/GfModal.css";
 
 // ==================== CONSTANTES ====================
@@ -42,6 +46,23 @@ const CAMPOS_IGNORAR = new Set([
 ]);
 
 const FIELD_LABELS = {
+  historial_plan_recuperado_id: "Archivo de plan recuperado (ID)",
+  fecha_activacion: "Fecha de activación",
+  ano_cobertura: "Año de cobertura",
+  cobertura_tipo: "Tipo de cobertura",
+  policy_number: "Código de ID",
+  agente: "Agente",
+  pagador_id: "Pagador (ID)",
+  dia_pago: "Día de pago",
+  parentesco: "Parentesco",
+  activo: "Activo",
+  vigente: "Vigente",
+  motivo_retiro: "Motivo de retiro",
+  nota_retiro: "Nota de retiro",
+  motivo_anulacion: "Motivo de anulación",
+  nota_anulacion: "Nota de anulación",
+  fecha_anulacion: "Fecha de anulación",
+  cobertura_definida: "Cobertura definida",
   ingreso_familiar_anual: "Ingreso familiar anual",
   personas_cobertura: "Personas en cobertura",
   personas_taxes: "Personas en Taxes",
@@ -387,12 +408,13 @@ const formatFormaPago = (value) => {
 };
 
 const formatValueForHistorial = (val, campo) => {
-  if (campo === "forma_pago") return formatFormaPago(val);
-  if (campo === "es_principal") {
+  const key = claveCampoCliente(campo);
+  if (key === "forma_pago") return formatFormaPago(val);
+  if (["es_principal", "activo", "vigente"].includes(key)) {
     if (val === true || val === "true" || val === 1) return "Sí";
     if (val === false || val === "false" || val === 0) return "No";
   }
-  if (esCampoTelefonos(campo)) {
+  if (esCampoTelefonos(key) || esCampoTelefonos(campo)) {
     return renderTelefonosHistorial(val);
   }
   return formatValue(val);
@@ -457,6 +479,106 @@ const buildTitularesDesdeCoberturas = (coberturas = []) => {
     };
   });
   return map;
+};
+
+const toValidModeloId = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const nombreCompaniaCobertura = (cob) => {
+  if (!cob || typeof cob !== "object") return null;
+  if (cob.compania && typeof cob.compania === "object") {
+    return cob.compania.nombre || cob.compania.name || null;
+  }
+  if (typeof cob.compania === "string" && cob.compania.trim()) return cob.compania.trim();
+  if (cob.compania_nombre) return cob.compania_nombre;
+  return null;
+};
+
+const etiquetaEstadoCoberturaLista = (cob) => {
+  if (cob?.fecha_anulacion) return "Anulada";
+  if (cob?.fecha_retiro) return "Retirada";
+  if (cob?.fecha_cancelacion) return "Cancelada";
+  if (cob?.estado_cobertura) return cob.estado_cobertura;
+  if (cob?.activo === false || cob?.activo === 0 || cob?.activo === "false") return "Inactiva";
+  return "—";
+};
+
+/** Normaliza coberturas del grupo abierto (dedupe por ID; excluye otros grupos). */
+const normalizarCoberturasDelGrupo = (coberturas = [], grupoId) => {
+  const grupoNum = toValidModeloId(grupoId);
+  const porId = new Map();
+  (Array.isArray(coberturas) ? coberturas : []).forEach((cob) => {
+    const id = toValidModeloId(cob?.id);
+    if (!id || porId.has(id)) return;
+    const gfId =
+      toValidModeloId(cob.grupo_familiar_id) ??
+      toValidModeloId(cob.grupo_familiar?.id) ??
+      grupoNum;
+    if (grupoNum && gfId && gfId !== grupoNum) return;
+    const clienteId = toValidModeloId(cob.cliente?.id ?? cob.cliente_id);
+    porId.set(id, {
+      id,
+      cobertura_tipo: cob.cobertura_tipo || "Sin tipo",
+      plan: cob.plan || null,
+      compania: nombreCompaniaCobertura(cob),
+      ano_cobertura: cob.ano_cobertura ?? null,
+      estado: etiquetaEstadoCoberturaLista(cob),
+      cliente_id: clienteId,
+      cliente_nombre: obtenerNombreCliente(cob.cliente) || "Sin nombre",
+      parentesco: cob.parentesco || null,
+    });
+  });
+  return [...porId.values()].sort((a, b) => {
+    const anioA = Number(a.ano_cobertura) || 0;
+    const anioB = Number(b.ano_cobertura) || 0;
+    if (anioA !== anioB) return anioB - anioA;
+    return a.id - b.id;
+  });
+};
+
+const agruparCoberturasPorPersona = (items = []) => {
+  const grupos = new Map();
+  items.forEach((item) => {
+    const clave = item.cliente_id != null ? `id-${item.cliente_id}` : `nombre-${item.cliente_nombre}-${item.id}`;
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        clave,
+        personaId: item.cliente_id,
+        nombre: item.cliente_nombre,
+        parentesco: item.parentesco,
+        coberturas: [],
+      });
+    }
+    grupos.get(clave).coberturas.push(item);
+  });
+  return [...grupos.values()].sort((a, b) =>
+    String(a.nombre || "").localeCompare(String(b.nombre || ""), "es", { sensitivity: "base" })
+  );
+};
+
+const filtrarCoberturasHub = (items, busqueda, anio) => {
+  const q = String(busqueda || "").trim().toLowerCase();
+  const anioFiltro = anio != null && anio !== "" ? String(anio) : "";
+  return (Array.isArray(items) ? items : []).filter((item) => {
+    if (anioFiltro && String(item.ano_cobertura ?? "") !== anioFiltro) return false;
+    if (!q) return true;
+    const texto = [
+      item.cliente_nombre,
+      item.cliente_id,
+      item.cobertura_tipo,
+      item.plan,
+      item.compania,
+      item.id,
+      item.ano_cobertura,
+      item.estado,
+      item.parentesco,
+    ]
+      .map((v) => String(v ?? "").toLowerCase())
+      .join(" ");
+    return texto.includes(q);
+  });
 };
 
 const resolverTitularCobertura = ({
@@ -694,7 +816,18 @@ const opcionesCampoHistorial = (filas) => {
 const filasDeHistorialSeccion = (rows, seccionId) => {
   const filas = [];
   (Array.isArray(rows) ? rows : []).forEach((row) => {
-    const campos = ordenarCamposDeSeccion(Object.keys(row?.cambios || {}), seccionId);
+    const campos = seccionId === "cobertura"
+      ? Object.keys(row?.cambios || {}).filter((campo) => {
+        const key = campo.split(".").pop();
+        const info = row.cambios[campo];
+        return !CAMPOS_IGNORAR.has(campo) && !/updated|fecha_actualizacion/i.test(campo)
+          && !["id", "created_at", "deleted_at", "edad", "cliente_id", "grupo_familiar_id"].includes(key)
+          && !["cliente", "grupo_familiar", "medio_pago", "medios_pago", "responsable"].includes(key)
+          && !campo.startsWith("cliente.")
+          && ![info?.anterior, info?.nuevo].some((valor) => valor !== null && typeof valor === "object")
+          && JSON.stringify(info?.anterior ?? null) !== JSON.stringify(info?.nuevo ?? null);
+      })
+      : ordenarCamposDeSeccion(Object.keys(row?.cambios || {}), seccionId);
     campos.forEach((campo) => {
       const info = row.cambios[campo];
       filas.push({
@@ -702,6 +835,7 @@ const filasDeHistorialSeccion = (rows, seccionId) => {
         fecha: row.created_at || row.fecha,
         usuario: row.usuario || "—",
         campo,
+        esCobertura: seccionId === "cobertura",
         label: getFieldLabel(claveCampoCliente(campo)),
         anterior: info?.anterior,
         nuevo: info?.nuevo,
@@ -917,7 +1051,30 @@ const coincideFiltroFila = (fila, filtroCampo, consulta) => {
   return textoBusquedaFila(fila).includes(consulta);
 };
 
-function listadoFilasSeccion(filasVisibles) {
+function listadoFilasSeccion(filasVisibles, { distinguirFuentes = false } = {}) {
+  const mostrarOrigen = !filasVisibles.every((fila) => fila.esCobertura);
+  const renderEtiquetaCampo = (fila) => {
+    const fuenteLabel = distinguirFuentes ? etiquetaFuenteHistorialCobertura(fila.fuente) : null;
+    return (
+      <>
+        {fila.label}
+        {fuenteLabel && (
+          <span
+            className="badge bg-light text-secondary border ms-1 fw-normal"
+            style={{ fontSize: "0.7rem" }}
+            title={
+              fila.eventoId != null
+                ? `Evento #${fila.eventoId}${fila.operacionId ? ` · operación ${fila.operacionId}` : ""}`
+                : undefined
+            }
+          >
+            {fuenteLabel}
+          </span>
+        )}
+      </>
+    );
+  };
+
   return (
     <>
       <div className="d-md-none">
@@ -926,18 +1083,18 @@ function listadoFilasSeccion(filasVisibles) {
             <div className="small text-muted mb-1">
               {formatDateTime(fila.fecha)} · {fila.usuario}
             </div>
-            <div className="small mb-1">
+            {mostrarOrigen && <div className="small mb-1">
               <span className="text-muted">Origen: </span>
               {etiquetaFilaOrigen(fila)}
-            </div>
-            <div className="fw-semibold mb-1">{fila.label}</div>
+            </div>}
+            <div className="fw-semibold mb-1">{renderEtiquetaCampo(fila)}</div>
             <div className="small mb-1">
               <span className="text-muted">Anterior: </span>
-              {renderValorSeccion(fila.anterior, fila.campo)}
+              {(fila.esCobertura ? formatValueForHistorial(fila.anterior, fila.campo) : renderValorSeccion(fila.anterior, fila.campo))}
             </div>
             <div className="small">
               <span className="text-muted">Nuevo: </span>
-              <span className="fw-semibold">{renderValorSeccion(fila.nuevo, fila.campo)}</span>
+              <span className="fw-semibold">{(fila.esCobertura ? formatValueForHistorial(fila.nuevo, fila.campo) : renderValorSeccion(fila.nuevo, fila.campo))}</span>
             </div>
           </article>
         ))}
@@ -948,9 +1105,9 @@ function listadoFilasSeccion(filasVisibles) {
           <thead style={{ backgroundColor: "#e9ecef" }}>
             <tr>
               <th scope="col">Fecha</th>
-              <th scope="col" title="Origen de la actualización" style={{ width: "1%", whiteSpace: "nowrap" }}>
+              {mostrarOrigen && <th scope="col" title="Origen de la actualización" style={{ width: "1%", whiteSpace: "nowrap" }}>
                 Origen
-              </th>
+              </th>}
               <th scope="col">Usuario</th>
               <th scope="col">Campo</th>
               <th scope="col">Anterior</th>
@@ -961,16 +1118,16 @@ function listadoFilasSeccion(filasVisibles) {
             {filasVisibles.map((fila) => (
               <tr key={fila.key}>
                 <td style={{ whiteSpace: "nowrap" }}>{formatDateTime(fila.fecha)}</td>
-                <td style={{ whiteSpace: "nowrap" }}>
+                {mostrarOrigen && <td style={{ whiteSpace: "nowrap" }}>
                   {etiquetaFilaOrigen(fila)}
-                </td>
+                </td>}
                 <td>{fila.usuario}</td>
-                <td>{fila.label}</td>
+                <td>{renderEtiquetaCampo(fila)}</td>
                 <td style={{ wordBreak: "break-word" }}>
-                  <span className="text-muted">{renderValorSeccion(fila.anterior, fila.campo)}</span>
+                  <span className="text-muted">{(fila.esCobertura ? formatValueForHistorial(fila.anterior, fila.campo) : renderValorSeccion(fila.anterior, fila.campo))}</span>
                 </td>
                 <td style={{ wordBreak: "break-word" }}>
-                  <span className="fw-semibold">{renderValorSeccion(fila.nuevo, fila.campo)}</span>
+                  <span className="fw-semibold">{(fila.esCobertura ? formatValueForHistorial(fila.nuevo, fila.campo) : renderValorSeccion(fila.nuevo, fila.campo))}</span>
                 </td>
               </tr>
             ))}
@@ -984,6 +1141,7 @@ function listadoFilasSeccion(filasVisibles) {
 function vistaHistorialSeccion({
   cargando,
   error,
+  warning,
   filas,
   filtroCampo,
   filtroTexto,
@@ -996,6 +1154,7 @@ function vistaHistorialSeccion({
   onLimpiar,
   pagina,
   onPagina,
+  distinguirFuentes = false,
 }) {
   if (cargando) {
     return (
@@ -1007,15 +1166,18 @@ function vistaHistorialSeccion({
     );
   }
 
-  if (error) {
+  if (error && (!filas || filas.length === 0)) {
     return <div className="alert alert-danger mb-0">{error}</div>;
   }
 
-  if (filas.length === 0) {
+  if (!filas || filas.length === 0) {
     return (
-      <div className="text-muted text-center py-3">
-        Sin cambios registrados en esta sección.
-      </div>
+      <>
+        {warning && <div className="alert alert-warning mb-3">{warning}</div>}
+        <div className="text-muted text-center py-3">
+          Sin cambios registrados en esta sección.
+        </div>
+      </>
     );
   }
 
@@ -1037,6 +1199,10 @@ function vistaHistorialSeccion({
 
   return (
     <>
+      {warning && <div className="alert alert-warning mb-3">{warning}</div>}
+      {error && filas.length > 0 && (
+        <div className="alert alert-warning mb-3">{error}</div>
+      )}
       {filtroHistorialSeccion({
         opcionesCampo: opcionesCampoHistorial(filas),
         filtroCampo,
@@ -1062,7 +1228,7 @@ function vistaHistorialSeccion({
         </div>
       ) : (
         <>
-          {listadoFilasSeccion(paginaActual.filas)}
+          {listadoFilasSeccion(paginaActual.filas, { distinguirFuentes })}
           {paginaActual.paginas > 1 && (
             <nav className="d-flex align-items-center justify-content-between gap-2 mt-3" aria-label="Páginas del historial">
               <button
@@ -1101,6 +1267,8 @@ export default function HistorialCambiosModal({
   modeloId,
   seccion,
   grupoFamiliarId = null,
+  /** Si true (solo GF): abre lista de coberturas del grupo antes del historial general. */
+  inicioConListaCoberturas = false,
 }) {
   const [historial, setHistorial] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -1111,20 +1279,76 @@ export default function HistorialCambiosModal({
   const [historialSeccion, setHistorialSeccion] = useState({
     key: "",
     rows: [],
+    formato: "eventos",
     error: null,
+    warning: null,
     loading: false,
+    distinguirFuentes: false,
   });
   const [filtroCampo, setFiltroCampo] = useState("");
   const [filtroTexto, setFiltroTexto] = useState("");
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
   const [paginaHistorial, setPaginaHistorial] = useState(1);
+  const [vistaHub, setVistaHub] = useState("lista"); // lista | cobertura | grupo
+  const [coberturaHub, setCoberturaHub] = useState(null);
+  const [busquedaHub, setBusquedaHub] = useState("");
+  const [anioHub, setAnioHub] = useState("");
+  const [listaCoberturas, setListaCoberturas] = useState([]);
+  const [listaLoading, setListaLoading] = useState(false);
+  const [listaError, setListaError] = useState(null);
   const dialogRef = useRef(null);
   const closeBtnRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /** Cache del historial crudo de GrupoFamiliar para reutilizar en detalles del hub. */
+  const cacheHistorialGrupoRef = useRef({ grupoId: null, rows: null });
 
-  const filtrarPorSeccion = seccion != null && seccion !== "";
+  const isGrupo = modelo === "GrupoFamiliar";
+  const hubActivo = Boolean(inicioConListaCoberturas && isGrupo && show);
+  const modeloEfectivo =
+    hubActivo && vistaHub === "cobertura" ? "Cobertura" : modelo;
+  const modeloIdEfectivo =
+    hubActivo && vistaHub === "cobertura" ? coberturaHub?.id : modeloId;
+  const seccionEfectiva =
+    hubActivo && vistaHub === "cobertura" ? "cobertura" : seccion;
+  const grupoFamiliarIdEfectivo =
+    hubActivo && vistaHub === "cobertura"
+      ? toValidModeloId(modeloId) ?? grupoFamiliarId
+      : grupoFamiliarId;
+  const filtrarPorSeccion = seccionEfectiva != null && seccionEfectiva !== "";
+  const mostrarListaHub = hubActivo && vistaHub === "lista";
+  const mostrarDetalleHub = hubActivo && vistaHub !== "lista";
+  const atraparFoco = filtrarPorSeccion || hubActivo;
+
+  useEffect(() => {
+    if (!inicioConListaCoberturas) return;
+    setVistaHub("lista");
+    setCoberturaHub(null);
+    setBusquedaHub("");
+    setAnioHub("");
+    setListaCoberturas([]);
+    setListaError(null);
+    setHistorial([]);
+    setSelected(null);
+    setError(null);
+    setHistorialSeccion({
+      key: "",
+      rows: [],
+      formato: "eventos",
+      error: null,
+      warning: null,
+      loading: false,
+      distinguirFuentes: false,
+    });
+    cacheHistorialGrupoRef.current = { grupoId: null, rows: null };
+  }, [show, modeloId, inicioConListaCoberturas]);
+
+  useEffect(() => {
+    if (!show) {
+      cacheHistorialGrupoRef.current = { grupoId: null, rows: null };
+    }
+  }, [show]);
 
   useEffect(() => {
     setFiltroCampo("");
@@ -1132,13 +1356,11 @@ export default function HistorialCambiosModal({
     setFechaDesde("");
     setFechaHasta("");
     setPaginaHistorial(1);
-  }, [seccion, modeloId, grupoFamiliarId]);
+  }, [seccionEfectiva, modeloIdEfectivo, grupoFamiliarIdEfectivo]);
 
   useEffect(() => {
     setPaginaHistorial(1);
   }, [filtroCampo, filtroTexto, fechaDesde, fechaHasta]);
-
-  const isGrupo = modelo === "GrupoFamiliar";
 
   // Obtener historial de coberturas relacionadas
   const obtenerHistorialCoberturas = async (coberturas = []) => {
@@ -1434,26 +1656,155 @@ export default function HistorialCambiosModal({
     return Array.from(clientesMap.values()).filter((cliente) => cliente.cambios.length > 0);
   };
 
-  // Cargar historial
+  // Lista de coberturas del hub (sin historiales individuales)
   useEffect(() => {
-    if (!show || !modeloId) return undefined;
+    if (!mostrarListaHub || !modeloId) return undefined;
 
     let cancelled = false;
 
+    const cargarLista = async () => {
+      setListaLoading(true);
+      setListaError(null);
+      try {
+        const grupoData = await GrupoFamiliarService.getFullById(modeloId);
+        if (cancelled) return;
+        const coberturasGrupo = Array.isArray(grupoData?.coberturas) ? grupoData.coberturas : [];
+        setListaCoberturas(normalizarCoberturasDelGrupo(coberturasGrupo, modeloId));
+      } catch (e) {
+        if (cancelled) return;
+        console.error("Error cargando coberturas del grupo:", e);
+        setListaError("No se pudieron cargar las coberturas del grupo.");
+        setListaCoberturas([]);
+      } finally {
+        if (!cancelled) setListaLoading(false);
+      }
+    };
+
+    cargarLista();
+    return () => {
+      cancelled = true;
+    };
+  }, [mostrarListaHub, modeloId]);
+
+  // Cargar historial (detalle de cobertura o historial general; no en la lista del hub)
+  useEffect(() => {
+    if (!show || !modeloIdEfectivo || mostrarListaHub) return undefined;
+
+    let cancelled = false;
+    const modeloFetch = modeloEfectivo;
+    const modeloIdFetch = modeloIdEfectivo;
+    const seccionFetch = seccionEfectiva;
+    const esGrupoFetch = modeloFetch === "GrupoFamiliar";
+
     const fetchHistorial = async () => {
-      if (seccion) {
-        const key = `${modelo}:${modeloId}:${seccion}`;
-        setHistorialSeccion({ key, rows: [], error: null, loading: true });
+      if (seccionFetch) {
+        const key = `${modeloFetch}:${modeloIdFetch}:${seccionFetch}`;
+        setHistorialSeccion({
+          key,
+          rows: [],
+          formato: seccionFetch === "cobertura" ? "filas" : "eventos",
+          error: null,
+          warning: null,
+          loading: true,
+          distinguirFuentes: false,
+        });
 
         try {
-          const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
+          if (seccionFetch === "cobertura") {
+            const coberturaId = toValidModeloId(modeloIdFetch);
+            const grupoIdConsulta = toValidModeloId(grupoFamiliarIdEfectivo);
+            let errorCobertura = null;
+            let errorGrupo = null;
+            let eventosCobertura = [];
+            let eventosGrupo = [];
+
+            if (!coberturaId) {
+              const detalleInvalido = construirDetalleHistorialCobertura({ coberturaId });
+              setHistorialSeccion({
+                key,
+                rows: [],
+                formato: "filas",
+                error: detalleInvalido.error,
+                warning: detalleInvalido.warning,
+                loading: false,
+                distinguirFuentes: false,
+              });
+              return;
+            }
+
+            const promesas = [
+              apiRequest(`/historial/Cobertura/${coberturaId}`, "GET")
+                .then((res) => {
+                  eventosCobertura = (Array.isArray(res.data) ? res.data : []).filter(
+                    (row) => !row?.modelo_afectado || row.modelo_afectado === "Cobertura"
+                  );
+                })
+                .catch((err) => {
+                  errorCobertura = err;
+                }),
+            ];
+
+            if (grupoIdConsulta) {
+              const cache = cacheHistorialGrupoRef.current;
+              if (cache.grupoId === grupoIdConsulta && Array.isArray(cache.rows)) {
+                eventosGrupo = cache.rows;
+              } else {
+                promesas.push(
+                  apiRequest(`/historial/GrupoFamiliar/${grupoIdConsulta}`, "GET")
+                    .then((res) => {
+                      eventosGrupo = Array.isArray(res.data) ? res.data : [];
+                      cacheHistorialGrupoRef.current = {
+                        grupoId: grupoIdConsulta,
+                        rows: eventosGrupo,
+                      };
+                    })
+                    .catch((err) => {
+                      errorGrupo = err;
+                    })
+                );
+              }
+            }
+
+            await Promise.all(promesas);
+            if (cancelled) return;
+
+            const detalle = construirDetalleHistorialCobertura({
+              coberturaId,
+              eventosCobertura,
+              eventosGrupo,
+              errorCobertura,
+              errorGrupo,
+              sinGrupoId: !grupoIdConsulta,
+            });
+
+            const filasConLabel = detalle.filas.map((fila) => ({
+              ...fila,
+              label: getFieldLabel(fila.campo),
+            }));
+
+            setHistorialSeccion({
+              key,
+              rows: filasConLabel,
+              formato: "filas",
+              error: detalle.error,
+              warning: detalle.warning,
+              loading: false,
+              distinguirFuentes: Boolean(detalle.distinguirFuentes),
+            });
+            return;
+          }
+
+          const res = await apiRequest(`/historial/${modeloFetch}/${modeloIdFetch}`, "GET");
           if (cancelled) return;
           const rows = (Array.isArray(res.data) ? res.data : []).filter(esEventoIndividualCliente);
           setHistorialSeccion({
             key,
-            rows: filtrarHistorialPorSeccion(rows, seccion),
+            rows: filtrarHistorialPorSeccion(rows, seccionFetch),
+            formato: "eventos",
             error: null,
+            warning: null,
             loading: false,
+            distinguirFuentes: false,
           });
         } catch (e) {
           if (cancelled) return;
@@ -1461,8 +1812,11 @@ export default function HistorialCambiosModal({
           setHistorialSeccion({
             key,
             rows: [],
+            formato: seccionFetch === "cobertura" ? "filas" : "eventos",
             error: "No se pudo cargar el historial de cambios.",
+            warning: null,
             loading: false,
+            distinguirFuentes: false,
           });
         }
         return;
@@ -1473,13 +1827,21 @@ export default function HistorialCambiosModal({
 
       try {
         // Obtener historial del modelo principal
-        const res = await apiRequest(`/historial/${modelo}/${modeloId}`, "GET");
+        const res = await apiRequest(`/historial/${modeloFetch}/${modeloIdFetch}`, "GET");
         if (cancelled) return;
         let rows = Array.isArray(res.data) ? res.data : [];
+
+        // Cache del historial crudo del grupo (sin mezclar coberturas/medios de pago)
+        if (esGrupoFetch && modeloIdFetch) {
+          cacheHistorialGrupoRef.current = {
+            grupoId: toValidModeloId(modeloIdFetch),
+            rows: [...rows],
+          };
+        }
         
         // Si es GrupoFamiliar, obtener también historial de coberturas
-        if (isGrupo && modeloId) {
-          const grupoData = await GrupoFamiliarService.getFullById(modeloId);
+        if (esGrupoFetch && modeloIdFetch) {
+          const grupoData = await GrupoFamiliarService.getFullById(modeloIdFetch);
           if (cancelled) return;
           const coberturasGrupo = Array.isArray(grupoData?.coberturas) ? grupoData.coberturas : [];
           setTitularesPorCobertura(buildTitularesDesdeCoberturas(coberturasGrupo));
@@ -1496,9 +1858,9 @@ export default function HistorialCambiosModal({
             const fechaB = new Date(b.created_at || b.fecha || 0).getTime();
             return fechaB - fechaA;
           });
-        } else if (modelo === "Cliente" && modeloId) {
+        } else if (modeloFetch === "Cliente" && modeloIdFetch) {
           setTitularesPorCobertura({});
-          const registrosMediosPago = await obtenerHistorialMediosPago(null, modeloId);
+          const registrosMediosPago = await obtenerHistorialMediosPago(null, modeloIdFetch);
           if (cancelled) return;
           rows = [...rows, ...registrosMediosPago];
           rows.sort((a, b) => {
@@ -1528,7 +1890,7 @@ export default function HistorialCambiosModal({
     return () => {
       cancelled = true;
     };
-  }, [show, modelo, modeloId, isGrupo, seccion]);
+  }, [show, modeloEfectivo, modeloIdEfectivo, seccionEfectiva, mostrarListaHub, grupoFamiliarIdEfectivo]);
 
   // Auto-seleccionar el área con cambios al cambiar de registro
   useEffect(() => {
@@ -1557,7 +1919,7 @@ export default function HistorialCambiosModal({
   }, [selected?.id]);
 
   useEffect(() => {
-    if (!show || !filtrarPorSeccion) return undefined;
+    if (!show || !atraparFoco) return undefined;
 
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
@@ -1599,18 +1961,210 @@ export default function HistorialCambiosModal({
         previouslyFocused.focus();
       }
     };
-  }, [show, filtrarPorSeccion]);
+  }, [show, atraparFoco]);
 
   if (!show) return null;
 
-  const claveSeccionActual = `${modelo}:${modeloId}:${seccion || ""}`;
+  const volverAListaHub = () => {
+    setVistaHub("lista");
+    setCoberturaHub(null);
+    setSelected(null);
+    setHistorial([]);
+    setError(null);
+    setHistorialSeccion({
+      key: "",
+      rows: [],
+      formato: "eventos",
+      error: null,
+      warning: null,
+      loading: false,
+      distinguirFuentes: false,
+    });
+  };
+
+  const abrirDetalleCoberturaHub = (item) => {
+    if (!toValidModeloId(item?.id)) return;
+    setCoberturaHub(item);
+    setVistaHub("cobertura");
+  };
+
+  const abrirHistorialGeneralHub = () => {
+    setCoberturaHub(null);
+    setVistaHub("grupo");
+  };
+
+  const coberturasFiltradasHub = filtrarCoberturasHub(listaCoberturas, busquedaHub, anioHub);
+  const personasHub = agruparCoberturasPorPersona(coberturasFiltradasHub);
+  const aniosHubDisponibles = [...new Set(
+    listaCoberturas.map((c) => c.ano_cobertura).filter((a) => a != null && a !== "")
+  )].sort((a, b) => Number(b) - Number(a));
+
+  const claveSeccionActual = `${modeloEfectivo}:${modeloIdEfectivo}:${seccionEfectiva || ""}`;
   const seccionVigente = historialSeccion.key === claveSeccionActual;
   const cargandoSeccion = filtrarPorSeccion && (!seccionVigente || historialSeccion.loading);
   const errorSeccion = filtrarPorSeccion && seccionVigente ? historialSeccion.error : null;
-  const filasSeccion = filtrarPorSeccion && seccionVigente && !historialSeccion.loading && !historialSeccion.error
-    ? filasDeHistorialSeccion(historialSeccion.rows, seccion)
-    : [];
-  const tituloSeccion = ETIQUETAS_SECCION_FICHA[seccion] || "Sección";
+  const warningSeccion = filtrarPorSeccion && seccionVigente ? historialSeccion.warning : null;
+  const distinguirFuentesSeccion = Boolean(
+    filtrarPorSeccion && seccionVigente && historialSeccion.distinguirFuentes
+  );
+  const filasSeccion = (() => {
+    if (!filtrarPorSeccion || !seccionVigente || historialSeccion.loading) return [];
+    // Error total sin filas: vacío (la vista muestra el error)
+    if (historialSeccion.error && (!historialSeccion.rows || historialSeccion.rows.length === 0)) {
+      return [];
+    }
+    if (historialSeccion.formato === "filas") {
+      return Array.isArray(historialSeccion.rows) ? historialSeccion.rows : [];
+    }
+    if (historialSeccion.error) return [];
+    return filasDeHistorialSeccion(historialSeccion.rows, seccionEfectiva);
+  })();
+  const tituloSeccion = seccionEfectiva === "cobertura"
+    ? `Detalle de cobertura #${modeloIdEfectivo}`
+    : ETIQUETAS_SECCION_FICHA[seccionEfectiva] || "Sección";
+
+  const tituloModal = mostrarListaHub
+    ? "Historial del grupo y sus coberturas"
+    : filtrarPorSeccion
+      ? `Historial · ${tituloSeccion}`
+      : hubActivo && vistaHub === "grupo"
+        ? "Historial de Cambios"
+        : "Historial de Cambios";
+
+  const subtituloModal = (() => {
+    if (mostrarListaHub) {
+      return modeloId ? `Grupo familiar #${modeloId}` : "Sin grupo familiar";
+    }
+    if (hubActivo && vistaHub === "cobertura" && coberturaHub) {
+      const persona = coberturaHub.cliente_id != null
+        ? `${coberturaHub.cliente_nombre} (ID ${coberturaHub.cliente_id})`
+        : coberturaHub.cliente_nombre;
+      return `${persona} · ${coberturaHub.cobertura_tipo} #${coberturaHub.id} · Grupo familiar #${modeloId}`;
+    }
+    if (filtrarPorSeccion) {
+      return grupoFamiliarIdEfectivo
+        ? `Grupo familiar #${grupoFamiliarIdEfectivo}`
+        : "Sin grupo familiar";
+    }
+    if (hubActivo && vistaHub === "grupo") {
+      return modeloId ? `Grupo familiar #${modeloId}` : null;
+    }
+    return null;
+  })();
+
+  const renderListaCoberturasHub = () => (
+    <div className="d-flex flex-column" style={{ flex: "1 1 auto", minHeight: 0 }}>
+      <div className="d-flex flex-wrap gap-2 align-items-end mb-3">
+        <div className="flex-grow-1" style={{ minWidth: "12rem" }}>
+          <label htmlFor="historial-hub-busqueda" className="form-label small mb-1">
+            Buscar
+          </label>
+          <input
+            id="historial-hub-busqueda"
+            type="search"
+            className="form-control form-control-sm"
+            placeholder="Persona, cobertura, plan o ID"
+            value={busquedaHub}
+            onChange={(event) => setBusquedaHub(event.target.value)}
+          />
+        </div>
+        <div style={{ minWidth: "7rem" }}>
+          <label htmlFor="historial-hub-anio" className="form-label small mb-1">
+            Año
+          </label>
+          <select
+            id="historial-hub-anio"
+            className="form-select form-select-sm"
+            value={anioHub}
+            onChange={(event) => setAnioHub(event.target.value)}
+          >
+            <option value="">Todos</option>
+            {aniosHubDisponibles.map((anio) => (
+              <option key={anio} value={anio}>{anio}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline-primary btn-sm"
+          onClick={abrirHistorialGeneralHub}
+        >
+          Cambios generales del grupo
+        </button>
+      </div>
+
+      {listaLoading && (
+        <div className="d-flex justify-content-center py-4">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Cargando coberturas…</span>
+          </div>
+        </div>
+      )}
+
+      {!listaLoading && listaError && (
+        <div className="alert alert-danger mb-0">{listaError}</div>
+      )}
+
+      {!listaLoading && !listaError && listaCoberturas.length === 0 && (
+        <div className="text-muted text-center py-4">
+          Este grupo no tiene coberturas disponibles para consultar.
+        </div>
+      )}
+
+      {!listaLoading && !listaError && listaCoberturas.length > 0 && coberturasFiltradasHub.length === 0 && (
+        <div className="text-muted text-center py-4">
+          Ninguna cobertura coincide con la búsqueda o el año seleccionados.
+        </div>
+      )}
+
+      {!listaLoading && !listaError && personasHub.length > 0 && (
+        <div className="flex-grow-1" style={{ minHeight: 0, overflowY: "auto" }}>
+          {personasHub.map((persona) => (
+            <section key={persona.clave} className="border rounded bg-white mb-3">
+              <header className="px-3 py-2 border-bottom" style={{ backgroundColor: "#f1f5f9" }}>
+                <div className="fw-semibold">
+                  {persona.nombre}
+                  {persona.personaId != null && (
+                    <span className="text-muted fw-normal ms-2">ID {persona.personaId}</span>
+                  )}
+                </div>
+                {persona.parentesco && (
+                  <div className="small text-muted">{persona.parentesco}</div>
+                )}
+              </header>
+              <ul className="list-unstyled mb-0">
+                {persona.coberturas.map((cob) => (
+                  <li
+                    key={cob.id}
+                    className="px-3 py-2 border-top d-flex flex-wrap gap-2 align-items-center justify-content-between"
+                  >
+                    <div className="min-w-0 flex-grow-1">
+                      <div className="fw-semibold">{cob.cobertura_tipo}</div>
+                      <div className="small text-muted">
+                        {[cob.compania, cob.plan].filter(Boolean).join(" · ") || "Sin compañía / plan"}
+                        {" · "}ID {cob.id}
+                        {cob.ano_cobertura != null && cob.ano_cobertura !== "" ? ` · ${cob.ano_cobertura}` : ""}
+                        {" · "}{cob.estado}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-outline-secondary btn-sm flex-shrink-0"
+                      aria-label={`Ver cambios de cobertura ${cob.cobertura_tipo} #${cob.id}`}
+                      onClick={() => abrirDetalleCoberturaHub(cob)}
+                    >
+                      <i className="fas fa-history me-1" aria-hidden="true" />
+                      Ver cambios
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   const renderDetalleCambios = () => {
     if (!selected) {
@@ -2537,21 +3091,24 @@ export default function HistorialCambiosModal({
     );
   };
 
+  // Compacto solo fuera del hub (p. ej. ficha del cliente). El hub mantiene un único espacio modal.
+  const dialogCompacto = filtrarPorSeccion && !hubActivo;
+
   return (
     <>
       <div
         className="modal fade show gf-modal"
         tabIndex="-1"
         role="dialog"
-        aria-modal={filtrarPorSeccion ? "true" : undefined}
+        aria-modal={atraparFoco ? "true" : undefined}
         aria-labelledby="historial-cambios-titulo"
         style={{ display: "block", zIndex: 1060 }}
       >
         <div
           ref={dialogRef}
-          className={`modal-dialog modal-dialog-centered gf-modal ${filtrarPorSeccion ? "modal-lg" : "modal-xl gf-modal--xl"}`}
+          className={`modal-dialog modal-dialog-centered gf-modal ${dialogCompacto ? "modal-lg" : "modal-xl gf-modal--xl"}`}
           role="document"
-          style={filtrarPorSeccion ? {
+          style={dialogCompacto ? {
             maxWidth: "min(1480px, calc(100vw - 2rem))",
             width: "min(1480px, calc(100vw - 2rem))",
             margin: "0.75rem auto",
@@ -2567,7 +3124,7 @@ export default function HistorialCambiosModal({
           <div
             className="modal-content gf-modal__content"
             style={{
-              height: filtrarPorSeccion ? "auto" : "100%",
+              height: dialogCompacto ? "auto" : "100%",
               maxHeight: "100%",
               display: "flex",
               flexDirection: "column",
@@ -2576,18 +3133,16 @@ export default function HistorialCambiosModal({
             <div className="modal-header gf-modal__header" style={{ flexShrink: 0 }}>
               <div className="min-w-0 me-2 flex-grow-1">
                 <h5 id="historial-cambios-titulo" className="modal-title gf-modal__title">
-                  {filtrarPorSeccion ? `Historial · ${tituloSeccion}` : "Historial de Cambios"}
-                  {isGrupo && !filtrarPorSeccion && (
+                  {tituloModal}
+                  {isGrupo && !filtrarPorSeccion && !mostrarListaHub && (
                     <span className="badge bg-light text-dark ms-2" style={{ fontSize: "0.75rem", fontWeight: "500" }}>
                       Grupo Familiar
                     </span>
                   )}
                 </h5>
-                {filtrarPorSeccion && (
+                {subtituloModal && (
                   <p className="gf-modal__subtitle mb-0">
-                    {grupoFamiliarId
-                      ? `Grupo familiar #${grupoFamiliarId}`
-                      : "Sin grupo familiar"}
+                    {subtituloModal}
                   </p>
                 )}
               </div>
@@ -2595,7 +3150,7 @@ export default function HistorialCambiosModal({
                 ref={closeBtnRef}
                 type="button"
                 className="btn-close btn-close-white flex-shrink-0"
-                aria-label={filtrarPorSeccion ? "Cerrar historial" : "Close"}
+                aria-label={atraparFoco ? "Cerrar historial" : "Close"}
                 onClick={onClose}
                 style={{ margin: 0 }}
               />
@@ -2603,9 +3158,16 @@ export default function HistorialCambiosModal({
 
             <div
               className="modal-body"
-              style={filtrarPorSeccion ? {
+              style={dialogCompacto ? {
                 padding: "1rem",
                 overflowY: "auto",
+              } : filtrarPorSeccion ? {
+                padding: "1.25rem 1.5rem",
+                flex: "1 1 auto",
+                minHeight: 0,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
               } : {
                 padding: "1.25rem 1.5rem",
                 flex: "1 1 auto",
@@ -2615,10 +3177,25 @@ export default function HistorialCambiosModal({
                 flexDirection: "column",
               }}
             >
-              {filtrarPorSeccion ? (
+              {mostrarDetalleHub && (
+                <div className="mb-3 flex-shrink-0">
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm text-decoration-none px-0"
+                    onClick={volverAListaHub}
+                  >
+                    ← Volver a coberturas
+                  </button>
+                </div>
+              )}
+
+              {mostrarListaHub ? (
+                renderListaCoberturasHub()
+              ) : filtrarPorSeccion ? (
                 vistaHistorialSeccion({
                   cargando: cargandoSeccion,
                   error: errorSeccion,
+                  warning: warningSeccion,
                   filas: filasSeccion,
                   filtroCampo,
                   filtroTexto,
@@ -2636,6 +3213,7 @@ export default function HistorialCambiosModal({
                   },
                   pagina: paginaHistorial,
                   onPagina: setPaginaHistorial,
+                  distinguirFuentes: distinguirFuentesSeccion,
                 })
               ) : (
               <>

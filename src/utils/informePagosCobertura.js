@@ -13,7 +13,8 @@ export function filasInformePagos(pagos, filtros) {
     if (filtros.estado && pago.estado !== filtros.estado) continue;
     const key = `${pago.anio_generado}|${pago.cobertura_id ?? `pago-${pago.id}`}`;
     if (!filas.has(key)) filas.set(key, {
-      id: key, cliente, cliente_id: pago.cliente_id || pago.cliente?.id,
+      id: key, cobertura_id: pago.cobertura_id ?? null,
+      cliente, cliente_id: pago.cliente_id || pago.cliente?.id,
       grupo_familiar_id: pago.grupo_familiar_id,
       codigo_poliza: fiscal.codigo_poliza, compania: fiscal.compania_nombre,
       pagador: fiscal.pagador_nombre, plan: fiscal.plan,
