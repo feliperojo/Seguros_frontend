@@ -142,7 +142,7 @@ const HistorialPlanCoberturaModal = ({
   }, [historial, anioSeleccionado]);
 
   const modalTitle = useMemo(() => {
-    const base = esDental ? "Historial de plan dental" : "Historial de plan";
+    const base = esDental ? "Archivo de plan dental" : "Archivo de plan";
     if (allowBulkArchive && members.length > 1) {
       return `${base} — Grupo familiar`;
     }

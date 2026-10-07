@@ -21,7 +21,6 @@ const HistorialPlanCoberturaConsulta = ({
   error = "",
   registros = [],
   onRetry,
-  onCollapse,
 }) => {
   const visibles = useMemo(() => {
     if (!valida || status !== "success") return [];
@@ -35,15 +34,6 @@ const HistorialPlanCoberturaConsulta = ({
           <i className="fas fa-history" aria-hidden="true" />
           Historial del plan
         </div>
-        <Button
-          type="button"
-          variant="link"
-          size="sm"
-          className="hcc-plan-section__collapse"
-          onClick={onCollapse}
-        >
-          Ocultar
-        </Button>
       </div>
 
       <div className="hp-filter-bar hcc-plan-meta">
