@@ -18,13 +18,21 @@ import {
   FaFilter,
   FaTable,
   FaFileInvoiceDollar,
+  FaFileExcel,
 } from "react-icons/fa";
+import { saveAs } from "file-saver";
+import * as XLSX from "xlsx";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
 import { filasInformePagos } from "../utils/informePagosCobertura";
 import { detalleSnapshotCobro } from "../utils/pagosGrupoFamiliarConsulta";
 import { indicadorMorosidadPagosPorMes, pickEstadoFechaActualizacionPago } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
+import {
+  crearLibroInformePagos,
+  fechaDescargaLocal,
+  nombreArchivoInformePagos,
+} from "../utils/informePagosExcel";
 import "../styles/GruposFamiliaresListado.css";
 import "../styles/PagosInforme.css";
 
@@ -73,6 +81,7 @@ const renderSituacion = (pagosPorMes) => {
 
 const PagosInforme = () => {
   const [loading, setLoading] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [pagos, setPagos] = useState([]);
   const [alerta, setAlerta] = useState({ show: false, variant: "", mensaje: "" });
   const [filtros, setFiltros] = useState({ cliente: "", compania: "", estado: "", anio: new Date().getFullYear() });
@@ -109,6 +118,25 @@ const PagosInforme = () => {
   };
 
   const rows = filasInformePagos(pagos, filtros);
+
+  const descargarExcel = () => {
+    if (loading || exportando || rows.length === 0) return;
+    setExportando(true);
+    try {
+      const fechaDescarga = fechaDescargaLocal();
+      const libro = crearLibroInformePagos({ filas: rows, filtros, fechaDescarga });
+      const buffer = XLSX.write(libro, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      saveAs(blob, nombreArchivoInformePagos(filtros.anio, fechaDescarga));
+    } catch (err) {
+      console.error("Error al exportar el informe de pagos:", err);
+      mostrarAlerta("No se pudo descargar el Excel del informe de pagos.", "danger");
+    } finally {
+      setExportando(false);
+    }
+  };
   const totalPages = Math.ceil(rows.length / rowsPerPage);
   const currentRows = rows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
   const indexInicio = rows.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
@@ -139,6 +167,16 @@ const PagosInforme = () => {
                 ? "Cargando…"
                 : `${rows.length} póliza${rows.length !== 1 ? "s" : ""} · ${filtros.anio}`}
             </span>
+            <Button
+              type="button"
+              size="sm"
+              className="gf-listado__btn-ghost"
+              onClick={descargarExcel}
+              disabled={loading || exportando || rows.length === 0}
+            >
+              <FaFileExcel className="me-1" />
+              Descargar Excel
+            </Button>
             <Button
               size="sm"
               className="gf-listado__btn-ghost"
