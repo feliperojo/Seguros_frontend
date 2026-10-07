@@ -24,6 +24,10 @@ import {
   formatValorCampoCliente,
   ordenarCamposDeSeccion,
 } from "../../utils/clienteHistorialSeccion";
+import {
+  construirDetalleHistorialCobertura,
+  etiquetaFuenteHistorialCobertura,
+} from "../../utils/historialCoberturaDetalle";
 import "../../styles/GfModal.css";
 
 // ==================== CONSTANTES ====================
@@ -404,12 +408,13 @@ const formatFormaPago = (value) => {
 };
 
 const formatValueForHistorial = (val, campo) => {
-  if (campo === "forma_pago") return formatFormaPago(val);
-  if (["es_principal", "activo", "vigente"].includes(campo)) {
+  const key = claveCampoCliente(campo);
+  if (key === "forma_pago") return formatFormaPago(val);
+  if (["es_principal", "activo", "vigente"].includes(key)) {
     if (val === true || val === "true" || val === 1) return "Sí";
     if (val === false || val === "false" || val === 0) return "No";
   }
-  if (esCampoTelefonos(campo)) {
+  if (esCampoTelefonos(key) || esCampoTelefonos(campo)) {
     return renderTelefonosHistorial(val);
   }
   return formatValue(val);
@@ -1046,8 +1051,30 @@ const coincideFiltroFila = (fila, filtroCampo, consulta) => {
   return textoBusquedaFila(fila).includes(consulta);
 };
 
-function listadoFilasSeccion(filasVisibles) {
+function listadoFilasSeccion(filasVisibles, { distinguirFuentes = false } = {}) {
   const mostrarOrigen = !filasVisibles.every((fila) => fila.esCobertura);
+  const renderEtiquetaCampo = (fila) => {
+    const fuenteLabel = distinguirFuentes ? etiquetaFuenteHistorialCobertura(fila.fuente) : null;
+    return (
+      <>
+        {fila.label}
+        {fuenteLabel && (
+          <span
+            className="badge bg-light text-secondary border ms-1 fw-normal"
+            style={{ fontSize: "0.7rem" }}
+            title={
+              fila.eventoId != null
+                ? `Evento #${fila.eventoId}${fila.operacionId ? ` · operación ${fila.operacionId}` : ""}`
+                : undefined
+            }
+          >
+            {fuenteLabel}
+          </span>
+        )}
+      </>
+    );
+  };
+
   return (
     <>
       <div className="d-md-none">
@@ -1060,7 +1087,7 @@ function listadoFilasSeccion(filasVisibles) {
               <span className="text-muted">Origen: </span>
               {etiquetaFilaOrigen(fila)}
             </div>}
-            <div className="fw-semibold mb-1">{fila.label}</div>
+            <div className="fw-semibold mb-1">{renderEtiquetaCampo(fila)}</div>
             <div className="small mb-1">
               <span className="text-muted">Anterior: </span>
               {(fila.esCobertura ? formatValueForHistorial(fila.anterior, fila.campo) : renderValorSeccion(fila.anterior, fila.campo))}
@@ -1095,7 +1122,7 @@ function listadoFilasSeccion(filasVisibles) {
                   {etiquetaFilaOrigen(fila)}
                 </td>}
                 <td>{fila.usuario}</td>
-                <td>{fila.label}</td>
+                <td>{renderEtiquetaCampo(fila)}</td>
                 <td style={{ wordBreak: "break-word" }}>
                   <span className="text-muted">{(fila.esCobertura ? formatValueForHistorial(fila.anterior, fila.campo) : renderValorSeccion(fila.anterior, fila.campo))}</span>
                 </td>
@@ -1114,6 +1141,7 @@ function listadoFilasSeccion(filasVisibles) {
 function vistaHistorialSeccion({
   cargando,
   error,
+  warning,
   filas,
   filtroCampo,
   filtroTexto,
@@ -1126,6 +1154,7 @@ function vistaHistorialSeccion({
   onLimpiar,
   pagina,
   onPagina,
+  distinguirFuentes = false,
 }) {
   if (cargando) {
     return (
@@ -1137,15 +1166,18 @@ function vistaHistorialSeccion({
     );
   }
 
-  if (error) {
+  if (error && (!filas || filas.length === 0)) {
     return <div className="alert alert-danger mb-0">{error}</div>;
   }
 
-  if (filas.length === 0) {
+  if (!filas || filas.length === 0) {
     return (
-      <div className="text-muted text-center py-3">
-        Sin cambios registrados en esta sección.
-      </div>
+      <>
+        {warning && <div className="alert alert-warning mb-3">{warning}</div>}
+        <div className="text-muted text-center py-3">
+          Sin cambios registrados en esta sección.
+        </div>
+      </>
     );
   }
 
@@ -1167,6 +1199,10 @@ function vistaHistorialSeccion({
 
   return (
     <>
+      {warning && <div className="alert alert-warning mb-3">{warning}</div>}
+      {error && filas.length > 0 && (
+        <div className="alert alert-warning mb-3">{error}</div>
+      )}
       {filtroHistorialSeccion({
         opcionesCampo: opcionesCampoHistorial(filas),
         filtroCampo,
@@ -1192,7 +1228,7 @@ function vistaHistorialSeccion({
         </div>
       ) : (
         <>
-          {listadoFilasSeccion(paginaActual.filas)}
+          {listadoFilasSeccion(paginaActual.filas, { distinguirFuentes })}
           {paginaActual.paginas > 1 && (
             <nav className="d-flex align-items-center justify-content-between gap-2 mt-3" aria-label="Páginas del historial">
               <button
@@ -1243,8 +1279,11 @@ export default function HistorialCambiosModal({
   const [historialSeccion, setHistorialSeccion] = useState({
     key: "",
     rows: [],
+    formato: "eventos",
     error: null,
+    warning: null,
     loading: false,
+    distinguirFuentes: false,
   });
   const [filtroCampo, setFiltroCampo] = useState("");
   const [filtroTexto, setFiltroTexto] = useState("");
@@ -1262,6 +1301,8 @@ export default function HistorialCambiosModal({
   const closeBtnRef = useRef(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  /** Cache del historial crudo de GrupoFamiliar para reutilizar en detalles del hub. */
+  const cacheHistorialGrupoRef = useRef({ grupoId: null, rows: null });
 
   const isGrupo = modelo === "GrupoFamiliar";
   const hubActivo = Boolean(inicioConListaCoberturas && isGrupo && show);
@@ -1291,8 +1332,23 @@ export default function HistorialCambiosModal({
     setHistorial([]);
     setSelected(null);
     setError(null);
-    setHistorialSeccion({ key: "", rows: [], error: null, loading: false });
+    setHistorialSeccion({
+      key: "",
+      rows: [],
+      formato: "eventos",
+      error: null,
+      warning: null,
+      loading: false,
+      distinguirFuentes: false,
+    });
+    cacheHistorialGrupoRef.current = { grupoId: null, rows: null };
   }, [show, modeloId, inicioConListaCoberturas]);
+
+  useEffect(() => {
+    if (!show) {
+      cacheHistorialGrupoRef.current = { grupoId: null, rows: null };
+    }
+  }, [show]);
 
   useEffect(() => {
     setFiltroCampo("");
@@ -1643,19 +1699,112 @@ export default function HistorialCambiosModal({
     const fetchHistorial = async () => {
       if (seccionFetch) {
         const key = `${modeloFetch}:${modeloIdFetch}:${seccionFetch}`;
-        setHistorialSeccion({ key, rows: [], error: null, loading: true });
+        setHistorialSeccion({
+          key,
+          rows: [],
+          formato: seccionFetch === "cobertura" ? "filas" : "eventos",
+          error: null,
+          warning: null,
+          loading: true,
+          distinguirFuentes: false,
+        });
 
         try {
+          if (seccionFetch === "cobertura") {
+            const coberturaId = toValidModeloId(modeloIdFetch);
+            const grupoIdConsulta = toValidModeloId(grupoFamiliarIdEfectivo);
+            let errorCobertura = null;
+            let errorGrupo = null;
+            let eventosCobertura = [];
+            let eventosGrupo = [];
+
+            if (!coberturaId) {
+              const detalleInvalido = construirDetalleHistorialCobertura({ coberturaId });
+              setHistorialSeccion({
+                key,
+                rows: [],
+                formato: "filas",
+                error: detalleInvalido.error,
+                warning: detalleInvalido.warning,
+                loading: false,
+                distinguirFuentes: false,
+              });
+              return;
+            }
+
+            const promesas = [
+              apiRequest(`/historial/Cobertura/${coberturaId}`, "GET")
+                .then((res) => {
+                  eventosCobertura = (Array.isArray(res.data) ? res.data : []).filter(
+                    (row) => !row?.modelo_afectado || row.modelo_afectado === "Cobertura"
+                  );
+                })
+                .catch((err) => {
+                  errorCobertura = err;
+                }),
+            ];
+
+            if (grupoIdConsulta) {
+              const cache = cacheHistorialGrupoRef.current;
+              if (cache.grupoId === grupoIdConsulta && Array.isArray(cache.rows)) {
+                eventosGrupo = cache.rows;
+              } else {
+                promesas.push(
+                  apiRequest(`/historial/GrupoFamiliar/${grupoIdConsulta}`, "GET")
+                    .then((res) => {
+                      eventosGrupo = Array.isArray(res.data) ? res.data : [];
+                      cacheHistorialGrupoRef.current = {
+                        grupoId: grupoIdConsulta,
+                        rows: eventosGrupo,
+                      };
+                    })
+                    .catch((err) => {
+                      errorGrupo = err;
+                    })
+                );
+              }
+            }
+
+            await Promise.all(promesas);
+            if (cancelled) return;
+
+            const detalle = construirDetalleHistorialCobertura({
+              coberturaId,
+              eventosCobertura,
+              eventosGrupo,
+              errorCobertura,
+              errorGrupo,
+              sinGrupoId: !grupoIdConsulta,
+            });
+
+            const filasConLabel = detalle.filas.map((fila) => ({
+              ...fila,
+              label: getFieldLabel(fila.campo),
+            }));
+
+            setHistorialSeccion({
+              key,
+              rows: filasConLabel,
+              formato: "filas",
+              error: detalle.error,
+              warning: detalle.warning,
+              loading: false,
+              distinguirFuentes: Boolean(detalle.distinguirFuentes),
+            });
+            return;
+          }
+
           const res = await apiRequest(`/historial/${modeloFetch}/${modeloIdFetch}`, "GET");
           if (cancelled) return;
-          const rows = (Array.isArray(res.data) ? res.data : []).filter(
-            seccionFetch === "cobertura" ? (row) => row.modelo_afectado === "Cobertura" : esEventoIndividualCliente
-          );
+          const rows = (Array.isArray(res.data) ? res.data : []).filter(esEventoIndividualCliente);
           setHistorialSeccion({
             key,
-            rows: seccionFetch === "cobertura" ? [...rows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))) : filtrarHistorialPorSeccion(rows, seccionFetch),
+            rows: filtrarHistorialPorSeccion(rows, seccionFetch),
+            formato: "eventos",
             error: null,
+            warning: null,
             loading: false,
+            distinguirFuentes: false,
           });
         } catch (e) {
           if (cancelled) return;
@@ -1663,8 +1812,11 @@ export default function HistorialCambiosModal({
           setHistorialSeccion({
             key,
             rows: [],
+            formato: seccionFetch === "cobertura" ? "filas" : "eventos",
             error: "No se pudo cargar el historial de cambios.",
+            warning: null,
             loading: false,
+            distinguirFuentes: false,
           });
         }
         return;
@@ -1678,6 +1830,14 @@ export default function HistorialCambiosModal({
         const res = await apiRequest(`/historial/${modeloFetch}/${modeloIdFetch}`, "GET");
         if (cancelled) return;
         let rows = Array.isArray(res.data) ? res.data : [];
+
+        // Cache del historial crudo del grupo (sin mezclar coberturas/medios de pago)
+        if (esGrupoFetch && modeloIdFetch) {
+          cacheHistorialGrupoRef.current = {
+            grupoId: toValidModeloId(modeloIdFetch),
+            rows: [...rows],
+          };
+        }
         
         // Si es GrupoFamiliar, obtener también historial de coberturas
         if (esGrupoFetch && modeloIdFetch) {
@@ -1730,7 +1890,7 @@ export default function HistorialCambiosModal({
     return () => {
       cancelled = true;
     };
-  }, [show, modeloEfectivo, modeloIdEfectivo, seccionEfectiva, mostrarListaHub]);
+  }, [show, modeloEfectivo, modeloIdEfectivo, seccionEfectiva, mostrarListaHub, grupoFamiliarIdEfectivo]);
 
   // Auto-seleccionar el área con cambios al cambiar de registro
   useEffect(() => {
@@ -1811,7 +1971,15 @@ export default function HistorialCambiosModal({
     setSelected(null);
     setHistorial([]);
     setError(null);
-    setHistorialSeccion({ key: "", rows: [], error: null, loading: false });
+    setHistorialSeccion({
+      key: "",
+      rows: [],
+      formato: "eventos",
+      error: null,
+      warning: null,
+      loading: false,
+      distinguirFuentes: false,
+    });
   };
 
   const abrirDetalleCoberturaHub = (item) => {
@@ -1835,9 +2003,22 @@ export default function HistorialCambiosModal({
   const seccionVigente = historialSeccion.key === claveSeccionActual;
   const cargandoSeccion = filtrarPorSeccion && (!seccionVigente || historialSeccion.loading);
   const errorSeccion = filtrarPorSeccion && seccionVigente ? historialSeccion.error : null;
-  const filasSeccion = filtrarPorSeccion && seccionVigente && !historialSeccion.loading && !historialSeccion.error
-    ? filasDeHistorialSeccion(historialSeccion.rows, seccionEfectiva)
-    : [];
+  const warningSeccion = filtrarPorSeccion && seccionVigente ? historialSeccion.warning : null;
+  const distinguirFuentesSeccion = Boolean(
+    filtrarPorSeccion && seccionVigente && historialSeccion.distinguirFuentes
+  );
+  const filasSeccion = (() => {
+    if (!filtrarPorSeccion || !seccionVigente || historialSeccion.loading) return [];
+    // Error total sin filas: vacío (la vista muestra el error)
+    if (historialSeccion.error && (!historialSeccion.rows || historialSeccion.rows.length === 0)) {
+      return [];
+    }
+    if (historialSeccion.formato === "filas") {
+      return Array.isArray(historialSeccion.rows) ? historialSeccion.rows : [];
+    }
+    if (historialSeccion.error) return [];
+    return filasDeHistorialSeccion(historialSeccion.rows, seccionEfectiva);
+  })();
   const tituloSeccion = seccionEfectiva === "cobertura"
     ? `Detalle de cobertura #${modeloIdEfectivo}`
     : ETIQUETAS_SECCION_FICHA[seccionEfectiva] || "Sección";
@@ -3014,6 +3195,7 @@ export default function HistorialCambiosModal({
                 vistaHistorialSeccion({
                   cargando: cargandoSeccion,
                   error: errorSeccion,
+                  warning: warningSeccion,
                   filas: filasSeccion,
                   filtroCampo,
                   filtroTexto,
@@ -3031,6 +3213,7 @@ export default function HistorialCambiosModal({
                   },
                   pagina: paginaHistorial,
                   onPagina: setPaginaHistorial,
+                  distinguirFuentes: distinguirFuentesSeccion,
                 })
               ) : (
               <>
