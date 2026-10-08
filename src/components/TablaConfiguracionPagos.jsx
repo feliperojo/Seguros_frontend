@@ -27,6 +27,11 @@ import { renderClienteLink } from "../pages/ListaClientes";
 import "./TablaConfiguracionPagos.css";
 
 const TablaConfiguracionPagos = () => {
+  const [decisionVencimientos, setDecisionVencimientos] = useState(null);
+  const confirmarVencimientosRef = useRef(false);
+  const solicitudPolizasRef = useRef(0);
+  const venceEnMes = (p) => Boolean(mesSeleccionado && anioSeleccionado &&
+    String(p.fecha_cancelacion || "").slice(0, 7) === `${anioSeleccionado}-${mesSeleccionado}`);
   const [loading, setLoading] = useState(false);
   const [polizas, setPolizas] = useState([]);
   const [filtros, setFiltros] = useState({ cliente: "", compania: "", responsable: "" });
@@ -83,26 +88,27 @@ const TablaConfiguracionPagos = () => {
   };
 
   const fetchPolizas = async () => {
+    const solicitud = ++solicitudPolizasRef.current;
     try {
       setLoading(true);
-      const response = await apiRequest("cobertura/activas", "GET");
+      const response = await apiRequest(`cobertura/activas${mesSeleccionado && anioSeleccionado ? `?periodo=${anioSeleccionado}-${mesSeleccionado}` : ""}`, "GET");
       const normalizado = response.map(p => ({
         ...p,
         precio: p.precio ? Number(p.precio) : 0,
         id: p.id || p.cobertura_id || Math.random(),
       }));
-      setPolizas(normalizado);
+      if (solicitud === solicitudPolizasRef.current) setPolizas(normalizado);
     } catch (err) {
       console.error("Error al cargar polizas activas:", err);
       mostrarAlerta("Error al cargar las pólizas activas", "danger");
     } finally {
-      setLoading(false);
+      if (solicitud === solicitudPolizasRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchPolizas();
-  }, []);
+  }, [mesSeleccionado, anioSeleccionado]);
 
   const periodoParaMes = (mesDosDigitos, anio) => {
     if (!mesDosDigitos || !anio) return null;
@@ -208,6 +214,8 @@ const TablaConfiguracionPagos = () => {
   }, [mesSeleccionado, anioSeleccionado]);
 
   useEffect(() => {
+    setDecisionVencimientos(null);
+    confirmarVencimientosRef.current = false;
     idsLoteRef.current = [];
     productosLoteRef.current = [];
     setDetalleLote({});
@@ -258,7 +266,7 @@ const TablaConfiguracionPagos = () => {
     setPaginaRegenerar(1);
   };
 
-  const cargarVistaPrevia = async ({ ids: idsForzados, productos: productosForzados } = {}) => {
+  const cargarVistaPrevia = async ({ ids: idsForzados, productos: productosForzados, decisionTomada = false } = {}) => {
     if (generandoRef.current) return;
     if (!mesSeleccionado || !anioSeleccionado) {
       mostrarAlerta("Seleccione el mes y el año para generar los cobros", "warning");
@@ -283,6 +291,15 @@ const TablaConfiguracionPagos = () => {
     if (ids.length === 0) {
       mostrarAlerta("No hay pólizas válidas para generar cobros", "warning");
       return;
+    }
+
+    if (!revalidar && !decisionTomada) {
+      confirmarVencimientosRef.current = false;
+      const vencimientos = polizas.filter((p) => ids.includes(p.id) && venceEnMes(p));
+      if (vencimientos.length > 0) {
+        setDecisionVencimientos({ ids, productos, vencimientos });
+        return;
+      }
     }
 
     if (!revalidar) {
@@ -389,6 +406,7 @@ const TablaConfiguracionPagos = () => {
         mes: mesSeleccionado,
         anio: Number(anioSeleccionado),
         ...preparado,
+        confirmar_vencimientos: confirmarVencimientosRef.current,
       });
       const nuevos = Number(data?.nuevos_registros ?? 0);
       const existentes = Number(data?.pagos_existentes ?? 0);
@@ -889,7 +907,7 @@ const TablaConfiguracionPagos = () => {
           <div className="pagos-mensuales__section mb-0">
             <div className="pagos-mensuales__section-title">
               <i className="fas fa-list" aria-hidden="true" />
-              Pólizas activas
+              Coberturas para el período
             </div>
             <div className="pagos-mensuales__summary">
               Mostrando <strong>{polizasFiltradas.length}</strong> de{" "}
@@ -920,7 +938,7 @@ const TablaConfiguracionPagos = () => {
                   </thead>
                   <tbody>
                     {polizasFiltradas.map((p) => (
-                      <tr key={p.id}>
+                      <tr key={p.id} className={venceEnMes(p) ? "table-warning" : ""}>
                         <td>
                           {p.grupo_familiar_id ? (
                             <Link
@@ -958,7 +976,9 @@ const TablaConfiguracionPagos = () => {
                         <td className="text-center">{p.tipo_pago || "-"}</td>
                         <td>{p.grupo_familiar?.responsable || "-"}</td>
                         <td className="text-center">
-                          {p.activo ? (
+                          {venceEnMes(p) ? (
+                            <Badge bg="warning" text="dark">Vence / se cancela el {String(p.fecha_cancelacion).slice(0, 10)}</Badge>
+                          ) : p.activo ? (
                             <Badge bg="success" className="pagos-mensuales__badge-estado">
                               Activa
                             </Badge>
@@ -977,6 +997,30 @@ const TablaConfiguracionPagos = () => {
           </div>
         </div>
       </div>
+
+      <Modal show={Boolean(decisionVencimientos)} onHide={() => setDecisionVencimientos(null)} centered>
+        <Modal.Header closeButton><Modal.Title>Coberturas que vencen este mes</Modal.Title></Modal.Header>
+        <Modal.Body>
+          <Alert variant="warning">Estas coberturas tienen fecha de cancelación en {etiquetaMes(mesSeleccionado)} de {anioSeleccionado}. ¿Desea incluirlas en la generación de cobros?</Alert>
+          <ul>{decisionVencimientos?.vencimientos.map((p) => <li key={p.id}>{p.cliente?.nombre_completo || `Cobertura ${p.id}`} — {String(p.fecha_cancelacion).slice(0, 10)}</li>)}</ul>
+          <p>Los cobros que ya existen se conservarán aunque decida excluir estas coberturas.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setDecisionVencimientos(null)}>Cancelar</Button>
+          <Button variant="outline-primary" onClick={() => {
+            const decision = decisionVencimientos;
+            setDecisionVencimientos(null);
+            confirmarVencimientosRef.current = false;
+            cargarVistaPrevia({ ids: decision.ids.filter((id) => !decision.vencimientos.some((p) => p.id === id)), productos: decision.productos, decisionTomada: true });
+          }}>Continuar sin ellas</Button>
+          <Button variant="primary" onClick={() => {
+            const decision = decisionVencimientos;
+            setDecisionVencimientos(null);
+            confirmarVencimientosRef.current = true;
+            cargarVistaPrevia({ ids: decision.ids, productos: decision.productos, decisionTomada: true });
+          }}>Sí, incluirlas</Button>
+        </Modal.Footer>
+      </Modal>
 
       <Modal
         show={showInconsistenciasModal}

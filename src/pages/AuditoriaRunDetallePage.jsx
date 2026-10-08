@@ -88,38 +88,79 @@ const tituloPendienteAuditoriaAnterior = (row) => {
   return `Pendiente de auditoría anterior: ${st} (${per})`;
 };
 
-const buildPagoRowResolver = (includePagosEnabled, pagosPorEntidad) => (c) => {
-  if (!includePagosEnabled) return null;
-  const coberturaId = c?.cobertura_id ?? c?.id ?? null;
-  const clienteId = c?.cliente_id ?? null;
-  const codigoPoliza = c?.codigo_poliza ? String(c.codigo_poliza).trim() : "";
-  if (coberturaId != null && pagosPorEntidad[`cobertura:${coberturaId}`]) {
-    return pagosPorEntidad[`cobertura:${coberturaId}`];
-  }
-  if (clienteId != null && pagosPorEntidad[`cliente:${clienteId}`]) {
-    return pagosPorEntidad[`cliente:${clienteId}`];
-  }
-  if (codigoPoliza && pagosPorEntidad[`poliza:${codigoPoliza}`]) {
-    return pagosPorEntidad[`poliza:${codigoPoliza}`];
-  }
-  return null;
+/**
+ * Período del run de auditoría. Solo "YYYY-MM".
+ * `anio_generado` llega como entero y `mes_generado` como string de 2 caracteres ("01"–"12").
+ */
+const periodoAuditoria = (periodoRun) => {
+  if (typeof periodoRun !== "string") return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(periodoRun.trim());
+  if (!match) return null;
+  const anio = Number(match[1]);
+  const mes = Number(match[2]);
+  if (!Number.isInteger(anio) || !Number.isInteger(mes) || mes < 1 || mes > 12) return null;
+  return { anio, mes };
 };
 
-/** Pagos del GET listado que corresponden a la misma cobertura/cliente/póliza que la fila del reporte. */
-const filterPagosListForCoberturaRow = (list, cobertura) => {
+/** Período generado del cobro. No usa `fecha_pago`. */
+const periodoGeneradoPago = (pago) => {
+  if (pago == null || pago.anio_generado == null || pago.anio_generado === "") return null;
+  if (pago.mes_generado == null || String(pago.mes_generado).trim() === "") return null;
+  const anio = Number(pago.anio_generado);
+  const mes = Number(String(pago.mes_generado).trim());
+  if (!Number.isInteger(anio) || !Number.isInteger(mes) || mes < 1 || mes > 12) return null;
+  return { anio, mes };
+};
+
+const idNumerico = (value) => {
+  if (value == null || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
+/** ID de la cobertura de la fila. No sustituye por `id` del ítem, cliente ni póliza. */
+const coberturaIdFila = (cobertura) => idNumerico(cobertura?.cobertura_id);
+
+/**
+ * ID de cobertura del cobro. Si la columna y la relación discrepan, no hay identidad inequívoca.
+ */
+const coberturaIdPago = (pago) => {
+  const directo = idNumerico(pago?.cobertura_id);
+  const anidado = idNumerico(pago?.cobertura?.id);
+  if (directo != null && anidado != null && directo !== anidado) return null;
+  return directo ?? anidado;
+};
+
+const pagoEsDeCoberturaYPeriodo = (pago, coberturaId, periodo) => {
+  if (coberturaId == null || !periodo) return false;
+  const pagoCoberturaId = coberturaIdPago(pago);
+  if (pagoCoberturaId == null || pagoCoberturaId !== coberturaId) return false;
+  const generado = periodoGeneradoPago(pago);
+  if (!generado) return false;
+  return generado.anio === periodo.anio && generado.mes === periodo.mes;
+};
+
+const buildPagoRowResolver = (includePagosEnabled, pagosPorEntidad) => (c) => {
+  if (!includePagosEnabled) return null;
+  const coberturaId = coberturaIdFila(c);
+  if (coberturaId == null) return null;
+  return pagosPorEntidad[`cobertura:${coberturaId}`] ?? null;
+};
+
+/**
+ * Cobros del listado que pertenecen a esta cobertura.
+ * Con `periodo`, exige además `anio_generado` y `mes_generado`.
+ * Sin cobertura identificable, o con período pedido pero desconocido, no hay coincidencias.
+ */
+const filterPagosListForCoberturaRow = (list, cobertura, periodo) => {
   if (!Array.isArray(list) || !cobertura) return [];
-  const cid = cobertura.cobertura_id ?? cobertura.id ?? null;
-  const clid = cobertura.cliente_id ?? null;
-  const codigoPoliza = cobertura.codigo_poliza ? String(cobertura.codigo_poliza).trim() : "";
-  return list.filter((p) => {
-    const pCob = p?.cobertura?.id ?? p?.cobertura_id ?? null;
-    const pCli = p?.cliente?.id ?? p?.cliente_id ?? null;
-    const pCodRaw = p?.cobertura?.codigo_poliza ?? p?.codigo_poliza ?? null;
-    const pCod = pCodRaw != null ? String(pCodRaw).trim() : "";
-    if (cid != null && pCob != null && Number(pCob) === Number(cid)) return true;
-    if (clid != null && pCli != null && Number(pCli) === Number(clid)) return true;
-    if (codigoPoliza && pCod && pCod === codigoPoliza) return true;
-    return false;
+  const coberturaId = coberturaIdFila(cobertura);
+  if (coberturaId == null) return [];
+  if (periodo === null) return [];
+  return list.filter((pago) => {
+    if (coberturaIdPago(pago) !== coberturaId) return false;
+    if (periodo === undefined) return true;
+    return pagoEsDeCoberturaYPeriodo(pago, coberturaId, periodo);
   });
 };
 
@@ -541,25 +582,14 @@ const AuditoriaRunDetallePage = () => {
       const list = Array.isArray(pagos) ? pagos : pagos?.data || [];
       setPagosListadoCompleto(Array.isArray(list) ? list : []);
 
-      let candidatos = list;
-      if (periodoRun) {
-        const prefix = `${periodoRun}-`;
-        candidatos = list.filter(
-          (p) => typeof p?.fecha_pago === "string" && p.fecha_pago.startsWith(prefix)
-        );
-      }
-
-      // Mapear por entidad: prioridad cobertura_id, luego cliente_id, luego código póliza.
+      // Solo el cobro de esa cobertura en el período generado de la auditoría.
+      const periodo = periodoAuditoria(periodoRun);
       const map = {};
-      for (const p of candidatos) {
-        const coberturaId = p?.cobertura?.id || p?.cobertura_id || null;
-        const clienteId = p?.cliente?.id || p?.cliente_id || null;
-        const codigoPoliza = p?.cobertura?.codigo_poliza || p?.codigo_poliza || null;
-        if (coberturaId != null) map[`cobertura:${coberturaId}`] = p;
-        if (clienteId != null) map[`cliente:${clienteId}`] = map[`cliente:${clienteId}`] || p;
-        if (codigoPoliza) {
-          const key = `poliza:${String(codigoPoliza).trim()}`;
-          map[key] = map[key] || p;
+      if (periodo) {
+        for (const p of list) {
+          const coberturaId = coberturaIdPago(p);
+          if (!pagoEsDeCoberturaYPeriodo(p, coberturaId, periodo)) continue;
+          map[`cobertura:${coberturaId}`] = p;
         }
       }
       setPagosPorEntidad(map);
@@ -615,7 +645,13 @@ const AuditoriaRunDetallePage = () => {
         const pagos = await apiRequest("cobertura/pagos/listado", "GET");
         const list = Array.isArray(pagos) ? pagos : pagos?.data || [];
         const arr = Array.isArray(list) ? list : [];
-        const items = filterPagosListForCoberturaRow(arr, cobertura).sort((a, b) => {
+        const periodo = periodoAuditoria(periodoRun);
+        const items = filterPagosListForCoberturaRow(arr, cobertura).flatMap((pago) => {
+          const generado = periodoGeneradoPago(pago);
+          if (!periodo || !generado || generado.anio !== periodo.anio) return [];
+          // El modal es anual: agrupar por el período generado sin modificar el cobro original.
+          return [{ ...pago, fecha_pago: `${generado.anio}-${String(generado.mes).padStart(2, "0")}-01` }];
+        }).sort((a, b) => {
           const ta = parseDateMs(a?.fecha_pago) ?? 0;
           const tb = parseDateMs(b?.fecha_pago) ?? 0;
           return tb - ta;
@@ -628,7 +664,7 @@ const AuditoriaRunDetallePage = () => {
         console.error("Error al cargar pagos del cliente:", err);
       }
     },
-    [toast]
+    [toast, periodoRun]
   );
 
   useEffect(() => {
@@ -1288,14 +1324,19 @@ const AuditoriaRunDetallePage = () => {
     const seen = new Set();
     const filasReporte = Array.isArray(coberturasTrasFiltroGf) ? coberturasTrasFiltroGf : [];
     for (const c of filasReporte) {
-      const entityId = c?.cobertura_id || c?.cliente_id;
-      const k =
-        entityId != null
-          ? `id:${entityId}`
-          : `pol:${String(c?.codigo_poliza ?? "").trim()}`;
-      if (k === "pol:" || seen.has(k)) continue;
+      const coberturaId = coberturaIdFila(c);
+      if (coberturaId == null) continue;
+      const k = `cobertura:${coberturaId}`;
+      if (seen.has(k)) continue;
       seen.add(k);
-      const filtered = filterPagosListForCoberturaRow(pagosListadoCompleto, c);
+      const periodo = periodoAuditoria(periodoRun);
+      const filtered = filterPagosListForCoberturaRow(pagosListadoCompleto, c).flatMap((pago) => {
+        const generado = periodoGeneradoPago(pago);
+        if (periodo == null || generado == null || generado.anio !== periodo.anio) return [];
+        const mes = String(generado.mes).padStart(2, "0");
+        // Copia solo para el indicador anual, que agrupa por fecha_pago. No se guarda.
+        return [{ ...pago, fecha_pago: `${generado.anio}-${mes}-01` }];
+      });
       const { porMes } = agruparPagosPorMesEnAnio(filtered, periodoRun);
       map.set(k, indicadorMorosidadPagosPorMes(porMes));
     }
@@ -1689,24 +1730,10 @@ const AuditoriaRunDetallePage = () => {
                       const estaExpandido = taskUiKey ? itemsConTareasExpandidos[taskUiKey] : false;
                       const estaCargandoTareas = taskUiKey ? loadingTareas[taskUiKey] : false;
 
-                      const pagoRelacionado = (() => {
-                        if (!includePagosEnabled) return null;
-                        const coberturaId = cobertura?.cobertura_id ?? cobertura?.id ?? null;
-                        const clienteId = cobertura?.cliente_id ?? null;
-                        const codigoPoliza = cobertura?.codigo_poliza
-                          ? String(cobertura.codigo_poliza).trim()
-                          : "";
-                        if (coberturaId != null && pagosPorEntidad[`cobertura:${coberturaId}`]) {
-                          return pagosPorEntidad[`cobertura:${coberturaId}`];
-                        }
-                        if (clienteId != null && pagosPorEntidad[`cliente:${clienteId}`]) {
-                          return pagosPorEntidad[`cliente:${clienteId}`];
-                        }
-                        if (codigoPoliza && pagosPorEntidad[`poliza:${codigoPoliza}`]) {
-                          return pagosPorEntidad[`poliza:${codigoPoliza}`];
-                        }
-                        return null;
-                      })();
+                      const pagoRelacionado = buildPagoRowResolver(
+                        includePagosEnabled,
+                        pagosPorEntidad
+                      )(cobertura);
 
                       const pendienteAuditoriaAnterior = filaPendienteAuditoriaAnterior(cobertura);
                       const tituloPendienteAudAnt = tituloPendienteAuditoriaAnterior(cobertura);
@@ -1821,7 +1848,7 @@ const AuditoriaRunDetallePage = () => {
                                 <span className="text-muted">-</span>
                               )
                             ) : (
-                              <span className="text-muted">-</span>
+                              <span className="text-muted">—</span>
                             )}
                           </td>
                         )}
@@ -1854,7 +1881,7 @@ const AuditoriaRunDetallePage = () => {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-muted">-</span>
+                              <span className="text-muted">—</span>
                             )}
                           </td>
                         )}
@@ -1863,12 +1890,14 @@ const AuditoriaRunDetallePage = () => {
                             {loadingPagos ? (
                               <span className="text-muted small">…</span>
                             ) : (() => {
-                              const eid = cobertura.cobertura_id || cobertura.cliente_id;
-                              const moraKey =
-                                eid != null
-                                  ? `id:${eid}`
-                                  : `pol:${String(cobertura.codigo_poliza || "").trim()}`;
-                              const ind = indicadorMoraPorCoberturaKey.get(moraKey);
+                              if (!pagoRelacionado) {
+                                return <span className="text-muted small">—</span>;
+                              }
+                              const coberturaId = coberturaIdFila(cobertura);
+                              const ind =
+                                coberturaId != null
+                                  ? indicadorMoraPorCoberturaKey.get(`cobertura:${coberturaId}`)
+                                  : null;
                               if (!ind || ind.nivel === "sin_datos" || ind.nivel === "sin_generacion") {
                                 return (
                                   <span className="text-muted small" title={ind?.titulo}>
