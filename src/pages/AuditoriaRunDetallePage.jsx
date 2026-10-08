@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom";
 import { Table, Button, Badge, Alert, Spinner, Form, Modal } from "react-bootstrap";
 import { Helmet } from "react-helmet-async";
+import "../styles/AuditoriaRunDetallePage.css";
 import {
   FaSort,
   FaSortUp,
@@ -1344,7 +1345,7 @@ const AuditoriaRunDetallePage = () => {
   }, [includePagosEnabled, pagosListadoCompleto, coberturasTrasFiltroGf, periodoRun]);
   
   return (
-    <div className="container-fluid py-4">
+    <div className="container-fluid auditoria-detalle">
       <Helmet>
         <title>
           {[
@@ -1359,8 +1360,8 @@ const AuditoriaRunDetallePage = () => {
         </title>
       </Helmet>
       
-      <div className="card border-0 shadow-sm mb-4 overflow-hidden">
-        <div className="border-start border-primary border-4 bg-white">
+      <div className="card auditoria-detalle__header mb-4 overflow-hidden">
+        <div className="auditoria-detalle__header-content">
           <div className="px-4 py-4">
             {loadingRunInfo ? (
               <div className="d-flex align-items-center gap-3 py-2">
@@ -1473,7 +1474,7 @@ const AuditoriaRunDetallePage = () => {
       </div>
       
       {/* Filtros */}
-      <div className="card mb-4">
+      <div className="card auditoria-detalle__filters mb-4">
         <div className="card-header">
           <h5 className="mb-0">Filtros</h5>
         </div>
@@ -1588,7 +1589,7 @@ const AuditoriaRunDetallePage = () => {
       )}
       
       {/* Tabla */}
-      <div className="card">
+      <div className="card auditoria-detalle__report">
         <div className="card-header d-flex justify-content-between align-items-center">
           <h5 className="mb-0">Coberturas</h5>
           {meta.total > 0 && (
@@ -1624,7 +1625,7 @@ const AuditoriaRunDetallePage = () => {
             </Alert>
           ) : (
             <>
-              <div className="table-responsive">
+              <div className="table-responsive auditoria-detalle__table-wrap">
                 <Table striped bordered hover>
                   <thead>
                     <tr>

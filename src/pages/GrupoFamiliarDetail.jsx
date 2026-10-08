@@ -24,6 +24,7 @@ import {
   attachCoberturaDirtyFieldsForLegacy,
   buildDeltaCambiosFromPayloads,
 } from "../utils/grupoFamiliarConcurrentSave";
+import { mapaPreciosGuardados } from "../utils/aplicarPrecioCobros";
 import "../styles/GrupoFamiliarDetail.css";
 
 import { resolveClienteTelefonos, toApiPhones } from "../utils/phone-mappers";
@@ -1097,6 +1098,14 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [showHistorialRenovacionesAnio, setShowHistorialRenovacionesAnio] =
     useState(false);
   const esAnioPasado = periodoRelativo === "pasado";
+  const preciosGuardados = useMemo(() => {
+    if (isEditing) {
+      return editBaseline?.familyMembers
+        ? mapaPreciosGuardados(editBaseline.familyMembers)
+        : null;
+    }
+    return mapaPreciosGuardados(familyMembers);
+  }, [isEditing, editBaseline, familyMembers]);
 
   // Presencia al abrir el grupo (informativo: quién lo está visualizando).
   // El guardado usa payload legacy completo; la presencia no debe cambiar el modo de save.
@@ -2497,6 +2506,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           canAdd={canAddMember}
           isProspecto={isProspecto}
           anioConsultado={anioConsultado}
+          preciosGuardados={preciosGuardados}
           defaultCoberturaTipo={
             productoCotizacion?.label ||
             getProductoFromCoberturas(formData?.coberturas || [])?.label ||

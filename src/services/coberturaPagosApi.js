@@ -52,6 +52,28 @@ export async function fetchPagosGrupoFamiliar(grupoFamiliarId, anio) {
  * Listado de cobros de un período. Mes y año son obligatorios.
  * GET /cobertura/pagos/listado?anio=YYYY&mes=MM
  */
+/**
+ * Revisión para aplicar el precio guardado de una cobertura.
+ * GET /cobertura/pagos/aplicar-precio/revision
+ */
+export async function fetchRevisionAplicarPrecio({ coberturaId, grupoFamiliarId, anio }) {
+  const params = new URLSearchParams({
+    cobertura_id: String(coberturaId),
+    grupo_familiar_id: String(grupoFamiliarId),
+    anio: String(anio),
+  });
+  const res = await apiRequest(`cobertura/pagos/aplicar-precio/revision?${params.toString()}`, "GET");
+  return res?.data ?? res ?? {};
+}
+
+/**
+ * Aplica el precio persistido a un lote de cobros. El importe lo resuelve el servidor.
+ * POST /cobertura/pagos/aplicar-precio
+ */
+export async function aplicarPrecioACobros(body) {
+  return apiRequest("cobertura/pagos/aplicar-precio", "POST", body);
+}
+
 export async function fetchListadoPagosPeriodo(anio, mes) {
   const mesNorm = String(mes).padStart(2, "0");
   const params = new URLSearchParams({

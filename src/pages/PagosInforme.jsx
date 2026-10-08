@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import {
@@ -24,10 +24,20 @@ import { saveAs } from "file-saver";
 import * as XLSX from "xlsx";
 import apiRequest from "../services/api";
 import { renderClienteLink } from "./ListaClientes";
+import ActualizarEstadoPagoInformeModal from "../components/ActualizarEstadoPagoInformeModal";
+import useMenuVisibility from "../hooks/useMenuVisibility";
 import { filasInformePagos } from "../utils/informePagosCobertura";
 import { detalleSnapshotCobro } from "../utils/pagosGrupoFamiliarConsulta";
 import { indicadorMorosidadPagosPorMes, pickEstadoFechaActualizacionPago } from "../utils/pagosMorosidad";
 import { formatDateForDisplay } from "../utils/formatters";
+import { etiquetaMes } from "../utils/periodoCobros";
+import {
+  ESTADOS_INFORME_PAGO,
+  paginaTrasConsulta,
+  prepararActualizacionEstadoInforme,
+  puedeEditarEstadoInforme,
+  reflejarEstadoGuardado,
+} from "../utils/informePagosEstado";
 import {
   crearLibroInformePagos,
   fechaDescargaLocal,
@@ -79,45 +89,160 @@ const renderSituacion = (pagosPorMes) => {
   );
 };
 
+const textoCobertura = (fila) =>
+  [fila.codigo_poliza, fila.compania, fila.plan].filter(Boolean).join(" · ") || "—";
+
+const montoCobro = (monto) => {
+  const numero = Number(monto);
+  return Number.isFinite(numero) ? `$${numero.toFixed(2)}` : "—";
+};
+
 const PagosInforme = () => {
+  const { isVisible, canPreviewHidden } = useMenuVisibility();
+  const puedeEditar = puedeEditarEstadoInforme({
+    moduloActualizacionVisible: isVisible("pagos.actualizar"),
+    puedeAbrirModuloOculto: canPreviewHidden,
+  });
   const [loading, setLoading] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [pagos, setPagos] = useState([]);
   const [alerta, setAlerta] = useState({ show: false, variant: "", mensaje: "" });
   const [filtros, setFiltros] = useState({ cliente: "", compania: "", estado: "", anio: new Date().getFullYear() });
   const [currentPage, setCurrentPage] = useState(1);
+  const [edicion, setEdicion] = useState(null);
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState("");
+  const [guardandoEstado, setGuardandoEstado] = useState(false);
+  const [errorEstado, setErrorEstado] = useState("");
+  const solicitudEstadoRef = useRef(0);
+  const guardandoEstadoRef = useRef(false);
   const rowsPerPage = 10;
 
-  const mostrarAlerta = (mensaje, tipo = "success", duracion = 5000) => {
+  const mostrarAlerta = useCallback((mensaje, tipo = "success", duracion = 5000) => {
     setAlerta({ show: true, variant: tipo, mensaje });
     setTimeout(() => setAlerta({ show: false, variant: "", mensaje: "" }), duracion);
-  };
+  }, []);
 
-  const fetchPagos = async () => {
+  const fetchPagos = useCallback(async ({ mostrarCarga = true } = {}) => {
+    if (mostrarCarga) setLoading(true);
     try {
-      setLoading(true);
       const response = await apiRequest("cobertura/pagos/listado?informe_anual=1", "GET");
       const raw = response?.data != null ? response.data : response;
-      setPagos(Array.isArray(raw) ? raw : []);
+      const lista = Array.isArray(raw) ? raw : [];
+      setPagos(lista);
+      return lista;
     } catch (err) {
       console.error("Error al cargar pagos:", err);
-      mostrarAlerta("Error al cargar los pagos", "danger");
+      if (mostrarCarga) mostrarAlerta("Error al cargar los pagos", "danger");
+      throw err;
     } finally {
-      setLoading(false);
+      if (mostrarCarga) setLoading(false);
     }
-  };
+  }, [mostrarAlerta]);
 
   useEffect(() => {
-    fetchPagos();
+    fetchPagos().catch(() => {});
+  }, [fetchPagos]);
+
+  useEffect(() => () => {
+    solicitudEstadoRef.current += 1;
   }, []);
+
+  const rows = filasInformePagos(pagos, filtros);
+  const paginaVisible = paginaTrasConsulta(currentPage, rows.length, rowsPerPage);
+
+  useEffect(() => {
+    setCurrentPage((pagina) => paginaTrasConsulta(pagina, rows.length, rowsPerPage));
+  }, [rows.length]);
+
+  const abrirEdicion = (fila, cobro, mesIndex) => {
+    if (!puedeEditar || cobro?.id == null || guardandoEstadoRef.current) return;
+    solicitudEstadoRef.current += 1;
+    guardandoEstadoRef.current = false;
+    setGuardandoEstado(false);
+    setErrorEstado("");
+    const estado = String(cobro.estado || "").toLowerCase();
+    setEstadoSeleccionado(ESTADOS_INFORME_PAGO.some((item) => item.value === estado) ? estado : "");
+    setEdicion({
+      pagoId: cobro.id,
+      estadoActual: estado,
+      monto: montoCobro(cobro.monto),
+      cliente: fila.cliente || "—",
+      cobertura: textoCobertura(fila),
+      grupo: fila.grupo_familiar_id ?? "—",
+      periodo: `${etiquetaMes(mesIndex + 1)} ${filtros.anio}`,
+    });
+  };
+
+  const cerrarEdicion = () => {
+    if (guardandoEstadoRef.current) return;
+    solicitudEstadoRef.current += 1;
+    guardandoEstadoRef.current = false;
+    setEdicion(null);
+    setErrorEstado("");
+    setEstadoSeleccionado("");
+  };
+
+  const cambiarEstadoSeleccionado = (estado) => {
+    if (guardandoEstadoRef.current) return;
+    setEstadoSeleccionado(estado);
+    setErrorEstado("");
+  };
+
+  const guardarEstado = async () => {
+    if (!edicion || guardandoEstadoRef.current) return;
+    const preparado = prepararActualizacionEstadoInforme({
+      pagoId: edicion.pagoId,
+      estadoActual: edicion.estadoActual,
+      estadoNuevo: estadoSeleccionado,
+    });
+    if (!preparado.enviar) return;
+
+    const solicitud = ++solicitudEstadoRef.current;
+    guardandoEstadoRef.current = true;
+    setGuardandoEstado(true);
+    setErrorEstado("");
+
+    try {
+      await apiRequest(preparado.path, "PUT", preparado.body);
+      if (solicitud !== solicitudEstadoRef.current) return;
+
+      try {
+        await fetchPagos({ mostrarCarga: false });
+        if (solicitud !== solicitudEstadoRef.current) return;
+        setEdicion(null);
+        setEstadoSeleccionado("");
+        mostrarAlerta("Estado del pago actualizado correctamente.");
+      } catch (errorRecarga) {
+        if (solicitud !== solicitudEstadoRef.current) return;
+        console.error("El estado se guardó, pero falló la recarga del informe:", errorRecarga);
+        setPagos((prev) => reflejarEstadoGuardado(prev, edicion.pagoId, preparado.body.estado));
+        setEdicion(null);
+        setEstadoSeleccionado("");
+        mostrarAlerta(
+          "El estado se guardó, pero no se pudo recargar el informe. Pulsa Actualizar para sincronizar el listado.",
+          "warning",
+          8000
+        );
+      }
+    } catch (err) {
+      if (solicitud !== solicitudEstadoRef.current) return;
+      console.error("Error al actualizar el estado del pago:", err);
+      setErrorEstado(
+        `${err?.message || "No se pudo actualizar el estado del pago."} El cobro conserva el estado anterior.`
+      );
+    } finally {
+      if (solicitud === solicitudEstadoRef.current) {
+        guardandoEstadoRef.current = false;
+        setGuardandoEstado(false);
+      }
+    }
+  };
 
   const handleFiltroChange = (e) => {
     const { name, value } = e.target;
     setFiltros((prev) => ({ ...prev, [name]: value }));
     setCurrentPage(1);
   };
-
-  const rows = filasInformePagos(pagos, filtros);
 
   const descargarExcel = () => {
     if (loading || exportando || rows.length === 0) return;
@@ -138,9 +263,9 @@ const PagosInforme = () => {
     }
   };
   const totalPages = Math.ceil(rows.length / rowsPerPage);
-  const currentRows = rows.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
-  const indexInicio = rows.length === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
-  const indexFin = Math.min(currentPage * rowsPerPage, rows.length);
+  const currentRows = rows.slice((paginaVisible - 1) * rowsPerPage, paginaVisible * rowsPerPage);
+  const indexInicio = rows.length === 0 ? 0 : (paginaVisible - 1) * rowsPerPage + 1;
+  const indexFin = Math.min(paginaVisible * rowsPerPage, rows.length);
 
   return (
     <Container fluid className="gf-listado-container py-3 pagos-informe">
@@ -180,7 +305,7 @@ const PagosInforme = () => {
             <Button
               size="sm"
               className="gf-listado__btn-ghost"
-              onClick={fetchPagos}
+              onClick={() => fetchPagos().catch(() => {})}
               disabled={loading}
             >
               <FaSyncAlt className={loading ? "fa-spin me-1" : "me-1"} />
@@ -349,7 +474,22 @@ const PagosInforme = () => {
                                     const fecha = pickEstadoFechaActualizacionPago(cobro);
                                     return (
                                       <div key={cobro.id} className="pagos-informe__celda">
-                                        <span className={`pagos-informe__estado ${getEstadoCeldaClass(cobro.estado)}`}>{cobro.estado}</span>
+                                        {puedeEditar ? (
+                                          <button
+                                            type="button"
+                                            className={`pagos-informe__estado pagos-informe__estado-btn ${getEstadoCeldaClass(cobro.estado)}`}
+                                            onClick={() => abrirEdicion(fila, cobro, idx)}
+                                            disabled={guardandoEstado}
+                                            aria-haspopup="dialog"
+                                            aria-label={`Actualizar estado del cobro ${cobro.id}, estado actual ${cobro.estado}`}
+                                          >
+                                            {cobro.estado}
+                                          </button>
+                                        ) : (
+                                          <span className={`pagos-informe__estado ${getEstadoCeldaClass(cobro.estado)}`}>
+                                            {cobro.estado}
+                                          </span>
+                                        )}
                                         <OverlayTrigger trigger={["hover", "focus"]} placement="auto" overlay={
                                           <Popover id={`snapshot-cobro-${cobro.id}`}>
                                             <Popover.Header as="h3">{detalle.titulo}</Popover.Header>
@@ -385,19 +525,19 @@ const PagosInforme = () => {
                       variant="outline-secondary"
                       size="sm"
                       className="gf-listado__btn-icon"
-                      disabled={currentPage <= 1}
+                      disabled={paginaVisible <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                     >
                       Anterior
                     </Button>
                     <span className="pagos-informe__page-indicator">
-                      Página {currentPage} de {totalPages}
+                      Página {paginaVisible} de {totalPages}
                     </span>
                     <Button
                       variant="outline-secondary"
                       size="sm"
                       className="gf-listado__btn-icon"
-                      disabled={currentPage >= totalPages}
+                      disabled={paginaVisible >= totalPages}
                       onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                     >
                       Siguiente
@@ -409,6 +549,15 @@ const PagosInforme = () => {
           </div>
         </div>
       </div>
+      <ActualizarEstadoPagoInformeModal
+        seleccion={edicion}
+        estadoSeleccionado={estadoSeleccionado}
+        guardando={guardandoEstado}
+        error={errorEstado}
+        onCambiarEstado={cambiarEstadoSeleccionado}
+        onCancel={cerrarEdicion}
+        onGuardar={guardarEstado}
+      />
     </Container>
   );
 };

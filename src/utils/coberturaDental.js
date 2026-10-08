@@ -12,6 +12,7 @@ const date10 = (v) => (v ? String(v).slice(0, 10) : "");
 /** Campos de cobertura (salud o dental) desde API */
 export const mapCoberturaApiToFields = (cov = {}) => ({
   cobertura_id: cov.id ?? null,
+  grupo_familiar_id: cov.grupo_familiar_id ?? null,
   estado_cobertura: cov.estado_cobertura || "Sí",
   cobertura_tipo: cov.cobertura_tipo || "Plan de salud",
   ano_cobertura: cov.ano_cobertura || new Date().getFullYear(),

@@ -25,6 +25,8 @@ import MediosPagoSection from "../MediosPagoSection";
 import HistorialPlanCoberturaModal from "../coberturas/HistorialPlanCoberturaModal";
 import HistorialCambiosModal from "../Reports/HistorialCambiosModal";
 import CoveragePriceInput from "../common/CoveragePriceInput";
+import AplicarPrecioCobrosModal from "../AplicarPrecioCobrosModal";
+import { estadoBotonAplicarPrecio } from "../../utils/aplicarPrecioCobros";
 import CoberturaDeleteButton from "./CoberturaDeleteButton";
 import CoberturaAnularButton from "./CoberturaAnularButton";
 import AgregarDentalModal from "./AgregarDentalModal";
@@ -295,6 +297,67 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
 const toValidId = (value) => {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : null;
+};
+
+const precioDigitadoDe = (members, solicitud) => {
+  const id = Number(solicitud?.coberturaId);
+  for (const member of members || []) {
+    if (Number(member?.cobertura_id) === id) return member?.precio;
+    if (Number(member?.coberturaDental?.cobertura_id) === id) {
+      return member?.coberturaDental?.precio;
+    }
+  }
+  return solicitud?.precioDigitado;
+};
+
+const BotonAplicarPrecioCobros = ({
+  source,
+  persona,
+  grupoVistaId,
+  preciosGuardados,
+  onAbrir,
+}) => {
+  const estado = estadoBotonAplicarPrecio({
+    coberturaId: source?.cobertura_id,
+    precioDigitado: source?.precio,
+    preciosGuardados,
+  });
+  const grupo = toValidId(source?.grupo_familiar_id) ?? toValidId(grupoVistaId);
+  const anio = Number(String(source?.ano_cobertura ?? "").trim());
+  const anioValido = Number.isInteger(anio) && anio > 1900 && anio < 2100;
+  const puedeAbrir = estado.habilitado && Boolean(grupo) && anioValido;
+  let explicacion = estado.explicacion;
+  if (estado.habilitado && !grupo) {
+    explicacion = "Esta cobertura no tiene el grupo familiar al que pertenece.";
+  } else if (estado.habilitado && !anioValido) {
+    explicacion = "La cobertura no tiene un año fiscal válido.";
+  }
+
+  return (
+    <div className="mt-1">
+      <button
+        type="button"
+        className="btn btn-link btn-sm text-secondary text-decoration-none py-0 px-0"
+        disabled={!puedeAbrir}
+        aria-disabled={!puedeAbrir}
+        onClick={() => {
+          if (!puedeAbrir) return;
+          onAbrir({
+            token: Date.now(),
+            coberturaId: toValidId(source.cobertura_id),
+            grupoFamiliarId: grupo,
+            anio,
+            persona: persona || "",
+            cobertura: source?.cobertura_tipo || "",
+            precioDigitado: source?.precio,
+          });
+        }}
+      >
+        Aplicar precio a cobros
+      </button>
+      {explicacion ? <div className="small text-muted">{explicacion}</div> : null}
+    </div>
+  );
 };
 
 /** Acceso discreto al detalle de historial de una cobertura (reutiliza HistorialCambiosModal). */
@@ -859,6 +922,8 @@ const TomaDeDatos = ({
   onDerivedCounts,
   /** Año de la vista del GF (histórico / actual / futuro). Controla Dental MS. */
   anioConsultado = null,
+  /** Precios persistidos por cobertura_id. Null si la vista no tiene una línea base. */
+  preciosGuardados = null,
 }) => {
   const [openModal, setOpenModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
@@ -874,6 +939,7 @@ const TomaDeDatos = ({
   });
   // Una sola instancia del modal de detalle de cobertura (salud / dental / privado)
   const [coberturaHistorialAbierta, setCoberturaHistorialAbierta] = useState(null);
+  const [aplicarPrecio, setAplicarPrecio] = useState(null);
   // Estado para mantener valores visuales temporales de dinero (formato con miles)
   const [moneyDisplay, setMoneyDisplay] = useState({});
   // Estado para controlar la visualización de miembros retirados
@@ -3022,6 +3088,13 @@ const activeNormalized = useMemo(
                                   disabled={isReadOnly}
                                   className="form-control form-control-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                 />
+                                <BotonAplicarPrecioCobros
+                                  source={m}
+                                  persona={m.nombreCompleto || m.nombre_completo}
+                                  grupoVistaId={grupoFamiliarId}
+                                  preciosGuardados={preciosGuardados}
+                                  onAbrir={setAplicarPrecio}
+                                />
                               </ConfigField>
                             )}
 
@@ -3458,6 +3531,13 @@ const activeNormalized = useMemo(
                                 disabled={isDentalReadOnly}
                                 className="form-control form-control-sm"
                               />
+                              <BotonAplicarPrecioCobros
+                                source={d}
+                                persona={m.nombreCompleto || m.nombre_completo}
+                                grupoVistaId={toValidId(d.grupo_familiar_id) ?? toValidId(m.grupo_familiar_id) ?? grupoFamiliarId}
+                                preciosGuardados={preciosGuardados}
+                                onAbrir={setAplicarPrecio}
+                              />
                             </ConfigField>
                           )}
                           {d.fecha_cancelacion && (
@@ -3714,6 +3794,18 @@ const activeNormalized = useMemo(
         readOnly={readOnly}
         onReabierta={handleDentalReabierta}
         onPlanesRecuperados={handlePlanesRecuperados}
+      />
+
+      <AplicarPrecioCobrosModal
+        solicitud={
+          aplicarPrecio
+            ? {
+                ...aplicarPrecio,
+                precioDigitado: precioDigitadoDe(familyMembers, aplicarPrecio),
+              }
+            : null
+        }
+        onCerrar={() => setAplicarPrecio(null)}
       />
 
       {coberturaHistorialAbierta?.id && (
