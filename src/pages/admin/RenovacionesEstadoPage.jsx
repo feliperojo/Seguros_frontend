@@ -27,6 +27,7 @@ import CierresFiscalesPanel from "../../components/GrupoFamiliar/CierresFiscales
 import { Helmet } from "react-helmet-async";
 import apiRequest from "../../services/api";
 import PreRenovacionModal from "../../components/GrupoFamiliar/PreRenovacionModal";
+import ImportarPreRenovacionModal from "../../components/GrupoFamiliar/ImportarPreRenovacionModal";
 import ConsolidarTodosModal from "../../components/GrupoFamiliar/ConsolidarTodosModal";
 import {
   estadoGestionBadge,
@@ -172,6 +173,7 @@ const RenovacionesEstadoPage = () => {
     page: 1,
   });
   const [grupoSeleccionado, setGrupoSeleccionado] = useState(null);
+  const [grupoImportacion, setGrupoImportacion] = useState(null);
   const [showConsolidarTodos, setShowConsolidarTodos] = useState(false);
   const [resumenEstados, setResumenEstados] = useState(RESUMEN_ESTADOS_VACIO);
   const [resumenGestion, setResumenGestion] = useState({});
@@ -783,6 +785,19 @@ const RenovacionesEstadoPage = () => {
                                       Generar pre-renovación
                                     </Dropdown.Item>
                                   )}
+                                  {(fila.estado_renovacion === "pendiente" ||
+                                    fila.estado_renovacion === "borrador") && (
+                                    <Dropdown.Item
+                                      onClick={() =>
+                                        setGrupoImportacion({
+                                          id: fila.id,
+                                          tomadorNombre: fila.tomador_nombre,
+                                        })
+                                      }
+                                    >
+                                      Importar pre-renovación desde Excel
+                                    </Dropdown.Item>
+                                  )}
                                   {fila.estado_renovacion === "borrador" && (
                                     <Dropdown.Item
                                       onClick={() =>
@@ -856,6 +871,17 @@ const RenovacionesEstadoPage = () => {
         onAfterConsolidar={() => {
           setGrupoSeleccionado(null);
         }}
+      />
+
+      <ImportarPreRenovacionModal
+        show={!!grupoImportacion}
+        onHide={async () => {
+          setGrupoImportacion(null);
+          if (hasConsultado) await fetchData();
+        }}
+        grupoFamiliarId={grupoImportacion?.id}
+        anioDestino={anioDestino}
+        tomadorNombre={grupoImportacion?.tomadorNombre}
       />
 
       <ConsolidarTodosModal

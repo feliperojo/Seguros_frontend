@@ -231,3 +231,144 @@
   padding: 0 !important;
   background: #fff;
 }
+
+/* Historial por secciones (solo el modal de historial) */
+.hcm-secciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.hcm-acc {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.hcm-acc--cliente > .hcm-acc__toggle {
+  background: #e8eef6;
+}
+
+.hcm-acc__toggle {
+  width: 100%;
+  border: 0;
+  padding: 0.72rem 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  text-align: left;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.hcm-acc__toggle:hover {
+  background: #f1f5f9;
+}
+
+.hcm-acc__toggle.is-open {
+  background: #eef4fb;
+  color: #0f2744;
+}
+
+.hcm-acc__icon {
+  color: #64748b;
+  width: 1rem;
+  text-align: center;
+}
+
+.hcm-acc__toggle.is-open .hcm-acc__icon {
+  color: #1a365d;
+}
+
+.hcm-acc__count {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #475569;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.45rem;
+}
+
+.hcm-acc__chevron {
+  color: #64748b;
+  font-size: 0.72rem;
+  transition: transform 0.2s ease;
+}
+
+.hcm-acc__toggle.is-open .hcm-acc__chevron {
+  transform: rotate(180deg);
+}
+
+.hcm-acc__panel {
+  padding: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.hcm-secciones--nested .hcm-acc__toggle {
+  background: #fff;
+  font-weight: 600;
+}
+
+.hcm-snap {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.hcm-snap__scroll {
+  overflow-x: auto;
+}
+
+.hcm-snap table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.78rem;
+}
+
+.hcm-snap thead th {
+  background: #0f2744;
+  color: #fff;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  padding: 0.45rem 0.7rem;
+  position: sticky;
+  top: 0;
+}
+
+.hcm-snap td {
+  white-space: nowrap;
+  padding: 0.42rem 0.7rem;
+  border-top: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.hcm-snap__fija {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+.hcm-snap tbody tr:hover td {
+  background: #f8fafc;
+}
+
+.hcm-snap__cambio {
+  background: #dbeafe;
+  color: #1e3a8a;
+  font-weight: 600;
+}
+
+.hcm-snap tbody tr:hover td.hcm-snap__cambio {
+  background: #bfdbfe;
+}

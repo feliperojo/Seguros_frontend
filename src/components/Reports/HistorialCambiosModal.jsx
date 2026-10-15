@@ -132,6 +132,17 @@ const CLIENTE_SECCIONES = [
 
 const SECCION_OTROS = { id: "otros", label: "Otros campos" };
 
+const SECCIONES_PERSONA_HUB = [
+  { id: "principales", titulo: ETIQUETAS_SECCION_FICHA.principales },
+  { id: "migratorio", titulo: ETIQUETAS_SECCION_FICHA.migratorio },
+  { id: "contacto", titulo: ETIQUETAS_SECCION_FICHA.contacto },
+  { id: "direccion", titulo: ETIQUETAS_SECCION_FICHA.direccion },
+  { id: "empleo", titulo: ETIQUETAS_SECCION_FICHA.empleo },
+  { id: "medios_pago", titulo: "Medios de Pago" },
+];
+
+const IDS_SECCION_CLIENTE_HUB = ["principales", "migratorio", "contacto", "direccion", "empleo"];
+
 const formatModeloAfectado = (modelo) => {
   const labels = {
     GrupoFamiliar: "Grupo familiar",
@@ -813,6 +824,108 @@ const opcionesCampoHistorial = (filas) => {
   return opciones;
 };
 
+const filasDesdeEventosMedioPago = (rows = []) => {
+  const filas = [];
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const cambios = row?.cambios && typeof row.cambios === "object" ? row.cambios : {};
+    Object.keys(cambios).forEach((campo) => {
+      if (CAMPOS_IGNORAR.has(campo) || /updated|fecha_actualizacion/i.test(campo)) return;
+      const info = cambios[campo];
+      if (!info || typeof info !== "object") return;
+      if (JSON.stringify(info.anterior ?? null) === JSON.stringify(info.nuevo ?? null)) return;
+      filas.push({
+        key: `${row.id ?? "sin-id"}-${row._medioPagoId ?? "mp"}-${campo}`,
+        fecha: row.created_at || row.fecha,
+        usuario: row.usuario || "—",
+        campo,
+        medioPagoId: row._medioPagoId ?? "",
+        esCobertura: true,
+        label: getFieldLabel(campo),
+        anterior: info.anterior,
+        nuevo: info.nuevo,
+        origen: row.origen ?? null,
+        grupoFamiliarOrigenId: row.grupo_familiar_origen_id ?? null,
+        coberturaOrigenId: row.cobertura_origen_id ?? null,
+      });
+    });
+  });
+  return filas;
+};
+
+const ORDEN_COLUMNAS_COBERTURA = [
+  "compania",
+  "plan",
+  "metal",
+  "red",
+  "policy_number",
+  "codigo_poliza",
+  "agente",
+  "precio",
+  "fecha_activacion",
+  "fecha_cancelacion",
+  "nota",
+  "tipo_pago",
+  "grupo",
+  "elegibilidad",
+  "estado_cobertura",
+  "parentesco",
+  "ano_cobertura",
+  "cobertura_tipo",
+  "activo",
+  "vigente",
+];
+
+const ordenColumnaCobertura = (campo = "") => {
+  const clave = claveCampoCliente(campo);
+  const indice = ORDEN_COLUMNAS_COBERTURA.indexOf(clave);
+  return indice === -1 ? ORDEN_COLUMNAS_COBERTURA.length : indice;
+};
+
+/** Un guardado visible = misma hora y usuario, aunque vengan de eventos distintos. */
+const agruparCambiosEnLinea = (filas = [], { seccionId, incluirOrigen = false } = {}) => {
+  const grupos = new Map();
+  (Array.isArray(filas) ? filas : []).forEach((fila) => {
+    const momento = formatDateTime(fila?.fecha);
+    const usuario = fila?.usuario || "—";
+    const origen = incluirOrigen ? etiquetaFilaOrigen(fila) : "";
+    const clave = [momento, usuario, origen, fila?.medioPagoId || ""].join("|");
+    if (!grupos.has(clave)) {
+      grupos.set(clave, {
+        key: clave,
+        fecha: fila?.fecha,
+        usuario,
+        origen,
+        partes: [],
+      });
+    }
+    const grupo = grupos.get(clave);
+    const campo = fila?.campo;
+    const ya = grupo.partes.find((parte) => parte.campo === campo);
+    if (!ya) {
+      grupo.partes.push(fila);
+      return;
+    }
+    const previo = String(ya.fecha || "");
+    const actual = String(fila?.fecha || "");
+    const reemplaza = actual > previo || (actual === previo && fila?.fuente === "cobertura");
+    if (reemplaza) {
+      grupo.partes = grupo.partes.map((parte) => (parte.campo === campo ? fila : parte));
+    }
+  });
+  const comparar = (a, b) => {
+    if (seccionId) {
+      const ordenados = ordenarCamposDeSeccion([a.campo, b.campo], seccionId);
+      if (ordenados[0] !== ordenados[1]) return ordenados[0] === a.campo ? -1 : 1;
+    }
+    return ordenColumnaCobertura(a.campo) - ordenColumnaCobertura(b.campo)
+      || String(a.label || a.campo).localeCompare(String(b.label || b.campo), "es");
+  };
+  return [...grupos.values()].map((grupo) => ({
+    ...grupo,
+    partes: [...grupo.partes].sort(comparar),
+  }));
+};
+
 const filasDeHistorialSeccion = (rows, seccionId) => {
   const filas = [];
   (Array.isArray(rows) ? rows : []).forEach((row) => {
@@ -1258,6 +1371,191 @@ function vistaHistorialSeccion({
   );
 }
 
+function AcordeonHistorial({ id, titulo, icono, abierto, onToggle, conteo, variante, children }) {
+  return (
+    <div className={`hcm-acc ${variante === "cliente" ? "hcm-acc--cliente" : ""}`}>
+      <button
+        type="button"
+        className={`hcm-acc__toggle ${abierto ? "is-open" : ""}`}
+        aria-expanded={abierto}
+        aria-controls={`hcm-panel-${id}`}
+        onClick={onToggle}
+      >
+        <span className="d-flex align-items-center gap-2 min-w-0">
+          {icono && <span className="hcm-acc__icon">{icono}</span>}
+          <span className="text-truncate">{titulo}</span>
+          {conteo != null && (
+            <span className="hcm-acc__count">
+              {conteo} {conteo === 1 ? "cambio" : "cambios"}
+            </span>
+          )}
+        </span>
+        <i className="fas fa-chevron-down hcm-acc__chevron" aria-hidden="true" />
+      </button>
+      {abierto && (
+        <div id={`hcm-panel-${id}`} className="hcm-acc__panel">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EstadoCargaSeccion({ cargando, error, onReintentar, vacio, children }) {
+  if (cargando) {
+    return (
+      <div className="d-flex justify-content-center py-3">
+        <div className="spinner-border spinner-border-sm" role="status">
+          <span className="visually-hidden">Cargando cambios…</span>
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="d-flex flex-wrap align-items-center gap-2">
+        <span className="text-danger small">{error}</span>
+        {onReintentar && (
+          <button type="button" className="btn btn-outline-secondary btn-sm" onClick={onReintentar}>
+            Reintentar
+          </button>
+        )}
+      </div>
+    );
+  }
+  if (vacio) {
+    return <p className="text-muted small mb-0">Sin cambios registrados en esta sección.</p>;
+  }
+  return children;
+}
+
+function columnasDeLineasCobertura(lineas = [], seccionId) {
+  const porCampo = new Map();
+  lineas.forEach((linea) => {
+    (linea.partes || []).forEach((parte) => {
+      if (!parte?.campo || porCampo.has(parte.campo)) return;
+      porCampo.set(parte.campo, parte.label || parte.campo);
+    });
+  });
+  const columnas = [...porCampo.entries()].map(([campo, label]) => ({ campo, label }));
+  if (seccionId) {
+    const orden = ordenarCamposDeSeccion(columnas.map((columna) => columna.campo), seccionId);
+    const puesto = new Map(orden.map((campo, indice) => [campo, indice]));
+    columnas.sort((a, b) => (puesto.get(a.campo) ?? 999) - (puesto.get(b.campo) ?? 999));
+    return columnas;
+  }
+  return columnas.sort((a, b) => (
+    ordenColumnaCobertura(a.campo) - ordenColumnaCobertura(b.campo)
+    || String(a.label).localeCompare(String(b.label), "es")
+  ));
+}
+
+const valorCoberturaVacio = (valor) => valor === null || valor === undefined || valor === "";
+
+/** Cada fila muestra el dato vigente. El color queda solo en lo que cambió en ese guardado. */
+const completarSnapshotsCobertura = (lineas = []) => {
+  const lista = Array.isArray(lineas) ? lineas : [];
+  const cronologico = [...lista].sort(
+    (a, b) => new Date(a?.fecha || 0).getTime() - new Date(b?.fecha || 0).getTime()
+  );
+
+  const campos = [];
+  const vistos = new Set();
+  cronologico.forEach((linea) => {
+    (linea.partes || []).forEach((parte) => {
+      if (!parte?.campo || vistos.has(parte.campo)) return;
+      vistos.add(parte.campo);
+      campos.push(parte.campo);
+    });
+  });
+
+  const primera = {};
+  cronologico.forEach((linea, indice) => {
+    (linea.partes || []).forEach((parte) => {
+      if (!parte?.campo || primera[parte.campo]) return;
+      primera[parte.campo] = { indice, anterior: parte.anterior };
+    });
+  });
+
+  const vigente = {};
+  const valoresPorClave = new Map();
+  cronologico.forEach((linea, indice) => {
+    const cambiados = new Set();
+    (linea.partes || []).forEach((parte) => {
+      if (!parte?.campo) return;
+      vigente[parte.campo] = parte.nuevo;
+      cambiados.add(parte.campo);
+    });
+    const valores = {};
+    campos.forEach((campo) => {
+      const aunNoCambia = indice < (primera[campo]?.indice ?? Infinity);
+      valores[campo] = {
+        valor: aunNoCambia ? primera[campo]?.anterior : vigente[campo],
+        cambio: cambiados.has(campo),
+      };
+    });
+    valoresPorClave.set(linea.key, valores);
+  });
+
+  return lista.map((linea) => ({
+    ...linea,
+    valores: valoresPorClave.get(linea.key) || {},
+  }));
+};
+
+function TablaLineasCobertura({
+  lineas,
+  columnas,
+  formatear = formatValueForHistorial,
+  mostrarOrigen = false,
+}) {
+  return (
+    <div className="hcm-snap">
+      <div className="hcm-snap__scroll">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Fecha</th>
+              {mostrarOrigen && <th scope="col">Origen</th>}
+              <th scope="col">Usuario</th>
+              {columnas.map((columna) => (
+                <th key={columna.campo} scope="col">{columna.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {lineas.map((linea) => {
+              const porCampo = new Map((linea.partes || []).map((parte) => [parte.campo, parte]));
+              return (
+                <tr key={linea.key}>
+                  <td className="hcm-snap__fija">{formatDateTime(linea.fecha)}</td>
+                  {mostrarOrigen && <td>{linea.origen || ""}</td>}
+                  <td>{linea.usuario}</td>
+                  {columnas.map((columna) => {
+                    const dato = linea.valores?.[columna.campo];
+                    const parte = porCampo.get(columna.campo);
+                    const vacio = !dato || valorCoberturaVacio(dato.valor);
+                    const anterior = parte ? textoPlanoValor(parte.anterior, parte.campo) : "";
+                    return (
+                      <td
+                        key={`${linea.key}-${columna.campo}`}
+                        className={dato?.cambio ? "hcm-snap__cambio" : undefined}
+                        title={dato?.cambio ? `Antes: ${anterior || "vacío"}` : undefined}
+                      >
+                        {vacio ? "" : formatear(dato.valor, columna.campo)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 // ==================== COMPONENTE PRINCIPAL ====================
 
 export default function HistorialCambiosModal({
@@ -1297,6 +1595,20 @@ export default function HistorialCambiosModal({
   const [listaCoberturas, setListaCoberturas] = useState([]);
   const [listaLoading, setListaLoading] = useState(false);
   const [listaError, setListaError] = useState(null);
+  const [seccionesPersonaAbiertas, setSeccionesPersonaAbiertas] = useState({ cliente: true });
+  const [clienteHubCache, setClienteHubCache] = useState({
+    clienteId: null,
+    rows: null,
+    loading: false,
+    error: null,
+  });
+  const [mediosHubCache, setMediosHubCache] = useState({
+    clienteId: null,
+    rows: null,
+    loading: false,
+    error: null,
+  });
+  const [busquedaLineaCobertura, setBusquedaLineaCobertura] = useState("");
   const dialogRef = useRef(null);
   const closeBtnRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -1342,6 +1654,10 @@ export default function HistorialCambiosModal({
       distinguirFuentes: false,
     });
     cacheHistorialGrupoRef.current = { grupoId: null, rows: null };
+    setSeccionesPersonaAbiertas({ cliente: true });
+    setClienteHubCache({ clienteId: null, rows: null, loading: false, error: null });
+    setMediosHubCache({ clienteId: null, rows: null, loading: false, error: null });
+    setBusquedaLineaCobertura("");
   }, [show, modeloId, inicioConListaCoberturas]);
 
   useEffect(() => {
@@ -1357,6 +1673,105 @@ export default function HistorialCambiosModal({
     setFechaHasta("");
     setPaginaHistorial(1);
   }, [seccionEfectiva, modeloIdEfectivo, grupoFamiliarIdEfectivo]);
+
+  useEffect(() => {
+    setSeccionesPersonaAbiertas({ cliente: true });
+    setClienteHubCache({ clienteId: null, rows: null, loading: false, error: null });
+    setMediosHubCache({ clienteId: null, rows: null, loading: false, error: null });
+    setBusquedaLineaCobertura("");
+  }, [coberturaHub?.id]);
+
+  useEffect(() => {
+    if (!(hubActivo && vistaHub === "cobertura")) return undefined;
+    const clienteId = toValidModeloId(coberturaHub?.cliente_id);
+    const pideCliente = IDS_SECCION_CLIENTE_HUB.some((id) => seccionesPersonaAbiertas[id]);
+    if (!pideCliente || !clienteId) return undefined;
+    if (
+      clienteHubCache.clienteId === clienteId
+      && (clienteHubCache.loading || Array.isArray(clienteHubCache.rows))
+    ) {
+      return undefined;
+    }
+
+    setClienteHubCache({ clienteId, rows: null, loading: true, error: null });
+    apiRequest(`/historial/Cliente/${clienteId}`, "GET")
+      .then((res) => {
+        const rows = (Array.isArray(res.data) ? res.data : []).filter(esEventoIndividualCliente);
+        setClienteHubCache((prev) => (
+          prev.clienteId === clienteId
+            ? { clienteId, rows, loading: false, error: null }
+            : prev
+        ));
+      })
+      .catch((err) => {
+        console.warn("Error cargando historial del cliente en el hub:", err);
+        setClienteHubCache((prev) => (
+          prev.clienteId === clienteId
+            ? {
+              clienteId,
+              rows: [],
+              loading: false,
+              error: "No se pudo cargar el historial del cliente.",
+            }
+            : prev
+        ));
+      });
+
+    return undefined;
+  }, [
+    hubActivo,
+    vistaHub,
+    coberturaHub?.cliente_id,
+    seccionesPersonaAbiertas,
+    clienteHubCache.clienteId,
+    clienteHubCache.loading,
+    clienteHubCache.rows,
+  ]);
+
+  useEffect(() => {
+    if (!(hubActivo && vistaHub === "cobertura")) return undefined;
+    const clienteId = toValidModeloId(coberturaHub?.cliente_id);
+    if (!seccionesPersonaAbiertas.medios_pago || !clienteId) return undefined;
+    if (
+      mediosHubCache.clienteId === clienteId
+      && (mediosHubCache.loading || Array.isArray(mediosHubCache.rows))
+    ) {
+      return undefined;
+    }
+
+    setMediosHubCache({ clienteId, rows: null, loading: true, error: null });
+    obtenerHistorialMediosPago(null, clienteId)
+      .then((rows) => {
+        setMediosHubCache((prev) => (
+          prev.clienteId === clienteId
+            ? { clienteId, rows, loading: false, error: null }
+            : prev
+        ));
+      })
+      .catch((err) => {
+        console.warn("Error cargando medios de pago en el hub:", err);
+        setMediosHubCache((prev) => (
+          prev.clienteId === clienteId
+            ? {
+              clienteId,
+              rows: [],
+              loading: false,
+              error: "No se pudo cargar el historial de medios de pago.",
+            }
+            : prev
+        ));
+      });
+
+    return undefined;
+  }, [
+    hubActivo,
+    vistaHub,
+    coberturaHub?.cliente_id,
+    seccionesPersonaAbiertas.medios_pago,
+    mediosHubCache.clienteId,
+    mediosHubCache.loading,
+    mediosHubCache.rows,
+  ]);
 
   useEffect(() => {
     setPaginaHistorial(1);
@@ -1971,6 +2386,8 @@ export default function HistorialCambiosModal({
     setSelected(null);
     setHistorial([]);
     setError(null);
+    setSeccionesPersonaAbiertas({ cliente: true });
+    setBusquedaLineaCobertura("");
     setHistorialSeccion({
       key: "",
       rows: [],
@@ -2165,6 +2582,202 @@ export default function HistorialCambiosModal({
       )}
     </div>
   );
+
+  const alternarSeccionPersona = (id) => {
+    setSeccionesPersonaAbiertas((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const reintentarHistorialCliente = () => {
+    setClienteHubCache({ clienteId: null, rows: null, loading: false, error: null });
+  };
+
+  const reintentarMediosPago = () => {
+    setMediosHubCache({ clienteId: null, rows: null, loading: false, error: null });
+  };
+
+  const renderSeccionesPersonaHub = () => {
+    const clienteId = toValidModeloId(coberturaHub?.cliente_id);
+    const cacheClienteLista = clienteHubCache.clienteId === clienteId;
+    const cacheMediosLista = mediosHubCache.clienteId === clienteId;
+    const tipoCobertura = coberturaHub?.cobertura_tipo || "Salud";
+
+    const lineasDeSeccion = (filas, seccionId) => completarSnapshotsCobertura(
+      agruparCambiosEnLinea(filas, {
+        seccionId: seccionId === "medios_pago" ? undefined : seccionId,
+        incluirOrigen: true,
+      })
+    );
+
+    const conteoSeccionCliente = (seccionId) => {
+      if (
+        !cacheClienteLista
+        || clienteHubCache.loading
+        || clienteHubCache.error
+        || !Array.isArray(clienteHubCache.rows)
+      ) return null;
+      return lineasDeSeccion(
+        filasDeHistorialSeccion(filtrarHistorialPorSeccion(clienteHubCache.rows, seccionId), seccionId),
+        seccionId
+      ).length;
+    };
+
+    const filasMedios = cacheMediosLista && Array.isArray(mediosHubCache.rows)
+      ? filasDesdeEventosMedioPago(mediosHubCache.rows)
+      : null;
+    const lineasMedios = filasMedios ? lineasDeSeccion(filasMedios, "medios_pago") : null;
+
+    const lineasCobertura = completarSnapshotsCobertura(agruparCambiosEnLinea(filasSeccion));
+    const consultaLinea = busquedaLineaCobertura.trim().toLowerCase();
+    const lineasVisibles = consultaLinea
+      ? lineasCobertura.filter((linea) => {
+        const texto = [
+          formatDateTime(linea.fecha),
+          linea.usuario,
+          ...linea.partes.flatMap((parte) => [
+            parte.label,
+            parte.campo,
+            textoPlanoValor(parte.anterior, parte.campo),
+            textoPlanoValor(parte.nuevo, parte.campo),
+          ]),
+          ...Object.entries(linea.valores || {}).map(([campo, info]) => textoPlanoValor(info?.valor, campo)),
+        ].join(" ").toLowerCase();
+        return texto.includes(consultaLinea);
+      })
+      : lineasCobertura;
+
+    const renderTablaSeccion = (lineas, seccionId) => (
+      <>
+        <p className="small text-muted mb-2">
+          Cada fila es un guardado. El color marca lo que cambió; el resto es la información que ya estaba.
+        </p>
+        <TablaLineasCobertura
+          lineas={lineas}
+          columnas={columnasDeLineasCobertura(lineas, seccionId === "medios_pago" ? undefined : seccionId)}
+          formatear={seccionId === "medios_pago" ? formatValueForHistorial : renderValorSeccion}
+          mostrarOrigen
+        />
+      </>
+    );
+
+    const renderContenidoCliente = (seccionId) => {
+      if (!clienteId) {
+        return <p className="text-muted small mb-0">Esta cobertura no tiene una persona asociada.</p>;
+      }
+      const filas = cacheClienteLista && Array.isArray(clienteHubCache.rows)
+        ? filasDeHistorialSeccion(filtrarHistorialPorSeccion(clienteHubCache.rows, seccionId), seccionId)
+        : [];
+      const lineas = filas.length ? lineasDeSeccion(filas, seccionId) : [];
+      return (
+        <EstadoCargaSeccion
+          cargando={!cacheClienteLista || clienteHubCache.loading}
+          error={cacheClienteLista ? clienteHubCache.error : null}
+          onReintentar={reintentarHistorialCliente}
+          vacio={lineas.length === 0}
+        >
+          {renderTablaSeccion(lineas, seccionId)}
+        </EstadoCargaSeccion>
+      );
+    };
+
+    return (
+      <div className="hcm-secciones">
+        <AcordeonHistorial
+          id="datos-cliente"
+          titulo="Datos Cliente"
+          variante="cliente"
+          icono={<i className="fas fa-user" aria-hidden="true" />}
+          abierto={Boolean(seccionesPersonaAbiertas.cliente)}
+          onToggle={() => alternarSeccionPersona("cliente")}
+        >
+          <div className="hcm-secciones hcm-secciones--nested">
+            {SECCIONES_PERSONA_HUB.map((seccion) => (
+              <AcordeonHistorial
+                key={seccion.id}
+                id={seccion.id}
+                titulo={seccion.titulo}
+                abierto={Boolean(seccionesPersonaAbiertas[seccion.id])}
+                onToggle={() => alternarSeccionPersona(seccion.id)}
+                conteo={seccion.id === "medios_pago"
+                  ? (cacheMediosLista && !mediosHubCache.loading && !mediosHubCache.error && lineasMedios
+                    ? lineasMedios.length
+                    : null)
+                  : conteoSeccionCliente(seccion.id)}
+              >
+                {seccion.id === "medios_pago" ? (
+                  !clienteId ? (
+                    <p className="text-muted small mb-0">Esta cobertura no tiene una persona asociada.</p>
+                  ) : (
+                    <EstadoCargaSeccion
+                      cargando={!cacheMediosLista || mediosHubCache.loading}
+                      error={cacheMediosLista ? mediosHubCache.error : null}
+                      onReintentar={reintentarMediosPago}
+                      vacio={!lineasMedios || lineasMedios.length === 0}
+                    >
+                      {renderTablaSeccion(lineasMedios || [], "medios_pago")}
+                    </EstadoCargaSeccion>
+                  )
+                ) : (
+                  renderContenidoCliente(seccion.id)
+                )}
+              </AcordeonHistorial>
+            ))}
+          </div>
+        </AcordeonHistorial>
+
+        <AcordeonHistorial
+          id="cobertura"
+          titulo={`Datos de cobertura ${tipoCobertura}`}
+          icono={<i className="fas fa-shield-alt" aria-hidden="true" />}
+          abierto={Boolean(seccionesPersonaAbiertas.cobertura)}
+          onToggle={() => alternarSeccionPersona("cobertura")}
+          conteo={cargandoSeccion ? null : lineasCobertura.length}
+        >
+          {warningSeccion && <div className="alert alert-warning py-2 small">{warningSeccion}</div>}
+          <EstadoCargaSeccion
+            cargando={cargandoSeccion}
+            error={errorSeccion && lineasCobertura.length === 0 ? errorSeccion : null}
+            vacio={false}
+          >
+            <>
+              {errorSeccion && lineasCobertura.length > 0 && (
+                <div className="alert alert-warning py-2 small">{errorSeccion}</div>
+              )}
+              {lineasCobertura.length > 0 && (
+                <>
+                  <p className="small text-muted mb-2">
+                    El color marca lo que cambió en ese guardado. Los demás datos son los que ya estaban.
+                  </p>
+                  <div className="mb-2">
+                    <label htmlFor="historial-linea-busqueda" className="form-label small mb-1">
+                      Buscar en los cambios
+                    </label>
+                    <input
+                      id="historial-linea-busqueda"
+                      type="search"
+                      className="form-control form-control-sm"
+                      placeholder="Fecha, usuario o valor"
+                      value={busquedaLineaCobertura}
+                      onChange={(event) => setBusquedaLineaCobertura(event.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              {lineasCobertura.length === 0 ? (
+                <p className="text-muted small mb-0">Sin cambios registrados en esta sección.</p>
+              ) : lineasVisibles.length === 0 ? (
+                <p className="text-muted small mb-0">Ningún cambio coincide con la búsqueda.</p>
+              ) : (
+                <TablaLineasCobertura
+                  lineas={lineasVisibles}
+                  columnas={columnasDeLineasCobertura(lineasCobertura)}
+                />
+              )}
+            </>
+          </EstadoCargaSeccion>
+        </AcordeonHistorial>
+      </div>
+    );
+  };
 
   const renderDetalleCambios = () => {
     if (!selected) {
@@ -3191,6 +3804,8 @@ export default function HistorialCambiosModal({
 
               {mostrarListaHub ? (
                 renderListaCoberturasHub()
+              ) : hubActivo && vistaHub === "cobertura" ? (
+                renderSeccionesPersonaHub()
               ) : filtrarPorSeccion ? (
                 vistaHistorialSeccion({
                   cargando: cargandoSeccion,

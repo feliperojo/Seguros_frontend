@@ -391,6 +391,69 @@
   font-weight: 600;
 }
 
+.pr-acc {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.pr-acc__toggle {
+  width: 100%;
+  border: 0;
+  padding: 0.7rem 0.875rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.pr-acc__toggle:hover {
+  background: #f1f5f9;
+}
+
+.pr-acc__toggle.is-open {
+  background: #eef4fb;
+  color: #0f2744;
+}
+
+.pr-acc__toggle.is-open .pr-acc__chevron {
+  transform: rotate(180deg);
+}
+
+.pr-acc__icon {
+  color: #64748b;
+}
+
+.pr-acc__toggle.is-open .pr-acc__icon {
+  color: #1a365d;
+}
+
+.pr-acc__chevron {
+  color: #64748b;
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+}
+
+.pr-acc__detalle {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: #64748b;
+}
+
+.pr-acc__panel {
+  padding: 0.75rem 0.875rem 1rem;
+  border-top: 1px solid #e2e8f0;
+  background: #fff;
+}
+
 @media (max-width: 575.98px) {
   .modal-dialog.pr-modal {
     max-width: calc(100vw - 0.5rem) !important;
