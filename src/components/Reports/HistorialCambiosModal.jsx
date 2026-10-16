@@ -5,7 +5,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import { formatDateTimeForDisplay, formatPhone334 } from "../../utils/formatters";
+import { formatDateForDisplay, formatDateTimeForDisplay, formatPhone334 } from "../../utils/formatters";
 import {
   CLIENTE_FIELDS_PRINCIPALES,
   CLIENTE_FIELDS_MIGRATORIO,
@@ -429,6 +429,46 @@ const formatValueForHistorial = (val, campo) => {
     return renderTelefonosHistorial(val);
   }
   return formatValue(val);
+};
+
+/** Fecha de tarjeta en el historial: MM-DD-YYYY, el mismo mes-día-año del resto de la pantalla. */
+const formatFechaExpiracionMedioPago = (val) => {
+  if (val === null || val === undefined || val === "") return "—";
+  const raw = String(val).trim();
+  if (!raw) return "—";
+
+  const mmYyyy = raw.match(/^(0[1-9]|1[0-2])\/(\d{4})$/);
+  if (mmYyyy) {
+    const month = Number(mmYyyy[1]);
+    const year = Number(mmYyyy[2]);
+    const lastDay = new Date(year, month, 0).getDate();
+    return `${mmYyyy[1]}-${String(lastDay).padStart(2, "0")}-${year}`;
+  }
+
+  const formatted = formatDateForDisplay(raw);
+  if (formatted && formatted !== "-") return formatted;
+  return formatValue(val);
+};
+
+const formatValorMedioPagoHistorial = (val, campo) => {
+  const key = claveCampoCliente(campo);
+  if (key === "fecha_expiracion" || key === "fecha_expiracion_raw") {
+    return formatFechaExpiracionMedioPago(val);
+  }
+  return formatValueForHistorial(val, campo);
+};
+
+/** El snapshot guarda la tarjeta enmascarada. Si los últimos 4 coinciden, muestra el número actual completo. */
+const revelarNumeroTarjetaHistorial = (valor, numeroCompleto) => {
+  if (valor === null || valor === undefined || valor === "") return valor;
+  if (!numeroCompleto) return valor;
+  const texto = String(valor);
+  if (!texto.includes("*")) return valor;
+  const ultimos = texto.replace(/\D/g, "");
+  const completos = String(numeroCompleto).replace(/\D/g, "");
+  if (ultimos.length < 4 || completos.length < 4) return valor;
+  if (!completos.endsWith(ultimos.slice(-4))) return valor;
+  return numeroCompleto;
 };
 
 const normalizeCoberturas = (val) => {
@@ -1535,7 +1575,10 @@ function TablaLineasCobertura({
                     const dato = linea.valores?.[columna.campo];
                     const parte = porCampo.get(columna.campo);
                     const vacio = !dato || valorCoberturaVacio(dato.valor);
-                    const anterior = parte ? textoPlanoValor(parte.anterior, parte.campo) : "";
+                    const anteriorFormateado = parte ? formatear(parte.anterior, parte.campo) : "";
+                    const anterior = typeof anteriorFormateado === "string"
+                      ? anteriorFormateado
+                      : (parte ? textoPlanoValor(parte.anterior, parte.campo) : "");
                     return (
                       <td
                         key={`${linea.key}-${columna.campo}`}
@@ -1840,25 +1883,54 @@ export default function HistorialCambiosModal({
       const historialesMedios = await Promise.all(
         clienteIds.map(async (clienteId) => {
           try {
-            const res = await apiRequest(`/historial/cliente/${clienteId}/medios-pago`, "GET");
+            const [res, resMedios] = await Promise.all([
+              apiRequest(`/historial/cliente/${clienteId}/medios-pago`, "GET"),
+              apiRequest(`mediopago/cliente/${clienteId}`, "GET").catch((err) => {
+                console.warn(`No se pudieron leer los medios de pago del cliente ${clienteId}:`, err);
+                return [];
+              }),
+            ]);
             const historialMedios = Array.isArray(res.data) ? res.data : [];
+            const mediosActuales = Array.isArray(resMedios) ? resMedios : [];
+            const numeroPorMedio = {};
+            mediosActuales.forEach((medio) => {
+              if (medio?.id && medio.numero_tarjeta) {
+                numeroPorMedio[medio.id] = medio.numero_tarjeta;
+              }
+            });
 
-            return historialMedios.map((record) => ({
-              ...record,
-              _esMedioPago: true,
-              _medioPagoId: record.modelo_id,
-              _medioPagoInfo: {
-                cliente_id: clienteId,
-                cliente_nombre:
-                  record.clientes_afectados?.[0]
-                  || nombresPorCliente[clienteId]
-                  || `Cliente #${clienteId}`,
-                forma_pago:
-                  record.cambios?.forma_pago?.nuevo
-                  || record.cambios?.forma_pago?.anterior
-                  || null,
-              },
-            }));
+            return historialMedios.map((record) => {
+              const numeroCompleto = numeroPorMedio[record.modelo_id];
+              const cambios = record.cambios && typeof record.cambios === "object"
+                ? { ...record.cambios }
+                : {};
+              const tarjeta = cambios.numero_tarjeta;
+              if (tarjeta && typeof tarjeta === "object" && numeroCompleto) {
+                cambios.numero_tarjeta = {
+                  ...tarjeta,
+                  anterior: revelarNumeroTarjetaHistorial(tarjeta.anterior, numeroCompleto),
+                  nuevo: revelarNumeroTarjetaHistorial(tarjeta.nuevo, numeroCompleto),
+                };
+              }
+
+              return {
+                ...record,
+                cambios,
+                _esMedioPago: true,
+                _medioPagoId: record.modelo_id,
+                _medioPagoInfo: {
+                  cliente_id: clienteId,
+                  cliente_nombre:
+                    record.clientes_afectados?.[0]
+                    || nombresPorCliente[clienteId]
+                    || `Cliente #${clienteId}`,
+                  forma_pago:
+                    cambios.forma_pago?.nuevo
+                    || cambios.forma_pago?.anterior
+                    || null,
+                },
+              };
+            });
           } catch (err) {
             console.warn(`Error obteniendo historial de medios de pago del cliente ${clienteId}:`, err);
             return [];
@@ -2653,7 +2725,7 @@ export default function HistorialCambiosModal({
         <TablaLineasCobertura
           lineas={lineas}
           columnas={columnasDeLineasCobertura(lineas, seccionId === "medios_pago" ? undefined : seccionId)}
-          formatear={seccionId === "medios_pago" ? formatValueForHistorial : renderValorSeccion}
+          formatear={seccionId === "medios_pago" ? formatValorMedioPagoHistorial : renderValorSeccion}
           mostrarOrigen
         />
       </>
@@ -3098,17 +3170,18 @@ export default function HistorialCambiosModal({
                 {keys.map((campo) => {
                   const info = cambios[campo];
                   const label = getFieldLabel(campo);
+                  const mostrarValor = esMedioPago ? formatValorMedioPagoHistorial : formatValueForHistorial;
                   return (
                     <tr key={campo}>
                       <td className="text-dark" style={{ padding: "0.75rem", verticalAlign: "top" }}>{label}</td>
                       <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
                         <span className="text-muted" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
-                          {formatValueForHistorial(info.anterior, campo)}
+                          {mostrarValor(info.anterior, campo)}
                         </span>
                       </td>
                       <td style={{ padding: "0.75rem", verticalAlign: "top" }}>
                         <span className="text-dark fw-semibold" style={{ fontSize: "0.9rem", wordBreak: "break-word" }}>
-                          {formatValueForHistorial(info.nuevo, campo)}
+                          {mostrarValor(info.nuevo, campo)}
                         </span>
                       </td>
                     </tr>
