@@ -5,7 +5,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import apiRequest from "../../services/api";
 import GrupoFamiliarService from "../../services/GrupoFamiliarService";
-import { formatDateForDisplay, formatDateTimeForDisplay, formatPhone334 } from "../../utils/formatters";
+import { formatDateTimeForDisplay, formatPhone334 } from "../../utils/formatters";
 import {
   CLIENTE_FIELDS_PRINCIPALES,
   CLIENTE_FIELDS_MIGRATORIO,
@@ -431,22 +431,21 @@ const formatValueForHistorial = (val, campo) => {
   return formatValue(val);
 };
 
-/** Fecha de tarjeta en el historial: MM-DD-YYYY, el mismo mes-día-año del resto de la pantalla. */
+/** La tarjeta solo tiene mes y año. En el historial se muestra MM/AAAA. */
 const formatFechaExpiracionMedioPago = (val) => {
   if (val === null || val === undefined || val === "") return "—";
   const raw = String(val).trim();
   if (!raw) return "—";
 
   const mmYyyy = raw.match(/^(0[1-9]|1[0-2])\/(\d{4})$/);
-  if (mmYyyy) {
-    const month = Number(mmYyyy[1]);
-    const year = Number(mmYyyy[2]);
-    const lastDay = new Date(year, month, 0).getDate();
-    return `${mmYyyy[1]}-${String(lastDay).padStart(2, "0")}-${year}`;
+  if (mmYyyy) return `${mmYyyy[1]}/${mmYyyy[2]}`;
+
+  const iso = raw.match(/^(\d{4})-(\d{2})(?:-(\d{2}))?/);
+  if (iso) {
+    const month = Number(iso[2]);
+    if (month >= 1 && month <= 12) return `${iso[2]}/${iso[1]}`;
   }
 
-  const formatted = formatDateForDisplay(raw);
-  if (formatted && formatted !== "-") return formatted;
   return formatValue(val);
 };
 
