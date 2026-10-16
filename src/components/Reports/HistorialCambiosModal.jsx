@@ -471,7 +471,7 @@ const revelarNumeroTarjetaHistorial = (valor, numeroCompleto) => {
   return numeroCompleto;
 };
 
-/** El historial guarda el CVV como ***. Aquí se muestra el valor actual, sin cambiar cómo se archiva. */
+/** El historial guarda el CVV como ***. Aquí se muestra el valor actual. */
 const revelarCvvHistorial = (valor, cvvCompleto) => {
   if (valor === null || valor === undefined || valor === "") return valor;
   if (cvvCompleto === null || cvvCompleto === undefined || cvvCompleto === "") return valor;
@@ -878,6 +878,7 @@ const filasDesdeEventosMedioPago = (rows = []) => {
   (Array.isArray(rows) ? rows : []).forEach((row) => {
     const cambios = row?.cambios && typeof row.cambios === "object" ? row.cambios : {};
     Object.keys(cambios).forEach((campo) => {
+      if (campo === "fecha_expiracion_raw") return;
       if (CAMPOS_IGNORAR.has(campo) || /updated|fecha_actualizacion/i.test(campo)) return;
       const info = cambios[campo];
       if (!info || typeof info !== "object") return;
@@ -2017,23 +2018,28 @@ export default function HistorialCambiosModal({
       const historialesMedios = await Promise.all(
         clienteIds.map(async (clienteId) => {
           try {
-            const [res, resMedios] = await Promise.all([
-              apiRequest(`/historial/cliente/${clienteId}/medios-pago`, "GET"),
-              apiRequest(`mediopago/cliente/${clienteId}`, "GET").catch((err) => {
-                console.warn(`No se pudieron leer los medios de pago del cliente ${clienteId}:`, err);
-                return [];
-              }),
-            ]);
+            const res = await apiRequest(`/historial/cliente/${clienteId}/medios-pago`, "GET");
             const historialMedios = Array.isArray(res.data) ? res.data : [];
-            const mediosActuales = Array.isArray(resMedios) ? resMedios : [];
+            const idsMedio = [...new Set(
+              historialMedios
+                .map((record) => record?.modelo_id)
+                .filter((id) => id != null && id !== "")
+            )];
             const datosPorMedio = {};
-            mediosActuales.forEach((medio) => {
-              if (!medio?.id) return;
-              datosPorMedio[String(medio.id)] = {
-                numero: medio.numero_tarjeta || "",
-                cvv: medio.cvv || "",
-              };
-            });
+            await Promise.all(idsMedio.map(async (id) => {
+              try {
+                const medio = await apiRequest(`mediopago/${id}`, "GET");
+                const registro = (medio?.numero_tarjeta != null || medio?.cvv != null) ? medio : medio?.data;
+                if (registro?.numero_tarjeta || registro?.cvv) {
+                  datosPorMedio[String(id)] = {
+                    numero: registro.numero_tarjeta || "",
+                    cvv: registro.cvv || "",
+                  };
+                }
+              } catch (err) {
+                console.warn(`No se pudo leer el medio de pago ${id}:`, err);
+              }
+            }));
 
             return historialMedios.map((record) => {
               const datosMedio = datosPorMedio[String(record.modelo_id)];
@@ -3008,7 +3014,12 @@ export default function HistorialCambiosModal({
     }
 
     const cambios = selected.cambios || {};
-    const keys = Object.keys(cambios).filter(campo => !debeIgnorarCampo(campo));
+    const esMedioPago = selected._esMedioPago || false;
+    const keys = Object.keys(cambios).filter((campo) => {
+      if (debeIgnorarCampo(campo)) return false;
+      if (esMedioPago && campo === "fecha_expiracion_raw") return false;
+      return true;
+    });
 
     if (keys.length === 0) {
       return (
@@ -3023,7 +3034,6 @@ export default function HistorialCambiosModal({
     const contadores = contarCambiosPorCategoria(cambios, {
       esCobertura: esCobertura || esAltaCoberturaDirecta,
     });
-    const esMedioPago = selected._esMedioPago || false;
     const coberturaInfo = selected._coberturaInfo || {};
     const medioPagoInfo = selected._medioPagoInfo || {};
     
