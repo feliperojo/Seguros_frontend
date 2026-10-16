@@ -471,6 +471,15 @@ const revelarNumeroTarjetaHistorial = (valor, numeroCompleto) => {
   return numeroCompleto;
 };
 
+/** El historial guarda el CVV como ***. Aquí se muestra el valor actual, sin cambiar cómo se archiva. */
+const revelarCvvHistorial = (valor, cvvCompleto) => {
+  if (valor === null || valor === undefined || valor === "") return valor;
+  if (cvvCompleto === null || cvvCompleto === undefined || cvvCompleto === "") return valor;
+  const texto = String(valor).trim();
+  if (!/^\*+$/.test(texto)) return valor;
+  return String(cvvCompleto);
+};
+
 const normalizeCoberturas = (val) => {
   if (!val) return [];
   if (Array.isArray(val)) return val;
@@ -890,6 +899,123 @@ const filasDesdeEventosMedioPago = (rows = []) => {
     });
   });
   return filas;
+};
+
+const CAMPOS_MEDIO_PAGO_OCULTOS = new Set([
+  "id",
+  "created_at",
+  "updated_at",
+  "deleted_at",
+  "cliente",
+  "cliente_nombre",
+  "fecha_expiracion_raw",
+  "fecha_expiracion_raw_legacy",
+]);
+
+const ORDEN_CAMPOS_MEDIO_PAGO = [
+  "forma_pago",
+  "tipo_tarjeta",
+  "titular",
+  "direccion",
+  "numero_tarjeta",
+  "fecha_expiracion",
+  "cvv",
+  "banco",
+  "ruta",
+  "cuenta_numero",
+  "quien_paga",
+  "es_principal",
+  "cliente_id",
+];
+
+const campoMedioPagoVisible = (campo, valor) => {
+  if (!campo || CAMPOS_MEDIO_PAGO_OCULTOS.has(campo)) return false;
+  if (valor === null || valor === undefined || valor === "") return false;
+  if (typeof valor === "object") return false;
+  return true;
+};
+
+/** Cada guardado muestra el medio de pago completo. El color queda solo en lo que cambió. */
+const lineasMediosPagoCompletas = (rows = []) => {
+  const eventos = (Array.isArray(rows) ? rows : []).filter(
+    (row) => row?.estado_resultante && typeof row.estado_resultante === "object"
+  );
+  if (!eventos.length) return null;
+
+  const porMedio = new Map();
+  eventos.forEach((row) => {
+    const id = String(row._medioPagoId ?? row.modelo_id ?? "");
+    if (!porMedio.has(id)) porMedio.set(id, []);
+    porMedio.get(id).push(row);
+  });
+
+  const lineas = [];
+  porMedio.forEach((lista) => {
+    const cronologico = [...lista].sort((a, b) => {
+      const fecha = new Date(a?.created_at || a?.fecha || 0).getTime()
+        - new Date(b?.created_at || b?.fecha || 0).getTime();
+      if (fecha !== 0) return fecha;
+      return Number(a?.id || 0) - Number(b?.id || 0);
+    });
+
+    const campos = [];
+    const vistos = new Set();
+    cronologico.forEach((row) => {
+      Object.keys(row.estado_resultante || {}).forEach((campo) => {
+        if (vistos.has(campo) || !campoMedioPagoVisible(campo, row.estado_resultante[campo])) return;
+        vistos.add(campo);
+        campos.push(campo);
+      });
+    });
+    campos.sort((a, b) => {
+      const ia = ORDEN_CAMPOS_MEDIO_PAGO.indexOf(a);
+      const ib = ORDEN_CAMPOS_MEDIO_PAGO.indexOf(b);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+
+    const vigente = {};
+    cronologico.forEach((row) => {
+      const estado = row.estado_resultante || {};
+      const cambios = row.cambios && typeof row.cambios === "object" ? row.cambios : {};
+      Object.entries(estado).forEach(([campo, valor]) => {
+        if (campoMedioPagoVisible(campo, valor)) vigente[campo] = valor;
+      });
+      const valores = {};
+      const partes = [];
+      campos.forEach((campo) => {
+        const info = cambios[campo];
+        const cambio = Boolean(
+          info
+          && typeof info === "object"
+          && JSON.stringify(info.anterior ?? null) !== JSON.stringify(info.nuevo ?? null)
+        );
+        const valor = Object.prototype.hasOwnProperty.call(vigente, campo) ? vigente[campo] : "";
+        valores[campo] = { valor, cambio };
+        partes.push({
+          campo,
+          label: getFieldLabel(campo),
+          anterior: cambio ? info.anterior : valor,
+          nuevo: valor,
+        });
+      });
+      lineas.push({
+        key: `${row.id ?? "sin-id"}-${row._medioPagoId ?? "mp"}`,
+        fecha: row.created_at || row.fecha,
+        usuario: row.usuario || "—",
+        origen: etiquetaFilaOrigen({
+          origen: row.origen ?? null,
+          grupoFamiliarOrigenId: row.grupo_familiar_origen_id ?? null,
+          coberturaOrigenId: row.cobertura_origen_id ?? null,
+        }),
+        partes,
+        valores,
+      });
+    });
+  });
+
+  return lineas.sort(
+    (a, b) => new Date(b?.fecha || 0).getTime() - new Date(a?.fecha || 0).getTime()
+  );
 };
 
 const ORDEN_COLUMNAS_COBERTURA = [
@@ -1478,6 +1604,14 @@ function columnasDeLineasCobertura(lineas = [], seccionId) {
     });
   });
   const columnas = [...porCampo.entries()].map(([campo, label]) => ({ campo, label }));
+  if (seccionId === "medios_pago") {
+    columnas.sort((a, b) => {
+      const ia = ORDEN_CAMPOS_MEDIO_PAGO.indexOf(a.campo);
+      const ib = ORDEN_CAMPOS_MEDIO_PAGO.indexOf(b.campo);
+      return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+    });
+    return columnas;
+  }
   if (seccionId) {
     const orden = ordenarCamposDeSeccion(columnas.map((columna) => columna.campo), seccionId);
     const puesto = new Map(orden.map((campo, indice) => [campo, indice]));
@@ -1892,24 +2026,34 @@ export default function HistorialCambiosModal({
             ]);
             const historialMedios = Array.isArray(res.data) ? res.data : [];
             const mediosActuales = Array.isArray(resMedios) ? resMedios : [];
-            const numeroPorMedio = {};
+            const datosPorMedio = {};
             mediosActuales.forEach((medio) => {
-              if (medio?.id && medio.numero_tarjeta) {
-                numeroPorMedio[medio.id] = medio.numero_tarjeta;
-              }
+              if (!medio?.id) return;
+              datosPorMedio[String(medio.id)] = {
+                numero: medio.numero_tarjeta || "",
+                cvv: medio.cvv || "",
+              };
             });
 
             return historialMedios.map((record) => {
-              const numeroCompleto = numeroPorMedio[record.modelo_id];
+              const datosMedio = datosPorMedio[String(record.modelo_id)];
               const cambios = record.cambios && typeof record.cambios === "object"
                 ? { ...record.cambios }
                 : {};
               const tarjeta = cambios.numero_tarjeta;
-              if (tarjeta && typeof tarjeta === "object" && numeroCompleto) {
+              if (tarjeta && typeof tarjeta === "object" && datosMedio?.numero) {
                 cambios.numero_tarjeta = {
                   ...tarjeta,
-                  anterior: revelarNumeroTarjetaHistorial(tarjeta.anterior, numeroCompleto),
-                  nuevo: revelarNumeroTarjetaHistorial(tarjeta.nuevo, numeroCompleto),
+                  anterior: revelarNumeroTarjetaHistorial(tarjeta.anterior, datosMedio.numero),
+                  nuevo: revelarNumeroTarjetaHistorial(tarjeta.nuevo, datosMedio.numero),
+                };
+              }
+              const cvv = cambios.cvv;
+              if (cvv && typeof cvv === "object" && datosMedio?.cvv) {
+                cambios.cvv = {
+                  ...cvv,
+                  anterior: revelarCvvHistorial(cvv.anterior, datosMedio.cvv),
+                  nuevo: revelarCvvHistorial(cvv.nuevo, datosMedio.cvv),
                 };
               }
 
@@ -2696,7 +2840,10 @@ export default function HistorialCambiosModal({
     const filasMedios = cacheMediosLista && Array.isArray(mediosHubCache.rows)
       ? filasDesdeEventosMedioPago(mediosHubCache.rows)
       : null;
-    const lineasMedios = filasMedios ? lineasDeSeccion(filasMedios, "medios_pago") : null;
+    const lineasMedios = cacheMediosLista && Array.isArray(mediosHubCache.rows)
+      ? (lineasMediosPagoCompletas(mediosHubCache.rows)
+        || (filasMedios ? lineasDeSeccion(filasMedios, "medios_pago") : null))
+      : null;
 
     const lineasCobertura = completarSnapshotsCobertura(agruparCambiosEnLinea(filasSeccion));
     const consultaLinea = busquedaLineaCobertura.trim().toLowerCase();
@@ -2724,7 +2871,7 @@ export default function HistorialCambiosModal({
         </p>
         <TablaLineasCobertura
           lineas={lineas}
-          columnas={columnasDeLineasCobertura(lineas, seccionId === "medios_pago" ? undefined : seccionId)}
+          columnas={columnasDeLineasCobertura(lineas, seccionId)}
           formatear={seccionId === "medios_pago" ? formatValorMedioPagoHistorial : renderValorSeccion}
           mostrarOrigen
         />
