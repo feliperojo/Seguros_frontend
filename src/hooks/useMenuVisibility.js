@@ -41,7 +41,11 @@ export default function useMenuVisibility() {
         if (typeof setAppSettings === "function") {
           setAppSettings((prev) => {
             const base = prev || readStoredSettings() || {};
-            const next = { ...base, menu_visibility: menuVisibility };
+            const next = {
+              ...base,
+              menu_visibility: menuVisibility,
+              ...(runtime?.fecha_operacion ? { fecha_operacion: runtime.fecha_operacion } : {}),
+            };
             persistSettings(next);
             return next;
           });

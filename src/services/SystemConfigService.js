@@ -61,5 +61,13 @@ export async function getRuntime() {
   return response?.data ?? response ?? {};
 }
 
-const systemConfigService = { getAll, get, put, verifySuperAdminPassword, getRuntime };
+/**
+ * Activa o desactiva la fecha de operación simulada.
+ * El servidor rechaza la escritura fuera de un entorno autorizado.
+ */
+export async function putFechaOperacion(activa, fecha) {
+  return apiRequest(`${BASE}/fecha-operacion`, "PUT", { activa, fecha });
+}
+
+const systemConfigService = { getAll, get, put, verifySuperAdminPassword, getRuntime, putFechaOperacion };
 export default systemConfigService;

@@ -117,6 +117,8 @@ const PreRenovacionModal = ({
   onHide,
   grupoFamiliarId,
   anioDestino,
+  anioOrigenSeleccionado = null,
+  loteId = null,
   onAfterConsolidar,
 }) => {
   const [lote, setLote] = useState(null);
@@ -144,7 +146,7 @@ const PreRenovacionModal = ({
   const [guardandoPagoConfirmado, setGuardandoPagoConfirmado] = useState(false);
 
   useEffect(() => {
-    if (!show || !grupoFamiliarId || !anioDestino) return undefined;
+    if (!show || !grupoFamiliarId || (!anioDestino && !loteId)) return undefined;
 
     let active = true;
     setLoading(true);
@@ -170,7 +172,13 @@ const PreRenovacionModal = ({
         const response = await apiRequest(
           `/grupo_familiar/${grupoFamiliarId}/pre-renovacion`,
           "POST",
-          { anio_destino: anioDestino }
+          loteId
+            ? {
+                lote_id: loteId,
+                ...(anioDestino ? { anio_destino: anioDestino } : {}),
+                ...(anioOrigenSeleccionado ? { anio_origen: anioOrigenSeleccionado } : {}),
+              }
+            : { anio_destino: anioDestino }
         );
         if (active) {
           const data = response?.data ?? response;
@@ -197,7 +205,7 @@ const PreRenovacionModal = ({
     return () => {
       active = false;
     };
-  }, [show, grupoFamiliarId, anioDestino]);
+  }, [show, grupoFamiliarId, anioDestino, anioOrigenSeleccionado, loteId]);
 
   useEffect(() => {
     if (lote?.estado_gestion) {

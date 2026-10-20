@@ -29,13 +29,10 @@ import {
 import { ordenarEtiquetasProductoListado } from "../constants/coberturaTipos";
 import SuperAdminPasswordModal from "../components/Documentos/SuperAdminPasswordModal";
 import { Helmet } from "react-helmet-async";
-
-
-
+import useFechaOperacion from "../hooks/useFechaOperacion";
+import { claveFechaOperacion } from "../utils/fechaOperacion";
 
 const ITEMS_PER_PAGE = 50;
-const ANIO_ACTUAL = new Date().getFullYear();
-const ANIOS_BASE = [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3];
 
 const mapearEstadoParaEndpoint = (codigoEstado) => {
   const estadoMap = {
@@ -62,6 +59,13 @@ const mapearEstadoParaEndpoint = (codigoEstado) => {
 const GruposFamiliaresListado = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const fechaOperacion = useFechaOperacion();
+  const ANIO_ACTUAL = fechaOperacion.anio;
+  const claveFecha = claveFechaOperacion(fechaOperacion);
+  const ANIOS_BASE = useMemo(
+    () => [ANIO_ACTUAL, ANIO_ACTUAL - 1, ANIO_ACTUAL - 2, ANIO_ACTUAL - 3],
+    [ANIO_ACTUAL]
+  );
 
 
   // Estados
@@ -148,7 +152,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [ANIOS_BASE]);
 
   /**
    * null = Todos los años
@@ -175,7 +179,7 @@ const [grupoFamiliarId, setGrupoFamiliarId] = useState(null); // Agregar el esta
 
     const unique = Array.from(new Set(years)).sort((a, b) => b - a);
     return unique.length > 0 ? unique : [ANIO_ACTUAL];
-  }, [searchParams, aniosDisponibles]);
+  }, [searchParams, aniosDisponibles, ANIO_ACTUAL, ANIOS_BASE]);
 
   const esTodosLosAnios = aniosSeleccionados === null;
 
@@ -338,14 +342,9 @@ useEffect(() => {
           params.set("search", debouncedSearch.trim());
         }
 
-        // null = todos / año actual solo (sin ?anio). Varios o históricos → ?anio=2024,2025
+        // null = todos. Cualquier año elegido, incluido el operativo, filtra por cobertura de ese año.
         if (esTodosLosAnios) {
           params.set("anio", "all");
-        } else if (
-          aniosSeleccionados.length === 1 &&
-          aniosSeleccionados[0] === ANIO_ACTUAL
-        ) {
-          // Compat: año actual solo no envía anio (mismo que antes).
         } else if (aniosSeleccionados.length > 0) {
           params.set("anio", aniosSeleccionados.join(","));
         }
@@ -415,7 +414,7 @@ useEffect(() => {
     return () => {
       cancelled = true;
     };
-  }, [selectedStatus, selectedProducto, selectedResponsable, debouncedSearch, currentPage, aniosSeleccionados, esTodosLosAnios, listadoReloadKey]);
+  }, [selectedStatus, selectedProducto, selectedResponsable, debouncedSearch, currentPage, aniosSeleccionados, esTodosLosAnios, listadoReloadKey, claveFecha]);
 
   const toggleGrupoExpandido = (grupoId) => {
     setGruposExpandidos((prev) => {
@@ -645,6 +644,8 @@ useEffect(() => {
             <ResumenGruposEstados
               onEstadoClick={handleEstadoClickFromResumen}
               estadoSeleccionado={selectedStatus}
+              anio={esTodosLosAnios ? "all" : aniosSeleccionados.join(",")}
+              claveFecha={claveFecha}
             />
           </div>
 

@@ -42,8 +42,9 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
   fetchFullGrupo: async (id, { onlyActive = false, anio = null } = {}) => {
     const params = new URLSearchParams();
     if (onlyActive) params.set("onlyActive", "true");
-    const anioActual = new Date().getFullYear();
-    if (anio != null && Number(anio) !== anioActual) {
+    // El backend resuelve el año operativo; el año solicitado debe respetarse
+    // aunque coincida con el reloj real durante una simulación.
+    if (anio != null) {
       params.set("anio", String(anio));
     }
     const qs = params.toString();

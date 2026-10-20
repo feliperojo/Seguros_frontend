@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import Swal from "sweetalert2";
+import { anioOperacion } from "../../utils/fechaOperacion";
 
 const RenovacionCoberturas = ({
   trigger = false,
@@ -139,7 +140,7 @@ html: `
               vigente: true,
               nota_cancel: "",
               id: `${member.id}-vacio-${Date.now()}`,
-              ano_cobertura: String((parseInt(member.ano_cobertura) || new Date().getFullYear())),
+              ano_cobertura: String((parseInt(member.ano_cobertura) || anioOperacion())),
               tipo_renovacion: "vacia"
             }));
       

@@ -10,6 +10,7 @@ import {
 import DateInputWithCalendar from "../common/DateInputWithCalendar";
 import CompanySelect from "../selects/CompanySelect";
 import useCompanies from "../../hooks/useCompanies";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
 import {
   anularYRecuperarPlanes,
   archivarPlanActual,
@@ -38,8 +39,6 @@ const EMPTY_MANUAL_FORM = {
   fecha_expiracion: "",
   nota: "",
 };
-
-const ANIO_ACTUAL = new Date().getFullYear();
 
 const textoFecha = (valor) => (valor ? String(valor).slice(0, 10) : "—");
 
@@ -71,6 +70,7 @@ const HistorialPlanCoberturaModal = ({
   initialCoberturaId = null,
   allowBulkArchive = false,
   readOnly = false,
+  anioConsultado = null,
   /** "salud" | "dental" — dental no muestra Metal/Red ni Código ID */
   product = "salud",
   /** Solo Dental MS: actualiza la ficha al reabrir una inscripción anulada. */
@@ -78,10 +78,14 @@ const HistorialPlanCoberturaModal = ({
   /** Actualiza en la ficha solo los campos de plan restaurados. */
   onPlanesRecuperados = null,
 }) => {
+  const { anio: ANIO_ACTUAL } = useFechaOperacion();
+  const anioContexto = Number(anioConsultado) > 1900
+    ? Number(anioConsultado)
+    : ANIO_ACTUAL;
   const esDental = product === "dental";
   const [selectedCoberturaId, setSelectedCoberturaId] = useState(null);
   const [historial, setHistorial] = useState([]);
-  const [anioSeleccionado, setAnioSeleccionado] = useState(ANIO_ACTUAL);
+  const [anioSeleccionado, setAnioSeleccionado] = useState(anioContexto);
   const [loading, setLoading] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
@@ -128,13 +132,13 @@ const HistorialPlanCoberturaModal = ({
   const formEsAnulacion = esDentalAnulada || esAnulacion;
 
   const aniosDisponibles = useMemo(() => {
-    const years = new Set();
+    const years = new Set([anioContexto, anioSeleccionado]);
     historial.forEach((item) => {
       const year = getAnioHistorialPlan(item);
       if (year != null) years.add(year);
     });
     return Array.from(years).sort((a, b) => b - a);
-  }, [historial]);
+  }, [historial, anioContexto, anioSeleccionado]);
 
   const historialFiltrado = useMemo(() => {
     if (!anioSeleccionado) return historial;
@@ -221,7 +225,7 @@ const HistorialPlanCoberturaModal = ({
   useEffect(() => {
     if (!show) {
       setHistorial([]);
-      setAnioSeleccionado(ANIO_ACTUAL);
+      setAnioSeleccionado(anioContexto);
       setError("");
       setSuccess("");
       setShowArchivarForm(false);
@@ -243,7 +247,7 @@ const HistorialPlanCoberturaModal = ({
       null;
 
     setSelectedCoberturaId(defaultId);
-    setAnioSeleccionado(ANIO_ACTUAL);
+    setAnioSeleccionado(anioContexto);
     setShowArchivarForm(false);
     setShowCrearForm(false);
     setManualForm(EMPTY_MANUAL_FORM);
@@ -266,7 +270,7 @@ const HistorialPlanCoberturaModal = ({
     } else {
       setSelectedForArchive(new Set());
     }
-  }, [show, initialCoberturaId, members, allowBulkArchive, membersWithPlan]);
+  }, [show, initialCoberturaId, members, allowBulkArchive, membersWithPlan, anioContexto]);
 
   useEffect(() => {
     if (show && selectedCoberturaId) {
@@ -274,20 +278,11 @@ const HistorialPlanCoberturaModal = ({
     }
   }, [show, selectedCoberturaId, cargarHistorial]);
 
-  // Al cargar historial: año actual si hay datos; si no, el más reciente disponible.
+  // Abrir en el año de la ficha, aunque aún no tenga archivos. Las recargas
+  // del historial no deben sobrescribir una selección manual del usuario.
   useEffect(() => {
-    if (aniosDisponibles.length === 0) {
-      setAnioSeleccionado(ANIO_ACTUAL);
-      return;
-    }
-    if (aniosDisponibles.includes(ANIO_ACTUAL)) {
-      setAnioSeleccionado(ANIO_ACTUAL);
-      return;
-    }
-    setAnioSeleccionado((prev) =>
-      aniosDisponibles.includes(prev) ? prev : aniosDisponibles[0]
-    );
-  }, [aniosDisponibles]);
+    if (show) setAnioSeleccionado(anioContexto);
+  }, [show, anioContexto]);
 
   const toggleMemberSelection = (coberturaId) => {
     setSelectedForArchive((prev) => {
@@ -1181,9 +1176,6 @@ const HistorialPlanCoberturaModal = ({
               <span className="hp-chip">
                 {historialFiltrado.length} registro
                 {historialFiltrado.length !== 1 ? "s" : ""} en {anioSeleccionado}
-                {aniosDisponibles.length > 1
-                  ? ` · ${aniosDisponibles.length} años`
-                  : ""}
               </span>
             </div>
 

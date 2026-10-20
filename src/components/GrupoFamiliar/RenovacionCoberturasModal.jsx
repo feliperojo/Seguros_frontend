@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import apiRequest from "../../services/api"; // ajusta la ruta si es distinto
 import RenovacionCoberturasBorrador from "./RenovacionCoberturasBorrador";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
 
 const RenovacionCoberturasModal = ({
   show,
@@ -10,7 +11,8 @@ const RenovacionCoberturasModal = ({
   // opcional: para que el padre pueda refrescar las cards luego
   onAfterConfirm,
 }) => {
-  const [anioDestino, setAnioDestino] = useState(new Date().getFullYear() + 1);
+  const { anio: anioOperativo } = useFechaOperacion();
+  const [anioDestino, setAnioDestino] = useState(anioOperativo + 1);
   const anioOrigen = anioDestino - 1;
 
   const [step, setStep] = useState(1); // 1: configurar años, 2: confirmar proceso
@@ -26,8 +28,7 @@ const RenovacionCoberturasModal = ({
   // Cuando se abre el modal, dejamos todo limpio
   useEffect(() => {
     if (show) {
-      const currentYear = new Date().getFullYear();
-      setAnioDestino(currentYear + 1);
+      setAnioDestino(anioOperativo + 1);
       setStep(1);
       setLoading(false);
       setLoadingConfirm(false);
@@ -35,7 +36,7 @@ const RenovacionCoberturasModal = ({
       setBorrador(null);
       setVersiones([]);
     }
-  }, [show]);
+  }, [show, anioOperativo]);
 
   // 🔹 NUEVO: cargar versiones de historial cuando se abre el modal
   useEffect(() => {
@@ -270,7 +271,7 @@ const RenovacionCoberturasModal = ({
                       onChange={(e) =>
                         setAnioDestino(
                           Number(e.target.value) ||
-                            new Date().getFullYear() + 1
+                            anioOperativo + 1
                         )
                       }
                       required

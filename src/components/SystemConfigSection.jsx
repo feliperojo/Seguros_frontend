@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, Form, Button, Spinner, Alert, Table, Badge } from "react-bootstrap";
 import { toast } from "react-toastify";
 import systemConfigService from "../services/SystemConfigService";
+import { publicarFechaOperacion } from "../utils/fechaOperacion";
 import { useAuth } from "../context/AuthContext";
 
 const CONFIG_KEYS = {
@@ -158,6 +159,32 @@ const SystemConfigSection = ({
   const [savingPaymentMethods, setSavingPaymentMethods] = useState(false);
   const [savingDocumentFolders, setSavingDocumentFolders] = useState(false);
   const [savingCierresFiscales, setSavingCierresFiscales] = useState(false);
+  const [fechaSimuladaPermitida, setFechaSimuladaPermitida] = useState(false);
+  const [fechaSimuladaActiva, setFechaSimuladaActiva] = useState(false);
+  const [fechaSimuladaValor, setFechaSimuladaValor] = useState("");
+  const [fechaEfectiva, setFechaEfectiva] = useState("");
+  const [savingFechaSimulada, setSavingFechaSimulada] = useState(false);
+
+  useEffect(() => {
+    let vigente = true;
+    systemConfigService.getRuntime().then((runtime) => {
+      if (!vigente) return;
+      const fecha = runtime?.fecha_operacion;
+      setFechaSimuladaPermitida(fecha?.simulacion_permitida === true);
+      setFechaSimuladaActiva(fecha?.activa === true);
+      setFechaSimuladaValor(
+        typeof fecha?.fecha === "string" ? fecha.fecha.replace(" ", "T").slice(0, 19) : ""
+      );
+      setFechaEfectiva(typeof fecha?.fecha === "string" ? fecha.fecha : "");
+      if (fecha) {
+        publicarFechaOperacion(fecha);
+        setAppSettings((prev) => ({ ...(prev || {}), fecha_operacion: fecha }));
+      }
+    }).catch(() => {});
+    return () => {
+      vigente = false;
+    };
+  }, [setAppSettings]);
 
   const update = (key, value) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
@@ -281,6 +308,40 @@ const SystemConfigSection = ({
       toast.error(msg);
     } finally {
       setSavingDocumentFolders(false);
+    }
+  };
+
+  const handleSaveFechaSimulada = async () => {
+    if (!canEditSettings || !fechaSimuladaPermitida) return;
+    setSavingFechaSimulada(true);
+    try {
+      const fecha = fechaSimuladaValor ? fechaSimuladaValor.replace("T", " ") : "";
+      const normalizada = fecha.length === 16 ? `${fecha}:00` : fecha;
+      const response = await systemConfigService.putFechaOperacion(
+        fechaSimuladaActiva,
+        fechaSimuladaActiva ? normalizada : normalizada || null
+      );
+      const fechaOperacion = response?.data ?? response;
+      if (fechaOperacion?.fecha) {
+        setFechaEfectiva(fechaOperacion.fecha);
+        setFechaSimuladaActiva(fechaOperacion.activa === true);
+        publicarFechaOperacion(fechaOperacion);
+        setAppSettings((prev) => {
+          const next = { ...(prev || {}), fecha_operacion: fechaOperacion };
+          localStorage.setItem("app_settings", JSON.stringify(next));
+          return next;
+        });
+      }
+      toast.success(
+        fechaSimuladaActiva
+          ? "Fecha de operación simulada guardada. Las otras sesiones deben recargar."
+          : "Simulación desactivada. Vantun vuelve a la fecha real. Lo ya capturado, confirmado o consolidado no se revierte."
+      );
+    } catch (err) {
+      const msg = err?.message || err?.response?.data?.message || "Error al guardar la fecha simulada.";
+      toast.error(msg);
+    } finally {
+      setSavingFechaSimulada(false);
     }
   };
 
@@ -514,6 +575,51 @@ const SystemConfigSection = ({
                 )}
               </Button>
             </div>
+
+            {fechaSimuladaPermitida && (
+              <>
+                <hr className="my-4" />
+                <div className="mb-4 p-3 rounded border border-warning bg-warning-subtle">
+                  <div className="fw-semibold mb-1">Fecha de operación simulada</div>
+                  <p className="text-muted small mb-3">
+                    Fija el “hoy” que usan grupos, renovaciones, históricos y cierres en este
+                    entorno. No mueve sesiones, tokens ni el scheduler. Desactivarla devuelve
+                    backend y esta sesión a la fecha real, aunque exista una fecha local antigua
+                    de cierre fiscal, y no revierte capturas, confirmaciones ni consolidaciones.
+                  </p>
+                  <p className="small mb-3">
+                    Fecha efectiva de Vantun ({"America/Bogota"}): <strong>{fechaEfectiva || "—"}</strong>
+                  </p>
+                  <Form.Check
+                    type="checkbox"
+                    id="fecha_operacion_simulada_activa"
+                    label="Activar fecha de operación simulada"
+                    checked={fechaSimuladaActiva}
+                    onChange={(e) => setFechaSimuladaActiva(e.target.checked)}
+                    disabled={!canEditSettings}
+                    className="mb-3"
+                  />
+                  <Form.Group className="mb-3">
+                    <Form.Label>Fecha y hora (America/Bogota)</Form.Label>
+                    <Form.Control
+                      type="datetime-local"
+                      step="1"
+                      value={fechaSimuladaValor}
+                      onChange={(e) => setFechaSimuladaValor(e.target.value)}
+                      disabled={!canEditSettings}
+                    />
+                  </Form.Group>
+                  <Button
+                    variant="warning"
+                    size="sm"
+                    onClick={handleSaveFechaSimulada}
+                    disabled={savingFechaSimulada || !canEditSettings}
+                  >
+                    {savingFechaSimulada ? "Guardando..." : "Guardar fecha de operación"}
+                  </Button>
+                </div>
+              </>
+            )}
 
             <hr className="my-4" />
 

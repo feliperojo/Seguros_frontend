@@ -6,8 +6,10 @@ import { useNavigate } from "react-router-dom";
 import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import ResponderTareaAuditoriaModal from "../components/Tareas/ResponderTareaAuditoriaModal";
 import { getTask as getAuditoriaTask, listTasks as listAuditoriaTasks } from "../services/auditoriasTasksService";
+import useFechaOperacion from "../hooks/useFechaOperacion";
 
 const MainLayout = ({ children }) => {
+  const fechaOperacion = useFechaOperacion();
   const [isOpen, setIsOpen] = useState(true);
   const [pendientes, setPendientes] = useState(0);
   const sidebarRef = useRef(null);
@@ -608,6 +610,15 @@ const MainLayout = ({ children }) => {
         />
       </div>
       <div className={`main-content ${isOpen ? "expanded" : "collapsed"}`}>
+        {fechaOperacion.activa && fechaOperacion.aviso && (
+          <div
+            role="status"
+            className="alert alert-warning rounded-0 mb-0 py-2 px-3"
+            style={{ position: "sticky", top: 0, zIndex: 20 }}
+          >
+            {fechaOperacion.aviso}
+          </div>
+        )}
         <div className="dashboard-content">{children}</div>
       </div>
 

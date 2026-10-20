@@ -1,5 +1,6 @@
 // src/components/fase2/UserCoverageIcon.jsx
 import React from "react";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
 import { formatDateForDisplay } from "../../utils/formatters";
 import {
   normalizeEstadoGrupoCodigo,
@@ -24,6 +25,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   fechaActivacion,   // 👈 NUEVO
   fechaAnulacion = null,
   fueRenovado = false,
+  cierreAnioPendiente = false,
   omitidaRenovacion = false,
   motivoRetiro = null,
   motivoCancelacion = null,
@@ -32,6 +34,8 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   /** Código/nombre del estado del grupo familiar (para “por activar” en pasos 4–5) */
   estadoProceso = null,
 }) {
+  const fechaOperacion = useFechaOperacion();
+  const ahora = fechaOperacion.fecha;
   const normalizedStatus = String(status || "")
     .trim()
     .toLowerCase()
@@ -40,7 +44,11 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const hasRetiro = !!fechaRetiro;
   const hasCancel = !!fechaCancelacion;
   const hasAnulacion = !!fechaAnulacion;
-  const retiroProgramado = hasRetiro && isFechaRetiroProgramada(fechaRetiro);
+  const retiroProgramado = hasRetiro && isFechaRetiroProgramada(fechaRetiro, ahora);
+  // El año origen conserva su cierre; el destino ya iniciado usa su estado normal.
+  const mostrarRenovado = fueRenovado && (
+    hasRetiro || !fechaActivacion || isFechaActivacionPendiente(fechaActivacion, ahora)
+  );
   const cierreFiscalRenovacion = esCierreFiscalPorRenovacionAnual({
     fue_renovado: fueRenovado,
     omitida_renovacion: omitidaRenovacion,
@@ -56,6 +64,9 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   const enPaso4o5 = ESTADOS_POR_ACTIVAR.includes(procesoCode);
   const enProcesoInicial = esProcesoInicialGrupoFamiliar(procesoCode);
   const esSi = normalizedStatus === "si";
+  // Solo sustituye la apariencia vigente; conserva retiros, cancelaciones y renovaciones.
+  const mostrarCierrePendiente = cierreAnioPendiente && esSi &&
+    !hasRetiro && !hasCancel && !hasAnulacion && !fueRenovado;
   // Si hay fecha de activación futura: mismo estilo amarillo en cualquier etapa del GF
   // (no solo en Terminado), para que se vea igual que “Pendiente de activación”.
   const pendienteActivacion =
@@ -63,7 +74,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
     !hasRetiro &&
     !hasCancel &&
     !hasAnulacion &&
-    isFechaActivacionPendiente(fechaActivacion);
+    isFechaActivacionPendiente(fechaActivacion, ahora);
 
   const shortDate = (d) => {
     if (!d) return "";
@@ -76,7 +87,9 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   let color = colorProp;
 
   if (!color) {
-    if (fueRenovado) {
+    if (mostrarCierrePendiente) {
+      color = "#f0ad4e";
+    } else if (mostrarRenovado) {
       // Renovación anual: distinto de un retiro operativo.
       color = hasCancel ? "#ffc107" : "#0d6efd";
     } else if (hasAnulacion) {
@@ -112,15 +125,17 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   }
 
   /* ================== CHECK ================== */
-  const showCheck =
+  const showCheck = !mostrarCierrePendiente && (
     typeof showCheckProp === "boolean"
       ? showCheckProp
-      : !hasRetiro && !hasCancel && !hasAnulacion && esSi && !pendienteActivacion;
+      : !hasRetiro && !hasCancel && !hasAnulacion && esSi && !pendienteActivacion);
 
   /* ================== ETIQUETA ================== */
   let label = "";
 
-  if (fueRenovado) {
+  if (mostrarCierrePendiente) {
+    label = "Pendiente de cierre";
+  } else if (mostrarRenovado) {
     // Tras consolidar, el año origen se cerró por renovación (no es un retiro operativo).
     label = hasCancel ? "Cancelado - Renovado" : "Renovado";
   } else if (hasAnulacion) {
@@ -161,7 +176,7 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
   /* ================== FECHA A MOSTRAR ================== */
   let dateLabel = "";
 
-  if (fueRenovado && (fechaRetiro || fechaCancelacion)) {
+  if (mostrarRenovado && (fechaRetiro || fechaCancelacion)) {
     // Cierre del año origen por renovación (o cancelación + renovación).
     dateLabel = `${shortDate(fechaRetiro || fechaCancelacion)}`;
   } else if (hasAnulacion && fechaAnulacion) {

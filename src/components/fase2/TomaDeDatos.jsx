@@ -922,6 +922,7 @@ const TomaDeDatos = ({
   onDerivedCounts,
   /** Año de la vista del GF (histórico / actual / futuro). Controla Dental MS. */
   anioConsultado = null,
+  cierreAnioPendiente = false,
   /** Precios persistidos por cobertura_id. Null si la vista no tiene una línea base. */
   preciosGuardados = null,
 }) => {
@@ -2066,6 +2067,10 @@ const activeNormalized = useMemo(
                   <div className="mt-2">
                   <UserCoverageIcon
   status={m.estado_cobertura}
+  cierreAnioPendiente={
+    cierreAnioPendiente &&
+    (isProductoSaludMs(coberturaTipo) || isDentalMsCoberturaTipo(coberturaTipo))
+  }
   fechaRetiro={m.fecha_retiro}
   fechaCancelacion={m.fecha_cancelacion}
   fechaActivacion={m.fecha_activacion}   // 👈 NUEVO
@@ -3777,6 +3782,7 @@ const activeNormalized = useMemo(
       />
 
       <HistorialPlanCoberturaModal
+        anioConsultado={anioConsultado}
         show={historialPlanModal.open}
         onClose={() =>
           setHistorialPlanModal({

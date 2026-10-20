@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Container,
   Table,
@@ -35,9 +35,13 @@ import {
   ESTADOS_GESTION_FILTRO,
 } from "../../utils/renovacionEstadoGestion";
 import "../../styles/GruposFamiliaresListado.css";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
+import {
+  anioDestinoRenovacionPorDefecto,
+  claveFechaOperacion,
+} from "../../utils/fechaOperacion";
 
 const ITEMS_PER_PAGE = 50;
-const ANIO_DEFAULT = new Date().getFullYear() + 1;
 
 const ESTADOS_FILTRO = [
   {
@@ -145,9 +149,13 @@ const formatFecha = (value) => {
 };
 
 const RenovacionesEstadoPage = () => {
+  const fechaOperacion = useFechaOperacion();
+  const anioOperativo = fechaOperacion.anio;
+  const claveFecha = claveFechaOperacion(fechaOperacion);
   const [searchParams, setSearchParams] = useSearchParams();
   const vista = searchParams.get("vista") === "cierres" ? "cierres" : "estado";
-  const anioCierre = Number(searchParams.get("anio")) || new Date().getFullYear() - 1;
+  const anioCierreExplicito = searchParams.get("anio");
+  const anioCierre = Number(anioCierreExplicito) || anioOperativo - 1;
   const cambiarVista = (next) => {
     const params = new URLSearchParams(searchParams);
     if (next === "cierres") params.set("vista", "cierres");
@@ -158,7 +166,14 @@ const RenovacionesEstadoPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hasConsultado, setHasConsultado] = useState(false);
-  const [anioDestino, setAnioDestino] = useState(ANIO_DEFAULT);
+  const [anioDestino, setAnioDestino] = useState(() =>
+    anioDestinoRenovacionPorDefecto(fechaOperacion)
+  );
+  const anioDestinoExplicito = useRef(false);
+  useEffect(() => {
+    if (anioDestinoExplicito.current) return;
+    setAnioDestino(anioDestinoRenovacionPorDefecto(fechaOperacion));
+  }, [fechaOperacion]);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [estadoFiltro, setEstadoFiltro] = useState("");
@@ -187,7 +202,9 @@ const RenovacionesEstadoPage = () => {
     setCurrentPage(1);
   }, [debouncedSearch, estadoFiltro, estadoGestionFiltro, anioDestino, responsableFiltro]);
 
+  const consultaTicket = useRef(0);
   const fetchData = useCallback(async () => {
+    const ticket = ++consultaTicket.current;
     setLoading(true);
     setError(null);
     try {
@@ -213,6 +230,8 @@ const RenovacionesEstadoPage = () => {
         `grupo_familiar/renovaciones-estado?${params.toString()}`,
         "GET"
       );
+
+      if (ticket !== consultaTicket.current) return;
 
       if (response?.status === "success" && Array.isArray(response.data)) {
         setFilas(response.data);
@@ -252,6 +271,7 @@ const RenovacionesEstadoPage = () => {
         });
       }
     } catch (requestError) {
+      if (ticket !== consultaTicket.current) return;
       console.error("Error al cargar estado de renovaciones:", requestError);
       const message =
         requestError?.response?.data?.message ||
@@ -261,10 +281,11 @@ const RenovacionesEstadoPage = () => {
       setResumenEstados(RESUMEN_ESTADOS_VACIO);
       setResumenGestion({});
     } finally {
-      setLoading(false);
+      if (ticket === consultaTicket.current) setLoading(false);
     }
   }, [
     anioDestino,
+    claveFecha,
     currentPage,
     debouncedSearch,
     estadoFiltro,
@@ -453,7 +474,10 @@ const RenovacionesEstadoPage = () => {
                   value={anioDestino}
                   onChange={(e) => {
                     const next = Number(e.target.value);
-                    if (Number.isFinite(next)) setAnioDestino(next);
+                    if (Number.isFinite(next)) {
+                      anioDestinoExplicito.current = true;
+                      setAnioDestino(next);
+                    }
                   }}
                   aria-label="Año destino"
                 />
@@ -779,7 +803,10 @@ const RenovacionesEstadoPage = () => {
                                   {fila.estado_renovacion === "pendiente" && (
                                     <Dropdown.Item
                                       onClick={() =>
-                                        setGrupoSeleccionado({ id: fila.id })
+                                        setGrupoSeleccionado({
+                                          id: fila.id,
+                                          anioDestino,
+                                        })
                                       }
                                     >
                                       Generar pre-renovación
@@ -801,7 +828,12 @@ const RenovacionesEstadoPage = () => {
                                   {fila.estado_renovacion === "borrador" && (
                                     <Dropdown.Item
                                       onClick={() =>
-                                        setGrupoSeleccionado({ id: fila.id })
+                                        setGrupoSeleccionado({
+                                          id: fila.id,
+                                          loteId: fila.lote_id,
+                                          anioOrigen: fila.anio_origen,
+                                          anioDestino: fila.anio_destino,
+                                        })
                                       }
                                     >
                                       Gestionar pre-renovación
@@ -867,7 +899,9 @@ const RenovacionesEstadoPage = () => {
           if (hasConsultado) await fetchData();
         }}
         grupoFamiliarId={grupoSeleccionado?.id}
-        anioDestino={anioDestino}
+        anioDestino={grupoSeleccionado?.anioDestino ?? anioDestino}
+        anioOrigenSeleccionado={grupoSeleccionado?.anioOrigen}
+        loteId={grupoSeleccionado?.loteId}
         onAfterConsolidar={() => {
           setGrupoSeleccionado(null);
         }}

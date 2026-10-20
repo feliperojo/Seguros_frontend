@@ -1,6 +1,8 @@
 /* eslint-disable react/prop-types */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Badge, Button, Form, Modal } from "react-bootstrap";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
+import { claveFechaOperacion } from "../../utils/fechaOperacion";
 import {
   FaCalendarAlt,
   FaExclamationTriangle,
@@ -133,15 +135,24 @@ function ListaGuardada({ filas, cargando }) {
 }
 
 export default function CierresFiscalesPanel({ anioInicial }) {
+  const fechaOperacion = useFechaOperacion();
+  const claveFecha = claveFechaOperacion(fechaOperacion);
+  const anioElegido = useRef(false);
+  const cargaTicket = useRef(0);
   const [lista, setLista] = useState([]);
   const [meta, setMeta] = useState({
     habilitado: false,
     puede_gestionar: false,
     fecha_corte: null,
     hay_consolidacion: false,
+    anio_ventana: null,
     aviso_fecha_simulada: "",
   });
-  const [anio, setAnio] = useState(anioInicial || new Date().getFullYear() - 1);
+  const [anio, setAnio] = useState(anioInicial || fechaOperacion.anio - 1);
+  useEffect(() => {
+    if (anioElegido.current) return;
+    setAnio(anioInicial || fechaOperacion.anio - 1);
+  }, [anioInicial, fechaOperacion.anio]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [detalle, setDetalle] = useState(null);
@@ -154,24 +165,28 @@ export default function CierresFiscalesPanel({ anioInicial }) {
   const [cargandoLinea, setCargandoLinea] = useState(false);
 
   const cargar = useCallback(async () => {
+    const ticket = ++cargaTicket.current;
     setLoading(true);
     setError("");
     try {
       const response = await apiRequest(`/cierres-fiscales?anio=${anio}`, "GET");
+      if (ticket !== cargaTicket.current) return;
       setLista(Array.isArray(response?.data) ? response.data : []);
       setMeta({
         habilitado: !!response?.habilitado,
         puede_gestionar: !!response?.puede_gestionar,
         fecha_corte: response?.fecha_corte || `${anio}-12-31`,
         hay_consolidacion: !!response?.hay_consolidacion,
+        anio_ventana: response?.anio_ventana ?? null,
         aviso_fecha_simulada: response?.aviso_fecha_simulada || "",
       });
     } catch (requestError) {
+      if (ticket !== cargaTicket.current) return;
       setError(mensajeError(requestError, "No se pudo cargar el historial de cierres."));
     } finally {
-      setLoading(false);
+      if (ticket === cargaTicket.current) setLoading(false);
     }
-  }, [anio]);
+  }, [anio, claveFecha]);
 
   useEffect(() => {
     cargar();
@@ -310,6 +325,7 @@ export default function CierresFiscalesPanel({ anioInicial }) {
                 onChange={(event) => {
                   setDetalle(null);
                   setTarjeta(null);
+                  anioElegido.current = true;
                   setAnio(Number(event.target.value));
                 }}
               />
@@ -338,6 +354,16 @@ export default function CierresFiscalesPanel({ anioInicial }) {
             {puede && (
               <Button size="sm" onClick={revisar} disabled={!!accion || (meta.hay_consolidacion && !actual)}>
                 Revisar indicadores del cierre
+              </Button>
+            )}
+            {puede && fechaOperacion.activa && meta.anio_ventana === anio && (
+              <Button
+                size="sm"
+                variant="outline-warning"
+                disabled={!!accion}
+                onClick={() => ejecutar(`/cierres-fiscales/${anio}/capturar`)}
+              >
+                Capturar cierre de prueba
               </Button>
             )}
           </div>
@@ -416,6 +442,7 @@ export default function CierresFiscalesPanel({ anioInicial }) {
                           variant="outline-primary"
                           onClick={() => {
                             setTarjeta(null);
+                            anioElegido.current = true;
                             setAnio(Number(item.anio));
                             abrir(item.id);
                           }}

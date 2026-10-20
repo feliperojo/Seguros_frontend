@@ -17,6 +17,8 @@ import VerTareaModal from "../components/Tareas/VerTareaModal";
 import { Helmet } from "react-helmet-async";
 import DashboardKpiDetalleModal from "../components/Dashboard/DashboardKpiDetalleModal";
 import { getTaskOverdueDays } from "../utils/taskDueDate";
+import useFechaOperacion from "../hooks/useFechaOperacion";
+import { claveFechaOperacion, fechaParaConsulta } from "../utils/fechaOperacion";
 
 /** Evita errores al usar .slice cuando el backend devuelve { data: [] } u otras formas. */
 function normalizeDashboardList(res) {
@@ -176,6 +178,15 @@ function DashboardKpiTile({ label, value, icon, tone = "primary", onClick, onKey
 }
 
 const Dashboard = () => {
+  const fechaOperacion = useFechaOperacion();
+  const claveFecha = claveFechaOperacion(fechaOperacion);
+  const mesCoberturasExplicito = useRef(false);
+  const mesPagosExplicito = useRef(false);
+  const vigenciaDatos = useRef(0);
+  const vigenciaCumpleanos = useRef(0);
+  const vigenciaPagos = useRef(0);
+  const vigenciaTareas = useRef(0);
+  const vigenciaDocumentos = useRef(0);
   const currentUser = JSON.parse(localStorage.getItem("user"));
   
 
@@ -228,7 +239,7 @@ const Dashboard = () => {
   const [clienteToView, setClienteToView] = useState(null);
   const [filtroDias, setFiltroDias] = useState(15);
   const [mesCoberturasSeleccionado, setMesCoberturasSeleccionado] = useState(() => {
-    const hoy = new Date();
+    const hoy = fechaParaConsulta();
     return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
   });
   const [tipoCoberturaFiltro, setTipoCoberturaFiltro] = useState("todos");
@@ -237,9 +248,15 @@ const Dashboard = () => {
   const [cumpleanosMes, setCumpleanosMes] = useState([]);
   const [pagosPendientes, setPagosPendientes] = useState([]);
   const [mesPagosSeleccionado, setMesPagosSeleccionado] = useState(() => {
-    const hoy = new Date();
+    const hoy = fechaParaConsulta();
     return `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
   });
+  useEffect(() => {
+    const hoy = fechaParaConsulta();
+    const marca = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}`;
+    if (!mesCoberturasExplicito.current) setMesCoberturasSeleccionado(marca);
+    if (!mesPagosExplicito.current) setMesPagosSeleccionado(marca);
+  }, [claveFecha]);
   const [loadingCumpleanos, setLoadingCumpleanos] = useState(false);
   const [loadingPagos, setLoadingPagos] = useState(false);
   const [showConfigAccordion, setShowConfigAccordion] = useState(false);
@@ -308,7 +325,7 @@ const Dashboard = () => {
         )
       );
 
-      const hoy = new Date();
+      const hoy = fechaParaConsulta();
       const hoyUTC = new Date(
         Date.UTC(
           hoy.getUTCFullYear(),
@@ -327,7 +344,8 @@ const Dashboard = () => {
 
   // Función para cargar cumpleaños del día de hoy
   const cargarCumpleanos = useCallback(
-    async () => {
+    async (ticket) => {
+      const vigente = () => ticket === vigenciaCumpleanos.current;
       if (!preferenciasVisualizacion || !preferenciasVisualizacion.mostrarCumpleanos) {
         setCumpleanosMes([]);
         return;
@@ -339,7 +357,7 @@ const Dashboard = () => {
 
         try {
           const response = await apiRequest("cliente/cumpleanos-hoy", "GET");
-          setCumpleanosMes(normalizeDashboardList(response));
+          if (vigente()) setCumpleanosMes(normalizeDashboardList(response));
           return;
         } catch (e) {
           console.warn("cliente/cumpleanos-hoy no disponible, usando flujo anterior:", e);
@@ -375,19 +393,21 @@ const Dashboard = () => {
           esCumpleanosHoy(cliente.fecha_nacimiento)
         );
 
-        setCumpleanosMes(cumpleanosHoy);
+        if (vigente()) setCumpleanosMes(cumpleanosHoy);
       } catch (error) {
+        if (!vigente()) return;
         console.error("Error al cargar cumpleaños:", error);
         setCumpleanosMes([]);
       } finally {
-        setLoadingCumpleanos(false);
+        if (vigente()) setLoadingCumpleanos(false);
       }
     },
     [preferenciasVisualizacion?.mostrarCumpleanos, esCumpleanosHoy]
   );
 
   // Función para cargar pagos pendientes del mes seleccionado
-  const cargarPagosPendientes = useCallback(async () => {
+  const cargarPagosPendientes = useCallback(async (ticket) => {
+    const vigente = () => ticket === vigenciaPagos.current;
     if (!preferenciasVisualizacion || !preferenciasVisualizacion.mostrarPagosPendientes) {
       setPagosPendientes([]);
       return;
@@ -409,17 +429,19 @@ const Dashboard = () => {
                fechaPago.getMonth() + 1 === parseInt(mes);
       });
       
-      setPagosPendientes(pagosFiltrados);
+      if (vigente()) setPagosPendientes(pagosFiltrados);
     } catch (error) {
+      if (!vigente()) return;
       console.error("Error al cargar pagos pendientes:", error);
       setPagosPendientes([]);
     } finally {
-      setLoadingPagos(false);
+      if (vigente()) setLoadingPagos(false);
     }
   }, [mesPagosSeleccionado, preferenciasVisualizacion?.mostrarPagosPendientes]);
 
   // Función para cargar tareas vencidas del usuario actual
-  const cargarTareasVencidas = useCallback(async () => {
+  const cargarTareasVencidas = useCallback(async (ticket) => {
+    const vigente = () => ticket === vigenciaTareas.current;
     if (
       !preferenciasVisualizacion ||
       !preferenciasVisualizacion.mostrarTareasVencidas ||
@@ -444,11 +466,6 @@ const Dashboard = () => {
         tareasData = res;
       }
 
-      const calcularDiasAtraso = (fechaVenc) => {
-        const dias = getTaskOverdueDays(fechaVenc);
-        return dias > 0 ? dias : null;
-      };
-
       const pendientesVencidas = tareasData
         .map((t) => {
           const status = (t.status || t.estado || "").toLowerCase();
@@ -463,8 +480,8 @@ const Dashboard = () => {
             t.fecha_limite ||
             t.deadline;
 
-          const diasAtraso = calcularDiasAtraso(fechaVenc);
-          if (diasAtraso == null || diasAtraso <= 0) return null;
+          const diasAtraso = getTaskOverdueDays(fechaVenc, fechaParaConsulta());
+          if (diasAtraso <= 0) return null;
 
           return {
             ...t,
@@ -475,12 +492,13 @@ const Dashboard = () => {
         .filter(Boolean)
         .sort((a, b) => b._dias_atraso - a._dias_atraso);
 
-      setTareasVencidas(pendientesVencidas);
+      if (vigente()) setTareasVencidas(pendientesVencidas);
     } catch (error) {
+      if (!vigente()) return;
       console.error("Error al cargar tareas vencidas:", error);
       setTareasVencidas([]);
     } finally {
-      setLoadingTareasVencidas(false);
+      if (vigente()) setLoadingTareasVencidas(false);
     }
   }, [preferenciasVisualizacion?.mostrarTareasVencidas, currentUser?.id]);
 
@@ -566,36 +584,52 @@ const Dashboard = () => {
   // Cargar datos iniciales del dashboard (después de cargar preferencias)
   useEffect(() => {
     if (!cargandoPreferencias) {
-      cargarDatos();
+      const ticket = ++vigenciaDatos.current;
+      cargarDatos(ticket);
     }
-  }, [cargandoPreferencias, preferenciasVisualizacion?.mostrarCalendario, preferenciasVisualizacion?.mostrarClientesRecientes, preferenciasVisualizacion?.mostrarPolizasCanceladas, preferenciasVisualizacion?.mostrarDocumentosSolicitados]);
+    return () => {
+      vigenciaDatos.current += 1;
+    };
+  }, [cargandoPreferencias, preferenciasVisualizacion?.mostrarCalendario, preferenciasVisualizacion?.mostrarClientesRecientes, preferenciasVisualizacion?.mostrarPolizasCanceladas, preferenciasVisualizacion?.mostrarDocumentosSolicitados, claveFecha]);
 
   // Cargar cumpleaños cuando cambie la preferencia o al montar si está activo
   useEffect(() => {
     if (!cargandoPreferencias && preferenciasVisualizacion && preferenciasVisualizacion.mostrarCumpleanos) {
-      cargarCumpleanos();
+      const ticket = ++vigenciaCumpleanos.current;
+      cargarCumpleanos(ticket);
     } else if (!cargandoPreferencias) {
       setCumpleanosMes([]);
     }
-  }, [preferenciasVisualizacion?.mostrarCumpleanos, cargarCumpleanos, cargandoPreferencias]);
+    return () => {
+      vigenciaCumpleanos.current += 1;
+    };
+  }, [preferenciasVisualizacion?.mostrarCumpleanos, cargarCumpleanos, cargandoPreferencias, claveFecha]);
 
   // Cargar pagos cuando cambie el mes o la preferencia o al montar si está activo
   useEffect(() => {
     if (!cargandoPreferencias && preferenciasVisualizacion && preferenciasVisualizacion.mostrarPagosPendientes) {
-      cargarPagosPendientes();
+      const ticket = ++vigenciaPagos.current;
+      cargarPagosPendientes(ticket);
     } else if (!cargandoPreferencias) {
       setPagosPendientes([]);
     }
-  }, [mesPagosSeleccionado, preferenciasVisualizacion?.mostrarPagosPendientes, cargarPagosPendientes, cargandoPreferencias]);
+    return () => {
+      vigenciaPagos.current += 1;
+    };
+  }, [mesPagosSeleccionado, preferenciasVisualizacion?.mostrarPagosPendientes, cargarPagosPendientes, cargandoPreferencias, claveFecha]);
 
   // Cargar tareas vencidas cuando cambie la preferencia o el usuario
   useEffect(() => {
     if (!cargandoPreferencias && preferenciasVisualizacion && preferenciasVisualizacion.mostrarTareasVencidas) {
-      cargarTareasVencidas();
+      const ticket = ++vigenciaTareas.current;
+      cargarTareasVencidas(ticket);
     } else if (!cargandoPreferencias) {
       setTareasVencidas([]);
     }
-  }, [preferenciasVisualizacion?.mostrarTareasVencidas, cargarTareasVencidas, cargandoPreferencias]);
+    return () => {
+      vigenciaTareas.current += 1;
+    };
+  }, [preferenciasVisualizacion?.mostrarTareasVencidas, cargarTareasVencidas, cargandoPreferencias, claveFecha]);
 
   // Guardar preferencias cuando el usuario las cambie (debounce + sin PUT en la hidratación)
   useEffect(() => {
@@ -637,21 +671,25 @@ const Dashboard = () => {
     return () => clearTimeout(timer);
   }, [preferenciasVisualizacion, currentUser?.id, cargandoPreferencias]);
   
-  const cargarDatos = async () => {
+  const cargarDatos = async (ticket) => {
+    const vigente = () => ticket === vigenciaDatos.current;
     setCargando(true);
     setError(null);
 
     if (preferenciasVisualizacion?.mostrarCalendario) {
       try {
         const resTareas = await apiRequest("tareas_operativas?per_page=100", "GET");
+        if (!vigente()) return;
         setTareas(normalizeTareasOperativasResponse(resTareas));
       } catch (e) {
+        if (!vigente()) return;
         console.warn("No se pudieron cargar tareas del calendario:", e);
         setTareas([]);
       }
-    } else {
+    } else if (vigente()) {
       setTareas([]);
     }
+    if (!vigente()) return;
     setLoadingTareas(false);
 
     try {
@@ -671,6 +709,8 @@ const Dashboard = () => {
 
       const [resClientes, resPolizas, resEstadisticas, resClientesSoloCliente, resCanceladasBundle] =
         await Promise.all([recientesP, proximasP, generalP, kpiP, canceladasP]);
+
+      if (!vigente()) return;
 
       if (showRecientes) {
         setClientesRecientes(normalizeDashboardList(resClientes).slice(0, 15));
@@ -751,10 +791,11 @@ const Dashboard = () => {
             : (resEstadisticas?.totalClientes || 0),
       });
     } catch (err) {
+      if (!vigente()) return;
       console.error("Error al cargar datos del dashboard:", err);
       setError("Hubo un problema al cargar los datos. Por favor, intente nuevamente.");
     } finally {
-      setCargando(false);
+      if (vigente()) setCargando(false);
     }
   };
 
@@ -772,14 +813,19 @@ const Dashboard = () => {
       return;
     }
 
+    const ticket = ++vigenciaDocumentos.current;
     let cancelled = false;
 
     const cargarDocumentos = async () => {
       try {
         const res = await apiRequest(`documentos/proximos-vencer?dias=${filtroDias}`, "GET");
-        if (!cancelled) setDocumentosProximosVencer(normalizeDashboardList(res));
+        if (!cancelled && ticket === vigenciaDocumentos.current) {
+          setDocumentosProximosVencer(normalizeDashboardList(res));
+        }
       } catch (error) {
-        if (!cancelled) console.error("Error cargando documentos:", error);
+        if (!cancelled && ticket === vigenciaDocumentos.current) {
+          console.error("Error cargando documentos:", error);
+        }
       }
     };
 
@@ -788,7 +834,7 @@ const Dashboard = () => {
     return () => {
       cancelled = true;
     };
-  }, [cargandoPreferencias, preferenciasVisualizacion?.mostrarDocumentosSolicitados, filtroDias]);
+  }, [cargandoPreferencias, preferenciasVisualizacion?.mostrarDocumentosSolicitados, filtroDias, claveFecha]);
 
   // Función para abrir el modal de visualización
 const handleOpenViewModal = (cliente) => {
@@ -983,7 +1029,7 @@ const handleOpenViewModal = (cliente) => {
             onKeyDown={(e) => manejarTeclaKpiCard(e, "clientes")}
           />
           <DashboardKpiTile
-            label="Grupos Familiares"
+            label={`Grupos ${fechaOperacion.anio}`}
             value={estadisticas.totalGruposFamiliares}
             icon={<FaProjectDiagram />}
             onClick={() => abrirKpiModal("grupos")}
@@ -1102,7 +1148,7 @@ const handleOpenViewModal = (cliente) => {
                               const año = fechaNac.getFullYear();
                               
                               // Calcular edad
-                              const hoy = new Date();
+                              const hoy = fechaParaConsulta();
                               let edad = hoy.getFullYear() - año;
                               const mesActual = hoy.getMonth() + 1;
                               const diaActual = hoy.getDate();
@@ -1161,12 +1207,15 @@ const handleOpenViewModal = (cliente) => {
                   <Form.Select
                     size="sm"
                     value={mesPagosSeleccionado}
-                    onChange={(e) => setMesPagosSeleccionado(e.target.value)}
+                    onChange={(e) => {
+                      mesPagosExplicito.current = true;
+                      setMesPagosSeleccionado(e.target.value);
+                    }}
                     className="dashboard-widget__select"
                   >
                           {(() => {
                             const meses = [];
-                            const hoy = new Date();
+                            const hoy = fechaParaConsulta();
                             for (let i = 0; i < 12; i++) {
                               const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
                               const año = fecha.getFullYear();
@@ -1413,7 +1462,7 @@ const handleOpenViewModal = (cliente) => {
         ) : documentosProximosVencer.length > 0 ? (
           documentosProximosVencer.map(doc => {
             const fechaVenc = new Date(doc.fecha_vencimiento);
-            const hoy = new Date();
+            const hoy = fechaParaConsulta();
             const diasRestantes = Math.ceil((fechaVenc - hoy) / (1000 * 60 * 60 * 24));
             return (
               <tr key={doc.id}>
@@ -1563,12 +1612,15 @@ const handleOpenViewModal = (cliente) => {
                 <Form.Select
                   size="sm"
                   value={mesCoberturasSeleccionado}
-                  onChange={(e) => setMesCoberturasSeleccionado(e.target.value)}
+                  onChange={(e) => {
+                    mesCoberturasExplicito.current = true;
+                    setMesCoberturasSeleccionado(e.target.value);
+                  }}
                   style={{ minWidth: "150px" }}
                 >
                   {(() => {
                     const meses = [];
-                    const hoy = new Date();
+                    const hoy = fechaParaConsulta();
                     for (let i = 0; i < 12; i++) {
                       const fecha = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
                       const anio = fecha.getFullYear();

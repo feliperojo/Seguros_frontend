@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import apiRequest from "../services/api";
 import { getEstadoGrupoConfig, ordenarResumenGrupos } from "../constants/estadosGrupoFamiliar";
 
-const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
+const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado, anio = null, claveFecha = "real" }) => {
   const [resumenEstados, setResumenEstados] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState(null);
@@ -14,7 +14,15 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
       setCargando(true);
       setError(null);
       try {
-        const res = await apiRequest("estados/resumen-grupos", "GET");
+        const params = new URLSearchParams();
+        if (anio && anio !== "all") {
+          params.set("anio", anio);
+        }
+        const query = params.toString();
+        const res = await apiRequest(
+          query ? `estados/resumen-grupos?${query}` : "estados/resumen-grupos",
+          "GET"
+        );
         if (cancelled) return;
         // El endpoint devuelve un array de objetos
         const datos = res?.data || res || [];
@@ -41,7 +49,7 @@ const ResumenGruposEstados = ({ onEstadoClick, estadoSeleccionado }) => {
     return () => {
       cancelled = true;
     };
-  }, []); // Solo se ejecuta una vez al montar
+  }, [anio, claveFecha]);
 
   // Ordenar estados según un orden lógico
   const estadosConDatos = useMemo(

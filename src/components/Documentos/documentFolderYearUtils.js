@@ -1,4 +1,6 @@
-export const getCurrentYear = () => new Date().getFullYear();
+import { anioOperacion } from "../../utils/fechaOperacion";
+
+export const getCurrentYear = () => anioOperacion();
 
 export const isValidYearName = (nombre = "") => /^(19|20)\d{2}$/.test(String(nombre).trim());
 

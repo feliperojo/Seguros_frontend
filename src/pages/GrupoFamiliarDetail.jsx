@@ -17,6 +17,9 @@ import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import { deriveCounts } from "../utils/groupCounters";
 import { formatDisplayName } from "../utils/names";
 import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPresencia";
+import useFechaOperacion from "../hooks/useFechaOperacion";
+import { etiquetaEstadoGestion } from "../utils/renovacionEstadoGestion";
+import { fechaParaConsulta } from "../utils/fechaOperacion";
 import GrupoFamiliarEdicionAlerta, {
   otroUsuarioEstaEditando,
 } from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
@@ -41,8 +44,6 @@ import {
   COBERTURA_TIPO_DENTAL_MS,
 } from "../utils/coberturaDental";
 
-const ANIO_ACTUAL = new Date().getFullYear();
-const ANIO_RENOVACION = ANIO_ACTUAL + 1;
 
 const etiquetaProductoCierre = (tipo = "") => {
   const raw = String(tipo || "").trim();
@@ -258,6 +259,25 @@ const ResumenCierrePanel = ({
       </div>
     </div>
   );
+};
+
+const AvisoGestionRenovacion = ({ cierreAnio, anioConsultado }) => {
+  if (cierreAnio?.proceso_ejecutado === true) return null;
+
+  const gestion = cierreAnio?.gestion || {};
+  const anioDestino = Number(
+    cierreAnio?.anio_destino || gestion.anio_destino || Number(anioConsultado) + 1
+  );
+  const estado = String(gestion.estado_gestion || "").toLowerCase();
+
+  let texto = `Sin gestión para ${anioDestino}. Se recomienda confirmar con el cliente si desea renovar.`;
+  if (gestion.existe && estado === "no_renovara") {
+    texto = `Pre-renovación para ${anioDestino}: No renovará. Pendiente de completar el cierre de ${anioConsultado} para este grupo.`;
+  } else if (gestion.existe) {
+    texto = `Pre-renovación para ${anioDestino}: ${etiquetaEstadoGestion(estado)}.`;
+  }
+
+  return <div className="alert alert-light border small mb-2">{texto}</div>;
 };
 
 // ================== Helpers ==================
@@ -1057,6 +1077,9 @@ const buildNombreCompleto = (o = {}) =>
     .trim();
 // ================== Componente ==================
 const GrupoFamiliarDetail = () => {
+  const fechaOperacion = useFechaOperacion();
+  const ANIO_ACTUAL = fechaOperacion.anio;
+  const ANIO_RENOVACION = ANIO_ACTUAL + 1;
   const { id } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const anioUrl = useMemo(() => {
@@ -1090,7 +1113,15 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [anioConfiguracionVigente, setAnioConfiguracionVigente] = useState(null);
   const [anioConsultado, setAnioConsultado] = useState(ANIO_ACTUAL);
   const [aniosDisponibles, setAniosDisponibles] = useState([]);
+  // Incluye la consulta explícita aunque todavía no tenga un periodo archivado.
+  const aniosSelector = useMemo(
+    () => Array.from(new Set([...aniosDisponibles, anioConsultado]))
+      .filter((year) => Number.isFinite(year) && year > 1900)
+      .sort((a, b) => b - a),
+    [aniosDisponibles, anioConsultado]
+  );
   const [cierreAnio, setCierreAnio] = useState(null);
+  const [informacionAnioDisponible, setInformacionAnioDisponible] = useState(true);
   const [cierreLoading, setCierreLoading] = useState(false);
   const [cierreError, setCierreError] = useState("");
   const [showRenovacionModal, setShowRenovacionModal] = useState(false);
@@ -1110,7 +1141,7 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   // Presencia al abrir el grupo (informativo: quién lo está visualizando).
   // El guardado usa payload legacy completo; la presencia no debe cambiar el modo de save.
   const { edicion, applyEdicionMeta, refreshEdicion, touchPresencia } = useGrupoFamiliarEdicionPresencia(id, {
-    registrarPresencia: !loading && Boolean(id) && !esAnioPasado,
+    registrarPresencia: !loading && Boolean(id) && !esAnioPasado && informacionAnioDisponible !== false,
     activo: !esAnioPasado && (isEditing || saving),
   });
 
@@ -1242,6 +1273,13 @@ const [grupoVersion, setGrupoVersion] = useState(null);
 // Mantener ingresoFamiliar sincronizado con los miembros (detalle/edición)
 useEffect(() => {
   if (!Array.isArray(familyMembers)) return;
+  if (informacionAnioDisponible === false && familyMembers.length === 0) {
+    setFormData((prev) => {
+      if (!prev || prev.ingresoFamiliar === "") return prev;
+      return { ...prev, ingresoFamiliar: "" };
+    });
+    return;
+  }
 
   const total = calcIngresoFamiliar(familyMembers);
 
@@ -1250,7 +1288,7 @@ useEffect(() => {
     if (cur.ingresoFamiliar === total) return prev; // evita renders innecesarios
     return { ...cur, ingresoFamiliar: total };
   });
-}, [familyMembers]);
+}, [familyMembers, periodoRelativo, informacionAnioDisponible]);
 
 
 // ✅ usar el estado real
@@ -1270,13 +1308,17 @@ console.log("Ingreso Familiar:", total);
     setShowProductModal(false);
   };
 
+  const cargaDetalleRef = useRef(0);
+
   const reload = async () => {
+    const ticket = ++cargaDetalleRef.current;
     setLoading(true);
     setLoadError("");
     try {
       const { data: full, meta } = await GrupoFamiliarService.fetchFullGrupo(id, {
         anio: anioUrl,
       });
+      if (ticket !== cargaDetalleRef.current) return;
       applyEdicionMeta(meta);
       const fullData = unwrapFull(full);
 
@@ -1316,7 +1358,9 @@ console.log("Ingreso Familiar:", total);
       setAnioConfiguracionVigente(
         Number.isFinite(anioConfig) && anioConfig > 0 ? anioConfig : null
       );
-      if (relativo === "pasado") {
+      const infoDisponible = fullData?.informacion_anio_disponible;
+      setInformacionAnioDisponible(infoDisponible !== false);
+      if (relativo === "pasado" || infoDisponible === false) {
         setIsEditing(false);
         setEditBaseline(null);
         setShowRetiroModal(false);
@@ -1344,17 +1388,18 @@ console.log("Ingreso Familiar:", total);
         Number.isFinite(estadoIdNum) && estadoIdNum > 0 ? estadoIdNum : null
       );
     } catch (err) {
+      if (ticket !== cargaDetalleRef.current) return;
       console.error(err);
       setLoadError(err?.message || "No se pudo cargar el grupo.");
     } finally {
-      setLoading(false);
+      if (ticket === cargaDetalleRef.current) setLoading(false);
     }
   };
 
   useEffect(() => {
     reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, anioUrl]);
+  }, [id, anioUrl, ANIO_ACTUAL]);
 
   useEffect(() => {
     if (!id) {
@@ -1370,10 +1415,6 @@ console.log("Ingreso Familiar:", total);
         const normalizados = (Array.isArray(anios) ? anios : [])
           .map((y) => Number(y))
           .filter((y) => Number.isFinite(y) && y > 1900);
-        // Asegura que el año actual aparezca siempre (selector + opción Renovar).
-        if (!normalizados.includes(ANIO_ACTUAL)) {
-          normalizados.push(ANIO_ACTUAL);
-        }
         if (!cancelled) {
           setAniosDisponibles(Array.from(new Set(normalizados)).sort((a, b) => b - a));
         }
@@ -1401,9 +1442,6 @@ console.log("Ingreso Familiar:", total);
       const normalizados = (Array.isArray(anios) ? anios : [])
         .map((y) => Number(y))
         .filter((y) => Number.isFinite(y) && y > 1900);
-      if (!normalizados.includes(ANIO_ACTUAL)) {
-        normalizados.push(ANIO_ACTUAL);
-      }
       setAniosDisponibles(Array.from(new Set(normalizados)).sort((a, b) => b - a));
     } catch (err) {
       console.error("Error al cargar años disponibles del grupo:", err);
@@ -1483,6 +1521,13 @@ console.log("Ingreso Familiar:", total);
 // Mantener ingresoFamiliar sincronizado con los miembros (detalle/edición)
 useEffect(() => {
   if (!Array.isArray(familyMembers) || !formData) return;
+  if (informacionAnioDisponible === false && familyMembers.length === 0) {
+    setFormData((prev) => {
+      if (!prev || prev.ingresoFamiliar === "") return prev;
+      return { ...prev, ingresoFamiliar: "" };
+    });
+    return;
+  }
   const total = calcIngresoFamiliar(familyMembers);
 
   setFormData(prev => {
@@ -1490,7 +1535,7 @@ useEffect(() => {
     // evita renders innecesarios
     return prev.ingresoFamiliar === total ? prev : { ...prev, ingresoFamiliar: total };
   });
-}, [familyMembers, formData]);
+}, [familyMembers, formData, periodoRelativo, informacionAnioDisponible]);
 
 
   // Utilidad: mapea la respuesta {cliente, cobertura} a tu shape de card
@@ -1698,7 +1743,7 @@ const handleCreateMemberRemote = async (memberData) => {
         productoCotizacion
       ),
       estado_cobertura: memberData.estado_cobertura || "Sí",
-      ano_cobertura: String(memberData.ano_cobertura || new Date().getFullYear()),
+      ano_cobertura: String(memberData.ano_cobertura || ANIO_ACTUAL),
       fecha_activacion: memberData.fecha_activacion 
         ? String(memberData.fecha_activacion).slice(0,10)
         : null,
@@ -1800,7 +1845,7 @@ const handleCreateMemberRemote = async (memberData) => {
   };
 
   const formatTodayLocal = () => {
-    const now = new Date();
+    const now = fechaParaConsulta();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
@@ -1843,9 +1888,13 @@ const handleCreateMemberRemote = async (memberData) => {
   }, []);
   useEffect(() => {
     if (!Array.isArray(familyMembers)) return;
+    if (informacionAnioDisponible === false && familyMembers.length === 0) {
+      handleDerivedCounts({ taxes: "", cobertura: "" });
+      return;
+    }
     const { taxes, cobertura } = deriveCounts(familyMembers);
     handleDerivedCounts({ taxes, cobertura });
-  }, [familyMembers, handleDerivedCounts]);
+  }, [familyMembers, handleDerivedCounts, periodoRelativo, informacionAnioDisponible]);
 
 
 
@@ -2060,8 +2109,10 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
     );
   }
   const isProspecto = toEstadoCode(estadoActual) === 'PROSPECTO';
-  const canAddMember = esAnioPasado ? false : (isProspecto ? true : isEditing);
-  const readOnly = esAnioPasado || !isEditing;
+  const sinInformacionDelAnio = informacionAnioDisponible === false;
+  const puedeEditarAnio = !esAnioPasado && !sinInformacionDelAnio;
+  const canAddMember = puedeEditarAnio ? (isProspecto ? true : isEditing) : false;
+  const readOnly = !puedeEditarAnio || !isEditing;
   const edicionBloqueada = otroUsuarioEstaEditando(edicion);
 
 
@@ -2109,7 +2160,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
 
         <GrupoFamiliarEdicionAlerta edicion={edicion} />
 
-        {aniosDisponibles.length >= 1 && (
+        {aniosSelector.length >= 1 && (
           <div className="gf-detalle__toolbar">
             <div className="d-flex align-items-center gap-2">
               <i className="fas fa-calendar-alt gf-detalle__toolbar-icon" aria-hidden="true" />
@@ -2127,7 +2178,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 onChange={(e) => handleAnioConsultaChange(e.target.value)}
                 aria-label="Consultar año del grupo familiar"
               >
-                {aniosDisponibles.map((year) => (
+                {aniosSelector.map((year) => (
                   <option key={year} value={year}>
                     {year}
                     {year === ANIO_ACTUAL ? " (actual)" : ""}
@@ -2136,6 +2187,12 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               </Form.Select>
             </div>
           </div>
+        )}
+
+        {sinInformacionDelAnio && (
+          <Alert variant="warning" className="mb-3">
+            Este grupo no tiene información para {anioConsultado}.
+          </Alert>
         )}
 
         {periodoRelativo === "pasado" && (
@@ -2152,8 +2209,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 </>
               ) : (
                 <>
-                  Viendo el cierre del año {anioConsultado} — histórico, solo
-                  lectura
+                  Consultando información de {anioConsultado} · Solo lectura
                 </>
               )}
             </div>
@@ -2182,7 +2238,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           currentCode={estadoActual}
           grupoId={id}
           productoLabel={productoCotizacion?.label || null}
-          onDescartar={esAnioPasado ? undefined : async ({ motivo, metadata } = {}) => {
+          onDescartar={puedeEditarAnio ? async ({ motivo, metadata } = {}) => {
             await descartarCoberturasDelGrupo();
             const ok = await advanceState(
               "DESCARTADO",
@@ -2192,17 +2248,17 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
             if (!ok) {
               throw new Error("No se pudo marcar el grupo como descartado.");
             }
-          }}
-          onReactivarSeguimiento={esAnioPasado ? undefined : async () => {
+          } : undefined}
+          onReactivarSeguimiento={puedeEditarAnio ? async () => {
             await advanceState("SEGUIMIENTO");
-          }}
+          } : undefined}
         />
 
 
 
 
 
-        {!esAnioPasado && (
+        {puedeEditarAnio && (
         <div className="gf-detalle__actions">
           {readOnly ? (
             <div className="d-flex gap-2">
@@ -2371,7 +2427,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                               {productoCotizacion?.label || 'Sin plan'}
                       </span>
                     </div>
-                    {isEditing && !esAnioPasado && (
+                    {isEditing && puedeEditarAnio && (
                       <button
                         type="button"
                         className="gf-detalle__plan-change"
@@ -2417,17 +2473,18 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                     <h6 className="fw-semibold text-success mb-1">
                       Renovación al año siguiente
                     </h6>
-                    <p className="text-muted small mb-2">
-                      Resultado del proceso de renovación de {anioConsultado}: qué
-                      coberturas (Salud, Dental MS u otros) pasaron al año
-                      siguiente y cuáles no.
-                    </p>
-                    {cierreAnio.sin_proceso_renovacion_formal ? (
-                      <div className="alert alert-info mb-0">
-                        Este año no tiene un proceso de renovación formal
-                        registrado.
-                      </div>
-                    ) : (
+                    <AvisoGestionRenovacion
+                      cierreAnio={cierreAnio}
+                      anioConsultado={anioConsultado}
+                    />
+                    {cierreAnio.proceso_ejecutado === true && (
+                      <p className="text-muted small mb-2">
+                        Resultado del proceso de renovación de {anioConsultado}: qué
+                        coberturas (Salud, Dental MS u otros) pasaron al año
+                        siguiente y cuáles no.
+                      </p>
+                    )}
+                    {cierreAnio.proceso_ejecutado === true && (
                       <div className="row g-3">
                         <ResumenCierrePanel
                           titulo="Renovadas"
@@ -2506,6 +2563,13 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
           canAdd={canAddMember}
           isProspecto={isProspecto}
           anioConsultado={anioConsultado}
+          cierreAnioPendiente={
+            anioConsultado < ANIO_ACTUAL &&
+            !cierreLoading && !cierreError &&
+            Number(cierreAnio?.grupo_familiar_id) === Number(id) &&
+            Number(cierreAnio?.anio) === anioConsultado &&
+            cierreAnio?.proceso_ejecutado === false
+          }
           preciosGuardados={preciosGuardados}
           defaultCoberturaTipo={
             productoCotizacion?.label ||
@@ -2602,7 +2666,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         </Modal>
 
         {/* ✅ Modal de Retiro/Cancelación - Solo actualiza estado local */}
-        {!esAnioPasado && (
+        {puedeEditarAnio && (
           <RetiroCancelacionModal
             show={showRetiroModal}
             onHide={() => setShowRetiroModal(false)}

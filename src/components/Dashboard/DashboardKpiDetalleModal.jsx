@@ -3,6 +3,8 @@ import { Modal, Spinner } from "react-bootstrap";
 import { Link } from "react-router-dom";
 import apiRequest from "../../services/api";
 import { ordenarResumenGrupos } from "../../constants/estadosGrupoFamiliar";
+import useFechaOperacion from "../../hooks/useFechaOperacion";
+import { claveFechaOperacion } from "../../utils/fechaOperacion";
 
 const COBERTURA_ITEMS = [
   {
@@ -160,7 +162,8 @@ export default function DashboardKpiDetalleModal({
   const [cargandoGrupos, setCargandoGrupos] = useState(false);
   const [errorGrupos, setErrorGrupos] = useState(null);
   const [filaAbierta, setFilaAbierta] = useState(null);
-
+  const fechaOperacion = useFechaOperacion();
+  const claveFecha = claveFechaOperacion(fechaOperacion);
   useEffect(() => {
     if (!show) setFilaAbierta(null);
   }, [show]);
@@ -171,8 +174,7 @@ export default function DashboardKpiDetalleModal({
     let activo = true;
     setCargandoGrupos(true);
     setErrorGrupos(null);
-
-    apiRequest("estados/resumen-grupos", "GET")
+    apiRequest(`estados/resumen-grupos?anio=${fechaOperacion.anio}`, "GET")
       .then((res) => {
         if (!activo) return;
         const datos = res?.data || res || [];
@@ -190,11 +192,11 @@ export default function DashboardKpiDetalleModal({
     return () => {
       activo = false;
     };
-  }, [show, tipo]);
+  }, [show, tipo, claveFecha, fechaOperacion.anio]);
 
   const titulos = {
     clientes: "Detalle de Clientes",
-    grupos: "Detalle de Grupos Familiares",
+    grupos: `Grupos ${fechaOperacion.anio}`,
     coberturas: "Detalle — Estado de Coberturas MS",
     cotizacion: "Detalle — Cotizaciones",
     otros_productos: "Detalle — Otras coberturas",
@@ -204,7 +206,7 @@ export default function DashboardKpiDetalleModal({
 
   const enlaces = {
     clientes: "/clientes/lista",
-    grupos: "/grupofamiliar/lista",
+    grupos: `/grupofamiliar/lista?anio=${fechaOperacion.anio}`,
     cotizacion: "/grupofamiliar/lista?estado=flujo_cotizacion&anio=all",
     canceladas: "/informes/coberturas-canceladas-retiradas?tipo=cancelados",
     retiradas: "/informes/coberturas-canceladas-retiradas?tipo=retiros",
@@ -272,11 +274,7 @@ export default function DashboardKpiDetalleModal({
       return (
         <>
           <p className="dashboard-kpi-detalle-intro">
-            Grupos familiares según su estado actual en el flujo de trabajo.
-            El estado <strong>Grupo Familiar</strong> se divide en{" "}
-            <strong>activos</strong> e <strong>inactivos</strong> (todas las
-            coberturas canceladas o retiradas). Pulsa un dato para ver cuántos
-            son de productos MS y cuántos de productos privados.
+            Grupos de {fechaOperacion.anio}
           </p>
           <div className="dashboard-kpi-detalle-list">
             {estadosGrupo.map(({ key, valor, config, productos }) => {
@@ -300,9 +298,6 @@ export default function DashboardKpiDetalleModal({
               );
             })}
           </div>
-          <p className="dashboard-kpi-detalle-total mt-3 mb-0">
-            Total grupos: <strong>{estadisticas?.totalGruposFamiliares ?? 0}</strong>
-          </p>
         </>
       );
     }

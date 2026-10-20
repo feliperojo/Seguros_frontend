@@ -10,6 +10,7 @@ import {
   FaTable,
 } from "react-icons/fa";
 import { Link, useSearchParams } from "react-router-dom";
+import useFechaOperacion from "../hooks/useFechaOperacion";
 import DateInputWithCalendar from "../components/common/DateInputWithCalendar";
 import Pagination from "../components/Pagination";
 import {
@@ -72,14 +73,13 @@ const MOTIVOS_CANCELACION = [
   "OTRO",
 ];
 
-const aniosCancelacion = (() => {
-  const actual = new Date().getFullYear();
+const aniosCancelacion = (actual) => {
   const years = [];
   for (let y = actual + 1; y >= actual - 6; y -= 1) {
     years.push(y);
   }
   return years;
-})();
+};
 
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 const GRUPO_FICHA_PATH = (id) => `/grupo_familiar/${id}`;
@@ -161,6 +161,8 @@ const renderProducto = (row) => {
 };
 
 const ReporteCoberturasCanceladasRetiradasPage = () => {
+  const { anio: anioOperativo } = useFechaOperacion();
+  const aniosDisponibles = useMemo(() => aniosCancelacion(anioOperativo), [anioOperativo]);
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState(() => ({
     ...DEFAULT_FILTERS,
@@ -411,7 +413,7 @@ const ReporteCoberturasCanceladasRetiradasPage = () => {
                   onChange={(e) => handleFilterChange("anio", e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {aniosCancelacion.map((anio) => (
+                  {aniosDisponibles.map((anio) => (
                     <option key={anio} value={anio}>
                       {anio}
                     </option>

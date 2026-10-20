@@ -1,4 +1,5 @@
 import { parseApiDateToLocalDate } from "./formatters";
+import { fechaParaConsulta } from "./fechaOperacion";
 import { isDentalCoberturaTipo, isSaludCoberturaTipo } from "../constants/coberturaTipos";
 
 const toValidId = (v) => {
@@ -411,7 +412,7 @@ export function esCierreFiscalPorRenovacionAnual(m = {}) {
  * Texto del banner amarillo del miembro.
  * Renovación anual → cierre fiscal; retiro operativo → retiro programado/retirado.
  */
-export function etiquetaAvisoRetiroMiembro(m = {}, now = new Date()) {
+export function etiquetaAvisoRetiroMiembro(m = {}, now = fechaParaConsulta()) {
   if (hasFechaCobertura(m?.fecha_anulacion)) {
     return "Anulado del Grupo Familiar";
   }
@@ -423,7 +424,7 @@ export function etiquetaAvisoRetiroMiembro(m = {}, now = new Date()) {
     const anio = anioCierreFiscalMiembro(m);
     return programado && !enSeccionRetirados
       ? `Programado para cierre fiscal ${anio}`
-      : `Cierre fiscal ${anio}`;
+      : `Cobertura ${anio} cerrada · Consulta histórica`;
   }
 
   if (programado && !enSeccionRetirados) {
