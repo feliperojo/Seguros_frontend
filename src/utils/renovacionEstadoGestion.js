@@ -1,6 +1,6 @@
 export const ESTADOS_GESTION_OPTIONS = [
   { value: "sin_gestion", label: "Sin gestión", bg: "secondary" },
-  { value: "pre_renovacion", label: "Pre-renovación", bg: "info" },
+  { value: "pre_renovacion", label: "En proceso", bg: "info" },
   { value: "listo_para_renovar", label: "Listo para renovar", bg: "warning" },
   // Legacy: ya no se usa en el flujo; se mantiene solo para badge de lotes antiguos.
   { value: "pendiente_consolidar", label: "Pendiente consolidar", bg: "primary" },
@@ -47,7 +47,7 @@ export const estadoRenovacionBadge = (estado) => {
     case "pendiente":
       return { label: "Pendiente", bg: "secondary" };
     case "borrador":
-      return { label: "En pre-renovación", bg: "primary" };
+      return { label: "En proceso", bg: "primary" };
     case "consolidado":
       return { label: "Consolidado", bg: "success" };
     default:

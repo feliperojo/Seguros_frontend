@@ -46,6 +46,9 @@ const ENCABEZADOS_DETALLE = [
   "Fecha de activación",
   "Tipo de pago",
   "Día de pago",
+  "Origen",
+  "Confirmado por",
+  "Confirmado en",
 ];
 
 function celdaTexto(valor) {
@@ -235,6 +238,9 @@ function filaDetalle({ fila, mes, cobro }) {
     celdaTexto(snap.activacion),
     celdaTexto(snap.tipo),
     celdaTexto(snap.dia),
+    celdaTexto(cobro?.confirmacion_activacion_origen),
+    celdaTexto(cobro?.confirmado_activacion_por?.name),
+    celdaTexto(cobro?.confirmacion_activacion_en),
   ];
 }
 

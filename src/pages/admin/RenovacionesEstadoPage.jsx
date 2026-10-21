@@ -58,9 +58,9 @@ const ESTADOS_FILTRO = [
   },
   {
     key: "borrador",
-    label: "En pre-renovación",
+    label: "En proceso",
     descripcion:
-      "Tienen una pre-renovación en borrador para el año destino, pendiente de consolidar.",
+      "Tienen una renovación en proceso (borrador) para el año destino, pendiente de consolidar.",
   },
   {
     key: "consolidado",
@@ -76,9 +76,9 @@ const ESTADOS_FILTRO = [
   },
   {
     key: "inactivo_con_prerenovacion",
-    label: "Inactivo + pre-renovación",
+    label: "Inactivo + en proceso",
     descripcion:
-      "Grupo inactivo que además tiene una pre-renovación en borrador para el año destino, pendiente de consolidar.",
+      "Grupo inactivo que además tiene una renovación en proceso (borrador) para el año destino, pendiente de consolidar.",
   },
 ];
 
@@ -86,8 +86,8 @@ const DESCRIPCIONES_GESTION = {
   "": "Muestra los grupos sin filtrar por el estado de gestión comercial.",
   sin_gestion:
     "Todavía no tienen pre-renovación, o la pre-renovación aún no tiene una gestión asignada.",
-  pre_renovacion: "La pre-renovación está en curso.",
-  listo_para_renovar: "La pre-renovación quedó lista para consolidar.",
+  pre_renovacion: "La renovación está en proceso.",
+  listo_para_renovar: "La renovación quedó lista para consolidar.",
   renovado: "El grupo ya fue renovado para el año destino.",
   renovado_automatico: "La renovación se aplicó de forma automática.",
   anulado: "La renovación fue anulada.",
@@ -527,7 +527,7 @@ const RenovacionesEstadoPage = () => {
                         {showAlertaInactivo && (
                           <span
                             className="gf-listado__filter-pill-alert"
-                            aria-label={`${inactivosConPrerenovacion} con pre-renovación pendiente`}
+                            aria-label={`${inactivosConPrerenovacion} en proceso pendiente`}
                           >
                             <FaExclamationCircle aria-hidden="true" />
                             <span className="gf-listado__filter-pill-alert-n">
@@ -549,7 +549,7 @@ const RenovacionesEstadoPage = () => {
                     {inactivosConPrerenovacion !== 1 ? "s" : ""}
                   </strong>{" "}
                   con pre-renovación generada pendiente de consolidar. Use el
-                  filtro <em>Inactivo + pre-renovación</em> o el ícono en{" "}
+                  filtro <em>Inactivo + en proceso</em> o el ícono en{" "}
                   <em>Grupo inactivo</em>.
                 </p>
               )}

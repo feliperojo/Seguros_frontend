@@ -1703,7 +1703,7 @@ const AuditoriaRunDetallePage = () => {
                       {includeRenovacionesEnabled && (
                         <th
                           className="text-nowrap"
-                          title="Estado del lote de renovación: Pendiente, En pre-renovación o Consolidado (solo titular del grupo)"
+                          title="Estado del lote de renovación: Pendiente, En proceso o Consolidado (solo titular del grupo)"
                         >
                           Estado
                         </th>

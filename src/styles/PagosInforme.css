@@ -208,6 +208,13 @@ button.pagos-informe__estado-btn:focus-visible {
   word-break: break-word;
 }
 
+.pagos-informe__origen-activacion {
+  display: block;
+  font-size: 0.6rem;
+  color: #64748b;
+  line-height: 1.2;
+}
+
 .pagos-informe__situacion {
   display: inline-block;
   font-size: 0.6875rem;

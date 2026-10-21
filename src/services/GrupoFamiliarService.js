@@ -1,6 +1,7 @@
 // services/GrupoFamiliarService.js
 import apiRequest from "./api";
 import { sonMismoProductoParaConflicto } from "../constants/coberturaTipos";
+import { camposConfirmacionActivacion } from "../utils/confirmacionActivacionProducto";
 
 // Base paths (evita typos y facilita mantenimiento)
 const BASE_GF = "grupo_familiar";
@@ -121,13 +122,20 @@ appendMiembro: async (grupoId, payload, headers = {}) => {
     return await apiRequest(`${BASE_GR}/${grupoId}/historial-estado`, "GET");
   },
 
-  // headers opcional por si quieres auditar/etiquetar la transición
-  setEstado: async (grupoId, codigo, motivo = null, metadata = null, headers = {}) => {
-    return await apiRequest(`${BASE_GR}/${grupoId}/estado`, "POST", {
+  previewPagosInicialesActivacion: async (grupoId) => {
+    return await apiRequest(`${BASE_GR}/${grupoId}/activacion/pagos-iniciales`, "GET");
+  },
+
+  // headers opcional por si quieres auditar/etiquetar la transición.
+  // extra solo admite las dos confirmaciones y la huella del backend; no importes.
+  setEstado: async (grupoId, codigo, motivo = null, metadata = null, extra = null, headers = {}) => {
+    const body = {
       codigo,
       motivo,
       metadata,
-    }, headers);
+      ...camposConfirmacionActivacion(extra),
+    };
+    return await apiRequest(`${BASE_GR}/${grupoId}/estado`, "POST", body, headers);
   },
 
   // ---- Coberturas ----

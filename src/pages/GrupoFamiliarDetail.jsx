@@ -20,6 +20,12 @@ import useGrupoFamiliarEdicionPresencia from "../hooks/useGrupoFamiliarEdicionPr
 import useFechaOperacion from "../hooks/useFechaOperacion";
 import { etiquetaEstadoGestion } from "../utils/renovacionEstadoGestion";
 import { fechaParaConsulta } from "../utils/fechaOperacion";
+import {
+  camposConfirmacionActivacion,
+  estadoInicialConfirmacionActivacion,
+  previewSigueVigente,
+  puedeConfirmarActivacion,
+} from "../utils/confirmacionActivacionProducto";
 import GrupoFamiliarEdicionAlerta, {
   otroUsuarioEstaEditando,
 } from "../components/GrupoFamiliar/GrupoFamiliarEdicionAlerta";
@@ -1105,6 +1111,12 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [showActionsDropdown, setShowActionsDropdown] = useState(false);
   const [showConfirmTerminadoModal, setShowConfirmTerminadoModal] = useState(false);
   const [pendingAdvanceTo, setPendingAdvanceTo] = useState(null);
+  const [previewPagosActivacion, setPreviewPagosActivacion] = useState(null);
+  const [previewPagosLoading, setPreviewPagosLoading] = useState(false);
+  const [errorPagosActivacion, setErrorPagosActivacion] = useState("");
+  const [confirmoActivacionAseguradora, setConfirmoActivacionAseguradora] = useState(false);
+  const [registrarPagosIniciales, setRegistrarPagosIniciales] = useState(false);
+  const previewPagosSolicitud = useRef(0);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
   const [modoHistorico, setModoHistorico] = useState(false);
@@ -1788,14 +1800,64 @@ const handleCreateMemberRemote = async (memberData) => {
 };
 
 
-  const advanceState = async (targetCode, motivo = null, metadata = null) => {
+  const reiniciarDecisionesActivacion = () => {
+    previewPagosSolicitud.current += 1;
+    const limpio = estadoInicialConfirmacionActivacion();
+    setConfirmoActivacionAseguradora(limpio.confirmoActivacion);
+    setRegistrarPagosIniciales(limpio.registrarPagos);
+    setPreviewPagosActivacion(limpio.preview);
+    setPreviewPagosLoading(limpio.previewLoading);
+    setErrorPagosActivacion(limpio.previewError);
+  };
+
+  const cargarPreviewPagosActivacion = async () => {
+    const solicitud = ++previewPagosSolicitud.current;
+    setPreviewPagosLoading(true);
+    setErrorPagosActivacion("");
+    setPreviewPagosActivacion(null);
+    try {
+      const res = await GrupoFamiliarService.previewPagosInicialesActivacion(id);
+      if (!previewSigueVigente(solicitud, previewPagosSolicitud.current)) return;
+      setPreviewPagosActivacion(res?.data ?? res);
+    } catch (e) {
+      if (!previewSigueVigente(solicitud, previewPagosSolicitud.current)) return;
+      setPreviewPagosActivacion(null);
+      setErrorPagosActivacion(e?.message || "No se pudieron consultar los pagos iniciales.");
+    } finally {
+      if (previewSigueVigente(solicitud, previewPagosSolicitud.current)) {
+        setPreviewPagosLoading(false);
+      }
+    }
+  };
+
+  const alternarRegistroPagosIniciales = (marcado) => {
+    setRegistrarPagosIniciales(marcado === true);
+    if (marcado !== true) {
+      previewPagosSolicitud.current += 1;
+      setPreviewPagosActivacion(null);
+      setErrorPagosActivacion("");
+      setPreviewPagosLoading(false);
+      return;
+    }
+    cargarPreviewPagosActivacion();
+  };
+
+  const cerrarConfirmacionTerminado = () => {
+    if (advancing) return;
+    setShowConfirmTerminadoModal(false);
+    setPendingAdvanceTo(null);
+    reiniciarDecisionesActivacion();
+  };
+
+  const advanceState = async (targetCode, motivo = null, metadata = null, extra = null) => {
     setAdvancing(true);
     try {
       const res = await GrupoFamiliarService.setEstado(
         id,
         targetCode,
         motivo ?? `Cambio a ${targetCode}`,
-        metadata
+        metadata,
+        extra
       );
       setEstadoActual(toEstadoCode(targetCode) || targetCode);
       setEstadoIdActual(null); // se refresca en reload()
@@ -1803,11 +1865,11 @@ const handleCreateMemberRemote = async (memberData) => {
       const promovidos = Number(res?.miembros_promovidos_a_cliente || 0);
       const labelDestino =
         String(targetCode).toUpperCase() === "GRUPO_FAMILIAR" ? "TERMINADO" : targetCode;
-      const extra =
+      const avisoPromovidos =
         String(targetCode).toUpperCase() === "GRUPO_FAMILIAR" && promovidos > 0
           ? ` ${promovidos} contacto(s) pasaron a cliente.`
           : "";
-      showToast("success", "Etapa actualizada", `Ahora estás en ${labelDestino}.${extra}`);
+      showToast("success", "Etapa actualizada", `Ahora estás en ${labelDestino}.${avisoPromovidos}`);
       return true;
     } catch (e) {
       showToast("danger", "Error al cambiar de etapa", e?.message || "No fue posible cambiar de etapa.");
@@ -1827,6 +1889,7 @@ const handleCreateMemberRemote = async (memberData) => {
     }
 
     if (from === "INSCRIPCION_INI" && target === "GRUPO_FAMILIAR") {
+      reiniciarDecisionesActivacion();
       setPendingAdvanceTo(target);
       setShowConfirmTerminadoModal(true);
       return;
@@ -1838,10 +1901,30 @@ const handleCreateMemberRemote = async (memberData) => {
   };
 
   const confirmAdvanceTerminado = async () => {
+    const decision = {
+      confirmoActivacion: confirmoActivacionAseguradora,
+      registrarPagos: registrarPagosIniciales,
+      preview: previewPagosActivacion,
+      previewLoading: previewPagosLoading,
+      previewError: errorPagosActivacion,
+    };
+    if (advancing || !puedeConfirmarActivacion(decision)) return;
     const target = pendingAdvanceTo || "GRUPO_FAMILIAR";
-    setShowConfirmTerminadoModal(false);
-    setPendingAdvanceTo(null);
-    await advanceState(target);
+    const extra = camposConfirmacionActivacion({
+      confirmar_activacion: true,
+      confirmar_pagos_iniciales: registrarPagosIniciales,
+      huella: previewPagosActivacion?.huella,
+    });
+    const ok = await advanceState(target, `Cambio a ${target}`, null, extra);
+    if (ok) {
+      setShowConfirmTerminadoModal(false);
+      setPendingAdvanceTo(null);
+      reiniciarDecisionesActivacion();
+      return;
+    }
+    if (registrarPagosIniciales) {
+      await cargarPreviewPagosActivacion();
+    }
   };
 
   const formatTodayLocal = () => {
@@ -2614,11 +2697,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
         {/* Modal confirmación: Inscripción/Confirmación → Terminado (producto activo) */}
         <Modal
           show={showConfirmTerminadoModal}
-          onHide={() => {
-            if (advancing) return;
-            setShowConfirmTerminadoModal(false);
-            setPendingAdvanceTo(null);
-          }}
+          onHide={cerrarConfirmacionTerminado}
           centered
           backdrop="static"
           dialogClassName="gf-detalle-confirm-modal"
@@ -2627,30 +2706,98 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
             <Modal.Title>Confirmar producto activo</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <p className="mb-3">
+            <p className="mb-2">
               Al confirmar, el grupo familiar pasará a <strong>Terminado</strong> y
               quedará como <strong>producto activo</strong>.
             </p>
-            <Alert variant="warning" className="mb-0">
-              ⚠️ No marque este producto como activo sin antes verificar con la
-              aseguradora que el pago inicial fue recibido y que la cobertura ya
-              está activa.
-            </Alert>
+            <Form.Check
+              id="confirmar-activacion-aseguradora"
+              type="checkbox"
+              className="mb-2"
+              checked={confirmoActivacionAseguradora}
+              disabled={advancing}
+              onChange={(e) => setConfirmoActivacionAseguradora(e.target.checked)}
+              label="Confirmo la inscripción y activación en la aseguradora."
+            />
+            <Form.Check
+              id="registrar-pagos-iniciales"
+              type="checkbox"
+              className="mb-0"
+              checked={registrarPagosIniciales}
+              disabled={advancing}
+              onChange={(e) => alternarRegistroPagosIniciales(e.target.checked)}
+              label="Registrar también los pagos iniciales indicados."
+            />
+            {registrarPagosIniciales ? (
+              <>
+                <p className="mt-3 mb-2">Al confirmar, estos pagos quedarán registrados como pagados.</p>
+                {previewPagosLoading ? (
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="spinner-border spinner-border-sm" role="status" />
+                    Consultando pagos…
+                  </div>
+                ) : null}
+                {errorPagosActivacion ? (
+                  <Alert variant="danger" className="mb-2 py-2">
+                    {errorPagosActivacion}
+                  </Alert>
+                ) : null}
+                {(previewPagosActivacion?.bloqueos || []).map((bloqueo) => (
+                  <Alert
+                    key={`${bloqueo.cobertura_id}-${bloqueo.mensaje}`}
+                    variant="warning"
+                    className="mb-2 py-2"
+                  >
+                    {bloqueo.mensaje}
+                  </Alert>
+                ))}
+                {(previewPagosActivacion?.items || []).length > 0 ? (
+                  <ul className="gf-detalle-confirm-pagos">
+                    {previewPagosActivacion.items.map((item) => (
+                      <li key={item.cobertura_id}>
+                        <span>{item.etiqueta}</span>
+                        <span>{item.moneda === "USD" ? `$${item.monto}` : `${item.monto} ${item.moneda}`}</span>
+                        <span>{item.periodo_texto}</span>
+                      </li>
+                    ))}
+                    {previewPagosActivacion.total != null ? (
+                      <li className="gf-detalle-confirm-pagos__total">
+                        <span>Total</span>
+                        <span>
+                          {previewPagosActivacion.moneda === "USD"
+                            ? `$${previewPagosActivacion.total}`
+                            : `${previewPagosActivacion.total} ${previewPagosActivacion.moneda}`}
+                        </span>
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : null}
+                {!previewPagosLoading && previewPagosActivacion && !previewPagosActivacion.requiere_pago && previewPagosActivacion.confirmable ? (
+                  <p className="mb-0">No hay pagos iniciales por registrar.</p>
+                ) : null}
+              </>
+            ) : null}
           </Modal.Body>
           <Modal.Footer>
             <Button
               variant="outline-secondary"
               disabled={advancing}
-              onClick={() => {
-                setShowConfirmTerminadoModal(false);
-                setPendingAdvanceTo(null);
-              }}
+              onClick={cerrarConfirmacionTerminado}
             >
               Cancelar
             </Button>
             <Button
               variant="primary"
-              disabled={advancing}
+              disabled={
+                advancing
+                || !puedeConfirmarActivacion({
+                  confirmoActivacion: confirmoActivacionAseguradora,
+                  registrarPagos: registrarPagosIniciales,
+                  preview: previewPagosActivacion,
+                  previewLoading: previewPagosLoading,
+                  previewError: errorPagosActivacion,
+                })
+              }
               onClick={confirmAdvanceTerminado}
             >
               {advancing ? (
@@ -2659,7 +2806,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                   Activando…
                 </>
               ) : (
-                "Sí, pasar a Terminado"
+                "Confirmar y activar"
               )}
             </Button>
           </Modal.Footer>

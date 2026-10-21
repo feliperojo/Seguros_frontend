@@ -504,6 +504,17 @@ const PagosInforme = () => {
                                           </span>
                                         </OverlayTrigger>
                                         {fecha ? <span className="pagos-informe__fecha-estado" title="Última actualización del estado">{formatDateForDisplay(fecha)}</span> : null}
+                                        {cobro.confirmacion_activacion_origen ? (
+                                          <span
+                                            className="pagos-informe__origen-activacion"
+                                            title={[
+                                              cobro.confirmado_activacion_por?.name,
+                                              cobro.confirmacion_activacion_en,
+                                            ].filter(Boolean).join(" · ")}
+                                          >
+                                            {cobro.confirmacion_activacion_origen}
+                                          </span>
+                                        ) : null}
                                       </div>
                                     );
                                   })}
