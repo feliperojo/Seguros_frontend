@@ -199,6 +199,11 @@ const PreRenovacionItemCard = ({
       // Lotes antiguos pueden no tener parentesco en el JSON; usar el de la cobertura.
       parentesco:
         borrador.parentesco ?? item?.cobertura?.parentesco ?? "",
+      // Misma lógica que el grupo: el pagador vive en la cobertura.
+      pagador_id:
+        borrador.pagador_id !== undefined
+          ? borrador.pagador_id
+          : item?.cobertura?.pagador_id ?? null,
       cliente: { ...(borrador.cliente || {}) },
     };
   });
@@ -1072,35 +1077,6 @@ const PreRenovacionItemCard = ({
                   {renderEstado("agente")}
                 </div>
             )}
-            {esDental && showCoverageField("pagador_id") && (
-                <div className="col-md-4">
-                  <label className="form-label form-label-sm mb-1">Pagador</label>
-                  <select
-                    className="form-select form-select-sm"
-                    value={
-                      datos.pagador_id != null && datos.pagador_id !== ""
-                        ? String(datos.pagador_id)
-                        : ""
-                    }
-                    onChange={(e) =>
-                      cambiarDato(
-                        "pagador_id",
-                        e.target.value ? Number(e.target.value) : null,
-                        true
-                      )
-                    }
-                    disabled={disabled}
-                  >
-                    <option value="">Seleccione…</option>
-                    {pagadorOptions.map((opt) => (
-                      <option key={opt.id} value={String(opt.id)}>
-                        {opt.nombre}
-                      </option>
-                    ))}
-                  </select>
-                  {renderEstado("pagador_id")}
-                </div>
-            )}
 
             {showCoverageField("compania_id") && (
             <div className="col-md-4">
@@ -1156,6 +1132,43 @@ const PreRenovacionItemCard = ({
               {renderEstado("fecha_activacion")}
               <div className="form-text">Debe pertenecer a {anioDestino}.</div>
             </div>
+            )}
+
+            {showCoverageField("pagador_id") && (
+                <div className="col-md-4">
+                  <label className="form-label form-label-sm mb-1">Pagador</label>
+                  <select
+                    className="form-select form-select-sm"
+                    value={
+                      datos.pagador_id === undefined
+                      || datos.pagador_id === null
+                      || datos.pagador_id === ""
+                        ? "OTRO"
+                        : String(datos.pagador_id)
+                    }
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const next =
+                        raw === "OTRO" || raw === "" || raw == null
+                          ? null
+                          : Number(raw);
+                      cambiarDato(
+                        "pagador_id",
+                        Number.isNaN(next) ? null : next,
+                        true
+                      );
+                    }}
+                    disabled={disabled}
+                  >
+                    <option value="OTRO">Otro (externo)</option>
+                    {pagadorOptions.map((opt) => (
+                      <option key={opt.id} value={String(opt.id)}>
+                        {opt.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  {renderEstado("pagador_id")}
+                </div>
             )}
 
             {showCoverageField("tipo_pago") && (

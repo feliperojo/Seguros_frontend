@@ -110,6 +110,11 @@ function DetalleFila({
               {"vigente" in criterios && (
                 <span>vigente: <strong>{formatearCriterioBooleano(criterios.vigente)}</strong></span>
               )}
+              {"estado_cobertura" in criterios && (
+                <span>
+                  cobertura: <strong>{criterios.estado_cobertura}</strong>
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -350,10 +355,13 @@ export default function DashboardKpiDetalleModal({
         <>
           <p className="dashboard-kpi-detalle-intro">
             Este número cuenta <strong>coberturas</strong>, no grupos. Incluye
-            cada cobertura con <strong>activo = true</strong> cuyo grupo familiar
-            está en flujo de cotización (Prospecto → Inscripción / Confirmación).
-            No entran grupos en <strong>Terminado</strong> ni Descartado.
-            Un grupo con varias coberturas activas puede sumar más de una cotización.
+            cada cobertura con <strong>activo = true</strong> y cobertura en{" "}
+            <strong>Sí</strong> cuyo grupo familiar está en flujo de cotización
+            (Prospecto → Inscripción / Confirmación). No entran{" "}
+            <strong>Medicaid</strong>, <strong>Medicare</strong> ni{" "}
+            <strong>No</strong>, ni grupos en <strong>Terminado</strong> o
+            Descartado. Un grupo con varias coberturas activas en Sí puede sumar
+            más de una cotización.
           </p>
           <div className="dashboard-kpi-detalle-list">
             <DetalleFila
@@ -361,7 +369,7 @@ export default function DashboardKpiDetalleModal({
               valor={totalCotizacion}
               color="#f9ab00"
               descripcion="Grupo familiar en flujo de cotización (estados 1–5)"
-              criterios={{ activo: true }}
+              criterios={{ activo: true, estado_cobertura: "Sí" }}
             />
           </div>
         </>

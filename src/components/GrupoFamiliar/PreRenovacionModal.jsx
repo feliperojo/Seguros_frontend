@@ -16,7 +16,9 @@ import {
   isTomadorItem,
   itemElegibleParaCopiarEnBorrador,
   itemToCopyMember,
+  parentescoOfItem,
 } from "../../utils/preRenovacionCopy";
+import { parentescoSortRank } from "../../utils/parentescoOrder";
 import {
   ESTADOS_GESTION_EDITABLES,
   esEstadoGestionCierreSinDestino,
@@ -389,9 +391,11 @@ const PreRenovacionModal = ({
       const bRetiro = b?.renovar === false ? 1 : 0;
       if (aRetiro !== bRetiro) return aRetiro - bRetiro;
 
-      const aTomador = isTomadorItem(a) ? 0 : 1;
-      const bTomador = isTomadorItem(b) ? 0 : 1;
-      if (aTomador !== bTomador) return aTomador - bTomador;
+      // Tomador → Cónyuge → Hijo/a → resto (usa el parentesco del borrador).
+      const rank =
+        parentescoSortRank({ parentesco: parentescoOfItem(a) })
+        - parentescoSortRank({ parentesco: parentescoOfItem(b) });
+      if (rank !== 0) return rank;
 
       const na = String(nombreMiembro(a)).toLowerCase();
       const nb = String(nombreMiembro(b)).toLowerCase();

@@ -167,19 +167,40 @@ export const sortItemsPreRenovacion = (items = [], nombreFn) => {
   return list;
 };
 
-/** Opciones de pagador desde clientes visibles en el lote. */
+/** Opciones de pagador desde clientes visibles en el lote (misma lógica que el grupo). */
 export const buildPagadorOptionsFromItems = (items = []) => {
   const map = new Map();
+  const registrar = (id, nombre) => {
+    if (id == null || id === "") return;
+    const key = Number(id);
+    if (!Number.isFinite(key) || key <= 0) return;
+    if (map.has(key)) return;
+    map.set(key, {
+      id: key,
+      nombre: nombre || `Cliente #${key}`,
+    });
+  };
+
   (Array.isArray(items) ? items : []).forEach((item) => {
     const id = getItemClienteId(item);
-    if (id == null) return;
     const nombre =
       item?.cobertura?.cliente?.nombre_completo ||
       item?.cliente_existente?.nombre_completo ||
       item?.datos_borrador?.cliente?.nombre_completo ||
-      `Cliente #${id}`;
-    if (!map.has(id)) map.set(id, { id, nombre });
+      null;
+    registrar(id, nombre);
+
+    // Conservar el pagador ya elegido aunque no sea miembro del lote.
+    const pagadorId =
+      item?.datos_borrador?.pagador_id ?? item?.cobertura?.pagador_id ?? null;
+    if (pagadorId != null && pagadorId !== "") {
+      registrar(
+        pagadorId,
+        item?.cobertura?.pagador?.nombre_completo || `Cliente #${pagadorId}`
+      );
+    }
   });
+
   return Array.from(map.values()).sort((a, b) =>
     String(a.nombre).localeCompare(String(b.nombre), "es")
   );

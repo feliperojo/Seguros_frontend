@@ -35,10 +35,15 @@ export const normalizeClienteBorradorValue = (value) =>
 
 /** Parentesco del ítem de borrador (renovación o miembro nuevo). */
 export const parentescoOfItem = (item) => {
-  if (isItemAltaEnLote(item)) {
-    return item?.datos_borrador?.parentesco || "";
+  const datos = item?.datos_borrador || {};
+  // El valor editado en el lote manda: si cambia el tomador, la lista se reordena.
+  if (Object.prototype.hasOwnProperty.call(datos, "parentesco")) {
+    return datos.parentesco || "";
   }
-  return item?.cobertura?.parentesco || item?.datos_borrador?.parentesco || "";
+  if (isItemAltaEnLote(item)) {
+    return "";
+  }
+  return item?.cobertura?.parentesco || "";
 };
 
 export const isTomadorItem = (item) =>
