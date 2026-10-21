@@ -7,6 +7,10 @@ import { SUGGESTED_TAGS } from "../../utils/tagsCatalog";
 import { formatDateMMDDYYYY } from "../../utils/formatters";
 import { esGrupoPlanPrivado } from "../../constants/estadosGrupoFamiliar";
 import { clasificarGrupoFamiliar } from "../../utils/grupoFamiliarClasificacion";
+import {
+  etiquetaActivacionPrevista,
+  vistaExpandidaCotizacion,
+} from "../../utils/cotizacionFuturaListado";
 
 const CATEGORIAS_ORDEN = [
   "activos_con_cobertura",
@@ -106,7 +110,7 @@ const resolveTags = (grupo) => {
   }
 };
 
-function CategoriaMiembros({ categoria, miembros }) {
+function CategoriaMiembros({ categoria, miembros, anioOperacion = null }) {
   if (!miembros?.length) return null;
 
   const estadoInfo = miembros[0]?.estadoClasificado;
@@ -132,7 +136,9 @@ function CategoriaMiembros({ categoria, miembros }) {
           <Icon className={`text-${estadoInfo?.variant || "info"}`} />
           <strong>{estadoInfo?.label || categoria}</strong>
           <Badge bg={estadoInfo?.variant || "info"} className="ms-2">
-            {miembros.length}
+            {categoria === "cotizacion_futura"
+              ? `${miembros.length} en la cotización`
+              : miembros.length}
           </Badge>
         </div>
       </Card.Header>
@@ -181,9 +187,15 @@ function CategoriaMiembros({ categoria, miembros }) {
                 <td>{miembro.plan || "-"}</td>
                 <td>{formatCurrency(miembro.precio)}</td>
                 <td>
-                  <small className="d-block">
-                    <strong>Act:</strong> {formatDate(miembro.fecha_activacion)}
-                  </small>
+                  {etiquetaActivacionPrevista(miembro.fecha_activacion, anioOperacion) ? (
+                    <small className="d-block">
+                      {etiquetaActivacionPrevista(miembro.fecha_activacion, anioOperacion)}
+                    </small>
+                  ) : (
+                    <small className="d-block">
+                      <strong>Act:</strong> {formatDate(miembro.fecha_activacion)}
+                    </small>
+                  )}
                   {miembro.fecha_cancelacion && (
                     <small className="d-block text-danger">
                       <strong>Can:</strong>{" "}
@@ -214,6 +226,8 @@ export default function GrupoFamiliarClasificadoDetalle({
   grupo: grupoProp = null,
   anio = null,
   detallePath = null,
+  cotizacionFutura = false,
+  anioOperacion = null,
 }) {
   const [grupoLoaded, setGrupoLoaded] = useState(grupoProp);
   const [loading, setLoading] = useState(!grupoProp && !!grupoId);
@@ -233,7 +247,10 @@ export default function GrupoFamiliarClasificadoDetalle({
       setLoading(true);
       setError("");
       try {
-        const qs = anio ? `?anio=${encodeURIComponent(anio)}` : "";
+        const params = new URLSearchParams();
+        if (anio) params.set("anio", String(anio));
+        if (cotizacionFutura) params.set("cotizacion_futura", "1");
+        const qs = params.toString() ? `?${params.toString()}` : "";
         const response = await apiRequest(
           `grupo_familiar/grupos-familiares-full/${grupoId}${qs}`,
           "GET"
@@ -261,7 +278,7 @@ export default function GrupoFamiliarClasificadoDetalle({
     return () => {
       cancelled = true;
     };
-  }, [grupoId, grupoProp, anio]);
+  }, [grupoId, grupoProp, anio, cotizacionFutura]);
 
   const clasificado = useMemo(
     () => (grupoLoaded ? clasificarGrupoFamiliar(grupoLoaded) : null),
@@ -293,6 +310,20 @@ export default function GrupoFamiliarClasificadoDetalle({
   const linkTo =
     detallePath ||
     (clasificado.id ? `/grupo_familiar/${clasificado.id}` : null);
+  const vistaCotizacion = vistaExpandidaCotizacion({
+    coberturasAnio: clasificado.coberturas || [],
+    cotizacionFutura: cotizacionFutura ? grupoLoaded?.cotizacion_futura : [],
+    anioOperacion,
+  });
+  const futuras = vistaCotizacion.futuras.map((cobertura) => ({
+    ...cobertura,
+    estadoClasificado: {
+      categoria: "cotizacion_futura",
+      label: "Cotización con activación futura",
+      variant: "warning",
+      icon: null,
+    },
+  }));
 
   return (
     <div className="grupo-familiar-clasificado-detalle">
@@ -311,17 +342,21 @@ export default function GrupoFamiliarClasificadoDetalle({
               {tipo}
             </Badge>
           ))
-        ) : (
+        ) : vistaCotizacion.mostrarSinProducto ? (
           <Badge bg="dark">Sin producto</Badge>
-        )}
-        <Badge bg="info">
-          {clasificado.personas_cobertura || 0} en cobertura
-        </Badge>
-        <Badge bg="secondary">
-          {esGrupoPlanPrivado(clasificado)
-            ? "— en taxes"
-            : `${clasificado.personas_taxes || 0} en taxes`}
-        </Badge>
+        ) : null}
+        {vistaCotizacion.mostrarConteoCoberturaVigente ? (
+          <>
+            <Badge bg="info">
+              {clasificado.personas_cobertura || 0} en cobertura
+            </Badge>
+            <Badge bg="secondary">
+              {esGrupoPlanPrivado(clasificado)
+                ? "— en taxes"
+                : `${clasificado.personas_taxes || 0} en taxes`}
+            </Badge>
+          </>
+        ) : null}
       </div>
 
       <div className="d-flex align-items-center gap-2 flex-wrap mb-3">
@@ -350,10 +385,17 @@ export default function GrupoFamiliarClasificadoDetalle({
           key={key}
           categoria={key}
           miembros={clasificado.porCategoria[key]}
+          anioOperacion={anioOperacion}
         />
       ))}
 
-      {clasificado.estadisticas.total === 0 && (
+      <CategoriaMiembros
+        categoria="cotizacion_futura"
+        miembros={futuras}
+        anioOperacion={anioOperacion}
+      />
+
+      {vistaCotizacion.mostrarSinCoberturas && (
         <p className="text-muted mb-0">Este grupo no tiene coberturas.</p>
       )}
     </div>

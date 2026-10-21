@@ -86,7 +86,7 @@ const DESCRIPCIONES_GESTION = {
   "": "Muestra los grupos sin filtrar por el estado de gestión comercial.",
   sin_gestion:
     "Todavía no tienen pre-renovación, o la pre-renovación aún no tiene una gestión asignada.",
-  pre_renovacion: "La renovación está en proceso.",
+  pre_renovacion: "La pre-renovación está en curso.",
   listo_para_renovar: "La renovación quedó lista para consolidar.",
   renovado: "El grupo ya fue renovado para el año destino.",
   renovado_automatico: "La renovación se aplicó de forma automática.",

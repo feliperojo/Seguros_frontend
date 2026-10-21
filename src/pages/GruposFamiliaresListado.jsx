@@ -18,6 +18,7 @@ import RetiroCancelacionModal from "../components/RetiroCancelacionModal";
 import ResumenGruposEstados from "../components/ResumenGruposEstados";
 import GrupoFamiliarClasificadoDetalle from "../components/GrupoFamiliar/GrupoFamiliarClasificadoDetalle";
 import {
+  esGrupoEnFlujoCotizacion,
   labelEstadoGrupoParaDisplay,
   grupoFamiliarDeleteRequiereAdmin,
   personasSaludDentalParaListado,
@@ -1000,6 +1001,8 @@ useEffect(() => {
                                             : anioParaDetalle
                                         }
                                         detallePath={detallePath}
+                                        cotizacionFutura={esGrupoEnFlujoCotizacion(grupo.estado_codigo)}
+                                        anioOperacion={ANIO_ACTUAL}
                                       />
                                     </td>
                                   </tr>
