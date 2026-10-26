@@ -41,6 +41,14 @@ import {
   isProductoSaludMs,
 } from "../../constants/coberturaTipos";
 import { filterCamposCopiablesADentalMs, debeMostrarCoberturaDentalMs } from "../../utils/coberturaDental";
+import { fetchIndicadorPagosCoberturas } from "../../services/coberturaPagosApi";
+import {
+  EVENTO_PAGOS_GRUPO_ACTUALIZADOS,
+  eventoCorrespondeAlGrupo,
+  indicadoresDesdeRespuesta,
+  nivelIndicador,
+  textoDetalleIndicador,
+} from "../../utils/indicadorPagoCobertura";
 import { METAL_OPTIONS, TIPO_PAGO_OPTIONS } from "../../constants/coberturaFields";
 import "../../styles/GrupoFamiliarDetail.css";
 
@@ -251,7 +259,29 @@ const yaEstaActivoEnElGrupo = (clienteId, members) =>
 const CLIENTE_FICHA_PATH = (id) => `/clientes/${id}/ficha`;
 
 /* =================== COMPONENTE ACORDEÓN =================== */
-const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
+const ICONO_INDICADOR_PAGO = {
+  pagado: "fas fa-check",
+  pendiente: "fas fa-clock",
+  procesando: "fas fa-hourglass-half",
+  otro: "fas fa-info-circle",
+};
+
+const IndicadorPagoCobertura = ({ resumen }) => {
+  if (!resumen?.etiqueta) return null;
+  const nivel = nivelIndicador(resumen);
+  const detalle = textoDetalleIndicador(resumen);
+  return (
+    <span className={`gf-pago-ind gf-pago-ind--${nivel}`} title={detalle}>
+      <i className={ICONO_INDICADOR_PAGO[nivel]} aria-hidden="true" />
+      <span>{resumen.etiqueta}</span>
+      {detalle && detalle !== resumen.etiqueta ? (
+        <span className="visually-hidden">. {detalle}</span>
+      ) : null}
+    </span>
+  );
+};
+
+const AccordionItem = ({ id, title, icon, indicador = null, children, defaultOpen = false }) => {
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   const renderChildren = () => {
@@ -271,18 +301,21 @@ const AccordionItem = ({ id, title, icon, children, defaultOpen = false }) => {
         aria-expanded={isOpen}
         aria-controls={`accordion-panel-${id}`}
       >
-        <div className="d-flex align-items-center gap-2">
+        <div className="gf-detalle__acc-toggle-main">
           {icon && (
             <span className="gf-detalle__acc-toggle-icon">{icon}</span>
           )}
-          <span>{title}</span>
+          <span className="gf-detalle__acc-toggle-title">{title}</span>
         </div>
-        <i
-          className="fas fa-chevron-down gf-detalle__acc-chevron"
-          style={{
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-          }}
-        />
+        <span className="gf-detalle__acc-toggle-end">
+          {indicador}
+          <i
+            className="fas fa-chevron-down gf-detalle__acc-chevron"
+            style={{
+              transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+          />
+        </span>
       </button>
 
       {isOpen && (
@@ -951,6 +984,18 @@ const TomaDeDatos = ({
   const [clientFieldConfig, setClientFieldConfig] = useState(null);
   const [loadingCoverageFieldConfig, setLoadingCoverageFieldConfig] =
     useState(false);
+  const [indicadoresPagosState, setIndicadoresPagosState] = useState({
+    grupoId: null,
+    anio: null,
+    map: {},
+  });
+  const [pagosVersion, setPagosVersion] = useState(0);
+
+  const indicadoresPagos =
+    Number(indicadoresPagosState.grupoId) === Number(grupoFamiliarId) &&
+    Number(indicadoresPagosState.anio) === Number(anioConsultado || 0)
+      ? indicadoresPagosState.map
+      : {};
 
   const navigate = useNavigate();
 
@@ -958,6 +1003,47 @@ const TomaDeDatos = ({
     if (!Array.isArray(familyMembers)) return;
     onDerivedCounts?.(deriveCounts(familyMembers));
   }, [familyMembers, onDerivedCounts]);
+
+  useEffect(() => {
+    const grupoId = toValidId(grupoFamiliarId);
+    if (!grupoId) return undefined;
+    let cancelado = false;
+    const anio = Number(anioConsultado);
+    const anioParam = Number.isFinite(anio) && anio > 0 ? anio : undefined;
+
+    const cargar = async () => {
+      try {
+        const data = await fetchIndicadorPagosCoberturas(grupoId, anioParam);
+        if (cancelado) return;
+        setIndicadoresPagosState({
+          grupoId,
+          anio: anioConsultado || 0,
+          map: indicadoresDesdeRespuesta(data, null),
+        });
+      } catch {
+        if (cancelado) return;
+        setIndicadoresPagosState({
+          grupoId,
+          anio: anioConsultado || 0,
+          map: {},
+        });
+      }
+    };
+
+    cargar();
+    return () => {
+      cancelado = true;
+    };
+  }, [grupoFamiliarId, anioConsultado, pagosVersion]);
+
+  useEffect(() => {
+    const onPagos = (event) => {
+      if (!eventoCorrespondeAlGrupo(event, grupoFamiliarId)) return;
+      setPagosVersion((version) => version + 1);
+    };
+    window.addEventListener(EVENTO_PAGOS_GRUPO_ACTUALIZADOS, onPagos);
+    return () => window.removeEventListener(EVENTO_PAGOS_GRUPO_ACTUALIZADOS, onPagos);
+  }, [grupoFamiliarId]);
 
   // Cargar configuración de campos de cobertura y datos de cliente (solo visual) desde system_config
   useEffect(() => {
@@ -2748,6 +2834,11 @@ const activeNormalized = useMemo(
                         : "Datos de cobertura Salud"
                   }
                   icon={<i className="fas fa-shield-alt" />}
+                  indicador={
+                    <IndicadorPagoCobertura
+                      resumen={indicadoresPagos[Number(m.cobertura_id)]}
+                    />
+                  }
                 >
                   <div>
                       {esCoberturaAnulada(m) && (
@@ -3290,6 +3381,11 @@ const activeNormalized = useMemo(
                           : dentalDefinida
                       }`}
                       icon={<i className="fas fa-tooth" />}
+                      indicador={
+                        <IndicadorPagoCobertura
+                          resumen={indicadoresPagos[Number(d.cobertura_id)]}
+                        />
+                      }
                     >
                       <div>
                         {esCoberturaAnulada(d) && (

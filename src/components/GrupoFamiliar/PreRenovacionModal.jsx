@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import apiRequest from "../../services/api";
 import CierreFiscalBloqueo from "./CierreFiscalBloqueo";
 import { cierreFiscalDesdeError } from "../../utils/cierreFiscalBloqueo";
+import { pagoAConfirmarAlConsolidar } from "../../utils/confirmacionPagoConsolidacion";
 import ClienteExistenteModal from "../fase2/ClienteExistenteModal";
 import CopiarDatosModal from "../fase2/CopiarDatosModal";
 import MemberModal from "../fase2/MemberModal";
@@ -749,7 +750,34 @@ const PreRenovacionModal = ({
     setConsolidando(true);
     setError("");
     setBloqueoCierre(null);
+    const yaConfirmado = !!lote.pago_confirmado_externo;
+    const confirmado = pagoAConfirmarAlConsolidar({
+      esCierreSinDestino,
+      marcado: confirmoRevision,
+      yaConfirmado,
+    });
+    let marcoPago = false;
     try {
+      if (confirmado !== null) {
+        const pagoResponse = await apiRequest(
+          `/renovacion_lote/${lote.id}/pago-confirmado`,
+          "PATCH",
+          { confirmado }
+        );
+        const pagoActualizado = pagoResponse?.data ?? pagoResponse;
+        marcoPago = true;
+        setLote((prev) =>
+          prev
+            ? {
+                ...prev,
+                pago_confirmado_externo:
+                  pagoActualizado?.pago_confirmado_externo ?? confirmado,
+                pago_confirmado_por: pagoActualizado?.pago_confirmado_por ?? null,
+                pago_confirmado_en: pagoActualizado?.pago_confirmado_en ?? null,
+              }
+            : prev
+        );
+      }
       const response = await apiRequest(
         `/grupo_familiar/${grupoFamiliarId}/pre-renovacion/${lote.id}/consolidar`,
         "POST"
@@ -760,6 +788,22 @@ const PreRenovacionModal = ({
       onHide?.();
     } catch (requestError) {
       console.error("Error al consolidar la pre-renovación", requestError);
+      if (marcoPago) {
+        try {
+          await apiRequest(
+            `/renovacion_lote/${lote.id}/pago-confirmado`,
+            "PATCH",
+            { confirmado: yaConfirmado }
+          );
+          setLote((prev) =>
+            prev
+              ? { ...prev, pago_confirmado_externo: yaConfirmado }
+              : prev
+          );
+        } catch (reversionError) {
+          console.error("No se pudo revertir la confirmación de pago", reversionError);
+        }
+      }
       const bloqueo = cierreFiscalDesdeError(requestError);
       if (bloqueo) setBloqueoCierre(bloqueo);
       else setError(getErrorMessage(requestError));
@@ -947,7 +991,7 @@ const PreRenovacionModal = ({
                     >
                       {esCierreSinDestino
                         ? `Confirmo el cierre de ${anioOrigen} sin generar ${anioDestino} para este grupo.`
-                        : "Confirmo que revisé la información de todos los miembros y quiero ejecutar la renovación real para este grupo."}
+                        : `Confirmo que revisé la información de todos los miembros y quiero ejecutar la renovación real para este grupo, y confirmo el pago de ${anioDestino}. Los cobros que se generen quedarán registrados como pagados.`}
                     </label>
                   </div>
                 </div>

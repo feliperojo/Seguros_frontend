@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Form, Modal, OverlayTrigger, Popover, Spinner, Table } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import { fetchPagosGrupoFamiliar } from "../../services/coberturaPagosApi";
+import { notificarPagosGrupoActualizados } from "../../utils/indicadorPagoCobertura";
 import {
   detalleSnapshotCobro,
   ESTADOS_COBRO_EDITABLES,
@@ -268,6 +269,7 @@ const PagosGrupoFamiliarModal = ({ show, onHide, grupoFamiliarId }) => {
       );
       setConsulta(data);
       setCobroEdicion(null);
+      notificarPagosGrupoActualizados(grupoFamiliarId);
     } catch (err) {
       setErrorEdicion(err?.message || "No se pudo guardar el cobro.");
       try {

@@ -961,10 +961,84 @@ a:hover .gf-detalle__member-name {
   color: #1a365d;
 }
 
+.gf-detalle__acc-toggle-main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.gf-detalle__acc-toggle-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gf-detalle__acc-toggle-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: 0.5rem;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.gf-pago-ind {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 11rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.gf-pago-ind--pagado {
+  background: #e8f6ee;
+  color: #166534;
+}
+
+.gf-pago-ind--pendiente {
+  background: #fff6e5;
+  color: #92400e;
+}
+
+.gf-pago-ind--procesando {
+  background: #e8f1fb;
+  color: #1e40af;
+}
+
+.gf-pago-ind--otro {
+  background: #f1f5f9;
+  color: #334155;
+}
+
 .gf-detalle__acc-chevron {
   color: #64748b;
   font-size: 0.75rem;
   transition: transform 0.2s ease;
+}
+
+@media (max-width: 576px) {
+  .gf-detalle__acc-toggle {
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
+
+  .gf-detalle__acc-toggle-end {
+    margin-left: auto;
+  }
+
+  .gf-pago-ind {
+    max-width: 46vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 .gf-detalle__acc-panel {

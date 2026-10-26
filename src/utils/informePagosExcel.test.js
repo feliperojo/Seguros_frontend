@@ -361,3 +361,36 @@ test("el botón exporta las filas del informe y no consulta ni escribe cobros", 
   assert.match(fuente, /disabled=\{loading \|\| exportando \|\| rows\.length === 0\}/);
   assert.match(fuente, /Descargar Excel/);
 });
+
+test("el origen de activación se exporta y no cambia importes ni estados", () => {
+  const filtros = { anio: 2026, cliente: "", compania: "", estado: "" };
+  const pagos = [
+    pago({
+      id: 1, coberturaId: 21, mes: 7, estado: "pagado", monto: 80.5,
+      snapshot: { compania_nombre: "OSCAR", codigo_poliza: "00123" },
+    }),
+    pago({
+      id: 2, coberturaId: 22, mes: 7, estado: "pagado", monto: 19.5,
+      snapshot: null,
+    }),
+  ];
+  pagos[0].confirmacion_activacion_origen = "Confirmado en activación";
+  pagos[0].confirmacion_activacion_en = "2026-10-21T18:00:00.000000Z";
+  pagos[0].confirmado_activacion_por = { id: 4, name: "Ana Confirma" };
+
+  const { libro } = libroDe(pagos, filtros);
+  const detalle = registros(leerLibro(libro).Sheets[HOJA_DETALLE]);
+  const resumen = registros(leerLibro(libro).Sheets[HOJA_RESUMEN]);
+  const activado = detalle.find((fila) => valor(fila["ID del cobro"]) === 1);
+  const previo = detalle.find((fila) => valor(fila["ID del cobro"]) === 2);
+  assertTexto(activado.Estado, "pagado");
+  assertMoneda(activado.Monto, 80.5);
+  assertTexto(activado.Origen, "Confirmado en activación");
+  assertTexto(activado["Confirmado por"], "Ana Confirma");
+  assertTexto(activado["Confirmado en"], "2026-10-21T18:00:00.000000Z");
+  assertTexto(previo.Estado, "pagado");
+  assertMoneda(previo.Monto, 19.5);
+  assert.equal(previo.Origen, undefined);
+  assertMoneda(resumen.find((fila) => valor(fila["ID interno de cobertura"]) === 21)["Julio monto"], 80.5);
+  assertTexto(resumen.find((fila) => valor(fila["ID interno de cobertura"]) === 21)["Julio estado"], "pagado");
+});

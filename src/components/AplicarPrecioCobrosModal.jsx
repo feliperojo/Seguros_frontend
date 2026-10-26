@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Alert, Button, Form, Modal, Spinner, Table } from "react-bootstrap";
 import { formatMoney2 } from "../services/ingresos";
 import { aplicarPrecioACobros, fetchRevisionAplicarPrecio } from "../services/coberturaPagosApi";
+import { notificarPagosGrupoActualizados } from "../utils/indicadorPagoCobertura";
 import { etiquetaMes } from "../utils/periodoCobros";
 import {
   cobrosGenerados,
@@ -151,6 +152,7 @@ const AplicarPrecioCobrosModal = ({ solicitud, onCerrar }) => {
       setResultado(respuesta?.message || "Se aplicó el precio guardado.");
       setSeleccion([]);
       setMotivo("");
+      notificarPagosGrupoActualizados(solicitud.grupoFamiliarId);
       try {
         const recarga = await cargar(actual, true);
         if (secuencia.current !== actual) return;

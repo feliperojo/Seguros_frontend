@@ -1115,7 +1115,6 @@ const [grupoVersion, setGrupoVersion] = useState(null);
   const [previewPagosLoading, setPreviewPagosLoading] = useState(false);
   const [errorPagosActivacion, setErrorPagosActivacion] = useState("");
   const [confirmoActivacionAseguradora, setConfirmoActivacionAseguradora] = useState(false);
-  const [registrarPagosIniciales, setRegistrarPagosIniciales] = useState(false);
   const previewPagosSolicitud = useRef(0);
   const [showSaveDropdown, setShowSaveDropdown] = useState(false);
   const [showRetiroModal, setShowRetiroModal] = useState(false);
@@ -1804,7 +1803,6 @@ const handleCreateMemberRemote = async (memberData) => {
     previewPagosSolicitud.current += 1;
     const limpio = estadoInicialConfirmacionActivacion();
     setConfirmoActivacionAseguradora(limpio.confirmoActivacion);
-    setRegistrarPagosIniciales(limpio.registrarPagos);
     setPreviewPagosActivacion(limpio.preview);
     setPreviewPagosLoading(limpio.previewLoading);
     setErrorPagosActivacion(limpio.previewError);
@@ -1828,18 +1826,6 @@ const handleCreateMemberRemote = async (memberData) => {
         setPreviewPagosLoading(false);
       }
     }
-  };
-
-  const alternarRegistroPagosIniciales = (marcado) => {
-    setRegistrarPagosIniciales(marcado === true);
-    if (marcado !== true) {
-      previewPagosSolicitud.current += 1;
-      setPreviewPagosActivacion(null);
-      setErrorPagosActivacion("");
-      setPreviewPagosLoading(false);
-      return;
-    }
-    cargarPreviewPagosActivacion();
   };
 
   const cerrarConfirmacionTerminado = () => {
@@ -1892,6 +1878,7 @@ const handleCreateMemberRemote = async (memberData) => {
       reiniciarDecisionesActivacion();
       setPendingAdvanceTo(target);
       setShowConfirmTerminadoModal(true);
+      cargarPreviewPagosActivacion();
       return;
     }
 
@@ -1903,7 +1890,6 @@ const handleCreateMemberRemote = async (memberData) => {
   const confirmAdvanceTerminado = async () => {
     const decision = {
       confirmoActivacion: confirmoActivacionAseguradora,
-      registrarPagos: registrarPagosIniciales,
       preview: previewPagosActivacion,
       previewLoading: previewPagosLoading,
       previewError: errorPagosActivacion,
@@ -1912,7 +1898,6 @@ const handleCreateMemberRemote = async (memberData) => {
     const target = pendingAdvanceTo || "GRUPO_FAMILIAR";
     const extra = camposConfirmacionActivacion({
       confirmar_activacion: true,
-      confirmar_pagos_iniciales: registrarPagosIniciales,
       huella: previewPagosActivacion?.huella,
     });
     const ok = await advanceState(target, `Cambio a ${target}`, null, extra);
@@ -1922,9 +1907,7 @@ const handleCreateMemberRemote = async (memberData) => {
       reiniciarDecisionesActivacion();
       return;
     }
-    if (registrarPagosIniciales) {
-      await cargarPreviewPagosActivacion();
-    }
+    await cargarPreviewPagosActivacion();
   };
 
   const formatTodayLocal = () => {
@@ -2717,20 +2700,9 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
               checked={confirmoActivacionAseguradora}
               disabled={advancing}
               onChange={(e) => setConfirmoActivacionAseguradora(e.target.checked)}
-              label="Confirmo la inscripción y activación en la aseguradora."
+              label="Confirmo la inscripción y activación en la aseguradora, y el registro de los pagos iniciales."
             />
-            <Form.Check
-              id="registrar-pagos-iniciales"
-              type="checkbox"
-              className="mb-0"
-              checked={registrarPagosIniciales}
-              disabled={advancing}
-              onChange={(e) => alternarRegistroPagosIniciales(e.target.checked)}
-              label="Registrar también los pagos iniciales indicados."
-            />
-            {registrarPagosIniciales ? (
-              <>
-                <p className="mt-3 mb-2">Al confirmar, estos pagos quedarán registrados como pagados.</p>
+            <p className="mt-3 mb-2">Al confirmar, estos pagos quedarán registrados como pagados.</p>
                 {previewPagosLoading ? (
                   <div className="d-flex align-items-center gap-2">
                     <span className="spinner-border spinner-border-sm" role="status" />
@@ -2775,8 +2747,6 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 {!previewPagosLoading && previewPagosActivacion && !previewPagosActivacion.requiere_pago && previewPagosActivacion.confirmable ? (
                   <p className="mb-0">No hay pagos iniciales por registrar.</p>
                 ) : null}
-              </>
-            ) : null}
           </Modal.Body>
           <Modal.Footer>
             <Button
@@ -2792,7 +2762,6 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                 advancing
                 || !puedeConfirmarActivacion({
                   confirmoActivacion: confirmoActivacionAseguradora,
-                  registrarPagos: registrarPagosIniciales,
                   preview: previewPagosActivacion,
                   previewLoading: previewPagosLoading,
                   previewError: errorPagosActivacion,

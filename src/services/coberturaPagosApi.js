@@ -33,6 +33,21 @@ export async function fetchResumenAnual(anio) {
 }
 
 /**
+ * Indicador de solo lectura por cobertura del grupo.
+ * GET /cobertura/pagos/grupo-familiar/{id}/indicador?anio=YYYY
+ */
+export async function fetchIndicadorPagosCoberturas(grupoFamiliarId, anio) {
+  const params = new URLSearchParams();
+  if (anio) params.set("anio", String(anio));
+  const q = params.toString();
+  const res = await apiRequest(
+    `cobertura/pagos/grupo-familiar/${grupoFamiliarId}/indicador${q ? `?${q}` : ""}`,
+    "GET"
+  );
+  return res?.data ?? res ?? {};
+}
+
+/**
  * Consulta de solo lectura de los pagos elegibles de un grupo familiar.
  * Sin año, el backend usa el año vigente de la zona horaria del negocio.
  * GET /cobertura/pagos/grupo-familiar/{id}?anio=YYYY
