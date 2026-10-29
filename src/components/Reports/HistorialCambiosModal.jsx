@@ -1595,11 +1595,20 @@ function EstadoCargaSeccion({ cargando, error, onReintentar, vacio, children }) 
   return children;
 }
 
+const CAMPOS_OCULTOS_TABLA_COBERTURA = new Set([
+  "historial_plan_recuperado_id",
+  "cobertura_tipo",
+]);
+
+const campoOcultoTablaCobertura = (campo = "") =>
+  CAMPOS_OCULTOS_TABLA_COBERTURA.has(String(campo).split(".").pop());
+
 function columnasDeLineasCobertura(lineas = [], seccionId) {
   const porCampo = new Map();
   lineas.forEach((linea) => {
     (linea.partes || []).forEach((parte) => {
       if (!parte?.campo || porCampo.has(parte.campo)) return;
+      if (!seccionId && campoOcultoTablaCobertura(parte.campo)) return;
       porCampo.set(parte.campo, parte.label || parte.campo);
     });
   });
@@ -1733,6 +1742,81 @@ function TablaLineasCobertura({
   );
 }
 
+const lineaCoincideBusquedaCobertura = (linea, consulta) => {
+  const texto = [
+    formatDateTime(linea.fecha),
+    linea.usuario,
+    ...(linea.partes || []).flatMap((parte) => [
+      parte.label,
+      parte.campo,
+      textoPlanoValor(parte.anterior, parte.campo),
+      textoPlanoValor(parte.nuevo, parte.campo),
+    ]),
+    ...Object.entries(linea.valores || {}).map(([campo, info]) => textoPlanoValor(info?.valor, campo)),
+  ].join(" ").toLowerCase();
+  return texto.includes(consulta);
+};
+
+/** Tipo vigente si alguna fila del historial lo dejó registrado. */
+const tipoCoberturaDesdeLineas = (lineas = []) => {
+  for (const linea of lineas) {
+    const vigente = linea?.valores?.cobertura_tipo?.valor;
+    if (vigente != null && String(vigente).trim() !== "") return String(vigente).trim();
+    const parte = (linea?.partes || []).find((item) => item?.campo === "cobertura_tipo");
+    const candidato = parte?.nuevo ?? parte?.anterior;
+    if (candidato != null && String(candidato).trim() !== "") return String(candidato).trim();
+  }
+  return "";
+};
+
+/** Misma lectura que el historial del grupo: una fila por guardado y color solo en lo que cambió. */
+function PanelCambiosCobertura({
+  lineas,
+  busqueda,
+  onBusqueda,
+  inputId = "historial-linea-busqueda",
+}) {
+  const consulta = String(busqueda || "").trim().toLowerCase();
+  const visibles = consulta
+    ? lineas.filter((linea) => lineaCoincideBusquedaCobertura(linea, consulta))
+    : lineas;
+
+  return (
+    <>
+      {lineas.length > 0 && (
+        <>
+          <p className="small text-muted mb-2">
+            El color marca lo que cambió en ese guardado. Los demás datos son los que ya estaban.
+          </p>
+          <div className="mb-2">
+            <label htmlFor={inputId} className="form-label small mb-1">
+              Buscar en los cambios
+            </label>
+            <input
+              id={inputId}
+              type="search"
+              className="form-control form-control-sm"
+              placeholder="Fecha, usuario o valor"
+              value={busqueda}
+              onChange={(event) => onBusqueda(event.target.value)}
+            />
+          </div>
+        </>
+      )}
+      {lineas.length === 0 ? (
+        <p className="text-muted small mb-0">Sin cambios registrados en esta sección.</p>
+      ) : visibles.length === 0 ? (
+        <p className="text-muted small mb-0">Ningún cambio coincide con la búsqueda.</p>
+      ) : (
+        <TablaLineasCobertura
+          lineas={visibles}
+          columnas={columnasDeLineasCobertura(lineas)}
+        />
+      )}
+    </>
+  );
+}
+
 // ==================== COMPONENTE PRINCIPAL ====================
 
 export default function HistorialCambiosModal({
@@ -1742,6 +1826,8 @@ export default function HistorialCambiosModal({
   modeloId,
   seccion,
   grupoFamiliarId = null,
+  /** Etiqueta del producto (p. ej. "Plan Dental") para el detalle abierto desde la cobertura. */
+  tipoCobertura = "",
   /** Si true (solo GF): abre lista de coberturas del grupo antes del historial general. */
   inicioConListaCoberturas = false,
 }) {
@@ -1786,6 +1872,7 @@ export default function HistorialCambiosModal({
     error: null,
   });
   const [busquedaLineaCobertura, setBusquedaLineaCobertura] = useState("");
+  const [detalleCoberturaAbierto, setDetalleCoberturaAbierto] = useState(true);
   const dialogRef = useRef(null);
   const closeBtnRef = useRef(null);
   const onCloseRef = useRef(onClose);
@@ -2820,7 +2907,7 @@ export default function HistorialCambiosModal({
     const clienteId = toValidModeloId(coberturaHub?.cliente_id);
     const cacheClienteLista = clienteHubCache.clienteId === clienteId;
     const cacheMediosLista = mediosHubCache.clienteId === clienteId;
-    const tipoCobertura = coberturaHub?.cobertura_tipo || "Salud";
+    const tipoCoberturaHub = coberturaHub?.cobertura_tipo || "Salud";
 
     const lineasDeSeccion = (filas, seccionId) => completarSnapshotsCobertura(
       agruparCambiosEnLinea(filas, {
@@ -2851,23 +2938,6 @@ export default function HistorialCambiosModal({
       : null;
 
     const lineasCobertura = completarSnapshotsCobertura(agruparCambiosEnLinea(filasSeccion));
-    const consultaLinea = busquedaLineaCobertura.trim().toLowerCase();
-    const lineasVisibles = consultaLinea
-      ? lineasCobertura.filter((linea) => {
-        const texto = [
-          formatDateTime(linea.fecha),
-          linea.usuario,
-          ...linea.partes.flatMap((parte) => [
-            parte.label,
-            parte.campo,
-            textoPlanoValor(parte.anterior, parte.campo),
-            textoPlanoValor(parte.nuevo, parte.campo),
-          ]),
-          ...Object.entries(linea.valores || {}).map(([campo, info]) => textoPlanoValor(info?.valor, campo)),
-        ].join(" ").toLowerCase();
-        return texto.includes(consultaLinea);
-      })
-      : lineasCobertura;
 
     const renderTablaSeccion = (lineas, seccionId) => (
       <>
@@ -2950,7 +3020,7 @@ export default function HistorialCambiosModal({
 
         <AcordeonHistorial
           id="cobertura"
-          titulo={`Datos de cobertura ${tipoCobertura}`}
+          titulo={`Datos de cobertura ${tipoCoberturaHub}`}
           icono={<i className="fas fa-shield-alt" aria-hidden="true" />}
           abierto={Boolean(seccionesPersonaAbiertas.cobertura)}
           onToggle={() => alternarSeccionPersona("cobertura")}
@@ -2966,36 +3036,48 @@ export default function HistorialCambiosModal({
               {errorSeccion && lineasCobertura.length > 0 && (
                 <div className="alert alert-warning py-2 small">{errorSeccion}</div>
               )}
-              {lineasCobertura.length > 0 && (
-                <>
-                  <p className="small text-muted mb-2">
-                    El color marca lo que cambió en ese guardado. Los demás datos son los que ya estaban.
-                  </p>
-                  <div className="mb-2">
-                    <label htmlFor="historial-linea-busqueda" className="form-label small mb-1">
-                      Buscar en los cambios
-                    </label>
-                    <input
-                      id="historial-linea-busqueda"
-                      type="search"
-                      className="form-control form-control-sm"
-                      placeholder="Fecha, usuario o valor"
-                      value={busquedaLineaCobertura}
-                      onChange={(event) => setBusquedaLineaCobertura(event.target.value)}
-                    />
-                  </div>
-                </>
+              <PanelCambiosCobertura
+                lineas={lineasCobertura}
+                busqueda={busquedaLineaCobertura}
+                onBusqueda={setBusquedaLineaCobertura}
+              />
+            </>
+          </EstadoCargaSeccion>
+        </AcordeonHistorial>
+      </div>
+    );
+  };
+
+  const renderDetalleCoberturaLineas = () => {
+    const lineas = completarSnapshotsCobertura(agruparCambiosEnLinea(filasSeccion));
+    const tipo = String(tipoCobertura || tipoCoberturaDesdeLineas(lineas) || "").trim();
+    const titulo = tipo ? `Datos de cobertura ${tipo}` : "Datos de cobertura";
+
+    return (
+      <div className="hcm-secciones">
+        <AcordeonHistorial
+          id="cobertura-detalle"
+          titulo={titulo}
+          icono={<i className="fas fa-shield-alt" aria-hidden="true" />}
+          abierto={detalleCoberturaAbierto}
+          onToggle={() => setDetalleCoberturaAbierto((abierto) => !abierto)}
+          conteo={cargandoSeccion ? null : lineas.length}
+        >
+          {warningSeccion && <div className="alert alert-warning py-2 small">{warningSeccion}</div>}
+          <EstadoCargaSeccion
+            cargando={cargandoSeccion}
+            error={errorSeccion && lineas.length === 0 ? errorSeccion : null}
+            vacio={false}
+          >
+            <>
+              {errorSeccion && lineas.length > 0 && (
+                <div className="alert alert-warning py-2 small">{errorSeccion}</div>
               )}
-              {lineasCobertura.length === 0 ? (
-                <p className="text-muted small mb-0">Sin cambios registrados en esta sección.</p>
-              ) : lineasVisibles.length === 0 ? (
-                <p className="text-muted small mb-0">Ningún cambio coincide con la búsqueda.</p>
-              ) : (
-                <TablaLineasCobertura
-                  lineas={lineasVisibles}
-                  columnas={columnasDeLineasCobertura(lineasCobertura)}
-                />
-              )}
+              <PanelCambiosCobertura
+                lineas={lineas}
+                busqueda={busquedaLineaCobertura}
+                onBusqueda={setBusquedaLineaCobertura}
+              />
             </>
           </EstadoCargaSeccion>
         </AcordeonHistorial>
@@ -4035,6 +4117,8 @@ export default function HistorialCambiosModal({
                 renderListaCoberturasHub()
               ) : hubActivo && vistaHub === "cobertura" ? (
                 renderSeccionesPersonaHub()
+              ) : filtrarPorSeccion && seccionEfectiva === "cobertura" ? (
+                renderDetalleCoberturaLineas()
               ) : filtrarPorSeccion ? (
                 vistaHistorialSeccion({
                   cargando: cargandoSeccion,

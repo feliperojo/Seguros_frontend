@@ -3325,6 +3325,7 @@ const activeNormalized = useMemo(
                             grupoFamiliarId:
                               toValidId(grupoFamiliarId) ??
                               toValidId(m.grupo_familiar_id),
+                            tipo: coberturaTipo,
                           })
                         }
                       />
@@ -3747,6 +3748,7 @@ const activeNormalized = useMemo(
                                 toValidId(grupoFamiliarId) ??
                                 toValidId(d.grupo_familiar_id) ??
                                 toValidId(m.grupo_familiar_id),
+                              tipo: d.cobertura_tipo || dentalTipo,
                             })
                           }
                         />
@@ -3918,6 +3920,7 @@ const activeNormalized = useMemo(
           modelo="Cobertura"
           modeloId={coberturaHistorialAbierta.id}
           seccion="cobertura"
+          tipoCobertura={coberturaHistorialAbierta.tipo || ""}
           grupoFamiliarId={coberturaHistorialAbierta.grupoFamiliarId}
         />
       )}

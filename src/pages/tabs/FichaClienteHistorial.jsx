@@ -140,7 +140,7 @@ export default function FichaClienteHistorial() {
         <div className="card-body">
           <h6 className="mb-2">Historial de cobertura · Detalle</h6>
           <p className="small text-muted mb-3">
-            Consulta qué campo cambió, su valor anterior y nuevo, la fecha y quién lo modificó.
+            Cada fila es un guardado. El color marca lo que cambió y el resto es la información que ya estaba.
             Selecciona la cobertura que deseas revisar.
           </p>
           {coberturas.length ? (
