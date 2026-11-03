@@ -32,7 +32,9 @@ import GrupoFamiliarEdicionAlerta, {
 import {
   attachCoberturaDirtyFieldsForLegacy,
   buildDeltaCambiosFromPayloads,
+  edicionDeGrupoTieneCambios,
 } from "../utils/grupoFamiliarConcurrentSave";
+import { registrarCambiosSinGuardar } from "../utils/cambiosSinGuardar";
 import { mapaPreciosGuardados } from "../utils/aplicarPrecioCobros";
 import "../styles/GrupoFamiliarDetail.css";
 
@@ -2150,7 +2152,64 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
     }
     
   };
-  
+
+  const cambiosVistaRef = useRef({
+    saving: false,
+    isEditing: false,
+    editBaseline: null,
+    formData: null,
+    familyMembers: [],
+    productoCotizacion: null,
+    id: null,
+  });
+  cambiosVistaRef.current = {
+    saving,
+    isEditing,
+    editBaseline,
+    formData,
+    familyMembers,
+    productoCotizacion,
+    id,
+  };
+
+  useEffect(() => {
+    return registrarCambiosSinGuardar(() => {
+      const vista = cambiosVistaRef.current;
+      if (vista.saving) return { guardando: true, pendiente: false };
+      if (!vista.isEditing || !vista.editBaseline) {
+        return { guardando: false, pendiente: false };
+      }
+
+      const base = buildFullUpdatePayloadParts(
+        vista.editBaseline.formData,
+        vista.editBaseline.familyMembers,
+        vista.id,
+        vista.productoCotizacion
+      );
+      const actual = buildFullUpdatePayloadParts(
+        vista.formData,
+        vista.familyMembers,
+        vista.id,
+        vista.productoCotizacion
+      );
+
+      return {
+        guardando: false,
+        pendiente: edicionDeGrupoTieneCambios({
+          baselineMiembros: vista.editBaseline.familyMembers,
+          miembrosActuales: vista.familyMembers,
+          productoLabelBase: vista.editBaseline.productoLabel ?? null,
+          productoLabelActual: vista.productoCotizacion?.label ?? null,
+          baselineGrupo: base.grupoPayload,
+          grupoActual: actual.grupoPayload,
+          baselineClientes: base.clientesPayload,
+          clientesActuales: actual.clientesPayload,
+          baselineCoberturas: base.coberturasPayload,
+          coberturasActuales: actual.coberturasPayload,
+        }),
+      };
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -2345,6 +2404,7 @@ const { grupoPayload, clientesPayload, coberturasPayload } = buildFullUpdatePayl
                   setEditBaseline({
                     formData: cloneEditSnapshot(formData),
                     familyMembers: cloneEditSnapshot(familyMembers),
+                    productoLabel: productoCotizacion?.label ?? null,
                   });
                   setIsEditing(true);
                   await touchPresencia?.("editando");

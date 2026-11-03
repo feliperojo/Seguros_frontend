@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { registrarCambiosSinGuardar } from "../utils/cambiosSinGuardar";
 import { 
   Modal, Button, Form, Row, Col, Spinner, Alert, 
   Nav, Tab, InputGroup, Badge
@@ -607,7 +608,24 @@ useEffect(() => {
     actualizarCliente();
   };
   
+  const guardandoRef = useRef(false);
+  const cambiosModalRef = useRef({ show: false, hasChanges: false });
+  cambiosModalRef.current = { show, hasChanges };
+
+  useEffect(() => {
+    return registrarCambiosSinGuardar(() => ({
+      guardando: Boolean(cambiosModalRef.current.show && guardandoRef.current),
+      pendiente: Boolean(
+        cambiosModalRef.current.show &&
+          cambiosModalRef.current.hasChanges &&
+          !guardandoRef.current
+      ),
+    }));
+  }, []);
+
   const actualizarCliente = async () => {
+    guardandoRef.current = true;
+    try {
     const dataToSubmit = prepareDataForSubmit();
     if (origenActualizacion === "grupo_familiar" && grupoFamiliarOrigenId) {
       dataToSubmit.origen = "grupo_familiar";
@@ -633,6 +651,9 @@ useEffect(() => {
     } catch (error) {
       console.error("❌ Error al actualizar el cliente:", error);
       setError("No se pudo actualizar el cliente.");
+    }
+    } finally {
+      guardandoRef.current = false;
     }
   };
   

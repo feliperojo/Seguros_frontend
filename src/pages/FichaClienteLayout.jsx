@@ -6,6 +6,7 @@ import { FichaClienteContext } from "../context/fichaClienteContext";
 import Sidebar from "../components/Sidebar";
 import "../styles/MainLayout.css";
 import "../styles/FichaClienteGeneral.css";
+import GlobalSearchBar from "../components/GlobalSearch/GlobalSearchBar";
 
 // ===== NUEVO: Ruta absoluta a la lista de clientes =====
 const LISTA_CLIENTES_PATH = "/Clientes/lista"; // cámbiala a "/clientes/lista" si tu ruta es minúscula
@@ -217,6 +218,7 @@ export default function FichaClienteLayout() {
           <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
         </div>
         <div className={`main-content ${isSidebarOpen ? "expanded" : "collapsed"}`}>
+          <GlobalSearchBar />
           <div className="dashboard-content">
             <div className="container-xxl py-3 px-3 px-md-4 px-lg-5 mx-auto">
               <div className="ficha-layout">

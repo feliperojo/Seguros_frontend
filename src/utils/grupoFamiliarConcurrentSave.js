@@ -85,6 +85,60 @@ export const buildDeltaCambiosFromPayloads = ({
   return cambios;
 };
 
+const idsOrdenados = (lista) =>
+  (Array.isArray(lista) ? lista : [])
+    .map((item) => Number(item?.id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+    .sort((a, b) => a - b);
+
+const mismosIds = (base, actual) => {
+  const izquierda = idsOrdenados(base);
+  const derecha = idsOrdenados(actual);
+  return (
+    izquierda.length === derecha.length &&
+    izquierda.every((id, index) => id === derecha[index])
+  );
+};
+
+/**
+ * Cambios de una edición de grupo respecto de la copia tomada al pulsar Editar.
+ * No modifica los objetos recibidos. Una edición recién abierta, sin diferencias
+ * de payload, miembros ni plan, no cuenta como cambio pendiente.
+ */
+export const edicionDeGrupoTieneCambios = ({
+  baselineMiembros = [],
+  miembrosActuales = [],
+  productoLabelBase = null,
+  productoLabelActual = null,
+  baselineGrupo = {},
+  grupoActual = {},
+  baselineClientes = [],
+  clientesActuales = [],
+  baselineCoberturas = [],
+  coberturasActuales = [],
+} = {}) => {
+  if ((productoLabelBase ?? null) !== (productoLabelActual ?? null)) return true;
+  if (
+    (Array.isArray(baselineMiembros) ? baselineMiembros.length : 0) !==
+    (Array.isArray(miembrosActuales) ? miembrosActuales.length : 0)
+  ) {
+    return true;
+  }
+
+  const cambios = buildDeltaCambiosFromPayloads({
+    baselineGrupo,
+    currentGrupo: grupoActual,
+    baselineClientes,
+    currentClientes: clientesActuales,
+    baselineCoberturas,
+    currentCoberturas: coberturasActuales,
+  });
+  if (Object.keys(cambios).length > 0) return true;
+  if (!mismosIds(baselineClientes, clientesActuales)) return true;
+  if (!mismosIds(baselineCoberturas, coberturasActuales)) return true;
+  return false;
+};
+
 /**
  * En legacy el backend solo permite vaciar campos de cobertura si vienen en `_dirty_fields`.
  * Reutiliza el diff ya calculado (mismo criterio que modo delta) y lo adjunta al payload completo.

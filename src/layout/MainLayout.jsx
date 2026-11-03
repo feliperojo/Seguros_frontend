@@ -7,6 +7,7 @@ import ResponderTareaModal from "../components/Tareas/ResponderTareaModal";
 import ResponderTareaAuditoriaModal from "../components/Tareas/ResponderTareaAuditoriaModal";
 import { getTask as getAuditoriaTask, listTasks as listAuditoriaTasks } from "../services/auditoriasTasksService";
 import useFechaOperacion from "../hooks/useFechaOperacion";
+import GlobalSearchBar from "../components/GlobalSearch/GlobalSearchBar";
 
 const MainLayout = ({ children }) => {
   const fechaOperacion = useFechaOperacion();
@@ -619,6 +620,7 @@ const MainLayout = ({ children }) => {
             {fechaOperacion.aviso}
           </div>
         )}
+        <GlobalSearchBar />
         <div className="dashboard-content">{children}</div>
       </div>
 
