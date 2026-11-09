@@ -110,6 +110,231 @@
   grid-template-columns: 1fr;
 }
 
+.ficha-field--wide {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.ficha-contacto {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.ficha-contacto__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem 0.75rem;
+  min-width: 0;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.ficha-contacto__item:first-child {
+  padding-top: 0.15rem;
+}
+
+.ficha-contacto__item:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.ficha-contacto__dato {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.ficha-contacto__numero {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ficha-contacto__bandera {
+  margin-right: 0.28rem;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.ficha-contacto__etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.ficha-contacto__etiqueta {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0.05rem 0.45rem;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.ficha-contacto__etiqueta--principal {
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+.ficha-contacto__acciones {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.ficha-contacto__accion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #1a365d;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.ficha-contacto__accion:hover,
+.ficha-contacto__accion:focus-visible {
+  background: #eef4fb;
+  border-color: #1a365d;
+  color: #0f2744;
+  outline: 2px solid #1a365d;
+  outline-offset: 1px;
+}
+
+.ficha-miembros {
+  margin-top: 0.85rem;
+}
+
+.ficha-miembros__estado {
+  margin: 0.85rem 0 0;
+  color: #94a3b8;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.ficha-miembros__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #0f2744;
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ficha-miembros__toggle:hover,
+.ficha-miembros__toggle:focus-visible {
+  background: #eef4fb;
+  border-color: #1a365d;
+  outline: 2px solid #1a365d;
+  outline-offset: 1px;
+}
+
+.ficha-miembros__cantidad,
+.ficha-miembros__accion {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.ficha-miembros__accion {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.ficha-miembros__chevron {
+  font-size: 0.7rem;
+  transition: transform 0.2s ease;
+}
+
+.ficha-miembros__chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.ficha-miembros__lista {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ficha-miembros__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid #f1f5f9;
+  background: #fff;
+}
+
+.ficha-miembros__item:first-child {
+  border-top: 0;
+}
+
+.ficha-miembros__relacion,
+.ficha-miembros__coberturas {
+  color: #64748b;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ficha-miembros__coberturas {
+  margin-top: 0.1rem;
+  font-weight: 500;
+}
+
+.ficha-miembros__abrir {
+  color: #1a365d;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.ficha-miembros__abrir:hover,
+.ficha-miembros__abrir:focus-visible {
+  text-decoration: underline;
+  outline: 2px solid #1a365d;
+  outline-offset: 2px;
+}
+
 .ficha-field label,
 .ficha-label {
   display: block;
@@ -355,6 +580,12 @@
 @media (max-width: 768px) {
   .ficha-fields {
     grid-template-columns: 1fr;
+  }
+
+  .ficha-contacto__dato,
+  .ficha-contacto__acciones {
+    flex-basis: 100%;
+    margin-left: 0;
   }
 
   .ficha-poliza-card__fields {

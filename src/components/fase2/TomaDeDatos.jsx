@@ -746,6 +746,21 @@ const ConfigurableFieldsGrid = ({ children, minWidth = 220, className = "" }) =>
   </div>
 );
 
+/** Agrupación visual, sin título. No renderiza el bloque si no hay campos visibles. */
+const CoberturaGrupo = ({ children, className = "" }) => {
+  const items = React.Children.toArray(children).filter(
+    (child) => !(typeof child === "string" && child.trim() === "")
+  );
+  if (items.length === 0) return null;
+  return (
+    <div className={`gf-cobertura-grupo${className ? ` ${className}` : ""}`}>
+      <div className="gf-cobertura-grupo__grid">{items}</div>
+    </div>
+  );
+};
+
+const MEMBER_STATUS_ICON_STYLE = { width: "max-content", maxWidth: "100%" };
+
 const Field = ({ label, labelHint, labelWarning, children, className = "col-md-6" }) => (
   <div className={className}>
     <label className="gf-detalle__field-label">
@@ -2011,7 +2026,6 @@ const activeNormalized = useMemo(
   // Función helper para renderizar una card de miembro
   const renderMemberCard = ({ m, idx }) => {
     const itemId = `member-${m.id ?? idx}`;
-    const leftRightWidth = 180;
     const c = getC(m);
     const onChange = onChangeFactory(idx); // ✅ idx = índice original en familyMembers
     const grupoValor = (m.grupo ?? "").toUpperCase();
@@ -2124,8 +2138,8 @@ const activeNormalized = useMemo(
             )}
             {/* Header */}
             <div className="gf-detalle__member-header">
-              <div className="gf-detalle__member-header-row" style={{ minHeight: 64 }}>
-                <div className="d-flex flex-column justify-content-center align-items-start me-3" style={{ width: leftRightWidth }}>
+              <div className="gf-detalle__member-header-row">
+                <div className="gf-detalle__member-status-col">
                   <div className="d-flex align-items-center gap-2">
                     <span className={`badge bg-${getTypeColor(m.tipo)}`}>
                       {m.tipo || "Miembro"}
@@ -2152,6 +2166,8 @@ const activeNormalized = useMemo(
                   </div>
                   <div className="mt-2">
                   <UserCoverageIcon
+  className="gf-detalle__member-status"
+  style={MEMBER_STATUS_ICON_STYLE}
   status={m.estado_cobertura}
   cierreAnioPendiente={
     cierreAnioPendiente &&
@@ -2175,7 +2191,7 @@ const activeNormalized = useMemo(
                   </div>
                 </div>
 
-                <div className="flex-grow-1 text-center">
+                <div className="gf-detalle__member-name-slot">
                   {clienteId ? (
                     <span
                       role="button"
@@ -2194,10 +2210,7 @@ const activeNormalized = useMemo(
                   )}
                 </div>
 
-                <div
-                  className="d-flex align-items-center justify-content-end ms-3"
-                  style={{ minWidth: leftRightWidth }}
-                >
+                <div className="gf-detalle__member-actions-col">
                   {canEditParentesco && (
                     <CoberturaDeleteButton
                       member={m}
@@ -2870,8 +2883,8 @@ const activeNormalized = useMemo(
                       )}
                       {/* Si es Medicare o Medicaid, mostrar solo Elegibilidad, Cobertura y Grupo */}
                       {isMedicareOrMedicaid ? (
-                        <ConfigurableFieldsGrid minWidth={200}>
-                            <ConfigField label="Cobertura">
+                        <CoberturaGrupo>
+                            <ConfigField key="estado_cobertura" label="Cobertura">
                               <select
                                 className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                 name="estado_cobertura"
@@ -2891,7 +2904,7 @@ const activeNormalized = useMemo(
                               </select>
                             </ConfigField>
 
-                            <ConfigField label="Elegibilidad">
+                            <ConfigField key="elegibilidad" label="Elegibilidad">
                               <input
                                 className="form-control form-control-sm"
                                 name="elegibilidad"
@@ -2902,7 +2915,7 @@ const activeNormalized = useMemo(
                               />
                             </ConfigField>
 
-                            <ConfigField label="Grupo">
+                            <ConfigField key="grupo" label="Grupo">
                               <select
                                 className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                 name="grupo"
@@ -2917,7 +2930,7 @@ const activeNormalized = useMemo(
                                 <option value="G4">G4</option>
                               </select>
                             </ConfigField>
-                        </ConfigurableFieldsGrid>
+                        </CoberturaGrupo>
                       ) : visibleCoverageFieldCount === 0 ? (
                         <p className="text-muted small mb-0">
                           No hay campos de cobertura habilitados para{" "}
@@ -2925,9 +2938,11 @@ const activeNormalized = useMemo(
                           Configúralos en el administrador de campos por tipo de producto.
                         </p>
                       ) : (
-                        <ConfigurableFieldsGrid>
+                        <div className="gf-cobertura-grupos">
+                        <CoberturaGrupo>
                             {shouldShowCoverageField("codigo_poliza") && (
                               <ConfigField
+                                key="codigo_poliza"
                                 label="Numero ID"
                                 labelHint="Se debe colocar el número de póliza + los 2 dígitos de miembro."
                               >
@@ -2943,8 +2958,27 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
+                            {shouldShowCoverageField("policy_number") && (
+                              <ConfigField
+                                key="policy_number"
+                                label="Codigo de ID"
+                                labelHint="Es el número de póliza principal sin dígitos finales."
+                              >
+                                <input
+                                  className="form-control form-control-sm"
+                                  type="text"
+                                  name="policy_number"
+                                  value={m.policy_number || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Codigo de ID"
+                                />
+                              </ConfigField>
+                            )}
+
                             {shouldShowCoverageField("fecha_activacion") && (
                               <ConfigField
+                                key="fecha_activacion"
                                 label="Fecha de Activación"
                                 labelWarning={
                                   isFechaActivacionPendiente(m.fecha_activacion)
@@ -2974,6 +3008,7 @@ const activeNormalized = useMemo(
 
                             {shouldShowCoverageField("ano_cobertura") && (
                               <ConfigField
+                                key="ano_cobertura"
                                 label="Año de Cobertura"
                               >
                                 <input
@@ -2990,21 +3025,10 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
-                            {shouldShowCoverageField("elegibilidad") && (
-                              <ConfigField label="Elegibilidad">
-                                <input
-                                  className="form-control form-control-sm"
-                                  name="elegibilidad"
-                                  value={m.elegibilidad || ""}
-                                  onChange={onChange}
-                                  disabled={isReadOnly}
-                                  placeholder="Elegibilidad"
-                                />
-                              </ConfigField>
-                            )}
-
+                        </CoberturaGrupo>
+                        <CoberturaGrupo>
                             {shouldShowCoverageField("compania_id") && (
-                              <ConfigField label="Compañía">
+                              <ConfigField key="compania_id" label="Compañía">
                                 <CompanySelect
                                   companies={filterCompaniesForProducto(
                                     companies,
@@ -3021,25 +3045,8 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
-                            {shouldShowCoverageField("policy_number") && (
-                              <ConfigField
-                                label="Codigo de ID"
-                                labelHint="Es el número de póliza principal sin dígitos finales."
-                              >
-                                <input
-                                  className="form-control form-control-sm"
-                                  type="text"
-                                  name="policy_number"
-                                  value={m.policy_number || ""}
-                                  onChange={onChange}
-                                  disabled={isReadOnly}
-                                  placeholder="Codigo de ID"
-                                />
-                              </ConfigField>
-                            )}
-
                             {shouldShowCoverageField("agente") && (
-                              <ConfigField label="Agente">
+                              <ConfigField key="agente" label="Agente">
                                 <input
                                   className="form-control form-control-sm"
                                   type="text"
@@ -3053,7 +3060,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("plan") && (
-                              <ConfigField label="Plan">
+                              <ConfigField key="plan" label="Plan">
                                 <input
                                   className="form-control form-control-sm"
                                   name="plan"
@@ -3066,7 +3073,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("metal") && (
-                              <ConfigField label="Metal">
+                              <ConfigField key="metal" label="Metal">
                                 <select
                                   className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="metal"
@@ -3085,7 +3092,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("red") && (
-                              <ConfigField label="Red">
+                              <ConfigField key="red" label="Red">
                                 <select
                                   className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="red"
@@ -3102,8 +3109,21 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
+                            {shouldShowCoverageField("elegibilidad") && (
+                              <ConfigField key="elegibilidad" label="Elegibilidad">
+                                <input
+                                  className="form-control form-control-sm"
+                                  name="elegibilidad"
+                                  value={m.elegibilidad || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                  placeholder="Elegibilidad"
+                                />
+                              </ConfigField>
+                            )}
+
                             {shouldShowCoverageField("estado_cobertura") && (
-                              <ConfigField label="Cobertura">
+                              <ConfigField key="estado_cobertura" label="Cobertura">
                                 <select
                                   className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="estado_cobertura"
@@ -3124,8 +3144,28 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
+                            {shouldShowCoverageField("grupo") && (
+                              <ConfigField key="grupo" label="Grupo">
+                                <select
+                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
+                                  name="grupo"
+                                  value={m.grupo || ""}
+                                  onChange={onChange}
+                                  disabled={isReadOnly}
+                                >
+                                  <option value="">Seleccione…</option>
+                                  <option value="G1">G1</option>
+                                  <option value="G2">G2</option>
+                                  <option value="G3">G3</option>
+                                  <option value="G4">G4</option>
+                                </select>
+                              </ConfigField>
+                            )}
+
+                        </CoberturaGrupo>
+                        <CoberturaGrupo>
                             {shouldShowCoverageField("pagador_id") && (
-                              <ConfigField label="Pagador">
+                              <ConfigField key="pagador_id" className="gf-cobertura-campo--ancho" label="Pagador">
                                 <PayerSelect
                                   options={payerOptionsWithOther}
                                   value={
@@ -3142,7 +3182,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("tipo_pago") && (
-                              <ConfigField label="Tipo de Pago">
+                              <ConfigField key="tipo_pago" className="gf-cobertura-campo--ancho" label="Tipo de Pago">
                                 <select
                                   className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
                                   name="tipo_pago"
@@ -3161,7 +3201,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("dia_pago") && (
-                              <ConfigField label="Dia de Pago">
+                              <ConfigField key="dia_pago" label="Dia de Pago">
                                 <input
                                   type="number"
                                   className="form-control form-control-sm"
@@ -3174,7 +3214,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {shouldShowCoverageField("precio") && (
-                              <ConfigField label="Precio ($)">
+                              <ConfigField key="precio" label="Precio ($)">
                                 <CoveragePriceInput
                                   size="sm"
                                   value={m.precio ?? ""}
@@ -3194,9 +3234,11 @@ const activeNormalized = useMemo(
                               </ConfigField>
                             )}
 
+                        </CoberturaGrupo>
+                        <CoberturaGrupo>
                             {m.fecha_cancelacion && (
                               <>
-                                <ConfigField label="Fecha de expiración">
+                                <ConfigField key="fecha_cancelacion" label="Fecha de expiración">
                                   <MdyDashDateInput
                                     size="sm"
                                     valueIso={(m.fecha_cancelacion || "").slice(0, 10)}
@@ -3205,7 +3247,7 @@ const activeNormalized = useMemo(
                                     onChangeIso={() => {}}
                                   />
                                 </ConfigField>
-                                <ConfigField label="Vigente">
+                                <ConfigField key="vigente" label="Vigente">
                                   <select
                                     className="form-select form-select-sm rounded-lg border-gray-300"
                                     name="vigente"
@@ -3222,7 +3264,7 @@ const activeNormalized = useMemo(
 
                             {m.fecha_retiro && (
                               <>
-                                <ConfigField label="Fecha de Expiración">
+                                <ConfigField key="fecha_retiro" label="Fecha de Expiración">
                                   <MdyDashDateInput
                                     size="sm"
                                     valueIso={(m.fecha_retiro || "").slice(0, 10)}
@@ -3231,7 +3273,7 @@ const activeNormalized = useMemo(
                                     onChangeIso={() => {}}
                                   />
                                 </ConfigField>
-                                <ConfigField label="Activo">
+                                <ConfigField key="activo" label="Activo">
                                   <select
                                     className="form-select form-select-sm rounded-lg border-gray-300"
                                     name="activo"
@@ -3247,7 +3289,7 @@ const activeNormalized = useMemo(
                             )}
 
                             {(m.nota_retiro || m.nota_cancel) && (
-                              <ConfigField label="Nota de Retiro">
+                              <ConfigField key="nota_retiro" label="Nota de Retiro">
                                 <input
                                   className="form-control form-control-sm"
                                   name="nota_retiro"
@@ -3261,7 +3303,7 @@ const activeNormalized = useMemo(
 
                             {m.fecha_anulacion && (
                               <>
-                                <ConfigField label="Fecha de anulación">
+                                <ConfigField key="fecha_anulacion" label="Fecha de anulación">
                                   <MdyDashDateInput
                                     size="sm"
                                     valueIso={(m.fecha_anulacion || "").slice(0, 10)}
@@ -3271,7 +3313,7 @@ const activeNormalized = useMemo(
                                   />
                                 </ConfigField>
                                 {m.motivo_anulacion && (
-                                  <ConfigField label="Motivo de anulación">
+                                  <ConfigField key="motivo_anulacion" label="Motivo de anulación">
                                     <input
                                       className="form-control form-control-sm"
                                       value={m.motivo_anulacion}
@@ -3281,7 +3323,7 @@ const activeNormalized = useMemo(
                                   </ConfigField>
                                 )}
                                 {m.nota_anulacion && (
-                                  <ConfigField label="Nota de anulación">
+                                  <ConfigField key="nota_anulacion" label="Nota de anulación">
                                     <input
                                       className="form-control form-control-sm"
                                       value={m.nota_anulacion}
@@ -3293,24 +3335,8 @@ const activeNormalized = useMemo(
                               </>
                             )}
 
-                            {shouldShowCoverageField("grupo") && (
-                              <ConfigField label="Grupo">
-                                <select
-                                  className="form-select form-select-sm rounded-lg border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500 focus:ring-opacity-30 transition-all duration-200 shadow-sm"
-                                  name="grupo"
-                                  value={m.grupo || ""}
-                                  onChange={onChange}
-                                  disabled={isReadOnly}
-                                >
-                                  <option value="">Seleccione…</option>
-                                  <option value="G1">G1</option>
-                                  <option value="G2">G2</option>
-                                  <option value="G3">G3</option>
-                                  <option value="G4">G4</option>
-                                </select>
-                              </ConfigField>
-                            )}
-                        </ConfigurableFieldsGrid>
+                        </CoberturaGrupo>
+                        </div>
                       )}
                       <AccesoVerCambiosCobertura
                         coberturaId={m.cobertura_id}

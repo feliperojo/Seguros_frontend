@@ -279,7 +279,15 @@ const UserCoverageIcon = React.memo(function UserCoverageIcon({
         >
           {label && <div className={pendienteActivacion ? undefined : "text-muted"}>{label}</div>}
           {dateLabel && (
-            <div className={pendienteActivacion ? undefined : "text-muted"}>{dateLabel}</div>
+            <div
+              className={
+                pendienteActivacion
+                  ? "gf-coverage-status-date"
+                  : "text-muted gf-coverage-status-date"
+              }
+            >
+              {dateLabel}
+            </div>
           )}
         </div>
       )}

@@ -8,7 +8,13 @@ import { useMentions } from "../../hooks/useMentions";
 import { isUserMentioned, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
 import { formatDateForDisplay } from "../../utils/formatters";
-import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClienteGrupo";
+import {
+  ESTADOS_TAREA_PENDIENTES,
+  ORDEN_TAREA_CREACION,
+  cargarListadoTareasClienteGrupo,
+  crearGuardiaDeConsulta,
+  tareasUnicasEnOrden,
+} from "../../utils/fetchTareasClienteGrupo";
 import {
   resolveAttachmentPublicUrl,
   descargarArchivoAdjunto,
@@ -65,7 +71,27 @@ export default function TareasPendientesPanel({
   const [autoItems, setAutoItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [errMsg, setErrMsg] = useState("");
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
   const [showNueva, setShowNueva] = useState(false);
+  const consultaRef = useRef(null);
+  if (!consultaRef.current) consultaRef.current = crearGuardiaDeConsulta();
+  const paginaRecuperadaRef = useRef(null);
+  const alcanceActualRef = useRef({ clienteId, grupoId });
+  const paginaActualRef = useRef(page);
+  alcanceActualRef.current = { clienteId, grupoId };
+  paginaActualRef.current = page;
+
+  const alcanceKey = `${clienteId ?? ""}:${grupoId ?? ""}`;
+  const [alcanceVisto, setAlcanceVisto] = useState(alcanceKey);
+  if (alcanceVisto !== alcanceKey) {
+    setAlcanceVisto(alcanceKey);
+    paginaRecuperadaRef.current = null;
+    setPage(1);
+    setAutoItems([]);
+    setErrMsg("");
+    setMeta({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
+  }
 
   // Modal responder
   const [showResponder, setShowResponder] = useState(false);
@@ -225,7 +251,6 @@ export default function TareasPendientesPanel({
   const closeResponder = (updated) => {
     setShowResponder(false);
     setSelectedTask(null);
-    setNotificationContext(null);
     if (updated) fetchTasks();
   };
 
@@ -461,69 +486,6 @@ export default function TareasPendientesPanel({
     };
   };
 
-  const toTime = (v) => {
-    if (!v) return null;
-    if (v instanceof Date) {
-      const t = v.getTime();
-      return Number.isFinite(t) ? t : null;
-    }
-    if (typeof v === "number") return Number.isFinite(v) ? v : null;
-    if (typeof v === "string") {
-      const s = v.trim();
-      if (!s) return null;
-
-      // Intento 1: Date nativo (ISO / RFC).
-      const native = new Date(s);
-      const nativeTime = native.getTime();
-      if (!Number.isNaN(nativeTime)) return nativeTime;
-
-      // Intento 2: formatos tipo "MM-DD-YYYY" o "DD-MM-YYYY" o "YYYY-MM-DD".
-      const m = s.match(/^(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})(?:\s|T|$)/);
-      if (m) {
-        const p1 = Number(m[1]);
-        const p2 = Number(m[2]);
-        const p3 = Number(m[3]);
-        if (Number.isFinite(p1) && Number.isFinite(p2) && Number.isFinite(p3)) {
-          let year, month, day;
-          if (m[1].length === 4) {
-            // YYYY-MM-DD
-            year = p1; month = p2; day = p3;
-          } else if (m[3].length === 4) {
-            // Preferimos MM-DD-YYYY (como se muestra en la UI); si no cuadra, cae a DD-MM-YYYY.
-            const asMDY = { year: p3, month: p1, day: p2 };
-            const asDMY = { year: p3, month: p2, day: p1 };
-            const valid = (x) => x.month >= 1 && x.month <= 12 && x.day >= 1 && x.day <= 31;
-            const chosen = valid(asMDY) ? asMDY : asDMY;
-            year = chosen.year; month = chosen.month; day = chosen.day;
-          }
-          if (year && month && day) {
-            const dt = new Date(year, month - 1, day);
-            const t = dt.getTime();
-            return Number.isNaN(t) ? null : t;
-          }
-        }
-      }
-    }
-    return null;
-  };
-
-  // Orden solicitado: más reciente (creación) arriba.
-  const sortTasks = (a, b) => {
-    const ac = toTime(a?.fechaCreacion);
-    const bc = toTime(b?.fechaCreacion);
-    const at = ac ?? 0;
-    const bt = bc ?? 0;
-    if (at !== bt) return bt - at;
-
-    // Desempate: fecha límite ascendente (si existe)
-    const ad = toTime(a?.fechaLimite);
-    const bd = toTime(b?.fechaLimite);
-    const adt = ad ?? Number.POSITIVE_INFINITY;
-    const bdt = bd ?? Number.POSITIVE_INFINITY;
-    if (adt !== bdt) return adt - bdt;
-    return String(a?.id ?? "").localeCompare(String(b?.id ?? ""));
-  };
-
   const estadoLabel = (estado) => {
     switch ((estado || "").toLowerCase()) {
       case "pending": return "Pendiente";
@@ -536,21 +498,35 @@ export default function TareasPendientesPanel({
   const fetchTasks = useCallback(async () => {
     if (!clienteId || !grupoId) {
       setAutoItems([]);
+      setLoading(false);
+      setMeta({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
       return;
     }
+    const token = consultaRef.current.iniciar();
+    const solicitado = { clienteId, grupoId, page };
+    const sigueVigente = () =>
+      consultaRef.current.sigueVigente(token) &&
+      alcanceActualRef.current.clienteId === solicitado.clienteId &&
+      alcanceActualRef.current.grupoId === solicitado.grupoId &&
+      paginaActualRef.current === solicitado.page;
     setLoading(true);
     setErrMsg("");
     try {
-      const merged = await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage);
+      const resultado = await cargarListadoTareasClienteGrupo({
+        clienteId,
+        grupoId,
+        perPage,
+        page,
+        statuses: ESTADOS_TAREA_PENDIENTES,
+        orden: ORDEN_TAREA_CREACION,
+        sigueVigente,
+      });
+      if (resultado.descartada || !sigueVigente()) return;
+      const merged = resultado.list;
       const filtered = merged.filter((t) =>
         PENDING_STATES.has(String(t?.estado ?? t?.status ?? "").toLowerCase())
       );
-      const unique = Object.values(
-        filtered.reduce((acc, t) => {
-          if (t && t.id != null) acc[t.id] = t;
-          return acc;
-        }, {})
-      ).map(normalizeTask).sort(sortTasks);
+      const unique = tareasUnicasEnOrden(filtered).map(normalizeTask);
 
       // El endpoint por cliente/grupo a veces no incluye el id de bitácora necesario para adjuntos.
       const sinBitacora = unique.filter((norm) => !pickBitacoraIdFromRaw(norm.__raw));
@@ -575,8 +551,14 @@ export default function TareasPendientesPanel({
         );
       }
 
+      if (!sigueVigente()) return;
+      if (resultado.pagina !== page) paginaRecuperadaRef.current = resultado.pagina;
+      setLoading(false);
       setAutoItems(unique);
+      setMeta(merged.meta);
+      if (resultado.pagina !== page) setPage(resultado.pagina);
     } catch (err) {
+      if (!sigueVigente()) return;
       console.error("TareasPendientesPanel:", err?.response?.status, err?.message, err);
       setErrMsg(
         err?.response?.status === 403
@@ -584,12 +566,24 @@ export default function TareasPendientesPanel({
           : "No fue posible cargar las tareas."
       );
       setAutoItems([]);
+      setMeta({ total: 0, per_page: perPage, current_page: page, last_page: 1 });
     } finally {
-      setLoading(false);
+      if (sigueVigente()) setLoading(false);
     }
-  }, [clienteId, grupoId, perPage]);
+  }, [clienteId, grupoId, perPage, page]);
 
-  useEffect(() => { fetchTasks(); }, [fetchTasks]);
+  useEffect(() => {
+    if (paginaRecuperadaRef.current === page) {
+      return () => {
+        consultaRef.current.iniciar();
+      };
+    }
+    paginaRecuperadaRef.current = null;
+    fetchTasks();
+    return () => {
+      consultaRef.current.iniciar();
+    };
+  }, [fetchTasks, page]);
 
   const data = useMemo(() => {
     const byApi = Array.isArray(autoItems) ? autoItems : [];
@@ -598,10 +592,7 @@ export default function TareasPendientesPanel({
     return byProp.length ? byProp : byApi;
   }, [items, autoItems, clienteId, grupoId]);
 
-  const orderedData = useMemo(() => {
-    if (!Array.isArray(data) || data.length === 0) return [];
-    return [...data].sort(sortTasks);
-  }, [data, sortTasks]);
+  const orderedData = useMemo(() => (Array.isArray(data) ? data : []), [data]);
 
   // Cargar adjuntos automáticamente cuando cambian los logIds (no solo el length)
   const logIdsKey = useMemo(() => {
@@ -1224,6 +1215,35 @@ export default function TareasPendientesPanel({
             </div>
           </div>
         ))}
+
+        {!loading && !errMsg && meta.total > 0 && (
+          <div className="d-flex justify-content-between align-items-center gap-2 mt-2 small">
+            <span className="text-muted">
+              {meta.total} {meta.total === 1 ? "tarea" : "tareas"}
+              {meta.last_page > 1 ? ` · Página ${meta.current_page} de ${meta.last_page}` : ""}
+            </span>
+            {meta.last_page > 1 && (
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={page >= meta.last_page}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <NuevaTareaModal

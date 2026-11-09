@@ -24,7 +24,6 @@ import { getExtensions } from "../services/ringCentralIntegrationApi";
 const Sidebar = ({ isOpen, toggleSidebar, notificationsProps = null }) => {
   const storedUser = JSON.parse(localStorage.getItem("user") || "null");
   const { user } = useAuth();
-  const userName = user?.name || storedUser?.name || "Usuario";
 
   // Extensiones RingCentral: del usuario en contexto/localStorage o carga única si no vienen en /me
   const [sidebarExtensionIds, setSidebarExtensionIds] = useState(null);
@@ -185,8 +184,6 @@ const Sidebar = ({ isOpen, toggleSidebar, notificationsProps = null }) => {
       {/* Bienvenida */}
       {isOpen && (
         <div className="welcome-container">
-          <p>Bienvenido</p>
-          <span className="welcome-user-name">{userName}</span>
           <p className="welcome-extension">
             <FaPhone className="welcome-extension-icon" />
             {extensionLabel}

@@ -78,6 +78,13 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   const [loadingCliente, setLoadingCliente] = useState(false);
   const [archivos, setArchivos] = useState([]);
   const [subiendoArchivos, setSubiendoArchivos] = useState(false);
+  const [creacion, setCreacion] = useState(null);
+  const [creacionIncierta, setCreacionIncierta] = useState(false);
+  const [errorEnvio, setErrorEnvio] = useState("");
+  const envioRef = useRef(false);
+  const notificadoRef = useRef(false);
+  const ocupadoRef = useRef(false);
+  const tareaBloqueadaRef = useRef(false);
   const [grabando, setGrabando] = useState(false);
   const [reconocimientoDisponible, setReconocimientoDisponible] = useState(false);
   const [reconocimientoVoz, setReconocimientoVoz] = useState(null);
@@ -104,6 +111,8 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   });
 
   const handleClienteSeleccion = useCallback((cli, grupoElegido) => {
+    if (tareaBloqueadaRef.current) return;
+
     setFormData((prev) => {
       const ctxId = toInt(grupoFamiliarId ?? prev.grupo_familiar_id);
       const pickId = toInt(grupoElegido?.grupo_familiar_id);
@@ -190,6 +199,13 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       recognition.lang = 'es-ES';
 
       recognition.onresult = (event) => {
+        if (tareaBloqueadaRef.current) {
+          grabandoRef.current = false;
+          setGrabando(false);
+          try { recognition.stop(); } catch (e) {}
+          return;
+        }
+
         let textoTranscrito = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           if (event.results[i].isFinal) {
@@ -305,8 +321,21 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         return [];
       });
       setIsDragging(false);
+      setCreacion(null);
+      setCreacionIncierta(false);
+      setErrorEnvio("");
+      envioRef.current = false;
+      notificadoRef.current = false;
+      tareaBloqueadaRef.current = false;
       return;
     }
+
+    setCreacion(null);
+    setCreacionIncierta(false);
+    setErrorEnvio("");
+    envioRef.current = false;
+    notificadoRef.current = false;
+    tareaBloqueadaRef.current = false;
 
     // Resetear todo el estado cuando se abre el modal
     const hoy = getHoy();
@@ -455,11 +484,13 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   }, [show, grupoFamiliarId, clienteId]);
 
   const handleChange = (e) => {
+    if (tareaBloqueadaRef.current) return;
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handlePadreChange = async (e) => {
+    if (tareaBloqueadaRef.current) return;
     const selectedId = e.target.value;
     setConceptoPadreId(selectedId);
     setFormData((prev) => ({ ...prev, concept_id: "" }));
@@ -467,9 +498,11 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     if (selectedId) {
       try {
         const hijos = await apiRequest(`operational_concepts/${selectedId}/subconcepts`, "GET");
+        if (tareaBloqueadaRef.current) return;
         setConceptos(hijos || []);
       } catch (err) {
         console.error("Error al cargar subconceptos:", err);
+        if (tareaBloqueadaRef.current) return;
         setConceptos([]);
       }
     } else {
@@ -511,6 +544,8 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   };
 
   const agregarArchivos = useCallback((files) => {
+    if (ocupadoRef.current || envioRef.current) return;
+
     const archivosArray = Array.from(files);
     const archivosValidos = archivosArray.filter(validarArchivo);
     
@@ -524,6 +559,8 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
         file,
         id: Date.now() + Math.random(),
         preview: esImg ? URL.createObjectURL(file) : null,
+        resultado: null,
+        detalle: "",
         nombre: file.name,
         tipo: esImg ? "imagen" : file.type?.includes("pdf") ? "pdf" : "word",
       };
@@ -532,57 +569,82 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     setArchivos((prev) => [...prev, ...nuevosArchivos]);
   }, []);
 
-  const eliminarArchivo = (id) => {
+  const quitarDeLaSeleccion = (id) => {
+    if (ocupadoRef.current || envioRef.current) return;
+
     setArchivos((prev) => {
       const archivo = prev.find((arch) => arch.id === id);
-      if (archivo && archivo.preview) {
-        URL.revokeObjectURL(archivo.preview);
-      }
+      if (!archivo || archivo.resultado === "confirmado") return prev;
+      if (archivo.preview) URL.revokeObjectURL(archivo.preview);
       return prev.filter((arch) => arch.id !== id);
     });
   };
 
-  const subirArchivos = async (bitacoraId) => {
-    if (archivos.length === 0) return;
+  const subirArchivos = async (bitacoraId, lista) => {
+    const pendientes = lista.filter((archivo) => archivo.resultado !== "confirmado");
+    if (pendientes.length === 0) return [];
 
     setSubiendoArchivos(true);
     const token = getAuthToken();
 
     if (!token) {
-      alert("Token no encontrado. Por favor inicia sesión.");
       setSubiendoArchivos(false);
-      return;
+      throw new Error("Token no encontrado. Por favor inicia sesión.");
     }
 
+    const fallidos = [];
+
     try {
-      const uploadPromises = archivos.map(async (archivo) => {
-        const formData = new FormData();
-        formData.append("archivo", archivo.file);
+      for (const archivo of pendientes) {
+        try {
+          const formData = new FormData();
+          formData.append("archivo", archivo.file);
 
-        const response = await fetch(`${API_BASE_URL}/adjuntos/bitacora/${bitacoraId}`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: formData,
-        });
+          const response = await fetch(`${API_BASE_URL}/adjuntos/bitacora/${bitacoraId}`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+            body: formData,
+          });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const errorMessage = errorData.message || "Error al subir archivo";
-          throw new Error(errorMessage);
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            const error = new Error(errorData.message || `No se pudo subir ${archivo.nombre}`);
+            // Un 5xx no prueba que el archivo haya quedado sin guardar.
+            // Un 4xx posterior tampoco anula una incertidumbre previa.
+            error.resultado = response.status >= 500 || archivo.resultado === "incierto"
+              ? "incierto"
+              : "rechazado";
+            throw error;
+          }
+
+          try {
+            await response.json();
+          } catch {
+            const error = new Error(`No se pudo confirmar si se guardó ${archivo.nombre}`);
+            error.resultado = "incierto";
+            throw error;
+          }
+          setArchivos((prev) => prev.map((item) => (
+            item.id === archivo.id ? { ...item, resultado: "confirmado", detalle: "" } : item
+          )));
+        } catch (err) {
+          const resultado = err.resultado === "rechazado" ? "rechazado" : "incierto";
+          const detalle = resultado === "rechazado"
+            ? (err.message || `No se pudo subir ${archivo.nombre}`)
+            : "";
+          setArchivos((prev) => prev.map((item) => (
+            item.id === archivo.id ? { ...item, resultado, detalle } : item
+          )));
+          fallidos.push({ nombre: archivo.nombre, resultado });
         }
-
-        return response.json();
-      });
-
-      await Promise.all(uploadPromises);
-    } catch (err) {
-      console.error("Error al subir archivos:", err);
-      throw err;
+      }
     } finally {
       setSubiendoArchivos(false);
     }
+
+    return fallidos;
   };
 
   const handleFileInput = (e) => {
@@ -667,6 +729,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
   }, [show, agregarArchivos]);
 
   const iniciarDictado = () => {
+    if (tareaBloqueadaRef.current) return;
     if (!reconocimientoVoz) {
       alert('El reconocimiento de voz no está disponible en tu navegador.');
       return;
@@ -753,145 +816,216 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
     return Object.keys(nuevosErrores).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (!validarCampos()) {
-      return;
+  const describirAdjuntos = (tarea, lista) => {
+    const rechazados = lista.filter((archivo) => archivo.resultado === "rechazado");
+    const inciertos = lista.filter((archivo) => archivo.resultado === "incierto");
+    if (rechazados.length === 0 && inciertos.length === 0) return "";
+
+    const frases = [`La tarea ya existe (n.º ${tarea.id}).`];
+    if (rechazados.length > 0) {
+      frases.push(`No se guardaron: ${rechazados.map((archivo) => archivo.nombre).join(", ")}.`);
     }
-    
+    if (inciertos.length > 0) {
+      frases.push(`No se pudo confirmar si se guardaron: ${inciertos.map((archivo) => archivo.nombre).join(", ")}. Esos archivos podrían haberse guardado.`);
+      frases.push("Reintentarlos puede duplicarlos.");
+    }
+    frases.push("Puedes reintentar los pendientes.");
+    if (inciertos.length > 0 && rechazados.length > 0) {
+      frases.push("Si cierras, la tarea permanece creada. Los rechazados no se guardaron. El resultado de los no confirmados sigue sin estar confirmado.");
+    } else if (inciertos.length > 0) {
+      frases.push("Si cierras, la tarea permanece creada y el resultado de esos archivos no está confirmado.");
+    } else {
+      frases.push("Si cierras, la tarea permanece creada y esos archivos no quedan guardados.");
+    }
+    return frases.join(" ");
+  };
+
+  const capturarResultado = () => {
+    const conceptoSeleccionado = conceptos.find((c) => c.id === parseInt(formData.concept_id, 10));
+    let nombreCliente = "Cliente";
+
+    if (clienteFicha && String(formData.cliente_id) === String(clienteFicha.id)) {
+      nombreCliente = clienteFicha.nombre_completo;
+    } else {
+      const clienteEncontrado = clientes.find((c) =>
+        String(c.cliente_id ?? c.id) === String(formData.cliente_id)
+      );
+      if (clienteEncontrado) {
+        nombreCliente = clienteEncontrado.nombre_completo;
+      }
+    }
+
+    return {
+      tipo: "tarea",
+      scheduled_date: formData.scheduled_date,
+      due_date: formData.due_date,
+      status: "pending",
+      log: {
+        concept: { name: conceptoSeleccionado?.name || "Concepto" },
+        note: formData.note,
+        cliente: { nombre_completo: nombreCliente },
+      },
+    };
+  };
+
+  const notificarCreacion = (resultado) => {
+    if (!resultado?.id || notificadoRef.current || typeof onCreated !== "function") return;
+    notificadoRef.current = true;
+    onCreated(resultado);
+  };
+
+  const cerrarModal = () => {
+    if (envioRef.current) return;
+    if (creacion) notificarCreacion(creacion);
+    onHide();
+  };
+
+  const soltarBloqueo = () => {
+    tareaBloqueadaRef.current = false;
+  };
+
+  const marcarNoEnviados = (mensaje) => {
+    setArchivos((prev) => prev.map((item) => (
+      item.resultado ? item : { ...item, resultado: "rechazado", detalle: mensaje }
+    )));
+  };
+
+  const aplicarErroresServidor = (error) => {
+    const detalles = error.response?.errors;
+    if (!detalles || typeof detalles !== "object") return;
+
+    const mapa = {};
+    Object.entries(detalles).forEach(([campo, mensajes]) => {
+      mapa[campo] = Array.isArray(mensajes) ? mensajes.filter(Boolean).join(" ") : String(mensajes);
+    });
+    setErrors((prev) => ({ ...prev, ...mapa }));
+  };
+
+  const finalizarAdjuntos = async (resultado, lista) => {
+    const fallidos = await subirArchivos(resultado.log.id, lista);
+    if (fallidos.length > 0) return false;
+
+    notificarCreacion(resultado);
+    onHide();
+    return true;
+  };
+
+  const reintentarAdjuntos = async () => {
+    if (envioRef.current || !creacion) return;
+
+    envioRef.current = true;
     setLoading(true);
-    
+
     try {
-      // ✅ Extraer menciones antes de enviar
-      const mentionedIds = extractMentionedUserIds(formData.note || "", usuarios);
-      
-      // 📝 Log de depuración: Menciones detectadas (nueva tarea)
-      if (import.meta.env.DEV) {
-        console.log("🔔 [NOTIFICACIONES] Creando nueva tarea con menciones:", {
-          nota_preview: formData.note?.substring(0, 100) || "",
-          mentioned_user_ids: mentionedIds,
-          usuarios_mencionados: usuarios.filter(u => mentionedIds.includes(u.id)).map(u => ({ id: u.id, name: u.name })),
-          cliente_id: formData.cliente_id,
-          assign_to_user_id: formData.assign_to_user_id,
-          scheduled_date: formData.scheduled_date,
-          due_date: formData.due_date,
-          endpoint: "bitacora_operativa/create"
-        });
-      }
-      
-      const payload = {
-        ...formData,
-        action_type: "tarea",
-        tipo: "tarea",
-        mentioned_user_ids: mentionedIds, // Enviar IDs de usuarios mencionados
-      };
-
-      const response = await apiRequest("bitacora_operativa/create", "POST", payload);
-      
-      // 📝 Log de depuración: Confirmación de creación de tarea
-      if (import.meta.env.DEV) {
-        const taskId = response?.id || response?.log?.id || response?.data?.id || response?.bitacora?.id;
-        console.log("✅ [NOTIFICACIONES] Nueva tarea creada exitosamente:", {
-          tarea_id: taskId,
-          mentioned_user_ids_enviados: mentionedIds,
-          respuesta_backend: {
-            id: response?.id,
-            log_id: response?.log?.id,
-            data_id: response?.data?.id
-          }
-        });
-      }
-      
-      let logId = response?.id || response?.log?.id || response?.data?.id || response?.bitacora?.id;
-      
-      if (!logId && payload.grupo_familiar_id) {
-        try {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          const buscarResponse = await apiRequest(
-            `bitacora_operativa?grupo_familiar_id=${payload.grupo_familiar_id}&per_page=10`,
-            "GET"
-          );
-          
-          const lista = buscarResponse?.data || buscarResponse || [];
-          const registros = Array.isArray(lista) ? lista : [];
-          
-          const registroReciente = registros.find(reg => {
-            const conceptMatch = String(reg.concept_id) === String(payload.concept_id);
-            const noteMatch = reg.note === payload.note || reg.note?.trim() === payload.note?.trim();
-            const clienteMatch = String(reg.cliente_id) === String(payload.cliente_id);
-            const tipoMatch = (reg.tipo === payload.tipo) || (reg.action_type === payload.action_type);
-            
-            return conceptMatch && noteMatch && clienteMatch && tipoMatch;
-          });
-          
-          if (registroReciente) {
-            logId = registroReciente.id || registroReciente.log?.id;
-          }
-        } catch (err) {
-          console.error("Error al buscar el registro:", err);
-        }
-      }
-      
-      if (logId && archivos.length > 0) {
-        try {
-          await subirArchivos(logId);
-        } catch (err) {
-          console.error("Error al subir archivos:", err);
-          alert(`Se creó la tarea pero hubo un error al subir algunos archivos:\n${err.message || "Error desconocido"}`);
-        }
-      } else if (archivos.length > 0 && !logId) {
-        alert("Se creó la tarea pero no se pudieron subir los archivos porque no se pudo obtener el ID del registro.");
-      }
-
-      const conceptoSeleccionado = conceptos.find((c) => c.id === parseInt(formData.concept_id));
-
-      let nombreCliente = "Cliente";
-      if (clienteFicha && String(formData.cliente_id) === String(clienteFicha.id)) {
-        nombreCliente = clienteFicha.nombre_completo;
-      } else {
-        const clienteEncontrado = clientes.find((c) => 
-          String(c.cliente_id ?? c.id) === String(formData.cliente_id)
-        );
-        if (clienteEncontrado) {
-          nombreCliente = clienteEncontrado.nombre_completo;
-        }
-      }
-
-      const nuevaTarea = {
-        id: response?.task?.id || Date.now(),
-        tipo: "tarea",
-        scheduled_date: formData.scheduled_date,
-        due_date: formData.due_date,
-        status: "pending",
-        log: {
-          concept: { name: conceptoSeleccionado?.name || "Concepto" },
-          note: formData.note,
-          cliente: {
-            nombre_completo: nombreCliente,
-          },
-        },
-      };
-
-      if (onCreated) {
-        onCreated(nuevaTarea);
-      }
-      
-      onHide();
+      await finalizarAdjuntos(creacion, archivos);
     } catch (error) {
-      console.error("Error al guardar tarea:", error);
-      alert(`Error al guardar la tarea: ${error.message || "Error desconocido"}`);
+      marcarNoEnviados(error.message || "No se pudo enviar el archivo.");
     } finally {
+      envioRef.current = false;
       setLoading(false);
     }
   };
 
+  const handleSubmit = async () => {
+    if (envioRef.current || creacion || creacionIncierta) return;
+    if (!validarCampos()) return;
+
+    envioRef.current = true;
+    tareaBloqueadaRef.current = true;
+    if (grabandoRef.current) detenerDictado();
+    const resultadoBase = capturarResultado();
+    const payload = {
+      ...formData,
+      note: resultadoBase.log.note,
+      scheduled_date: resultadoBase.scheduled_date,
+      due_date: resultadoBase.due_date,
+      action_type: "tarea",
+      tipo: "tarea",
+      mentioned_user_ids: extractMentionedUserIds(resultadoBase.log.note || "", usuarios),
+    };
+    setLoading(true);
+    setErrorEnvio("");
+    let resultado = null;
+
+    try {
+      try {
+        const response = await apiRequest("bitacora_operativa/create", "POST", payload);
+        const logId = Number(response?.log_id);
+        const taskId = Number(response?.task_id);
+
+        if (!logId || !taskId) {
+          soltarBloqueo();
+          setCreacionIncierta(true);
+          setErrorEnvio("El servidor no entregó el identificador de la tarea. No se creará otra automáticamente. Revisa el listado antes de volver a intentarlo.");
+          return;
+        }
+
+        resultado = {
+          ...resultadoBase,
+          id: taskId,
+          log: { ...resultadoBase.log, id: logId },
+        };
+        setCreacion(resultado);
+      } catch (error) {
+        soltarBloqueo();
+        if (!error.response) {
+          setCreacionIncierta(true);
+          setErrorEnvio("No se pudo confirmar si la tarea se creó. No se reintentará automáticamente. Revisa el listado antes de crear otra.");
+          return;
+        }
+
+        if (error.response.status === 422) {
+          aplicarErroresServidor(error);
+          setErrorEnvio(error.message || "Revisa los datos de la tarea.");
+          return;
+        }
+
+        setErrorEnvio(error.message || "No se pudo crear la tarea.");
+        return;
+      }
+
+      if (archivos.length > 0) {
+        await finalizarAdjuntos(resultado, archivos);
+        return;
+      }
+
+      notificarCreacion(resultado);
+      onHide();
+    } catch (error) {
+      marcarNoEnviados(error.message || "No se pudo enviar el archivo.");
+    } finally {
+      envioRef.current = false;
+      setLoading(false);
+    }
+  };
+
+  const ocupado = loading || subiendoArchivos;
+  const tareaBloqueada = ocupado || Boolean(creacion);
+  ocupadoRef.current = ocupado;
+  tareaBloqueadaRef.current = tareaBloqueada || envioRef.current;
+  const avisoAdjuntos = creacion ? describirAdjuntos(creacion, archivos) : "";
+
   return (
-    <Modal show={show} onHide={onHide} size="lg" centered dialogClassName="gf-modal gf-modal--lg" contentClassName="gf-modal__content">
-      <Modal.Header closeButton className="gf-modal__header">
+    <Modal
+      show={show}
+      onHide={cerrarModal}
+      backdrop={ocupado ? "static" : true}
+      keyboard={!ocupado}
+      size="lg"
+      centered
+      dialogClassName="gf-modal gf-modal--lg"
+      contentClassName="gf-modal__content"
+    >
+      <Modal.Header closeButton={!ocupado} className="gf-modal__header">
         <Modal.Title className="gf-modal__title">Nueva Tarea</Modal.Title>
       </Modal.Header>
 
       <Modal.Body className="gf-modal__body">
+        {(avisoAdjuntos || errorEnvio) && (
+          <div className="alert alert-warning" role="alert">
+            {avisoAdjuntos || errorEnvio}
+          </div>
+        )}
         {(toInt(formData.grupo_familiar_id) || toInt(grupoFamiliarId)) && (
           <div className="mb-3">
             <span className="badge bg-secondary">
@@ -902,9 +1036,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
 
         <Form.Group className="mb-3">
           <Form.Label>Concepto Principal</Form.Label>
-          <Form.Select 
-            value={conceptoPadreId} 
+          <Form.Select
+            value={conceptoPadreId}
             onChange={handlePadreChange}
+            disabled={tareaBloqueada}
           >
             <option value="">Seleccionar</option>
             {conceptosPadres.map((c) => (
@@ -922,6 +1057,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               name="concept_id"
               value={formData.concept_id}
               onChange={handleChange}
+              disabled={tareaBloqueada}
               isInvalid={!!errors.concept_id}
             >
               <option value="">Seleccionar</option>
@@ -995,6 +1131,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                   variant={grabando ? "danger" : "outline-primary"}
                   size="sm"
                   onClick={toggleDictado}
+                  disabled={tareaBloqueada}
                   className="d-flex align-items-center gap-2"
                 >
                   {grabando ? (
@@ -1049,7 +1186,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                 ref={mentionQuillRef}
                 theme="snow"
                 value={formData.note || ""}
+                readOnly={tareaBloqueada}
                 onChange={(value, delta, source, editor) => {
+                  if (tareaBloqueadaRef.current) return;
                   setFormData((prev) => ({ ...prev, note: value }));
                   const quill =
                     getQuillInstance(editor) ??
@@ -1072,7 +1211,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                   // ✅ Manejar menciones
                   handleQuillChange(value, delta, source, editor);
                 }}
-                onKeyDown={handleQuillKeyDown}
+                onKeyDown={(event) => {
+                  if (tareaBloqueadaRef.current) return;
+                  handleQuillKeyDown(event);
+                }}
                 modules={quillModules}
                 formats={quillFormats}
                 placeholder="Describa los detalles y objetivos de esta tarea. Use la barra de herramientas para formatear el texto, el botón 'Dictar' para transcribir por voz, o escriba @ para mencionar usuarios..."
@@ -1123,7 +1265,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                       {mentionList.map((user, index) => (
                         <div
                           key={user.id}
-                          onClick={() => insertMention(user)}
+                          onClick={() => {
+                            if (tareaBloqueadaRef.current) return;
+                            insertMention(user);
+                          }}
                           onMouseEnter={() => {
                             if (updateSelectedIndex) {
                               updateSelectedIndex(index);
@@ -1186,6 +1331,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
             name="assign_to_user_id"
             value={formData.assign_to_user_id}
             onChange={handleChange}
+            disabled={tareaBloqueada}
             isInvalid={!!errors.assign_to_user_id}
           >
             <option value="">
@@ -1219,7 +1365,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
             <DateInputWithCalendar
               valueIso={formData.scheduled_date}
               onChangeIso={(iso) => handleChange({ target: { name: "scheduled_date", value: iso } })}
-              disabled={false}
+              disabled={tareaBloqueada}
             />
             <Form.Control.Feedback type="invalid">
               {errors.scheduled_date}
@@ -1233,6 +1379,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               name="scheduled_time"
               value={formData.scheduled_time || ""}
               onChange={handleChange}
+              disabled={tareaBloqueada}
               title="Hora desde la cual se contabiliza el tiempo de gestión"
             />
             <Form.Text className="text-muted" style={{ fontSize: "0.7rem" }}>
@@ -1245,7 +1392,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
             <DateInputWithCalendar
               valueIso={formData.due_date}
               onChangeIso={(iso) => handleChange({ target: { name: "due_date", value: iso } })}
-              disabled={false}
+              disabled={tareaBloqueada}
               minIso={formData.scheduled_date}
             />
             <Form.Control.Feedback type="invalid">
@@ -1267,7 +1414,10 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               borderWidth: isDragging ? "2px" : undefined,
               transition: "all 0.2s ease"
             }}
-            onClick={() => document.getElementById("file-input-tarea").click()}
+            onClick={() => {
+              if (ocupado) return;
+              document.getElementById("file-input-tarea").click();
+            }}
             onDragEnter={handleDragEnter}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -1279,6 +1429,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
               multiple
               accept="image/*,.pdf,.doc,.docx"
               onChange={handleFileInput}
+              disabled={ocupado}
               style={{ display: "none" }}
             />
             <div>
@@ -1329,24 +1480,27 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                         )}
                       </div>
                     )}
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-danger position-absolute top-0 end-0"
-                      style={{
-                        borderRadius: "50%",
-                        width: "20px",
-                        height: "20px",
-                        padding: 0,
-                        fontSize: "10px",
-                      }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        eliminarArchivo(archivo.id);
-                      }}
-                      title="Eliminar archivo"
-                    >
-                      ×
-                    </button>
+                    {archivo.resultado !== "confirmado" && archivo.resultado !== "incierto" && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary position-absolute top-0 end-0"
+                        style={{
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          padding: 0,
+                          fontSize: "10px",
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          quitarDeLaSeleccion(archivo.id);
+                        }}
+                        disabled={ocupado}
+                        aria-label={`Quitar de la selección: ${archivo.nombre}`}
+                      >
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    )}
                     <div
                       className="position-absolute bottom-0 start-0 end-0 bg-dark bg-opacity-75 text-white text-truncate p-1"
                       style={{ fontSize: "8px" }}
@@ -1359,6 +1513,36 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                   </div>
                 ))}
               </div>
+              {archivos.some((archivo) => archivo.resultado) && (
+                <ul className="list-unstyled mt-2 mb-0">
+                  {archivos.map((archivo) => (
+                    <li key={`estado-${archivo.id}`}>
+                      {archivo.resultado === "confirmado" && (
+                        <small className="text-success">{archivo.nombre}: Guardado</small>
+                      )}
+                      {archivo.resultado === "rechazado" && (
+                        <small className="text-danger">{archivo.nombre}: No se guardó. {archivo.detalle}</small>
+                      )}
+                      {archivo.resultado === "incierto" && (
+                        <small>
+                          {archivo.nombre}: No se pudo confirmar. Podría haberse guardado.
+                          {" "}Quitar de los reintentos no elimina una copia que pudiera haberse guardado.
+                          {" "}
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm p-0 align-baseline"
+                            disabled={ocupado}
+                            aria-label={`Quitar de los reintentos: ${archivo.nombre}`}
+                            onClick={() => quitarDeLaSeleccion(archivo.id)}
+                          >
+                            Quitar de los reintentos
+                          </button>
+                        </small>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {subiendoArchivos && (
                 <div className="mt-2 text-center">
                   <Spinner animation="border" size="sm" className="me-2" />
@@ -1384,7 +1568,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                 <button
                   type="button"
                   className="btn btn-sm btn-outline-secondary"
+                  disabled={tareaBloqueada}
                   onClick={() => {
+                    if (tareaBloqueadaRef.current) return;
                     setFormData(prev => ({ ...prev, cliente_id: "", grupo_familiar_id: "" }));
                     if (clienteId) {
                       setClienteQuery(clienteFicha?.nombre_completo || "");
@@ -1417,8 +1603,9 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                     : "Buscar cliente por nombre..."
               }
               value={clienteQuery}
-              disabled={loadingCliente}
+              disabled={loadingCliente || tareaBloqueada}
               onChange={async (e) => {
+                if (tareaBloqueadaRef.current) return;
                 const value = e.target.value;
                 setClienteQuery(value);
 
@@ -1450,6 +1637,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                       grupos: Array.isArray(c.grupos) ? c.grupos : [],
                     }));
 
+                    if (tareaBloqueadaRef.current) return;
                     setClientes(normalized);
                   } catch (err) {
                     console.error("Error al buscar clientes:", err);
@@ -1514,6 +1702,7 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
                               type="button"
                               className="btn btn-sm btn-outline-secondary"
                               onClick={() => handleClienteSeleccion(cli, g)}
+                              disabled={tareaBloqueada}
                             >
                               Grupo #{g.grupo_familiar_id}
                               {g.parentesco && (
@@ -1560,20 +1749,22 @@ const NuevaTareaModal = ({ show, onHide, onCreated, categoria = "tarea_manual", 
       </Modal.Body>
 
       <Modal.Footer className="gf-modal__footer">
-        <Button type="button" variant="outline-secondary" onClick={onHide} disabled={loading}>
-          Cancelar
+        <Button type="button" variant="outline-secondary" onClick={cerrarModal} disabled={ocupado}>
+          {creacion ? "Cerrar" : "Cancelar"}
         </Button>
-        <Button 
+        <Button
           type="button"
-          variant="primary" 
-          onClick={handleSubmit} 
-          disabled={loading}
+          variant="primary"
+          onClick={creacion ? reintentarAdjuntos : handleSubmit}
+          disabled={ocupado || creacionIncierta}
         >
-          {loading ? (
+          {ocupado ? (
             <>
               <Spinner size="sm" animation="border" className="me-2" />
-              Guardando...
+              {subiendoArchivos ? "Subiendo..." : "Guardando..."}
             </>
+          ) : creacion ? (
+            "Reintentar archivos"
           ) : (
             "Crear Tarea"
           )}

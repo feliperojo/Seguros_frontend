@@ -31,6 +31,7 @@ import { isTaskOverdue } from "../../utils/taskDueDate";
 import { useMentionableQuill } from "../../hooks/useMentionableQuill";
 import { extractMentionedUserIds, highlightMentions } from "../../utils/mentions";
 import { useAuth } from "../../context/AuthContext";
+import { puedeCompletarTarea } from "../../utils/puedeCompletarTarea";
 import { getQuillInstance } from "../../utils/quillEditorUtils";
 import TramosAsignacionBar from "./TramosAsignacionBar";
 
@@ -95,7 +96,7 @@ const toPositiveUserId = (v) => {
   return Number.isFinite(n) && n > 0 ? n : null;
 };
 
-/** Usuario asignado a la tarea (quien puede completarla según backend). */
+/** ID para avisar al responsable al comentar. No autoriza completar. */
 const getTareaAsignadoUserId = (t) => {
   if (!t) return null;
   return (
@@ -116,55 +117,6 @@ const getTareaAsignadoUserId = (t) => {
 const getAuthUserId = (u) => {
   if (!u) return null;
   return toPositiveUserId(u.id ?? u.user_id ?? u.userId);
-};
-
-const normalizeNombre = (s) =>
-  String(s ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
-
-/** Nombre visible del usuario en sesión (para coincidir con `asignado_a` cuando no hay ID). */
-const getAuthNombreVisible = (u) => {
-  if (!u) return "";
-  return (
-    u.name ??
-    u.nombre ??
-    u.full_name ??
-    u.username ??
-    ""
-  );
-};
-
-/**
- * Textos posibles de "asignado a" en el payload (incl. `asignado_a` como string).
- */
-const getTareaAsignadoNombres = (t) => {
-  if (!t) return [];
-  const candidates = [
-    t.asignado_a,
-    t.asignadoA,
-    t.assign_to_user_name,
-    t.assigned_to_name,
-    t.assign_to_user?.name,
-    t.assigned_user?.name,
-    t.assigned_to_user?.name,
-    t.task?.asignado_a,
-    t.task?.assign_to_user?.name,
-    t.log?.asignado_a,
-    t.log?.assign_to_user?.name,
-    t.log?.assigned_user?.name,
-  ];
-  return candidates
-    .map((x) => (typeof x === "string" ? normalizeNombre(x) : ""))
-    .filter(Boolean);
-};
-
-const coincideAsignacionPorNombre = (u, t) => {
-  const mine = normalizeNombre(getAuthNombreVisible(u));
-  if (!mine) return false;
-  const nombres = getTareaAsignadoNombres(t);
-  return nombres.some((n) => n && n === mine);
 };
 
 const pickNombreFrom = (v) => {
@@ -213,12 +165,10 @@ const ResponderTareaModal = ({
 }) => {
   const { hasPermission, hasRole, user } = useAuth();
 
-  const puedeMarcarCompletada = useMemo(() => {
-    const uid = getAuthUserId(user);
-    const aid = getTareaAsignadoUserId(tarea);
-    if (uid && aid && uid === aid) return true;
-    return coincideAsignacionPorNombre(user, tarea);
-  }, [user, tarea]);
+  const puedeMarcarCompletada = useMemo(
+    () => puedeCompletarTarea(user, tarea),
+    [user, tarea]
+  );
   // ✅ Log de depuración para verificar la estructura de la tarea (solo una vez por tarea)
   const tareaLogRef = useRef(null);
   useEffect(() => {

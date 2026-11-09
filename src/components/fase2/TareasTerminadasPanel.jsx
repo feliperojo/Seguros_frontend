@@ -3,7 +3,18 @@ import { FaPaperclip, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { Spinner, Modal, Button } from "react-bootstrap";
 import apiRequest from "../../services/api";
 import { formatDateForDisplay, formatDurationBetweenDates } from "../../utils/formatters";
-import { fetchTareasOperativasClienteGrupo } from "../../utils/fetchTareasClienteGrupo";
+import {
+  MENSAJE_CIERRE_NO_DISPONIBLE,
+  debeEnriquecerTareaTerminada,
+  fechaCierreReal,
+} from "../../utils/fechaCierreTarea";
+import {
+  ESTADOS_TAREA_TERMINADAS,
+  ORDEN_TAREA_CIERRE,
+  cargarListadoTareasClienteGrupo,
+  crearGuardiaDeConsulta,
+  tareasUnicasEnOrden,
+} from "../../utils/fetchTareasClienteGrupo";
 
 // Estados considerados como "terminadas"
 const COMPLETED_STATES = new Set([
@@ -70,6 +81,32 @@ export default function TareasTerminadasPanel({
   const [term, setTerm] = useState("");         // 👈 SOLO UNA VEZ
   const [hasLoaded, setHasLoaded] = useState(false); // evita peticiones innecesarias
   const [loadRequested, setLoadRequested] = useState(false); // se activa con el botón
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
+  const consultaRef = useRef(null);
+  if (!consultaRef.current) consultaRef.current = crearGuardiaDeConsulta();
+  const paginaRecuperadaRef = useRef(null);
+  const alcanceActualRef = useRef({ clienteId, grupoId });
+  const paginaActualRef = useRef(page);
+  const cargaSolicitadaRef = useRef(loadRequested);
+  alcanceActualRef.current = { clienteId, grupoId };
+  paginaActualRef.current = page;
+  cargaSolicitadaRef.current = loadRequested;
+
+  const alcanceKey = `${clienteId ?? ""}:${grupoId ?? ""}`;
+  const [alcanceVisto, setAlcanceVisto] = useState(alcanceKey);
+  if (alcanceVisto !== alcanceKey) {
+    setAlcanceVisto(alcanceKey);
+    paginaRecuperadaRef.current = null;
+    setPage(1);
+    setItems([]);
+    setErrMsg("");
+    setTerm("");
+    setHasLoaded(false);
+    setLoadRequested(false);
+    setLoading(false);
+    setMeta({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
+  }
 
   // Estados para adjuntos
   const [adjuntos, setAdjuntos] = useState({}); // { logId: [adjuntos] }
@@ -94,7 +131,9 @@ export default function TareasTerminadasPanel({
     logIdsCargandoRef.current = new Set();
     setHasLoaded(false);
     setLoadRequested(false);
-  }, [clienteId, grupoId]);
+    setPage(1);
+    setMeta({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
+  }, [clienteId, grupoId, perPage]);
 
   // ==== Helpers (usan formatDateForDisplay para evitar desfase de 1 día por zona horaria) ====
   const formatDate = (v) => {
@@ -117,7 +156,7 @@ export default function TareasTerminadasPanel({
 
   const dayLabel = (v) => {
     const parts = parseDateParts(v);
-    if (!parts) return "—";
+    if (!parts) return MENSAJE_CIERRE_NO_DISPONIBLE;
     // Crea fecha local para formatear mes correctamente
     const d = new Date(parts.year, parts.month - 1, parts.day);
     const mes = new Intl.DateTimeFormat("es-CO", { month: "long" }).format(d);
@@ -313,66 +352,8 @@ export default function TareasTerminadasPanel({
     }
   }, []);
 
-  // Normaliza y DERIVA fechaTermino y fechaInicio (para duración)
+  // La fecha de término es el completed_at recibido, sin reordenar ni reconstruir el cierre.
   const normalizeTask = (t) => {
-    const toMs = (v) => {
-      if (!v) return null;
-      if (v instanceof Date) {
-        const ms = v.getTime();
-        return Number.isNaN(ms) ? null : ms;
-      }
-      // Soporte para formatos del backend tipo "04/14/2026 16:34:59" o "04/14/2026"
-      if (typeof v === "string") {
-        const s = v.trim();
-        // ISO / RFC: delegar al parser nativo
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
-          const ms = new Date(s).getTime();
-          return Number.isNaN(ms) ? null : ms;
-        }
-        // MM/DD/YYYY HH:mm:ss (o sin hora)
-        const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2})(?::(\d{2}))?)?$/);
-        if (m) {
-          const mm = Number(m[1]);
-          const dd = Number(m[2]);
-          const yyyy = Number(m[3]);
-          const hh = Number(m[4] ?? 0);
-          const mi = Number(m[5] ?? 0);
-          const ss = Number(m[6] ?? 0);
-          const d = new Date(yyyy, mm - 1, dd, hh, mi, ss);
-          const ms = d.getTime();
-          return Number.isNaN(ms) ? null : ms;
-        }
-      }
-      const ms = new Date(v).getTime();
-      return Number.isNaN(ms) ? null : ms;
-    };
-
-    const getLastCommentMs = (taskLike) => {
-      const buckets = [
-        taskLike?.comentarios,
-        taskLike?.comments,
-        taskLike?.task_comments,
-        taskLike?.taskComments,
-        taskLike?.log?.comentarios,
-        taskLike?.log?.comments,
-      ].filter(Array.isArray);
-
-      let best = null;
-      for (const arr of buckets) {
-        for (const c of arr) {
-          const raw =
-            c?.fecha ||
-            c?.created_at ||
-            c?.updated_at ||
-            c?.createdAt ||
-            c?.updatedAt;
-          const ms = toMs(raw);
-          if (ms != null && (best == null || ms > best)) best = ms;
-        }
-      }
-      return best;
-    };
-
     const rawEstado = String(t?.estado ?? t?.status ?? "").toLowerCase();
     const nota =
       t?.nota ??
@@ -385,65 +366,7 @@ export default function TareasTerminadasPanel({
       "";
 
     const fechaCreacion = t?.fechaCreacion ?? t?.created_at ?? t?.fecha ?? null;
-    const lastCommentMs = getLastCommentMs(t);
-    const finishedCandidates = [
-      t?.fechaTermino,
-      t?.finished_at,
-      t?.completed_at,
-      t?.closed_at,
-      // Campos comunes en tu backend
-      t?.fecha_raw,
-      t?.last_activity_at_iso,
-      t?.last_activity_at,
-      t?.fecha,
-      t?.fecha_cierre,
-      t?.fecha_termino,
-      t?.fecha_fin,
-      t?.ended_at,
-      t?.end_date,
-      t?.completedAt,
-      // A veces el API manda las fechas dentro de `log` o `task`
-      t?.log?.fechaTermino,
-      t?.log?.finished_at,
-      t?.log?.completed_at,
-      t?.log?.closed_at,
-      t?.log?.fecha_raw,
-      t?.log?.last_activity_at_iso,
-      t?.log?.last_activity_at,
-      t?.log?.fecha,
-      t?.log?.fecha_cierre,
-      t?.log?.fecha_termino,
-      t?.log?.fecha_fin,
-      t?.log?.ended_at,
-      t?.log?.end_date,
-      t?.task?.fechaTermino,
-      t?.task?.finished_at,
-      t?.task?.completed_at,
-      t?.task?.closed_at,
-      t?.task?.fecha_raw,
-      t?.task?.last_activity_at_iso,
-      t?.task?.last_activity_at,
-      t?.task?.fecha,
-      t?.task?.fecha_cierre,
-      t?.task?.fecha_termino,
-      t?.task?.fecha_fin,
-      t?.task?.ended_at,
-      t?.task?.end_date,
-      t?.updated_at, // último recurso razonable si el backend no envía completed_at
-      t?.log?.updated_at,
-      t?.task?.updated_at,
-      t?.updatedAt,
-    ];
-
-    let bestFinishMs = null;
-    for (const v of finishedCandidates) {
-      const ms = toMs(v);
-      if (ms != null && (bestFinishMs == null || ms > bestFinishMs)) bestFinishMs = ms;
-    }
-    if (lastCommentMs != null && (bestFinishMs == null || lastCommentMs > bestFinishMs)) {
-      bestFinishMs = lastCommentMs;
-    }
-    const fechaTermino = bestFinishMs != null ? new Date(bestFinishMs).toISOString() : null;
+    const fechaTermino = fechaCierreReal(t);
     // Para duración: usar fecha_inicio o scheduled_date si existen, si no fecha de creación
     const fechaInicio =
       t?.fecha_inicio ?? t?.scheduled_date ?? t?.scheduled_at ?? fechaCreacion;
@@ -472,16 +395,6 @@ export default function TareasTerminadasPanel({
     // Requisito: SOLO traer tareas realmente terminadas por estado.
     return COMPLETED_STATES.has(st);
   }, []);
-
-  // Orden: terminada desc; si no hay, creada desc
-  const sortTasks = (a, b) => {
-    const at = a.fechaTermino ? new Date(a.fechaTermino).getTime() : -Infinity;
-    const bt = b.fechaTermino ? new Date(b.fechaTermino).getTime() : -Infinity;
-    if (at !== bt) return bt - at;
-    const ac = a.fechaCreacion ? new Date(a.fechaCreacion).getTime() : 0;
-    const bc = b.fechaCreacion ? new Date(b.fechaCreacion).getTime() : 0;
-    return bc - ac;
-  };
 
   const estadoLabel = (estado) => {
     switch ((estado || "").toLowerCase()) {
@@ -520,64 +433,47 @@ export default function TareasTerminadasPanel({
     }
 
     // No cargar automáticamente: solo cuando el usuario lo solicite
-    if (!loadRequested) return;
+    if (!loadRequested) {
+      paginaRecuperadaRef.current = null;
+      return;
+    }
+    if (paginaRecuperadaRef.current === page) {
+      paginaRecuperadaRef.current = null;
+      return;
+    }
 
+    const token = consultaRef.current.iniciar();
+    const solicitado = { clienteId, grupoId, page };
+    const sigueVigente = () =>
+      consultaRef.current.sigueVigente(token) &&
+      alcanceActualRef.current.clienteId === solicitado.clienteId &&
+      alcanceActualRef.current.grupoId === solicitado.grupoId &&
+      paginaActualRef.current === solicitado.page &&
+      cargaSolicitadaRef.current === true;
     let cancelled = false;
     (async () => {
       setLoading(true);
       setErrMsg("");
       try {
-        const rawList = await fetchTareasOperativasClienteGrupo(clienteId, grupoId, perPage);
+        const resultado = await cargarListadoTareasClienteGrupo({
+          clienteId,
+          grupoId,
+          perPage,
+          page,
+          statuses: ESTADOS_TAREA_TERMINADAS,
+          orden: ORDEN_TAREA_CIERRE,
+          sigueVigente,
+        });
+        if (cancelled || resultado.descartada || !sigueVigente()) return;
+        const rawList = resultado.list;
         const list = (Array.isArray(rawList) ? rawList : []).filter(isCompletedLike);
 
-        // Dedupe sin normalizar aún (para poder enriquecer antes de derivar fechas)
-        const uniqueRaw = Object.values(
-          list.reduce((acc, t) => {
-            if (t && t.id != null) acc[t.id] = t;
-            return acc;
-          }, {})
+        // Conserva el orden del backend. Un objeto reordenaría los id numéricos.
+        const uniqueRaw = tareasUnicasEnOrden(list);
+
+        const needDetail = uniqueRaw.filter((raw) =>
+          debeEnriquecerTareaTerminada(raw, Boolean(pickBitacoraIdFromRaw(raw)))
         );
-
-        const rawHasFinishDate = (t) =>
-          !!(
-            t?.fechaTermino ||
-            t?.finished_at ||
-            t?.completed_at ||
-            t?.closed_at ||
-            t?.fecha_cierre ||
-            t?.fecha_termino ||
-            t?.fecha_fin ||
-            t?.ended_at ||
-            t?.end_date ||
-            t?.completedAt ||
-            t?.log?.fechaTermino ||
-            t?.log?.finished_at ||
-            t?.log?.completed_at ||
-            t?.log?.closed_at ||
-            t?.log?.fecha_cierre ||
-            t?.log?.fecha_termino ||
-            t?.log?.fecha_fin ||
-            t?.log?.ended_at ||
-            t?.log?.end_date ||
-            t?.task?.fechaTermino ||
-            t?.task?.finished_at ||
-            t?.task?.completed_at ||
-            t?.task?.closed_at ||
-            t?.task?.fecha_cierre ||
-            t?.task?.fecha_termino ||
-            t?.task?.fecha_fin ||
-            t?.task?.ended_at ||
-            t?.task?.end_date
-          );
-
-        // Enriquecer SOLO si faltan datos críticos (bitácora o fecha de término)
-        const needDetail = uniqueRaw.filter((raw) => {
-          const tid = raw?.id;
-          if (tid == null) return false;
-          const lacksBitacora = !pickBitacoraIdFromRaw(raw);
-          const lacksFinish = !rawHasFinishDate(raw);
-          return lacksBitacora || lacksFinish;
-        });
 
         if (needDetail.length > 0) {
           await Promise.all(
@@ -600,32 +496,36 @@ export default function TareasTerminadasPanel({
           );
         }
 
-        const normalized = uniqueRaw.map(normalizeTask).sort(sortTasks);
+        const normalized = uniqueRaw.map(normalizeTask);
 
-        if (!cancelled) {
-          setItems(normalized);
-          setHasLoaded(true);
-        }
+        if (cancelled || !sigueVigente()) return;
+        if (resultado.pagina !== page) paginaRecuperadaRef.current = resultado.pagina;
+        setLoading(false);
+        setItems(normalized);
+        setMeta(rawList.meta);
+        setHasLoaded(true);
+        if (resultado.pagina !== page) setPage(resultado.pagina);
       } catch (err) {
-        if (!cancelled) {
-          console.error("TareasTerminadasPanel:", err?.response?.status, err?.message, err);
-          setErrMsg(
-            err?.response?.status === 403
-              ? "No tienes permiso para ver las tareas de este cliente."
-              : "No fue posible cargar las tareas terminadas."
-          );
-          setItems([]);
-          setHasLoaded(true);
-        }
+        if (cancelled || !sigueVigente()) return;
+        console.error("TareasTerminadasPanel:", err?.response?.status, err?.message, err);
+        setErrMsg(
+          err?.response?.status === 403
+            ? "No tienes permiso para ver las tareas de este cliente."
+            : "No fue posible cargar las tareas terminadas."
+        );
+        setItems([]);
+        setMeta({ total: 0, per_page: perPage, current_page: page, last_page: 1 });
+        setHasLoaded(true);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled && sigueVigente()) setLoading(false);
       }
     })();
 
     return () => {
       cancelled = true;
+      consultaRef.current.iniciar();
     };
-  }, [clienteId, grupoId, perPage, loadRequested, isCompletedLike]);
+  }, [clienteId, grupoId, perPage, page, loadRequested, isCompletedLike]);
 
   // ==== Búsqueda local (usa el ÚNICO 'term') ====
   const filtered = useMemo(() => {
@@ -778,6 +678,8 @@ export default function TareasTerminadasPanel({
                 setArchivosExpandidos({});
                 setHasLoaded(false);
                 setLoadRequested(false);
+                setPage(1);
+                setMeta({ total: 0, per_page: perPage, current_page: 1, last_page: 1 });
               }}
               disabled={loading}
               title="Ocultar y liberar datos (no vuelve a pedir hasta que lo cargues de nuevo)"
@@ -786,23 +688,26 @@ export default function TareasTerminadasPanel({
             </button>
           )}
 
-        <div
-          className="input-group input-group-sm"
-          style={{ flex: "1 1 260px", minWidth: 220, maxWidth: 360 }}
-        >
-          <span className="input-group-text">Filtrar / Buscar</span>
-          <input
-            className="form-control"
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Título, responsable, nota…"
-            disabled={!loadRequested || loading}
-          />
-          {!!term && (
-            <button className="btn btn-outline-secondary" onClick={() => setTerm("")}>
-              ×
-            </button>
-          )}
+        <div style={{ flex: "1 1 260px", minWidth: 220, maxWidth: 360 }}>
+          <div className="input-group input-group-sm">
+            <span className="input-group-text">Filtrar / Buscar</span>
+            <input
+              className="form-control"
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="Título, responsable, nota…"
+              aria-describedby="tareas-terminadas-busqueda-ayuda"
+              disabled={!loadRequested || loading}
+            />
+            {!!term && (
+              <button className="btn btn-outline-secondary" onClick={() => setTerm("")}>
+                ×
+              </button>
+            )}
+          </div>
+          <div id="tareas-terminadas-busqueda-ayuda" className="form-text mb-0">
+            La búsqueda aplica solo a la página cargada.
+          </div>
         </div>
         </div>
       </div>
@@ -845,7 +750,7 @@ export default function TareasTerminadasPanel({
                     <div className="fw-semibold">{t.titulo}</div>
                     <div className="small text-muted text-end">
                       <div><strong>Creada:</strong> {formatDate(t.fechaCreacion)}</div>
-                      <div><strong>Terminada:</strong> {formatDate(t.fechaTermino)}</div>
+                      <div><strong>Terminada:</strong> {t.fechaTermino ? formatDate(t.fechaTermino) : MENSAJE_CIERRE_NO_DISPONIBLE}</div>
                       {t.fechaInicio && t.fechaTermino && (
                         <div><strong>Duración:</strong> {formatDurationBetweenDates(t.fechaInicio, t.fechaTermino)}</div>
                       )}
@@ -1186,6 +1091,35 @@ export default function TareasTerminadasPanel({
             ))}
           </div>
         ))}
+
+        {!loading && loadRequested && !errMsg && meta.total > 0 && (
+          <div className="d-flex justify-content-between align-items-center gap-2 mt-2 small">
+            <span className="text-muted">
+              {meta.total} {meta.total === 1 ? "tarea" : "tareas"}
+              {meta.last_page > 1 ? ` · Página ${meta.current_page} de ${meta.last_page}` : ""}
+            </span>
+            {meta.last_page > 1 && (
+              <div className="d-flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-secondary"
+                  disabled={page >= meta.last_page}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  Siguiente
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Modal de previsualización de archivos */}

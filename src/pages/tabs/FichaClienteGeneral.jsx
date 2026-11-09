@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { useFichaCliente } from "../../context/fichaClienteContext";
 import ProductosButtons from "../../components/fase2/ProductosButtons";
 import CotizacionesButtons from "../../components/fase2/CotizacionesButtons";
@@ -25,10 +26,43 @@ import {
   labelEstadoGrupoParaDisplay,
 } from "../../constants/estadosGrupoFamiliar";
 import { isDentalCoberturaTipo } from "../../constants/coberturaTipos";
+import {
+  prepararCorreosContacto,
+  prepararTelefonosContacto,
+} from "../../utils/contactoFicha";
+import { miembrosVisiblesDelGrupo } from "../../utils/miembrosGrupoFicha";
+import useToast from "../../hooks/useToast";
 import "../../styles/FichaClienteGeneral.css";
+
+const copiarTextoPlano = async (texto) => {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    }
+  } catch {
+    // El navegador puede bloquear el portapapeles; se intenta el respaldo.
+  }
+
+  try {
+    const input = document.createElement("textarea");
+    input.value = texto;
+    input.setAttribute("readonly", "");
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(input);
+    return ok;
+  } catch {
+    return false;
+  }
+};
 
 export default function FichaClienteGeneral() {
   const { cliente, formatDate, coberturaPrincipal } = useFichaCliente();
+  const toast = useToast();
 
   // ===== helpers =====
   const toValidId = (v) => {
@@ -189,6 +223,8 @@ export default function FichaClienteGeneral() {
   // ===== Estado para grupos full (fuente de verdad del endpoint) y etiquetas =====
   const [gruposFullCache, setGruposFullCache] = useState({});
   const [loadingEtiquetas, setLoadingEtiquetas] = useState(false);
+  const [errorCargaGrupos, setErrorCargaGrupos] = useState(false);
+  const [miembrosAbiertos, setMiembrosAbiertos] = useState(false);
 
   const uniqueGrupoIds = useMemo(() => {
     const ids = new Set();
@@ -429,15 +465,26 @@ export default function FichaClienteGeneral() {
   const clienteId = toValidId(cliente?.id);
   const grupoId   = toValidId(gfId);
 
+  const miembrosGrupo = useMemo(
+    () => miembrosVisiblesDelGrupo(getCoberturasFromGrupoFull(grupoFull), clienteId),
+    [grupoFull, clienteId]
+  );
+
+  useEffect(() => {
+    setMiembrosAbiertos(false);
+  }, [grupoId]);
+
   // ===== Cargar datos completos de todos los grupos familiares del cliente =====
   useEffect(() => {
     if (!uniqueGrupoIds.length) {
       setGruposFullCache({});
+      setErrorCargaGrupos(false);
       return;
     }
 
     let cancelled = false;
     setLoadingEtiquetas(true);
+    setErrorCargaGrupos(false);
 
     (async () => {
       try {
@@ -455,6 +502,7 @@ export default function FichaClienteGeneral() {
         if (!cancelled) {
           console.error("Error al cargar grupos familiares:", error);
           setGruposFullCache({});
+          setErrorCargaGrupos(true);
         }
       } finally {
         if (!cancelled) setLoadingEtiquetas(false);
@@ -466,17 +514,15 @@ export default function FichaClienteGeneral() {
     };
   }, [uniqueGrupoIds.join(",")]);
 
-  // ===== helper para formatear número con distribución 3-3-4 =====
-  const formatearNumeroTelefono = (numero) => {
-    if (!numero) return "";
-    // Remover todos los caracteres no numéricos
-    const soloDigitos = numero.toString().replace(/\D/g, "");
-    // Aplicar formato 3-3-4 si tiene 10 dígitos
-    if (soloDigitos.length === 10) {
-      return `${soloDigitos.slice(0, 3)}-${soloDigitos.slice(3, 6)}-${soloDigitos.slice(6)}`;
+  const copiarContacto = async (texto, mensaje) => {
+    const valor = String(texto ?? "").trim();
+    if (!valor) return;
+    const copiado = await copiarTextoPlano(valor);
+    if (copiado) {
+      toast.showSuccess(mensaje, { autoClose: 1600 });
+      return;
     }
-    // Si no tiene 10 dígitos, devolver el número original
-    return numero;
+    toast.showError("No se pudo copiar.", { autoClose: 2500 });
   };
 
   // ===== verificar si es cumpleaños hoy =====
@@ -506,40 +552,14 @@ export default function FichaClienteGeneral() {
     }
   }, [cliente?.fecha_nacimiento]);
 
-  // ===== formatear teléfonos del cliente =====
-  const telefonosFormateados = useMemo(() => {
-    // Normalizar telefonos: puede venir como array, string JSON, o null
-    let telefonos = [];
-    if (Array.isArray(cliente?.telefonos)) {
-      telefonos = cliente.telefonos;
-    } else if (typeof cliente?.telefonos === "string" && cliente.telefonos.trim().startsWith("[")) {
-      try {
-        telefonos = JSON.parse(cliente.telefonos);
-        if (!Array.isArray(telefonos)) telefonos = [];
-      } catch (_) {
-        telefonos = [];
-      }
-    }
-    
-    if (telefonos.length === 0) {
-      // Fallback al campo legacy si no hay arreglo
-      return cliente?.telefono ? [cliente.telefono] : [];
-    }
-
-    // Ordenar: principal primero
-    const ordenados = [...telefonos].sort(
-      (a, b) => (b?.principal ? 1 : 0) - (a?.principal ? 1 : 0)
-    );
-
-    // Formatear cada teléfono
-    return ordenados.map((t) => {
-      const indicativo = t?.indicativo ? `+${t.indicativo} ` : "";
-      const numeroFormateado = formatearNumeroTelefono(t?.numero || "");
-      const tipo = t?.tipo ? ` (${t.tipo})` : "";
-      const principal = t?.principal ? " [Principal]" : "";
-      return `${indicativo}${numeroFormateado}${tipo}${principal}`.trim();
-    });
-  }, [cliente?.telefonos, cliente?.telefono]);
+  const telefonosContacto = useMemo(
+    () => prepararTelefonosContacto(cliente),
+    [cliente]
+  );
+  const correosContacto = useMemo(
+    () => prepararCorreosContacto(cliente?.email),
+    [cliente?.email]
+  );
 
   // mocks opcionales
   const USE_DEMO = false;
@@ -646,13 +666,120 @@ export default function FichaClienteGeneral() {
                   Información de contacto
                 </h6>
                 <div className="ficha-fields">
-                  <div className="ficha-field">
+                  <div className="ficha-field ficha-field--wide">
                     <label className="ficha-label">Teléfonos</label>
-                    {telefonosFormateados.length > 0 ? (
-                      <div className="d-flex flex-column gap-1">
-                        {telefonosFormateados.map((tel, idx) => (
-                          <div key={idx} className="ficha-value">
-                            {tel}
+                    {telefonosContacto.length > 0 ? (
+                      <div className="ficha-contacto">
+                        {telefonosContacto.map((tel, idx) => (
+                          <div key={tel.id ?? `${tel.visible}-${idx}`} className="ficha-contacto__item">
+                            <div className="ficha-contacto__dato">
+                              <span className="ficha-value ficha-contacto__numero">
+                                {tel.bandera && (
+                                  <span
+                                    className="ficha-contacto__bandera"
+                                    role="img"
+                                    aria-label={tel.pais || "País del indicativo"}
+                                  >
+                                    {tel.bandera}
+                                  </span>
+                                )}
+                                {tel.numero || tel.visible}
+                              </span>
+                              {(tel.tipo || tel.principal) && (
+                                <span className="ficha-contacto__etiquetas">
+                                  {tel.tipo && (
+                                    <span className="ficha-contacto__etiqueta">{tel.tipo}</span>
+                                  )}
+                                  {tel.principal && (
+                                    <span className="ficha-contacto__etiqueta ficha-contacto__etiqueta--principal">
+                                      Principal
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                            {(tel.whatsapp || tel.llamar || tel.copiar) && (
+                              <div
+                                className="ficha-contacto__acciones"
+                                role="group"
+                                aria-label={`Acciones para ${tel.copiar || tel.visible}`}
+                              >
+                                {tel.whatsapp && (
+                                  <a
+                                    className="ficha-contacto__accion"
+                                    href={tel.whatsapp}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    aria-label={`WhatsApp ${tel.copiar || tel.visible}`}
+                                  >
+                                    <i className="fab fa-whatsapp" aria-hidden="true" />
+                                    WhatsApp
+                                  </a>
+                                )}
+                                {tel.llamar && (
+                                  <a
+                                    className="ficha-contacto__accion"
+                                    href={tel.llamar}
+                                    aria-label={`Llamar a ${tel.copiar || tel.visible}`}
+                                  >
+                                    <i className="fas fa-phone" aria-hidden="true" />
+                                    Llamar
+                                  </a>
+                                )}
+                                {tel.copiar && (
+                                  <button
+                                    type="button"
+                                    className="ficha-contacto__accion"
+                                    aria-label={`Copiar número ${tel.copiar}`}
+                                    onClick={() => copiarContacto(tel.copiar, "Número copiado")}
+                                  >
+                                    <i className="fas fa-copy" aria-hidden="true" />
+                                    Copiar número
+                                  </button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="ficha-value ficha-value--muted">—</div>
+                    )}
+                  </div>
+                  <div className="ficha-field ficha-field--wide">
+                    <label className="ficha-label">Correo</label>
+                    {correosContacto.length > 0 ? (
+                      <div className="ficha-contacto">
+                        {correosContacto.map((correo, idx) => (
+                          <div key={`${correo.visible}-${idx}`} className="ficha-contacto__item">
+                            <div className="ficha-contacto__dato">
+                              <span className="ficha-value ficha-contacto__numero">{correo.visible}</span>
+                            </div>
+                            <div
+                              className="ficha-contacto__acciones"
+                              role="group"
+                              aria-label={`Acciones para ${correo.visible}`}
+                            >
+                              {correo.mailto && (
+                                <a
+                                  className="ficha-contacto__accion"
+                                  href={correo.mailto}
+                                  aria-label={`Enviar correo a ${correo.visible}`}
+                                >
+                                  <i className="fas fa-envelope" aria-hidden="true" />
+                                  Enviar correo
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                className="ficha-contacto__accion"
+                                aria-label={`Copiar correo ${correo.visible}`}
+                                onClick={() => copiarContacto(correo.copiar, "Correo copiado")}
+                              >
+                                <i className="fas fa-copy" aria-hidden="true" />
+                                Copiar correo
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -753,6 +880,25 @@ export default function FichaClienteGeneral() {
                       <div className="ficha-value">{parentescoCobertura}</div>
                     </div>
                   </div>
+
+                  {grupoId && (
+                    <div className="ficha-tags">
+                      <label className="ficha-label">Etiquetas del grupo familiar</label>
+                      {loadingEtiquetas ? (
+                        <div className="ficha-value ficha-value--muted">
+                          <i className="fas fa-spinner fa-spin me-2" />
+                          Cargando etiquetas...
+                        </div>
+                      ) : (
+                        <GroupTags
+                          value={etiquetasGrupo}
+                          onChange={() => {}}
+                          readOnly={true}
+                          className="mb-0"
+                        />
+                      )}
+                    </div>
+                  )}
 
                   {productosPolizaVista.length > 0 && (
                     <div className="ficha-poliza-productos">
@@ -867,21 +1013,64 @@ export default function FichaClienteGeneral() {
                     </div>
                   )}
 
-                  {grupoId && (
-                    <div className="ficha-tags">
-                      <label className="ficha-label">Etiquetas del grupo familiar</label>
-                      {loadingEtiquetas ? (
-                        <div className="ficha-value ficha-value--muted">
-                          <i className="fas fa-spinner fa-spin me-2" />
-                          Cargando etiquetas...
-                        </div>
-                      ) : (
-                        <GroupTags
-                          value={etiquetasGrupo}
-                          onChange={() => {}}
-                          readOnly={true}
-                          className="mb-0"
-                        />
+                  {loadingEtiquetas && !grupoFull ? (
+                    <p className="ficha-miembros__estado">
+                      <i className="fas fa-spinner fa-spin me-2" aria-hidden="true" />
+                      Cargando miembros...
+                    </p>
+                  ) : errorCargaGrupos && !grupoFull ? (
+                    <p className="ficha-miembros__estado">No se pudieron cargar los miembros.</p>
+                  ) : miembrosGrupo.length === 0 ? (
+                    <p className="ficha-miembros__estado">Sin otros miembros vinculados</p>
+                  ) : (
+                    <div className="ficha-miembros">
+                      <button
+                        type="button"
+                        className="ficha-miembros__toggle"
+                        aria-expanded={miembrosAbiertos}
+                        aria-controls="ficha-miembros-panel"
+                        onClick={() => setMiembrosAbiertos((abierto) => !abierto)}
+                      >
+                        <span>
+                          Miembros del grupo familiar
+                          <span className="ficha-miembros__cantidad"> · {miembrosGrupo.length}</span>
+                        </span>
+                        <span className="ficha-miembros__accion">
+                          Ver miembros
+                          <i
+                            className={`fas fa-chevron-down ficha-miembros__chevron${
+                              miembrosAbiertos ? " is-open" : ""
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </span>
+                      </button>
+                      {miembrosAbiertos && (
+                        <ul id="ficha-miembros-panel" className="ficha-miembros__lista">
+                          {miembrosGrupo.map((miembro) => (
+                            <li key={miembro.clienteId} className="ficha-miembros__item">
+                              <div className="min-w-0">
+                                <div className="ficha-value">{miembro.nombre}</div>
+                                <div className="ficha-miembros__relacion">
+                                  {miembro.relacion || "Sin relación registrada"}
+                                </div>
+                                {miembro.coberturas.length > 0 && (
+                                  <div className="ficha-miembros__coberturas">
+                                    {miembro.coberturas.map((cobertura) => (
+                                      <div key={cobertura}>{cobertura}</div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <Link
+                                to={`/clientes/${miembro.clienteId}/ficha`}
+                                className="ficha-miembros__abrir"
+                              >
+                                Abrir ficha
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
                       )}
                     </div>
                   )}
