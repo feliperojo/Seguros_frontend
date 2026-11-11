@@ -54,6 +54,8 @@ const DEFAULT_FILTERS = {
   grupo_familiar_id: [],
   responsable: [],
   estado_cobertura: [],
+  edad_desde: "",
+  edad_hasta: "",
   sort_by: "grupo_familiar_id",
   sort_dir: "asc",
 };
@@ -351,6 +353,10 @@ const ReporteCoberturasPorParentescoPage = () => {
 
   const queryParams = useMemo(() => {
     const params = { ...filters };
+    const edadDesde = String(params.edad_desde ?? "").trim();
+    const edadHasta = String(params.edad_hasta ?? "").trim();
+    delete params.edad_desde;
+    delete params.edad_hasta;
     if (!params.search) delete params.search;
     if (!Array.isArray(params.compania_id) || params.compania_id.length === 0) {
       delete params.compania_id;
@@ -386,6 +392,12 @@ const ReporteCoberturasPorParentescoPage = () => {
         };
       }
     });
+    if (edadDesde !== "" || edadHasta !== "") {
+      filtros.edad = {
+        ...(edadDesde !== "" ? { desde: edadDesde } : {}),
+        ...(edadHasta !== "" ? { hasta: edadHasta } : {}),
+      };
+    }
     if (Object.keys(filtros).length) params.filtros = filtros;
     return params;
   }, [filters, filtrosColumna, columnasVisibles]);
@@ -753,6 +765,32 @@ const ReporteCoberturasPorParentescoPage = () => {
                   styles={selectStyles}
                   aria-label="Filtrar por id de grupo"
                 />
+              </Col>
+              <Col md={6} lg={3}>
+                <div className="ccr-report__label">Edad</div>
+                <div className="d-flex gap-2">
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    value={filters.edad_desde}
+                    placeholder="Mínima"
+                    aria-label="Edad mínima"
+                    onChange={(event) => handleFilterChange("edad_desde", event.target.value)}
+                  />
+                  <Form.Control
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="numeric"
+                    value={filters.edad_hasta}
+                    placeholder="Máxima"
+                    aria-label="Edad máxima"
+                    onChange={(event) => handleFilterChange("edad_hasta", event.target.value)}
+                  />
+                </div>
+                <Form.Text className="text-muted">Menores de 19: máxima 18</Form.Text>
               </Col>
               <Col md={6} lg={3}>
                 <Form onSubmit={handleSearch}>
