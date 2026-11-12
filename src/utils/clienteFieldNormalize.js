@@ -38,8 +38,8 @@ const STATUS_ALIASES = {
   "legal permanent resident": "Permanent Resident",
   lpr: "Permanent Resident",
   "green card": "Permanent Resident",
-  resident: "Resident",
-  residente: "Resident",
+  resident: "Permanent Resident",
+  residente: "Permanent Resident",
   // EAD
   "ead (employment authorization document)": "EAD (Employment Authorization Document)",
   ead: "EAD (Employment Authorization Document)",

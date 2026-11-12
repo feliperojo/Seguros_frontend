@@ -5,7 +5,6 @@
 export const STATUS_MIGRATORIO_OPTIONS = [
   "Citizen",
   "Permanent Resident",
-  "Resident",
   "EAD (Employment Authorization Document)",
   "I-797",
   "I797C",
